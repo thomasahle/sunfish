@@ -1,8 +1,6 @@
 from itertools import count
 from collections import Counter, OrderedDict, namedtuple
 
-# We need a testbed for move generation and mate finding
-
 initial = (
 	'##########' +
 	'##########' +
@@ -123,17 +121,6 @@ pst = {
 	)
 }
 
-# Check ideas:
-#	With accents
-#	A Position flag
-#	Saved in the side of the board
-#	Don't use the direct graphical representation
-
-#	Don't hash ep and king-rights. Just check after retrieval
-
-#	Kill-map for ep and castling (can just be passed in the recur? No, then fen problem)
-#	Let the move generation take the previous move as an argument
-
 # Jeg gad godt finde en måde at fixe castling på, så jeg kan bruge reverse() i steddet for flip
 
 class Position(namedtuple('Position','board score wc bc ep kp')):
@@ -179,18 +166,27 @@ class Position(namedtuple('Position','board score wc bc ep kp')):
 
 	def move(self, m):
 		i, j = m
+		p, q = self.board[i], self.board[j]
 		put = lambda board, i, p: board[:i] + p + board[i+1:]
+		# def put(board,i,p):
+		# 	print self
+		# 	print m
+		# 	assert 21 <= i <= 99
+		# 	return board[:i] + p + board[i+1:]
 
 		board = self.board
 		wc, bc, ep, kp = self.wc, self.bc, 0, 0
 		score = self.score + self.value(m)
 
+		# Actual move
+		board = put(board, j, board[i])
+		board = put(board, i, '.')
 		# Castling
 		if i == 21: wc = (False, wc[1])
 		if i == 28: wc = (wc[0], False)
 		if j == 91: bc = (False, bc[1])
 		if j == 98: bc = (bc[0], False)
-		if board[i] == 'k':
+		if p == 'k':
 			wc = (False, False)
 			if j - i == -2:
 				board = put(board, i-1, 'r')
@@ -201,16 +197,13 @@ class Position(namedtuple('Position','board score wc bc ep kp')):
 				board = put(board, i+3, '.')
 				kp = i + 1
 		# Special pawn stuff
-		if board[i] == 'p':
+		if p == 'p':
 			if 90 < j < 100:
 				board = put(board, j, 'q')
 			if j - i == 20:
 				ep = i + 10
-			if j - i in (9, 11) and board[j] == '.':
+			if j - i in (9, 11) and q == '.':
 				board = put(board, j-10, '.')
-		# Actual move
-		board = put(board, j, board[i])
-		board = put(board, i, '.')
 
 		return Position(board, score, wc, bc, ep, kp).flip()
 
@@ -253,125 +246,78 @@ N = 0
 #	Qsearch
 #	Maybe it was a mistake to stop using orderedtable
 
-def search(pos, depth, gamma):
-	""" returns s(pos) <= r < gamma    if s(pos) < gamma
+def bound(pos, gamma, depth):
+	""" gamma -- should be within the interval (-MATE_VALUE, MATE_VALUE]
+		returns s(pos) <= r < gamma    if s(pos) < gamma
 		returns s(pos) >= r >= gamma   if s(pos) >= gamma """
 	global N; N += 1
+	assert -MATE_VALUE < gamma <= MATE_VALUE
 
 	# The thing is though, we can't just check for 
-	entry = tp.get(pos.board)
+	entry = None#tp.get(pos.board)
 	if entry is not None and entry.depth >= depth:
 		if entry.score < gamma and entry.score < entry.gamma or \
 				gamma <= entry.score and entry.gamma <= entry.score:
 			return entry.score
 
-	if depth == 0:
+	if depth == 0 or abs(pos.score) >= MATE_VALUE:
 		return pos.score
 
-	best, bmove = -weight['k'], None
+	best, bmove = -MATE_VALUE, None
 	for m in sorted(pos.genMoves(), key=pos.value, reverse=True):
-		score = -search(pos.move(m), depth-1, 1-gamma)
+		score = -bound(pos.move(m), 1-gamma, depth-1)
 		if score > best:
 			best = score
 			bmove = m
-		if best >= gamma:
+		if score >= gamma:
 			break
 
 	tp[pos.board] = Entry(depth, best, gamma, bmove)
 	return best
 
-def MTD(pos, depth):
-	lower, upper = -weight['k'], weight['k']
-	while upper-lower > 5:
-		g = (lower+upper)//2
-		s = search(pos, depth, g)
-		if s >= g:
-			lower = s
-		if s < g:
-			upper = s
-	return (lower+upper)//2
+def search(pos, maxn=2e4, maxd=99):
+	""" Iterative deepening MTD-bi search """
+	global N; N = 0
 
-def itd(pos):
-	global N
-	for d in range(1,99):
-		s = MTD(pos, d)
-		#if N > 2e4: break
-		if d == 7: break
-	print ("Visited %d noposdes. Depth %d. Score is %d" % (N,d,s))
-	N = 0
-	return tp[pos.board].move
+	for depth in range(1, maxd+1):
+		lower, upper = -MATE_VALUE, MATE_VALUE
+		# Inv: lower <= score <= upper
+		while lower < upper:
+			gamma = (lower+upper+1)//2
+			score = bound(pos, gamma, depth)
+			if score >= gamma:
+				lower = score
+			if score < gamma:
+				upper = score
+		
+		print depth, lower, "%s%s" % (irender(tp[pos.board].move[0]),irender(tp[pos.board].move[1]))
+		if N >= maxn or lower >= MATE_VALUE:
+			break
 
-def parse(c):
-	return 11 + (ord(c[1])-ord('0'))*10 + ord(c[0])-ord('a')
+	move, score = tp[pos.board].move, lower
+	#print ("Visited %d noposdes. Depth %d. Score is %d" % (N,depth,score))
+	return move, score
 
-def format(i):
-	return chr(i%10 + ord('a')-1) + str(i//10 - 1)
-
-def iformat(i):
-	return chr(i%10 + ord('a')-1) + str(10 - i//10)
+############
 
 import sys
 if sys.version_info[0] == 2:
 	input = raw_input
 
-############
+def parse(c):
+	return 11 + (ord(c[1])-ord('0'))*10 + ord(c[0])-ord('a')
 
-start = Position(initial,0,(True,True),(True,True),0,0)
+def iparse(c):
+	return 101 + (-ord(c[1])+ord('0'))*10 + ord(c[0])-ord('a')
 
-def xboard():
-	pos = Position(initial,0)
-	while True:
-		smove = input()
-		if smove == 'quit':
-			break
-		if smove == 'protover 2':
-			print 'feature myname="SmallChess"'
-			print 'feature done=1'
-			continue
-		if len(smove) < 4:
-			continue
-		i, j = parse(smove[0:2]), parse(smove[2:4])
-		if not (21 <= i <= 85 and 21 <= j <= 85):
-			continue
-		pos = pos.move((i,j))
+def render(i):
+	return chr(i%10 + ord('a')-1) + str(i//10 - 1)
 
-		i,j = itd(pos)
-		print ("move %s%s" % (iformat(i),iformat(j)))
-		pos = pos.move((i,j))
+def irender(i):
+	return chr(i%10 + ord('a')-1) + str(10 - i//10)
 
-def selfplay():
-	pos = Position(initial,0)
-	#pos = parseFEN('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1')
-	#pos = parseFEN('r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1')
-	#pos = parseFEN('2k5/4B3/1K6/8/2B5/8/8/5r2 w - - 0 0')
-	#pos = parseFEN('5Kbk/6pp/6P1/8/8/8/8/7R w - - 0 0')
-	for _ in range(100):
-		print('\n'.join(''.join(pos.board[i:i+8]) for i in range(91,11,-10)))
-		print
-
-		m = itd(pos)
-		if m is None:
-			print "Game over"
-			break
-		else:
-			i, j = m
-			print ("move %s%s" % (format(i),format(j)))
-			pos = pos.move((i,j))
-		print('\n'.join(''.join(pos.flip().board[i:i+8]) for i in range(91,11,-10)))
-		print
-
-		m = itd(pos)
-		if m is None:
-			print "Game over"
-			break
-		else:
-			i, j = m
-			print ("move %s%s" % (iformat(i),iformat(j)))
-			pos = pos.move((i,j))
-		
-
-def normal():
-	pos = parseFEN('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1')
+def main():
+	pos = Position(initial,0,(True,True),(True,True),0,0)
 	while True:
 		print('\n'.join(''.join(pos.board[i:i+8]) for i in range(91,11,-10)))
 		smove = input("You're move: ")
@@ -380,85 +326,12 @@ def normal():
 		pos = pos.move(move)
 		print('\n'.join(''.join(pos.flip().board[i:i+8]) for i in range(91,11,-10)))
 
+		# TODO: Test gameover
 		i,j = itd(pos)
-		print ("move %s%s" % (iformat(i),iformat(j)))
+		print("My move: %s%s" % (irender(i),irender(j)))
 		pos = pos.move((i,j))
 
-def allperft(path):
-	# with open(path) as f:
-	# 	for line in f:
-	# 		parts = line.split(';')
-	# 		board = parseFEN(parts[0])
-	# 		print ';'.join([parts[0]]+[str(perft(board,d)) for d in range(1,5)])
-	# for d in range(1,5):
-	# 	print
-	# 	print "Going to depth %d" % d
-	# 	with open(path) as f:
-	# 		for line in f:
-	# 			parts = line.split(';')
-	# 			board = parseFEN(parts[0])
-	# 			print parts[0]
-	# 			if perft(board,d) != int(parts[d][2:].strip()):
-	# 				print '======================'
-	# 				print "ERROR at depth %d" % d
-	# 				print '======================'
-	with open(path) as f:
-		for line in f:
-			parts = line.split(';')
-			pos = parseFEN(parts[0].strip())
-			print parts[0]
-			for d,s in enumerate(parts[1:]):
-				res = perft(pos,d+1)
-				if res != int(s):
-					print '========================================='
-					print "ERROR at depth %d. Gave %d rather than %d" % (d+1, res, int(s))
-					print '========================================='
-					if d+1 == 1:
-						print pos
-					perft(pos,d+1,True)
-					break
-				print d+1,
-				import sys; sys.stdout.flush()
-			print
-import re
-def parseFEN(fen):
-	# Fen uses the opposite color system of us. Maybe we should swap.
-	board, color, castling, enpas, hclock, fclock = fen.split()
-	board = re.sub('\d', (lambda m: '.'*int(m.group(0))), board)
-	board = '#'*21 + board.replace('/','##') + '#'*21
-	if color == 'w':
-		board = Position(board,0,0,0,0,0).flip().board
-		castling = castling.swapcase()
-	wc = ('q' in castling, 'k' in castling)
-	bc = ('Q' in castling, 'K' in castling)
-	ep = parse(enpas) if enpas != '-' else 0
-	return Position(board, 0, wc, bc, ep, 0)
-def checkKingCapt(pos):
-	for m in pos.genMoves():
-		#print "%s%s %d" % (format(m[0]),format(m[1]),pos.value(m))
-		if pos.value(m) >= MATE_VALUE:
-			return True
-	return False
-def perft(pos, depth, divide=False):
-	if depth == 0:
-		return 1
-	res = 0
-	for m in pos.genMoves():
-		pos1 = pos.move(m)
-		if not checkKingCapt(pos1):
-			#div = iformat(m[0])+iformat(m[1]) == "g2g1"
-			#if div:
-			#	print pos1.board
-			sub = perft(pos1, depth-1, False)
-			if divide:
-				#print pos1.board
-				print " "*depth+format(m[0])+format(m[1]), sub
-			res += sub
-	return res
-
-
 if __name__ == '__main__':
-	allperft('queen.epd')
-	#selfplay()
-	
+	main()
+
 	
