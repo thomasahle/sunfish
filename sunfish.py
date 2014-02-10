@@ -1,19 +1,22 @@
 from itertools import count
 from collections import Counter, OrderedDict, namedtuple
 
+TABLE_SIZE = 1e7
+NODES_SEARCHED = 2e4
+
 initial = (
-	'##########' +
-	'##########' +
-	'#rnbqkbnr#' +
-	'#pppppppp#' +
-	'#........#' +
-	'#........#' +
-	'#........#' +
-	'#........#' +
-	'#PPPPPPPP#' +
-	'#RNBQKBNR#' +
-	'##########' +
-	'##########')
+	'          ' +
+	'          ' +
+	' rnbqkbnr ' +
+	' pppppppp ' +
+	' ........ ' +
+	' ........ ' +
+	' ........ ' +
+	' ........ ' +
+	' PPPPPPPP ' +
+	' RNBQKBNR ' +
+	'          ' +
+	'          ')
 
 directions = {
 	'p': (10, 20, 9, 11),
@@ -121,8 +124,6 @@ pst = {
 	)
 }
 
-# Jeg gad godt finde en måde at fixe castling på, så jeg kan bruge reverse() i steddet for flip
-
 class Position(namedtuple('Position','board score wc bc ep kp')):
 	""" A state of a chess game
 	board -- a 120 char representation of the board
@@ -140,7 +141,7 @@ class Position(namedtuple('Position','board score wc bc ep kp')):
 				for d in directions[p]:
 					for j in count(i+d, d):
 						# Stay inside the board
-						if board[j] == '#': break
+						if board[j] == ' ': break
 						# No friendly captures
 						if board[j].islower(): break
 						# Special pawn stuff
@@ -168,11 +169,6 @@ class Position(namedtuple('Position','board score wc bc ep kp')):
 		i, j = m
 		p, q = self.board[i], self.board[j]
 		put = lambda board, i, p: board[:i] + p + board[i+1:]
-		# def put(board,i,p):
-		# 	print self
-		# 	print m
-		# 	assert 21 <= i <= 99
-		# 	return board[:i] + p + board[i+1:]
 
 		board = self.board
 		wc, bc, ep, kp = self.wc, self.bc, 0, 0
@@ -189,12 +185,14 @@ class Position(namedtuple('Position','board score wc bc ep kp')):
 		if p == 'k':
 			wc = (False, False)
 			if j - i == -2:
-				board = put(board, i-1, 'r')
-				board = put(board, i-4, '.')
+				board = board[:i-4] + '..kr' + board[i:]
+				#board = put(board, i-1, 'r')
+				#board = put(board, i-4, '.')
 				kp = i - 1
 			if j - i == 2:
-				board = put(board, i+1, 'r')
-				board = put(board, i+3, '.')
+				board = board[:i+1] + 'rk.' + board[i+4:]
+				#board = put(board, i+1, 'r')
+				#board = put(board, i+3, '.')
 				kp = i + 1
 		# Special pawn stuff
 		if p == 'p':
@@ -235,17 +233,14 @@ class Position(namedtuple('Position','board score wc bc ep kp')):
 				score += weight['p']
 		return score
 
-tp = {}
 Entry = namedtuple('Entry', 'depth score gamma move')
-
+tp = OrderedDict()
 N = 0
 
 # Optimizations:
 #	The entry.gamma <= score < gamma case
-#	Don't research if the table says we lost
+#	Faster hashing
 #	Qsearch
-#	Maybe it was a mistake to stop using orderedtable
-
 def bound(pos, gamma, depth):
 	""" gamma -- should be within the interval (-MATE_VALUE, MATE_VALUE]
 		returns s(pos) <= r < gamma    if s(pos) < gamma
@@ -253,16 +248,23 @@ def bound(pos, gamma, depth):
 	global N; N += 1
 	assert -MATE_VALUE < gamma <= MATE_VALUE
 
-	# The thing is though, we can't just check for 
-	entry = None#tp.get(pos.board)
-	if entry is not None and entry.depth >= depth:
-		if entry.score < gamma and entry.score < entry.gamma or \
-				gamma <= entry.score and entry.gamma <= entry.score:
-			return entry.score
+	# Look in the table if we have already searched this position before.
+	# We use the table value if it was done with at least as deep a search
+	# as ours, and the gamma value is compatible.
+	entry = tp.get(pos)
+	if entry is not None and entry.depth >= depth and (
+			entry.score < gamma and entry.score < entry.gamma or
+			gamma <= entry.score and entry.gamma <= entry.score):
+		return entry.score
 
+	# Stop searching if we have run out of depth or have won/lost
 	if depth == 0 or abs(pos.score) >= MATE_VALUE:
 		return pos.score
 
+	# We generate all possible, pseudo legal moves and order them to provoke
+	# cuts. At the next level of the tree we are going to minimize the score.
+	# This can be shown equal to maximizing the negative score, with a slightly
+	# adjusted gamma value.
 	best, bmove = -MATE_VALUE, None
 	for m in sorted(pos.genMoves(), key=pos.value, reverse=True):
 		score = -bound(pos.move(m), 1-gamma, depth-1)
@@ -272,17 +274,25 @@ def bound(pos, gamma, depth):
 		if score >= gamma:
 			break
 
-	tp[pos.board] = Entry(depth, best, gamma, bmove)
+	# We save the found move together with the score, so we can retrieve it in
+	# the play loop. We also trim the transposition table in FILO order.
+	tp[pos] = Entry(depth, best, gamma, bmove)
+	if len(tp) > TABLE_SIZE:
+		tp.pop()
 	return best
 
-def search(pos, maxn=2e4, maxd=99):
+def search(pos, maxn=NODES_SEARCHED):
 	""" Iterative deepening MTD-bi search """
 	global N; N = 0
 
-	for depth in range(1, maxd+1):
-		lower, upper = -MATE_VALUE, MATE_VALUE
+	# We limit the depth to some constant, so we don't get a stack overflow in
+	# the end game.
+	for depth in range(1, 99):
+		# The inner loop is a binary search on the score of the position.
 		# Inv: lower <= score <= upper
+		lower, upper = -MATE_VALUE, MATE_VALUE
 		while lower < upper:
+			#print (lower, upper)
 			gamma = (lower+upper+1)//2
 			score = bound(pos, gamma, depth)
 			if score >= gamma:
@@ -290,13 +300,20 @@ def search(pos, maxn=2e4, maxd=99):
 			if score < gamma:
 				upper = score
 		
-		print depth, lower, "%s%s" % (irender(tp[pos.board].move[0]),irender(tp[pos.board].move[1]))
-		if N >= maxn or lower >= MATE_VALUE:
+		#print("Searched %d nodes. Depth %d." % (N, depth))
+
+		# We stop deepening if the global N counter shows we have spent too
+		# long, or if we have already won the game.
+		if N >= maxn or abs(lower) >= MATE_VALUE:
+			#print("Searched %d nodes. Depth was %d.")
 			break
 
-	move, score = tp[pos.board].move, lower
-	#print ("Visited %d noposdes. Depth %d. Score is %d" % (N,depth,score))
-	return move, score
+	# If the game hasn't finished we can retrieve our move from the
+	# transposition table.
+	entry = tp.get(pos)
+	if entry is not None:
+		return entry.move
+	return None
 
 ############
 
@@ -319,17 +336,21 @@ def irender(i):
 def main():
 	pos = Position(initial,0,(True,True),(True,True),0,0)
 	while True:
-		print('\n'.join(''.join(pos.board[i:i+8]) for i in range(91,11,-10)))
-		smove = input("You're move: ")
+		print('\n'.join(pos.board[i:i+10] for i in range(100,0,-10)))
+
+		smove = input("\nYou're move: ")
 		move = parse(smove[0:2]), parse(smove[2:4])
 		
 		pos = pos.move(move)
-		print('\n'.join(''.join(pos.flip().board[i:i+8]) for i in range(91,11,-10)))
+		print('\n'.join(pos.flip().board[i:i+10] for i in range(100,0,-10)))
 
-		# TODO: Test gameover
-		i,j = itd(pos)
-		print("My move: %s%s" % (irender(i),irender(j)))
-		pos = pos.move((i,j))
+		m = search(pos)
+		if m is None:
+			print("\nGame over")
+			break
+		print("\nMy move: %s%s" % (irender(m[0]),irender(m[1])))
+		print("Visited %d nodes." % N)
+		pos = pos.move(m)
 
 if __name__ == '__main__':
 	main()

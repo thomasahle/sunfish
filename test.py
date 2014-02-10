@@ -4,16 +4,18 @@
 import sys
 import re
 
+from sunfish import Position, MATE_VALUE, search, parse, iparse, render, irender, bound
+
+# Python 2 compatability
 if sys.version_info[0] == 2:
 	input = raw_input
 
-from sunfish import Position, MATE_VALUE, search, parse, iparse, render, irender, bound
 
 def parseFEN(fen):
 	# Fen uses the opposite color system of us. Maybe we should swap.
 	board, color, castling, enpas, hclock, fclock = fen.split()
 	board = re.sub('\d', (lambda m: '.'*int(m.group(0))), board)
-	board = '#'*21 + board.replace('/','##') + '#'*21
+	board = ' '*21 + board.replace('/','  ') + ' '*21
 	wc = ('q' in castling, 'k' in castling)
 	bc = ('Q' in castling, 'K' in castling)
 	ep = iparse(enpas) if enpas != '-' else 0
@@ -30,50 +32,38 @@ def xboard():
 		smove = input()
 		if smove == 'quit':
 			break
-		if smove == 'protover 2':
-			print 'feature myname="SmallChess"'
+		elif smove == 'protover 2':
+			print 'feature myname="Sunfish"'
+			print 'feature usermove=1'
 			print 'feature done=1'
 			continue
-		if len(smove) < 4:
+		elif smove.startswith('usermove'):
+			smove = smove[9:]
+			i, j = parse(smove[0:2]), parse(smove[2:4])
+			assert 21 <= i <= 89 and 21 <= j <= 98
+		else:
+			print "Didn't understand command '%s'" % smove
 			continue
-		i, j = parse(smove[0:2]), parse(smove[2:4])
-		if not (21 <= i <= 85 and 21 <= j <= 85):
-			continue
-		pos = pos.move((i,j))
 
-		i,j = itd(pos)
-		print ("move %s%s" % (irender(i),irender(j)))
 		pos = pos.move((i,j))
+		m = search(pos)
+		print("move %s%s" % tuple(map(irender,m)))
+		pos = pos.move(m)
 
 def selfplay():
 	pos = parseFEN('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 0')
-	#pos = parseFEN('r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1')
-	#pos = parseFEN('r3k2r/p1ppqpb1/bn2pnp1/3PN3/1p2P3/2N2Q1p/PPPBBPPP/R3K2R w KQkq - 0 1')
-	#pos = parseFEN('2k5/4B3/1K6/8/2B5/8/8/5r2 w - - 0 0')
-	#pos = parseFEN('5Kbk/6pp/6P1/8/8/8/8/7R w - - 0 0')
-	for _ in range(100):
-		print('\n'.join(''.join(pos.board[i:i+8]) for i in range(91,11,-10)))
-		print
-
-		m = itd(pos)
-		if m is None:
-			print "Game over"
-			break
+	for d in range(200):
+		if d % 2 == 0:
+			print('\n'.join(pos.board[i:i+10] for i in range(100,0,-10)))
 		else:
-			i, j = m
-			print ("move %s%s" % (render(i),render(j)))
-			pos = pos.move((i,j))
-		print('\n'.join(''.join(pos.flip().board[i:i+8]) for i in range(91,11,-10)))
-		print
+			print('\n'.join(pos.flip().board[i:i+10] for i in range(100,0,-10)))
 
-		m = itd(pos)
+		m = search(pos)
 		if m is None:
-			print "Game over"
+			print("Game over")
 			break
-		else:
-			i, j = m
-			print ("move %s%s" % (irender(i),irender(j)))
-			pos = pos.move((i,j))
+		print ("\nmove %s%s" % tuple(map(render,m)))
+		pos = pos.move(m)
 
 ############################
 # Perft test
@@ -141,10 +131,12 @@ def quickmate(path, depth):
 				score = bound(pos, MATE_VALUE, d)
 				if score >= MATE_VALUE:
 					break
+				print d, score
 			else:
 				print "Unable to find mate. Only got score = %d" % score
 				return
 
 if __name__ == '__main__':
-	allperft('queen.epd')
-	#quickmate('mate1.epd', 3)
+	#allperft('queen.epd')
+	#quickmate('mate3.epd', 7)
+	xboard()
