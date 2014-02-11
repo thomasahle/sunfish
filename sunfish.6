@@ -56,5 +56,20 @@ Sunfish supports castling, en passant, and promotion. It doesn't however do mino
 On the technical side there are a lot of features that could be interesting to add to Sunfish. For performance, the most important might be a piecelist to save the enumeration of all board squares at every move generation. Other performance optimizations include a reduced use of hashtables and a mutable board representation. Perhaps based on bitboards.
 
 The evaluation in Sunfish is not very sophisticated. E.g. we don't distinguish between midgame and endgame. The search is limited in that no quince search is performed and so we can have horizon effects. Null move pruning is not done, and it is debatable wether it would be safe given our choice of MTD search. Finally Sunfish might benefit from a more advanced move ordering, including such things as killer move and SEE.
+.SH COPYRIGHT
+Copyright (C) 2014 Thomas Ahle
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation, either version 3 of the License, or
+(at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
 .SH AUTHOR
-Thomas Dybdahl Ahle
+Thomas Ahle
