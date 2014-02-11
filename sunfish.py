@@ -158,27 +158,27 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
 
 	def genMoves(self):
 		for i, p in enumerate(self.board):
-			if p.isupper():
-				for d in directions[p]:
-					for j in count(i+d, d):
-						q = self.board[j]
-						# Stay inside the board
-						if self.board[j] == ' ': break
-						# Castling
-						if i == A1 and q == 'K' and self.wc[0]: yield (j, j-2)
-						if i == H1 and q == 'K' and self.wc[1]: yield (j, j+2)
-						# No friendly captures
-						if q.isupper(): break
-						# Special pawn stuff
-						if p == 'P' and d in (9, 11) and q == '.' and j not in (self.ep, self.kp): break
-						if p == 'P' and d in (10, 20) and q != '.': break
-						if p == 'P' and d == 20 and (i > 40 or self.board[j-10] != '.'): break
-						# Move it
-						yield (i, j)
-						# Stop crawlers from sliding
-						if p in ('P','N','K'): break
-						# No sliding after captures
-						if q.islower(): break
+			if not p.isupper(): continue
+			for d in directions[p]:
+				for j in count(i+d, d):
+					q = self.board[j]
+					# Stay inside the board
+					if self.board[j] == ' ': break
+					# Castling
+					if i == A1 and q == 'K' and self.wc[0]: yield (j, j-2)
+					if i == H1 and q == 'K' and self.wc[1]: yield (j, j+2)
+					# No friendly captures
+					if q.isupper(): break
+					# Special pawn stuff
+					if p == 'P' and d in (9, 11) and q == '.' and j not in (self.ep, self.kp): break
+					if p == 'P' and d in (10, 20) and q != '.': break
+					if p == 'P' and d == 20 and (i > 40 or self.board[j-10] != '.'): break
+					# Move it
+					yield (i, j)
+					# Stop crawlers from sliding
+					if p in ('P','N','K'): break
+					# No sliding after captures
+					if q.islower(): break
 
 	def rotate(self):
 		return Position(
