@@ -1,0 +1,60 @@
+.TH SUNFISH 6 "11 Feb 2014"
+.SH NAME
+Sunfish - A 111 line Chess Engine in Python
+.SH SYNOPSIS
+sunfish
+.SH DESCRIPTION
+Sunfish is a simple, but strong chess engine, written in Python, mostly for teaching purposes. Without tables and its simple interface, it takes up just 111 lines of code!
+
+The great clarity of the Sunfish code provides a great platform for experimenting, be it with evaluation functions, chess heuristics or search. Fork it today and see what you can do! 
+.SH GAMEPLAY
+Sunfish presents chess board as a simple grid
+
+  r n b q k b n r 
+  p p p p p p p p 
+  . . . . . . . . 
+  . . . . . . . . 
+  . . . . . . . . 
+  . . . . . . . . 
+  P P P P P P P P 
+  R N B Q K B N R 
+
+ Your move:
+
+You make your move by typing source and destination coordinates.
+Coordinates are represented by letters A through H on X-axis and numbers 1
+through 8 on Y-axis, where bottom-left corner represents coordinate A1
+
+ 1  r n b q k b n r 
+ 2  p p p p p p p p 
+ 3  . . . . . . . . 
+ 4  . . . . . . . . 
+ 5  . . . . . . . . 
+ 6  . . . . . . . . 
+ 7  P P P P P P P P 
+ 8  R N B Q K B N R 
+
+    A B C D E F G H
+
+Player always begins. Player controls capital letters on the bottom.
+
+To move Pawn on E7 to E5, player would type e7e5 on the "Your move:" prompt and
+press return key.
+
+.SH FEATURES
+.IP \[bu]
+Build around the simple, but deadly efficient MTD-bi search algorithm.
+.IP \[bu]
+Filled with classic as well as modern 'chess engine tricks' for simpler and faster code.
+.IP \[bu]
+Easily adaptive evalutation function through Piece Square Tables.
+.IP \[bu]
+Uses standard Python collections and data structures for clarity and efficiency.
+.SH LIMITATIONS
+Sunfish supports castling, en passant, and promotion. It doesn't however do minor promotion or draws of any kind. All input must be done in simple 'two coordinate' notation, as shown in the screenshot.
+
+On the technical side there are a lot of features that could be interesting to add to Sunfish. For performance, the most important might be a piecelist to save the enumeration of all board squares at every move generation. Other performance optimizations include a reduced use of hashtables and a mutable board representation. Perhaps based on bitboards.
+
+The evaluation in Sunfish is not very sophisticated. E.g. we don't distinguish between midgame and endgame. The search is limited in that no quince search is performed and so we can have horizon effects. Null move pruning is not done, and it is debatable wether it would be safe given our choice of MTD search. Finally Sunfish might benefit from a more advanced move ordering, including such things as killer move and SEE.
+.SH AUTHOR
+Thomas Dybdahl Ahle
