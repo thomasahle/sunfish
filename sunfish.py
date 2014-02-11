@@ -24,7 +24,7 @@ directions = {
 	'b': (-9, 11, 9, -11),
 	'r': (-10, 1, 10, -1),
 	'q': (-9, 11, 9, -11, -10, 1, 10, -1),
-	'k': (-2, 2, -9, 11, 9, -11, -10, 1, 10, -1)
+	'k': (-9, 11, 9, -11, -10, 1, 10, -1)
 }
 
 weight = {
@@ -142,15 +142,15 @@ class Position(namedtuple('Position','board score wc bc ep kp')):
 					for j in count(i+d, d):
 						# Stay inside the board
 						if board[j] == ' ': break
+						# Castling
+						if i == 21 and board[j] == 'k' and self.wc[0]: yield (j, j-2)
+						if i == 28 and board[j] == 'k' and self.wc[1]: yield (j, j+2)
 						# No friendly captures
 						if board[j].islower(): break
 						# Special pawn stuff
 						if p == 'p' and d in (9, 11) and board[j] == '.' and j not in (self.ep, self.kp): break
 						if p == 'p' and d in (10, 20) and board[j] != '.': break
 						if p == 'p' and d == 20 and (i > 40 or board[j-10] != '.'): break
-						# Castling
-						if p == 'k' and d == -2 and (not self.wc[0] or board[i-3:i] != '...'): break
-						if p == 'k' and d == 2 and (not self.wc[1] or board[i+1:i+3] != '..'): break
 
 						yield (i,j)
 
@@ -160,10 +160,9 @@ class Position(namedtuple('Position','board score wc bc ep kp')):
 						if board[j].isupper(): break
 
 	def flip(self):
-		# Vertical mirroring and color swapping
-		board = ''.join(self.board[i:i+10] for i in range(110,-1,-10)).swapcase()
-		ep, kp = (11-self.ep//10)*10+self.ep%10, (11-self.kp//10)*10+self.kp%10
-		return Position(board, -self.score, self.bc, self.wc, ep, kp)
+		return Position(
+			self.board[::-1].swapcase(), -self.score,
+			self.bc, self.wc, 119-self.ep, 119-self.kp)
 
 	def move(self, m):
 		i, j = m
@@ -177,23 +176,18 @@ class Position(namedtuple('Position','board score wc bc ep kp')):
 		# Actual move
 		board = put(board, j, board[i])
 		board = put(board, i, '.')
-		# Castling
+		# Castling rights
 		if i == 21: wc = (False, wc[1])
 		if i == 28: wc = (wc[0], False)
-		if j == 91: bc = (False, bc[1])
-		if j == 98: bc = (bc[0], False)
+		if j == 91: bc = (bc[0], False)
+		if j == 98: bc = (False, bc[1])
+		# Castling
 		if p == 'k':
 			wc = (False, False)
-			if j - i == -2:
-				board = board[:i-4] + '..kr' + board[i:]
-				#board = put(board, i-1, 'r')
-				#board = put(board, i-4, '.')
-				kp = i - 1
-			if j - i == 2:
-				board = board[:i+1] + 'rk.' + board[i+4:]
-				#board = put(board, i+1, 'r')
-				#board = put(board, i+3, '.')
-				kp = i + 1
+			if abs(j-i) == 2:
+				kp = (i+j)//2
+				board = put(board, 21 if j < i else 28, '.')
+				board = put(board, kp, 'r')
 		# Special pawn stuff
 		if p == 'p':
 			if 90 < j < 100:
@@ -219,10 +213,9 @@ class Position(namedtuple('Position','board score wc bc ep kp')):
 			score += weight['k']
 		# Castling
 		if p == 'k':
-			if j - i == -2:
-				score += pst['r'][i-1] - pst['r'][i-4]
-			if j - i == 2:
-				score += pst['r'][i+1] - pst['r'][i+3]
+			ri = 21 if j < i else 28
+			rj = (i+j)//2
+			score += pst['r'][rj] - pst['r'][ri]
 		# Special pawn stuff
 		if p == 'p':
 			if 80 < j < 90:
@@ -324,14 +317,8 @@ if sys.version_info[0] == 2:
 def parse(c):
 	return 11 + (ord(c[1])-ord('0'))*10 + ord(c[0])-ord('a')
 
-def iparse(c):
-	return 101 + (-ord(c[1])+ord('0'))*10 + ord(c[0])-ord('a')
-
 def render(i):
 	return chr(i%10 + ord('a')-1) + str(i//10 - 1)
-
-def irender(i):
-	return chr(i%10 + ord('a')-1) + str(10 - i//10)
 
 def main():
 	pos = Position(initial,0,(True,True),(True,True),0,0)
@@ -348,7 +335,7 @@ def main():
 		if m is None:
 			print("\nGame over")
 			break
-		print("\nMy move: %s%s" % (irender(m[0]),irender(m[1])))
+		print("\nMy move: %s%s" % (render(119-m[0]),render(119-m[1])))
 		print("Visited %d nodes." % N)
 		pos = pos.move(m)
 

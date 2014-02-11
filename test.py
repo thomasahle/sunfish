@@ -4,7 +4,7 @@
 import sys
 import re
 
-from sunfish import Position, MATE_VALUE, search, parse, iparse, render, irender, bound
+from sunfish import Position, MATE_VALUE, search, parse, render, bound
 
 # Python 2 compatability
 if sys.version_info[0] == 2:
@@ -12,15 +12,16 @@ if sys.version_info[0] == 2:
 
 
 def parseFEN(fen):
-	# Fen uses the opposite color system of us. Maybe we should swap.
 	board, color, castling, enpas, hclock, fclock = fen.split()
+	# Fen uses the opposite color system of us. Maybe we should swap.
+	board, castling = board.swapcase(), castling.swapcase()
 	board = re.sub('\d', (lambda m: '.'*int(m.group(0))), board)
-	board = ' '*21 + board.replace('/','  ') + ' '*21
+	board = ' '*21 + '  '.join(board.split('/')[::-1]) + ' '*21
 	wc = ('q' in castling, 'k' in castling)
-	bc = ('Q' in castling, 'K' in castling)
-	ep = iparse(enpas) if enpas != '-' else 0
+	bc = ('K' in castling, 'Q' in castling)
+	ep = parse(enpas) if enpas != '-' else 0
 	pos = Position(board, 0, wc, bc, ep, 0)
-	return pos.flip() if color == 'w' else pos
+	return pos if color == 'w' else pos.flip()
 
 ############################
 # Playing test
@@ -47,7 +48,7 @@ def xboard():
 
 		pos = pos.move((i,j))
 		m = search(pos)
-		print("move %s%s" % tuple(map(irender,m)))
+		print("move %s%s" % (render(119-m[0]), render(119-m[1])))
 		pos = pos.move(m)
 
 def selfplay():
@@ -95,12 +96,14 @@ def perft(pos, depth, divide=False):
 	res = 0
 	for m in pos.genMoves():
 		pos1 = pos.move(m)
+		#print pos1
 		# Make sure the move was legal
 		if not any(pos1.value(m) >= MATE_VALUE for m in pos1.genMoves()):
 			sub = perft(pos1, depth-1, False)
 			if divide:
-				print " "*depth+irender(m[0])+irender(m[1]), sub
+				print " "*depth+render(m[0])+render(m[1]), sub
 			res += sub
+		#else: print "no", render(m[0]), render(m[1]), [m for m in pos1.genMoves() if pos1.value(m) >= MATE_VALUE]
 	return res
 
 ############################
@@ -138,5 +141,7 @@ def quickmate(path, depth):
 
 if __name__ == '__main__':
 	#allperft('queen.epd')
-	#quickmate('mate3.epd', 7)
-	xboard()
+	quickmate('mate1.epd', 3)
+	quickmate('mate2.epd', 5)
+	quickmate('mate3.epd', 7)
+	#xboard()
