@@ -13,12 +13,10 @@ if sys.version_info[0] == 2:
 
 def parseFEN(fen):
 	board, color, castling, enpas, hclock, fclock = fen.split()
-	# Fen uses the opposite color system of us. Maybe we should swap.
-	board, castling = board.swapcase(), castling.swapcase()
 	board = re.sub('\d', (lambda m: '.'*int(m.group(0))), board)
 	board = ' '*21 + '  '.join(board.split('/')[::-1]) + ' '*21
-	wc = ('q' in castling, 'k' in castling)
-	bc = ('K' in castling, 'Q' in castling)
+	wc = ('Q' in castling, 'K' in castling)
+	bc = ('k' in castling, 'q' in castling)
 	ep = parse(enpas) if enpas != '-' else 0
 	pos = Position(board, 0, wc, bc, ep, 0)
 	return pos if color == 'w' else pos.flip()
@@ -140,8 +138,8 @@ def quickmate(path, depth):
 				return
 
 if __name__ == '__main__':
-	#allperft('queen.epd')
-	quickmate('mate1.epd', 3)
-	quickmate('mate2.epd', 5)
-	quickmate('mate3.epd', 7)
+	allperft('queen.epd')
+	#quickmate('mate1.epd', 3)
+	#quickmate('mate2.epd', 5)
+	#quickmate('mate3.epd', 7)
 	#xboard()

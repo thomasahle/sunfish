@@ -7,38 +7,38 @@ NODES_SEARCHED = 2e4
 initial = (
 	'          ' +
 	'          ' +
-	' rnbqkbnr ' +
-	' pppppppp ' +
-	' ........ ' +
-	' ........ ' +
-	' ........ ' +
-	' ........ ' +
-	' PPPPPPPP ' +
 	' RNBQKBNR ' +
+	' PPPPPPPP ' +
+	' ........ ' +
+	' ........ ' +
+	' ........ ' +
+	' ........ ' +
+	' pppppppp ' +
+	' rnbqkbnr ' +
 	'          ' +
 	'          ')
 
 directions = {
-	'p': (10, 20, 9, 11),
-	'n': (-19, -8, 12, 21, 19, 8, -12, -21),
-	'b': (-9, 11, 9, -11),
-	'r': (-10, 1, 10, -1),
-	'q': (-9, 11, 9, -11, -10, 1, 10, -1),
-	'k': (-9, 11, 9, -11, -10, 1, 10, -1)
+	'P': (10, 20, 9, 11),
+	'N': (-19, -8, 12, 21, 19, 8, -12, -21),
+	'B': (-9, 11, 9, -11),
+	'R': (-10, 1, 10, -1),
+	'Q': (-9, 11, 9, -11, -10, 1, 10, -1),
+	'K': (-9, 11, 9, -11, -10, 1, 10, -1)
 }
 
 weight = {
-	'p': 100,   'P': -100,
-	'n': 320,   'N': -320,
-	'b': 330,   'B': -330,
-	'r': 500,   'R': -500,
-	'q': 900,   'Q': -900,
-	'k': 20000, 'K': -20000,
+	'P': 100,
+	'N': 320,
+	'B': 330,
+	'R': 500,
+	'Q': 900,
+	'K': 20000
 }
 MATE_VALUE = 10000
 
 pst = {
-	'p': (
+	'P': (
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
@@ -52,7 +52,7 @@ pst = {
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0
 	),
-	'b': (
+	'B': (
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0, -44, -17, -24, -33, -33, -24, -17, -44,   0,
@@ -66,7 +66,7 @@ pst = {
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0
 	),
-	'n': (
+	'N': (
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0,-134, -99, -75, -63, -63, -75, -99,-134,   0,
@@ -80,7 +80,7 @@ pst = {
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0
 	),
-	'r': (
+	'R': (
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0, -24, -24,  -2,   2,   2,  -2, -24, -24,   0,
@@ -94,7 +94,7 @@ pst = {
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0
 	),
-	'q': (
+	'Q': (
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0,   8,   8,   8,   8,   8,   8,   8,   8,   0,
@@ -108,7 +108,7 @@ pst = {
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0
 	),
-	'k': (
+	'K': (
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0, 298, 332, 273, 175, 225, 175, 332, 298,   0,
@@ -137,27 +137,27 @@ class Position(namedtuple('Position','board score wc bc ep kp')):
 	def genMoves(self):
 		board = self.board
 		for i, p in enumerate(board):
-			if p.islower():
+			if p.isupper():
 				for d in directions[p]:
 					for j in count(i+d, d):
 						# Stay inside the board
 						if board[j] == ' ': break
 						# Castling
-						if i == 21 and board[j] == 'k' and self.wc[0]: yield (j, j-2)
-						if i == 28 and board[j] == 'k' and self.wc[1]: yield (j, j+2)
+						if i == 21 and board[j] == 'K' and self.wc[0]: yield (j, j-2)
+						if i == 28 and board[j] == 'K' and self.wc[1]: yield (j, j+2)
 						# No friendly captures
-						if board[j].islower(): break
+						if board[j].isupper(): break
 						# Special pawn stuff
-						if p == 'p' and d in (9, 11) and board[j] == '.' and j not in (self.ep, self.kp): break
-						if p == 'p' and d in (10, 20) and board[j] != '.': break
-						if p == 'p' and d == 20 and (i > 40 or board[j-10] != '.'): break
+						if p == 'P' and d in (9, 11) and board[j] == '.' and j not in (self.ep, self.kp): break
+						if p == 'P' and d in (10, 20) and board[j] != '.': break
+						if p == 'P' and d == 20 and (i > 40 or board[j-10] != '.'): break
 
 						yield (i,j)
 
 						# Stop crawlers from sliding
-						if p in ('p','n','k'): break
+						if p in ('P','N','K'): break
 						# No sliding after captures
-						if board[j].isupper(): break
+						if board[j].islower(): break
 
 	def flip(self):
 		return Position(
@@ -182,16 +182,16 @@ class Position(namedtuple('Position','board score wc bc ep kp')):
 		if j == 91: bc = (bc[0], False)
 		if j == 98: bc = (False, bc[1])
 		# Castling
-		if p == 'k':
+		if p == 'K':
 			wc = (False, False)
 			if abs(j-i) == 2:
 				kp = (i+j)//2
 				board = put(board, 21 if j < i else 28, '.')
-				board = put(board, kp, 'r')
+				board = put(board, kp, 'R')
 		# Special pawn stuff
-		if p == 'p':
+		if p == 'P':
 			if 90 < j < 100:
-				board = put(board, j, 'q')
+				board = put(board, j, 'Q')
 			if j - i == 20:
 				ep = i + 10
 			if j - i in (9, 11) and q == '.':
@@ -205,25 +205,25 @@ class Position(namedtuple('Position','board score wc bc ep kp')):
 		# Actual move
 		score = pst[p][j] - pst[p][i]
 		# Capture
-		if q.isupper():
-			score += pst[q.lower()][j]
-			score += weight[q.lower()]
+		if q.islower():
+			score += pst[q.upper()][j]
+			score += weight[q.upper()]
 		# King capture
 		if abs(j-self.kp) < 2:
-			score += weight['k']
+			score += weight['K']
 		# Castling
-		if p == 'k':
+		if p == 'K':
 			ri = 21 if j < i else 28
 			rj = (i+j)//2
-			score += pst['r'][rj] - pst['r'][ri]
+			score += pst['R'][rj] - pst['R'][ri]
 		# Special pawn stuff
-		if p == 'p':
+		if p == 'P':
 			if 80 < j < 90:
-				score += weight['q'] - weight['p']
-				score += pst['q'][j] - pst['p'][j]
+				score += weight['Q'] - weight['P']
+				score += pst['Q'][j] - pst['P'][j]
 			if j == self.ep:
-				score += pst['p'][j-10]
-				score += weight['p']
+				score += pst['P'][j-10]
+				score += weight['P']
 		return score
 
 Entry = namedtuple('Entry', 'depth score gamma move')
