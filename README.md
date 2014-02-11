@@ -28,4 +28,4 @@ It is also possible to run Sunfish as an XBoard/CECP engine in PyChess or a simi
 
 Limitations
 ===========
-Sunfish supports castling, en passant, and promotion. It doesn't however do minor promotion or draws of any kind. All input must be done in simple 'two coordinate' notation.
+Sunfish supports castling, en passant, and promotion. It doesn't however do minor promotion or draws of any kind. All input must be done in simple 'two coordinate' notation, as shown in the screenshot.
