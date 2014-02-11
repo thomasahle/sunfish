@@ -1,6 +1,5 @@
 Sunfish
 =======
-
 Sunfish is a near minimal chess engine, written in Python, mostly for teaching purposes. It prioritises clarity over performance, but can look 6 half moves into 'the future' easily. Sunfish provides a great platform for experimenting, be it with evaluation functions, chess heuristics or search. Fork it today and see what you can do!
 
 Screenshot
@@ -21,10 +20,16 @@ Screenshot
 
 Run it!
 =======
-
 Sunfish is selfcontained in the `sunfish.py` file of the repository. I recommend running it with `pypy` for optimal perforamnce.
 
 It is also possible to run Sunfish as an XBoard/CECP engine in PyChess or a similar interface. It requires a bit of fiddling with the `test.py` script though.
+
+Features
+===========
+1. Build around the simple, but deadly efficient MTD-bi search algorithm.
+2. Filled with classic as well as modern 'chess engine tricks' for simpler and faster code.
+3. Easily adaptive evalutation function through Piece Square Tables.
+4. Uses standard Python collections and data structures for clarity and efficiency.
 
 Limitations
 ===========
