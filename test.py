@@ -5,6 +5,7 @@ import re
 from sunfish import Position, MATE_VALUE, search, parse, render, bound
 
 def parseFEN(fen):
+	""" Parses a string in Forsyth-Edwards Notation into a Position """
 	board, color, castling, enpas, hclock, fclock = fen.split()
 	board = re.sub('\d', (lambda m: '.'*int(m.group(0))), board)
 	board = ' '*21 + '  '.join(board.split('/')[::-1]) + ' '*21
@@ -14,11 +15,12 @@ def parseFEN(fen):
 	pos = Position(board, 0, wc, bc, ep, 0)
 	return pos if color == 'w' else pos.rotate()
 
-############################
+###############################################################################
 # Playing test
-############################
+###############################################################################
 
 def xboard():
+	""" Play as a black engine in the CECP/XBoard protocol """
 	pos = parseFEN('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1')
 	while True:
 		smove = input()
@@ -40,6 +42,7 @@ def xboard():
 			continue
 
 def selfplay():
+	""" Start a game sunfish vs. sunfish """
 	pos = parseFEN('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1')
 	for d in range(200):
 		# Always print the board from the same direction
@@ -54,9 +57,9 @@ def selfplay():
 		print("\nmove %s%s" % tuple(map(render,m)))
 		pos = pos.move(m)
 
-############################
+###############################################################################
 # Perft test
-############################
+###############################################################################
 
 def allperft(path, depth=4):
 	for d in range(1, depth+1):
@@ -76,7 +79,7 @@ def allperft(path, depth=4):
 						print(pos)
 					perft(pos, d, divide=True)
 					return
-		print()
+		print('')
 
 def perft(pos, depth, divide=False):
 	if depth == 0:
@@ -92,9 +95,9 @@ def perft(pos, depth, divide=False):
 			res += sub
 	return res
 
-############################
+###############################################################################
 # Find mate test
-############################
+###############################################################################
 
 def allmate(path):
 	with open(path) as f:
@@ -108,8 +111,9 @@ def allmate(path):
 				print("Unable to find mate. Only got score = %d" % score)
 				break
 
-# This one is about twice as fast
 def quickmate(path, depth):
+	""" Similar to allmate, but uses the `bound` function directly to only
+	search for moves that will win us the game """
 	with open(path) as f:
 		for line in f:
 			line = line.strip()
@@ -133,6 +137,5 @@ if __name__ == '__main__':
 	#allperft('queen.epd')
 	#quickmate('mate1.epd', 3)
 	#quickmate('mate2.epd', 5)
-	#quickmate('mate3.epd', 7)
-	allmate('mate2.epd')
+	quickmate('mate3.epd', 7)
 	#xboard()
