@@ -134,8 +134,8 @@ if sys.version_info[0] == 2:
 	input = raw_input
 
 if __name__ == '__main__':
-	#allperft('queen.epd')
+	allperft('queen.epd')
 	#quickmate('mate1.epd', 3)
 	#quickmate('mate2.epd', 5)
-	quickmate('mate3.epd', 7)
-	#xboard()
+	#quickmate('mate3.epd', 7)
+	#selfplay()

@@ -157,8 +157,11 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
 	"""
 
 	def genMoves(self):
-		for i, p in enumerate(self.board):
-			if not p.isupper(): continue
+		# For each of our pieces, iterate through each possible 'ray' of moves,
+		# as defined in the 'directions' map. The rays are broken e.g. by
+		# captures or immediately in case of pieces such as knights.
+		piecelist = ((i,p) for i,p in enumerate(self.board) if p.isupper())
+		for i, p in piecelist:
 			for d in directions[p]:
 				for j in count(i+d, d):
 					q = self.board[j]
