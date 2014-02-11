@@ -1,3 +1,5 @@
+import sys
+
 from itertools import count
 from collections import Counter, OrderedDict, namedtuple
 
@@ -159,7 +161,7 @@ class Position(namedtuple('Position','board score wc bc ep kp')):
 						# No sliding after captures
 						if board[j].islower(): break
 
-	def flip(self):
+	def rotate(self):
 		return Position(
 			self.board[::-1].swapcase(), -self.score,
 			self.bc, self.wc, 119-self.ep, 119-self.kp)
@@ -168,11 +170,10 @@ class Position(namedtuple('Position','board score wc bc ep kp')):
 		i, j = m
 		p, q = self.board[i], self.board[j]
 		put = lambda board, i, p: board[:i] + p + board[i+1:]
-
+		# Copy variables and reset ep and kp
 		board = self.board
 		wc, bc, ep, kp = self.wc, self.bc, 0, 0
 		score = self.score + self.value(m)
-
 		# Actual move
 		board = put(board, j, board[i])
 		board = put(board, i, '.')
@@ -196,8 +197,8 @@ class Position(namedtuple('Position','board score wc bc ep kp')):
 				ep = i + 10
 			if j - i in (9, 11) and q == '.':
 				board = put(board, j-10, '.')
-
-		return Position(board, score, wc, bc, ep, kp).flip()
+		# We rotate the returned position, so it's ready for the next player
+		return Position(board, score, wc, bc, ep, kp).rotate()
 
 	def value(self, move):
 		i, j = move
@@ -208,7 +209,7 @@ class Position(namedtuple('Position','board score wc bc ep kp')):
 		if q.islower():
 			score += pst[q.upper()][j]
 			score += weight[q.upper()]
-		# King capture
+		# Castling check detection
 		if abs(j-self.kp) < 2:
 			score += weight['K']
 		# Castling
@@ -293,11 +294,12 @@ def search(pos, maxn=NODES_SEARCHED):
 			if score < gamma:
 				upper = score
 		
+		score = (lower + upper)//2
 		#print("Searched %d nodes. Depth %d." % (N, depth))
 
 		# We stop deepening if the global N counter shows we have spent too
 		# long, or if we have already won the game.
-		if N >= maxn or abs(lower) >= MATE_VALUE:
+		if N >= maxn or abs(score) >= MATE_VALUE:
 			#print("Searched %d nodes. Depth was %d.")
 			break
 
@@ -305,12 +307,12 @@ def search(pos, maxn=NODES_SEARCHED):
 	# transposition table.
 	entry = tp.get(pos)
 	if entry is not None:
-		return entry.move
-	return None
+		return entry.move, score
+	return None, score
 
 ############
 
-import sys
+# Python 2 compatability
 if sys.version_info[0] == 2:
 	input = raw_input
 
@@ -325,13 +327,13 @@ def main():
 	while True:
 		print('\n'.join(pos.board[i:i+10] for i in range(100,0,-10)))
 
-		smove = input("\nYou're move: ")
+		smove = input("\nYour move: ")
 		move = parse(smove[0:2]), parse(smove[2:4])
 		
 		pos = pos.move(move)
-		print('\n'.join(pos.flip().board[i:i+10] for i in range(100,0,-10)))
+		print('\n'.join(pos.rotate().board[i:i+10] for i in range(100,0,-10)))
 
-		m = search(pos)
+		m, _ = search(pos)
 		if m is None:
 			print("\nGame over")
 			break
