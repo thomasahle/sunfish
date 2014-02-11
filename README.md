@@ -1,6 +1,8 @@
 Sunfish
 =======
-Sunfish is a near minimal chess engine, written in Python, mostly for teaching purposes. It prioritises clarity over performance, but can look 6 half moves into 'the future' easily. Sunfish provides a great platform for experimenting, be it with evaluation functions, chess heuristics or search. Fork it today and see what you can do!
+Sunfish is a simple, but strong chess engine, written in Python, mostly for teaching purposes. Without tables and its simple interface, it takes up just 111 lines of code!
+
+The great clarity of the Sunfish code provides a great platform for experimenting, be it with evaluation functions, chess heuristics or search. Fork it today and see what you can do!
 
 Screenshot
 ==========
