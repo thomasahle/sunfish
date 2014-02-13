@@ -44,3 +44,5 @@ The evaluation in Sunfish is not very sophisticated. E.g. we don't distinguish b
 Why Sunfish?
 ============
 The name Sunfish actually refers to the [Pygmy Sunfish](http://en.wikipedia.org/wiki/Pygmy_sunfish), which is amoung the very few fish to start with the letters 'Py'. Using the name of a fish is a reference to the great giants Stockfish and Rybka.
+
+![alt tag](http://upload.wikimedia.org/wikipedia/commons/6/67/Elassoma_sp.jpg)
