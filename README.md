@@ -40,3 +40,7 @@ Sunfish supports castling, en passant, and promotion. It doesn't however do mino
 On the technical side there are a lot of features that could be interesting to add to Sunfish. For performance, the most important might be a piecelist to save the enumeration of all board squares at every move generation. Other performance optimizations include a reduced use of hashtables and a mutable board representation. Perhaps based on bitboards.
 
 The evaluation in Sunfish is not very sophisticated. E.g. we don't distinguish between midgame and endgame. The search is limited in that no quince search is performed and so we can have horizon effects. Null move pruning is not done, and it is debatable wether it would be safe given our choice of MTD search. Finally Sunfish might benefit from a more advanced move ordering, including such things as killer move and SEE.
+
+Why Sunfish?
+============
+The name Sunfish actually refers to the [Pygmy Sunfish](http://en.wikipedia.org/wiki/Pygmy_sunfish), which is amoung the very few fish to start with the letters 'Py'. Using the name of a fish is a reference to the great giants Stockfish and Rybka.
