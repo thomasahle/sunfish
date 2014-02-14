@@ -258,11 +258,9 @@ tp = OrderedDict()
 
 N = 0
 def bound(pos, gamma, depth):
-	""" gamma -- should be within the interval (-MATE_VALUE, MATE_VALUE]
-		returns s(pos) <= r < gamma    if s(pos) < gamma
+	""" returns s(pos) <= r < gamma    if s(pos) < gamma
 		returns s(pos) >= r >= gamma   if s(pos) >= gamma """
 	global N; N += 1
-	assert -MATE_VALUE < gamma <= MATE_VALUE
 
 	# Look in the table if we have already searched this position before.
 	# We use the table value if it was done with at least as deep a search
@@ -307,8 +305,8 @@ def search(pos, maxn=NODES_SEARCHED):
 	for depth in range(1, 99):
 		# The inner loop is a binary search on the score of the position.
 		# Inv: lower <= score <= upper
-		lower, upper = -MATE_VALUE, MATE_VALUE
-		while lower < upper:
+		lower, upper = -3*MATE_VALUE, 3*MATE_VALUE
+		while lower != upper:
 			gamma = (lower+upper+1)//2
 			score = bound(pos, gamma, depth)
 			if score >= gamma:
@@ -316,7 +314,7 @@ def search(pos, maxn=NODES_SEARCHED):
 			if score < gamma:
 				upper = score
 		
-		score = (lower + upper)//2
+		score = lower
 		#print("Searched %d nodes. Depth %d. Score %d" % (N, depth, score))
 
 		# We stop deepening if the global N counter shows we have spent too
