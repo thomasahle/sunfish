@@ -19,28 +19,6 @@ def parseFEN(fen):
 # Playing test
 ###############################################################################
 
-def xboard():
-	""" Play as a black engine in the CECP/XBoard protocol """
-	pos = parseFEN('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1')
-	while True:
-		smove = input()
-		if smove == 'quit':
-			break
-		elif smove == 'protover 2':
-			print('feature myname="Sunfish" usermove=1 done=1')
-			continue
-		elif smove.startswith('usermove'):
-			smove = smove[9:]
-			m = parse(smove[0:2]), parse(smove[2:4])
-			pos = pos.move(m)
-			# Respond
-			m, _ = search(pos)
-			print("move %s%s" % (render(119-m[0]), render(119-m[1])))
-			pos = pos.move(m)
-		else:
-			print("Didn't understand command '%s'" % smove)
-			continue
-
 def selfplay():
 	""" Start a game sunfish vs. sunfish """
 	pos = parseFEN('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1')
@@ -135,8 +113,7 @@ if sys.version_info[0] == 2:
 
 if __name__ == '__main__':
 	#allperft('queen.epd')
-	#quickmate('mate1.epd', 3)
-	#quickmate('mate2.epd', 5)
-	#quickmate('mate3.epd', 7)
+	quickmate('mate1.epd', 3)
+	quickmate('mate2.epd', 5)
+	quickmate('mate3.epd', 7)
 	#selfplay()
-	xboard()

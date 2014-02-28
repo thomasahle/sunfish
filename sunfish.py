@@ -18,18 +18,18 @@ MATE_VALUE = 10000
 # fast detection of moves that don't stay within the board.
 A1, H1, A8, H8 = 21, 28, 91, 98
 initial = (
-	'          ' +
-	'          ' +
-	' RNBQKBNR ' +
-	' PPPPPPPP ' +
-	' ........ ' +
-	' ........ ' +
-	' ........ ' +
-	' ........ ' +
-	' pppppppp ' +
-	' rnbqkbnr ' +
-	'          ' +
-	'          ')
+	'          ' + #   0 -  9
+	'          ' + #  10 - 19
+	' RNBQKBNR ' + #  20 - 29
+	' PPPPPPPP ' + #  30 - 39
+	' ........ ' + #  40 - 49
+	' ........ ' + #  50 - 59
+	' ........ ' + #  60 - 69
+	' ........ ' + #  70 - 79
+	' pppppppp ' + #  80 - 89
+	' rnbqkbnr ' + #  90 - 99
+	'          ' + # 100 -109
+	'          ')  # 110 -119
 
 
 ###############################################################################
@@ -267,8 +267,8 @@ def bound(pos, gamma, depth):
 	# as ours, and the gamma value is compatible.
 	entry = tp.get(pos)
 	if entry is not None and entry.depth >= depth and (
-			entry.score < gamma and entry.score < entry.gamma or
-			gamma <= entry.score and entry.gamma <= entry.score):
+			entry.score < entry.gamma and entry.score < gamma or
+			entry.score >= entry.gamma and entry.score >= gamma):
 		return entry.score
 
 	# Stop searching if we have run out of depth or have won/lost.
@@ -280,7 +280,7 @@ def bound(pos, gamma, depth):
 	# cuts. At the next level of the tree we are going to minimize the score.
 	# This can be shown equal to maximizing the negative score, with a slightly
 	# adjusted gamma value.
-	best, bmove = -MATE_VALUE, None
+	best, bmove = -3*MATE_VALUE, None
 	for move in sorted(pos.genMoves(), key=pos.value, reverse=True):
 		score = -bound(pos.move(move), 1-gamma, depth-1)
 		if score > best:
@@ -288,7 +288,7 @@ def bound(pos, gamma, depth):
 			bmove = move
 		if score >= gamma:
 			break
-
+	
 	# We save the found move together with the score, so we can retrieve it in
 	# the play loop. We also trim the transposition table in FILO order.
 	tp[pos] = Entry(depth, best, gamma, bmove)
@@ -305,8 +305,11 @@ def search(pos, maxn=NODES_SEARCHED):
 	for depth in range(1, 99):
 		# The inner loop is a binary search on the score of the position.
 		# Inv: lower <= score <= upper
+		# However this may be broken by values from the transposition table,
+		# as they don't have the same concept of p(score). Hence we just use
+		# 'lower < upper - margin' as the loop condition.
 		lower, upper = -3*MATE_VALUE, 3*MATE_VALUE
-		while lower != upper:
+		while lower < upper - 3:
 			gamma = (lower+upper+1)//2
 			score = bound(pos, gamma, depth)
 			if score >= gamma:
@@ -314,8 +317,7 @@ def search(pos, maxn=NODES_SEARCHED):
 			if score < gamma:
 				upper = score
 		
-		score = lower
-		#print("Searched %d nodes. Depth %d. Score %d" % (N, depth, score))
+		print("Searched %d nodes. Depth %d. Score %d" % (N, depth, score))
 
 		# We stop deepening if the global N counter shows we have spent too
 		# long, or if we have already won the game.
