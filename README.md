@@ -22,7 +22,7 @@ Screenshot
 
 Run it!
 =======
-Sunfish is self contained in the `sunfish.py` file from the repository. I recommend running it with `pypy` for optimal perforamnce.
+Sunfish is self contained in the `sunfish.py` file from the repository. I recommend running it with `pypy` for optimal performance.
 
 It is also possible to run Sunfish as an [XBoard](http://www.gnu.org/software/xboard/)/CECP engine in [PyChess](http://pychess.org) or a similar interface. It requires a bit of fiddling with the `test.py` script though.
 

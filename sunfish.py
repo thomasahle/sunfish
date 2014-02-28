@@ -6,7 +6,7 @@ from collections import Counter, OrderedDict, namedtuple
 # The table size is the maximum number of elements in the transposition table.
 TABLE_SIZE = 1e7
 
-# This constant controls how much time we spend on looking for uptimal moves.
+# This constant controls how much time we spend on looking for optimal moves.
 NODES_SEARCHED = 2e4
 
 # Mate value must be greater than 8*queen + 2*(rook+knight+bishop)
