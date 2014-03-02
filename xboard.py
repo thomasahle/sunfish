@@ -6,11 +6,6 @@ import sys
 import sunfish
 import test
 
-# Another try at disabling the buffer
-os.environ['PYTHONUNBUFFERED'] = '1'
-sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
-# msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
-
 # Python 2 compatability
 if sys.version_info[0] == 2:
 	input = raw_input
@@ -38,13 +33,14 @@ if __name__ == '__main__':
 			print('feature usermove=1')
 			print('feature setboard=1')
 			print('feature ping=1')
+			print('feature sigint=0')
 			print('feature done=1')
 
 		elif smove == 'new':
 			stack.append('setboard rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1')
 
 		elif smove.startswith('setboard'):
-			_, fen = smove.split()
+			_, fen = smove.split(' ', 1)
 			pos = test.parseFEN(fen)
 			forced = True
 			color = WHITE if fen.split()[1] == 'w' else BLACK
@@ -88,4 +84,4 @@ if __name__ == '__main__':
 			pass
 
 		else:
-			print("Didn't understand command '%s'" % smove)
+			print("Error (unkown command):", smove)
