@@ -114,14 +114,14 @@ pst = {
 	'Q': (
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-		0,   8,   8,   8,   8,   8,   8,   8,   8,   0,
-		0,   8,   8,   8,   8,   8,   8,   8,   8,   0,
-		0,   8,   8,   8,   8,   8,   8,   8,   8,   0,
-		0,   8,   8,   8,   8,   8,   8,   8,   8,   0,
-		0,   8,   8,   8,   8,   8,   8,   8,   8,   0,
-		0,   8,   8,   8,   8,   8,   8,   8,   8,   0,
-		0,   8,   8,   8,   8,   8,   8,   8,   8,   0,
-		0,   8,   8,   8,   8,   8,   8,   8,   8,   0,
+		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+		0,   0,   0,   0,  -5,  -5,   0,   0,   0,   0,
+		0,   0,   0,   0,  -5,  -5,   0,   0,   0,   0,
+		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0
 	),
@@ -195,6 +195,7 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
 		# Copy variables and reset ep and kp
 		board = self.board
 		wc, bc, ep, kp = self.wc, self.bc, 0, 0
+		# TODO: tempo via auto decreasing of score?
 		score = self.score + self.value(move)
 		# Actual move
 		board = put(board, j, board[i])
@@ -271,10 +272,17 @@ def bound(pos, gamma, depth):
 			entry.score >= entry.gamma and entry.score >= gamma):
 		return entry.score
 
-	# Stop searching if we have run out of depth or have won/lost.
-	# A so called qsearch could be started from here for stronger play.
-	if depth == 0 or abs(pos.score) >= MATE_VALUE:
+	# Stop searching if we have won/lost.
+	if abs(pos.score) >= MATE_VALUE:
 		return pos.score
+
+	# Null move. Is also used for stalemate checking
+	nullscore = -bound(pos.rotate(), 1-gamma, depth-3) if depth > 0 else pos.score
+	if nullscore >= gamma:
+		# We need a pv
+		if entry is None:
+			tp[pos] = Entry(0, nullscore, gamma, next(pos.genMoves()))
+		return nullscore
 
 	# We generate all possible, pseudo legal moves and order them to provoke
 	# cuts. At the next level of the tree we are going to minimize the score.
@@ -282,18 +290,32 @@ def bound(pos, gamma, depth):
 	# adjusted gamma value.
 	best, bmove = -3*MATE_VALUE, None
 	for move in sorted(pos.genMoves(), key=pos.value, reverse=True):
+		# QSearch
+		if depth <= 0 and pos.value(move) < 100:
+			break
 		score = -bound(pos.move(move), 1-gamma, depth-1)
 		if score > best:
 			best = score
 			bmove = move
 		if score >= gamma:
 			break
-	
+
+	# If there are no captures, or just not any good ones, stand pat
+	if depth <= 0 and best < nullscore:
+		return nullscore
+	# Check for stalemate
+	if depth > 0 and bmove is None and nullscore > -MATE_VALUE:
+		print("Stalemate detected")
+		print(pos.board)
+		best = 0
+
 	# We save the found move together with the score, so we can retrieve it in
 	# the play loop. We also trim the transposition table in FILO order.
-	tp[pos] = Entry(depth, best, gamma, bmove)
-	if len(tp) > TABLE_SIZE:
-		tp.pop()
+	# We prefer fail-high moves, as they are the ones we can build our pv from.
+	if entry is None or depth >= entry.depth and score >= gamma:
+		tp[pos] = Entry(depth, best, gamma, bmove)
+		if len(tp) > TABLE_SIZE:
+			tp.pop()
 	return best
 
 def search(pos, maxn=NODES_SEARCHED):
@@ -317,7 +339,7 @@ def search(pos, maxn=NODES_SEARCHED):
 			if score < gamma:
 				upper = score
 		
-		print("Searched %d nodes. Depth %d. Score %d" % (N, depth, score))
+		print("Searched %d nodes. Depth %d. Score %d(%d/%d). Pv %s" % (N, depth, score, lower, upper, ' '.join(pv(1,pos))))
 
 		# We stop deepening if the global N counter shows we have spent too
 		# long, or if we have already won the game.
@@ -345,6 +367,26 @@ def parse(c):
 
 def render(i):
 	return chr(i%10 + ord('a') - 1) + str(i//10 - 1)
+
+def mrender(color,pos, m):
+	# Sunfish always assumes promotion to queen
+	p = 'q' if A8 <= m[1] <= H8 and pos.board[m[0]] == 'P' else ''
+	m = (119-m[0],119-m[1]) if color == 1 else m
+	return render(m[0]) + render(m[1]) + p
+def pv(color, pos):
+	res = []
+	while True:
+		entry = tp.get(pos)
+		if entry is None:
+			break
+		move = mrender(color,pos,entry.move)
+		if move in res:
+			res.append(move)
+			res.append('loop')
+			break
+		res.append(move)
+		pos, color = pos.move(entry.move), 1-color
+	return res
 
 def main():
 	pos = Position(initial,0,(True,True),(True,True),0,0)
