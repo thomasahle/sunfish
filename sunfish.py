@@ -1,4 +1,5 @@
 import sys
+import time
 
 from itertools import count
 from collections import Counter, OrderedDict, namedtuple
@@ -344,6 +345,8 @@ def search(pos, maxn=NODES_SEARCHED):
 	""" Iterative deepening MTD-bi search """
 	global N; N = 0
 
+	starttime = time.time()
+	print("Depth\tScore\tTime\tNodes\tPV")
 	# We limit the depth to some constant, so we don't get a stack overflow in
 	# the end game.
 	for depth in range(1, 99):
@@ -360,9 +363,8 @@ def search(pos, maxn=NODES_SEARCHED):
 				lower = score
 			if score < gamma:
 				upper = score
-		
-		print("Searched %d nodes. Depth %d. Score %d(%d/%d). Pv %s" % (N, depth, score, lower, upper, ' '.join(pv(1,pos))))
-
+		now = int((time.time() - starttime) * 100)
+		print("%d\t%d\t%d\t%d\t%s" % (depth, score, now, N, ' '.join(pv(1,pos))))
 		# We stop deepening if the global N counter shows we have spent too
 		# long, or if we have already won the game.
 		if N >= maxn or abs(score) >= MATE_VALUE:
