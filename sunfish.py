@@ -313,9 +313,13 @@ def bound(pos, gamma, depth):
 		# LMR
 		movecount += 1
 		reductions = 0
+		# If we are starting to get into moves that look unlikely to be higher
+		# than gamma, we might as well start reducing them to save time.
 		if movecount > 5 and 3 > depth > 0:
 			reductions = 1
 		score = -bound(pos.move(move), 1-gamma, depth-1-reductions)
+		# If this actually looks like it will be a good move, then look at it
+		# again at full depth.
 		if score > best and reductions == 1:
 			score = -bound(pos.move(move), 1-gamma, depth-1)
 		if score > best:
