@@ -284,22 +284,37 @@ def bound(pos, gamma, depth):
 			tp[pos] = Entry(0, nullscore, gamma, next(pos.genMoves()))
 		return nullscore
 
+        # Try the TT move, it's usually good enough to get a free cutoff, or
+        # otherwise get a good score.
+	best, bmove = -3*MATE_VALUE, None
+	if entry is not None:
+                score = -bound(pos.move(entry.move), 1-gamma, depth-1)
+                if score > best:
+                        best = score
+                        bmove = entry.move
+                if score >= gamma:
+                	if depth >= entry.depth:
+                		tp[pos] = Entry(depth, best, gamma, bmove)
+                		if len(tp) > TABLE_SIZE:
+                			tp.pop()
+                	return best
 	# We generate all possible, pseudo legal moves and order them to provoke
 	# cuts. At the next level of the tree we are going to minimize the score.
 	# This can be shown equal to maximizing the negative score, with a slightly
 	# adjusted gamma value.
-	best, bmove = -3*MATE_VALUE, None
 	for move in sorted(pos.genMoves(), key=pos.value, reverse=True):
 		# QSearch
 		if depth <= 0 and pos.value(move) < 100:
 			break
+                # Don't try the TT move twice
+		if entry is not None and move == entry.move:
+                        continue
 		score = -bound(pos.move(move), 1-gamma, depth-1)
 		if score > best:
 			best = score
 			bmove = move
 		if score >= gamma:
 			break
-
 	# If there are no captures, or just not any good ones, stand pat
 	if depth <= 0 and best < nullscore:
 		return nullscore
