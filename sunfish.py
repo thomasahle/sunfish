@@ -284,20 +284,20 @@ def bound(pos, gamma, depth):
 			tp[pos] = Entry(0, nullscore, gamma, next(pos.genMoves()))
 		return nullscore
 
-	# Try the TT move, it's usually good enough to get a free cutoff, or
-	# otherwise get a good score.
-	best, bmove, movecount = -3*MATE_VALUE, None, 0
+        # Try the TT move, it's usually good enough to get a free cutoff, or
+        # otherwise get a good score.
+	best, bmove = -3*MATE_VALUE, None
 	if entry is not None:
-		movecount += 1
-		score = -bound(pos.move(entry.move), 1-gamma, depth-1)
-		best = score
-		bmove = entry.move
-		if score >= gamma:
-			if depth >= entry.depth:
-				tp[pos] = Entry(depth, best, gamma, bmove)
-				if len(tp) > TABLE_SIZE:
-					tp.pop()
-			return best
+                score = -bound(pos.move(entry.move), 1-gamma, depth-1)
+                if score > best:
+                        best = score
+                        bmove = entry.move
+                if score >= gamma:
+                	if depth >= entry.depth:
+                		tp[pos] = Entry(depth, best, gamma, bmove)
+                		if len(tp) > TABLE_SIZE:
+                			tp.pop()
+                	return best
 	# We generate all possible, pseudo legal moves and order them to provoke
 	# cuts. At the next level of the tree we are going to minimize the score.
 	# This can be shown equal to maximizing the negative score, with a slightly
@@ -306,17 +306,10 @@ def bound(pos, gamma, depth):
 		# QSearch
 		if depth <= 0 and pos.value(move) < 100:
 			break
-		# Don't try the TT move twice
+                # Don't try the TT move twice
 		if entry is not None and move == entry.move:
-			continue
-		# LMR
-		movecount += 1
-		reductions = 0
-		if movecount > 5 and 3 > depth > 0:
-			reductions = 1
-		score = -bound(pos.move(move), 1-gamma, depth-1-reductions)
-		if score > best and reductions == 1:
-			score = -bound(pos.move(move), 1-gamma, depth-1)
+                        continue
+		score = -bound(pos.move(move), 1-gamma, depth-1)
 		if score > best:
 			best = score
 			bmove = move
@@ -451,4 +444,3 @@ def main():
 
 if __name__ == '__main__':
 	main()
-
