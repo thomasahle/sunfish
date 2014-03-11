@@ -1,9 +1,20 @@
 #!/usr/bin/env pypy -u
+# -*- coding: utf-8 -*-
+
 from __future__ import print_function
 from __future__ import division
 import re
 import sys
 import sunfish
+
+# Python 2 compatability
+if sys.version_info[0] == 2:
+	input = raw_input
+
+# Sunfish doesn't know about colors. We hav to.
+WHITE, BLACK = range(2)
+FEN_INITIAL = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+
 
 def parseFEN(fen):
 	""" Parses a string in Forsyth-Edwards Notation into a Position """
@@ -49,15 +60,8 @@ def pv(color, pos):
 		res.append(str(pos.score if color==origc else -pos.score))
 	return ' '.join(res)
 
-# Python 2 compatability
-if sys.version_info[0] == 2:
-	input = raw_input
-
-# Sunfish doesn't know about colors. We hav to.
-WHITE, BLACK = range(2)
-
 def main():
-	pos = parseFEN('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1')
+	pos = parseFEN(FEN_INITIAL)
 	forced = False
 	color = WHITE
 	time, otim = 1, 1
@@ -82,7 +86,7 @@ def main():
 			print('feature done=1')
 
 		elif smove == 'new':
-			stack.append('setboard rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1')
+			stack.append('setboard ' + FEN_INITIAL)
 
 		elif smove.startswith('setboard'):
 			_, fen = smove.split(' ', 1)
@@ -97,14 +101,14 @@ def main():
 			forced = False
 
 			# Let's follow the clock of our opponent
-			nodes = sunfish.NODES_SEARCHED
+			nodes = 2e4
 			if time > 0 and otim > 0: nodes *= time/otim
 			m, s = sunfish.search(pos, maxn=nodes)
 			# We don't play well once we have detected our death
 			if s <= -sunfish.MATE_VALUE:
 				print('resign')
 			else:
-				print('# %d %+d %d %d %s' % (0, s, 0, sunfish.N, pv(color,pos)))
+				print('# %d %+d %d %d %s' % (0, s, 0, sunfish.nodes, pv(color,pos)))
 				print('move', mrender(color, pos, m))
 				print('score before %d after %+d' % (pos.score, pos.value(m)))
 				pos = pos.move(m)
