@@ -36,3 +36,6 @@ profile.pstats
 .project
 .pydevproject
 *~
+
+# Gimp
+*.xcf
