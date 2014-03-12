@@ -91,7 +91,6 @@ def main():
 		elif smove.startswith('setboard'):
 			_, fen = smove.split(' ', 1)
 			pos = parseFEN(fen)
-			forced = True
 			color = WHITE if fen.split()[1] == 'w' else BLACK
 
 		elif smove == 'force':
