@@ -6,6 +6,9 @@ import sys
 import re
 import time
 import subprocess
+import functools
+import os
+import signal
 
 import sunfish
 import xboard
@@ -33,37 +36,50 @@ def selfplay():
 # Test Xboard
 ###############################################################################
 
+class timeout:
+    def __init__(self, seconds=1, error_message='Timeout'):
+        self.seconds = seconds
+        self.error_message = error_message
+    def handle_timeout(self, signum, frame):
+        raise TimeoutError(self.error_message)
+    def __enter__(self):
+        signal.signal(signal.SIGALRM, self.handle_timeout)
+        signal.alarm(self.seconds)
+    def __exit__(self, type, value, traceback):
+        signal.alarm(0)
+
 def testxboard(python='python3'):
     print('Xboard test \'%s\'' % python)
     fish = subprocess.Popen([python, '-u', 'xboard.py'],
        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
        universal_newlines=True)
-    print('xboard', file=fish.stdin)
-    print('protover 2', file=fish.stdin)
-    for _ in range(100):
-        if re.search('done\s*=\s*1', fish.stdout.readline()):
-            break
-    else:
-        print('done=1 was never encountered')
-        return
-    print('usermove e2e4', file=fish.stdin)
-    print('Waiting for calculation of move...')
-    for _ in range(100):
-        if re.search('move ', fish.stdout.readline()):
-            break
-    else:
-        print('move was never encountered')
-        return
-    print('quit', file=fish.stdin)
-    if hasattr(subprocess, 'TimeoutExpired'):
-        try:
-            fish.wait(timeout=1)
-        except subprocess.TimeoutExpired:
-            print('quit did not terminate sunfish')
-            fish.terminate()
-    else:
-        time.sleep(1)
-        fish.terminate()
+
+    def waitFor(regex):
+        with timeout(20, '%s was never encountered'%regex):
+            while True:
+                line = fish.stdout.readline()
+                # print("Saw lines", line)
+                if re.search(regex, line):
+                    return
+
+    try:
+        print('xboard', file=fish.stdin)
+        print('protover 2', file=fish.stdin)
+        waitFor('done\s*=\s*1')
+
+        print('usermove e2e4', file=fish.stdin)
+        waitFor('move ')
+
+        print('setboard rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1', file=fish.stdin)
+        print('usermove e7e5', file=fish.stdin)
+        waitFor('move ')
+
+        print('quit', file=fish.stdin)
+        with timeout(5, 'quit did not terminate sunfish'):
+            fish.wait()
+    finally:
+        if fish.poll() is None:
+            fish.kill()
 
 ###############################################################################
 # Perft test
