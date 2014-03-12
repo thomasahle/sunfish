@@ -2,29 +2,32 @@ Sunfish
 =======
 Sunfish is a simple, but strong chess engine, written in Python, mostly for teaching purposes. Without tables and its simple interface, it takes up just 111 lines of code!
 
-The great clarity of the Sunfish code provides a great platform for experimenting, be it with evaluation functions, chess heuristics or search. Fork it today and see what you can do!
+The clarity of the Sunfish code provides a great platform for experimenting, be it with evaluation functions, search extensions or anything. Fork it today and see what you can do!
 
 Screenshot
 ==========
 
-    My move: b8c6
-    Visited 68997 nodes.
-     r . b q k b n r 
-     p p p p p p p p 
-     . . n . . . . . 
-     . . . . . . . . 
-     . . . . P . . . 
-     . . . . . . . . 
-     P P P P . P P P 
-     R N B Q K B N R 
-              
+    My move: g8f6
+                      
+                       
+       r n b q k b . r 
+       p p p p p p p p 
+       . . . . . n . . 
+       . . . . . . . . 
+       . . . . P . . . 
+       . . . . . . . . 
+       P P P P . P P P 
+       R N B Q K B N R 
+                       
+                        
     Your move: 
+
 
 Run it!
 =======
 Sunfish is self contained in the `sunfish.py` file from the repository. I recommend running it with `pypy` for optimal performance.
 
-It is also possible to run Sunfish as an [XBoard](http://www.gnu.org/software/xboard/)/CECP engine in [PyChess](http://pychess.org), [Arena](http://www.playwitharena.com) or your chess interface of choice. Just add the command `pypy -u xboard.py`, replacing `pypy` with your favourite Python interpreter.
+It is also possible to run Sunfish as an [XBoard](http://www.gnu.org/software/xboard/)/CECP engine in [PyChess](http://pychess.org), [Arena](http://www.playwitharena.com) or your chess interface of choice. Just add the command `pypy -u xboard.py`.
 
 Features
 ===========
@@ -43,6 +46,6 @@ The evaluation in Sunfish is not very sophisticated. E.g. we don't distinguish b
 
 Why Sunfish?
 ============
-The name Sunfish actually refers to the [Pygmy Sunfish](http://en.wikipedia.org/wiki/Pygmy_sunfish), which is amoung the very few fish to start with the letters 'Py'. Using the name of a fish is a reference to the great giants Stockfish and Rybka.
+The name Sunfish actually refers to the [Pygmy Sunfish](http://en.wikipedia.org/wiki/Pygmy_sunfish), which is amoung the very few fish to start with the letters 'Py'. The use of a fish is in the spirit of great engines such as Stockfish, Zappa and Rybka.
 
-![alt tag](http://upload.wikimedia.org/wikipedia/commons/6/67/Elassoma_sp.jpg)
+![alt tag](https://raw.github.com/thomasahle/sunfish/master/logo/sunfish_large.png)
