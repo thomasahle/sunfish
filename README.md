@@ -46,6 +46,6 @@ The evaluation in Sunfish is not very sophisticated. E.g. we don't distinguish b
 
 Why Sunfish?
 ============
-The name Sunfish actually refers to the [Pygmy Sunfish](http://en.wikipedia.org/wiki/Pygmy_sunfish), which is amoung the very few fish to start with the letters 'Py'. The use of a fish is in the spirit of great engines such as Stockfish, Zappa and Rybka.
+The name Sunfish actually refers to the [Pygmy Sunfish](http://en.wikipedia.org/wiki/Pygmy_sunfish), which is among the very few fish to start with the letters 'Py'. The use of a fish is in the spirit of great engines such as Stockfish, Zappa and Rybka.
 
 ![alt tag](https://raw.github.com/thomasahle/sunfish/master/logo/sunfish_large.png)
