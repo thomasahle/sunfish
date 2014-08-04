@@ -362,7 +362,11 @@ def main():
         move = None
         while move not in pos.genMoves():
             crdn = input("Your move: ")
-            move = parse(crdn[0:2]), parse(crdn[2:4])
+            try:
+              move = parse(crdn[0:2]), parse(crdn[2:4])
+            except ValueError:
+              # Inform the user when invalid input (e.g. "help") is entered
+              print("Invalid input. Please enter a move in the proper format (e.g. g8f6)")
         pos = pos.move(move)
 
         # After our move we rotate the board and print it again.
