@@ -229,6 +229,39 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
                 score += pst['P'][j+S]
         return score
 
+    def in_check(self, player):
+        for i, p in enumerate(self.board):
+            if p ==player:
+                for m in ('R','B','N','K'):
+                    for d in directions[m]:
+                        for j in count(i+d, d):
+                            q = self.board[j]
+                            # Stay inside the board
+                            if self.board[j].isspace(): break
+
+                            if q!='.':
+                                # Same player pieces reached stop the ray-casting
+                                if (q.islower()==player.islower()): break
+
+                                # Check for pieces reached
+                                if (q.upper()== str(m)) or (q.upper() == 'Q' and m in ('R','B')):
+                                    return True
+                                    # returns the player is in check if ray-casting
+                                    # matches an opposite piece
+                                if (str(m)=='K') and (d in (S+E, S+W)) and (q.upper()=='P'):
+                                    return True
+                                    # returns the player is in check if ray-casting
+                                    # matches an opposite pawn piece
+
+                                #if q!='.' and fails above condition, ray-casting must stop
+                                else: break
+                                
+                            # Stop crawlers from sliding
+                            if m in ('P', 'N', 'K'): break
+                                
+                return False
+
+
 Entry = namedtuple('Entry', 'depth score gamma move')
 tp = OrderedDict()
 
@@ -350,24 +383,45 @@ def render(i):
     rank, fil = divmod(i - A1, 10)
     return chr(fil + ord('a')) + str(-rank + 1)
 
-
 def main():
     pos = Position(initial, 0, (True,True), (True,True), 0, 0)
+    pos_temp = Position(initial, 0, (True,True), (True,True), 0, 0)
     while True:
         # We add some spaces to the board before we print it.
         # That makes it more readable and pleasing.
         print(' '.join(pos.board))
 
+        # If black checks white, print 'Check! under my move
+        if pos.in_check('K'):
+            print ("Check! (Black checks White)")
+
         # We query the user until she enters a legal move.
-        move = None
+        pos_temp=pos
+        crdn = input("Your move: ")
+        move = parse(crdn[0:2]), parse(crdn[2:4])
+
         while move not in pos.genMoves():
+            crdn = input("Invalid move. Your move: ")
+            move = parse(crdn[0:2]), parse(crdn[2:4])
+
+        # Checking if move puts player in check (if so, move not allowed)
+        pos_temp = pos_temp.move(move)
+        while pos_temp.in_check('k'):
+            pos_temp=pos
+            print ("Move not allowed! (Results in Check)")
             crdn = input("Your move: ")
             move = parse(crdn[0:2]), parse(crdn[2:4])
+            pos_temp = pos_temp.move(move)
+
         pos = pos.move(move)
 
         # After our move we rotate the board and print it again.
         # This allows us to see the effect of our move.
         print(' '.join(pos.rotate().board))
+
+        # If white checks black, print 'Check!' under my move
+        if pos.in_check('K'):
+            print("Check! (White checks Black)")
 
         # Fire up the engine to look for a move.
         move, score = search(pos)
@@ -375,6 +429,9 @@ def main():
             print("You won")
             break
         if score >= MATE_VALUE:
+            print("My move:", render(119-move[0]) + render(119-move[1]))
+            pos = pos.move(move)
+            print(' '.join(pos.board))
             print("You lost")
             break
 
