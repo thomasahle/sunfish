@@ -35,7 +35,7 @@ Features
 ===========
 1. Build around the simple, but deadly efficient MTD-bi search algorithm.
 2. Filled with classic as well as modern 'chess engine tricks' for simpler and faster code.
-3. Easily adaptive evalutation function through Piece Square Tables.
+3. Easily adaptive evaluation function through Piece Square Tables.
 4. Uses standard Python collections and data structures for clarity and efficiency.
 
 Limitations
