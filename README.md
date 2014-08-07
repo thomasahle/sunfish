@@ -27,7 +27,9 @@ Run it!
 =======
 Sunfish is self contained in the `sunfish.py` file from the repository. I recommend running it with `pypy` for optimal performance.
 
-It is also possible to run Sunfish as an [XBoard](http://www.gnu.org/software/xboard/)/CECP engine in [PyChess](http://pychess.org), [Arena](http://www.playwitharena.com) or your chess interface of choice. Just add the command `pypy -u xboard.py`.
+It is also possible to run Sunfish as an [XBoard](http://www.gnu.org/software/xboard/)/CECP engine in [PyChess](http://pychess.org), [Arena](http://www.playwitharena.com) or your chess interface of choice. Just add the command `pypy -u xboard.py`. Ruxy Sylwyka has [a note on making it all work on Windows](http://www.talkchess.com/forum/viewtopic.php?topic_view=threads&p=560462).
+
+![Arena Screenshot](http://s29.postimg.org/89gnk99d3/Clipboard01.png)
 
 Features
 ===========
@@ -50,4 +52,4 @@ The name Sunfish actually refers to the [Pygmy Sunfish](http://en.wikipedia.org/
 
 In terms of Heritage, Sunfish borrows much more from [Micro-Max by Geert Muller](http://home.hccnet.nl/h.g.muller/max-src2.html) and [PyChess](http://pychess.org).
 
-![alt tag](https://raw.github.com/thomasahle/sunfish/master/logo/sunfish_large.png)
+![Sunfish logo](https://raw.github.com/thomasahle/sunfish/master/logo/sunfish_large.png)
