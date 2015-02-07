@@ -292,7 +292,7 @@ def bound(pos, gamma, depth):
     if entry is None or depth >= entry.depth and best >= gamma:
         tp[pos] = Entry(depth, best, gamma, bmove)
         if len(tp) > TABLE_SIZE:
-            tp.pop()
+            tp.popitem()
     return best
 
 
