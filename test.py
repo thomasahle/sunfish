@@ -10,6 +10,9 @@ import functools
 import os
 import signal
 import argparse
+import importlib
+import multiprocessing
+import random
 
 import sunfish
 import xboard
@@ -32,6 +35,41 @@ def selfplay(maxn=200):
             break
         print("\nmove", xboard.mrender(d%2, pos, m))
         pos = pos.move(m)
+
+def self_arena(version1, version2, games, maxn):
+    pool = multiprocessing.Pool(8)
+    instances = [(version1, version2, maxn, random.Random()) for _ in range(games)]
+    for r in pool.imap_unordered(play, instances):
+        print(r)
+
+def play(version1_version2_maxn_rand):
+    ''' returns 1 if fish1 won, 0 for draw and -1 otherwise '''
+    version1, version2, maxn, rand = version1_version2_maxn_rand
+    fish1 = importlib.import_module(version1)
+    fish2 = importlib.import_module(version2)
+    pos = xboard.parseFEN('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1')
+    old = None
+    tdelta = 0
+    for d in range(200):
+        nodes = maxn
+        nodes *= (1+abs(tdelta)/5) if (tdelta<0)==(d%2==0) else 1
+        nodes *= .75+random.random()/2
+        before = time.time()
+        m, score = (fish1 if d%2==0 else fish2).search(pos, nodes)
+        tdelta += (time.time()-before)*(1 if d%2==0 else -1)
+        if m is not None:
+            pos = pos.move(m)
+            # Test repetition draws
+            if d%4==0:
+                if pos.board == old:
+                    return 0
+                old = pos.board
+        else:
+            assert score < -1000
+            return 1 if d%2 == 1 else -1
+    else:
+        print('200 moves reached')
+        return 0
 
 ###############################################################################
 # Test Xboard
@@ -325,6 +363,16 @@ def main():
         help='number of nodes to search per move. Default=%(default)s.')
     add_action(p, lambda n: selfplay(n.nodes))
 
+    p = subparsers.add_parser('arena',
+        help='run a number of games between two sunfish versions.')
+    p.add_argument('fish1', type=str, help='sunfish')
+    p.add_argument('fish2', type=str, help='sunfish2')
+    p.add_argument('--games', type=int, default=10,
+        help='number of games to play. Default=%(default)s.')
+    p.add_argument('--nodes', type=int, default=200,
+        help='number of nodes to search per move. Default=%(default)s.')
+    add_action(p, lambda n: self_arena(n.fish1, n.fish2, n.games, n.nodes))
+
     p = subparsers.add_parser('findbest',
         help='reports the best moves found at certain positions after certain intervals of time.')
     p.add_argument('file', type=argparse.FileType('r'),
@@ -334,7 +382,11 @@ def main():
         default=[15, 30, 60, 120])
     add_action(p, lambda n: findbest(n.file, n.times))
 
-    parser.parse_args()
+    args, unknown = parser.parse_known_args()
+    if unknown:
+        print('Notice: unused arguments', ' '.join(unknown))
+    if len(sys.argv) == 1:
+        parser.print_help()
 
 if __name__ == '__main__':
     main()
