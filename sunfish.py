@@ -35,13 +35,8 @@ initial = (
     '          '   # 110 -119
 )
 
-# This code defines a piece map of text pieces to unicode pieces
-# e.g.  'R' --> '♖'
-# The pieces can be swapped depending on the backround of the terminal window
-PIECES_LIGHT_BG = u'r♜n♞b♝q♛k♚p♟R♖N♘B♗Q♕K♔P♙'
-PIECES_DARK_BG = u'R♜N♞B♝Q♛K♚P♟r♖n♘b♗q♕k♔p♙'
-PIECES = PIECES_DARK_BG
-PIECE_MAP = {PIECES[i]: PIECES[i+1] for i in range(0, len(PIECES), 2)}
+# This code defines a piece map of text pieces to unicode pieces e.g.  'r' --> '♖'
+PIECES = {'R': u'♜','N': u'♞','B': u'♝','Q': u'♛','K': u'♚','P': u'♟','r': u'♖','n': u'♘','b': u'♗','q': u'♕','k': u'♔','p': u'♙'}
 
 ###############################################################################
 # Move and evaluation tables
@@ -358,17 +353,16 @@ def render(i):
     rank, fil = divmod(i - A1, 10)
     return chr(fil + ord('a')) + str(-rank + 1)
 
-def replace_pieces(board):
-    for text, unicode in PIECE_MAP.iteritems():
-        board = board.replace(text,unicode)
-    return board
+def format_board(board):
+    # We add some spaces to the board before we print it.
+    # That makes it more readable and pleasing.
+    # We also swap ascii letters for unicode chess pieces
+    return ' '.join(PIECES[p] if p in PIECES else p for p in board)
 
 def main():
     pos = Position(initial, 0, (True,True), (True,True), 0, 0)
     while True:
-        # We add some spaces to the board before we print it.
-        # That makes it more readable and pleasing.
-        print(' '.join(replace_pieces(pos.board)))
+        print(format_board(pos.board))
 
         # We query the user until she enters a legal move.
         move = None
@@ -383,7 +377,7 @@ def main():
 
         # After our move we rotate the board and print it again.
         # This allows us to see the effect of our move.
-        print(' '.join(replace_pieces(pos.rotate().board)))
+        print(format_board(pos.rotate().board))
 
         # Fire up the engine to look for a move.
         move, score = search(pos)
