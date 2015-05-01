@@ -15,6 +15,47 @@ if sys.version_info[0] == 2:
 # Sunfish doesn't know about colors. We hav to.
 WHITE, BLACK = range(2)
 FEN_INITIAL = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+
+
+def unparse(c):
+	rank = str((110-c)  // 10)
+	fil = chr(ord('a') + (c % 10) - 1)
+	return fil+rank
+
+def test_unparse(): 
+	for l in 'abcdefgh':
+		for i in range(1,9):
+			c = sunfish.parse(l+str(i))  
+			assert(l+str(i) == unparse(c))
+
+def posToFEN(pos): 
+	color = 'w' if int(pos.fclock) == pos.fclock else 'b' 
+	if color == 'b': 
+		pos = pos.rotate()
+	board = '/'.join(pos.board[21:-21].split('\n '))
+	board = re.sub('\.+', (lambda m: str(len(m.group(0)))), board)
+	castling = ''.join((i for i, j in zip('KQkq', chain(reversed(pos.wc), reversed(pos.bc))) if j))
+	enpas = '-' if pos.ep == 0 else unparse(pos.ep) 
+	hclock = str(pos.hclock)
+	fclock = str(int(pos.fclock))
+	return ' '.join([board, color, castling, enpas, hclock, fclock])
+
+def test_posToFEN(): 
+	fens = [
+	"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 
+	"rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1", 
+	"rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2", 
+	"rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
+	]
+	moves = [ 'e2e4', 'c7c5', 'g1f3']
+	for fen in fens: 
+		pos = parseFEN(fen) 
+		assert(fen == posToFEN(pos))
+	pos = parseFEN(FEN_INITIAL) 
+	for i in range(len(moves)):
+		m = mparse(int(pos.fclock) != pos.fclock, moves[i])
+		pos = pos.move(m)
+		assert(fens[i+1] == posToFEN(pos))
 	
 def parseFEN(fen):
 	""" Parses a string in Forsyth-Edwards Notation into a Position """
