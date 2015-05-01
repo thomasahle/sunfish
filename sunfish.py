@@ -361,7 +361,7 @@ def main():
         # We query the user until she enters a legal move.
         move = None
         while move not in pos.genMoves():
-            crdn = input("Your move: ")
+            crdn = input("Your move: ").lower()
             try:
               move = parse(crdn[0:2]), parse(crdn[2:4])
             except ValueError:
