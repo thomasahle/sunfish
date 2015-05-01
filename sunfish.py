@@ -351,12 +351,21 @@ def render(i):
     return chr(fil + ord('a')) + str(-rank + 1)
 
 
+def print_board(board, notated=False): 
+    pretty_board = "" 
+    if not notated: 
+        return print(' '.join(board.replace('\n ', '\n  ')))
+    for l in range(0, len(board)-20, 10): 
+        pretty_board += (str((len(board)-l)/10 - 2) if (l > 1*10 and l < 10*10) else '') + ' '.join(board[l:(l+10    )])
+    print("%s\n%sA B C D E F G H\n" %(pretty_board, ' '*(5 if sys.version[0] == '3' else 3)))
+
+    
 def main():
     pos = Position(initial, 0, (True,True), (True,True), 0, 0)
     while True:
         # We add some spaces to the board before we print it.
         # That makes it more readable and pleasing.
-        print(' '.join(pos.board))
+        print_board(pos.board, notated=True)
 
         # We query the user until she enters a legal move.
         move = None
@@ -371,7 +380,7 @@ def main():
 
         # After our move we rotate the board and print it again.
         # This allows us to see the effect of our move.
-        print(' '.join(pos.rotate().board))
+        print_board(pos.rotate().board, notated=False)
 
         # Fire up the engine to look for a move.
         move, score = search(pos)
