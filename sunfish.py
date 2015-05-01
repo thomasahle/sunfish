@@ -373,7 +373,7 @@ def main():
             crdn = input("Your move: ").lower()
             try:
               move = parse(crdn[0:2]), parse(crdn[2:4])
-            except ValueError:
+            except (ValueError, IndexError):
               # Inform the user when invalid input (e.g. "help") is entered
               print("Invalid input. Please enter a move in the proper format (e.g. g8f6)")
         pos = pos.move(move)
