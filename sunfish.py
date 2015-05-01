@@ -129,8 +129,8 @@ pst = {
 ###############################################################################
 # Chess logic
 ###############################################################################
-
-class Position(namedtuple('Position', 'board score wc bc ep kp')):
+    
+class Position(namedtuple('Position', 'board score wc bc ep kp hclock fclock')):
     """ A state of a chess game
     board -- a 120 char representation of the board
     score -- the board evaluation
@@ -138,8 +138,13 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
     bc -- the opponent castling rights
     ep - the en passant square
     kp - the king passant square
+    hclock - Halfmove clock
+    fclock - Fullmove number
     """
-
+    #Init hclock and fclock by default
+    def __new__(cls, board, score, wc, bc, ep, kp, hclock=0, fclock=1.0):
+        return super(Position, cls).__new__(cls, board, score, wc, bc, ep, kp, hclock, fclock)
+    
     def genMoves(self):
         # For each of our pieces, iterate through each possible 'ray' of moves,
         # as defined in the 'directions' map. The rays are broken e.g. by
@@ -170,7 +175,7 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
     def rotate(self):
         return Position(
             self.board[::-1].swapcase(), -self.score,
-            self.bc, self.wc, 119-self.ep, 119-self.kp)
+            self.bc, self.wc, 119-self.ep, 119-self.kp, self.hclock, self.fclock)
 
     def move(self, move):
         i, j = move
@@ -178,7 +183,7 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
         put = lambda board, i, p: board[:i] + p + board[i+1:]
         # Copy variables and reset ep and kp
         board = self.board
-        wc, bc, ep, kp = self.wc, self.bc, 0, 0
+        wc, bc, ep, kp, hclock, fclock = self.wc, self.bc, 0, 0, self.hclock + 1, self.fclock + .5
         score = self.score + self.value(move)
         # Actual move
         board = put(board, j, board[i])
@@ -203,8 +208,10 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
                 ep = i + N
             if j - i in (N+W, N+E) and q == '.':
                 board = put(board, j+S, '.')
+            hclock = 0
+        if sum(ord(i) for i in self.board if i.isalpha()) != sum(ord(i) for i in board if i.isalpha()): hclock = 0
         # We rotate the returned position, so it's ready for the next player
-        return Position(board, score, wc, bc, ep, kp).rotate()
+        return Position(board, score, wc, bc, ep, kp, hclock, fclock).rotate()
 
     def value(self, move):
         i, j = move
@@ -352,7 +359,7 @@ def render(i):
 
 
 def main():
-    pos = Position(initial, 0, (True,True), (True,True), 0, 0)
+    pos = Position(initial, 0, (True,True), (True,True), 0, 0, 0, 1)
     while True:
         # We add some spaces to the board before we print it.
         # That makes it more readable and pleasing.

@@ -6,6 +6,7 @@ from __future__ import division
 import re
 import sys
 import sunfish
+from itertools import chain
 
 # Python 2 compatability
 if sys.version_info[0] == 2:
@@ -14,8 +15,7 @@ if sys.version_info[0] == 2:
 # Sunfish doesn't know about colors. We hav to.
 WHITE, BLACK = range(2)
 FEN_INITIAL = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
-
-
+	
 def parseFEN(fen):
 	""" Parses a string in Forsyth-Edwards Notation into a Position """
 	board, color, castling, enpas, hclock, fclock = fen.split()
@@ -26,7 +26,7 @@ def parseFEN(fen):
 	ep = sunfish.parse(enpas) if enpas != '-' else 0
 	score = sum(sunfish.pst[p][i] for i,p in enumerate(board) if p.isupper())
 	score -= sum(sunfish.pst[p.upper()][i] for i,p in enumerate(board) if p.islower())
-	pos = sunfish.Position(board, score, wc, bc, ep, 0)
+	pos = sunfish.Position(board, score, wc, bc, ep, 0, int(hclock), float(fclock) + (.5 if color == 'b' else 0))
 	return pos if color == 'w' else pos.rotate()
 
 def mrender(color, pos, m):
