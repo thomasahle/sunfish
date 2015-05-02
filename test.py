@@ -121,6 +121,29 @@ def testxboard(python='python3'):
         if fish.poll() is None:
             fish.kill()
 
+def test_unparse(): 
+    for l in 'abcdefgh':
+        for i in range(1,9):
+            c = sunfish.parse(l+str(i))  
+            assert(l+str(i) == xboard.unparse(c))
+            
+def test_posToFEN(): 
+    fens = [
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1", 
+    "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1", 
+    "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2", 
+    "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2"
+    ]
+    moves = [ 'e2e4', 'c7c5', 'g1f3']
+    for fen in fens: 
+        pos = xboard.parseFEN(fen) 
+        assert(fen == xboard.posToFEN(pos))
+    pos = xboard.parseFEN(xboard.FEN_INITIAL) 
+    for i in range(len(moves)):
+        m = xboard.mparse(int(pos.fclock) != pos.fclock, moves[i])
+        pos = pos.move(m)
+        assert(fens[i+1] == xboard.posToFEN(pos))
+
 ###############################################################################
 # Perft test
 ###############################################################################
@@ -356,7 +379,11 @@ def main():
     p.add_argument('--python', type=str, default='python',
         help='what version of python to use, e.g. python3, pypy.')
     add_action(p, lambda n: testxboard(n.python))
-
+    
+    p = subparsers.add_parser('fen', 
+        help='Tests FEN <=> Sunfish Position Parsing.')
+    add_action(p, lambda n: (test_unparse(), test_posToFEN()))
+         
     p = subparsers.add_parser('selfplay',
         help='run a simple visual sunfish vs sunfish game.')
     p.add_argument('--nodes', type=int, default=200,
