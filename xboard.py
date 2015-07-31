@@ -24,8 +24,7 @@ def parseFEN(fen):
 	wc = ('Q' in castling, 'K' in castling)
 	bc = ('k' in castling, 'q' in castling)
 	ep = sunfish.parse(enpas) if enpas != '-' else 0
-	score = sum(sunfish.pst[p][i] for i,p in enumerate(board) if p.isupper())
-	score -= sum(sunfish.pst[p.upper()][i] for i,p in enumerate(board) if p.islower())
+	score = sum(sunfish.pst[p][i] if p.isupper() else -sunfish.pst[p.upper()][i] for i,p in enumerate(board) if p.isalpha())
 	pos = sunfish.Position(board, score, wc, bc, ep, 0)
 	return pos if color == 'w' else pos.rotate()
 
@@ -131,7 +130,7 @@ def main():
 		elif smove.startswith('otim'):
 			otim = int(smove.split()[1])
 
-		elif any(smove.startswith(x) for x in ('xboard','post','random','hard','accepted','level')):
+		elif any(map(smove.startswith, ('xboard', 'post', 'random', 'hard', 'accepted', 'level'))):
 			pass
 
 		else:
