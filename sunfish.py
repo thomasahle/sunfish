@@ -284,7 +284,7 @@ def bound(pos, gamma, depth):
         return nullscore
     # Check for stalemate. If best move loses king, but not doing anything
     # would save us. Not at all a perfect check.
-    if depth > 0 and best <= -MATE_VALUE is None and nullscore > -MATE_VALUE:
+    if depth > 0 and best <= -MATE_VALUE and nullscore > -MATE_VALUE:
         best = 0
 
     # We save the found move together with the score, so we can retrieve it in
