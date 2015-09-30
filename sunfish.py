@@ -5,7 +5,7 @@ from __future__ import print_function
 import re
 import sys
 from itertools import count
-from collections import Counter, OrderedDict, namedtuple
+from collections import OrderedDict, namedtuple
 
 # The table size is the maximum number of elements in the transposition table.
 TABLE_SIZE = 1e6
@@ -63,8 +63,7 @@ pst = {
         0, 198, 198, 198, 198, 198, 198, 198, 198, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
-    'B': (
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    'B': (0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 797, 824, 817, 808, 808, 817, 824, 797, 0,
         0, 814, 841, 834, 825, 825, 834, 841, 814, 0,
@@ -141,7 +140,7 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
     kp - the king passant square
     """
 
-    def genMoves(self):
+    def gen_moves(self):
         # For each of our pieces, iterate through each possible 'ray' of moves,
         # as defined in the 'directions' map. The rays are broken e.g. by
         # captures or immediately in case of pieces such as knights.
@@ -268,7 +267,7 @@ def bound(pos, gamma, depth):
     # This can be shown equal to maximizing the negative score, with a slightly
     # adjusted gamma value.
     best, bmove = -3*MATE_VALUE, None
-    for move in sorted(pos.genMoves(), key=pos.value, reverse=True):
+    for move in sorted(pos.gen_moves(), key=pos.value, reverse=True):
         # We check captures with the value function, as it also contains ep and kp
         if depth <= 0 and pos.value(move) < 150:
             break
@@ -317,8 +316,6 @@ def search(pos, maxn=NODES_SEARCHED):
                 lower = score
             if score < gamma:
                 upper = score
-        
-        # print("Searched %d nodes. Depth %d. Score %d(%d/%d)" % (nodes, depth, score, lower, upper))
 
         # We stop deepening if the global N counter shows we have spent too
         # long, or if we have already won the game.
@@ -361,7 +358,7 @@ def main():
 
         # We query the user until she enters a legal move.
         move = None
-        while move not in pos.genMoves():
+        while move not in pos.gen_moves():
             match = re.match('([a-h][1-8])'*2, input('Your move: '))
             if match:
                 move = parse(match.group(1)), parse(match.group(2))

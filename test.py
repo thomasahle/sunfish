@@ -6,8 +6,6 @@ import sys
 import re
 import time
 import subprocess
-import functools
-import os
 import signal
 import argparse
 import importlib
@@ -53,7 +51,7 @@ def play(version1_version2_maxn_rand):
     for d in range(200):
         nodes = maxn
         nodes *= (1+abs(tdelta)/5) if (tdelta<0)==(d%2==0) else 1
-        nodes *= .75+random.random()/2
+        nodes *= .75 + rand.random()/2
         before = time.time()
         m, score = (fish1 if d%2==0 else fish2).search(pos, nodes)
         tdelta += (time.time()-before)*(1 if d%2==0 else -1)
@@ -67,9 +65,8 @@ def play(version1_version2_maxn_rand):
         else:
             assert score < -1000
             return 1 if d%2 == 1 else -1
-    else:
-        print('200 moves reached')
-        return 0
+    print('200 moves reached')
+    return 0
 
 ###############################################################################
 # Test Xboard
@@ -79,7 +76,7 @@ class timeout:
     def __init__(self, seconds=1, error_message='Timeout'):
         self.seconds = seconds
         self.error_message = error_message
-    def handle_timeout(self, signum, frame):
+    def handle_timeout(self, _signum, frame):
         raise TimeoutError(self.error_message)
     def __enter__(self):
         signal.signal(signal.SIGALRM, self.handle_timeout)
@@ -105,7 +102,7 @@ def testxboard(python='python3'):
     try:
         print('xboard', file=fish.stdin)
         print('protover 2', file=fish.stdin)
-        waitFor('done\s*=\s*1')
+        waitFor(r'done\s*=\s*1')
 
         print('usermove e2e4', file=fish.stdin)
         waitFor('move ')
@@ -149,10 +146,10 @@ def perft(pos, depth, divide=False):
     if depth == 0:
         return 1
     res = 0
-    for m in pos.genMoves():
+    for m in pos.gen_moves():
         pos1 = pos.move(m)
         # Make sure the move was legal
-        if not any(pos1.value(m) >= sunfish.MATE_VALUE for m in pos1.genMoves()):
+        if not any(pos1.value(m) >= sunfish.MATE_VALUE for m in pos1.gen_moves()):
             sub = perft(pos1, depth-1, False)
             if divide:
                 print(" "*depth+xboard.mrender(m), sub)
@@ -222,11 +219,11 @@ def renderSAN(pos, move):
     csrc, cdst = sunfish.render(i), sunfish.render(j)
     # Check
     pos1 = pos.move(move)
-    cankill = lambda p: any(p.board[b]=='k' for a,b in p.genMoves())
+    cankill = lambda p: any(p.board[b]=='k' for a,b in p.gen_moves())
     check = ''
     if cankill(pos1.rotate()):
         check = '+'
-        if all(cankill(pos1.move(move1)) for move1 in pos1.genMoves()):
+        if all(cankill(pos1.move(move1)) for move1 in pos1.gen_moves()):
             check = '#'
     # Castling
     if pos.board[i] == 'K' and csrc == 'e1' and cdst in ('c1','g1'):
@@ -240,7 +237,7 @@ def renderSAN(pos, move):
         return cap + cdst + pro + check
     # Normal moves
     p = pos.board[i]
-    srcs = [a for a,b in pos.genMoves() if pos.board[a] == p and b == j]
+    srcs = [a for a,b in pos.gen_moves() if pos.board[a] == p and b == j]
     # TODO: We can often get away with just sending the rank or file here.
     src = csrc if len(srcs) > 1 else ''
     cap = 'x' if pos.board[j] != '.' else ''
@@ -263,7 +260,7 @@ def parseSAN(pos, color, msan):
     if msan == "O-O":
         p, src, dst = 'K', 'e1|d1', 'g1|b1'
     # Find possible match
-    for i, j in pos.genMoves():
+    for i, j in pos.gen_moves():
         # TODO: Maybe check for check here?
         csrc, cdst = sunfish.render(i), sunfish.render(j)
         if pos.board[i] == p and re.match(dst, cdst) and re.match(src, csrc):
@@ -287,7 +284,7 @@ def findbest(f, times):
     print('-'*60)
     totalpoints = 0
     totaltests = 0
-    for k, line in enumerate(f):
+    for line in f:
         fen, opts = parseEPD(line)
         pos = xboard.parseFEN(fen)
         color = 0 if fen.split()[1] == 'w' else 1
@@ -382,7 +379,7 @@ def main():
         default=[15, 30, 60, 120])
     add_action(p, lambda n: findbest(n.file, n.times))
 
-    args, unknown = parser.parse_known_args()
+    _args, unknown = parser.parse_known_args()
     if unknown:
         print('Notice: unused arguments', ' '.join(unknown))
     if len(sys.argv) == 1:
