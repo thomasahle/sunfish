@@ -269,8 +269,10 @@ def parseSAN(pos, color, msan):
 def parseEPD(epd):
     parts = epd.strip('\n ;').replace('"','').split(maxsplit=6)
     fen = ' '.join(parts[:6])
-    opts = dict(p.split(maxsplit=1) for p in parts[6].split(';'))
-    return fen, opts
+    if len(parts) == 7:
+        opts = dict(p.split(maxsplit=1) for p in parts[6].split(';'))
+        return fen, opts
+    return fen, {}
 
 def findbest(f, times):
     print('Calibrating search speed...')
@@ -292,7 +294,7 @@ def findbest(f, times):
         am = parseSAN(pos,color,opts['am']) if 'am' in opts else None
         bm = parseSAN(pos,color,opts['bm']) if 'bm' in opts else None
         points = 0
-        print(opts['id'], end=' ', flush=True)
+        print(opts.get('id','unnamed'), end=' ', flush=True)
         for t in times:
             move, _ = sunfish.search(pos, factor*t)
             mark = renderSAN(pos, move)
