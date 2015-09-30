@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function
+import re
 import sys
 from itertools import count
 from collections import Counter, OrderedDict, namedtuple
@@ -361,12 +362,12 @@ def main():
         # We query the user until she enters a legal move.
         move = None
         while move not in pos.genMoves():
-            crdn = input("Your move: ")
-            try:
-              move = parse(crdn[0:2]), parse(crdn[2:4])
-            except ValueError:
-              # Inform the user when invalid input (e.g. "help") is entered
-              print("Invalid input. Please enter a move in the proper format (e.g. g8f6)")
+            match = re.match('([a-h][1-8])'*2, input('Your move: '))
+            if match:
+                move = parse(match.group(1)), parse(match.group(2))
+            else:
+                # Inform the user when invalid input (e.g. "help") is entered
+                print("Please enter a move like g8f6")
         pos = pos.move(move)
 
         # After our move we rotate the board and print it again.
