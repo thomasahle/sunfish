@@ -349,12 +349,19 @@ def render(i):
     return chr(fil + ord('a')) + str(-rank + 1)
 
 
+def print_pos(pos):
+    print()
+    uni_pieces = {'R':'♜', 'N':'♞', 'B':'♝', 'Q':'♛', 'K':'♚', 'P':'♟',
+                  'r':'♖', 'n':'♘', 'b':'♗', 'q':'♕', 'k':'♔', 'p':'♙'}
+    for i, row in enumerate(pos.board.strip().split('\n ')):
+        print(' ', 8-i, ' '.join(uni_pieces.get(p, p) for p in row))
+    print('    a b c d e f g h \n\n')
+
+
 def main():
     pos = Position(initial, 0, (True,True), (True,True), 0, 0)
     while True:
-        # We add some spaces to the board before we print it.
-        # That makes it more readable and pleasing.
-        print(' '.join(pos.board))
+        print_pos(pos)
 
         # We query the user until she enters a legal move.
         move = None
@@ -369,7 +376,7 @@ def main():
 
         # After our move we rotate the board and print it again.
         # This allows us to see the effect of our move.
-        print(' '.join(pos.rotate().board))
+        print_pos(pos.rotate())
 
         # Fire up the engine to look for a move.
         move, score = search(pos)
