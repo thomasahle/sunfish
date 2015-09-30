@@ -8,20 +8,19 @@ Screenshot
 ==========
 
     My move: g8f6
-                      
-                       
-       r n b q k b . r 
-       p p p p p p p p 
-       . . . . . n . . 
-       . . . . . . . . 
-       . . . . P . . . 
-       . . . . . . . . 
-       P P P P . P P P 
-       R N B Q K B N R 
-                       
-                        
-    Your move: 
-
+    
+      8 ♖ ♘ ♗ ♕ ♔ ♗ . ♖
+      7 ♙ ♙ ♙ ♙ ♙ ♙ ♙ ♙
+      6 . . . . . ♘ . .
+      5 . . . . . . . .
+      4 . . . . ♟ . . .
+      3 . . . . . . . .
+      2 ♟ ♟ ♟ ♟ . ♟ ♟ ♟
+      1 ♜ ♞ ♝ ♛ ♚ ♝ ♞ ♜
+        a b c d e f g h
+    
+    
+    Your move:
 
 Run it!
 =======
