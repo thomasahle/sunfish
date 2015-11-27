@@ -4,8 +4,18 @@
 from __future__ import print_function
 import re
 import sys
+import os.path
+sys.path.append('util')
 from itertools import count
 from collections import OrderedDict, namedtuple
+import set_compiler
+set_compiler.install()
+import pyximport
+import numpy as np
+pyximport.install(setup_args={"include_dirs":np.get_include()},
+                  reload_support=True)
+from testing import testing
+
 
 # The table size is the maximum number of elements in the transposition table.
 TABLE_SIZE = 1e6
@@ -362,7 +372,8 @@ def main():
     pos = Position(initial, 0, (True,True), (True,True), 0, 0)
     while True:
         print_pos(pos)
-
+        testing(initial)
+        raw_input()
         # We query the user until she enters a legal move.
         move = None
         while move not in pos.gen_moves():
