@@ -46,6 +46,11 @@ initial = (
     '          '   # 110 -119
 )
 
+# Integer mapping for converting board to numpy array
+mapping = { '.': 0, 
+            'p': 1, 'n': 2, 'b': 3, 'r': 4, 'q': 5, 'k': 6,
+            'P': 7, 'N': 8, 'B': 9, 'R': 10, 'Q': 11, 'K': 12 }
+
 ###############################################################################
 # Move and evaluation tables
 ###############################################################################
@@ -239,6 +244,12 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
                 score += pst['P'][j+S]
         return score
 
+    def numpyify(self):
+        # convert board to numpy array
+        str_board = self.board.strip().split('\n ')
+        int_board = map(lambda row: map(lambda c: mapping[c], row), str_board)
+        return np.array(int_board).astype(np.int32)
+
 Entry = namedtuple('Entry', 'depth score gamma move')
 tp = OrderedDict()
 
@@ -371,9 +382,10 @@ def print_pos(pos):
 def main():
     pos = Position(initial, 0, (True,True), (True,True), 0, 0)
     while True:
+        testing(pos.numpyify())
         print_pos(pos)
-        testing(initial)
-        raw_input()
+        # testing()
+        # raw_input()
         # We query the user until she enters a legal move.
         move = None
         while move not in pos.gen_moves():
