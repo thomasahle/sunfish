@@ -43,11 +43,11 @@ initial = (
     ' PPPPPPPP\n'  #  80 - 89
     ' RNBQKBNR\n'  #  90 - 99
     '         \n'  # 100 -109
-    '          '   # 110 -119
+    '         '   # 110 -119
 )
 
 # Integer mapping for converting board to numpy array
-mapping = { '.': 0, 
+mapping = { ' ': -1, '.': 0, 
             'p': 1, 'n': 2, 'b': 3, 'r': 4, 'q': 5, 'k': 6,
             'P': 7, 'N': 8, 'B': 9, 'R': 10, 'Q': 11, 'K': 12 }
 
@@ -246,8 +246,10 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
 
     def numpyify(self):
         # convert board to numpy array
-        str_board = self.board.strip().split('\n ')
+        str_board = self.board.split('\n')
+        print(str_board)
         int_board = map(lambda row: map(lambda c: mapping[c], row), str_board)
+        print(int_board)
         return np.array(int_board).astype(np.int32)
 
 Entry = namedtuple('Entry', 'depth score gamma move')
@@ -382,6 +384,7 @@ def print_pos(pos):
 def main():
     pos = Position(initial, 0, (True,True), (True,True), 0, 0)
     while True:
+        print(pos.numpyify())
         testing(pos.numpyify())
         print_pos(pos)
         # testing()
