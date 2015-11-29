@@ -14,7 +14,7 @@ import pyximport
 import numpy as np
 pyximport.install(setup_args={"include_dirs":np.get_include()},
                   reload_support=True)
-from testing import testing
+# from testing import testing
 
 
 # The table size is the maximum number of elements in the transposition table.
@@ -388,6 +388,7 @@ def main():
         # raw_input()
         # We query the user until she enters a legal move.
         move = None
+        print (list(pos.gen_moves()))
         while move not in pos.gen_moves():
             match = re.match('([a-h][1-8])'*2, input('Your move: '))
             if match:
@@ -395,6 +396,7 @@ def main():
             else:
                 # Inform the user when invalid input (e.g. "help") is entered
                 print("Please enter a move like g8f6")
+        print (moves)
         pos = pos.move(move)
 
         # After our move we rotate the board and print it again.
