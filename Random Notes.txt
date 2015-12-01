@@ -1,0 +1,33 @@
+Horizon Effect
+
+An unresolved defect of chess programs is the insertion of delaying moves that cause any inevitable loss of material to occur beyond the program’s horizon (maximum search depth), so that the loss is hidden (Berliner, 1973 [3]). The ‘horizon effect’ is said to occur when the delaying moves unnecessarily weaken the position or give up additional material to postpone the eventual loss. The effect is less apparent in programs with more knowledgeable quiescence searches (Hermann Kaindl, 1982 [4]), but all programs exhibit this phenomenon. There are many illustrations of the difficulty; the example in Figure 4, which is based on a study by Kaindl, is clear. Here a program with a simple quiescence search involving only captures would assume that any blocking move saves the queen. Even an 8-ply search (..., Pb2; Bxb2, Pc3; Bxc3, Pd4; Bxd4, Pe5; Bxe5) might not show the inevitable, ‘believing’ that the queen has been saved at the expense of four pawns!
+
+Quiescence Search (Limiting it)
+
+Despite the fact that quiescence searches are typically very short, about 50%-90% nodes are spent there, so it is worthwhile to apply some pruning there. Apart from not trying moves with the static exchange evaluation < 0, delta pruning can be used for that purpose.
+
+int Quiesce( int alpha, int beta ) {
+    int stand_pat = Evaluate();
+    if( stand_pat >= beta )
+        return beta;
+    if( alpha < stand_pat )
+        alpha = stand_pat;
+ 
+    until( every_capture_has_been_examined )  {
+        MakeCapture();
+        score = -Quiesce( -beta, -alpha );
+        TakeBackMove();
+ 
+        if( score >= beta )
+            return beta;
+        if( score > alpha )
+           alpha = score;
+    }
+    return alpha;
+}
+
+A final method to spend less time traversing the minimax tree was to use a technique called a
+quiescence search. This technique basically chooses a random path in the tree to follow all the way to
+the end state of the chess game, and uses the hopefully superior alpha-beta score at this end state to
+prune subbranches being explored by other threads.
+
