@@ -11,6 +11,17 @@ import sunfish
 if sys.version_info[0] == 2:
     input = raw_input
 
+# Disable buffering
+class Unbuffered(object):
+    def __init__(self, stream):
+        self.stream = stream
+    def write(self, data):
+        self.stream.write(data)
+        self.stream.flush()
+    def __getattr__(self, attr):
+        return getattr(self.stream, attr)
+sys.stdout = Unbuffered(sys.stdout)
+
 # Sunfish doesn't know about colors. We hav to.
 WHITE, BLACK = range(2)
 FEN_INITIAL = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
