@@ -213,7 +213,7 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
         score = pst[p][j] - pst[p][i]
         # Capture
         if q.islower():
-            score += pst[q.upper()][j]
+            score += pst[q.upper()][len(self.board)-j-1]
         # Castling check detection
         if abs(j-self.kp) < 2:
             score += pst['K'][j]
