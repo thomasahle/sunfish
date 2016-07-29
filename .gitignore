@@ -39,3 +39,6 @@ profile.pstats
 
 # Gimp
 *.xcf
+
+# Vim
+*.swp

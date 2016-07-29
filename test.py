@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import print_function
+import os
 import sys
 import re
 import time
@@ -9,11 +10,32 @@ import subprocess
 import signal
 import argparse
 import importlib
+import itertools
 import multiprocessing
 import random
+import unittest
 
 import sunfish
 import xboard
+
+###############################################################################
+# Playing test
+###############################################################################
+
+class TestValueFunction(unittest.TestCase):
+    def setUp(self):
+        perft_file = os.path.join(os.path.dirname(__file__), 'tests/queen.fen')
+        test_trees = [expand_position(xboard.parseFEN(parseEPD(line)[0])) for line in open(perft_file)]
+        self.positions = list(itertools.chain(*[flatten_tree(tree, depth=2) for tree in test_trees]))
+
+    def test_value(self):
+        for pos in self.positions:
+            score = 0
+            for i,p in enumerate(pos.board):
+                if p.isupper(): score += sunfish.pst[p][i]
+                if p.islower(): score -= sunfish.pst[p.upper()][119-i]
+            self.assertEqual(pos.score, score,
+                    ' '.join(pos.board) + repr(pos))
 
 ###############################################################################
 # Playing test
@@ -76,12 +98,12 @@ class timeout:
     def __init__(self, seconds=1, error_message='Timeout'):
         self.seconds = seconds
         self.error_message = error_message
-    def handle_timeout(self, _signum, frame):
+    def handle_timeout(self, _signum, _frame):
         raise TimeoutError(self.error_message)
     def __enter__(self):
         signal.signal(signal.SIGALRM, self.handle_timeout)
         signal.alarm(self.seconds)
-    def __exit__(self, type, value, traceback):
+    def __exit__(self, _type, _value, _traceback):
         signal.alarm(0)
 
 def testxboard(python='python3'):
@@ -122,40 +144,46 @@ def testxboard(python='python3'):
 # Perft test
 ###############################################################################
 
+def expand_position(pos):
+    ''' Yiels a tree of generators [p, [p, [...], ...], ...] rooted at pos '''
+    yield pos
+    for m in pos.gen_moves():
+        pos1 = pos.move(m)
+        # Make sure the move was legal
+        if not any(pos1.value(m) >= sunfish.MATE_VALUE for m in pos1.gen_moves()):
+            yield expand_position(pos1)
+
+def collect_tree_depth(tree, depth):
+    root = next(tree)
+    if depth == 0:
+        yield root
+    else:
+        for subtree in tree:
+            yield from collect_tree_depth(subtree, depth-1)
+
+def flatten_tree(tree, depth):
+    if depth == 0:
+        return
+    yield next(tree)
+    for subtree in tree:
+        yield from flatten_tree(subtree, depth-1)
+
 def allperft(f, depth=4):
     lines = f.readlines()
     for d in range(1, depth+1):
-        print("Going to depth %d" % d)
+        print("Going to depth {}/{}".format(d, depth))
         for line in lines:
             parts = line.split(';')
             print(parts[0])
 
             pos, score = xboard.parseFEN(parts[0]), int(parts[d])
-            res = perft(pos, d)
+            res = sum(1 for _ in collect_tree_depth(expand_position(pos), d))
             if res != score:
                 print('=========================================')
                 print("ERROR at depth %d. Gave %d rather than %d" % (d, res, score))
                 print('=========================================')
-                if d == 1:
-                    print(pos)
-                perft(pos, d, divide=True)
                 return
         print('')
-
-def perft(pos, depth, divide=False):
-    if depth == 0:
-        return 1
-    res = 0
-    for m in pos.gen_moves():
-        pos1 = pos.move(m)
-        # Make sure the move was legal
-        if not any(pos1.value(m) >= sunfish.MATE_VALUE for m in pos1.gen_moves()):
-            sub = perft(pos1, depth-1, False)
-            if divide:
-                print(" "*depth+xboard.mrender(m), sub)
-            res += sub
-    return res
-
 
 ###############################################################################
 # Find mate test
@@ -267,12 +295,19 @@ def parseSAN(pos, color, msan):
             return (i, j)
 
 def parseEPD(epd):
-    parts = epd.strip('\n ;').replace('"','').split(maxsplit=6)
-    fen = ' '.join(parts[:6])
-    if len(parts) == 7:
-        opts = dict(p.split(maxsplit=1) for p in parts[6].split(';'))
-        return fen, opts
-    return fen, {}
+    epd = epd.strip('\n ;').replace('"','')
+    parts = epd.split(maxsplit=6)
+    opt_part = ''
+    if len(parts) >= 6 and parts[4].isdigit() and parts[5].isdigit():
+        fen = ' '.join(parts[:6])
+        opt_part = ' '.join(parts[6:])
+    else:
+        # Sometimes fen doesn't include half move clocks
+        fen = ' '.join(parts[:4]) + ' 0 1'
+        opt_part = ' '.join(parts[4:])
+    # EPD operations may either be <opcode> or (<opcode> <operand>)
+    opts = [p.split(maxsplit=1) for p in opt_part.split(';')]
+    return fen, opts
 
 def findbest(f, times):
     print('Calibrating search speed...')
@@ -321,13 +356,6 @@ def add_action(parser, f):
     parser.add_argument('_action', nargs='?',
         help=argparse.SUPPRESS, action=LambdaAction)
 
-class PerftAction(argparse.Action):
-    def __call__(self, parser, namespace, values, option_string=None):
-        allperft(namespace.file, namespace.depth)
-class QuickMateAction(argparse.Action):
-    def __call__(self, parser, namespace, values, option_string=None):
-        quickmate(namespace.file, namespace.depth)
-
 def main():
     parser = argparse.ArgumentParser(
         description='Run various tests for speed and correctness of sunfish.')
@@ -335,7 +363,7 @@ def main():
 
     p = subparsers.add_parser('perft',
         help='tests for correctness and speed of move generator.')
-    p.add_argument('--depth', type=int, default=1)
+    p.add_argument('--depth', type=int, default=2)
     p.add_argument('file', type=argparse.FileType('r'),
         help='such as tests/queen.fen.')
     add_action(p, lambda n: allperft(n.file, n.depth))
@@ -380,6 +408,11 @@ def main():
         help='a list of times (in seconds) at which to report the best move. Default is %(default)s.',
         default=[15, 30, 60, 120])
     add_action(p, lambda n: findbest(n.file, n.times))
+
+    suite = unittest.defaultTestLoader.loadTestsFromTestCase(TestValueFunction)
+    p = subparsers.add_parser('unittest',
+            help='isloated tests of evaluation and more')
+    add_action(p, lambda n: unittest.TextTestRunner().run(suite))
 
     _args, unknown = parser.parse_known_args()
     if unknown:
