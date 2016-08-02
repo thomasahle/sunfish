@@ -8,7 +8,7 @@ from itertools import count
 from collections import OrderedDict, namedtuple
 
 # The table size is the maximum number of elements in the transposition table.
-TABLE_SIZE = 1e6
+TABLE_SIZE = 1e3
 
 # This constant controls how much time we spend on looking for optimal moves.
 NODES_SEARCHED = 1e4
@@ -229,8 +229,10 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
                 score += pst['P'][j+S]
         return score
 
+# TODO: Ville det v;re bedre med to tps? En for fail-high og en for fail-low?
 Entry = namedtuple('Entry', 'depth score gamma move')
 tp = OrderedDict()
+Entry2 = namedtuple('Entry2', 'depth lower upper move')
 
 
 ###############################################################################
@@ -238,9 +240,10 @@ tp = OrderedDict()
 ###############################################################################
 
 nodes = 0
-def bound(pos, gamma, depth):
-    """ returns s(pos) <= r < gamma    if s(pos) < gamma
-        returns s(pos) >= r >= gamma   if s(pos) >= gamma """
+def bound(pos, gamma, depth, root=True):
+    """ returns r where
+            s(pos) <= r < gamma    if gamma > s(pos)
+            gamma <= r <= s(pos)   if gamma <= s(pos)"""
     global nodes; nodes += 1
 
     # Look in the table if we have already searched this position before.
@@ -257,9 +260,9 @@ def bound(pos, gamma, depth):
         return pos.score
 
     # Null move. Is also used for stalemate checking
-    nullscore = -bound(pos.rotate(), 1-gamma, depth-3) if depth > 0 else pos.score
+    nullscore = -bound(pos.rotate(), 1-gamma, depth-3,False) if depth > 0 else pos.score
     #nullscore = -MATE_VALUE*3 if depth > 0 else pos.score
-    if nullscore >= gamma:
+    if nullscore >= gamma and not root:
         return nullscore
 
     # We generate all possible, pseudo legal moves and order them to provoke
@@ -271,7 +274,7 @@ def bound(pos, gamma, depth):
         # We check captures with the value function, as it also contains ep and kp
         if depth <= 0 and pos.value(move) < 150:
             break
-        score = -bound(pos.move(move), 1-gamma, depth-1)
+        score = -bound(pos.move(move), 1-gamma, depth-1, False)
         if score > best:
             best = score
             bmove = move
@@ -280,6 +283,7 @@ def bound(pos, gamma, depth):
 
     # If there are no captures, or just not any good ones, stand pat
     if depth <= 0 and best < nullscore:
+        if root: print('Root fail low. How is depth <= 0?')
         return nullscore
     # Check for stalemate. If best move loses king, but not doing anything
     # would save us. Not at all a perfect check.
@@ -289,10 +293,14 @@ def bound(pos, gamma, depth):
     # We save the found move together with the score, so we can retrieve it in
     # the play loop. We also trim the transposition table in FILO order.
     # We prefer fail-high moves, as they are the ones we can build our pv from.
+    # bmove doesn't really mean anything when fail-low?
+    # FIXME: What if we never find a fail-high?
+    entry = tp.get(pos) # We may have been removed at this point
     if entry is None or depth >= entry.depth and best >= gamma:
+        if len(tp) == TABLE_SIZE:
+            tp.popitem(last=True)
+        assert bmove is not None
         tp[pos] = Entry(depth, best, gamma, bmove)
-        if len(tp) > TABLE_SIZE:
-            tp.popitem()
     return best
 
 
@@ -309,13 +317,14 @@ def search(pos, maxn=NODES_SEARCHED):
         # as they don't have the same concept of p(score). Hence we just use
         # 'lower < upper - margin' as the loop condition.
         lower, upper = -3*MATE_VALUE, 3*MATE_VALUE
-        while lower < upper - 3:
+        while lower < upper - 10:
             gamma = (lower+upper+1)//2
             score = bound(pos, gamma, depth)
             if score >= gamma:
                 lower = score
             if score < gamma:
                 upper = score
+        score = bound(pos, lower, depth, root=True)
 
         # We stop deepening if the global N counter shows we have spent too
         # long, or if we have already won the game.

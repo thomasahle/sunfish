@@ -63,7 +63,6 @@ def selfplay(maxn=200):
         # Always print the board from the same direction
         board = pos.board if d % 2 == 0 else pos.rotate().board
         print(' '.join(board))
-
         m, _ = sunfish.search(pos, maxn)
         if m is None:
             print("Game over")
@@ -71,39 +70,68 @@ def selfplay(maxn=200):
         print("\nmove", xboard.mrender(d%2, pos, m))
         pos = pos.move(m)
 
-def self_arena(version1, version2, games, maxn):
-    pool = multiprocessing.Pool(8)
-    instances = [(version1, version2, maxn, random.Random()) for _ in range(games)]
-    for r in pool.imap_unordered(play, instances):
-        print(r)
 
-def play(version1_version2_maxn_rand):
+def self_arena(version1, version2, games, secs):
+    print('Playing {} games of {} vs. {} at {} secs/game'.format(games, version1, version2, secs))
+    openings_file = os.path.join(os.path.dirname(__file__), 'tests/chessathome_openings.fen')
+    openings = random.sample(list(open(openings_file)), games)
+    pool = multiprocessing.Pool()
+    instances = [random.choice([
+        (version1, version2, secs, fen),
+        (version2, version1, secs, fen)]) for fen in openings]
+    wins = 0
+    losses = 0
+    for i, r in enumerate(pool.imap_unordered(play, instances)):
+        if r is None:
+            print('-', end='', flush=True)
+        if r == version1:
+            wins += 1
+            print('w', end='', flush=True)
+        if r == version2:
+            losses += 1
+            print('l', end='', flush=True)
+        if i % 80 == 79:
+            print()
+            print('{} wins, {} draws, {} losses out of {}'.format(wins,i+1-wins-losses,losses,i+1))
+    print()
+    print('Result: {} wins, {} draws, {} losses out of {}'.format(wins,games-wins-losses,losses,games))
+
+
+def play(version1_version2_secs_fen):
     ''' returns 1 if fish1 won, 0 for draw and -1 otherwise '''
-    version1, version2, maxn, rand = version1_version2_maxn_rand
-    fish1 = importlib.import_module(version1)
-    fish2 = importlib.import_module(version2)
-    pos = xboard.parseFEN(xboard.FEN_INITIAL)
+    version1, version2, secs, fen = version1_version2_secs_fen
+    fish = [importlib.import_module(version1),
+            importlib.import_module(version2)]
+    nodes = [5000, 5000]
+    times = [0, 0]
+    pos = xboard.parseFEN(fen)
     old = None
-    tdelta = 0
     for d in range(200):
-        nodes = maxn
-        nodes *= (1+abs(tdelta)/5) if (tdelta<0)==(d%2==0) else 1
-        nodes *= .75 + rand.random()/2
-        before = time.time()
-        m, score = (fish1 if d%2==0 else fish2).search(pos, nodes)
-        tdelta += (time.time()-before)*(1 if d%2==0 else -1)
+        t = time.time()
+        maxn = nodes[d%2] * (times[(d+1)%2]+secs) / (times[d%2]+secs)
+        m, score = fish[d%2].search(pos, maxn)
+        times[d%2] += time.time() - t
+        nodes[d%2] *= (secs/(time.time()-t))**.3
         if m is not None:
             pos = pos.move(m)
             # Test repetition draws
             if d%4==0:
                 if pos.board == old:
-                    return 0
+                    return None
                 old = pos.board
         else:
-            assert score < -1000
-            return 1 if d%2 == 1 else -1
-    print('200 moves reached')
-    return 0
+            if score > 30000:
+                assert False
+                # This means we move and kill the opponent king.
+                # But then the opponent made an illegal move last time???
+                return version1 if d%2 == 0 else version2
+            if score > -1000:
+                print("How did we get here, if we didn't lose?")
+                print(pos, m, score)
+                return None
+            return version1 if d%2 == 1 else version2
+    return None
+
 
 ###############################################################################
 # Test Xboard
@@ -131,22 +159,23 @@ def testxboard(python='python3'):
         with timeout(20, '%s was never encountered'%regex):
             while True:
                 line = fish.stdout.readline()
+                print(repr(line))
                 if re.search(regex, line):
                     return
+    def write(cmd):
+        print('>>>', repr(cmd))
+        print(cmd, file=fish.stdin, flush=True)
 
     try:
-        print('xboard', file=fish.stdin)
-        print('protover 2', file=fish.stdin)
+        write('xboard')
+        write('protover 2')
         waitFor(r'done\s*=\s*1')
-
-        print('usermove e2e4', file=fish.stdin)
+        write('usermove e2e4')
         waitFor('move ')
-
-        print('setboard rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1', file=fish.stdin)
-        print('usermove e7e5', file=fish.stdin)
+        write('setboard rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1')
+        write('usermove e7e5')
         waitFor('move ')
-
-        print('quit', file=fish.stdin)
+        write('quit')
         with timeout(5, 'quit did not terminate sunfish'):
             fish.wait()
     finally:
@@ -436,9 +465,9 @@ def main():
     p.add_argument('fish2', type=str, help='sunfish2')
     p.add_argument('--games', type=int, default=10,
         help='number of games to play. Default=%(default)s.')
-    p.add_argument('--nodes', type=int, default=200,
-        help='number of nodes to search per move. Default=%(default)s.')
-    add_action(p, lambda n: self_arena(n.fish1, n.fish2, n.games, n.nodes))
+    p.add_argument('--seconds', type=float, default=.1,
+        help='number of seconds to search per move. Default=%(default)s.')
+    add_action(p, lambda n: self_arena(n.fish1, n.fish2, n.games, n.seconds))
 
     p = subparsers.add_parser('findbest',
         help='reports the best moves found at certain positions after certain intervals of time.')
