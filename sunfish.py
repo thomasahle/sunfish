@@ -8,7 +8,7 @@ from itertools import count
 from collections import OrderedDict, namedtuple
 
 # The table size is the maximum number of elements in the transposition table.
-TABLE_SIZE = 1e3
+TABLE_SIZE = 1e6
 
 # This constant controls how much time we spend on looking for optimal moves.
 NODES_SEARCHED = 1e4
@@ -229,10 +229,10 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
                 score += pst['P'][j+S]
         return score
 
-# TODO: Ville det v;re bedre med to tps? En for fail-high og en for fail-low?
-Entry = namedtuple('Entry', 'depth score gamma move')
-tp = OrderedDict()
-Entry2 = namedtuple('Entry2', 'depth lower upper move')
+# lower <= s(pos) <= upper
+Entry = namedtuple('Entry', 'lower upper')
+tp_score = OrderedDict()
+tp_move = OrderedDict()
 
 
 ###############################################################################
@@ -249,21 +249,22 @@ def bound(pos, gamma, depth, root=True):
     # Look in the table if we have already searched this position before.
     # We use the table value if it was done with at least as deep a search
     # as ours, and the gamma value is compatible.
-    entry = tp.get(pos)
-    if entry is not None and entry.depth >= depth and (
-            entry.score < entry.gamma and entry.score < gamma or
-            entry.score >= entry.gamma and entry.score >= gamma):
-        return entry.score
+    entry = tp_score.get((pos, depth), Entry(-3*MATE_VALUE, 3*MATE_VALUE))
+    if gamma <= entry.lower: return entry.lower
+    if gamma > entry.upper: return entry.upper
 
     # Stop searching if we have won/lost.
     if abs(pos.score) >= MATE_VALUE:
         return pos.score
 
     # Null move. Is also used for stalemate checking
-    nullscore = -bound(pos.rotate(), 1-gamma, depth-3,False) if depth > 0 else pos.score
-    #nullscore = -MATE_VALUE*3 if depth > 0 else pos.score
+    nullscore = -bound(pos.rotate(), 1-gamma, depth-3, False) if depth > 0 else pos.score
+    # move `and not root` to above
     if nullscore >= gamma and not root:
         return nullscore
+
+    if gamma <= nullscore:
+        gamma -= 1
 
     # We generate all possible, pseudo legal moves and order them to provoke
     # cuts. At the next level of the tree we are going to minimize the score.
@@ -281,6 +282,9 @@ def bound(pos, gamma, depth, root=True):
         if score >= gamma:
             break
 
+    if best < nullscore:
+        best += 1
+
     # If there are no captures, or just not any good ones, stand pat
     if depth <= 0 and best < nullscore:
         if root: print('Root fail low. How is depth <= 0?')
@@ -292,15 +296,16 @@ def bound(pos, gamma, depth, root=True):
 
     # We save the found move together with the score, so we can retrieve it in
     # the play loop. We also trim the transposition table in FILO order.
-    # We prefer fail-high moves, as they are the ones we can build our pv from.
-    # bmove doesn't really mean anything when fail-low?
-    # FIXME: What if we never find a fail-high?
-    entry = tp.get(pos) # We may have been removed at this point
-    if entry is None or depth >= entry.depth and best >= gamma:
-        if len(tp) == TABLE_SIZE:
-            tp.popitem(last=True)
-        assert bmove is not None
-        tp[pos] = Entry(depth, best, gamma, bmove)
+    if len(tp_move) > TABLE_SIZE: tp_move.popitem(last=True)
+    # FIXME: Do we really need that last rule?
+    # I think it would be nicer (and stronger) to somehow guarantee we always get at least one fail-high
+    if best >= gamma or (root and pos not in tp_move):
+        tp_move[pos] = bmove
+    # If we find an upper bound, it should always be better than the current upper bound
+    # since if it weren't, the current upper bound would have caused a table-return much earlier
+    if len(tp_score) > TABLE_SIZE: tp_score.popitem(last=True)
+    if best < gamma: tp_score[(pos, depth)] = Entry(entry.lower, best)
+    if best >= gamma: tp_score[(pos, depth)] = Entry(best, entry.upper)
     return best
 
 
@@ -317,14 +322,17 @@ def search(pos, maxn=NODES_SEARCHED):
         # as they don't have the same concept of p(score). Hence we just use
         # 'lower < upper - margin' as the loop condition.
         lower, upper = -3*MATE_VALUE, 3*MATE_VALUE
-        while lower < upper - 10:
+        while lower < upper - 20:
             gamma = (lower+upper+1)//2
             score = bound(pos, gamma, depth)
             if score >= gamma:
                 lower = score
             if score < gamma:
                 upper = score
+            assert lower <= upper
+        # We do this to ensure there is a fail-high move in the table that we can return
         score = bound(pos, lower, depth, root=True)
+        assert score >= lower
 
         # We stop deepening if the global N counter shows we have spent too
         # long, or if we have already won the game.
@@ -333,10 +341,7 @@ def search(pos, maxn=NODES_SEARCHED):
 
     # If the game hasn't finished we can retrieve our move from the
     # transposition table.
-    entry = tp.get(pos)
-    if entry is not None:
-        return entry.move, score
-    return None, score
+    return tp_move.get(pos), score
 
 
 ###############################################################################
@@ -372,7 +377,11 @@ def main():
     while True:
         print_pos(pos)
 
-        # We query the user until she enters a legal move.
+        if pos.score <= -MATE_VALUE:
+            print("You lost")
+            break
+
+        # We query the user until she enters a (pseudo) legal move.
         move = None
         while move not in pos.gen_moves():
             match = re.match('([a-h][1-8])'*2, input('Your move: '))
@@ -387,14 +396,12 @@ def main():
         # This allows us to see the effect of our move.
         print_pos(pos.rotate())
 
-        # Fire up the engine to look for a move.
-        move, score = search(pos)
-        if score <= -MATE_VALUE:
+        if pos.score <= -MATE_VALUE:
             print("You won")
             break
-        if score >= MATE_VALUE:
-            print("You lost")
-            break
+
+        # Fire up the engine to look for a move.
+        move, score = search(pos)
 
         # The black player moves from a rotated position, so we have to
         # 'back rotate' the move before printing it.
