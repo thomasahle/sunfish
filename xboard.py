@@ -50,24 +50,22 @@ def mparse(color, move):
     m = (sunfish.parse(move[0:2]), sunfish.parse(move[2:4]))
     return m if color == WHITE else (119-m[0], 119-m[1])
 
-def pv(color, pos):
+def pv(searcher, color, pos):
     res = []
     origc = color
     res.append(str(pos.score))
     while True:
-        entry = sunfish.tp.get(pos)
-        if entry is None:
-            break
-        if entry.move is None:
+        move = searcher.tp_move.get(pos)
+        if move is None:
             res.append('null')
             break
-        move = mrender(color,pos,entry.move)
-        if move in res:
-            res.append(move)
+        rmove = mrender(color, pos, move)
+        if rmove in res:
+            res.append(rmove)
             res.append('loop')
             break
-        res.append(move)
-        pos, color = pos.move(entry.move), 1-color
+        res.append(rmove)
+        pos, color = pos.move(move), 1-color
         res.append(str(pos.score if color==origc else -pos.score))
     return ' '.join(res)
 

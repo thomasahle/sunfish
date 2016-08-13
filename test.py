@@ -56,14 +56,14 @@ class TestValueFunction(unittest.TestCase):
 # Playing test
 ###############################################################################
 
-def selfplay(maxn=200):
+def selfplay(secs=1):
     """ Start a game sunfish vs. sunfish """
     pos = xboard.parseFEN(xboard.FEN_INITIAL)
     for d in range(200):
         # Always print the board from the same direction
         board = pos.board if d % 2 == 0 else pos.rotate().board
         print(' '.join(board))
-        m, _ = sunfish.search(pos, maxn)
+        m, _ = sunfish.Searcher().search(pos, secs)
         if m is None:
             print("Game over")
             break
@@ -71,14 +71,15 @@ def selfplay(maxn=200):
         pos = pos.move(m)
 
 
-def self_arena(version1, version2, games, secs):
-    print('Playing {} games of {} vs. {} at {} secs/game'.format(games, version1, version2, secs))
+def self_arena(version1, version2, games, secs, plus):
+    print('Playing {} games of {} vs. {} at {} secs/game + {} secs/move'
+            .format(games, version1, version2, secs, plus))
     openings_file = os.path.join(os.path.dirname(__file__), 'tests/chessathome_openings.fen')
     openings = random.sample(list(open(openings_file)), games)
     pool = multiprocessing.Pool()
     instances = [random.choice([
-        (version1, version2, secs, fen),
-        (version2, version1, secs, fen)]) for fen in openings]
+        (version1, version2, secs, plus, fen),
+        (version2, version1, secs, plus, fen)]) for fen in openings]
     wins = 0
     losses = 0
     for i, r in enumerate(pool.imap_unordered(play, instances)):
@@ -97,21 +98,34 @@ def self_arena(version1, version2, games, secs):
     print('Result: {} wins, {} draws, {} losses out of {}'.format(wins,games-wins-losses,losses,games))
 
 
-def play(version1_version2_secs_fen):
+def play(version1_version2_secs_plus_fen):
     ''' returns 1 if fish1 won, 0 for draw and -1 otherwise '''
-    version1, version2, secs, fen = version1_version2_secs_fen
-    fish = [importlib.import_module(version1),
-            importlib.import_module(version2)]
-    nodes = [5000, 5000]
-    times = [0, 0]
+    version1, version2, secs, plus, fen = version1_version2_secs_plus_fen
+    searchers = [importlib.import_module(version1).Searcher(),
+                 importlib.import_module(version2).Searcher()]
+    times = [secs, secs]
     pos = xboard.parseFEN(fen)
     old = None
     for d in range(200):
+        moves_remain = 40
+        use = times[d%2]/moves_remain
         t = time.time()
-        maxn = nodes[d%2] * (times[(d+1)%2]+secs) / (times[d%2]+secs)
-        m, score = fish[d%2].search(pos, maxn)
-        times[d%2] += time.time() - t
-        nodes[d%2] *= (secs/(time.time()-t))**.3
+        m, score = searchers[d%2].search(pos, use)
+        times[d%2] -= time.time() - t
+        times[d%2] += plus
+        if times[d%2] < 0:
+            pass
+            #print('out of time after', d//2, 'moves')
+            #return version1 if d%2 == 1 else version2
+
+        # Give more time, if the opponent has used too much
+        #opp_factor = (times[(d+1)%2]+secs) / (times[d%2]+secs)
+        #prec_factor = times[d%2]/(d//2+1)
+        #maxn = nodes[d%2] * opp_factor
+        #times[d%2] += time.time() - t
+        #print('time', use, time.time()-t)
+        # Try to get time usage down to 1 second
+        #nodes[d%2] *= (secs*(time.time()-t))**.3
         if m is not None:
             pos = pos.move(m)
             # Test repetition draws
@@ -120,11 +134,13 @@ def play(version1_version2_secs_fen):
                     return None
                 old = pos.board
         else:
-            if score > 30000:
+            if score > sunfish.MATE_VALUE:
                 assert False
                 # This means we move and kill the opponent king.
                 # But then the opponent made an illegal move last time???
                 return version1 if d%2 == 0 else version2
+            if score == 0:
+                return None
             if score > -1000:
                 print("How did we get here, if we didn't lose?")
                 print(pos, m, score)
@@ -222,8 +238,11 @@ def allperft(f, depth=4):
             res = sum(1 for _ in collect_tree_depth(expand_position(pos), d))
             if res != score:
                 print('=========================================')
-                print("ERROR at depth %d. Gave %d rather than %d" % (d, res, score))
+                print('ERROR at depth %d. Gave %d rather than %d' % (d, res, score))
                 print('=========================================')
+                sunfish.print_pos(pos)
+                #print(' '.join(renderSAN(pos, 0, mov) for mov in pos.gen_moves()))
+                print(' '.join(sunfish.render(m[0])+sunfish.render(m[1]) for m in pos.gen_moves()))
                 return
         print('')
 
@@ -238,7 +257,7 @@ def allmate(path):
             print(line)
 
             pos = xboard.parseFEN(line)
-            _, score = sunfish.search(pos, maxn=1e9)
+            _, score = sunfish.Searcher().search(pos, secs=3600)
             if score < sunfish.MATE_VALUE:
                 print("Unable to find mate. Only got score = %d" % score)
                 break
@@ -249,30 +268,32 @@ def quickdraw(f, depth):
         print(line)
 
         pos = xboard.parseFEN(line)
+        searcher = sunfish.Searcher()
         for d in range(depth, 99):
-            s0 = sunfish.bound(pos, 0, d)
-            s1 = sunfish.bound(pos, 1, d)
+            s0 = searcher.bound(pos, 0, d, root=True)
+            s1 = searcher.bound(pos, 1, d, root=True)
             if s0 >= 0 and s1 < 1:
                 break
-            print(d, s0, s1, xboard.pv(0, pos))
+            else:
+                print('depth {}, s0 {}, s1 {}'.format(d, s0, s1))
+            #print(d, s0, s1, xboard.pv(0, pos))
         else:
             print("Fail: Unable to find draw!")
             return
 
-def quickmate(f, min_depth=1, draw=False):
+def quickmate(f, min_depth=1):
     """ Similar to allmate, but uses the `bound` function directly to only
     search for moves that will win us the game """
-    if draw:
-        return quickdraw(f, min_depth)
-
     for line in f:
         line = line.strip()
         print(line)
 
         pos = xboard.parseFEN(line)
+        searcher = sunfish.Searcher()
         for d in range(min_depth, 99):
-            score = sunfish.bound(pos, sunfish.MATE_VALUE, d)
+            score = searcher.bound(pos, sunfish.MATE_VALUE, d)
             if score >= sunfish.MATE_VALUE:
+                print(xboard.pv(searcher, 0, pos))
                 break
             print('Score at depth {}: {}'.format(d, score))
         else:
@@ -374,12 +395,8 @@ def parseEPD(epd, opt_dict=False):
     return fen, opts
 
 def findbest(f, times):
-    print('Calibrating search speed...')
     pos = xboard.parseFEN(xboard.FEN_INITIAL)
-    CAL_NODES = 100000
-    start = time.time()
-    _ = sunfish.search(pos, CAL_NODES)
-    factor = sunfish.nodes/(time.time()-start)
+    searcher = sunfish.Searcher()
 
     print('Running benchmark with %.1f nodes per second...' % factor)
     print('Printing best move after seconds', times)
@@ -400,7 +417,7 @@ def findbest(f, times):
         points = 0
         print(opts.get('id','unnamed'), end=' ', flush=True)
         for t in times:
-            move, _ = sunfish.search(pos, factor*t)
+            move, _ = searcher.search(pos, t)
             mark = renderSAN(pos,color,move)
             if am and move != am or bm and move == bm:
                 mark += '(1)'
@@ -440,12 +457,18 @@ def main():
     p = subparsers.add_parser('quickmate',
         help='uses the `bound` function directly to search for moves that will win us the game.')
     p.add_argument('file', type=argparse.FileType('r'),
-        help='such as tests/mate{1,2,3}.fen or tests/stalemate2.fen.')
+        help='such as tests/mate{1,2,3}.fen.')
     p.add_argument('--mindepth', type=int, default=3, metavar='D',
         help='optional minimum number of plies to search for.')
-    p.add_argument('--draw', action='store_true',
-        help='search for draws rather than mates.')
-    add_action(p, lambda n: quickmate(n.file, n.mindepth, n.draw))
+    add_action(p, lambda n: quickmate(n.file, n.mindepth))
+
+    p = subparsers.add_parser('quickdraw',
+            help='solve draw puzzles')
+    p.add_argument('file', type=argparse.FileType('r'),
+        help='such as tests/staltemate2.fen.')
+    p.add_argument('--mindepth', type=int, default=3, metavar='D',
+        help='optional minimum number of plies to search for.')
+    add_action(p, lambda n: quickdraw(n.file, n.mindepth))
 
     p = subparsers.add_parser('xboard',
         help='starts the xboard.py script and runs a few commands.')
@@ -455,8 +478,8 @@ def main():
 
     p = subparsers.add_parser('selfplay',
         help='run a simple visual sunfish vs sunfish game.')
-    p.add_argument('--nodes', type=int, default=200,
-        help='number of nodes to search per move. Default=%(default)s.')
+    p.add_argument('--sexs', type=int, default=1,
+        help='number of seconds to search per move. Default=%(default)s.')
     add_action(p, lambda n: selfplay(n.nodes))
 
     p = subparsers.add_parser('arena',
@@ -465,9 +488,11 @@ def main():
     p.add_argument('fish2', type=str, help='sunfish2')
     p.add_argument('--games', type=int, default=10,
         help='number of games to play. Default=%(default)s.')
-    p.add_argument('--seconds', type=float, default=.1,
-        help='number of seconds to search per move. Default=%(default)s.')
-    add_action(p, lambda n: self_arena(n.fish1, n.fish2, n.games, n.seconds))
+    p.add_argument('--seconds', type=float, default=20,
+        help='number of seconds to search per game. Default=%(default)s.')
+    p.add_argument('--plus', type=float, default=.1,
+        help='seconds time increment per move. Default=%(default)s.')
+    add_action(p, lambda n: self_arena(n.fish1, n.fish2, n.games, n.seconds, n.plus))
 
     p = subparsers.add_parser('findbest',
         help='reports the best moves found at certain positions after certain intervals of time.')
