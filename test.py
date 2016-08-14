@@ -24,9 +24,38 @@ import xboard
 
 class TestValueFunction(unittest.TestCase):
     def setUp(self):
-        perft_file = os.path.join(os.path.dirname(__file__), 'tests/queen.fen')
-        test_trees = [expand_position(xboard.parseFEN(parseEPD(line)[0])) for line in open(perft_file)]
+        self.perft_file = os.path.join(os.path.dirname(__file__), 'tests/queen.fen')
+        test_trees = [expand_position(xboard.parseFEN(parseEPD(line)[0])) for line in open(self.perft_file)]
         self.positions = list(itertools.chain(*[flatten_tree(tree, depth=2) for tree in test_trees]))
+
+    def test_fen(self):
+        fen_file = os.path.join(os.path.dirname(__file__), 'tests/chessathome_openings.fen')
+        for fen in open(fen_file):
+            fen = fen.strip()
+            pos = xboard.parseFEN(fen)
+            _, col, _, _, _, _ = fen.split()
+            fen1 = xboard.renderFEN(pos, xboard.WHITE if col == 'w' else xboard.BLACK)
+            self.assertEqual(fen, fen1, "Sunfish didn't correctly reproduce the FEN")
+
+    def test_perft(self):
+        success = allperft(open(self.perft_file), depth=2, verbose=False)
+        self.assertTrue(success)
+
+    def test_san(self):
+        return
+        pgn_file = os.path.join(os.path.dirname(__file__), 'tests/pgns.pgn')
+        for line in open(pgn_file):
+            msans = [msan for i, msan in enumerate(line.split()[:-1]) if i%3]
+            pos = xboard.parseFEN(xboard.FEN_INITIAL)
+            for i, msan in enumerate(msans):
+                move = parseSAN(pos, i%2, msan)
+                if re.search('=[BNR]', msan):
+                    # Sunfish doesn't support underpromotion
+                    break
+                msan_back = renderSAN(pos, i%2, move)
+                self.assertEqual(msan_back, msan,
+                                 "Sunfish didn't correctly reproduce the SAN move")
+                pos = pos.move(move)
 
     def test_value(self):
         for pos in self.positions:
@@ -37,20 +66,11 @@ class TestValueFunction(unittest.TestCase):
             self.assertEqual(pos.score, score,
                     ' '.join(pos.board) + repr(pos))
 
-    def test_san(self):
-        pgn_file = os.path.join(os.path.dirname(__file__), 'tests/pgns.pgn')
-        for line in open(pgn_file):
-            msans = [msan for i, msan in enumerate(line.split()[:-1]) if i%3!=0]
-            pos = xboard.parseFEN(xboard.FEN_INITIAL)
-            for i, msan in enumerate(msans):
-                move = parseSAN(pos, i%2, msan)
-                if re.search('=[BNR]', msan):
-                    # Sunfish doesn't support underpromotion
-                    break
-                msan_back = renderSAN(pos, i%2, move)
-                self.assertEqual(msan_back, msan,
-                        "Sunfish didn't correctly reproduce the SAN move")
-                pos = pos.move(move)
+    def test_xboard(self):
+        test_xboard('pypy3', verbose=False)
+        test_xboard('python3', verbose=False)
+        test_xboard('python', verbose=False)
+        test_xboard('pypy', verbose=False)
 
 ###############################################################################
 # Playing test
@@ -165,32 +185,36 @@ class timeout:
     def __exit__(self, _type, _value, _traceback):
         signal.alarm(0)
 
-def testxboard(python='python3'):
-    print('Xboard test \'%s\'' % python)
-    fish = subprocess.Popen([python, '-u', 'xboard.py'],
-       stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-       universal_newlines=True)
+def test_xboard(python='python3', verbose=True):
+    if verbose:
+        print('Xboard test \'%s\'' % python)
+    fish = subprocess.Popen(
+        [python, '-u', 'xboard.py'],
+        stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+        universal_newlines=True)
 
-    def waitFor(regex):
+    def wait_for(regex):
         with timeout(20, '%s was never encountered'%regex):
             while True:
                 line = fish.stdout.readline()
-                print(repr(line))
+                if verbose:
+                    print(repr(line))
                 if re.search(regex, line):
                     return
     def write(cmd):
-        print('>>>', repr(cmd))
+        if verbose:
+            print('>>>', repr(cmd))
         print(cmd, file=fish.stdin, flush=True)
 
     try:
         write('xboard')
         write('protover 2')
-        waitFor(r'done\s*=\s*1')
+        wait_for(r'done\s*=\s*1')
         write('usermove e2e4')
-        waitFor('move ')
+        wait_for('move ')
         write('setboard rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR b KQkq - 0 1')
         write('usermove e7e5')
-        waitFor('move ')
+        wait_for('move ')
         write('quit')
         with timeout(5, 'quit did not terminate sunfish'):
             fish.wait()
@@ -226,13 +250,15 @@ def flatten_tree(tree, depth):
     for subtree in tree:
         yield from flatten_tree(subtree, depth-1)
 
-def allperft(f, depth=4):
+def allperft(f, depth=4, verbose=True):
     lines = f.readlines()
     for d in range(1, depth+1):
-        print("Going to depth {}/{}".format(d, depth))
+        if verbose:
+            print("Going to depth {}/{}".format(d, depth))
         for line in lines:
             parts = line.split(';')
-            print(parts[0])
+            if verbose:
+                print(parts[0])
 
             pos, score = xboard.parseFEN(parts[0]), int(parts[d])
             res = sum(1 for _ in collect_tree_depth(expand_position(pos), d))
@@ -243,8 +269,10 @@ def allperft(f, depth=4):
                 sunfish.print_pos(pos)
                 #print(' '.join(renderSAN(pos, 0, mov) for mov in pos.gen_moves()))
                 print(' '.join(sunfish.render(m[0])+sunfish.render(m[1]) for m in pos.gen_moves()))
-                return
-        print('')
+                return False
+        if verbose:
+            print('')
+    return True
 
 ###############################################################################
 # Find mate test
@@ -302,6 +330,46 @@ def quickmate(f, min_depth=1):
 
 ###############################################################################
 # Best move test
+###############################################################################
+
+def findbest(f, times):
+    pos = xboard.parseFEN(xboard.FEN_INITIAL)
+    searcher = sunfish.Searcher()
+
+    print('Printing best move after seconds', times)
+    print('-'*60)
+    totalpoints = 0
+    totaltests = 0
+    for line in f:
+        fen, opts = parseEPD(line, opt_dict=True)
+        if type(opts) != dict or ('am' not in opts and 'bm' not in opts):
+            print("Line didn't have am/bm in opts", line, opts)
+            continue
+        pos = xboard.parseFEN(fen)
+        color = xboard.WHITE if fen.split()[1] == 'w' else xboard.BLACK
+        # am -> avoid move; bm -> best move
+        am = parseSAN(pos,color,opts['am']) if 'am' in opts else None
+        bm = parseSAN(pos,color,opts['bm']) if 'bm' in opts else None
+        print('Looking for am/bm', opts.get('am'), opts.get('bm'))
+        points = 0
+        print(opts.get('id','unnamed'), end=' ', flush=True)
+        for t in times:
+            move, _ = searcher.search(pos, t)
+            mark = renderSAN(pos,color,move)
+            if am and move != am or bm and move == bm:
+                mark += '(1)'
+                points += 1
+            else:
+                mark += '(0)'
+            print(mark, end=' ', flush=True)
+            totaltests += 1
+        print(points)
+        totalpoints += points
+    print('-'*60)
+    print('Total Points: %d/%d', totalpoints, totaltests)
+
+###############################################################################
+# Tools
 ###############################################################################
 
 def gen_legal_moves(pos):
@@ -394,43 +462,6 @@ def parseEPD(epd, opt_dict=False):
         opts = dict(p.split(maxsplit=1) for p in opts)
     return fen, opts
 
-def findbest(f, times):
-    pos = xboard.parseFEN(xboard.FEN_INITIAL)
-    searcher = sunfish.Searcher()
-
-    print('Running benchmark with %.1f nodes per second...' % factor)
-    print('Printing best move after seconds', times)
-    print('-'*60)
-    totalpoints = 0
-    totaltests = 0
-    for line in f:
-        fen, opts = parseEPD(line, opt_dict=True)
-        if type(opts) != dict or ('am' not in opts and 'bm' not in opts):
-            print("Line didn't have am/bm in opts", line, opts)
-            continue
-        pos = xboard.parseFEN(fen)
-        color = xboard.WHITE if fen.split()[1] == 'w' else xboard.BLACK
-        # am -> avoid move; bm -> best move
-        am = parseSAN(pos,color,opts['am']) if 'am' in opts else None
-        bm = parseSAN(pos,color,opts['bm']) if 'bm' in opts else None
-        print('Looking for am/bm', opts.get('am'), opts.get('bm'))
-        points = 0
-        print(opts.get('id','unnamed'), end=' ', flush=True)
-        for t in times:
-            move, _ = searcher.search(pos, t)
-            mark = renderSAN(pos,color,move)
-            if am and move != am or bm and move == bm:
-                mark += '(1)'
-                points += 1
-            else:
-                mark += '(0)'
-            print(mark, end=' ', flush=True)
-            totaltests += 1
-        print(points)
-        totalpoints += points
-    print('-'*60)
-    print('Total Points: %d/%d', totalpoints, totaltests)
-
 ###############################################################################
 # Actions
 ###############################################################################
@@ -474,7 +505,7 @@ def main():
         help='starts the xboard.py script and runs a few commands.')
     p.add_argument('--python', type=str, default='python',
         help='what version of python to use, e.g. python3, pypy.')
-    add_action(p, lambda n: testxboard(n.python))
+    add_action(p, lambda n: test_xboard(n.python))
 
     p = subparsers.add_parser('selfplay',
         help='run a simple visual sunfish vs sunfish game.')

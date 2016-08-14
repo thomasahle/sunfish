@@ -5,6 +5,8 @@ from __future__ import print_function
 from __future__ import division
 import re
 import sys
+import time
+
 import sunfish
 
 # Python 2 compatability
@@ -40,6 +42,18 @@ def parseFEN(fen):
     pos = sunfish.Position(board, score, wc, bc, ep, 0)
     return pos if color == 'w' else pos.rotate()
 
+def renderFEN(pos, color, half_move_clock=0, full_move_clock=1):
+    if color == BLACK:
+        pos = pos.rotate()
+    board = '/'.join(re.sub(r'\.+', (lambda m: str(len(m.group(0)))), rank)
+                      for rank in pos.board.split())
+    color = 'w' if color == WHITE else 'b'
+    castling = ('K' if pos.wc[1] else '') + ('Q' if pos.wc[0] else '') \
+            + ('k' if pos.bc[0] else '') + ('q' if pos.bc[1] else '') or '-'
+    ep = sunfish.render(pos.ep) if pos.ep else '-'
+    clock = str(half_move_clock) + ' ' + str(full_move_clock)
+    return ' '.join((board, color, castling, ep, clock))
+
 def mrender(color, pos, m):
     # Sunfish always assumes promotion to queen
     p = 'q' if sunfish.A8 <= m[1] <= sunfish.H8 and pos.board[m[0]] == 'P' else ''
@@ -50,30 +64,32 @@ def mparse(color, move):
     m = (sunfish.parse(move[0:2]), sunfish.parse(move[2:4]))
     return m if color == WHITE else (119-m[0], 119-m[1])
 
-def pv(searcher, color, pos):
+def pv(searcher, color, pos, include_scores=True):
     res = []
+    seen_pos = set()
     origc = color
-    res.append(str(pos.score))
+    if include_scores:
+        res.append(str(pos.score))
     while True:
         move = searcher.tp_move.get(pos)
         if move is None:
-            res.append('null')
             break
-        rmove = mrender(color, pos, move)
-        if rmove in res:
-            res.append(rmove)
+        res.append(mrender(color, pos, move))
+        pos, color = pos.move(move), 1-color
+        if pos in seen_pos:
             res.append('loop')
             break
-        res.append(rmove)
-        pos, color = pos.move(move), 1-color
-        res.append(str(pos.score if color==origc else -pos.score))
+        seen_pos.add(pos)
+        if include_scores:
+            res.append(str(pos.score if color==origc else -pos.score))
     return ' '.join(res)
 
 def main():
     pos = parseFEN(FEN_INITIAL)
+    searcher = sunfish.Searcher()
     forced = False
     color = WHITE
-    time, otim = 1, 1
+    our_time, opp_time = 1000, 1000 # time in centi-seconds
 
     stack = []
     while True:
@@ -108,15 +124,29 @@ def main():
         elif smove == 'go':
             forced = False
 
+            moves_remain = 40
+            use = our_time/moves_remain
             # Let's follow the clock of our opponent
-            nodes = 2e4
-            if time > 0 and otim > 0: nodes *= time/otim
-            m, s = sunfish.search(pos, maxn=nodes)
+            if our_time >= 100 and opp_time >= 100:
+                use *= our_time/opp_time
+            
+            start = time.time()
+            for _ in searcher._search(pos, secs=use/100):
+                # ply score time nodes pv
+                ply = searcher.depth
+                entry = searcher.tp_score.get((pos, ply, True))
+                assert entry is not None
+                score = '{}:{}'.format(entry.lower, entry.upper)
+                #if score is None: score = '?'
+                used = int((time.time() - start)*100 + .5)
+                moves = pv(searcher, color, pos, include_scores=False)
+                print('#{:>3} {:>13} {:>8} {:>8}  {}'.format(
+                    ply, score, used, searcher.nodes, moves))
+            m, s = searcher.tp_move.get(pos), entry.lower
             # We don't play well once we have detected our death
             if s <= -sunfish.MATE_VALUE:
                 print('resign')
             else:
-                print('# %d %+d %d %d %s' % (0, s, 0, sunfish.nodes, pv(color,pos)))
                 print('move', mrender(color, pos, m))
                 print('score before %d after %+d' % (pos.score, pos.value(m)))
                 pos = pos.move(m)
@@ -135,10 +165,10 @@ def main():
                 stack.append('go')
 
         elif smove.startswith('time'):
-            time = int(smove.split()[1])
+            our_time = int(smove.split()[1])
         
         elif smove.startswith('otim'):
-            otim = int(smove.split()[1])
+            opp_time = int(smove.split()[1])
 
         elif any(smove.startswith(x) for x in ('xboard','post','random','hard','accepted','level')):
             pass

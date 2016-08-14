@@ -249,9 +249,9 @@ class Searcher:
         # We use the table value if it was done with at least as deep a search
         # as ours, and the gamma value is compatible.
         # TODO: Maybe only use table for larger depth?
-        #entry = self.tp_score.get((pos, depth, root), Entry(-3*MATE_VALUE, 3*MATE_VALUE))
-        #if gamma <= entry.lower: return entry.lower
-        #if gamma > entry.upper: return entry.upper
+        entry = self.tp_score.get((pos, depth, root), Entry(-3*MATE_VALUE, 3*MATE_VALUE))
+        if gamma <= entry.lower: return entry.lower
+        if gamma > entry.upper: return entry.upper
 
         # Null move. Is also used for stalemate checking
         # Note this means we may return a wrong value, and thus break our guarantee
@@ -301,22 +301,22 @@ class Searcher:
             # the play loop. We also trim the transposition table in FILO order.
             if len(self.tp_move) > TABLE_SIZE: self.tp_move.popitem(last=True)
             self.tp_move[pos] = bmove
-            #if len(self.tp_score) > TABLE_SIZE: self.tp_score.popitem(last=True)
-            #self.tp_score[(pos, depth, root)] = Entry(best, entry.upper)
+            if len(self.tp_score) > TABLE_SIZE: self.tp_score.popitem(last=True)
+            self.tp_score[(pos, depth, root)] = Entry(best, entry.upper)
 
         # If we find an upper bound, it should always be better than the current upper bound
         # since if it weren't, the current upper bound would have caused a table-return much earlier
         if best < gamma:
             pass
-            #if len(self.tp_score) > TABLE_SIZE: self.tp_score.popitem(last=True)
-            #self.tp_score[(pos, depth, root)] = Entry(entry.lower, best)
+            if len(self.tp_score) > TABLE_SIZE: self.tp_score.popitem(last=True)
+            self.tp_score[(pos, depth, root)] = Entry(entry.lower, best)
         return best
 
     #TODO: Try speeding up hash table using score for key
 
     # secs over maxn is a breaking change. Can we do this?
     # I guess I could send a pull request to deep pink
-    def search(self, pos, secs):
+    def _search(self, pos, secs):
         """ Iterative deepening MTD-bi search """
         self.nodes = 0
         start = time.time()
@@ -324,6 +324,7 @@ class Searcher:
         # We limit the depth to some constant, so we don't get a stack overflow in
         # the end game.
         for depth in range(1, 99):
+            self.depth = depth
             # The inner loop is a binary search on the score of the position.
             # Inv: lower <= score <= upper
             # However this may be broken by values from the transposition table,
@@ -337,6 +338,8 @@ class Searcher:
                 if score >= gamma:
                     if score > upper:
                         print('sunfish.py wtf1', lower, upper, gamma, score, 'depth', depth)
+                        import xboard
+                        print('pos', xboard.renderFEN(pos, 0))
                     lower = score
                 if score < gamma:
                     if score < lower:
@@ -357,6 +360,7 @@ class Searcher:
                 score = self.bound(pos, lower, depth, root=True)
             assert pos in self.tp_move or abs(score) >= MATE_VALUE
 
+            yield
             # We stop deepening if we have spent too long, or if we have already won the game.
             if time.time()-start > secs and depth >= 2 or abs(score) >= MATE_VALUE:
                 break
@@ -365,6 +369,12 @@ class Searcher:
         # If the game hasn't finished we can retrieve our move from the
         # transposition table.
         return self.tp_move.get(pos), score
+
+    def search(self, pos, secs):
+        list(self._search(pos, secs))
+        # If the game hasn't finished we can retrieve our move from the
+        # transposition table.
+        return self.tp_move.get(pos), self.tp_score.get((pos, self.depth, True))
 
 
 ###############################################################################
