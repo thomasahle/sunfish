@@ -7,7 +7,10 @@ import re
 import sys
 import time
 
+import tools
 import sunfish
+
+from tools import WHITE, BLACK
 
 # Python 2 compatability
 if sys.version_info[0] == 2:
@@ -24,68 +27,8 @@ class Unbuffered(object):
         return getattr(self.stream, attr)
 sys.stdout = Unbuffered(sys.stdout)
 
-# Sunfish doesn't know about colors. We hav to.
-WHITE, BLACK = range(2)
-FEN_INITIAL = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
-
-
-def parseFEN(fen):
-    """ Parses a string in Forsyth-Edwards Notation into a Position """
-    board, color, castling, enpas, _hclock, _fclock = fen.split()
-    board = re.sub(r'\d', (lambda m: '.'*int(m.group(0))), board)
-    board = ' '*19+'\n ' + '\n '.join(board.split('/')) + ' \n'+' '*19
-    wc = ('Q' in castling, 'K' in castling)
-    bc = ('k' in castling, 'q' in castling)
-    ep = sunfish.parse(enpas) if enpas != '-' else 0
-    score = sum(sunfish.pst[p][i] for i,p in enumerate(board) if p.isupper())
-    score -= sum(sunfish.pst[p.upper()][119-i] for i,p in enumerate(board) if p.islower())
-    pos = sunfish.Position(board, score, wc, bc, ep, 0)
-    return pos if color == 'w' else pos.rotate()
-
-def renderFEN(pos, color, half_move_clock=0, full_move_clock=1):
-    if color == BLACK:
-        pos = pos.rotate()
-    board = '/'.join(re.sub(r'\.+', (lambda m: str(len(m.group(0)))), rank)
-                      for rank in pos.board.split())
-    color = 'w' if color == WHITE else 'b'
-    castling = ('K' if pos.wc[1] else '') + ('Q' if pos.wc[0] else '') \
-            + ('k' if pos.bc[0] else '') + ('q' if pos.bc[1] else '') or '-'
-    ep = sunfish.render(pos.ep) if pos.ep else '-'
-    clock = str(half_move_clock) + ' ' + str(full_move_clock)
-    return ' '.join((board, color, castling, ep, clock))
-
-def mrender(color, pos, m):
-    # Sunfish always assumes promotion to queen
-    p = 'q' if sunfish.A8 <= m[1] <= sunfish.H8 and pos.board[m[0]] == 'P' else ''
-    m = m if color == WHITE else (119-m[0], 119-m[1])
-    return sunfish.render(m[0]) + sunfish.render(m[1]) + p
-
-def mparse(color, move):
-    m = (sunfish.parse(move[0:2]), sunfish.parse(move[2:4]))
-    return m if color == WHITE else (119-m[0], 119-m[1])
-
-def pv(searcher, color, pos, include_scores=True):
-    res = []
-    seen_pos = set()
-    origc = color
-    if include_scores:
-        res.append(str(pos.score))
-    while True:
-        move = searcher.tp_move.get(pos)
-        if move is None:
-            break
-        res.append(mrender(color, pos, move))
-        pos, color = pos.move(move), 1-color
-        if pos in seen_pos:
-            res.append('loop')
-            break
-        seen_pos.add(pos)
-        if include_scores:
-            res.append(str(pos.score if color==origc else -pos.score))
-    return ' '.join(res)
-
 def main():
-    pos = parseFEN(FEN_INITIAL)
+    pos = tools.parseFEN(tools.FEN_INITIAL)
     searcher = sunfish.Searcher()
     forced = False
     color = WHITE
@@ -111,11 +54,11 @@ def main():
             print('feature done=1')
 
         elif smove == 'new':
-            stack.append('setboard ' + FEN_INITIAL)
+            stack.append('setboard ' + tools.FEN_INITIAL)
 
         elif smove.startswith('setboard'):
             _, fen = smove.split(' ', 1)
-            pos = parseFEN(fen)
+            pos = tools.parseFEN(fen)
             color = WHITE if fen.split()[1] == 'w' else BLACK
 
         elif smove == 'force':
@@ -139,15 +82,15 @@ def main():
                 score = '{}:{}'.format(entry.lower, entry.upper)
                 #if score is None: score = '?'
                 used = int((time.time() - start)*100 + .5)
-                moves = pv(searcher, color, pos, include_scores=False)
+                moves = tools.pv(searcher, pos, include_scores=False)
                 print('#{:>3} {:>13} {:>8} {:>8}  {}'.format(
                     ply, score, used, searcher.nodes, moves))
             m, s = searcher.tp_move.get(pos), entry.lower
-            # We don't play well once we have detected our death
-            if s <= -sunfish.MATE_VALUE:
+            # We only resign once we are mated.. That's never?
+            if s == -sunfish.MATE_UPPER:
                 print('resign')
             else:
-                print('move', mrender(color, pos, m))
+                print('move', tools.mrender(pos, m))
                 print('score before %d after %+d' % (pos.score, pos.value(m)))
                 pos = pos.move(m)
                 color = 1-color
@@ -158,7 +101,7 @@ def main():
 
         elif smove.startswith('usermove'):
             _, smove = smove.split()
-            m = mparse(color, smove)
+            m = tools.mparse(color, smove)
             pos = pos.move(m)
             color = 1-color
             if not forced:
@@ -169,6 +112,12 @@ def main():
         
         elif smove.startswith('otim'):
             opp_time = int(smove.split()[1])
+
+        elif smove.startswith('perft'):
+            start = time.time()
+            for d in range(1,10):
+                res = sum(1 for _ in tools.collect_tree_depth(tools.expand_position(pos), d))
+                print('{:>8} {:>8}'.format(res, time.time()-start))
 
         elif any(smove.startswith(x) for x in ('xboard','post','random','hard','accepted','level')):
             pass
