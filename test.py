@@ -176,14 +176,18 @@ def play(version1_version2_secs_plus_fen):
         if m is not None:
             pos = pos.move(m)
             # Test repetition draws
+            # This is by far the most common type of draw
             if pos in seen:
                 return None
             seen.add(pos)
         else:
             if score == 0:
+                # This is actually a bit interesting. Why would we ever throw away a win like this?
+                print('Stalemate?', tools.renderFEN(pos))
                 return None
-            assert score <= -sunfish.MATE_LOWER, "We lost?"
+            assert score <= -sunfish.MATE_LOWER, "move is None, but we didn't lose?"
             return version1 if d%2 == 1 else version2
+    print('Game too long', tools.renderFEN(pos))
     return None
 
 
@@ -207,12 +211,12 @@ def test_xboard(python='python3', verbose=True):
     if verbose:
         print('Xboard test \'%s\'' % python)
     fish = subprocess.Popen(
-        [python, '-u', 'tools.py'],
+        [python, '-u', 'xboard.py'],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE,
         universal_newlines=True)
 
     def wait_for(regex):
-        with timeout(20, '%s was never encountered'%regex):
+        with timeout(20, '{} was never encountered'.format(regex)):
             while True:
                 line = fish.stdout.readline()
                 if verbose:
@@ -262,9 +266,9 @@ def allperft(f, depth=4, verbose=True):
                 print('ERROR at depth %d. Gave %d rather than %d' % (d, res, score))
                 print('=========================================')
                 print(tools.renderFEN(pos,0))
-                sunfish.print_pos(pos)
-                #print(' '.join(renderSAN(pos, 0, mov) for mov in pos.gen_moves()))
-                print(' '.join(sunfish.render(m[0])+sunfish.render(m[1]) for m in pos.gen_moves()))
+                for move in pos.gen_moves():
+                    split = sum(1 for _ in tools.collect_tree_depth(tools.expand_position(pos.move(move)),1))
+                    print('{}: {}'.format(tools.mrender(pos, move), split))
                 return False
         if verbose:
             print('')
