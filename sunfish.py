@@ -7,7 +7,7 @@ from itertools import count
 from collections import OrderedDict, namedtuple
 
 # The table size is the maximum number of elements in the transposition table.
-TABLE_SIZE = 1e2
+TABLE_SIZE = 1e8
 
 # Mate value must be greater than 8*queen + 2*(rook+knight+bishop)
 # King value is set to twice this value such that if the opponent is
@@ -165,8 +165,15 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
     def rotate(self):
         ''' Rotates the board, preserving enpassant '''
         return Position(
+            self.board[::-1].swapcase(), -self.score, self.bc, self.wc,
+            119-self.ep if self.ep else 0,
+            119-self.kp if self.kp else 0)
+
+    def nullmove(self):
+        ''' Like rotate, but clears ep and kp '''
+        return Position(
             self.board[::-1].swapcase(), -self.score,
-            self.bc, self.wc, 119-self.ep, 119-self.kp)
+            self.bc, self.wc, 0, 0)
 
     def move(self, move):
         i, j = move
@@ -179,7 +186,7 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
         # Actual move
         board = put(board, j, board[i])
         board = put(board, i, '.')
-        # Castling rights
+        # Castling rights, we move the rook or capture the opponent's
         if i == A1: wc = (False, wc[1])
         if i == H1: wc = (wc[0], False)
         if j == A8: bc = (bc[0], False)
@@ -212,7 +219,7 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
             score += pst[q.upper()][119-j]
         # Castling check detection
         if abs(j-self.kp) < 2:
-            score += pst['K'][j]
+            score += pst['K'][119-j]
         # Castling
         if p == 'K' and abs(i-j) == 2:
             score += pst['R'][(i+j)//2]
@@ -222,7 +229,7 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
             if A8 <= j <= H8:
                 score += pst['Q'][j] - pst['P'][j]
             if j == self.ep:
-                score += pst['P'][j+S]
+                score += pst['P'][119-(j+S)]
         return score
 
 ###############################################################################
@@ -255,201 +262,124 @@ class LRUCache:
 class Searcher:
     def __init__(self):
         self.tp_score = LRUCache(TABLE_SIZE)
-        self.tp_move = LRUCache(10**8)
+        self.tp_move = LRUCache(TABLE_SIZE)
         self.nodes = 0
 
-    def bound(self, pos, gamma, depth, root=False):
+    def bound(self, pos, gamma, depth, root=True):
         """ returns r where
                 s(pos) <= r < gamma    if gamma > s(pos)
                 gamma <= r <= s(pos)   if gamma <= s(pos)"""
         self.nodes += 1
-
-        # Stop searching if we have lost.
-        if pos.score <= -MATE_LOWER:
-            return -MATE_UPPER
-        assert pos.score < MATE_LOWER, "We should never get here if we've won"
-        #assert abs(pos.score) < MATE_LOWER, "We no longer allow illegal moves"
 
         # Look in the table if we have already searched this position before.
         # We use the table value if it was done with at least as deep a search
         # as ours, and the gamma value is compatible.
         # TODO: Maybe only use table for larger depth?
         entry = self.tp_score.get((pos, depth, root), Entry(-MATE_UPPER, MATE_UPPER))
-        if entry.lower >= gamma: return entry.lower
-        if entry.upper < gamma: return entry.upper
+        if entry.lower >= gamma and (not root or self.tp_move.get(pos) is not None):
+            return entry.lower
+        if entry.upper < gamma:
+            return entry.upper
 
+        # Helper function for check move legality
+        is_dead = lambda pos: any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
 
-        # Null move. Is also used for stalemate checking
-        # Note this means we may return a wrong value, and thus break our guarantee
-        # At root we still need the null score for stalemate testing
-        # But do we really need the extra case? Does it win us a lot not to do the deep null move test at root?
-        # Apparantly it makes a huge difference... Maybe the depth-3 version is wrong somehow?
-        # The depth 0 is basically just a 'is in check' check.
-        if depth > 0:
-            in_check = any(pos.board[119-move[1]] == 'K' for move in pos.rotate().gen_moves())
-            nullscore = -self.bound(pos.rotate(), 1-gamma, 0)
-            # The mate finder should find checks to kp, which they other version doesn't!
-            #mate_finder = -self.bound(pos.rotate(), 1-MATE_LOWER, 0)
-            #if in_check != (mate_finder <= -MATE_LOWER):
-                #import xboard
-                #print ('hvad da?', __file__, in_check, mate_finder, nullscore, xboard.renderFEN(pos, 0))
-            #mate_finder = self.bound(pos.rotate(), MATE_UPPER, 0)
-            #if in_check != (mate_finder >= MATE_LOWER):
-            #    import xboard
-            #    print ('hvad da?', __file__, in_check, (mate_finder >= MATE_LOWER), mate_finder, nullscore, xboard.renderFEN(pos, 0))
-            #in_check = nullscore <= -MATE_LOWER
-        # In qs we just use the pos.score for standing pat
-        else:
-            nullscore = pos.score
-            in_check = False
-        if depth > 3 and not root and not in_check:
-            nullscore = -self.bound(pos.rotate(), 1-gamma, depth-3)
-            in_danger = nullscore <= -MATE_LOWER
-            # TODO: If null score gets mated, we may still want to do a 
-        if not root and nullscore >= gamma:
-            return nullscore
+        # Generator of moves to search in order.
+        # Allows short circuting.
+        def moves():
+            # First try not moving at all
+            if depth > 0 and not root and any(c in pos.board for c in 'RBNQ'):
+                pos1 = pos.nullmove()
+                if not is_dead(pos1):
+                    yield None, -self.bound(pos1, 1-gamma, depth-3, root=False)
+            # For small depths we can stand pat
+            if depth <= 0:
+                yield None, pos.score
+            # Then killer move
+            killer = self.tp_move.get(pos)
+            if killer:
+                # TODO: Try not reducing?
+                yield killer, -self.bound(pos.move(killer), 1-gamma, depth-1, root=False)
+            # Then all the other moves
+            for move in sorted(pos.gen_moves(), key=pos.value, reverse=True):
+                if depth <= 0:
+                    if pos.value(move) < 150: break
+                    # We don't check legality in QSearch, since we can't recognize
+                    # mate anyway (We don't know if there's a check evasion)
+                    yield move, -self.bound(pos.move(move), 1-gamma, depth-1, root=False)
+                else:
+                    pos1 = pos.move(move)
+                    if not is_dead(pos1):
+                        yield move, -self.bound(pos1, 1-gamma, depth-1, root=False)
 
-        # TODO: test this check extension
-        # Test 1: Seems to make mate finding a LOT slower... odly
-        #if in_check:
-        #    depth += 1
-
-
-        # We generate all possible, pseudo legal moves and order them to provoke
-        # cuts. At the next level of the tree we are going to minimize the score.
-        # This can be shown equal to maximizing the negative score, with a slightly
-        # adjusted gamma value.
-        best, bmove = -MATE_UPPER, None
-        any_moves = False
-        # Putting killer first actually means that king-captures are no longer first
-        # Well: only if king captures are not in the table, but why wouldn't they be?
-        # For some reason this still doesn't improve performance much...
-        # It does make the time to search ply=8 go from 3 seconds to 2.5 though
-        # But it also makes the quickmate2 run slower
-        killer = self.tp_move.get(pos)
-        killer = [killer] if killer is not None else []
-        for move in killer + sorted(pos.gen_moves(), key=pos.value, reverse=True):
-        #for move in killer + list(pos.gen_moves()):
-            # We check captures with the value function, as it also contains ep and kp
-            # Note that we will always search king-captures first, so they aren't hidden
-            # by fail-high
-            if depth <= 0 and pos.value(move) < 150:
+        # Run through the moves, shortcutting when possible
+        best, bmove, any_moves = -MATE_UPPER, None, False
+        # For depth > 0 we also check if we exhaust all moves
+        # We can't count on any_moves for QSearch, since it stops early
+        any_moves = False if depth > 0 else True
+        for move, score in moves():
+            any_moves = True
+            best = max(best, score)
+            if best >= gamma:
+                bmove = move
                 break
-            pos1 = pos.move(move)
-            is_legal = depth <= 0 or not any(pos1.board[j] == 'k' for i,j in pos1.gen_moves())
-            if is_legal:
-                any_moves = True
-                # Do the actual recursive check
-                score = -self.bound(pos1, 1-gamma, depth-1)
-                if score > best:
-                    best = score
-                if score >= gamma:
-                    bmove = move
-                    break
 
-        # Check for stalemate. If best move (immediately) loses king,
-        # but not we are not in check.
-        # But is best really -MATE_UPPER when legal moves?
-        # Does't it actually depend on the gamma used?
-        # We can't just check best==-MATE_UPPER, at least not until we have delay
-        if depth > 0 and not any_moves and not in_check:
-            #import xboard
-            #print('looks like stalemate to', __file__, xboard.renderFEN(pos,0))
-            return 0
+        # Check for game having finished
+        # Note for depth <= 0 there will always be a move, so we can't get here
+        # We can get a king capture though.
+        if not any_moves:
+            best = -MATE_UPPER if is_dead(pos.nullmove()) else 0
+            self.tp_score[(pos, depth, root)] = Entry(best, best)
 
-        # Since we fail-high with nullscore, we should also use it for fail-low
-        # If root, the null score is only used for the draw check
-        if best < nullscore and not root:
-            best = nullscore
-            bmove = None
-
-        # Delay
-        # This actually made us go from 14s to 13.5s in quickmate2
-        if best >= MATE_UPPER-100: best -= 1
-        if best <= -(MATE_UPPER-100): best += 1
-
-        # We don't want fail-low moves in tp_move, which is supposed to give the pv.
-        # However then we need to guarantee that we always have a fail-high move at root.
-        # This should be easy, but search instability (from null move) can screw us.
-        if best >= gamma:
-            # We save the found move together with the score, so we can retrieve it in
-            # the play loop. We also trim the transposition table in FIFO order.
+        elif best >= gamma:
             self.tp_move[pos] = bmove
             self.tp_score[(pos, depth, root)] = Entry(best, entry.upper)
 
-        #if root:
-        #    print('Root {} fail {}. Move {}'.format(depth,
-        #        ('high' if best >= gamma else 'low'), self.tp_move.get(pos)))
-
-        # If we find an upper bound, it should always be better than the current upper bound
-        # since if it weren't, the current upper bound would have caused a table-return much earlier
-        if best < gamma:
-            #pass
+        else:
             self.tp_score[(pos, depth, root)] = Entry(entry.lower, best)
-        return best
 
-    #TODO: Try speeding up hash table using score for key
+        return best
 
     # secs over maxn is a breaking change. Can we do this?
     # I guess I could send a pull request to deep pink
-    def _search(self, pos, secs):
+    # Why include secs at all?
+    def _search(self, pos):
         """ Iterative deepening MTD-bi search """
         self.nodes = 0
-        start = time.time()
 
-        # We limit the depth to some constant, so we don't get a stack overflow in
-        # the end game.
-        for depth in range(1, 99):
+        for depth in count(1):
             self.depth = depth
             # The inner loop is a binary search on the score of the position.
             # Inv: lower <= score <= upper
-            # However this may be broken by values from the transposition table,
-            # as they don't have the same concept of p(score). Hence we just use
-            # 'lower < upper - margin' as the loop condition.
+            # 'while lower != upper' would work, but play tests show a margin of 20 plays better.
             lower, upper = -MATE_UPPER, MATE_UPPER
             while lower < upper - 20:
                 gamma = (lower+upper+1)//2
                 # TODO: Check if allowing null-move in this search has a positive effect
-                score = self.bound(pos, gamma, depth, root=True)
+                score = self.bound(pos, gamma, depth)
+                #if not lower <= score <= upper:
+                #    print()
+                #    print(__file__, 'what?', lower, upper, 'gamma score', gamma, score, 'depth', depth)
+                #    import tools
+                #    print('pos', tools.renderFEN(pos))
                 if score >= gamma:
-                    if score > upper:
-                        print(__file__, 'wtf1', lower, upper, 'gamma score', gamma, score, 'depth', depth)
-                        import tools
-                        print('pos', tools.renderFEN(pos, 0))
                     lower = score
                 if score < gamma:
-                    if score < lower:
-                        print(__file__, 'wtf2', lower, upper, 'gamma score', gamma, score, 'depth', depth)
                     upper = score
-                #assert lower <= upper
-            #while pos not in tp_move.get(pos):
-            #    lower = bound(pos, lower, depth, root=True)
-            # We do this to ensure there is a fail-high move in the table that we can return
-            #if not score >= lower:
-            #    print('sunfish.py wtf', lower, upper, score, 'depth', depth)
+            # We want to make sure the move to play hasn't been kicked out of the table,
+            # So we make another call that must always fail high and thus produce a move.
+            score = self.bound(pos, lower, depth)
             #assert score >= lower
-            # TODO: What about draws?
-            score = self.bound(pos, lower, depth, root=True)
-            while score < lower:
-                print('weird', score)
-                lower = score
-                score = self.bound(pos, lower, depth, root=True)
-            assert score == self.tp_score.get((pos, depth, True)).lower
-            assert self.tp_move.get(pos) is not None or score == 0 or abs(score) >= MATE_LOWER, \
-                    "{}, {} <= {} <= {}".format(self.tp_move.get(pos), lower, score, upper)
-
+            #assert score == self.tp_score.get((pos, depth, True)).lower
+            # Yield so the user may inspect the search
             yield
-            # We stop deepening if we have spent too long, or if we have already won the game.
-            if time.time()-start > secs and depth >= 2 or abs(score) >= MATE_LOWER:
-                break
-        #print('depth', depth)
-
-        # If the game hasn't finished we can retrieve our move from the
-        # transposition table.
-        #return self.tp_move.get(pos), score
 
     def search(self, pos, secs):
-        list(self._search(pos, secs))
+        start = time.time()
+        for _ in self._search(pos):
+            if self.depth < 2: continue
+            if time.time() - start > secs:
+                break
         # If the game hasn't finished we can retrieve our move from the
         # transposition table.
         return self.tp_move.get(pos), self.tp_score.get((pos, self.depth, True)).lower
@@ -531,3 +461,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
