@@ -1,3 +1,4 @@
+import itertools
 import re
 
 import sunfish
@@ -22,8 +23,9 @@ def gen_legal_moves(pos):
         Also the position after moving is included. '''
     for move in pos.gen_moves():
         pos1 = pos.move(move)
+        # If we just checked for opponent moves capturing the king, we would miss
+        # captures in case of illegal castling.
         if not any(pos1.value(m) >= sunfish.MATE_LOWER for m in pos1.gen_moves()):
-        #if not any(pos1.board[j] == 'k' or j == pos1.kp for i,j in pos1.gen_moves()):
             yield move, pos1
 
 def mrender(pos, m):
@@ -66,7 +68,7 @@ def renderSAN(pos, move):
     srcs = [a for (a,b),_ in gen_legal_moves(pos) if pos.board[a] == pos.board[i] and b == j]
     srcs_file = [a for a in srcs if (a - sunfish.A1) % 10 == (i - sunfish.A1) % 10]
     srcs_rank = [a for a in srcs if (a - sunfish.A1) // 10 == (i - sunfish.A1) // 10]
-    assert len(srcs) > 0
+    assert srcs, 'No moves compatible with {}'.format(move)
     if len(srcs) == 1: src = ''
     elif len(srcs_file) == 1: src = csrc[0]
     elif len(srcs_rank) == 1: src = csrc[1]
@@ -133,7 +135,7 @@ def renderFEN(pos, half_move_clock=0, full_move_clock=1):
         pos = pos.rotate()
     board = '/'.join(pos.board.split())
     board = re.sub(r'\.+', (lambda m: str(len(m.group(0)))), board)
-    castling = ''.join(c for c, t in zip('KQkq', pos.wc[::-1]+pos.bc) if t) or '-'
+    castling = ''.join(itertools.compress('KQkq', pos.wc[::-1]+pos.bc)) or '-'
     ep = sunfish.render(pos.ep) if not pos.board[pos.ep].isspace() else '-'
     clock = '{} {}'.format(half_move_clock, full_move_clock)
     return ' '.join((board, color, castling, ep, clock))
