@@ -74,7 +74,7 @@ def main():
                 use *= our_time/opp_time
             
             start = time.time()
-            for _ in searcher._search(pos, secs=use/100):
+            for _ in searcher._search(pos):
                 # ply score time nodes pv
                 ply = searcher.depth
                 entry = searcher.tp_score.get((pos, ply, True))
@@ -85,6 +85,8 @@ def main():
                 moves = tools.pv(searcher, pos, include_scores=False)
                 print('#{:>3} {:>13} {:>8} {:>8}  {}'.format(
                     ply, score, used, searcher.nodes, moves))
+                if time.time() - start > use/100:
+                    break
             m, s = searcher.tp_move.get(pos), entry.lower
             # We only resign once we are mated.. That's never?
             if s == -sunfish.MATE_UPPER:
@@ -127,3 +129,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
