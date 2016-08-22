@@ -33,6 +33,7 @@ def main():
     forced = False
     color = WHITE
     our_time, opp_time = 1000, 1000 # time in centi-seconds
+    show_thinking = False
 
     stack = []
     while True:
@@ -75,25 +76,24 @@ def main():
             
             start = time.time()
             for _ in searcher._search(pos):
-                # ply score time nodes pv
-                ply = searcher.depth
-                entry = searcher.tp_score.get((pos, ply, True))
-                assert entry is not None
-                score = '{}:{}'.format(entry.lower, entry.upper)
-                #if score is None: score = '?'
-                used = int((time.time() - start)*100 + .5)
-                moves = tools.pv(searcher, pos, include_scores=False)
-                print('#{:>3} {:>13} {:>8} {:>8}  {}'.format(
-                    ply, score, used, searcher.nodes, moves))
+                if show_thinking:
+                    ply = searcher.depth
+                    entry = searcher.tp_score.get((pos, ply, True))
+                    score = round((entry.lower + entry.upper)/2)
+                    dual_score = '{}:{}'.format(entry.lower, entry.upper)
+                    used = int((time.time() - start)*100 + .5)
+                    moves = tools.pv(searcher, pos, include_scores=False)
+                    print('{:>3} {:>8} {:>8} {:>8} {:>13} \t{}'.format(
+                        ply, score, used, searcher.nodes, dual_score, moves))
                 if time.time() - start > use/100:
                     break
+            entry = searcher.tp_score.get((pos, searcher.depth, True))
             m, s = searcher.tp_move.get(pos), entry.lower
             # We only resign once we are mated.. That's never?
             if s == -sunfish.MATE_UPPER:
                 print('resign')
             else:
                 print('move', tools.mrender(pos, m))
-                print('score before %d after %+d' % (pos.score, pos.value(m)))
                 pos = pos.move(m)
                 color = 1-color
 
@@ -121,7 +121,13 @@ def main():
                 res = sum(1 for _ in tools.collect_tree_depth(tools.expand_position(pos), d))
                 print('{:>8} {:>8}'.format(res, time.time()-start))
 
-        elif any(smove.startswith(x) for x in ('xboard','post','random','hard','accepted','level')):
+        elif smove.startswith('post'):
+            show_thinking = True
+
+        elif smove.startswith('nopost'):
+            show_thinking = False
+
+        elif any(smove.startswith(x) for x in ('xboard','random','hard','accepted','level')):
             pass
 
         else:
