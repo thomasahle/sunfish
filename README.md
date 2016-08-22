@@ -2,7 +2,7 @@ Sunfish
 =======
 Sunfish is a simple, but strong chess engine, written in Python, mostly for teaching purposes. Without tables and its simple interface, it takes up just 111 lines of code!
 
-The clarity of the Sunfish code provides a great platform for experimenting, be it with evaluation functions, search extensions or anything. Fork it today and see what you can do!
+Because Sunfish is small and strives to be simple, the code provides a great platform for experimenting. People have used it for testing parallel search algorithms, experimenting with evaluation functions, and developing deep learning chess programs. Fork it today and see what you can do!
 
 Screenshot
 ==========
@@ -24,9 +24,9 @@ Screenshot
 
 Run it!
 =======
-Sunfish is self contained in the `sunfish.py` file from the repository. I recommend running it with `pypy` for optimal performance.
+Sunfish is self contained in the `sunfish.py` file from the repository. I recommend running it with `pypy` or `pypy3` for optimal performance.
 
-It is also possible to run Sunfish as an [XBoard](http://www.gnu.org/software/xboard/)/CECP engine in [PyChess](http://pychess.org), [Arena](http://www.playwitharena.com) or your chess interface of choice. Just add the command `pypy -u xboard.py`. Ruxy Sylwyka has [a note on making it all work on Windows](http://www.talkchess.com/forum/viewtopic.php?topic_view=threads&p=560462).
+It is also possible to run Sunfish with a graphical interface, such as [PyChess](http://pychess.org), [Arena](http://www.playwitharena.com) or your chess interface of choice. Sunfish' can communicate through the [XBoard](http://www.gnu.org/software/xboard/)/CECP protocol by the command `pypy -u xboard.py`. Ruxy Sylwyka has [a note on making it all work on Windows](http://www.talkchess.com/forum/viewtopic.php?topic_view=threads&p=560462).
 
 ![Arena Screenshot](http://s29.postimg.org/89gnk99d3/Clipboard01.png)
 
@@ -39,11 +39,11 @@ Features
 
 Limitations
 ===========
-Sunfish supports castling, en passant, and promotion. It doesn't however do minor promotion or draws of any kind. All input must be done in simple 'two coordinate' notation, as shown in the screenshot.
+Sunfish supports castling, en passant, and promotion. It doesn't however do minor promotion or draws by repetition. All input must be done in simple 'two coordinate' notation, as shown in the screenshot.
 
-On the technical side there are a lot of features that could be interesting to add to Sunfish. For performance, the most important might be a piecelist to save the enumeration of all board squares at every move generation. Other performance optimizations could include dedicated check detection, zobrist hashing and a mutable board representation - perhaps based on bitboards.
+There are many ways in which you may try to make Sunfish stronger. First you could change to board representation to a mutable array and add a fast way to enumerate pieces. Then you could implement dedicated capture generation, check detection and check evasions. You could also move everything to bitboards, implement parts of the code in C or experiment with parallel search!
 
-The evaluation in Sunfish is not very sophisticated. E.g. we don't distinguish between midgame and endgame. Not much selective deepening is done, no threat detection and the like. Finally Sunfish might benefit from a more advanced move ordering, including such things as killer move and SEE.
+The other way to make Sunfish stronger is to give it more knowledge of chess. The current evaluation function only uses piece square tables - it doesn't even distinguish between midgame and endgame. You can also experiment with more pruning - currently only null move is done - and extensions - currently none are used. Finally Sunfish might benefit from a more advanced move ordering, MVV/LVA and SEE perhaps?
 
 Why Sunfish?
 ============
