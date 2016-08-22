@@ -264,6 +264,19 @@ class Searcher:
         self.tp_score = LRUCache(TABLE_SIZE)
         self.tp_move = LRUCache(TABLE_SIZE)
         self.nodes = 0
+        #self.was_unstable = False
+
+    def quiescence(self, pos, gamma):
+        self.nodes += 1
+        if pos.score <= -MATE_LOWER:
+            return -MATE_UPPER
+        score = pos.score
+        for move in sorted(pos.gen_moves(), key=pos.value, reverse=True):
+            if score >= gamma:
+                break
+            if pos.value(move) >= 150:
+                score = max(score, -self.quiescence(pos.move(move), 1-gamma))
+        return score
 
     def bound(self, pos, gamma, depth, root=True):
         """ returns r where
@@ -271,10 +284,12 @@ class Searcher:
                 gamma <= r <= s(pos)   if gamma <= s(pos)"""
         self.nodes += 1
 
+        if depth <= 0:
+            return self.quiescence(pos, gamma)
+
         # Look in the table if we have already searched this position before.
         # We use the table value if it was done with at least as deep a search
         # as ours, and the gamma value is compatible.
-        # TODO: Maybe only use table for larger depth?
         entry = self.tp_score.get((pos, depth, root), Entry(-MATE_UPPER, MATE_UPPER))
         if entry.lower >= gamma and (not root or self.tp_move.get(pos) is not None):
             return entry.lower
@@ -284,58 +299,47 @@ class Searcher:
         # Helper function for check move legality
         is_dead = lambda pos: any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
 
+        # Check for the end of the game
+        any_moves = not all(is_dead(pos.move(m)) for m in pos.gen_moves())
+        in_check = is_dead(pos.nullmove())
+        if not any_moves:
+            score = -MATE_UPPER if in_check else 0
+            self.tp_score[(pos, depth, root)] = Entry(score, score)
+            return score
+
+        # This is where extensions might be inserted.
+        # Like if in_check: depth += 1
+
         # Generator of moves to search in order.
         # Allows short circuting.
         def moves():
             # First try not moving at all
-            if depth > 0 and not root and any(c in pos.board for c in 'RBNQ'):
-                pos1 = pos.nullmove()
-                if not is_dead(pos1):
-                    yield None, -self.bound(pos1, 1-gamma, depth-3, root=False)
-            # For small depths we can stand pat
-            if depth <= 0:
-                yield None, pos.score
-            # Then killer move
+            if not root and not in_check and any(c in pos.board for c in 'RBNQ'):
+                yield None, -self.bound(pos.nullmove(), 1-gamma, depth-3, root=False)
+            # Then killer move. We search it twice, but the table will fix things for us.
+            # Note, we don't have to check for legality, since we've already done it before.
             killer = self.tp_move.get(pos)
             if killer:
-                # TODO: Try not reducing?
                 yield killer, -self.bound(pos.move(killer), 1-gamma, depth-1, root=False)
             # Then all the other moves
             for move in sorted(pos.gen_moves(), key=pos.value, reverse=True):
-                if depth <= 0:
-                    if pos.value(move) < 150: break
-                    # We don't check legality in QSearch, since we can't recognize
-                    # mate anyway (We don't know if there's a check evasion)
-                    yield move, -self.bound(pos.move(move), 1-gamma, depth-1, root=False)
-                else:
-                    pos1 = pos.move(move)
-                    if not is_dead(pos1):
-                        yield move, -self.bound(pos1, 1-gamma, depth-1, root=False)
+                pos1 = pos.move(move)
+                if not is_dead(pos1):
+                    yield move, -self.bound(pos1, 1-gamma, depth-1, root=False)
 
         # Run through the moves, shortcutting when possible
-        best, bmove, any_moves = -MATE_UPPER, None, False
-        # For depth > 0 we also check if we exhaust all moves
-        # We can't count on any_moves for QSearch, since it stops early
-        any_moves = False if depth > 0 else True
+        best, bmove = -MATE_UPPER, None
         for move, score in moves():
-            any_moves = True
             best = max(best, score)
             if best >= gamma:
                 bmove = move
                 break
 
-        # Check for game having finished
-        # Note for depth <= 0 there will always be a move, so we can't get here
-        # We can get a king capture though.
-        if not any_moves:
-            best = -MATE_UPPER if is_dead(pos.nullmove()) else 0
-            self.tp_score[(pos, depth, root)] = Entry(best, best)
-
-        elif best >= gamma:
+        if best >= gamma:
             self.tp_move[pos] = bmove
             self.tp_score[(pos, depth, root)] = Entry(best, entry.upper)
 
-        else:
+        if best < gamma:
             self.tp_score[(pos, depth, root)] = Entry(entry.lower, best)
 
         return best
@@ -346,8 +350,11 @@ class Searcher:
     def _search(self, pos):
         """ Iterative deepening MTD-bi search """
         self.nodes = 0
+        #self.was_unstable = False
 
-        for depth in count(1):
+        # In finished games, we could potentially go far enough to cause a recursion
+        # limit exception. Hence we bound the ply.
+        for depth in range(1000):
             self.depth = depth
             # The inner loop is a binary search on the score of the position.
             # Inv: lower <= score <= upper
@@ -362,6 +369,7 @@ class Searcher:
                 #    print(__file__, 'what?', lower, upper, 'gamma score', gamma, score, 'depth', depth)
                 #    import tools
                 #    print('pos', tools.renderFEN(pos))
+                #    self.was_unstable = True
                 if score >= gamma:
                     lower = score
                 if score < gamma:
