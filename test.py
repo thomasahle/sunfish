@@ -107,6 +107,57 @@ class Tests(unittest.TestCase):
         test_xboard('pypy', verbose=False)
 
 ###############################################################################
+# Instability
+###############################################################################
+
+def unstable():
+    secs = 1
+    unstables, total = 0, 0
+    path = os.path.join(os.path.dirname(__file__), 'tests/unstable_positions2')
+    for line in open(path):
+        pos = tools.parseFEN(line)
+        searcher = sunfish.Searcher()
+        start = time.time()
+        for _ in searcher._search(pos):
+            if searcher.was_unstable or time.time() - start > secs:
+                break
+        #list(zip(range(depth), searcher._search(pos)))
+        total += 1
+        if searcher.was_unstable:
+            #print('got one at depth', searcher.depth)
+            unstables += 1
+        print('{} / {}, at depth {}'.format(unstables, total, searcher.depth))
+
+
+###############################################################################
+# Benchmarking
+###############################################################################
+
+def benchmark(cnt=20, depth=3):
+    path = os.path.join(os.path.dirname(__file__), 'tests/chessathome_openings.fen')
+    random.seed(0)
+    start = time.time()
+    nodes = 0
+    for i, line in enumerate(random.sample(list(open(path)), cnt)):
+        pos = tools.parseFEN(line)
+        searcher = sunfish.Searcher()
+        start1 = time.time()
+        for _ in searcher._search(pos):
+            speed = int(round(searcher.nodes/(time.time()-start1)))
+            print('Benchmark: {}/{}, Depth: {}, Speed: {:,}N/s'.format(
+                i+1, cnt, searcher.depth, speed), end='\r')
+            sys.stdout.flush()
+            if searcher.depth == depth:
+                nodes += searcher.nodes
+                break
+    print()
+    total_time = time.time() - start
+    speed = int(round(nodes/total_time))
+    print('Total time: {}, Total nodes: {}, Average speed: {:,}N/s'.format(
+        total_time, nodes, speed))
+
+
+###############################################################################
 # Playing test
 ###############################################################################
 
@@ -124,7 +175,6 @@ def selfplay(secs=1):
         print("\nmove", tools.mrender(pos, m))
         pos = pos.move(m)
 
-
 def self_arena(version1, version2, games, secs, plus):
     print('Playing {} games of {} vs. {} at {} secs/game + {} secs/move'
             .format(games, version1, version2, secs, plus))
@@ -133,7 +183,8 @@ def self_arena(version1, version2, games, secs, plus):
     pool = multiprocessing.Pool()
     instances = [random.choice([
         (version1, version2, secs, plus, fen),
-        (version2, version1, secs, plus, fen)]) for fen in openings]
+        (version2, version1, secs, plus, fen),
+        ]) for fen in openings]
     wins = 0
     losses = 0
     for i, r in enumerate(pool.imap_unordered(play, instances)):
@@ -149,6 +200,7 @@ def self_arena(version1, version2, games, secs, plus):
             print()
             print('{} wins, {} draws, {} losses out of {}'.format(wins,i+1-wins-losses,losses,i+1))
     print()
+
     print('Result: {} wins, {} draws, {} losses out of {}'.format(wins,games-wins-losses,losses,games))
 
 
@@ -162,31 +214,67 @@ def play(version1_version2_secs_plus_fen):
             searchers.append(module.Searcher())
         else: searchers.append(module)
     times = [secs, secs]
+    efactor = [1, 1]
     pos = tools.parseFEN(fen)
     seen = set()
     for d in range(200):
-        moves_remain = 40
-        use = times[d%2]/moves_remain
+        moves_remain = 30
+        use = times[d%2]/moves_remain + plus
+        # Use a bit more time, if we have more on the clock than our opponent
+        use += (times[d%2] - times[(d+1)%2])/10
+        use = max(use, plus)
         t = time.time()
-        m, score = searchers[d%2].search(pos, use)
+        m, score = searchers[d%2].search(pos, use*efactor[d%2])
+        efactor[d%2] *= (use/(time.time() - t))**.5
         times[d%2] -= time.time() - t
         times[d%2] += plus
+        #print('Used {:.2} rather than {:.2}. Off by {:.2}. Remaining: {}'
+            #.format(time.time()-t, use, (time.time()-t)/use, times[d%2]))
         if times[d%2] < 0:
-            pass
-        if m is not None:
-            pos = pos.move(m)
-            # Test repetition draws
-            # This is by far the most common type of draw
-            if pos in seen:
-                return None
-            seen.add(pos)
-        else:
-            if score == 0:
-                # This is actually a bit interesting. Why would we ever throw away a win like this?
-                print('Stalemate?', tools.renderFEN(pos))
-                return None
-            assert score <= -sunfish.MATE_LOWER, "move is None, but we didn't lose?"
+            print('{} ran out of time'.format(version2 if d%2 == 1 else version1))
             return version1 if d%2 == 1 else version2
+            pass
+
+        if m is None:
+            print('Game not done, but no move? Score', score)
+            name = version1 if d%2 == 0 else version2
+            print(version1, tools.renderFEN(pos))
+            assert False
+
+        # Test move
+        is_dead = lambda pos: any(pos.value(m) >= sunfish.MATE_LOWER for m in pos.gen_moves())
+        if is_dead(pos.move(m)):
+            name = version1 if d%2 == 0 else version2
+            print('{} made an illegal move {} in position {}. Depth {}, Score {}'.
+                    format(name, tools.mrender(pos,m), tools.renderFEN(pos), searchers[d%2].depth, score))
+            assert False
+
+        # Make the move
+        pos = pos.move(m)
+
+        # Test repetition draws
+        # This is by far the most common type of draw
+        if pos in seen:
+            #print('Rep time at end', times)
+            return None
+        seen.add(pos)
+
+        any_moves = not all(is_dead(pos.move(m)) for m in pos.gen_moves())
+        in_check = is_dead(pos.nullmove())
+        if not any_moves:
+            if not in_check:
+                # This is actually a bit interesting. Why would we ever throw away a win like this?
+                name = version1 if d%2 == 0 else version2
+                print('{} stalemated? depth {} {}'.format(
+                    name, searchers[d%2].depth, tools.renderFEN(pos)))
+                if score != 0:
+                    print('it got the wrong score: {} != 0'.format(score))
+                return None
+            else:
+                name = version1 if d%2 == 0 else version2
+                if score < sunfish.MATE_LOWER:
+                    print('{} mated, but did not realize. Only scored {} in position {}, depth {}'.format(name, score, tools.renderFEN(pos), searchers[d%2].depth))
+                return name
     print('Game too long', tools.renderFEN(pos))
     return None
 
@@ -420,9 +508,9 @@ def main():
 
     p = subparsers.add_parser('selfplay',
         help='run a simple visual sunfish vs sunfish game.')
-    p.add_argument('--sexs', type=int, default=1,
+    p.add_argument('--secs', type=int, default=1,
         help='number of seconds to search per move. Default=%(default)s.')
-    add_action(p, lambda n: selfplay(n.nodes))
+    add_action(p, lambda n: selfplay(n.secs))
 
     p = subparsers.add_parser('arena',
         help='run a number of games between two sunfish versions.')
@@ -445,6 +533,14 @@ def main():
         default=[15, 30, 60, 120])
     add_action(p, lambda n: findbest(n.file, n.times))
 
+    p = subparsers.add_parser('unstable',
+        help='helps debug unstable positions')
+    add_action(p, lambda n: unstable())
+
+    p = subparsers.add_parser('benchmark',
+        help='Search a few positions to a fixed depth (IID), and measure the time it took.')
+    add_action(p, lambda n: benchmark())
+
     suite = unittest.defaultTestLoader.loadTestsFromTestCase(Tests)
     p = subparsers.add_parser('unittest',
             help='Deprecated: use python -m unittest test.Tests')
@@ -455,6 +551,18 @@ def main():
         print('Notice: unused arguments', ' '.join(unknown))
     if len(sys.argv) == 1:
         parser.print_help()
+
+# Python 2 compatability
+if sys.version_info[0] == 2:
+    old_print = print
+    def print(*args, **kwargs):
+        flush = kwargs.get('flush', False)
+        if 'flush' in kwargs:
+            del kwargs['flush']
+        old_print(*args, **kwargs)
+        if flush:
+            file = kwargs.get('file', sys.stdout)
+            file.flush()
 
 if __name__ == '__main__':
     main()

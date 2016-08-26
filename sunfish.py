@@ -17,6 +17,9 @@ TABLE_SIZE = 1e8
 MATE_LOWER = 60000 - 8*2700
 MATE_UPPER = 60000 + 8*2700
 
+QS_LIMIT = 150
+EVAL_ROUGHNESS = 20
+
 # Our board is represented as a 120 character string. The padding allows for
 # fast detection of moves that don't stay within the board.
 A1, H1, A8, H8 = 91, 98, 21, 28
@@ -264,19 +267,6 @@ class Searcher:
         self.tp_score = LRUCache(TABLE_SIZE)
         self.tp_move = LRUCache(TABLE_SIZE)
         self.nodes = 0
-        #self.was_unstable = False
-
-    def quiescence(self, pos, gamma):
-        self.nodes += 1
-        if pos.score <= -MATE_LOWER:
-            return -MATE_UPPER
-        score = pos.score
-        for move in sorted(pos.gen_moves(), key=pos.value, reverse=True):
-            if score >= gamma:
-                break
-            if pos.value(move) >= 150:
-                score = max(score, -self.quiescence(pos.move(move), 1-gamma))
-        return score
 
     def bound(self, pos, gamma, depth, root=True):
         """ returns r where
@@ -284,61 +274,92 @@ class Searcher:
                 gamma <= r <= s(pos)   if gamma <= s(pos)"""
         self.nodes += 1
 
-        if depth <= 0:
-            return self.quiescence(pos, gamma)
+        # Depth <= 0 is QSearch. Here any position is searched as deeply as is needed for calmness, and so there is no reason to keep different depths in the transposition table.
+        depth = max(depth, 0)
+
+        # Sunfish is a king-capture engine, so we should always check if we
+        # still have a king. Notice since this is the only termination check,
+        # the remaining code has to be comfortable with being mated, stalemated
+        # or able to capture the opponent king.
+        if pos.score <= -MATE_LOWER:
+            return -MATE_UPPER
 
         # Look in the table if we have already searched this position before.
-        # We use the table value if it was done with at least as deep a search
-        # as ours, and the gamma value is compatible.
+        # We also need to be sure, that the stored search was over the same
+        # nodes as the current search.
         entry = self.tp_score.get((pos, depth, root), Entry(-MATE_UPPER, MATE_UPPER))
         if entry.lower >= gamma and (not root or self.tp_move.get(pos) is not None):
             return entry.lower
         if entry.upper < gamma:
             return entry.upper
 
-        # Helper function for check move legality
-        is_dead = lambda pos: any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
+        # For positive scores we subtract for delay.
+        # If we were interested in gamma=2 we instead search gamma=3 and subtract 1
+        #if gamma > 1:
+        #    gamma += 1
+        #if gamma < -1:
+        #    gamma -= 1
 
-        # Check for the end of the game
-        any_moves = not all(is_dead(pos.move(m)) for m in pos.gen_moves())
-        in_check = is_dead(pos.nullmove())
-        if not any_moves:
-            score = -MATE_UPPER if in_check else 0
-            self.tp_score[(pos, depth, root)] = Entry(score, score)
-            return score
-
-        # This is where extensions might be inserted.
-        # Like if in_check: depth += 1
+        # Here extensions may be added
+        # Such as 'if in_check: depth += 1'
 
         # Generator of moves to search in order.
-        # Allows short circuting.
+        # This allows us to define the moves, but only calculate them if needed.
         def moves():
             # First try not moving at all
-            if not root and not in_check and any(c in pos.board for c in 'RBNQ'):
+            if depth > 0 and not root and any(c in pos.board for c in 'RBNQ'):
                 yield None, -self.bound(pos.nullmove(), 1-gamma, depth-3, root=False)
-            # Then killer move. We search it twice, but the table will fix things for us.
-            # Note, we don't have to check for legality, since we've already done it before.
+            # For QSearch we have a different kind of null-move
+            if depth == 0:
+                yield None, pos.score
+            # Then killer move. We search it twice, but the tp will fix things for us. Note, we don't have to check for legality, since we've already done it before. Also note that in QS the killer must be a capture, otherwise we will be non deterministic.
             killer = self.tp_move.get(pos)
-            if killer:
+            if killer and (depth > 0 or pos.value(killer) >= QS_LIMIT):
                 yield killer, -self.bound(pos.move(killer), 1-gamma, depth-1, root=False)
             # Then all the other moves
             for move in sorted(pos.gen_moves(), key=pos.value, reverse=True):
-                pos1 = pos.move(move)
-                if not is_dead(pos1):
-                    yield move, -self.bound(pos1, 1-gamma, depth-1, root=False)
+                if depth > 0 or pos.value(move) >= QS_LIMIT:
+                    yield move, -self.bound(pos.move(move), 1-gamma, depth-1, root=False)
 
         # Run through the moves, shortcutting when possible
-        best, bmove = -MATE_UPPER, None
+        best = -MATE_UPPER
         for move, score in moves():
+            # Only allow legal moves at root
+            #if root and (move is None or is_dead(pos.move(move)) or
+            #        ):
+            #    continue
             best = max(best, score)
             if best >= gamma:
-                bmove = move
+                # Save the move for pv construction and killer heuristic
+                self.tp_move[pos] = move
                 break
 
-        if best >= gamma:
-            self.tp_move[pos] = bmove
-            self.tp_score[(pos, depth, root)] = Entry(best, entry.upper)
+        # Stalemate checking is a bit tricky: Say we failed low, because
+        # we can't (legally) move and so the (real) score is -infty.
+        # At the next depth we are allowed to just return r, -infty <= r < gamma,
+        # which is normally fine.
+        # However, what if gamma = -10 and we don't have any legal moves?
+        # Then the score is actaully a draw and we should fail high!
+        # Thus, if best < gamma <= 0 we need to double check what we are doing.
+        # This doesn't prevent sunfish from making a move that results in stalemate,
+        # but only if depth == 1, so that's probably fair enough.
+        # (Btw, at depth 1 we can also mate without realizing.)
+        if best < gamma <= 0 and depth > 0:
+            is_dead = lambda pos: any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
+            # Check that we aren't actually stalemate
+            if all(is_dead(pos.move(m)) for m in pos.gen_moves()):
+                in_check = is_dead(pos.nullmove())
+                best = -MATE_UPPER if in_check else 0
 
+        # Delay part 2
+        #if gamma > 1:
+        #    best -= 1
+        #if gamma < -1:
+        #    best += 1
+
+        # Table part 2
+        if best >= gamma:
+            self.tp_score[(pos, depth, root)] = Entry(best, entry.upper)
         if best < gamma:
             self.tp_score[(pos, depth, root)] = Entry(entry.lower, best)
 
@@ -350,7 +371,6 @@ class Searcher:
     def _search(self, pos):
         """ Iterative deepening MTD-bi search """
         self.nodes = 0
-        #self.was_unstable = False
 
         # In finished games, we could potentially go far enough to cause a recursion
         # limit exception. Hence we bound the ply.
@@ -364,12 +384,11 @@ class Searcher:
                 gamma = (lower+upper+1)//2
                 # TODO: Check if allowing null-move in this search has a positive effect
                 score = self.bound(pos, gamma, depth)
-                #if not lower <= score <= upper:
-                #    print()
-                #    print(__file__, 'what?', lower, upper, 'gamma score', gamma, score, 'depth', depth)
-                #    import tools
-                #    print('pos', tools.renderFEN(pos))
-                #    self.was_unstable = True
+                if not lower <= score <= upper:
+                    print()
+                    print(__file__, 'what?', lower, upper, 'gamma score', gamma, score, 'depth', depth)
+                    import tools
+                    print('pos', tools.renderFEN(pos))
                 if score >= gamma:
                     lower = score
                 if score < gamma:
@@ -377,15 +396,26 @@ class Searcher:
             # We want to make sure the move to play hasn't been kicked out of the table,
             # So we make another call that must always fail high and thus produce a move.
             score = self.bound(pos, lower, depth)
-            #assert score >= lower
-            #assert score == self.tp_score.get((pos, depth, True)).lower
+            assert score >= lower
+            if self.tp_score.get((pos, depth, True)) is None:
+                print("No score stored?", score)
+                self.tp_score[(pos, depth, True)] = Entry(score,score)
+            assert score == self.tp_score.get((pos, depth, True)).lower
+            arb_legal_move = lambda: next((m for m in pos.gen_moves() if not any(pos.move(m).value(m1) >= MATE_LOWER for m1 in pos.move(m).gen_moves())), None)
+            if self.tp_move.get(pos) is None:
+                print('No move stored? Score: {}'.format(score))
+                self.tp_move[pos] = arb_legal_move()
+            else:
+                pos1 = pos.move(self.tp_move.get(pos))
+                if any(pos1.value(m) >= MATE_LOWER for m in pos1.gen_moves()):
+                    print('Returned illegal move? Score: {}'.format(score))
+                    self.tp_move[pos] = arb_legal_move()
             # Yield so the user may inspect the search
             yield
 
     def search(self, pos, secs):
         start = time.time()
         for _ in self._search(pos):
-            if self.depth < 2: continue
             if time.time() - start > secs:
                 break
         # If the game hasn't finished we can retrieve our move from the
