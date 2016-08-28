@@ -344,7 +344,7 @@ class Searcher:
         # This doesn't prevent sunfish from making a move that results in stalemate,
         # but only if depth == 1, so that's probably fair enough.
         # (Btw, at depth 1 we can also mate without realizing.)
-        if best < gamma <= 0 and depth > 0:
+        if best < gamma and best < 0 and depth > 0:
             is_dead = lambda pos: any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
             # Check that we aren't actually stalemate
             if all(is_dead(pos.move(m)) for m in pos.gen_moves()):
