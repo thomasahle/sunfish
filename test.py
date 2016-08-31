@@ -552,8 +552,8 @@ def main():
     if len(sys.argv) == 1:
         parser.print_help()
 
-# Python 2 compatability
-if sys.version_info[0] == 2:
+# Old Python compatability
+if sys.version_info < (3,5):
     old_print = print
     def print(*args, **kwargs):
         flush = kwargs.get('flush', False)
