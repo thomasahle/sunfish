@@ -293,13 +293,6 @@ class Searcher:
         if entry.upper < gamma:
             return entry.upper
 
-        # For positive scores we subtract for delay.
-        # If we were interested in gamma=2 we instead search gamma=3 and subtract 1
-        #if gamma > 1:
-        #    gamma += 1
-        #if gamma < -1:
-        #    gamma -= 1
-
         # Here extensions may be added
         # Such as 'if in_check: depth += 1'
 
@@ -324,10 +317,6 @@ class Searcher:
         # Run through the moves, shortcutting when possible
         best = -MATE_UPPER
         for move, score in moves():
-            # Only allow legal moves at root
-            #if root and (move is None or is_dead(pos.move(move)) or
-            #        ):
-            #    continue
             best = max(best, score)
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
@@ -340,22 +329,15 @@ class Searcher:
         # which is normally fine.
         # However, what if gamma = -10 and we don't have any legal moves?
         # Then the score is actaully a draw and we should fail high!
-        # Thus, if best < gamma <= 0 we need to double check what we are doing.
+        # Thus, if best < gamma and best < 0 we need to double check what we are doing.
         # This doesn't prevent sunfish from making a move that results in stalemate,
         # but only if depth == 1, so that's probably fair enough.
         # (Btw, at depth 1 we can also mate without realizing.)
         if best < gamma and best < 0 and depth > 0:
             is_dead = lambda pos: any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
-            # Check that we aren't actually stalemate
             if all(is_dead(pos.move(m)) for m in pos.gen_moves()):
                 in_check = is_dead(pos.nullmove())
                 best = -MATE_UPPER if in_check else 0
-
-        # Delay part 2
-        #if gamma > 1:
-        #    best -= 1
-        #if gamma < -1:
-        #    best += 1
 
         # Table part 2
         if best >= gamma:
@@ -380,15 +362,13 @@ class Searcher:
             # Inv: lower <= score <= upper
             # 'while lower != upper' would work, but play tests show a margin of 20 plays better.
             lower, upper = -MATE_UPPER, MATE_UPPER
-            while lower < upper - 20:
+            while lower < upper - EVAL_ROUGHNESS:
                 gamma = (lower+upper+1)//2
-                # TODO: Check if allowing null-move in this search has a positive effect
                 score = self.bound(pos, gamma, depth)
+                # Test for debugging search instability
                 if not lower <= score <= upper:
-                    print()
-                    print(__file__, 'what?', lower, upper, 'gamma score', gamma, score, 'depth', depth)
                     import tools
-                    print('pos', tools.renderFEN(pos))
+                    print(__file__, 'search instability?', lower, upper, 'gamma score', gamma, score, 'depth', depth, 'pos', tools.renderFEN(pos))
                 if score >= gamma:
                     lower = score
                 if score < gamma:
@@ -396,20 +376,29 @@ class Searcher:
             # We want to make sure the move to play hasn't been kicked out of the table,
             # So we make another call that must always fail high and thus produce a move.
             score = self.bound(pos, lower, depth)
+
+            # Test for debugging tp_score
             assert score >= lower
             if self.tp_score.get((pos, depth, True)) is None:
                 print("No score stored?", score)
-                self.tp_score[(pos, depth, True)] = Entry(score,score)
+                self.tp_score[(pos, depth, True)] = Entry(score, score)
             assert score == self.tp_score.get((pos, depth, True)).lower
+
+            # Test for debugging tp_move
             arb_legal_move = lambda: next((m for m in pos.gen_moves() if not any(pos.move(m).value(m1) >= MATE_LOWER for m1 in pos.move(m).gen_moves())), None)
             if self.tp_move.get(pos) is None:
                 print('No move stored? Score: {}'.format(score))
                 self.tp_move[pos] = arb_legal_move()
             else:
-                pos1 = pos.move(self.tp_move.get(pos))
+                move = self.tp_move.get(pos)
+                pos1 = pos.move(move)
                 if any(pos1.value(m) >= MATE_LOWER for m in pos1.gen_moves()):
-                    print('Returned illegal move? Score: {}'.format(score))
+                    import tools
+                    print('Returned illegal move? Score: {}'.format(score),
+                            'move', tools.mrender(pos, move),
+                            'pos', tools.renderFEN(pos))
                     self.tp_move[pos] = arb_legal_move()
+
             # Yield so the user may inspect the search
             yield
 
