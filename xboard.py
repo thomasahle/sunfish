@@ -3,6 +3,7 @@
 
 from __future__ import print_function
 from __future__ import division
+import importlib
 import re
 import sys
 import time
@@ -11,6 +12,9 @@ import tools
 import sunfish
 
 from tools import WHITE, BLACK
+
+if len(sys.argv) > 1:
+    sunfish = importlib.import_module(sys.argv[1])
 
 # Python 2 compatability
 if sys.version_info[0] == 2:
@@ -79,12 +83,12 @@ def main():
                 if show_thinking:
                     ply = searcher.depth
                     entry = searcher.tp_score.get((pos, ply, True))
-                    score = round((entry.lower + entry.upper)/2)
+                    score = int(round((entry.lower + entry.upper)/2))
                     dual_score = '{}:{}'.format(entry.lower, entry.upper)
                     used = int((time.time() - start)*100 + .5)
                     moves = tools.pv(searcher, pos, include_scores=False)
-                    print('{:>3} {:>8} {:>8} {:>8} {:>13} \t{}'.format(
-                        ply, score, used, searcher.nodes, dual_score, moves))
+                    print('{:>3} {:>8} {:>8} {:>13} \t{}'.format(
+                        ply, score, used, searcher.nodes, moves))
                 if time.time() - start > use/100:
                     break
             entry = searcher.tp_score.get((pos, searcher.depth, True))

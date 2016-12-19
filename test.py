@@ -247,7 +247,8 @@ def play(version1_version2_secs_plus_fen):
             name = version1 if d%2 == 0 else version2
             print('{} made an illegal move {} in position {}. Depth {}, Score {}'.
                     format(name, tools.mrender(pos,m), tools.renderFEN(pos), searchers[d%2].depth, score))
-            assert False
+            return version2 if d%2 == 0 else version1
+            #assert False
 
         # Make the move
         pos = pos.move(m)
