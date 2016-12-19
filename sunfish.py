@@ -365,10 +365,6 @@ class Searcher:
             while lower < upper - EVAL_ROUGHNESS:
                 gamma = (lower+upper+1)//2
                 score = self.bound(pos, gamma, depth)
-                # Test for debugging search instability
-                if not lower <= score <= upper:
-                    import tools
-                    print(__file__, 'search instability?', lower, upper, 'gamma score', gamma, score, 'depth', depth, 'pos', tools.renderFEN(pos))
                 if score >= gamma:
                     lower = score
                 if score < gamma:
@@ -376,28 +372,6 @@ class Searcher:
             # We want to make sure the move to play hasn't been kicked out of the table,
             # So we make another call that must always fail high and thus produce a move.
             score = self.bound(pos, lower, depth)
-
-            # Test for debugging tp_score
-            assert score >= lower
-            if self.tp_score.get((pos, depth, True)) is None:
-                print("No score stored?", score)
-                self.tp_score[(pos, depth, True)] = Entry(score, score)
-            assert score == self.tp_score.get((pos, depth, True)).lower
-
-            # Test for debugging tp_move
-            arb_legal_move = lambda: next((m for m in pos.gen_moves() if not any(pos.move(m).value(m1) >= MATE_LOWER for m1 in pos.move(m).gen_moves())), None)
-            if self.tp_move.get(pos) is None:
-                print('No move stored? Score: {}'.format(score))
-                self.tp_move[pos] = arb_legal_move()
-            else:
-                move = self.tp_move.get(pos)
-                pos1 = pos.move(move)
-                if any(pos1.value(m) >= MATE_LOWER for m in pos1.gen_moves()):
-                    import tools
-                    print('Returned illegal move? Score: {}'.format(score),
-                            'move', tools.mrender(pos, move),
-                            'pos', tools.renderFEN(pos))
-                    self.tp_move[pos] = arb_legal_move()
 
             # Yield so the user may inspect the search
             yield
