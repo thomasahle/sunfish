@@ -350,13 +350,13 @@ class Searcher:
     # secs over maxn is a breaking change. Can we do this?
     # I guess I could send a pull request to deep pink
     # Why include secs at all?
-    def _search(self, pos):
+    def _search(self, pos, max_depth = 1000):
         """ Iterative deepening MTD-bi search """
         self.nodes = 0
 
         # In finished games, we could potentially go far enough to cause a recursion
         # limit exception. Hence we bound the ply.
-        for depth in range(1, 1000):
+        for depth in range(1, max_depth):
             self.depth = depth
             # The inner loop is a binary search on the score of the position.
             # Inv: lower <= score <= upper
@@ -462,4 +462,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
