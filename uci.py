@@ -12,23 +12,7 @@ import tools
 import sunfish
 
 from tools import WHITE, BLACK
-
-if len(sys.argv) > 1:
-    sunfish = importlib.import_module(sys.argv[1])
-
-# Python 2 compatability
-if sys.version_info[0] == 2:
-    input = raw_input
-
-# Disable buffering
-class Unbuffered(object):
-    def __init__(self, stream):
-        self.stream = stream
-    def write(self, data):
-        self.stream.write(data)
-        self.stream.flush()
-    def __getattr__(self, attr):
-        return getattr(self.stream, attr)
+from xboard import Unbuffered, sunfish, input
 sys.stdout = Unbuffered(sys.stdout)
 
 def main():
@@ -41,7 +25,7 @@ def main():
 
     # print name of chess engine
     print('Sunfish')
-    
+
     stack = []
     while True:
         if stack:
@@ -74,12 +58,14 @@ def main():
 
             # parse parameters
             params = smove.split(' ')
+            if len(params) == 1: continue
+
             i = 0
             while i < len(params):
                 param = params[i]
                 if param == 'depth':
                     i += 1
-                    depth = int(params[i]) + 1
+                    depth = int(params[i])
                 if param == 'movetime':
                     i += 1
                     movetime = int(params[i])
@@ -91,7 +77,7 @@ def main():
 
             start = time.time()
             ponder = None
-            for _ in searcher._search(pos, depth):
+            for _ in searcher._search(pos):
                 moves = tools.pv(searcher, pos, include_scores=False)
 
                 if show_thinking:
@@ -105,6 +91,9 @@ def main():
                     ponder = moves[1]
 
                 if movetime > 0 and (time.time() - start) * 1000 > movetime:
+                    break
+
+                if searcher.depth >= depth:
                     break
 
             entry = searcher.tp_score.get((pos, searcher.depth, True))
