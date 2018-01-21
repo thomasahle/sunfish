@@ -399,11 +399,19 @@ def render(i):
 
 
 def print_pos(pos):
+    '''print the board of pos always in conventional orientation;'''
+    board = pos.board
+    if board.startswith('\n'):
+        board = board[::-1].swapcase()
     print()
-    uni_pieces = {'R':'♜', 'N':'♞', 'B':'♝', 'Q':'♛', 'K':'♚', 'P':'♟',
-                  'r':'♖', 'n':'♘', 'b':'♗', 'q':'♕', 'k':'♔', 'p':'♙', '.':'·'}
-    for i, row in enumerate(pos.board.split()):
-        print(' ', 8-i, ' '.join(uni_pieces.get(p, p) for p in row))
+    esc = ('\033[;41m','\033[0m') # ansi esc (background red, normal)
+    uni_pieces = {
+        'R':'♜', 'N':'♞', 'B':'♝', 'Q':'♛', 'K':'♚', 'P':'♟',
+        'r':'♖', 'n':'♘', 'b':'♗', 'q':'♕', 'k':'♔', 'p':'♙', '.':' '}
+    for i, row in enumerate(board.split()):
+        print(' ', 8-i, end="")
+        print(' '.join((esc[(i+j)%2] + uni_pieces.get(p, p))
+                           for j, p in enumerate(row)) + ' ' + esc[1])
     print('    a b c d e f g h \n\n')
 
 
@@ -428,9 +436,7 @@ def main():
                 print("Please enter a move like g8f6")
         pos = pos.move(move)
 
-        # After our move we rotate the board and print it again.
-        # This allows us to see the effect of our move.
-        print_pos(pos.rotate())
+        print_pos(pos)
 
         if pos.score <= -MATE_LOWER:
             print("You won")
@@ -450,4 +456,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-
