@@ -187,7 +187,7 @@ def pv(searcher, pos, include_scores=True):
 ################################################################################
 
 def expand_position(pos):
-    ''' Yiels a tree of generators [p, [p, [...], ...], ...] rooted at pos '''
+    ''' Yields a tree of generators [p, [p, [...], ...], ...] rooted at pos '''
     yield pos
     for _, pos1 in gen_legal_moves(pos):
         yield expand_position(pos1)
