@@ -195,7 +195,7 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
                 board = put(board, j, 'Q')
             if j - i == 2*N:
                 ep = i + N
-            if j - i in (N+W, N+E) and q == '.':
+            if j == self.ep:
                 board = put(board, j+S, '.')
         # We rotate the returned position, so it's ready for the next player
         return Position(board, score, wc, bc, ep, kp).rotate()
