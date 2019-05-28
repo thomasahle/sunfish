@@ -12,7 +12,7 @@ import tools
 import sunfish
 
 from tools import WHITE, BLACK
-from xboard import Unbuffered, sunfish, input
+from xboard import Unbuffered, sunfish
 sys.stdout = Unbuffered(sys.stdout)
 
 def main():
