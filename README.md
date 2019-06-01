@@ -28,7 +28,7 @@ Sunfish is self contained in the `sunfish.py` file from the repository. I recomm
 
 It is also possible to run Sunfish with a graphical interface, such as [PyChess](http://pychess.org), [Arena](http://www.playwitharena.com) or your chess interface of choice. Sunfish' can communicate through the [XBoard](http://www.gnu.org/software/xboard/)/CECP protocol by the command `pypy -u xboard.py`. Ruxy Sylwyka has [a note on making it all work on Windows](http://www.talkchess.com/forum/viewtopic.php?topic_view=threads&p=560462).
 
-[Play now on LiChess!](https://lichess.org/@/sunfish_rs) against [Recursing's Rust port](https://github.com/Recursing/sunfish_rs)
+[Play now on Lichess!](https://lichess.org/@/sunfish_rs) against [Recursing's Rust port](https://github.com/Recursing/sunfish_rs)
 
 Features
 ===========
