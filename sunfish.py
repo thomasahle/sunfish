@@ -398,20 +398,36 @@ def render(i):
     return chr(fil + ord('a')) + str(-rank + 1)
 
 
-def print_pos(pos):
+def print_pos(pos, format):
     print()
-    uni_pieces = {'R':'♜', 'N':'♞', 'B':'♝', 'Q':'♛', 'K':'♚', 'P':'♟',
-                  'r':'♖', 'n':'♘', 'b':'♗', 'q':'♕', 'k':'♔', 'p':'♙', '.':'·'}
     for i, row in enumerate(pos.board.split()):
-        print(' ', 8-i, ' '.join(uni_pieces.get(p, p) for p in row))
+        print(' ', 8-i, ' '.join(get_print_pos(format).get(p, p) for p in row))
     print('    a b c d e f g h \n\n')
+
+# currently, decides the view of the empty spaces on board
+# can add more options on ui
+# users can choose which one they want
+def get_print_pos(format):
+    if format == 1:
+        return uni_pieces = {'R':'♜', 'N':'♞', 'B':'♝', 'Q':'♛', 'K':'♚', 'P':'♟',
+                  'r':'♖', 'n':'♘', 'b':'♗', 'q':'♕', 'k':'♔', 'p':'♙', '.':'·'}
+    elif format == 2:
+        return uni_pieces = {'R':'♜', 'N':'♞', 'B':'♝', 'Q':'♛', 'K':'♚', 'P':'♟',
+                  'r':'♖', 'n':'♘', 'b':'♗', 'q':'♕', 'k':'♔', 'p':'♙', '.':'◇'}
+    elif format == 3:
+        return uni_pieces = {'R':'♜', 'N':'♞', 'B':'♝', 'Q':'♛', 'K':'♚', 'P':'♟',
+                  'r':'♖', 'n':'♘', 'b':'♗', 'q':'♕', 'k':'♔', 'p':'♙', '.':'◽'}
 
 
 def main():
     pos = Position(initial, 0, (True,True), (True,True), 0, 0)
     searcher = Searcher()
+    # user choose the format of the board
+    print('Choose format (1,2,3):')
+    format = input()
+
     while True:
-        print_pos(pos)
+        print_pos(pos, format)
 
         if pos.score <= -MATE_LOWER:
             print("You lost")
@@ -430,7 +446,7 @@ def main():
 
         # After our move we rotate the board and print it again.
         # This allows us to see the effect of our move.
-        print_pos(pos.rotate())
+        print_pos(pos.rotate(), format)
 
         if pos.score <= -MATE_LOWER:
             print("You won")
