@@ -404,19 +404,19 @@ def print_pos(pos, format):
         print(' ', 8-i, ' '.join(get_print_pos(format).get(p, p) for p in row))
     print('    a b c d e f g h \n\n')
 
-# currently, decides the view of the empty spaces on board
-# can add more options on ui
+# currently, decides the view of the pieces and the board
+# can add more options like different pieces or other graphical options
 # users can choose which one they want
 def get_print_pos(format):
     if format == 1:
-        return uni_pieces = {'R':'♜', 'N':'♞', 'B':'♝', 'Q':'♛', 'K':'♚', 'P':'♟',
-                  'r':'♖', 'n':'♘', 'b':'♗', 'q':'♕', 'k':'♔', 'p':'♙', '.':'·'}
-    elif format == 2:
         return uni_pieces = {'R':'♖', 'N':'♘', 'B':'♗', 'Q':'♕', 'K':'♔', 'P':'♙',
                   'r':'♜', 'n':'♞', 'b':'♝', 'q':'♛', 'k':'♚', 'p':'♟', '.':'◇'}
-    elif format == 3:
+    elif format == 2:
         return uni_pieces = {'R':'♜', 'N':'♞', 'B':'♝', 'Q':'♛', 'K':'♚', 'P':'♟',
                   'r':'♖', 'n':'♘', 'b':'♗', 'q':'♕', 'k':'♔', 'p':'♙', '.':'◽'}
+    else:
+        return uni_pieces = {'R':'♜', 'N':'♞', 'B':'♝', 'Q':'♛', 'K':'♚', 'P':'♟',
+                  'r':'♖', 'n':'♘', 'b':'♗', 'q':'♕', 'k':'♔', 'p':'♙', '.':'·'}
 
 
 def main():
