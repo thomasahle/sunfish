@@ -115,7 +115,7 @@ def main():
 
         elif smove.startswith('time'):
             our_time = int(smove.split()[1])
-        
+
         elif smove.startswith('otim'):
             opp_time = int(smove.split()[1])
 
@@ -131,11 +131,16 @@ def main():
         elif smove.startswith('nopost'):
             show_thinking = False
 
-        elif any(smove.startswith(x) for x in ('xboard','random','hard','accepted','level')):
-            pass
+        elif any(smove.startswith(x) for x in ('xboard','random','hard','accepted','level','easy','st')):
+            print(f'# Ignoring command {smove}.')
+
+        elif smove.startswith('reject'):
+            _, feature = smove.split(maxsplit=1)
+            print(f'# Warning ({feature} rejected): Might not work as expected.')
 
         else:
-            print("Error (unkown command):", smove)
+            print(f'# Warning (unkown command): {smove}. Treating as move.')
+            stack.append(f'usermove {smove}')
 
 if __name__ == '__main__':
     main()
