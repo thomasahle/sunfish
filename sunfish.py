@@ -109,7 +109,7 @@ MATE_LOWER = piece['K'] - 10*piece['Q']
 MATE_UPPER = piece['K'] + 10*piece['Q']
 
 # The table size is the maximum number of elements in the transposition table.
-TABLE_SIZE = 1e8
+TABLE_SIZE = 1e7
 
 # Constants for tuning search
 QS_LIMIT = 150
@@ -230,30 +230,10 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
 # lower <= s(pos) <= upper
 Entry = namedtuple('Entry', 'lower upper')
 
-# The normal OrderedDict doesn't update the position of a key in the list,
-# when the value is changed.
-class LRUCache:
-    '''Store items in the order the keys were last added'''
-    def __init__(self, size):
-        self.od = OrderedDict()
-        self.size = size
-
-    def get(self, key, default=None):
-        try: self.od.move_to_end(key)
-        except KeyError: return default
-        return self.od[key]
-
-    def __setitem__(self, key, value):
-        try: del self.od[key]
-        except KeyError:
-            if len(self.od) == self.size:
-                self.od.popitem(last=False)
-        self.od[key] = value
-
 class Searcher:
     def __init__(self):
-        self.tp_score = LRUCache(TABLE_SIZE)
-        self.tp_move = LRUCache(TABLE_SIZE)
+        self.tp_score = {}
+        self.tp_move = {}
         self.nodes = 0
 
     def bound(self, pos, gamma, depth, root=True):
@@ -262,7 +242,9 @@ class Searcher:
                 gamma <= r <= s(pos)   if gamma <= s(pos)"""
         self.nodes += 1
 
-        # Depth <= 0 is QSearch. Here any position is searched as deeply as is needed for calmness, and so there is no reason to keep different depths in the transposition table.
+        # Depth <= 0 is QSearch. Here any position is searched as deeply as is needed for
+        # calmness, and from this point on there is no difference in behaviour depending on
+        # depth, so so there is no reason to keep different depths in the transposition table.
         depth = max(depth, 0)
 
         # Sunfish is a king-capture engine, so we should always check if we
@@ -307,6 +289,8 @@ class Searcher:
         for move, score in moves():
             best = max(best, score)
             if best >= gamma:
+                # Clear before setting, so we always have a value
+                if len(self.tp_move) > TABLE_SIZE: self.tp_move.clear()
                 # Save the move for pv construction and killer heuristic
                 self.tp_move[pos] = move
                 break
@@ -327,11 +311,13 @@ class Searcher:
                 in_check = is_dead(pos.nullmove())
                 best = -MATE_UPPER if in_check else 0
 
+        # Clear before setting, so we always have a value
+        if len(self.tp_score) > TABLE_SIZE: self.tp_score.clear()
         # Table part 2
         if best >= gamma:
-            self.tp_score[(pos, depth, root)] = Entry(best, entry.upper)
+            self.tp_score[pos, depth, root] = Entry(best, entry.upper)
         if best < gamma:
-            self.tp_score[(pos, depth, root)] = Entry(entry.lower, best)
+            self.tp_score[pos, depth, root] = Entry(entry.lower, best)
 
         return best
 
@@ -359,8 +345,7 @@ class Searcher:
                     upper = score
             # We want to make sure the move to play hasn't been kicked out of the table,
             # So we make another call that must always fail high and thus produce a move.
-            score = self.bound(pos, lower, depth)
-
+            self.bound(pos, lower, depth)
             # Yield so the user may inspect the search
             yield
 
