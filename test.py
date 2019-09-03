@@ -66,10 +66,10 @@ class Tests(unittest.TestCase):
             msans = [msan for i, msan in enumerate(line.split()[:-1]) if i%3]
             pos = tools.parseFEN(tools.FEN_INITIAL)
             for i, msan in enumerate(msans):
-                move = tools.parseSAN(pos, msan)
                 if re.search('=[BNR]', msan):
                     # Sunfish doesn't support underpromotion
                     break
+                move = tools.parseSAN(pos, msan)
                 msan_back = tools.renderSAN(pos, move)
                 self.assertEqual(msan_back, msan,
                                  "Sunfish didn't correctly reproduce the SAN move")
@@ -78,7 +78,7 @@ class Tests(unittest.TestCase):
     def test_selfplay(self):
         pos = tools.parseFEN(tools.FEN_INITIAL)
         for d in range(200):
-            m, score = sunfish.Searcher().search(pos, .1)
+            m, score, _ = tools.search(sunfish.Searcher(), pos, .1)
             if m is None:
                 self.assertTrue(score == 0 or abs(score) >= sunfish.MATE_LOWER)
                 break
@@ -106,6 +106,30 @@ class Tests(unittest.TestCase):
         test_xboard('python', verbose=False)
         test_xboard('pypy', verbose=False)
 
+    def test_3fold(self):
+        sunfish.DRAW_TEST = True
+        # Games where the last move is right, but the second to last move is wrong
+        path_do = os.path.join(os.path.dirname(__file__), 'tests/3fold_do.pgn')
+        # Games where the last move is wrong
+        path_dont = os.path.join(os.path.dirname(__file__), 'tests/3fold_dont.pgn')
+        with open(path_dont) as file:
+            for i, (_pgn, pos_moves) in enumerate(tools.readPGN(file)):
+                history = []
+                for pos, move in pos_moves:
+                    history.append(pos)
+                last_pos, last_move = pos_moves[-1]
+                # Maybe we just didn't like the position we were in.
+                # This is a kind of crude way of testing that.
+                if last_pos.score < 0:
+                    continue
+                move, score, _ = tools.search(sunfish.Searcher(), pos, secs=.1, history=history[:-1])
+                if move == last_move:
+                    print('Score was', score, pos.score)
+                    print('Failed at', i)
+                    print(_pgn)
+                self.assertNotEqual(move, last_move)
+
+
 ###############################################################################
 # Instability
 ###############################################################################
@@ -118,7 +142,7 @@ def unstable():
         pos = tools.parseFEN(line)
         searcher = sunfish.Searcher()
         start = time.time()
-        for _ in searcher._search(pos):
+        for depth, _, _ in searcher.search(pos):
             if searcher.was_unstable or time.time() - start > secs:
                 break
         #list(zip(range(depth), searcher._search(pos)))
@@ -126,7 +150,7 @@ def unstable():
         if searcher.was_unstable:
             #print('got one at depth', searcher.depth)
             unstables += 1
-        print('{} / {}, at depth {}'.format(unstables, total, searcher.depth))
+        print('{} / {}, at depth {}'.format(unstables, total, depth))
 
 
 ###############################################################################
@@ -142,12 +166,12 @@ def benchmark(cnt=20, depth=3):
         pos = tools.parseFEN(line)
         searcher = sunfish.Searcher()
         start1 = time.time()
-        for _ in searcher._search(pos):
+        for search_depth, _, _ in searcher.search(pos):
             speed = int(round(searcher.nodes/(time.time()-start1)))
             print('Benchmark: {}/{}, Depth: {}, Speed: {:,}N/s'.format(
-                i+1, cnt, searcher.depth, speed), end='\r')
+                i+1, cnt, search_depth, speed), end='\r')
             sys.stdout.flush()
-            if searcher.depth == depth:
+            if search_depth == depth:
                 nodes += searcher.nodes
                 break
     print()
@@ -168,7 +192,7 @@ def selfplay(secs=1):
         # Always print the board from the same direction
         board = pos.board if d % 2 == 0 else pos.rotate().board
         print(' '.join(board))
-        m, _ = sunfish.Searcher().search(pos, secs)
+        m, _, _ = tools.search(sunfish.Searcher(), pos, secs)
         if m is None:
             print("Game over")
             break
@@ -224,7 +248,7 @@ def play(version1_version2_secs_plus_fen):
         use += (times[d%2] - times[(d+1)%2])/10
         use = max(use, plus)
         t = time.time()
-        m, score = searchers[d%2].search(pos, use*efactor[d%2])
+        m, score, depth = tools.search(searchers[d%2], pos, use*efactor[d%2])
         efactor[d%2] *= (use/(time.time() - t))**.5
         times[d%2] -= time.time() - t
         times[d%2] += plus
@@ -246,7 +270,7 @@ def play(version1_version2_secs_plus_fen):
         if is_dead(pos.move(m)):
             name = version1 if d%2 == 0 else version2
             print('{} made an illegal move {} in position {}. Depth {}, Score {}'.
-                    format(name, tools.mrender(pos,m), tools.renderFEN(pos), searchers[d%2].depth, score))
+                    format(name, tools.mrender(pos,m), tools.renderFEN(pos), depth, score))
             return version2 if d%2 == 0 else version1
             #assert False
 
@@ -267,14 +291,14 @@ def play(version1_version2_secs_plus_fen):
                 # This is actually a bit interesting. Why would we ever throw away a win like this?
                 name = version1 if d%2 == 0 else version2
                 print('{} stalemated? depth {} {}'.format(
-                    name, searchers[d%2].depth, tools.renderFEN(pos)))
+                    name, depth, tools.renderFEN(pos)))
                 if score != 0:
                     print('it got the wrong score: {} != 0'.format(score))
                 return None
             else:
                 name = version1 if d%2 == 0 else version2
                 if score < sunfish.MATE_LOWER:
-                    print('{} mated, but did not realize. Only scored {} in position {}, depth {}'.format(name, score, tools.renderFEN(pos), searchers[d%2].depth))
+                    print('{} mated, but did not realize. Only scored {} in position {}, depth {}'.format(name, score, tools.renderFEN(pos), depth))
                 return name
     print('Game too long', tools.renderFEN(pos))
     return None
@@ -305,7 +329,7 @@ def test_xboard(python='python3', verbose=True):
         universal_newlines=True)
 
     def wait_for(regex):
-        with timeout(20, '{} was never encountered'.format(regex)):
+        with timeout(20, '"{}" was never encountered'.format(regex)):
             while True:
                 line = fish.stdout.readline()
                 if verbose:
@@ -363,6 +387,7 @@ def allperft(f, depth=4, verbose=True):
             print('')
     return True
 
+
 ###############################################################################
 # Find mate test
 ###############################################################################
@@ -374,7 +399,7 @@ def allmate(path):
             print(line)
 
             pos = tools.parseFEN(line)
-            _, score = sunfish.Searcher().search(pos, secs=3600)
+            _, score, _ = tools.search(sunfish.Searcher(), pos, secs=3600)
             if score < sunfish.MATE_LOWER:
                 print("Unable to find mate. Only got score = %d" % score)
                 break
@@ -423,6 +448,7 @@ def quickmate(f, min_depth=1):
             return
         print(tools.pv(searcher, pos, include_scores=False))
 
+
 ###############################################################################
 # Best move test
 ###############################################################################
@@ -448,7 +474,7 @@ def findbest(f, times):
         points = 0
         print(opts.get('id','unnamed'), end=' ', flush=True)
         for t in times:
-            move, _ = searcher.search(pos, t)
+            move, _, _ = tools.search(searcher, pos, t)
             mark = tools.renderSAN(pos,move)
             if am and move != am or bm and move == bm:
                 mark += '(1)'
@@ -461,6 +487,7 @@ def findbest(f, times):
         totalpoints += points
     print('-'*60)
     print('Total Points: %d/%d', totalpoints, totaltests)
+
 
 ###############################################################################
 # Actions

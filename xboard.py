@@ -46,6 +46,7 @@ def main():
     our_time, opp_time = 1000, 1000 # time in centi-seconds
     show_thinking = False
     options = {}
+    history = []
 
     stack = []
     while True:
@@ -53,7 +54,8 @@ def main():
             smove = stack.pop()
         else:
             smove = input()
-            print('>>>', smove, file=sys.stderr, flush=True)
+            print('>>>', smove, file=sys.stderr)
+            sys.stderr.flush() # For Python 2.7 support
 
         if smove == 'quit':
             break
@@ -66,19 +68,22 @@ def main():
             print('feature ping=1')
             print('feature sigint=0')
             print('feature variants="normal"')
-            print('feature option="qs_limit -spin 150 -100 1000"')
-            print('feature option="eval_roughness -spin 20 1 1000"')
+            print('feature option="qs_limit -spin {} -100 1000"'.format(sunfish.QS_LIMIT))
+            print('feature option="eval_roughness -spin {} 1 1000"'.format(sunfish.EVAL_ROUGHNESS))
+            print('feature option="draw_test -spin {} 0 1"'.format(int(sunfish.DRAW_TEST)))
             print('feature done=1')
 
         elif smove == 'new':
             stack.append('setboard ' + tools.FEN_INITIAL)
             # Clear out the old searcher, including the tables
             searcher = sunfish.Searcher()
+            del history[:]
 
         elif smove.startswith('setboard'):
             _, fen = smove.split(' ', 1)
             pos = tools.parseFEN(fen)
             color = WHITE if fen.split()[1] == 'w' else BLACK
+            del history[:]
 
         elif smove == 'force':
             forced = True
@@ -92,6 +97,8 @@ def main():
                 sunfish.QS_LIMIT = int(val)
             if name == 'eval_roughness':
                 sunfish.EVAL_ROUGHNESS = int(val)
+            if name == 'draw_test':
+                sunfish.DRAW_TEST = bool(int(val))
             options[name] = val
 
         elif smove == 'go':
@@ -104,8 +111,7 @@ def main():
                 use *= our_time/opp_time
 
             start = time.time()
-            for _ in searcher._search(pos):
-                ply = searcher.depth
+            for ply, move, score in searcher.search(pos, history):
                 entry = searcher.tp_score.get((pos, ply, True))
                 score = int(round((entry.lower + entry.upper)/2))
                 if show_thinking:
@@ -122,15 +128,14 @@ def main():
                     break
                 if time.time() - start > use/100:
                     break
-            entry = searcher.tp_score.get((pos, searcher.depth, True))
-            m, s = searcher.tp_move.get(pos), entry.lower
             # We sometimes make illegal moves when we're losing,
             # so it's safer to just resign.
-            if s == -sunfish.MATE_UPPER:
+            if score == -sunfish.MATE_UPPER:
                 print('resign')
             else:
-                print('move', tools.mrender(pos, m))
-            pos = pos.move(m)
+                print('move', tools.mrender(pos, move))
+            pos = pos.move(move)
+            history.append(pos)
             color = 1-color
 
         elif smove.startswith('ping'):
@@ -141,6 +146,7 @@ def main():
             _, smove = smove.split()
             m = tools.mparse(color, smove)
             pos = pos.move(m)
+            history.append(pos)
             color = 1-color
             if not forced:
                 stack.append('go')
@@ -164,15 +170,15 @@ def main():
             show_thinking = False
 
         elif any(smove.startswith(x) for x in ('xboard','random','hard','accepted','level','easy','st','result','?')):
-            print(f'# Ignoring command {smove}.')
+            print('# Ignoring command {}.'.format(smove))
 
         elif smove.startswith('reject'):
             _, feature = smove.split(maxsplit=1)
-            print(f'# Warning ({feature} rejected): Might not work as expected.')
+            print('# Warning ({} rejected): Might not work as expected.'.format(feature))
 
         else:
-            print(f'# Warning (unkown command): {smove}. Treating as move.')
-            stack.append(f'usermove {smove}')
+            print('# Warning (unkown command): {}. Treating as move.'.format(smove))
+            stack.append('usermove {}'.format(usermove))
 
 if __name__ == '__main__':
     main()

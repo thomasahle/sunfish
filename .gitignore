@@ -1,5 +1,9 @@
 *.py[cod]
 
+# Sunfish files
+*.log
+*.txt
+
 # C extensions
 *.so
 
