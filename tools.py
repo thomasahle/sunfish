@@ -1,5 +1,6 @@
 import itertools
 import re
+import time
 
 import sunfish
 
@@ -13,6 +14,16 @@ import sunfish
 WHITE, BLACK = range(2)
 
 FEN_INITIAL = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'
+
+
+def search(searcher, pos, secs, history=()):
+    """ This used to be in the Searcher class """
+    start = time.time()
+    for depth, move, score in searcher.search(pos, history):
+        if time.time() - start > secs:
+            break
+    return move, score, depth
+
 
 ################################################################################
 # Parse and Render moves
@@ -88,6 +99,7 @@ def parseSAN(pos, msan):
     # Pawn moves
     pawn = re.match('([a-h])?x?([a-h][1-8])', msan)
     if pawn:
+        assert not re.search('[RBN]$', msan), 'Sunfish only supports queen promotion in {}'.format(msan)
         p, (fil, dst) = 'P', pawn.groups()
         src = (fil or '[a-h]')+'[1-8]'
     # Castling
@@ -96,13 +108,42 @@ def parseSAN(pos, msan):
     if re.match(msan, "O-O[+#]?"):
         p, src, dst = 'K', 'e[18]', 'g[18]'
     # Find possible match
+    assert 'p' in vars(), 'No piece to move with {}'.format(msan)
     for (i, j), _ in gen_legal_moves(pos):
         if get_color(pos) == WHITE:
             csrc, cdst = sunfish.render(i), sunfish.render(j)
         else: csrc, cdst = sunfish.render(119-i), sunfish.render(119-j)
         if pos.board[i] == p and re.match(dst,cdst) and re.match(src,csrc):
             return (i, j)
-    assert False
+    assert False, 'Couldn\'t find legal move matching {}. Had {}'.format(msan, {
+        'p':p, 'src':src, 'dst': dst, 'mvs':list(gen_legal_moves(pos))})
+
+def readPGN(file):
+    """ Yields a number of [(pos, move), ...] lists. """
+    def _parse_single_pgn(lines):
+        # Remove comments and numbers.
+        parts = re.sub('{.*?}', '', ' '.join(lines)).split()
+        msans = [part for part in parts if not part[0].isdigit()]
+        pos = parseFEN(FEN_INITIAL)
+        for msan in msans:
+            try:
+                move = parseSAN(pos, msan)
+            except AssertionError:
+                print('PGN was:', ' '.join(lines))
+                raise
+            yield pos, move
+            pos = pos.move(move)
+
+    # TODO: Currently assumes all games start at the initial position.
+    current_game = []
+    for line in file:
+        if line.startswith('['):
+            if current_game:
+                yield ' '.join(current_game), list(_parse_single_pgn(current_game))
+            del current_game[:]
+        else:
+            current_game.append(line.strip())
+
 
 ################################################################################
 # Parse and Render positions
