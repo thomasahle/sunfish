@@ -45,6 +45,15 @@ There are many ways in which you may try to make Sunfish stronger. First you cou
 
 The other way to make Sunfish stronger is to give it more knowledge of chess. The current evaluation function only uses piece square tables - it doesn't even distinguish between midgame and endgame. You can also experiment with more pruning - currently only null move is done - and extensions - currently none are used. Finally Sunfish might benefit from a more advanced move ordering, MVV/LVA and SEE perhaps?
 
+An easy way to get a strong Sunfish is to run with with the [PyPy Just-In-Time intepreter](https://pypy.org/). In particular the python2.7 version of pypy gives a 250 ELO boost compared to the cpython (2 or 3) intepreters at fast time controls:
+
+    Rank Name                    Elo     +/-   Games   Score   Draws
+       1 pypy2.7 (7.1)           166      38     300   72.2%   19.7%
+       2 pypy3.6 (7.1)            47      35     300   56.7%   21.3%
+       3 python3.7               -97      36     300   36.3%   20.7%
+       4 python2.7              -109      35     300   34.8%   24.3%
+
+
 Why Sunfish?
 ============
 The name Sunfish actually refers to the [Pygmy Sunfish](http://en.wikipedia.org/wiki/Pygmy_sunfish), which is among the very few fish to start with the letters 'Py'. The use of a fish is in the spirit of great engines such as Stockfish, Zappa and Rybka.
