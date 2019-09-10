@@ -4,7 +4,7 @@
 from __future__ import print_function
 import re, sys, time
 from itertools import count
-from collections import OrderedDict, namedtuple
+from collections import namedtuple
 
 ###############################################################################
 # Piece-Square tables. Tune these to change sunfish's behaviour
@@ -261,6 +261,8 @@ class Searcher:
         # Note that we need to do this before we look in the table, as the
         # position may have been previously reached with a different score.
         # This is what prevents a search instability.
+        # FIXME: This is not true, since other positions will be affected by
+        # the new values for all the drawn positions.
         if DRAW_TEST:
             if not root and pos in self.history:
                 return 0
@@ -339,7 +341,10 @@ class Searcher:
     def search(self, pos, history=()):
         """ Iterative deepening MTD-bi search """
         self.nodes = 0
-        self.history = set(history)
+        if DRAW_TEST:
+            self.history = set(history)
+            # print('# Clearing table due to new history')
+            self.tp_score.clear()
 
         # In finished games, we could potentially go far enough to cause a recursion
         # limit exception. Hence we bound the ply.
@@ -370,11 +375,6 @@ class Searcher:
 # Python 2 compatability
 if sys.version_info[0] == 2:
     input = raw_input
-    class NewOrderedDict(OrderedDict):
-        def move_to_end(self, key):
-            value = self.pop(key)
-            self[key] = value
-    OrderedDict = NewOrderedDict
 
 
 def parse(c):

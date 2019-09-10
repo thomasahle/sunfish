@@ -173,12 +173,12 @@ def main():
             print('# Ignoring command {}.'.format(smove))
 
         elif smove.startswith('reject'):
-            _, feature = smove.split(maxsplit=1)
+            _, feature = smove.split()[:2] # split(maxsplit=2) doesnt work in python2.7
             print('# Warning ({} rejected): Might not work as expected.'.format(feature))
 
         else:
             print('# Warning (unkown command): {}. Treating as move.'.format(smove))
-            stack.append('usermove {}'.format(usermove))
+            stack.append('usermove {}'.format(smove))
 
 if __name__ == '__main__':
     main()
