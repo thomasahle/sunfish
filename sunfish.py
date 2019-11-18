@@ -145,7 +145,8 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
                     # Pawn move, double move and capture
                     if p == 'P' and d in (N, N+N) and q != '.': break
                     if p == 'P' and d == N+N and (i < A1+N or self.board[i+N] != '.'): break
-                    if p == 'P' and d in (N+W, N+E) and q == '.' and j not in (self.ep, self.kp): break
+                    if p == 'P' and d in (N+W, N+E) and q == '.' \
+                            and j not in (self.ep, self.kp, self.kp-1, self.kp+1): break
                     # Move it
                     yield (i, j)
                     # Stop crawlers from sliding, and sliding after captures

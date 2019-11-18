@@ -369,6 +369,8 @@ def allperft(f, depth=4, verbose=True):
             print("Going to depth {}/{}".format(d, depth))
         for line in lines:
             parts = line.split(';')
+            if len(parts) <= d:
+                continue
             if verbose:
                 print(parts[0])
 
