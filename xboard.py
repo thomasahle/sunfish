@@ -67,6 +67,7 @@ def main():
             print('feature setboard=1')
             print('feature ping=1')
             print('feature sigint=0')
+            print('feature nps=0')
             print('feature variants="normal"')
             print('feature option="qs_limit -spin {} -100 1000"'.format(sunfish.QS_LIMIT))
             print('feature option="eval_roughness -spin {} 1 1000"'.format(sunfish.EVAL_ROUGHNESS))

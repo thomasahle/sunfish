@@ -59,7 +59,7 @@ def main():
             pos = tools.parseFEN(tools.FEN_INITIAL)
             color = WHITE
 
-            if params[2] == 'moves':
+            if len(params) > 2 and params[2] == 'moves':
                 for move in params[3:]:
                     pos = pos.move(tools.mparse(color, move))
                     color = 1 - color
@@ -72,27 +72,27 @@ def main():
             _, *params = smove.split(' ')
             for param, val in zip(*2*(iter(params),)):
                 if param == 'depth':
-                    depth = int(params[i])
+                    depth = int(val)
                 if param == 'movetime':
-                    movetime = int(params[i])
+                    movetime = int(val)
                 if param == 'wtime':
-                    our_time = int(params[i])
+                    our_time = int(val)
                 if param == 'btime':
-                    opp_time = int(params[i])
+                    opp_time = int(val)
 
             moves_remain = 40
 
             start = time.time()
             ponder = None
-            for _ in searcher._search(pos):
+            for sdepth, _move, _score in searcher.search(pos):
                 moves = tools.pv(searcher, pos, include_scores=False)
 
                 if show_thinking:
-                    entry = searcher.tp_score.get((pos, searcher.depth, True))
+                    entry = searcher.tp_score.get((pos, sdepth, True))
                     score = int(round((entry.lower + entry.upper)/2))
                     usedtime = int((time.time() - start) * 1000)
                     moves_str = moves if len(moves) < 15 else ''
-                    output('info depth {} score cp {} time {} nodes {} pv {}'.format(searcher.depth, score, usedtime, searcher.nodes, moves_str))
+                    output('info depth {} score cp {} time {} nodes {} pv {}'.format(sdepth, score, usedtime, searcher.nodes, moves_str))
 
                 if len(moves) > 5:
                     ponder = moves[1]
@@ -103,10 +103,10 @@ def main():
                 if (time.time() - start) * 1000 > our_time/moves_remain:
                     break
 
-                if searcher.depth >= depth:
+                if sdepth >= depth:
                     break
 
-            entry = searcher.tp_score.get((pos, searcher.depth, True))
+            entry = searcher.tp_score.get((pos, sdepth, True))
             m, s = searcher.tp_move.get(pos), entry.lower
             # We only resign once we are mated.. That's never?
             if s == -sunfish.MATE_UPPER:

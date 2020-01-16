@@ -15,6 +15,9 @@ import multiprocessing
 import random
 import unittest
 import warnings
+import chess
+import chess.engine
+import pathlib
 
 import sunfish
 import tools
@@ -105,6 +108,16 @@ class Tests(unittest.TestCase):
         test_xboard('python3', verbose=False)
         test_xboard('python', verbose=False)
         test_xboard('pypy', verbose=False)
+
+    def test_xboard2(self):
+        # Xboard using python-chess doesn't currently work.
+        # test_uci('pypy3', protocol='xboard')
+        # test_uci('python3', protocol='xboard')
+        pass
+
+    def test_uci(self):
+        test_uci('pypy3')
+        test_uci('python3')
 
     def test_3fold(self):
         sunfish.DRAW_TEST = True
@@ -356,6 +369,43 @@ def test_xboard(python='python3', verbose=True):
     finally:
         if fish.poll() is None:
             fish.kill()
+
+###############################################################################
+# Test uci
+###############################################################################
+
+
+def test_uci(python='python3', protocol='uci'):
+    def new_engine():
+        #python = '/usr/local/bin/python3'
+        d = pathlib.Path(__file__).parent
+        if protocol ==  'uci':
+            args = [python, '-u', str(d / 'uci.py')]
+            return chess.engine.SimpleEngine.popen_uci(args, debug=True)
+        else:
+            args = [python, '-u', str(d / 'xboard.py')]
+            return chess.engine.SimpleEngine.popen_xboard(args, debug=True)
+
+    limits = [
+        chess.engine.Limit(time=1),
+        chess.engine.Limit(nodes=1000),
+        chess.engine.Limit(white_clock=1, black_clock=1),
+        chess.engine.Limit(
+            white_clock=1,
+            black_clock=1,
+            white_inc=1,
+            black_inc=1,
+            remaining_moves=2)
+    ]
+
+    for limit in limits:
+        engine = new_engine()
+        board = chess.Board()
+        while not board.is_game_over() and len(board.move_stack) < 3:
+            result = engine.play(board, limit)
+            board.push(result.move)
+        engine.quit()
+
 
 ###############################################################################
 # Perft test
