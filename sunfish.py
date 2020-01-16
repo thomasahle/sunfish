@@ -336,9 +336,6 @@ class Searcher:
 
         return best
 
-    # secs over maxn is a breaking change. Can we do this?
-    # I guess I could send a pull request to deep pink
-    # Why include secs at all?
     def search(self, pos, history=()):
         """ Iterative deepening MTD-bi search """
         self.nodes = 0
