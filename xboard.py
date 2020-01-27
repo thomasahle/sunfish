@@ -5,16 +5,18 @@ from __future__ import print_function
 from __future__ import division
 import importlib
 import re
+import signal
 import sys
 import time
 
 import tools
-import sunfish
 
 from tools import WHITE, BLACK
 
 if len(sys.argv) > 1:
     sunfish = importlib.import_module(sys.argv[1])
+else:
+    import sunfish
 
 # Python 2 compatability
 if sys.version_info[0] == 2:
@@ -175,6 +177,8 @@ def main():
 
         elif smove.startswith('reject'):
             _, feature = smove.split()[:2] # split(maxsplit=2) doesnt work in python2.7
+            if feature == 'sigint':
+                signal.signal(signal.SIGINT, signal.SIG_IGN)
             print('# Warning ({} rejected): Might not work as expected.'.format(feature))
 
         else:
