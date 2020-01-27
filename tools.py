@@ -34,10 +34,13 @@ def gen_legal_moves(pos):
         Also the position after moving is included. '''
     for move in pos.gen_moves():
         pos1 = pos.move(move)
-        # If we just checked for opponent moves capturing the king, we would miss
-        # captures in case of illegal castling.
-        if not any(pos1.value(m) >= sunfish.MATE_LOWER for m in pos1.gen_moves()):
+        if not can_kill_king(pos1):
             yield move, pos1
+
+def can_kill_king(pos):
+    # If we just checked for opponent moves capturing the king, we would miss
+    # captures in case of illegal castling.
+    return any(pos.value(m) >= sunfish.MATE_LOWER for m in pos.gen_moves())
 
 def mrender(pos, m):
     # Sunfish always assumes promotion to queen
@@ -211,7 +214,8 @@ def pv(searcher, pos, include_scores=True):
         res.append(str(pos.score))
     while True:
         move = searcher.tp_move.get(pos)
-        if move is None:
+        # The tp may have illegal moves, given lower depths don't detect king killing
+        if move is None or can_kill_king(pos.move(move)):
             break
         res.append(mrender(pos, move))
         pos, color = pos.move(move), 1-color
