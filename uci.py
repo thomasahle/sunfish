@@ -15,6 +15,13 @@ import sunfish
 from tools import WHITE, BLACK
 from xboard import Unbuffered
 
+
+if len(sys.argv) > 1:
+    sunfish = importlib.import_module(sys.argv[1])
+else:
+    import sunfish
+
+
 def main():
     logging.basicConfig(filename='sunfish.log', level=logging.DEBUG)
     out = Unbuffered(sys.stdout)
