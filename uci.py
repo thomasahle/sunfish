@@ -8,21 +8,24 @@ import re
 import sys
 import time
 import logging
+import argparse
 
 import tools
 import sunfish
 
-from tools import WHITE, BLACK
-from xboard import Unbuffered
-
-
-if len(sys.argv) > 1:
-    sunfish = importlib.import_module(sys.argv[1])
-else:
-    import sunfish
-
+from tools import WHITE, BLACK, Unbuffered
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('module', help='sunfish.py file (without .py)', type=str, default='sunfish', nargs='?')
+    parser.add_argument('--tables', metavar='pst', help='alternative pst table', type=str, default=None)
+    args = parser.parse_args()
+
+    sunfish = importlib.import_module(args.module)
+    if args.tables is not None:
+        pst_module = importlib.import_module(args.tables)
+        sunfish.pst = pst_module.pst
+
     logging.basicConfig(filename='sunfish.log', level=logging.DEBUG)
     out = Unbuffered(sys.stdout)
     def output(line):
