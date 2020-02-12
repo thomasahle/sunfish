@@ -1,6 +1,7 @@
 import itertools
 import re
 import time
+import sys
 
 import sunfish
 
@@ -205,7 +206,7 @@ def parseEPD(epd, opt_dict=False):
 # Pretty print
 ################################################################################
 
-def pv(searcher, pos, include_scores=True):
+def pv(searcher, pos, include_scores=True, include_loop=False):
     res = []
     seen_pos = set()
     color = get_color(pos)
@@ -220,7 +221,8 @@ def pv(searcher, pos, include_scores=True):
         res.append(mrender(pos, move))
         pos, color = pos.move(move), 1-color
         if pos in seen_pos:
-            res.append('loop')
+            if include_loop:
+                res.append('loop')
             break
         seen_pos.add(pos)
         if include_scores:
@@ -255,4 +257,20 @@ def flatten_tree(tree, depth):
     for subtree in tree:
         for pos in flatten_tree(subtree, depth-1):
             yield pos
+
+################################################################################
+# Non chess related tools
+################################################################################
+
+# Disable buffering
+class Unbuffered(object):
+    def __init__(self, stream):
+        self.stream = stream
+    def write(self, data):
+        self.stream.write(data)
+        self.stream.flush()
+        sys.stderr.write(data)
+        sys.stderr.flush()
+    def __getattr__(self, attr):
+        return getattr(self.stream, attr)
 
