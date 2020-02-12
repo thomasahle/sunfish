@@ -4,43 +4,39 @@
 from __future__ import print_function
 from __future__ import division
 import importlib
+import argparse
 import re
 import signal
 import sys
 import time
+from datetime import datetime
 
 import tools
-
 from tools import WHITE, BLACK
 
-if len(sys.argv) > 1:
-    sunfish = importlib.import_module(sys.argv[1])
-else:
-    import sunfish
 
 # Python 2 compatability
 if sys.version_info[0] == 2:
     input = raw_input
 
-# Disable buffering
-class Unbuffered(object):
-    def __init__(self, stream):
-        self.stream = stream
-    def write(self, data):
-        self.stream.write(data)
-        self.stream.flush()
-        sys.stderr.write(data)
-        sys.stderr.flush()
-    def __getattr__(self, attr):
-        return getattr(self.stream, attr)
-sys.stdout = Unbuffered(sys.stdout)
-
-from datetime import datetime
-now = datetime.now()
-path = 'sunfish-' + now.strftime("%d:%m:%Y-%H:%M:%S:%f") + '.log'
-sys.stderr = open(path, 'a')
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('module', help='sunfish.py file (without .py)', type=str, default='sunfish', nargs='?')
+    parser.add_argument('--tables', metavar='pst', help='alternative pst table', type=str, default=None)
+    args = parser.parse_args()
+
+    sunfish = importlib.import_module(args.module)
+    if args.tables is not None:
+        pst_module = importlib.import_module(args.tables)
+        sunfish.pst = pst_module.pst
+
+    sys.stdout = tools.Unbuffered(sys.stdout)
+
+    now = datetime.now()
+    path = 'sunfish-' + now.strftime("%d:%m:%Y-%H:%M:%S:%f") + '.log'
+    sys.stderr = open(path, 'a')
+
     pos = tools.parseFEN(tools.FEN_INITIAL)
     searcher = sunfish.Searcher()
     forced = False
@@ -120,10 +116,8 @@ def main():
                 if show_thinking:
                     used = int((time.time() - start)*100 + .5)
                     moves = tools.pv(searcher, pos, include_scores=False)
-                    seldepth = 0
-                    nps = int(searcher.nodes / (time.time() - start) + .5)
-                    print('{:>3} {:>8} {:>8} {:>13} {:>1} {:>4} \t{}'.format(
-                        ply, score, used, searcher.nodes, seldepth, nps, moves))
+                    print('{:>3} {:>8} {:>8} {:>13} \t{}'.format(
+                        ply, score, used, searcher.nodes, moves))
                     print('# Hashfull: {:.3f}%; {} <= score < {}'.format(
                         len(searcher.tp_score)/sunfish.TABLE_SIZE*100, entry.lower, entry.upper))
                 # If found mate, just stop
