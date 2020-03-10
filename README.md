@@ -1,9 +1,7 @@
-# Sunfish
-
 ![Sunfish logo](https://raw.github.com/thomasahle/sunfish/master/logo/sunfish_large.png)
 
 ## Introduction
-Sunfish is a simple, but strong chess engine, written in Python, mostly for teaching purposes. Without tables and its simple interface, it takes up just 111 lines of code! (Now 110 by `wc compressed.py`!)
+Sunfish is a simple, but strong chess engine, written in Python, mostly for teaching purposes. Without tables and its simple interface, it takes up just 111 lines of code! (see `compressed.py`) Yet [it plays at rating 1800-1900 at Lichess](https://lichess.org/@/sunfish-engine).
 
 Because Sunfish is small and strives to be simple, the code provides a great platform for experimenting. People have used it for testing parallel search algorithms, experimenting with evaluation functions, and developing deep learning chess programs. Fork it today and see what you can do!
 
@@ -30,7 +28,8 @@ Sunfish is self contained in the `sunfish.py` file from the repository. I recomm
 
 It is also possible to run Sunfish with a graphical interface, such as [PyChess](http://pychess.org), [Arena](http://www.playwitharena.com) or your chess interface of choice. Sunfish' can communicate through the [XBoard](http://www.gnu.org/software/xboard/)/CECP protocol by the command `pypy -u xboard.py`. Ruxy Sylwyka has [a note on making it all work on Windows](http://www.talkchess.com/forum/viewtopic.php?topic_view=threads&p=560462).
 
-[Play now on Lichess!](https://lichess.org/@/sunfish_rs) (requires log in) against [Recursing's Rust port](https://github.com/Recursing/sunfish_rs)
+You can [play sunfish now on Lichess](https://lichess.org/@/sunfish-engine) (requires log in) or play against [Recursing's Rust port](https://github.com/Recursing/sunfish_rs),
+also [on Lichess](https://lichess.org/@/sunfish_rs), which is about 100 ELO stronger.
 
 # Features
 
@@ -65,4 +64,3 @@ In terms of Heritage, Sunfish borrows much more from [Micro-Max by Geert Muller]
 # License
 
 [GNU GPL v3](https://www.gnu.org/licenses/gpl-3.0.en.html)
-
