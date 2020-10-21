@@ -59,10 +59,28 @@ def main():
         elif smove == 'ucinewgame':
             stack.append('position fen ' + tools.FEN_INITIAL)
 
+        # syntax specified in UCI
+        # position [fen  | startpos ]  moves  ....
+
         elif smove.startswith('position fen'):
-            _, _, fen = smove.split(' ', 2)
+            idx=smove.find('moves')
+
+            if idx >= 0:
+                fenpart=smove[:idx]
+            else:
+                fenpart = smove
+
+            _, _, fen = fenpart.split(' ', 2)
+
             pos = tools.parseFEN(fen)
             color = WHITE if fen.split()[1] == 'w' else BLACK
+
+            if idx >= 0:
+                movespart=smove[idx:].split()
+
+                for move in movespart[1:]:
+                    pos = pos.move(tools.mparse(color, move))
+                    color = 1 - color
 
         elif smove.startswith('position startpos'):
             params = smove.split(' ')
