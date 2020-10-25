@@ -371,7 +371,7 @@ class Searcher:
             self.bound(pos, lower, depth)
             # If the game hasn't finished we can retrieve our move from the
             # transposition table.
-            yield depth, self.tp_move.get(pos), self.tp_score.get((pos, depth, True)).lower
+            yield self.tp_move.get(pos), self.tp_score.get((pos, depth, True)).lower
 
 
 ###############################################################################
@@ -433,7 +433,7 @@ def main():
 
         # Fire up the engine to look for a move.
         start = time.time()
-        for _depth, move, score in searcher.search(hist[-1], hist):
+        for move, score in searcher.search(hist[-1], hist):
             if time.time() - start > 1:
                 break
 
