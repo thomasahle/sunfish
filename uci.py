@@ -41,7 +41,8 @@ def main():
     while True:
         if stack:
             smove = stack.pop()
-        else: smove = input()
+        else:
+            smove = input()
 
         logging.debug(f'>>> {smove} ')
 
@@ -63,10 +64,10 @@ def main():
         # position [fen  | startpos ]  moves  ....
 
         elif smove.startswith('position fen'):
-            idx=smove.find('moves')
+            idx = smove.find('moves')
 
             if idx >= 0:
-                fenpart=smove[:idx]
+                fenpart = smove[:idx]
             else:
                 fenpart = smove
 
@@ -76,7 +77,7 @@ def main():
             color = WHITE if fen.split()[1] == 'w' else BLACK
 
             if idx >= 0:
-                movespart=smove[idx:].split()
+                movespart = smove[idx:].split()
 
                 for move in movespart[1:]:
                     pos = pos.move(tools.mparse(color, move))
