@@ -63,35 +63,35 @@ def main():
         # syntax specified in UCI
         # position [fen  | startpos ]  moves  ....
 
-        elif smove.startswith('position fen'):
+        elif smove.startswith('position'):
+            params = smove.split(' ')
             idx = smove.find('moves')
 
             if idx >= 0:
-                fenpart = smove[:idx]
+                moveslist = smove[idx:].split()[1:]
             else:
-                fenpart = smove
+                moveslist = []
 
-            _, _, fen = fenpart.split(' ', 2)
+            if params[1] == 'fen':
+                if idx >= 0:
+                    fenpart = smove[:idx]
+                else:
+                    fenpart = smove
+
+                _, _, fen = fenpart.split(' ', 2)
+
+            elif params[1] == 'startpos':
+                fen = tools.FEN_INITIAL
+
+            else:
+                pass
 
             pos = tools.parseFEN(fen)
             color = WHITE if fen.split()[1] == 'w' else BLACK
 
-            if idx >= 0:
-                movespart = smove[idx:].split()
-
-                for move in movespart[1:]:
-                    pos = pos.move(tools.mparse(color, move))
-                    color = 1 - color
-
-        elif smove.startswith('position startpos'):
-            params = smove.split(' ')
-            pos = tools.parseFEN(tools.FEN_INITIAL)
-            color = WHITE
-
-            if len(params) > 2 and params[2] == 'moves':
-                for move in params[3:]:
-                    pos = pos.move(tools.mparse(color, move))
-                    color = 1 - color
+            for move in moveslist:
+                pos = pos.move(tools.mparse(color, move))
+                color = 1 - color
 
         elif smove.startswith('go'):
             #  default options
