@@ -170,7 +170,7 @@ def main():
         elif smove.startswith('nopost'):
             show_thinking = False
 
-        elif any(smove.startswith(x) for x in ('xboard','random','hard','accepted','level','easy','st','result','?','name')):
+        elif any(smove.startswith(x) for x in ('xboard','random','hard','accepted','level','easy','st','result','?','name','rating')):
             print('# Ignoring command {}.'.format(smove))
 
         elif smove.startswith('reject'):
