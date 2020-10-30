@@ -30,6 +30,8 @@ def main():
     if args.tables is not None:
         pst_module = importlib.import_module(args.tables)
         sunfish.pst = pst_module.pst
+        sunfish.QS_LIMIT = pst_module.QS_LIMIT
+        sunfish.EVAL_ROUGHNESS = pst_module.EVAL_ROUGHNESS
 
     sys.stdout = tools.Unbuffered(sys.stdout)
 
@@ -62,7 +64,7 @@ def main():
             print('feature done=0')
             print('feature myname="Sunfish"')
             print('feature usermove=1')
-            print('feature setboard=1')
+            print('feature setboard=0') # Removing setboard because of lichess bug
             print('feature ping=1')
             print('feature sigint=0')
             print('feature nps=0')
@@ -114,10 +116,12 @@ def main():
                 entry = searcher.tp_score.get((pos, ply, True))
                 score = int(round((entry.lower + entry.upper)/2))
                 if show_thinking:
-                    used = int((time.time() - start)*100 + .5)
+                    seconds = time.time() - start
+                    used_ms = int(seconds*100 + .5)
                     moves = tools.pv(searcher, pos, include_scores=False)
                     print('{:>3} {:>8} {:>8} {:>13} \t{}'.format(
-                        ply, score, used, searcher.nodes, moves))
+                        ply, score, used_ms, searcher.nodes, moves))
+                    print('# {} n/s'.format(round(searcher.nodes/seconds)))
                     print('# Hashfull: {:.3f}%; {} <= score < {}'.format(
                         len(searcher.tp_score)/sunfish.TABLE_SIZE*100, entry.lower, entry.upper))
                 # If found mate, just stop
@@ -166,7 +170,7 @@ def main():
         elif smove.startswith('nopost'):
             show_thinking = False
 
-        elif any(smove.startswith(x) for x in ('xboard','random','hard','accepted','level','easy','st','result','?')):
+        elif any(smove.startswith(x) for x in ('xboard','random','hard','accepted','level','easy','st','result','?','name')):
             print('# Ignoring command {}.'.format(smove))
 
         elif smove.startswith('reject'):
