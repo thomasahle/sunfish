@@ -5,6 +5,8 @@ from __future__ import print_function
 import re, sys, time
 from itertools import count
 from collections import namedtuple
+import configparser
+import os.path
 
 ###############################################################################
 # Piece-Square tables. Tune these to change sunfish's behaviour
@@ -402,7 +404,7 @@ def print_pos(pos):
     print('    a b c d e f g h \n\n')
 
 
-def main():
+def main_init():
     hist = [Position(initial, 0, (True,True), (True,True), 0, 0)]
     searcher = Searcher()
     while True:
@@ -444,8 +446,111 @@ def main():
         # 'back rotate' the move before printing it.
         print("My move:", render(119-move[0]) + render(119-move[1]))
         hist.append(hist[-1].move(move))
+        
+###############################################################################
+# convert list to string
+###############################################################################
+def listToString(s):  
+    
+    # initialize an empty string 
+    str1 = ""  
+    
+    # traverse in the string   
+    for ele in s:  
+        str1 += ele   
+    
+    # return string   
+    return str1  
 
+###############################################################################
+# main
+###############################################################################
+def main(argv):
+
+    #read history
+    hist = readMatch()
+    searcher = Searcher()
+
+    if hist[-1].score <= -MATE_LOWER:
+        print("You lost")
+
+    match = re.match('([a-h][1-8])'*2, argv)
+    move = parse(match.group(1)), parse(match.group(2))
+    hist.append(hist[-1].move(move))
+
+    # After our move we rotate the board and print it again.
+    # This allows us to see the effect of our move.
+    #print_pos(hist[-1].rotate())
+
+    if hist[-1].score <= -MATE_LOWER:
+        print("You won")
+
+        # Fire up the engine to look for a move.
+    start = time.time()
+    for _depth, move, score in searcher.search(hist[-1], hist):
+        if time.time() - start > 1:
+            break
+
+    if score == MATE_UPPER:
+        print("Checkmate!")
+
+        # The black player moves from a rotated position, so we have to
+        # 'back rotate' the move before printing it.
+    print("My move:", render(119-move[0]) + render(119-move[1]))
+    hist.append(hist[-1].move(move))
+    lastHist = hist[len(hist)-1]
+    #Save history
+    saveMatch(lastHist)
+    
+###############################################################################
+# saveMatch
+###############################################################################
+def saveMatch(lastHist): 
+
+    print("Saving match")
+    ## save board  
+    f = open("match.txt", "w")
+    f.write(lastHist.board)
+    f.close()
+
+    ## save properties of the match
+    config = configparser.ConfigParser()
+    config.add_section('match')
+    config['match']['score'] = str(lastHist.score)
+    config['match']['wc'] = str(lastHist.wc)
+    config['match']['bc'] = str(lastHist.bc)
+    config['match']['ep'] = str(lastHist.ep)
+    config['match']['kp'] = str(lastHist.kp)
+
+    with open('match.ini', 'w') as configfile:
+        config.write(configfile)
+        
+###############################################################################
+# readMatch
+###############################################################################        
+def readMatch(): 
+
+    ## read board  
+    if os.path.isfile('match.txt'):
+      f = open("match.txt", "r")
+      board = f.read()
+      f.close()
+    
+      ## read properties of the file
+      config = configparser.ConfigParser()
+      config.read('match.ini')
+
+      score = int(config['match']['score'])
+      wc = config['match']['wc']
+      bc = config['match']['bc']
+      ep = int(config['match']['ep'])
+      kp = int(config['match']['kp'])
+      #print(board)
+      hist = [Position(board, score, (True,True), (True,True), ep, kp)]
+    else:
+      hist = [Position(initial, 0, (True,True), (True,True), 0, 0)]
+    return hist
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1])
 
