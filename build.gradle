@@ -1,0 +1,36 @@
+plugins {
+    id 'com.bmuschko.docker-remote-api' version '6.4.0'
+}
+
+version='0.1'
+
+repositories {
+    mavenCentral()
+}
+
+
+// Import task types
+import com.bmuschko.gradle.docker.tasks.image.*
+
+
+task buildImage(type: DockerBuildImage) {
+    inputDir = file('.')
+    images.add("docker.io/sebastianrevuelta/sunfish:${project.version}")
+}
+ 
+
+task pushImage(type: DockerPushImage, dependsOn: buildImage){
+    images.add("docker.io/sebastianrevuelta/sunfish:${project.version}")
+}
+
+task buildImageObf(type: DockerBuildImage) {
+    inputDir = file('.')
+    buildArgs = ['OBF':'true']
+    images.add("docker.io/sebastianrevuelta/sunfish:obf-${project.version}")
+
+}
+
+task pushImageObf(type: DockerPushImage, dependsOn: buildImageObf) {
+	dependsOn buildImageObf
+    images.add("docker.io/sebastianrevuelta/sunfish:obf-${project.version}")
+}

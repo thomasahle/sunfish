@@ -480,7 +480,7 @@ def main(argv):
 
     # After our move we rotate the board and print it again.
     # This allows us to see the effect of our move.
-    #print_pos(hist[-1].rotate())
+    print_pos(hist[-1].rotate())
 
     if hist[-1].score <= -MATE_LOWER:
         print("You won")
