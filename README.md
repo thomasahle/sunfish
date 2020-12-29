@@ -40,7 +40,7 @@ also [on Lichess](https://lichess.org/@/sunfish_rs), which is about 100 ELO stro
 
 # Limitations
 
-Sunfish supports castling, en passant, and promotion. It doesn't however do minor promotios to rooks, knights or bishops - all input must be done in simple 'two coordinate' notation, as shown in the screenshot.
+Sunfish supports castling, en passant, and promotion. It doesn't however do minor promotions to rooks, knights or bishops - all input must be done in simple 'two coordinate' notation, as shown in the screenshot.
 
 There are many ways in which you may try to make Sunfish stronger. First you could change from a board representation to a mutable array and add a fast way to enumerate pieces. Then you could implement dedicated capture generation, check detection and check evasions. You could also move everything to bitboards, implement parts of the code in C or experiment with parallel search!
 
