@@ -288,7 +288,7 @@ class Searcher:
             if depth > 0 and not root and any(c in pos.board for c in 'RBNQ'):
                 yield None, -self.bound(pos.nullmove(), 1-gamma, depth-3, root=False)
             # For QSearch we have a different kind of null-move, namely we can just stop
-            # and not capture anythign else.
+            # and not capture anything else.
             if depth == 0:
                 yield None, pos.score
             # Then killer move. We search it twice, but the tp will fix things for us.
