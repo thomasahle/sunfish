@@ -1,4 +1,10 @@
 #!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+Minimal wrapper class for sunfish
+"""
+
 import re
 import time
 import sunfish as sf
@@ -11,6 +17,13 @@ BLACK = False
 
 parse_square = sf.parse
 square_name = sf.render
+
+# TODO: actual compatibility with python-chess, not just resemble it's behavior
+
+class GameOver(Exception): pass
+# TODO: Game over detecting
+# I didn't quite understand how sunfish detects gameover, so I left it unimplemented.
+# Sunfish.push() and Sunfish.think() should raise GameOver if the game has ended
 
 class Move:
     def __init__(self, from_square: Square, to_square: Square, side: Color = WHITE):
@@ -56,11 +69,6 @@ class Move:
         else:
             raise ValueError(f"Invalid uci: {uci}")
 
-
-class GameOver(Exception): pass
-# TODO: Game over detecting
-# I didn't quite understand how sunfish detects gameover, so I left it unimplemented.
-# Sunfish.push() and Sunfish.think() should raise GameOver if the game has ended
 
 class Sunfish:
     def __init__(self):
@@ -131,3 +139,35 @@ class Sunfish:
             ret.append(' '.join(uni_pieces[c] for c in row))
         return '\n'.join(ret)
 
+def play():
+    fish = Sunfish()
+    while True:
+        print(fish.unicode())
+        print()
+        while True:
+            san = input("Your move: ")
+            try:
+                fish.push_san(san)
+            except ValueError:
+                print("Please enter a move like g8f6")
+            else: break
+
+        print(fish.unicode())
+        print()
+        move = fish.act()
+        print(f"My move: {move.uci()}")
+
+def selfplay():
+    fish = Sunfish()
+    while True:
+        print(fish.unicode())
+        print()
+        move = fish.act()
+        print(move.uci())
+
+if __name__=="__main__":
+    options = [play, selfplay]
+    print("1. play vs sunfish")
+    print("2. watch sunfish vs sunfish")
+    chosen = int(input("Your option: ") )
+    options[chosen-1]()
