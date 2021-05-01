@@ -38,6 +38,8 @@ also [on Lichess](https://lichess.org/@/sunfish_rs), which is about 100 ELO stro
 1. Create a container from the docker image using the command:
 <code>docker run -it --rm rutuparn/sunfish</code>
 
+![logo/docker-demo.gif](logo/docker-demo.gif)
+
 # Features
 
 1. Built around the simple, but deadly efficient MTD-bi search algorithm.
