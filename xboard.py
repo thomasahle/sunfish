@@ -64,7 +64,9 @@ def main():
             print('feature done=0')
             print('feature myname="Sunfish"')
             print('feature usermove=1')
-            print('feature setboard=0') # Removing setboard because of lichess bug
+            # Note, because of a bug in Lichess, it may be necessary to
+            # set setboard=0 when using Sunfish on the server.
+            print('feature setboard=1')
             print('feature ping=1')
             print('feature sigint=0')
             print('feature nps=0')
