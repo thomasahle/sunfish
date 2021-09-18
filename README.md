@@ -33,6 +33,15 @@ It is also possible to run Sunfish with a graphical interface, such as [PyChess]
 You can [play sunfish now on Lichess](https://lichess.org/@/sunfish-engine) (requires log in) or play against [Recursing's Rust port](https://github.com/Recursing/sunfish_rs),
 also [on Lichess](https://lichess.org/@/sunfish_rs), which is about 100 ELO stronger.
 
+### Don't feel like downloading the source code or installing pypy
+1. Head to [Play with Docker (PWD)](https://labs.play-with-docker.com/)
+1. Login using your docker account
+1. Spinup a new instance by clicking on the '+ ADD NEW INSTANCE' button
+1. Create a container from the docker image using the command:
+<code>docker run -it --rm rutuparn/sunfish</code>
+
+![logo/docker-demo.gif](docker/docker-demo.gif)
+
 # Features
 
 1. Built around the simple, but deadly efficient MTD-bi search algorithm.
