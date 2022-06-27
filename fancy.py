@@ -2,13 +2,11 @@ import chess.engine
 import json
 import argparse
 import random
-import time
 import sys
 import asyncio
 import pathlib
 import logging
 import math
-
 
 parser = argparse.ArgumentParser()
 parser.add_argument('conf', default='engines.json', nargs='?',
@@ -23,8 +21,9 @@ parser.add_argument('-pvs', nargs='?', const=3, default=0, type=int,
 parser.add_argument('-fen', help='Start from given position',
                     default='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1')
 
+
 async def load_engine(engine_args, name, debug=False):
-    args = next(a for a in engine_args if a['name'] == name)
+    args = next(argument for argument in engine_args if argument['name'] == name)
     curdir = str(pathlib.Path(__file__).parent)
     popen_args = {}
     if 'workingDirectory' in args:
@@ -74,7 +73,7 @@ def print_unicode_board(board, perspective=chess.WHITE):
     """ Prints the position from a given perspective. """
     sc, ec = '\x1b[0;30;107m', '\x1b[0m'
     for r in range(8) if perspective == chess.BLACK else range(7, -1, -1):
-        line = [f'{sc} {r+1}']
+        line = [f'{sc} {r + 1}']
         for c in range(8) if perspective == chess.WHITE else range(7, -1, -1):
             color = '\x1b[48;5;255m' if (r + c) % 2 == 1 else '\x1b[48;5;253m'
             if board.move_stack:
@@ -117,7 +116,7 @@ async def get_engine_move(engine, board, limit, game_id, multipv, debug=False):
 
             if not debug and all(infos) and 'score' in analysis.info:
                 if not first:
-                    #print('\n'*(multipv+1), end='')
+                    # print('\n'*(multipv+1), end='')
                     print(f"\u001b[1A\u001b[K" * (multipv + 1), end='')
                 else:
                     first = False
@@ -125,7 +124,7 @@ async def get_engine_move(engine, board, limit, game_id, multipv, debug=False):
                 info = analysis.info
                 score = info['score'].relative
                 score = f'Score: {score.score()}' \
-                        if score.score() is not None else f'Mate in {score.mate()}'
+                    if score.score() is not None else f'Mate in {score.mate()}'
                 print(f'{score}, nodes: {info.get("nodes", "N/A")}, nps: {info.get("nps", "N/A")},'
                       f' time: {float(info.get("time", "N/A")):.1f}', end='')
                 print()
@@ -141,7 +140,7 @@ async def get_engine_move(engine, board, limit, game_id, multipv, debug=False):
                         if key == 'pv_nodes':
                             nodes = int(val[0])
                             rel = nodes / analysis.info['nodes']
-                            score_rel = f'({score:.2f}, {rel*100:.0f}%)'
+                            score_rel = f'({score:.2f}, {rel * 100:.0f}%)'
                         else:
                             score_rel = f'({score:.2f})'
                     else:
@@ -203,18 +202,23 @@ async def main():
 
     board = chess.Board(args.fen)
 
-    if args.movetime:
-        limit = chess.engine.Limit(time=args.movetime / 1000)
-    elif args.nodes:
-        limit = chess.engine.Limit(nodes=args.nodes)
-    else:
-        limit = chess.engine.Limit(white_clock=30, black_clock=30, remaining_moves=30)
+    limit = chess_engin_limit(args)
 
     try:
         await play(engine, board, selfplay=args.selfplay, pvs=args.pvs, time_limit=limit, debug=args.debug)
     finally:
         print('\nGoodbye!')
         await engine.quit()
+
+
+def chess_engin_limit(args):
+    if args.movetime:
+        limit = chess.engine.Limit(time=args.movetime / 1000)
+    elif args.nodes:
+        limit = chess.engine.Limit(nodes=args.nodes)
+    else:
+        limit = chess.engine.Limit(white_clock=30, black_clock=30, remaining_moves=30)
+    return limit
 
 
 asyncio.set_event_loop_policy(chess.engine.EventLoopPolicy())
