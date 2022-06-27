@@ -180,25 +180,11 @@ async def play(engine, board, selfplay, pvs, time_limit, debug=False):
 async def main():
     args = parser.parse_args()
 
-    if args.debug:
-        logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.ERROR)
+    set_debug_level(args)
 
-    if not args.conf:
-        path = pathlib.Path(__file__).parent / 'engines.json'
-        if not path.is_file():
-            print('Unable to locate engines.json file.')
-            return
-        conf = json.load(path.open())
-    else:
-        conf = json.load(open(args.conf))
+    conf = get_engine_file(args)
 
-    engine = await load_engine(conf, args.name, debug=args.debug)
-    if 'author' in engine.id:
-        print(f"Playing against {engine.id['name']} by {engine.id['author']}.")
-    else:
-        print(f"Playing against {engine.id['name']}.")
+    print_opponent_details(conf, args.name, debug=args.debug)
 
     board = chess.Board(args.fen)
 
@@ -209,6 +195,32 @@ async def main():
     finally:
         print('\nGoodbye!')
         await engine.quit()
+
+def set_debug_level(args):
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.ERROR)
+
+
+def get_engine_file(args):
+    if not args.conf:
+        path = pathlib.Path(__file__).parent / 'engines.json'
+        if not path.is_file():
+            print('Unable to locate engines.json file.')
+            return
+        conf = json.load(path.open())
+    else:
+        conf = json.load(open(args.conf))
+    return conf
+
+
+def print_opponent_details(conf, args):
+    engine = await load_engine(conf, args.name, debug=args.debug)
+    if 'author' in engine.id:
+        print(f"Playing against {engine.id['name']} by {engine.id['author']}.")
+    else:
+        print(f"Playing against {engine.id['name']}.")
 
 
 def chess_engin_limit(args):
