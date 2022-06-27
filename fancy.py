@@ -152,8 +152,8 @@ async def get_engine_move(engine, board, limit, game_id, multipv, debug=False):
         return analysis.info['pv'][0]
 
 
-async def play(engine, board, selfplay, pvs, time_limit, debug=False):
-    if not selfplay:
+async def play(engine, board, self_play, pvs, time_limit, debug=False):
+    if not self_play:
         user_color = get_user_color()
     else:
         user_color = chess.WHITE
@@ -165,7 +165,7 @@ async def play(engine, board, selfplay, pvs, time_limit, debug=False):
 
     while not board.is_game_over():
         print_unicode_board(board, perspective=user_color)
-        if not selfplay and user_color == board.turn:
+        if not self_play and user_color == board.turn:
             move = get_user_move(board)
         else:
             move = await get_engine_move(engine, board, time_limit, game_id, pvs, debug=debug)
@@ -179,22 +179,13 @@ async def play(engine, board, selfplay, pvs, time_limit, debug=False):
 
 async def main():
     args = parser.parse_args()
-
     set_debug_level(args)
-
     conf = get_engine_file(args)
-
-    print_opponent_details(conf, args.name, debug=args.debug)
-
+    engine = await load_engine(conf, args.name, debug=args.debug)
+    print_opponent_details(engine)
     board = chess.Board(args.fen)
-
     limit = chess_engin_limit(args)
-
-    try:
-        await play(engine, board, selfplay=args.selfplay, pvs=args.pvs, time_limit=limit, debug=args.debug)
-    finally:
-        print('\nGoodbye!')
-        await engine.quit()
+    await manage_game(engine, board, args, limit)
 
 
 def set_debug_level(args):
@@ -216,8 +207,7 @@ def get_engine_file(args):
     return conf
 
 
-def print_opponent_details(conf, args):
-    engine = await load_engine(conf, args.name, debug=args.debug)
+def print_opponent_details(engine):
     if 'author' in engine.id:
         print(f"Playing against {engine.id['name']} by {engine.id['author']}.")
     else:
@@ -232,6 +222,14 @@ def chess_engin_limit(args):
     else:
         limit = chess.engine.Limit(white_clock=30, black_clock=30, remaining_moves=30)
     return limit
+
+
+async def manage_game(engine, board, args, limit):
+    try:
+        await play(engine, board, self_play=args.selfplay, pvs=args.pvs, time_limit=limit, debug=args.debug)
+    finally:
+        print('\nGoodbye!')
+        await engine.quit()
 
 
 asyncio.set_event_loop_policy(chess.engine.EventLoopPolicy())
