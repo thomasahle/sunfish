@@ -1,7 +1,17 @@
 [
    {
       "name": "sunfish",
-      "command": "$PYTHON -u xboard.py",
+      "command": "sunfish.sh",
       "protocol": "xboard"
+   },
+   {
+      "name": "sunfish-nnue",
+      "command": "sunfish_nnue.sh",
+      "protocol": "uci"
+   },
+   {
+      "name": "sf",
+      "command": "stockfish",
+      "protocol": "uci"
    }
 ]

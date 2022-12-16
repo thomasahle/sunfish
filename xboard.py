@@ -1,6 +1,7 @@
 #!/usr/bin/env pypy -u
 # -*- coding: utf-8 -*-
 
+
 from __future__ import print_function
 from __future__ import division
 import importlib
@@ -14,6 +15,7 @@ from datetime import datetime
 import tools
 from tools import WHITE, BLACK
 
+print('test 2')
 
 # Python 2 compatability
 if sys.version_info[0] == 2:
@@ -129,6 +131,7 @@ def main():
                 # If found mate, just stop
                 if entry.lower >= sunfish.MATE_UPPER:
                     break
+                # xboard uses centi-seconds
                 if time.time() - start > use/100:
                     break
             # We sometimes make illegal moves when we're losing,

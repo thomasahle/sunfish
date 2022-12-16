@@ -1,0 +1,23 @@
+   {
+    "engines": [
+        {
+            "command": "engine1",
+            "fixed_parameters": {
+                "Threads": 2
+            }
+        },
+        {
+            "command": "engine2",
+            "fixed_parameters": {
+                "Threads": 4
+            }
+        }
+    ],
+    "parameter_ranges": {
+        "CPuct": "Real(0.0, 10.0)"
+    },
+    "engine1_tc": "1+0.1",
+    "engine2_tc": "1+0.1",
+    "rounds": 20,
+    "opening_file": "openings.pgn"
+}
