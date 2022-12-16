@@ -185,6 +185,11 @@ class Position(namedtuple('Position', 'board score wf bf wc bc ep kp')):
             if A8 <= j <= H8: pos = put(pos, j, pr)
             if j - i == 2*N: pos = pos._replace(ep = i + N)
             if j == self.ep: pos = put(pos, j+S, '.')
+
+
+        # assert np.allclose(pos.wf, sum(pst[p][i] for i, p in enumerate(pos.board) if p.isupper()))
+        # assert np.allclose(pos.bf, sum(pst[p.upper()][119-i] for i, p in enumerate(pos.board) if p.islower()))
+
         return pos.rotate()
 
     def is_capture(self, move):
@@ -312,11 +317,12 @@ class Searcher:
             # opponent, smaller score means the move is better for us.
             #print(f'Searching at {depth=}')
             for move, pos1 in sorted(moves, key=lambda move_pos: move_pos[1].score):
-                #if render(move.i) + render(move.j) == 'd5g8':
-                #    print('d5g8', pos1.score)
-                #    print(pos1.board)
-                #if move.i == parse('D5') and move.j == parse('G8'):
-                    #print('inner', move, score)
+                # TODO: We seem to have some issues with our QS search, which eventually
+                # leads to very large jumps in search time. (Maybe we get the classical
+                # "Queen plunders everything" case?) Hence Improving this might solve some
+                # of our timeout issues. It could also be that using a more simple ordering
+                # would speed up the move generation?
+                # See https://home.hccnet.nl/h.g.muller/mvv.html for inspiration
                 # If depth is 0 we only try moves with high intrinsic score (captures and
                 # promotions). Otherwise we do all moves.
                 #if depth > 0 or -pos1.score-pos.score >= QS_LIMIT:
@@ -348,6 +354,8 @@ class Searcher:
         # so it only ends up accounting for about 10% of our total search time.
         # That is still not nothing though, so it might be worth it to make a real
         # is_check test somewhere...
+        # TODO: Can we use ideas from Micromax to improve this?
+        # https://home.hccnet.nl/h.g.muller/mate.html
         if best < gamma and best < 0 and depth > 0:
             # A position is dead if the curent player has a move that captures the king
             is_dead = lambda pos: any(pos.move(m).score <= -MATE_LOWER for m in pos.gen_moves())
@@ -410,7 +418,9 @@ def render(i):
 
 
 def main():
-    pos0 = Position(initial, 0, np.zeros(L0), np.zeros(L0), (True,True), (True,True), 0, 0)
+    wf = np.zeros(L0) + sum(pst[p][i] for i, p in enumerate(initial) if p.isupper())
+    bf = np.zeros(L0) + sum(pst[p.upper()][119-i] for i, p in enumerate(initial) if p.islower())
+    pos0 = Position(initial, 0, wf, bf, (True,True), (True,True), 0, 0)
     searcher = Searcher()
     while True:
         match input().split():
@@ -481,15 +491,15 @@ def main():
                         if len(hist) % 2 == 0:
                             a, b = 119 - a, 119 - b
                         move_str = render(a) + render(b) + move.prom.lower()
-                        elapsed = round(time.time() - start, 3)
+                        elapsed = time.time() - start
                         #print('Time spent on that stuff:', dead_total, 'per time:', dead_total/dead_n)
                         #print('Time spent on eval:', counters)
-                        print('info depth', depth, 'score', type, score, 'el', elapsed, 'pv', move_str)
-                        if time.time() - start > think:
+                        print('info depth', depth, 'score', type, score, 'time', int(1000*elapsed), 'nodes', searcher.nodes, 'pv', move_str)
+                        if time.time() - start > think * 2 /3:
                             break
                 except KeyboardInterrupt:
                     break
-                print(f"Stopped thinking after {elapsed} seconds")
+                print(f"Stopped thinking after {round(elapsed,3)} seconds")
                 print('bestmove', move_str)
 
 
