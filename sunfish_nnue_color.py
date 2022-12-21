@@ -110,6 +110,8 @@ directions = {
 # Constants for tuning search
 EVAL_ROUGHNESS = 13
 QS_LIMIT = 200
+QS_CAPTURE, QS_SINGLE, QS_DOUBLE = range(3)
+QS_TYPE = QS_CAPTURE
 debug = False
 
 
@@ -387,13 +389,19 @@ class Searcher:
                     return -MATE
                 p, q = pos.board[move.i], pos.board[move.j]
                 # TODO: This currently doesn't include promotions
-                return pst[q][move.j][0] - (pst[p][move.j][0] - pst[p][move.i][0])
+                score = pst[q][move.j][0] - (pst[p][move.j][0] - pst[p][move.i][0])
+                if QS_TYPE == QS_DOUBLE:
+                    pp, qq = p.swapcase(), q.swapcase()
+                    score -= pst[qq][119-move.j][0] - (pst[pp][119-move.j][0] - pst[pp][119-move.i][0])
+                    score /= 2
+                return score
 
             if killer := self.tp_move.get(pos.hash()):
                 #if depth > 0 or -pos1.score - pos.score >= QS_LIMIT:
                 #if -mvv_lva(killer)*360 >= 30  - depth * 10:
-                if depth > 0 or -mvv_lva(killer) >= QS_LIMIT/360:
-                #if depth > 0 or pos.is_capture(killer):
+                #if depth > 0 or -mvv_lva(killer) >= QS_LIMIT/360:
+                if depth > 0 or (QS_TYPE == QS_CAPTURE and pos.is_capture(killer)) or (QS_TYPE != QS_CAPTURE and -mvv_lva(killer) >= QS_LIMIT/360):
+                # if depth > 0 or pos.is_capture(killer):
                     pos1 = pos.move(killer)
                     yield killer, -self.bound(pos1, 1 - gamma, depth - 1, root=False)
 
@@ -423,7 +431,7 @@ class Searcher:
                 #if depth > 0 or pos.is_capture(move):
                 #print(mvv_lva(move)*360)
                 #if -mvv_lva(move)*360 >= 30  - depth * 10:
-                if depth > 0 or -mvv_lva(move) >= QS_LIMIT/360:
+                if depth > 0 or (QS_TYPE == QS_CAPTURE and pos.is_capture(move)) or (QS_TYPE != QS_CAPTURE and -mvv_lva(move) >= QS_LIMIT/360):
                     pos1 = pos.move(move)
                     yield move, -self.bound(pos1, 1 - gamma, depth - 1, root=False)
 
@@ -535,6 +543,7 @@ def main():
             print("id name Sunfish NNUE")
             print(f"option name EVAL_ROUGHNESS type spin default {EVAL_ROUGHNESS} min 1 max 100")
             print(f"option name QS_LIMIT type spin default {QS_LIMIT} min 0 max 2000")
+            print(f"option name QS_TYPE type spin default {QS_TYPE} min 0 max 2000")
             print("uciok")
 
         elif args[0] == "isready":
