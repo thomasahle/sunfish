@@ -588,7 +588,10 @@ def main():
         # case ["go", *args]:
         elif args[0] == "go":
             # case ['movetime', movetime]:
-            if args[1] == "movetime":
+            #case []:
+            if len(args) == 1:
+                think = 24 * 3600
+            elif args[1] == "movetime":
                 movetime = args[2]
                 think = int(movetime) / 1000
             # case ['wtime', wtime, 'btime', btime, 'winc', winc, 'binc', binc]:
@@ -613,9 +616,6 @@ def main():
                         break
                 print("bestmove", move_str, "score cp", score)
                 continue
-            #case []:
-            else:
-                think = 24 * 3600
             if debug:
                 print(f"I want to think for {think} seconds.")
             start = time.time()
