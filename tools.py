@@ -44,6 +44,7 @@ def can_kill_king(pos):
     return any(pos.value(m) >= sunfish.MATE_LOWER for m in pos.gen_moves())
 
 def mrender(pos, m):
+    if m is None: return '0000' # This is null-move in uci
     # Sunfish always assumes promotion to queen
     p = 'q' if sunfish.A8 <= m[1] <= sunfish.H8 and pos.board[m[0]] == 'P' else ''
     m = m if get_color(pos) == WHITE else (119-m[0], 119-m[1])
