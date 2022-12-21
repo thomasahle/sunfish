@@ -106,6 +106,7 @@ directions = {
 
 # Constants for tuning search
 EVAL_ROUGHNESS = 13
+QS_LIMIT = 200
 debug = False
 
 
@@ -379,7 +380,6 @@ class Searcher:
             # Note, we don't have to check for legality, since we've already done it
             # before. Also note that in QS the killer must be a capture, otherwise we
             # will be non deterministic.
-            QS_LIMIT = 200/360
             def mvv_lva(move):
                 p, q = pos.board[move.i], pos.board[move.j]
                 return pst[q][move.j][0] - (pst[p][move.j][0] - pst[p][move.i][0])
@@ -387,8 +387,8 @@ class Searcher:
             if killer := self.tp_move.get(pos.hash()):
                 #if depth > 0 or -pos1.score - pos.score >= QS_LIMIT:
                 #if -mvv_lva(killer)*360 >= 30  - depth * 10:
-                #if depth > 0 or -mvv_lva(killer) >= QS_LIMIT:
-                if depth > 0 or pos.is_capture(killer):
+                if depth > 0 or -mvv_lva(killer) >= QS_LIMIT/360:
+                #if depth > 0 or pos.is_capture(killer):
                     pos1 = pos.move(killer)
                     yield killer, -self.bound(pos1, 1 - gamma, depth - 1, root=False)
 
@@ -415,10 +415,10 @@ class Searcher:
                 # If depth is 0 we only try moves with high intrinsic score (captures and
                 # promotions). Otherwise we do all moves.
                 #if depth > 0 or -pos1.score-pos.score >= QS_LIMIT:
-                if depth > 0 or pos.is_capture(move):
+                #if depth > 0 or pos.is_capture(move):
                 #print(mvv_lva(move)*360)
                 #if -mvv_lva(move)*360 >= 30  - depth * 10:
-                #if depth > 0 or -mvv_lva(move) >= QS_LIMIT:
+                if depth > 0 or -mvv_lva(move) >= QS_LIMIT/360:
                     pos1 = pos.move(move)
                     yield move, -self.bound(pos1, 1 - gamma, depth - 1, root=False)
 
@@ -529,6 +529,7 @@ def main():
         if args[0] == "uci":
             print("id name Sunfish NNUE")
             print(f"option name EVAL_ROUGHNESS type spin default {EVAL_ROUGHNESS} min 1 max 100")
+            print(f"option name QS_LIMIT type spin default {QS_LIMIT} min 1 max 200")
             print("uciok", flush=True)
 
         elif args[0] == "isready":
