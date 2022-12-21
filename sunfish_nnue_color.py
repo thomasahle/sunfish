@@ -529,8 +529,8 @@ def main():
         if args[0] == "uci":
             print("id name Sunfish NNUE")
             print(f"option name EVAL_ROUGHNESS type spin default {EVAL_ROUGHNESS} min 1 max 100")
-            print(f"option name QS_LIMIT type spin default {QS_LIMIT} min 1 max 200")
-            print("uciok", flush=True)
+            print(f"option name QS_LIMIT type spin default {QS_LIMIT} min 0 max 2000")
+            print("uciok")
 
         elif args[0] == "isready":
             print("readyok")
