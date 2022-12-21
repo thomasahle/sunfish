@@ -31,8 +31,10 @@ pst["."] = [[0]*L0] * 120
 # King value is set to twice this value such that if the opponent is
 # 8 queens up, but we got the king, we still exceed MATE_VALUE.
 MATE = 100000
-pst['K'][:, 0] += MATE//2
-pst['k'][:, 0] -= MATE//2
+# Since move ordering uses the lower-case version, we need to include the
+# mate score in it, since otherwise we wouldn't find checks in QS search.
+pst['K'][:, 0] += MATE
+#pst['k'][:, 0] -= MATE//2
 MATE_LOWER = MATE // 2
 MATE_UPPER = MATE * 3//2
 
@@ -382,7 +384,11 @@ class Searcher:
             # before. Also note that in QS the killer must be a capture, otherwise we
             # will be non deterministic.
             def mvv_lva(move):
+                # Need to make sure capturing the king is included
+                if abs(move.j - pos.kp) < 2:
+                    return -MATE
                 p, q = pos.board[move.i], pos.board[move.j]
+                # TODO: This currently doesn't include promotions
                 return pst[q][move.j][0] - (pst[p][move.j][0] - pst[p][move.i][0])
 
             if killer := self.tp_move.get(pos.hash()):
