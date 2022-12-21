@@ -36,9 +36,6 @@ class Command:
 # Test uci
 ###############################################################################
 
-async def new_engine(args, debug=False):
-    transport, engine = await chess.engine.popen_uci(args.split())
-    return engine
 
 
 ###############################################################################
@@ -159,8 +156,13 @@ class Selfplay(Command):
                 if btime <= 0:
                     print('Black lose on time.')
                     break
-
-            print(board.san(result.move), f"wtime={round(wtime,1)}, btime={round(btime,1)}")
+            if result.resigned:
+                print('Resigned')
+                break
+            print(
+                    f"{board.fullmove_number}{'..' if board.turn == chess.BLACK else '.'}",
+                    board.san(result.move),
+                    f"wtime={round(wtime,1)}, btime={round(btime,1)}")
             board.push(result.move)
 
 
@@ -324,15 +326,6 @@ def findbest(f, times):
 ###############################################################################
 
 
-def add_action(parser, f):
-    class LambdaAction(argparse.Action):
-        def __call__(self, parser, namespace, values, option_string=None):
-            f(namespace)
-
-    parser.add_argument(
-        "_action", nargs="?", help=argparse.SUPPRESS, action=LambdaAction
-    )
-
 
 def main():
     parser = argparse.ArgumentParser(
@@ -340,6 +333,7 @@ def main():
     )
     parser.add_argument('args', help="Command and arguments to run")
     parser.add_argument('--debug', action='store_true')
+    parser.add_argument('--xboard', action='store_true')
     subparsers = parser.add_subparsers()
     subparsers.required = True
 
@@ -355,7 +349,10 @@ def main():
         logging.basicConfig(level=logging.DEBUG)
 
     async def run():
-        engine = await new_engine(args.args, args.debug)
+        if args.xboard:
+            _, engine = await chess.engine.popen_xboard(args.args.split())
+        else:
+            _transport, engine = await chess.engine.popen_uci(args.args.split())
         try:
             await args.func(engine, args)
         finally:
