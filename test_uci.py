@@ -117,27 +117,69 @@ class Bench(Command):
         pb = tqdm.tqdm(lines)
         for line in pb:
             board, _ = chess.Board.from_epd(line)
-            with await engine.analysis(board, limit, info=chess.engine.INFO_ALL) as analysis:
+            with await engine.analysis(board, limit) as analysis:
                 async for info in analysis:
-                    desc = []
-                    if 'nodes' in info and 'time' in info:
-                        nps = info['nodes'] / info['time']
-                        desc.append(f"knps: {round(nps/1000, 2)}")
-                    if 'depth' in info:
-                        desc.append(f"depth: {info['depth']}")
-                    pb.set_description(', '.join(desc))
+                    pb.set_description(info_to_desc(info))
             total_nodes += info.get('nodes', 0)
 
         print(f'Total nodes: {total_nodes}.')
         print(f'Average knps: {round(total_nodes/(time.time() - start)/1000, 2)}.')
 
 
+class Selfplay(Command):
+    name="self-play"
+    help="Play the engine a single game against itself, using increments"
+
+    @classmethod
+    def add_arguments(self, parser):
+        parser.add_argument("--time", type=int, default=3, help="White time in seconds")
+        parser.add_argument("--inc", type=int, default=1, help="Increment time in seconds")
+
+    @classmethod
+    async def run(self, engine, args):
+        board = chess.Board()
+        wtime = btime = int(args.time)
+        winc = binc = int(args.inc)
+        while not board.is_game_over():
+            print(board)
+            start = time.time()
+            result = await engine.play(board, chess.engine.Limit(
+                white_clock=wtime,
+                black_clock=btime,
+                white_inc=winc,
+                black_inc=binc,
+                ))
+            if board.turn == chess.WHITE:
+                wtime -= time.time() - start - winc
+                if wtime <= 0:
+                    print('White lose on time.')
+                    break
+            else:
+                btime -= time.time() - start - binc
+                if btime <= 0:
+                    print('Black lose on time.')
+                    break
+
+            print(board.san(result.move), f"wtime={round(wtime,1)}, btime={round(btime,1)}")
+            board.push(result.move)
+
+
 ###############################################################################
 # Find mate test
 ###############################################################################
 
+def info_to_desc(info):
+    desc = []
+    if 'nodes' in info and 'time' in info:
+        # Add 1 to denominator, since time could be rounded to 0
+        nps = info['nodes'] / (info['time'] + 1)
+        desc.append(f"knps: {round(nps/1000, 2)}")
+    if 'depth' in info:
+        desc.append(f"depth: {info['depth']}")
+    return ', '.join(desc)
 
-class Mates(Command):
+
+class Mate(Command):
     name='mate'
     help = "Find the mates"
 
@@ -150,7 +192,7 @@ class Mates(Command):
         parser.add_argument("--quick", action="store_true", help="Use mate specific search in the engine, if supported")
 
     @classmethod
-    async def run(cls, args):
+    async def run(cls, engine, args):
         if args.quick:
             # Use "go mate" which allows engine to only look for mates
             limit = chess.engine.Limit(mate=args.depth)
@@ -158,24 +200,58 @@ class Mates(Command):
             limit = chess.engine.Limit(depth=args.depth)
         total = 0
         success = 0
-        engine = new_engine(args.args, args.debug)
-        try:
-            lines = args.file.readlines()
-            for line in tqdm.tqdm(lines):
-                total += 1
-                board, _ = chess.Board.from_epd(line)
-                play_result = engine.analyse(board, limit)
-                score = play_result['score']
-                if score.is_mate() or score.relative.cp > 10000:
-                    # TODO: Something about if we found mate, but not as fast as we'd like?
-                    success += 1
-                    continue
-                print('Failed on', line)
-                print('Result:', play_result)
-        finally:
-            engine.close()
+        lines = args.file.readlines()
+        pb = tqdm.tqdm(lines)
+        for line in pb:
+            total += 1
+            board, _ = chess.Board.from_epd(line)
+            with await engine.analysis(board, limit) as analysis:
+                async for info in analysis:
+                    pb.set_description(info_to_desc(info))
+                    score = info['score']
+                    if score.is_mate() or score.relative.cp > 10000:
+                        success += 1
+                        break
+                else:
+                    print('Failed on', line)
+                    print('Result:', info)
         print(f'Succeeded in {success}/{total} cases.')
 
+
+class Draw(Command):
+    name='draw'
+    help="Find the draws"
+
+    @classmethod
+    def add_arguments(cls, parser):
+        parser.add_argument("file",
+                            type=argparse.FileType("r"), help="such as tests/stalemate2.fen.")
+        parser.add_argument("--depth", type=int, default=100, help="Maximum plies at which to find the mate")
+        parser.add_argument("--quick", action="store_true", help="Use mate specific search in the engine, if supported")
+
+    @classmethod
+    async def run(cls, engine, args):
+        if args.quick:
+            # This is not currently supported by any engines
+            limit = chess.engine.Limit(draw=args.depth)
+        else:
+            limit = chess.engine.Limit(depth=args.depth)
+        total, success = 0, 0
+        pb = tqdm.tqdm(args.file.readlines())
+        for line in pb:
+            total += 1
+            board, _ = chess.Board.from_epd(line)
+            with await engine.analysis(board, limit) as analysis:
+                async for info in analysis:
+                    pb.set_description(info_to_desc(info))
+                    score = info['score']
+                    if score.is_mate() or score.relative.cp > 10000:
+                        success += 1
+                        break
+                else:
+                    print('Failed on', line)
+                    print('Result:', info)
+        print(f'Succeeded in {success}/{total} cases.')
 
 def quickdraw(f, depth):
     k, n = 0, 0
@@ -265,6 +341,7 @@ def main():
     parser.add_argument('args', help="Command and arguments to run")
     parser.add_argument('--debug', action='store_true')
     subparsers = parser.add_subparsers()
+    subparsers.required = True
 
     for cls in Command.__subclasses__():
         sub = subparsers.add_parser(cls.name, help=cls.help)

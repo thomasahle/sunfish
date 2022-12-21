@@ -1,7 +1,6 @@
 #!/usr/bin/env pypy
 # -*- coding: utf-8 -*-
 
-from __future__ import print_function
 import re, sys, time
 from itertools import count
 from collections import namedtuple
@@ -117,6 +116,9 @@ EVAL_ROUGHNESS = 13
 # Chess logic
 ###############################################################################
 
+
+Move = namedtuple("Move", "i j prom")
+
 class Position(namedtuple('Position', 'board score wc bc ep kp')):
     """ A state of a chess game
     board -- a 120 char representation of the board
@@ -139,17 +141,23 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
                     # Stay inside the board, and off friendly pieces
                     if q.isspace() or q.isupper(): break
                     # Pawn move, double move and capture
-                    if p == 'P' and d in (N, N+N) and q != '.': break
-                    if p == 'P' and d == N+N and (i < A1+N or self.board[i+N] != '.'): break
-                    if p == 'P' and d in (N+W, N+E) and q == '.' \
+                    if p == 'P':
+                        if d in (N, N+N) and q != '.': break
+                        if d == N+N and (i < A1+N or self.board[i+N] != '.'): break
+                        if d in (N+W, N+E) and q == '.' \
                             and j not in (self.ep, self.kp, self.kp-1, self.kp+1): break
+                        # If we move to the last row, we can be anything
+                        if A8 <= j <= H8:
+                            for prom in "NBRQ":
+                                yield Move(i, j, prom)
+                            break
                     # Move it
-                    yield (i, j)
+                    yield Move(i, j, '')
                     # Stop crawlers from sliding, and sliding after captures
                     if p in 'PNK' or q.islower(): break
                     # Castling, by sliding the rook next to the king
-                    if i == A1 and self.board[j+E] == 'K' and self.wc[0]: yield (j+E, j+W)
-                    if i == H1 and self.board[j+W] == 'K' and self.wc[1]: yield (j+W, j+E)
+                    if i == A1 and self.board[j+E] == 'K' and self.wc[0]: yield Move(j+E, j+W, '')
+                    if i == H1 and self.board[j+W] == 'K' and self.wc[1]: yield Move(j+W, j+E, '')
 
     def rotate(self):
         ''' Rotates the board, preserving enpassant '''
@@ -165,7 +173,7 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
             self.bc, self.wc, 0, 0)
 
     def move(self, move):
-        i, j = move
+        i, j, prom = move
         p, q = self.board[i], self.board[j]
         put = lambda board, i, p: board[:i] + p + board[i+1:]
         # Copy variables and reset ep and kp
@@ -190,7 +198,7 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
         # Pawn promotion, double move and en passant capture
         if p == 'P':
             if A8 <= j <= H8:
-                board = put(board, j, 'Q')
+                board = put(board, j, prom)
             if j - i == 2*N:
                 ep = i + N
             if j == self.ep:
@@ -199,7 +207,7 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
         return Position(board, score, wc, bc, ep, kp).rotate()
 
     def value(self, move):
-        i, j = move
+        i, j, prom = move
         p, q = self.board[i], self.board[j]
         # Actual move
         score = pst[p][j] - pst[p][i]
@@ -216,7 +224,7 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
         # Special pawn stuff
         if p == 'P':
             if A8 <= j <= H8:
-                score += pst['Q'][j] - pst['P'][j]
+                score += pst[prom][j] - pst['P'][j]
             if j == self.ep:
                 score += pst['P'][119-(j+S)]
         return score
@@ -323,12 +331,13 @@ class Searcher:
 
         return best
 
-    def search(self, pos, history=()):
+    def search(self, history):
         """ Iterative deepening MTD-bi search """
         self.nodes = 0
         self.history = set(history)
         self.tp_score.clear()
 
+        gamma = 0
         # In finished games, we could potentially go far enough to cause a recursion
         # limit exception. Hence we bound the ply.
         for depth in range(1, 1000):
@@ -338,92 +347,67 @@ class Searcher:
             # better.
             lower, upper = -MATE_UPPER, MATE_UPPER
             while lower < upper - EVAL_ROUGHNESS:
-                gamma = (lower+upper+1)//2
-                score = self.bound(pos, gamma, depth)
+                score = self.bound(history[-1], gamma, depth)
                 if score >= gamma:
                     lower = score
                 if score < gamma:
                     upper = score
-            # We want to make sure the move to play hasn't been kicked out of the table,
-            # So we make another call that must always fail high and thus produce a move.
-            self.bound(pos, lower, depth)
-            # If the game hasn't finished we can retrieve our move from the
-            # transposition table.
-            yield depth, self.tp_move.get(pos), self.tp_score.get((pos, depth, True)).lower
+                gamma = (lower + upper + 1) // 2
+                yield depth, self.tp_move.get(history[-1]), score
 
 
 ###############################################################################
-# User interface
+# UCI User interface
 ###############################################################################
-
-# Python 2 compatability
-if sys.version_info[0] == 2:
-    input = raw_input
-
 
 def parse(c):
     fil, rank = ord(c[0]) - ord('a'), int(c[1]) - 1
     return A1 + fil - 10*rank
 
-
 def render(i):
     rank, fil = divmod(i - A1, 10)
-    return chr(fil + ord('a')) + str(-rank + 1)
+    return chr(fil + ord("a")) + str(-rank + 1)
 
 
-def print_pos(pos):
-    print()
-    uni_pieces = {'R':'♜', 'N':'♞', 'B':'♝', 'Q':'♛', 'K':'♚', 'P':'♟',
-                  'r':'♖', 'n':'♘', 'b':'♗', 'q':'♕', 'k':'♔', 'p':'♙', '.':'·'}
-    for i, row in enumerate(pos.board.split()):
-        print(' ', 8-i, ' '.join(uni_pieces.get(p, p) for p in row))
-    print('    a b c d e f g h \n\n')
+def render_move(move, white_pov):
+    if move is None:
+        return '0000'
+    i, j = move.i, move.j
+    if not white_pov:
+        i, j = 119 - i, 119 - j
+    return render(i) + render(j) + move.prom.lower()
 
+hist = [Position(initial, 0, (True,True), (True,True), 0, 0)]
+while True:
+    args = input().split()
+    if args[0] == "uci":
+        print("uciok")
 
-def main():
-    hist = [Position(initial, 0, (True,True), (True,True), 0, 0)]
-    searcher = Searcher()
-    while True:
-        print_pos(hist[-1])
+    elif args[0] == "isready":
+        print("readyok")
 
-        if hist[-1].score <= -MATE_LOWER:
-            print("You lost")
-            break
+    elif args[0] == "quit":
+        break
 
-        # We query the user until she enters a (pseudo) legal move.
-        move = None
-        while move not in hist[-1].gen_moves():
-            match = re.match('([a-h][1-8])'*2, input('Your move: '))
-            if match:
-                move = parse(match.group(1)), parse(match.group(2))
-            else:
-                # Inform the user when invalid input (e.g. "help") is entered
-                print("Please enter a move like g8f6")
-        hist.append(hist[-1].move(move))
+    elif args[:2] == ["position", "startpos"]:
+        del hist[1:]
+        for ply, move in enumerate(args[3:]):
+            i, j, prom = parse(move[:2]), parse(move[2:4]), move[4:].upper()
+            if ply % 2 == 1:
+                i, j = 119 - i, 119 - j
+            hist.append(hist[-1].move(Move(i, j, prom)))
 
-        # After our move we rotate the board and print it again.
-        # This allows us to see the effect of our move.
-        print_pos(hist[-1].rotate())
-
-        if hist[-1].score <= -MATE_LOWER:
-            print("You won")
-            break
-
-        # Fire up the engine to look for a move.
+    elif args[0] == "go":
+        _, wtime, _, btime, _, winc, _, binc = args[1:]
+        think = int(wtime) / 1000 / 40 + int(winc) / 1000
         start = time.time()
-        for _depth, move, score in searcher.search(hist[-1], hist):
-            if time.time() - start > 1:
+        best_move = None
+        for depth, move, score in Searcher().search(hist):
+            print(f"info depth {depth} score cp {score}")
+            if move is not None:
+                best_move = move
+            if think > 0 and time.time() - start > think * 0.8:
                 break
-
-        if score == MATE_UPPER:
-            print("Checkmate!")
-
-        # The black player moves from a rotated position, so we have to
-        # 'back rotate' the move before printing it.
-        print("My move:", render(119-move[0]) + render(119-move[1]))
-        hist.append(hist[-1].move(move))
-
-
-if __name__ == '__main__':
-    main()
+        move_str = render_move(best_move, white_pov=len(hist) % 2 == 1)
+        print("bestmove", move_str)
 
