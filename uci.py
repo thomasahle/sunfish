@@ -97,10 +97,11 @@ def main():
             #  default options
             depth = 1000
             movetime = -1
+            our_time = opp_time = -1
 
             _, *params = smove.split(' ')
             for param, val in zip(*2*(iter(params),)):
-                if param == 'depth':
+                if param == 'depth' or param == 'mate':
                     depth = int(val)
                 if param == 'movetime':
                     movetime = int(val)
@@ -110,6 +111,9 @@ def main():
                     opp_time = int(val)
 
             moves_remain = 40
+            if our_time > -1:
+                movetime = our_time / moves_remain
+                # TODO: Support inc
 
             start = time.time()
             ponder = None
@@ -127,9 +131,6 @@ def main():
                     ponder = moves[1]
 
                 if movetime > 0 and (time.time() - start) * 1000 > movetime:
-                    break
-
-                if (time.time() - start) * 1000 > our_time/moves_remain:
                     break
 
                 if sdepth >= depth:
