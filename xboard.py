@@ -124,8 +124,7 @@ def main():
                     print('{:>3} {:>8} {:>8} {:>13} \t{}'.format(
                         ply, score, used_ms, searcher.nodes, moves))
                     print('# {} n/s'.format(round(searcher.nodes/seconds)))
-                    print('# Hashfull: {:.3f}%; {} <= score < {}'.format(
-                        len(searcher.tp_score)/sunfish.TABLE_SIZE*100, entry.lower, entry.upper))
+                    # print('# Hashfull: {:.3f}%; {} <= score < {}'.format( len(searcher.tp_score)/sunfish.TABLE_SIZE*100, entry.lower, entry.upper))
                 # If found mate, just stop
                 if entry.lower >= sunfish.MATE_UPPER:
                     break
