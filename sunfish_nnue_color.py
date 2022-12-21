@@ -31,7 +31,8 @@ pst["."] = [[0]*L0] * 120
 # King value is set to twice this value such that if the opponent is
 # 8 queens up, but we got the king, we still exceed MATE_VALUE.
 MATE = 100000
-pst['K'][:, 0] += MATE
+pst['K'][:, 0] += MATE//2
+pst['k'][:, 0] -= MATE//2
 MATE_LOWER = MATE // 2
 MATE_UPPER = MATE * 3//2
 
