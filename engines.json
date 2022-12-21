@@ -1,13 +1,21 @@
 [
    {
       "name": "sunfish",
-      "command": "sunfish.sh",
-      "protocol": "xboard"
+      "command": "./sunfish.sh",
+      "protocol": "xboard",
+      "stderrFile": "sunfish.err"
    },
    {
       "name": "sunfish-nnue",
       "command": "sunfish_nnue.sh",
-      "protocol": "uci"
+      "protocol": "uci",
+      "stderrFile": "nnue.err"
+   },
+   {
+      "name": "sunfish-nnue-color",
+      "command": "sunfish_nnue_color.sh",
+      "protocol": "uci",
+      "stderrFile": "color.err"
    },
    {
       "name": "sf",
