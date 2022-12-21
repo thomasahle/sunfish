@@ -36,8 +36,8 @@ def main():
     sys.stdout = tools.Unbuffered(sys.stdout)
 
     now = datetime.now()
-    path = 'sunfish-' + now.strftime("%d:%m:%Y-%H:%M:%S:%f") + '.log'
-    sys.stderr = open(path, 'a')
+    # path = 'sunfish-' + now.strftime("%d:%m:%Y-%H:%M:%S:%f") + '.log'
+    # sys.stderr = open(path, 'a')
 
     pos = tools.parseFEN(tools.FEN_INITIAL)
     searcher = sunfish.Searcher()
