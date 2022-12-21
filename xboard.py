@@ -15,8 +15,6 @@ from datetime import datetime
 import tools
 from tools import WHITE, BLACK
 
-print('test 2')
-
 # Python 2 compatability
 if sys.version_info[0] == 2:
     input = raw_input
@@ -75,7 +73,7 @@ def main():
             print('feature variants="normal"')
             print('feature option="qs_limit -spin {} -100 1000"'.format(sunfish.QS_LIMIT))
             print('feature option="eval_roughness -spin {} 1 1000"'.format(sunfish.EVAL_ROUGHNESS))
-            print('feature option="draw_test -spin {} 0 1"'.format(int(sunfish.DRAW_TEST)))
+            #print('feature option="draw_test -spin {} 0 1"'.format(int(sunfish.DRAW_TEST)))
             print('feature done=1')
 
         elif smove == 'new':
