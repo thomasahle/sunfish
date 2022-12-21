@@ -193,8 +193,8 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
     def move(self, move):
         put = lambda pos, i, p: pos._replace(
             board=pos.board[:i] + p + pos.board[i + 1 :],
-            wf=pos.wf + pst[p][i] - pst[q := pos.board[i]][i],
-            bf=pos.bf + pst[p.swapcase()][119 - i] - pst[q.swapcase()][119 - i],
+            wf=pos.wf + pst[p][i] - pst[pos.board[i]][i],
+            bf=pos.bf + pst[p.swapcase()][119 - i] - pst[pos.board[i].swapcase()][119 - i],
         )
 
         i, j, pr = move
@@ -525,113 +525,128 @@ def main():
     hist = [pos0]
     searcher = Searcher()
     while True:
-        match input().split():
-            case ["uci"]:
-                print("id name Sunfish NNUE")
-                print(f"option name EVAL_ROUGHNESS type spin default {EVAL_ROUGHNESS} min 1 max 100")
-                print("uciok", flush=True)
+        args = input().split()
+        if args[0] == "uci":
+            print("id name Sunfish NNUE")
+            print(f"option name EVAL_ROUGHNESS type spin default {EVAL_ROUGHNESS} min 1 max 100")
+            print("uciok", flush=True)
 
-            case ["isready"]:
-                print("readyok")
+        elif args[0] == "isready":
+            print("readyok")
 
-            case ["debug", on_off]:
-                debug = on_off == 'on'
+        elif args[0] == "debug":
+            debug = args[1] == 'on'
 
-            case ["ucinewgame"]:
-                hist = [pos0]
-            case ["setoption", "name", uci_key, "value", uci_value]:
-                globals()[uci_key] = int(uci_value)
-                # print(f'Now {QS_LIMIT=}')
+        elif args[0] == "ucinewgame":
+            hist = [pos0]
 
-            # FEN support is just for testing. Remove before TCEC
-            case ["position", "fen", *fen]:
-                board, color, castling, enpas, _hclock, _fclock = fen
-                board = re.sub(r"\d", (lambda m: "." * int(m.group(0))), board)
-                board = list(21 * " " + "  ".join(board.split("/")) + 21 * " ")
-                board[9::10] = ["\n"] * 12
-                board = "".join(board)
-                wc = ("Q" in castling, "K" in castling)
-                bc = ("k" in castling, "q" in castling)
-                ep = parse(enpas) if enpas != "-" else 0
-                wf, bf = features(board)
-                pos = Position(board, 0, wf, bf, wc, bc, ep, 0)
-                pos = pos._replace(score=pos.compute_value())
-                if color == "w":
-                    hist = [pos]
-                else:
-                    hist = [pos, pos.rotate()]
-                if debug:
-                    print(hist[-1].board)
-                    print(hist[-1].compute_value(verbose=True))
+        # case ["setoption", "name", uci_key, "value", uci_value]:
+        elif args[0] == "setoption":
+            _, uci_key, _, uci_value = args[1:]
+            globals()[uci_key] = int(uci_value)
 
-            case ["position", "startpos", *moves]:
-                # print('New position with moves', moves)
-                hist = [pos0]
-                for i, move in enumerate(moves[1:]):
-                    a, b, prom = parse(move[:2]), parse(move[2:4]), move[4:].upper()
-                    if i % 2 == 1:
-                        a, b = 119 - a, 119 - b
-                    hist.append(hist[-1].move(Move(a, b, prom)))
-                if debug:
-                    print(hist[-1].board)
-                    print(hist[-1].compute_value())
+        # FEN support is just for testing. Remove before TCEC
+        # case ["position", "fen", *fen]:
+        elif args[:2] == ["position", "fen"]:
+            fen = args[2:]
+            board, color, castling, enpas, _hclock, _fclock = fen
+            board = re.sub(r"\d", (lambda m: "." * int(m.group(0))), board)
+            board = list(21 * " " + "  ".join(board.split("/")) + 21 * " ")
+            board[9::10] = ["\n"] * 12
+            board = "".join(board)
+            wc = ("Q" in castling, "K" in castling)
+            bc = ("k" in castling, "q" in castling)
+            ep = parse(enpas) if enpas != "-" else 0
+            wf, bf = features(board)
+            pos = Position(board, 0, wf, bf, wc, bc, ep, 0)
+            pos = pos._replace(score=pos.compute_value())
+            if color == "w":
+                hist = [pos]
+            else:
+                hist = [pos, pos.rotate()]
+            if debug:
+                print(hist[-1].board)
+                print(hist[-1].compute_value(verbose=True))
 
-            case ["quit"]:
-                break
+        #case ["position", "startpos", *moves]:
+        elif args[:2] == ["position", "startpos"]:
+            moves = args[2:]
+            hist = [pos0]
+            for i, move in enumerate(moves[1:]):
+                a, b, prom = parse(move[:2]), parse(move[2:4]), move[4:].upper()
+                if i % 2 == 1:
+                    a, b = 119 - a, 119 - b
+                hist.append(hist[-1].move(Move(a, b, prom)))
+            if debug:
+                print(hist[-1].board)
+                print(hist[-1].compute_value())
 
-            case ["go", *args]:
-                match args:
-                    case ['movetime', movetime]:
-                        think = int(movetime) / 1000
-                    case ['wtime', wtime, 'btime', btime, 'winc', winc, 'binc', binc]:
-                        think = int(wtime) / 1000 / 40 + int(winc) / 1000
-                    case []:
-                        think = 24 * 3600
-                    case ['depth', max_depth]:
-                        think = -1
-                        max_depth = int(max_depth)
-                    case ['mate', max_depth]:
-                        for i in range(int(max_depth)):
-                            searcher = Searcher() # Need to clear stuff
-                            score = searcher.bound(hist[-1], MATE_LOWER, i+1, root=True)
-                            move = searcher.tp_move.get(hist[-1].hash())
-                            move_str = render_move(move, white_pov=len(hist)%2==1)
-                            print("info", "score cp", score, "pv", move_str)
-                            if score >= MATE_LOWER:
-                                break
-                        print("bestmove", move_str, "score cp", score)
+        #case ["quit"]:
+        elif args[0] == "quit":
+            break
+
+        # case ["go", *args]:
+        elif args[0] == "go":
+            # case ['movetime', movetime]:
+            if args[1] == "movetime":
+                movetime = args[2]
+                think = int(movetime) / 1000
+            # case ['wtime', wtime, 'btime', btime, 'winc', winc, 'binc', binc]:
+            elif args[1] == "wtime":
+                _, wtime, _, btime, _, winc, _, binc = args[1:]
+                think = int(wtime) / 1000 / 40 + int(winc) / 1000
+            #case ['depth', max_depth]:
+            elif args[1] == 'depth':
+                max_depth = args[2]
+                think = -1
+                max_depth = int(max_depth)
+            #case ['mate', max_depth]:
+            elif args[1] == 'mate':
+                max_depth = args[2]
+                for i in range(int(max_depth)):
+                    searcher = Searcher() # Need to clear stuff
+                    score = searcher.bound(hist[-1], MATE_LOWER, i+1, root=True)
+                    move = searcher.tp_move.get(hist[-1].hash())
+                    move_str = render_move(move, white_pov=len(hist)%2==1)
+                    print("info", "score cp", score, "pv", move_str)
+                    if score >= MATE_LOWER:
+                        break
+                print("bestmove", move_str, "score cp", score)
+                continue
+            #case []:
+            else:
+                think = 24 * 3600
+            if debug:
+                print(f"I want to think for {think} seconds.")
+            start = time.time()
+            try:
+                for depth, move, score, is_lower in searcher.search(hist):
+                    if think < 0 and depth == max_depth and is_lower is None:
+                        break
+                    if move is None:
                         continue
-                if debug:
-                    print(f"I want to think for {think} seconds.")
-                start = time.time()
-                try:
-                    for depth, move, score, is_lower in searcher.search(hist):
-                        if think < 0 and depth == max_depth and is_lower is None:
-                            break
-                        if move is None:
-                            continue
-                        move_str = render_move(move, white_pov=len(hist)%2==1)
-                        elapsed = time.time() - start
-                        print(
-                            "info depth",
-                            depth,
-                            "score cp",
-                            score,
-                            "" if is_lower is None else ("lowerbound" if is_lower else "upperbound"),
-                            "time",
-                            int(1000 * elapsed),
-                            "nodes",
-                            searcher.nodes,
-                            "pv",
-                            move_str,
-                        )
-                        if think > 0 and time.time() - start > think * 2 / 3:
-                            break
-                except KeyboardInterrupt:
-                    continue
-                if debug:
-                    print(f"Stopped thinking after {round(elapsed,3)} seconds")
-                print("bestmove", move_str, 'score cp', score)
+                    move_str = render_move(move, white_pov=len(hist)%2==1)
+                    elapsed = time.time() - start
+                    print(
+                        "info depth",
+                        depth,
+                        "score cp",
+                        score,
+                        "" if is_lower is None else ("lowerbound" if is_lower else "upperbound"),
+                        "time",
+                        int(1000 * elapsed),
+                        "nodes",
+                        searcher.nodes,
+                        "pv",
+                        move_str,
+                    )
+                    if think > 0 and time.time() - start > think * 2 / 3:
+                        break
+            except KeyboardInterrupt:
+                continue
+            if debug:
+                print(f"Stopped thinking after {round(elapsed,3)} seconds")
+            print("bestmove", move_str, 'score cp', score)
 
 
 if __name__ == "__main__":
