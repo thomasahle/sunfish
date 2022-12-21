@@ -33,8 +33,8 @@ pst["."] = [[0]*L0] * 120
 MATE = 100000
 # Since move ordering uses the lower-case version, we need to include the
 # mate score in it, since otherwise we wouldn't find checks in QS search.
-pst['K'][:, 0] += MATE
-#pst['k'][:, 0] -= MATE//2
+pst['K'][:, 0] += MATE//2
+pst['k'][:, 0] -= MATE//2
 MATE_LOWER = MATE // 2
 MATE_UPPER = MATE * 3//2
 
@@ -268,10 +268,8 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
         # only. Well, captures plus promotions.
         return (
             self.board[move.j] != "."
-            or move.j == self.ep
             or abs(move.j - self.kp) < 2
-            or self.board[move.i] == "P"
-            and A8 <= move.j <= H8
+            or self.board[move.i] == "P" and (A8 <= move.j <= H8 or move.j == self.ep)
         )
 
     def compute_value(self, verbose=False):
