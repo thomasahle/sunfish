@@ -160,9 +160,11 @@ class Selfplay(Command):
                 print('Resigned')
                 break
             print(
-                    f"{board.fullmove_number}{'..' if board.turn == chess.BLACK else '.'}",
-                    board.san(result.move),
-                    f"wtime={round(wtime,1)}, btime={round(btime,1)}")
+                f"{board.fullmove_number}{'..' if board.turn == chess.BLACK else '.'}",
+                board.san(result.move),
+                f"wtime={round(wtime,1)}, btime={round(btime,1)}",
+                #f"score={result.score}"
+                )
             board.push(result.move)
 
 

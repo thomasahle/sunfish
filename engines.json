@@ -1,8 +1,8 @@
 [
    {
       "name": "sunfish",
-      "command": "./sunfish.sh",
-      "protocol": "xboard",
+      "command": "sunfish_uci.sh",
+      "protocol": "uci",
       "stderrFile": "sunfish.err"
    },
    {
@@ -16,6 +16,12 @@
       "command": "sunfish_nnue_color.sh",
       "protocol": "uci",
       "stderrFile": "color.err"
+   },
+   {
+      "name": "sunfish-king",
+      "command": "./sunfish_king.sh",
+      "protocol": "uci",
+      "stderrFile": "king.err"
    },
    {
       "name": "sf",
