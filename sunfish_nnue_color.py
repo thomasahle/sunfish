@@ -610,10 +610,11 @@ def main():
             # case ['wtime', wtime, 'btime', btime, 'winc', winc, 'binc', binc]:
             elif args[1] == "wtime":
                 _, wtime, _, btime, _, winc, _, binc = args[1:]
+                wtime, btime, winc, binc = int(wtime), int(btime), int(winc), int(binc)
                 # We always consider ourselves white, but UCI doesn't
                 if len(hist) % 2 == 0:
                     wtime, winc = btime, binc
-                think = int(wtime) / 1000 / 40 + int(winc) / 1000
+                think = wtime / 1000 / 40 + winc / 1000
                 if think > wtime:
                     think = wtime/2
                 # Let's go fast for the first moves
