@@ -3,7 +3,7 @@
 
 import re, sys, time, pickle
 from itertools import count, product
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 import numpy as np
 
 ###############################################################################
@@ -255,6 +255,7 @@ class Searcher:
         self.tp_score = {}
         self.tp_move = {}
         self.history = set()
+        self.hist_move = defaultdict(int)
         self.nodes = 0
 
     def bound(self, pos, gamma, depth, root=True):
@@ -307,7 +308,9 @@ class Searcher:
             if killer and (depth > 0 or pos.is_capture(killer)):
                 yield killer, -self.bound(pos.move(killer), 1-gamma, depth-1, root=False)
             # Then all the other moves
-            for move in sorted(pos.gen_moves(), key=pos.value, reverse=True):
+            def combined(move):
+                return self.hist_move[move] + pos.value(move)
+            for move in sorted(pos.gen_moves(), key=combined, reverse=True):
                 # If depth == 0 we only try moves with high intrinsic score (captures and
                 # promotions). Otherwise we do all moves.
                 # if depth > 0 or pos.value(move) >= QS_LIMIT:
@@ -321,6 +324,7 @@ class Searcher:
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
                 self.tp_move[pos] = move
+                #self.hist_move[move] += depth**2
                 break
 
         # Stalemate checking is a bit tricky: Say we failed low, because
@@ -345,6 +349,7 @@ class Searcher:
         if best < gamma:
             self.tp_score[pos, depth, root] = Entry(entry.lower, best)
 
+        self.hist_move[self.tp_move.get(pos)] += depth**2
         return best
 
     def search(self, history):
@@ -418,11 +423,12 @@ while True:
             think = int(wtime) / 1000 / 40 + int(winc) / 1000
             think = min(think, int(wtime)/2)
         else:
-            think = 1
+            think = 2
         start = time.time()
         best_move = None
-        for depth, move, score in Searcher().search(hist):
-            print(f"info depth {depth} score cp {score}")
+        searcher = Searcher()
+        for depth, move, score in searcher.search(hist):
+            print(f"info depth {depth} score cp {score} nodes {searcher.nodes}")
             if move is not None:
                 best_move = move
             if think > 0 and time.time() - start > think * 0.8:
