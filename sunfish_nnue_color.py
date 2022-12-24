@@ -276,6 +276,8 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
 
     def compute_value(self, verbose=False):
         #relu6 = lambda x: np.minimum(np.maximum(x, 0), 6)
+        # TODO: We can maybe speed this up using a fixed `out` array,
+        # as well as using .dot istead of @.
         relu6 = np.tanh
         wf, bf = self.wf, self.bf
         # Pytorch matrices are in the shape (out_features, in_features)

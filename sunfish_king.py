@@ -1,74 +1,52 @@
 #!/usr/bin/env pypy
 # -*- coding: utf-8 -*-
 
-import re, sys, time
-from itertools import count
+import re, sys, time, pickle
+from itertools import count, product
 from collections import namedtuple
+import numpy as np
 
 ###############################################################################
-# Piece-Square tables. Tune these to change sunfish's behaviour
+# Load and expand the Piece-Square tables.
 ###############################################################################
 
-# With xz compression this whole section takes 652 bytes.
-# That's pretty good given we have 64*6 = 384 values.
-# Though probably we could do better...
-# For one thing, they could easily all fit into int8.
-piece = { 'P': 100, 'N': 280, 'B': 320, 'R': 479, 'Q': 929, 'K': 60000 }
-pst = {
-    'P': (   0,   0,   0,   0,   0,   0,   0,   0,
-            78,  83,  86,  73, 102,  82,  85,  90,
-             7,  29,  21,  44,  40,  31,  44,   7,
-           -17,  16,  -2,  15,  14,   0,  15, -13,
-           -26,   3,  10,   9,   6,   1,   0, -23,
-           -22,   9,   5, -11, -10,  -2,   3, -19,
-           -31,   8,  -7, -37, -36, -14,   3, -31,
-             0,   0,   0,   0,   0,   0,   0,   0),
-    'N': ( -66, -53, -75, -75, -10, -55, -58, -70,
-            -3,  -6, 100, -36,   4,  62,  -4, -14,
-            10,  67,   1,  74,  73,  27,  62,  -2,
-            24,  24,  45,  37,  33,  41,  25,  17,
-            -1,   5,  31,  21,  22,  35,   2,   0,
-           -18,  10,  13,  22,  18,  15,  11, -14,
-           -23, -15,   2,   0,   2,   0, -23, -20,
-           -74, -23, -26, -24, -19, -35, -22, -69),
-    'B': ( -59, -78, -82, -76, -23,-107, -37, -50,
-           -11,  20,  35, -42, -39,  31,   2, -22,
-            -9,  39, -32,  41,  52, -10,  28, -14,
-            25,  17,  20,  34,  26,  25,  15,  10,
-            13,  10,  17,  23,  17,  16,   0,   7,
-            14,  25,  24,  15,   8,  25,  20,  15,
-            19,  20,  11,   6,   7,   6,  20,  16,
-            -7,   2, -15, -12, -14, -15, -10, -10),
-    'R': (  35,  29,  33,   4,  37,  33,  56,  50,
-            55,  29,  56,  67,  55,  62,  34,  60,
-            19,  35,  28,  33,  45,  27,  25,  15,
-             0,   5,  16,  13,  18,  -4,  -9,  -6,
-           -28, -35, -16, -21, -13, -29, -46, -30,
-           -42, -28, -42, -25, -25, -35, -26, -46,
-           -53, -38, -31, -26, -29, -43, -44, -53,
-           -30, -24, -18,   5,  -2, -18, -31, -32),
-    'Q': (   6,   1,  -8,-104,  69,  24,  88,  26,
-            14,  32,  60, -10,  20,  76,  57,  24,
-            -2,  43,  32,  60,  72,  63,  43,   2,
-             1, -16,  22,  17,  25,  20, -13,  -6,
-           -14, -15,  -2,  -5,  -1, -10, -20, -22,
-           -30,  -6, -13, -11, -16, -11, -16, -27,
-           -36, -18,   0, -19, -15, -15, -21, -38,
-           -39, -30, -31, -13, -31, -36, -34, -42),
-    'K': (   4,  54,  47, -99, -99,  60,  83, -62,
-           -32,  10,  55,  56,  56,  55,  10,   3,
-           -62,  12, -57,  44, -67,  28,  37, -31,
-           -55,  50,  11,  -4, -19,  13,   0, -49,
-           -55, -43, -52, -28, -51, -47,  -8, -50,
-           -47, -42, -43, -79, -64, -32, -29, -32,
-            -4,   3, -14, -50, -57, -18,  13,   4,
-            17,  30,  -3, -14,   6,  -1,  40,  18),
-}
-# Pad tables and join piece and pst dictionaries
-for k, table in pst.items():
-    padrow = lambda row: (0,) + tuple(x+piece[k] for x in row) + (0,)
-    pst[k] = sum((padrow(table[i*8:i*8+8]) for i in range(8)), ())
-    pst[k] = (0,)*20 + pst[k] + (0,)*20
+ars, scale = pickle.load(open(sys.argv[1], "br"))
+# emb(64, c), pieces(c, c, 6), comb(c, c, c, 1)
+emb, pieces, comb = [np.frombuffer(ar, dtype=np.int8) / 127 for ar in ars]
+#import matplotlib.pyplot as plt
+#for b in emb.reshape(64,8).T.reshape(8,8,8):
+#    plt.imshow(b)
+#    plt.show()
+emb, pieces, comb = emb.reshape(8,8,8), pieces.reshape(8,8,6), comb.reshape(8,8,8)
+
+#emb = emb.reshape(64,8)
+#test = 0
+#wk, bk = 4, 60
+#for i, p in enumerate('RNBQKBNR'+'P'*8):
+#    p = 'PNBRQK'.find(p)
+#    w = np.einsum('dwb,dc,c,w,b->', comb, pieces[:,:,p], emb[i], emb[wk], emb[bk])
+#    print(i, p, w)
+#    test += w
+#print(test)
+#emb = emb.reshape(8,8,8)
+
+# Pad to use 12x10 notation
+emb = np.pad(emb[::-1], ((2,2),(1,1),(0,0))).reshape(120,8)
+pst = np.einsum('sc,dcp,def,we,bf->wbps', emb, pieces, comb, emb, emb, optimize=True)
+pst = (360 * scale * pst).round().astype(int)
+#pst = scale * pst
+
+# The king is worth a lot, to make mates visible
+pst[:,:,5,:] += 10**5
+# Mate values will be be around that value
+max_val = pst[:,:,:5,:].max()
+MATE_LOWER = pst[:,:,5,:].min() - 16 * max_val
+MATE_UPPER = pst[:,:,5,:].max() + 16 * max_val
+print(f'{MATE_LOWER=}, {MATE_UPPER=}')
+
+# We want to access the piece types using their letter
+kpst = [[dict(zip('PNBRQK', pst[wk,bk])) for bk in range(120)] for wk in range(120)]
+
 
 ###############################################################################
 # Global constants
@@ -92,6 +70,23 @@ initial = (
     '         \n'  # 110 -119
 )
 
+def calc_score(board, wk, bk):
+    # print(board, wk, bk)
+    w = sum(kpst[wk][bk][p][k] for k, p in enumerate(board) if p.isupper())
+    b = sum(kpst[119-bk][119-wk][p.upper()][119-k] for k, p in enumerate(board) if p.islower())
+    return w - b
+wk, bk = initial.find('K'), initial.find('k')
+#print(f'{wk=}, {bk=}')
+#print('first score', calc_score(initial, wk, bk))
+#print('rot score', calc_score(initial[::-1].swapcase(), 119-bk, 119-wk))
+def flip(board):
+    top = '         \n'*2
+    mid = ''.join(' '+row+'\n' for row in board.split()[::-1])
+    return top + mid + top
+#print(calc_score('\n'.join(initial.split('\n')[::-1]).swapcase(), 119-bk, 119-wk))
+#print('flip score', calc_score(flip(initial).swapcase(), 119-bk, 119-wk))
+
+
 # Lists of possible moves for each piece type.
 N, E, S, W = -10, 1, 10, -1
 directions = {
@@ -102,14 +97,6 @@ directions = {
     'Q': (N, E, S, W, N+E, S+E, S+W, N+W),
     'K': (N, E, S, W, N+E, S+E, S+W, N+W)
 }
-
-# Mate value must be greater than 8*queen + 2*(rook+knight+bishop)
-# King value is set to twice this value such that if the opponent is
-# 8 queens up, but we got the king, we still exceed MATE_VALUE.
-# When a MATE is detected, we'll set the score to MATE_UPPER - plies to get there
-# E.g. Mate in 3 will be MATE_UPPER - 6
-MATE_LOWER = piece['K'] - 10*piece['Q']
-MATE_UPPER = piece['K'] + 10*piece['Q']
 
 # Constants for tuning search
 QS_LIMIT = 219
@@ -123,10 +110,12 @@ EVAL_ROUGHNESS = 13
 
 Move = namedtuple("Move", "i j prom")
 
-class Position(namedtuple('Position', 'board score wc bc ep kp')):
+class Position(namedtuple('Position', 'board score wk bk wc bc ep kp')):
     """ A state of a chess game
     board -- a 120 char representation of the board
     score -- the board evaluation
+    wk -- position of white/our king
+    bk -- position of black/opponent king
     wc -- the castling rights, [west/queen side, east/king side]
     bc -- the opponent castling rights, [west/king side, east/queen side]
     ep - the en passant square
@@ -163,27 +152,24 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
                     if i == A1 and self.board[j+E] == 'K' and self.wc[0]: yield Move(j+E, j+W, '')
                     if i == H1 and self.board[j+W] == 'K' and self.wc[1]: yield Move(j+W, j+E, '')
 
-    def rotate(self):
-        ''' Rotates the board, preserving enpassant '''
-        return Position(
-            self.board[::-1].swapcase(), -self.score, self.bc, self.wc,
-            119-self.ep if self.ep else 0,
-            119-self.kp if self.kp else 0)
-
-    def nullmove(self):
-        ''' Like rotate, but clears ep and kp '''
-        return Position(
+    def rotate(self, nullmove=False):
+        ''' Rotates the board, preserving enpassant, unless nullmove '''
+        pos1 = Position(
             self.board[::-1].swapcase(), -self.score,
-            self.bc, self.wc, 0, 0)
+            119-self.bk, 119-self.wk, self.bc, self.wc,
+            119-self.ep if self.ep and not nullmove else 0,
+            119-self.kp if self.kp and not nullmove else 0)
+        # new_score = calc_score(pos1.board, pos1.wk, pos1.bk)
+        # assert new_score == pos1.score, (new_score, pos1.score)
+        return pos1
 
     def move(self, move):
         i, j, prom = move
-        p, q = self.board[i], self.board[j]
         put = lambda board, i, p: board[:i] + p + board[i+1:]
         # Copy variables and reset ep and kp
-        board = self.board
-        wc, bc, ep, kp = self.wc, self.bc, 0, 0
-        score = self.score + self.value(move)
+        board, score, wk, bk, wc, bc, ep, kp = self
+        ep, kp = 0, 0
+        p, q = board[i], board[j]
         # Actual move
         board = put(board, j, board[i])
         board = put(board, i, '.')
@@ -208,29 +194,45 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
             if j == self.ep:
                 board = put(board, j+S, '.')
         # We rotate the returned position, so it's ready for the next player
-        return Position(board, score, wc, bc, ep, kp).rotate()
+        if p != 'K':
+            score = self.score + self.value(move)
+        else:
+            wk = j
+            score = calc_score(board, wk, bk)
+        # if score != calc_score(board, wk, bk):
+        #     print('Move:', move)
+        #     print('Old board, score =', self.score)
+        #     print(self.board)
+        #     print('New board, score', score, calc_score(board,wk,bk))
+        #     print(board)
+        return Position(board, score, wk, bk, wc, bc, ep, kp).rotate()
 
     def value(self, move):
+        """ Returns the value change to the position after applying the move.
+            Except it doesn't recompute when the king moves. """
+        # Look up current pst for both players
+        wpst, bpst = kpst[self.wk][self.bk], kpst[119-self.bk][119-self.wk]
         i, j, prom = move
         p, q = self.board[i], self.board[j]
-        # Actual move
-        score = pst[p][j] - pst[p][i]
-        # Capture
+        # Actual move: Remove score from old location, and add for new location
+        score = wpst[p][j] - wpst[p][i]
+        # If capture, remove opponent piece
         if q.islower():
-            score += pst[q.upper()][119-j]
-        # Castling check detection
-        if abs(j-self.kp) < 2:
-            score += pst['K'][119-j]
+            score += bpst[q.upper()][119-j]
+        # Castling check detection. Only check in elif, since otherwise
+        # we might capture the king twice(!)
+        elif abs(j-self.kp) < 2:
+            # Now we actually know where the opponent king is hiding!
+            score += bpst['K'][119-self.bk]
         # Castling
         if p == 'K' and abs(i-j) == 2:
-            score += pst['R'][(i+j)//2]
-            score -= pst['R'][A1 if j < i else H1]
+            score += wpst['R'][(i+j)//2] - wpst['R'][A1 if j < i else H1]
         # Special pawn stuff
         if p == 'P':
             if A8 <= j <= H8:
-                score += pst[prom][j] - pst['P'][j]
+                score += wpst[prom][j] - wpst['P'][j]
             if j == self.ep:
-                score += pst['P'][119-(j+S)]
+                score += bpst['P'][119-(j+S)]
         return score
 
 ###############################################################################
@@ -283,7 +285,7 @@ class Searcher:
             # First try not moving at all. We only do this if there is at least one major
             # piece left on the board, since otherwise zugzwangs are too dangerous.
             if depth > 2 and not root and any(c in pos.board for c in 'RBNQ'):
-                yield None, -self.bound(pos.nullmove(), 1-gamma, depth-3, root=False)
+                yield None, -self.bound(pos.rotate(nullmove=True), 1-gamma, depth-3, root=False)
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else.
             if depth == 0:
@@ -324,7 +326,7 @@ class Searcher:
         if best < gamma and best < 0 and depth > 0:
             is_dead = lambda pos: any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
             if all(is_dead(pos.move(m)) for m in pos.gen_moves()):
-                in_check = is_dead(pos.nullmove())
+                in_check = is_dead(pos.rotate(nullmove=True))
                 best = -MATE_UPPER if in_check else 0
 
         # Table part 2
@@ -372,7 +374,6 @@ def render(i):
     rank, fil = divmod(i - A1, 10)
     return chr(fil + ord("a")) + str(-rank + 1)
 
-
 def render_move(move, white_pov):
     if move is None:
         return '0000'
@@ -381,7 +382,7 @@ def render_move(move, white_pov):
         i, j = 119 - i, 119 - j
     return render(i) + render(j) + move.prom.lower()
 
-hist = [Position(initial, 0, (True,True), (True,True), 0, 0)]
+hist = [Position(initial, calc_score(initial, 95, 25), 95, 25, (True,True), (True,True), 0, 0)]
 while True:
     args = input().split()
     if args[0] == "uci":
@@ -402,8 +403,12 @@ while True:
             hist.append(hist[-1].move(Move(i, j, prom)))
 
     elif args[0] == "go":
-        _, wtime, _, btime, _, winc, _, binc = args[1:]
-        think = int(wtime) / 1000 / 40 + int(winc) / 1000
+        if not args[1:]:
+            think = 1000
+        else:
+            _, wtime, _, btime, _, winc, _, binc = args[1:]
+            think = int(wtime) / 1000 / 40 + int(winc) / 1000
+            think = min(think, int(wtime)/2)
         start = time.time()
         best_move = None
         for depth, move, score in Searcher().search(hist):
