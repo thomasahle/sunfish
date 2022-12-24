@@ -235,6 +235,14 @@ class Position(namedtuple('Position', 'board score wk bk wc bc ep kp')):
                 score += bpst['P'][119-(j+S)]
         return score
 
+    def is_capture(self, move):
+        # We can get rid of this again later when we've tuned QS. Maybe.
+        return (
+            self.board[move.j] != "."
+            or abs(move.j - self.kp) < 2
+            or self.board[move.i] == "P" and (A8 <= move.j <= H8 or move.j == self.ep)
+        )
+
 ###############################################################################
 # Search logic
 ###############################################################################
@@ -295,13 +303,15 @@ class Searcher:
             # before. Also note that in QS the killer must be a capture, otherwise we
             # will be non deterministic.
             killer = self.tp_move.get(pos)
-            if killer and (depth > 0 or pos.value(killer) >= QS_LIMIT):
+            #if killer and (depth > 0 or pos.value(killer) >= QS_LIMIT):
+            if killer and (depth > 0 or pos.is_capture(killer)):
                 yield killer, -self.bound(pos.move(killer), 1-gamma, depth-1, root=False)
             # Then all the other moves
             for move in sorted(pos.gen_moves(), key=pos.value, reverse=True):
                 # If depth == 0 we only try moves with high intrinsic score (captures and
                 # promotions). Otherwise we do all moves.
-                if depth > 0 or pos.value(move) >= QS_LIMIT:
+                # if depth > 0 or pos.value(move) >= QS_LIMIT:
+                if depth > 0 or pos.is_capture(move):
                     yield move, -self.bound(pos.move(move), 1-gamma, depth-1, root=False)
 
         # Run through the moves, shortcutting when possible
@@ -403,12 +413,12 @@ while True:
             hist.append(hist[-1].move(Move(i, j, prom)))
 
     elif args[0] == "go":
-        if not args[1:]:
-            think = 1000
-        else:
+        if len(args) == 9:
             _, wtime, _, btime, _, winc, _, binc = args[1:]
             think = int(wtime) / 1000 / 40 + int(winc) / 1000
             think = min(think, int(wtime)/2)
+        else:
+            think = 1
         start = time.time()
         best_move = None
         for depth, move, score in Searcher().search(hist):

@@ -3,6 +3,8 @@
 # Sunfish files
 *.log
 *.txt
+*.err
+*.pickle
 
 # C extensions
 *.so
