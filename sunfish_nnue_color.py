@@ -218,14 +218,10 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
         #     pos = pos._replace(castl=pos.castle - {j})
 
         # Castling rights, we move the rook or capture the opponent's
-        if i == A1:
-            pos = pos._replace(wc=(False, pos.wc[1]))
-        if i == H1:
-            pos = pos._replace(wc=(pos.wc[0], False))
-        if j == A8:
-            pos = pos._replace(bc=(pos.bc[0], False))
-        if j == H8:
-            pos = pos._replace(bc=(False, pos.bc[1]))
+        if i == A1: pos = pos._replace(wc=(False, pos.wc[1]))
+        if i == H1: pos = pos._replace(wc=(pos.wc[0], False))
+        if j == A8: pos = pos._replace(bc=(pos.bc[0], False))
+        if j == H8: pos = pos._replace(bc=(False, pos.bc[1]))
         # Capture the moving king. Actually we get an extra free king. Same thing.
         if abs(j - self.kp) < 2:
             pos = put(pos, self.kp, "K")
@@ -614,7 +610,15 @@ def main():
             # case ['wtime', wtime, 'btime', btime, 'winc', winc, 'binc', binc]:
             elif args[1] == "wtime":
                 _, wtime, _, btime, _, winc, _, binc = args[1:]
+                # We always consider ourselves white, but UCI doesn't
+                if len(hist) % 2 == 0:
+                    wtime, winc = btime, binc
                 think = int(wtime) / 1000 / 40 + int(winc) / 1000
+                if think > wtime:
+                    think = wtime/2
+                # Let's go fast for the first moves
+                if len(hist) < 3:
+                    think = min(think, 1)
             #case ['depth', max_depth]:
             elif args[1] == 'depth':
                 max_depth = args[2]
