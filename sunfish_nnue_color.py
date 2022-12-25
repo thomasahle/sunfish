@@ -14,6 +14,7 @@ L0, L1, L2 = 10, 10, 10
 model = pickle.load(open(sys.argv[1], "br"))
 # pos_emb, comb, piece_val, comb_col layers0-1
 nn = [np.frombuffer(ar, dtype=np.int8) / 127.0 for ar in model["ars"]]
+layer1, layer2 = nn[4].reshape(L2, 2 * L1 - 2), nn[5].reshape(1, L2)
 # Pad the position embedding to fit with our 10x12 board
 pad = np.pad(nn[0].reshape(8, 8, 6)[::-1], ((2, 2), (1, 1), (0, 0))).reshape(120, 6)
 # Combine piece table and pos table into one piece-square table
@@ -39,29 +40,25 @@ MATE_LOWER = MATE // 2
 MATE_UPPER = MATE * 3//2
 
 
-counters = [0] * 5
-
-
-def manual_wf(board):
-    wf = 0
-    for i, p in enumerate(board):
-        col = p.isupper()
-        ptyp = "PNBRQK".find(p.upper())
-        if p.isalpha():
-            mrank, fil = divmod(i - A1, 10)
-            sq = -mrank*8 + fil
-            sq_emb = nn[0].reshape(64, 6)[sq]
-            comb = nn[1].reshape(L1, 6, 6)[:, :, ptyp]
-            emb = comb @ sq_emb
-            col_comb = nn[3].reshape(L0, L0, 2)[:, :, 1-int(col)]
-            emb = col_comb @ emb
-            wf += emb
-    return wf
+#def manual_wf(board):
+#    wf = 0
+#    for i, p in enumerate(board):
+#        col = p.isupper()
+#        ptyp = "PNBRQK".find(p.upper())
+#        if p.isalpha():
+#            mrank, fil = divmod(i - A1, 10)
+#            sq = -mrank*8 + fil
+#            sq_emb = nn[0].reshape(64, 6)[sq]
+#            comb = nn[1].reshape(L1, 6, 6)[:, :, ptyp]
+#            emb = comb @ sq_emb
+#            col_comb = nn[3].reshape(L0, L0, 2)[:, :, 1-int(col)]
+#            emb = col_comb @ emb
+#            wf += emb
+#    return wf
 
 def features(board):
     wf = sum(pst[p][i] for i, p in enumerate(board) if p.isalpha())
-    man_wf = manual_wf(board)
-    #assert np.allclose(wf, man_wf)
+    #assert np.allclose(wf, manual_wf(board))
     bf = sum(pst[p.swapcase()][119 - i] for i, p in enumerate(board) if p.isalpha())
     return wf, bf
 
@@ -109,10 +106,10 @@ directions = {
 
 # Constants for tuning search
 EVAL_ROUGHNESS = 13
-QS_LIMIT = 200
-QS_CAPTURE, QS_SINGLE, QS_DOUBLE = range(3)
-QS_TYPE = QS_CAPTURE
-debug = False
+#QS_LIMIT = 200
+#QS_CAPTURE, QS_SINGLE, QS_DOUBLE = range(3)
+#QS_TYPE = QS_CAPTURE
+#debug = False
 
 
 ###############################################################################
@@ -182,15 +179,11 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
                         yield Move(j + W, j + E, "")
 
     def rotate(self, nullmove=False):
-        """Rotates the board, preserving enpassant.
-        A nullmove is nearly a rotate, but it always clear enpassant."""
+        # Rotates the board, preserving enpassant.
+        # A nullmove is nearly a rotate, but it always clear enpassant.
         pos = Position(
             self.board[::-1].swapcase(),
-            0,
-            self.bf,
-            self.wf,
-            self.bc,
-            self.wc,
+            0, self.bf, self.wf, self.bc, self.wc,
             0 if nullmove or not self.ep else 119 - self.ep,
             0 if nullmove or not self.kp else 119 - self.kp,
         )
@@ -270,20 +263,20 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
             or self.board[move.i] == "P" and (A8 <= move.j <= H8 or move.j == self.ep)
         )
 
-    def compute_value(self, verbose=False):
+    def compute_value(self):
         #relu6 = lambda x: np.minimum(np.maximum(x, 0), 6)
         # TODO: We can maybe speed this up using a fixed `out` array,
         # as well as using .dot istead of @.
-        relu6 = np.tanh
+        act = np.tanh
         wf, bf = self.wf, self.bf
         # Pytorch matrices are in the shape (out_features, in_features)
-        hidden = nn[4].reshape(L2, 2 * L1 - 2) @ relu6(np.concatenate([wf[1:], bf[1:]]))
-        score = nn[5].reshape(1, L2) @ relu6(hidden)
-        if verbose:
-            print(f"Score: {score + model['scale'] * (wf[0] - bf[0])}")
-            print(f"from model: {score}, pieces: {wf[0]-bf[0]}")
-            print(f"{wf=}")
-            print(f"{bf=}")
+        hidden = layer1 @ act(np.concatenate([wf[1:], bf[1:]]))
+        score = layer2 @ act(hidden)
+        #if verbose:
+        #    print(f"Score: {score + model['scale'] * (wf[0] - bf[0])}")
+        #    print(f"from model: {score}, pieces: {wf[0]-bf[0]}")
+        #    print(f"{wf=}")
+        #    print(f"{bf=}")
         return int((score + model["scale"] * (wf[0] - bf[0])) * 360)
 
     def hash(self):
@@ -383,22 +376,23 @@ class Searcher:
             # will be non deterministic.
             def mvv_lva(move):
                 # Need to make sure capturing the king is included
-                if abs(move.j - pos.kp) < 2:
-                    return -MATE
-                p, q = pos.board[move.i], pos.board[move.j]
-                # TODO: This currently doesn't include promotions
-                score = pst[q][move.j][0] - (pst[p][move.j][0] - pst[p][move.i][0])
-                if QS_TYPE == QS_DOUBLE:
-                    pp, qq = p.swapcase(), q.swapcase()
-                    score -= pst[qq][119-move.j][0] - (pst[pp][119-move.j][0] - pst[pp][119-move.i][0])
-                    score /= 2
+                # Well, only if we use this for stopping QS, not if we just 
+                # if abs(move.j - pos.kp) < 2:
+                #     return -MATE
+                i, j = move.i, move.j
+                p, q = pos.board[i], pos.board[j]
+                score = pst[q][j][0] - (pst[p][j][0] - pst[p][i][0])
+                pp, qq = p.swapcase(), q.swapcase()
+                score -= pst[qq][119-j][0] - (pst[pp][119-j][0] - pst[pp][119-i][0])
+                # score /= 2
                 return score
 
             if killer := self.tp_move.get(pos.hash()):
                 #if depth > 0 or -pos1.score - pos.score >= QS_LIMIT:
                 #if -mvv_lva(killer)*360 >= 30  - depth * 10:
                 #if depth > 0 or -mvv_lva(killer) >= QS_LIMIT/360:
-                if depth > 0 or (QS_TYPE == QS_CAPTURE and pos.is_capture(killer)) or (QS_TYPE != QS_CAPTURE and -mvv_lva(killer) >= QS_LIMIT/360):
+                if depth > 0 or pos.is_capture(killer):
+                #if depth > 0 or (QS_TYPE == QS_CAPTURE and pos.is_capture(killer)) or (QS_TYPE != QS_CAPTURE and -mvv_lva(killer) >= QS_LIMIT/360):
                 # if depth > 0 or pos.is_capture(killer):
                     pos1 = pos.move(killer)
                     yield killer, -self.bound(pos1, 1 - gamma, depth - 1, root=False)
@@ -426,10 +420,10 @@ class Searcher:
                 # If depth is 0 we only try moves with high intrinsic score (captures and
                 # promotions). Otherwise we do all moves.
                 #if depth > 0 or -pos1.score-pos.score >= QS_LIMIT:
-                #if depth > 0 or pos.is_capture(move):
+                if depth > 0 or pos.is_capture(move):
                 #print(mvv_lva(move)*360)
                 #if -mvv_lva(move)*360 >= 30  - depth * 10:
-                if depth > 0 or (QS_TYPE == QS_CAPTURE and pos.is_capture(move)) or (QS_TYPE != QS_CAPTURE and -mvv_lva(move) >= QS_LIMIT/360):
+                #if depth > 0 or (QS_TYPE == QS_CAPTURE and pos.is_capture(move)) or (QS_TYPE != QS_CAPTURE and -mvv_lva(move) >= QS_LIMIT/360):
                     pos1 = pos.move(move)
                     yield move, -self.bound(pos1, 1 - gamma, depth - 1, root=False)
 
@@ -501,9 +495,8 @@ class Searcher:
                     lower = score
                 if score < gamma:
                     upper = score
-                yield depth, self.tp_move.get(pos.hash()), score, score >= gamma
+                yield depth, self.tp_move.get(pos.hash()), score
                 gamma = (lower + upper + 1) // 2
-            yield depth, self.tp_move.get(pos.hash()), gamma, None
 
 
 ###############################################################################
@@ -515,161 +508,57 @@ def parse(c):
     fil, rank = ord(c[0]) - ord("a"), int(c[1]) - 1
     return A1 + fil - 10 * rank
 
-
 def render(i):
     rank, fil = divmod(i - A1, 10)
     return chr(fil + ord("a")) + str(-rank + 1)
 
 def render_move(move, white_pov):
-    if move is None:
-        return '0000'
     a, b = move.i, move.j
     if not white_pov:
         a, b = 119 - a, 119 - b
     return render(a) + render(b) + move.prom.lower()
 
-def main():
-    global debug
-    wf, bf = features(initial)
-    pos0 = Position(initial, 0, wf, bf, (True, True), (True, True), 0, 0)
-    pos0 = pos0._replace(score=pos0.compute_value(verbose=debug))
-    hist = [pos0]
-    searcher = Searcher()
-    while True:
-        args = input().split()
-        if args[0] == "uci":
-            print("id name Sunfish NNUE")
-            print(f"option name EVAL_ROUGHNESS type spin default {EVAL_ROUGHNESS} min 1 max 100")
-            print(f"option name QS_LIMIT type spin default {QS_LIMIT} min 0 max 2000")
-            print(f"option name QS_TYPE type spin default {QS_TYPE} min 0 max 2000")
-            print("uciok")
+wf, bf = features(initial)
+hist = [Position(initial, 0, wf, bf, (True, True), (True, True), 0, 0)]
+while True:
+    args = input().split()
+    if args[0] == "uci":
+        print("uciok")
 
-        elif args[0] == "isready":
-            print("readyok")
+    elif args[0] == "isready":
+        print("readyok")
 
-        elif args[0] == "debug":
-            debug = args[1] == 'on'
+    elif args[0] == "quit":
+        break
 
-        elif args[0] == "ucinewgame":
-            hist = [pos0]
+    elif args[:2] == ["position", "startpos"]:
+        del hist[1:]
+        for ply, move in enumerate(args[3:]):
+            i, j, prom = parse(move[:2]), parse(move[2:4]), move[4:].upper()
+            if ply % 2 == 1:
+                i, j = 119 - i, 119 - j
+            hist.append(hist[-1].move(Move(i, j, prom)))
 
-        # case ["setoption", "name", uci_key, "value", uci_value]:
-        elif args[0] == "setoption":
-            _, uci_key, _, uci_value = args[1:]
-            globals()[uci_key] = int(uci_value)
+    elif args[0] == "go":
+        if len(args) > 1:
+            wtime, btime, winc, binc = map(int, args[2::2])
+            # We always consider ourselves white, but UCI doesn't
+            if len(hist) % 2 == 0:
+                wtime, winc = btime, binc
+            think = wtime / 40 + winc
+            if think < wtime:
+                think = wtime / 2
+        else:
+            think = 5000
+        # print('Thinking for', think)
+        start = time.time()
+        best_move = None
+        for depth, move, score in Searcher().search(hist):
+            print(f"info depth {depth} score cp {score}")
+            if move is not None:
+                best_move = move
+            if think > 0 and time.time() - start > think/1000 * 0.8:
+                break
+        move_str = render_move(best_move, white_pov=len(hist) % 2 == 1)
+        print("bestmove", move_str)
 
-        # FEN support is just for testing. Remove before TCEC
-        # case ["position", "fen", *fen]:
-        elif args[:2] == ["position", "fen"]:
-            fen = args[2:]
-            board, color, castling, enpas, _hclock, _fclock = fen
-            board = re.sub(r"\d", (lambda m: "." * int(m.group(0))), board)
-            board = list(21 * " " + "  ".join(board.split("/")) + 21 * " ")
-            board[9::10] = ["\n"] * 12
-            board = "".join(board)
-            wc = ("Q" in castling, "K" in castling)
-            bc = ("k" in castling, "q" in castling)
-            ep = parse(enpas) if enpas != "-" else 0
-            wf, bf = features(board)
-            pos = Position(board, 0, wf, bf, wc, bc, ep, 0)
-            pos = pos._replace(score=pos.compute_value())
-            if color == "w":
-                hist = [pos]
-            else:
-                hist = [pos, pos.rotate()]
-            if debug:
-                print(hist[-1].board)
-                print(hist[-1].compute_value(verbose=True))
-
-        #case ["position", "startpos", *moves]:
-        elif args[:2] == ["position", "startpos"]:
-            moves = args[2:]
-            hist = [pos0]
-            for i, move in enumerate(moves[1:]):
-                a, b, prom = parse(move[:2]), parse(move[2:4]), move[4:].upper()
-                if i % 2 == 1:
-                    a, b = 119 - a, 119 - b
-                hist.append(hist[-1].move(Move(a, b, prom)))
-            if debug:
-                print(hist[-1].board)
-                print(hist[-1].compute_value())
-
-        #case ["quit"]:
-        elif args[0] == "quit":
-            break
-
-        # case ["go", *args]:
-        elif args[0] == "go":
-            # case ['movetime', movetime]:
-            #case []:
-            if len(args) == 1:
-                think = 24 * 3600
-            elif args[1] == "movetime":
-                movetime = args[2]
-                think = int(movetime) / 1000
-            # case ['wtime', wtime, 'btime', btime, 'winc', winc, 'binc', binc]:
-            elif args[1] == "wtime":
-                _, wtime, _, btime, _, winc, _, binc = args[1:]
-                wtime, btime, winc, binc = int(wtime), int(btime), int(winc), int(binc)
-                # We always consider ourselves white, but UCI doesn't
-                if len(hist) % 2 == 0:
-                    wtime, winc = btime, binc
-                think = wtime / 1000 / 40 + winc / 1000
-                if think > wtime:
-                    think = wtime/2
-                # Let's go fast for the first moves
-                if len(hist) < 3:
-                    think = min(think, 1)
-            #case ['depth', max_depth]:
-            elif args[1] == 'depth':
-                max_depth = args[2]
-                think = -1
-                max_depth = int(max_depth)
-            #case ['mate', max_depth]:
-            elif args[1] == 'mate':
-                max_depth = args[2]
-                for i in range(int(max_depth)):
-                    searcher = Searcher() # Need to clear stuff
-                    score = searcher.bound(hist[-1], MATE_LOWER, i+1, root=True)
-                    move = searcher.tp_move.get(hist[-1].hash())
-                    move_str = render_move(move, white_pov=len(hist)%2==1)
-                    print("info", "score cp", score, "pv", move_str)
-                    if score >= MATE_LOWER:
-                        break
-                print("bestmove", move_str, "score cp", score)
-                continue
-            if debug:
-                print(f"I want to think for {think} seconds.")
-            start = time.time()
-            try:
-                for depth, move, score, is_lower in searcher.search(hist):
-                    if think < 0 and depth == max_depth and is_lower is None:
-                        break
-                    if move is None:
-                        continue
-                    move_str = render_move(move, white_pov=len(hist)%2==1)
-                    elapsed = time.time() - start
-                    print(
-                        "info depth",
-                        depth,
-                        "score cp",
-                        score,
-                        "" if is_lower is None else ("lowerbound" if is_lower else "upperbound"),
-                        "time",
-                        int(1000 * elapsed),
-                        "nodes",
-                        searcher.nodes,
-                        "pv",
-                        move_str,
-                    )
-                    if think > 0 and time.time() - start > think * 2 / 3:
-                        break
-            except KeyboardInterrupt:
-                continue
-            if debug:
-                print(f"Stopped thinking after {round(elapsed,3)} seconds")
-            print("bestmove", move_str, 'score cp', score)
-
-
-if __name__ == "__main__":
-    main()
