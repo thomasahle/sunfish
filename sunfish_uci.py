@@ -413,7 +413,7 @@ while True:
             print(f"info depth {depth} score cp {score}")
             if move is not None:
                 best_move = move
-            if think > 0 and time.time() - start > think * 0.8:
+            if time.time() - start > think * 0.8:
                 break
         move_str = render_move(best_move, white_pov=len(hist) % 2 == 1)
         print("bestmove", move_str)
