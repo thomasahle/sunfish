@@ -317,9 +317,16 @@ class Searcher:
         # This doesn't prevent sunfish from making a move that results in stalemate,
         # but only if depth == 1, so that's probably fair enough.
         # (Btw, at depth 1 we can also mate without realizing.)
-        if best < gamma and best < 0 and depth > 2:
-            if -MATE_LOWER >= -self.bound(pos.nullmove(), 1-gamma, depth-3):
-                best = 0
+        #if best < gamma and best < 0 and depth > 2:
+        #    null_move_score = -self.bound(pos.nullmove(), 1-gamma, depth-3)
+        #    #print(f'{best=}, {null_move_score=}, {depth=}, {gamma=}')
+        #    if null_move_score > -MATE_LOWER:
+        #        best = 0
+        if best < gamma and best < 0 and depth > 3:
+            is_dead = lambda pos: any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
+            if all(is_dead(pos.move(m)) for m in pos.gen_moves()):
+                in_check = is_dead(pos.nullmove())
+                best = -MATE_UPPER if in_check else 0
 
         # Update the table with the result
         self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else \
@@ -404,9 +411,20 @@ while True:
         wc = ("Q" in castling, "K" in castling)
         bc = ("k" in castling, "q" in castling)
         ep = parse(enpas) if enpas != "-" else 0
-        wf, bf = features(board)
-        pos = Position(board, 0, wf, bf, wc, bc, ep, 0)
+        pos = Position(board, 0, wc, bc, ep, 0)
         hist = [pos] if color == "w" else [pos, pos.rotate()]
+
+    elif args[:2] == ["go", "depth"]:
+        max_depth = int(args[2])
+        for depth, move, score in Searcher().search(hist):
+            move_str = render_move(move, white_pov=len(hist) % 2 == 1)
+            print(f"info depth {depth} score cp {score} pv {move_str}")
+            if move is not None:
+                best_move = move_str
+            if best_move and depth > max_depth:
+                break
+        print("bestmove", move_str)
+
 
     elif args[0] == "go":
         wtime, btime, winc, binc = [int(a)/1000 for a in args[2::2]]
