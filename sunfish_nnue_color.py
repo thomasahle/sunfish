@@ -499,6 +499,7 @@ class Searcher:
                     yield depth, self.tp_move.get(pos.hash()), score
                     gamma = (lower + upper + 1) // 2
                 else:
+                    yield depth, self.tp_move.get(pos.hash()), score
                     break
 
 
