@@ -305,6 +305,8 @@ class Searcher:
         self.nodes = 0
 
     def bound(self, pos, gamma, depth, root=True):
+        if (time.time() - start > think/1000 * 0.8):
+            return -MATE_UPPER
         # returns r where
         #    s(pos) <= r < gamma    if gamma > s(pos)
         #    gamma <= r <= s(pos)   if gamma <= s(pos)
@@ -489,12 +491,15 @@ class Searcher:
             lower, upper = -MATE_UPPER, MATE_UPPER
             while lower < upper - EVAL_ROUGHNESS:
                 score = self.bound(pos, gamma, depth)
-                if score >= gamma:
-                    lower = score
-                if score < gamma:
-                    upper = score
-                yield depth, self.tp_move.get(pos.hash()), score
-                gamma = (lower + upper + 1) // 2
+                if (time.time() - start < think/1000 * 0.8):
+                    if score >= gamma:
+                        lower = score
+                    if score < gamma:
+                        upper = score
+                    yield depth, self.tp_move.get(pos.hash()), score
+                    gamma = (lower + upper + 1) // 2
+                else:
+                    break
 
 
 ###############################################################################
