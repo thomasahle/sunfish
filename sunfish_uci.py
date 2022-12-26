@@ -309,7 +309,8 @@ class Searcher:
             best = max(best, score)
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
-                self.tp_move[pos] = move
+                if move is not None:
+                    self.tp_move[pos] = move
                 break
 
         # Stalemate checking is a bit tricky: Say we failed low, because
@@ -402,18 +403,35 @@ while True:
                 i, j = 119 - i, 119 - j
             hist.append(hist[-1].move(Move(i, j, prom)))
 
+    # TODO: Remove this before packing:
+    elif args[:2] == ["position", "fen"]:
+        fen = args[2:]
+        board, color, castling, enpas, _hclock, _fclock = fen
+        board = re.sub(r"\d", (lambda m: "." * int(m.group(0))), board)
+        board = list(21 * " " + "  ".join(board.split("/")) + 21 * " ")
+        board[9::10] = ["\n"] * 12
+        board = "".join(board)
+        wc = ("Q" in castling, "K" in castling)
+        bc = ("k" in castling, "q" in castling)
+        ep = parse(enpas) if enpas != "-" else 0
+        pos = Position(board, 0, wc, bc, ep, 0)
+        hist = [pos] if color == "w" else [pos, pos.rotate()]
+
     elif args[0] == "go":
-        wtime, btime, winc, binc = map(int, args[2::2])
-        if len(hist) % 2 == 0:
-            wtime, winc = btime, binc
-        think = min(wtime / 1000 / 40 + winc / 1000, wtime / 2000 - 1)
+        if len(args) <= 4:
+            think = 1
+        else:
+            wtime, btime, winc, binc = map(int, args[2::2])
+            if len(hist) % 2 == 0:
+                wtime, winc = btime, binc
+            think = min(wtime / 1000 / 40 + winc / 1000, wtime / 2000 - 1)
         start = time.time()
         best_move = None
         for depth, move, score in Searcher().search(hist):
             print(f"info depth {depth} score cp {score}")
             if move is not None:
                 best_move = move
-            if time.time() - start > think * 0.8:
+            if best_move and time.time() - start > think * 0.8:
                 break
         move_str = render_move(best_move, white_pov=len(hist) % 2 == 1)
         print("bestmove", move_str)
