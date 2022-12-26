@@ -3,7 +3,7 @@
 
 import re, sys, time
 from itertools import count
-from collections import namedtuple
+from collections import namedtuple, defaultdict
 
 ###############################################################################
 # Piece-Square tables. Tune these to change sunfish's behaviour
@@ -238,11 +238,11 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
 ###############################################################################
 
 # lower <= s(pos) <= upper
-Entry = namedtuple('Entry', 'lower upper')
+Entry = namedtuple('Entry', 'lower upper', defaults=(-MATE_UPPER, MATE_UPPER))
 
 class Searcher:
     def __init__(self):
-        self.tp_score = {}
+        self.tp_score = defaultdict(Entry)
         self.tp_move = {}
         self.history = set()
         self.nodes = 0
@@ -268,17 +268,9 @@ class Searcher:
         # Look in the table if we have already searched this position before.
         # We also need to be sure, that the stored search was over the same
         # nodes as the current search.
-        entry = self.tp_score.get((pos, depth), Entry(-MATE_UPPER, MATE_UPPER))
-        if entry.lower >= gamma:
-            return entry.lower
-        if entry.upper < gamma:
-            return entry.upper
-
-        # Check extension. It doesn't matter so much that we run the null-move multiple times,
-        # since the TT will catch the problem.
-        #in_check = depth > 2 and -self.bound(pos.nullmove(), 1-gamma, depth-3) <= -MATE_LOWER
-        #if in_check:
-            #depth += 1
+        entry = self.tp_score[pos, depth]
+        if entry.lower >= gamma: return entry.lower
+        if entry.upper < gamma: return entry.upper
 
         # Generator of moves to search in order.
         # This allows us to define the moves, but only calculate them if needed.
@@ -325,19 +317,13 @@ class Searcher:
         # This doesn't prevent sunfish from making a move that results in stalemate,
         # but only if depth == 1, so that's probably fair enough.
         # (Btw, at depth 1 we can also mate without realizing.)
-        if best < gamma and best < 0 and depth > 0:
-            is_dead = lambda pos: any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
-            if all(is_dead(pos.move(m)) for m in pos.gen_moves()):
-                in_check = is_dead(pos.nullmove())
-                best = -MATE_UPPER if in_check else 0
-        #if best < gamma and best < 0 and depth > 2 and not in_check:
-        #    best = 0
+        if best < gamma and best < 0 and depth > 2:
+            if -MATE_LOWER >= -self.bound(pos.nullmove(), 1-gamma, depth-3):
+                best = 0
 
-        # Table part 2
-        if best >= gamma:
-            self.tp_score[pos, depth] = Entry(best, entry.upper)
-        if best < gamma:
-            self.tp_score[pos, depth] = Entry(entry.lower, best)
+        # Update the table with the result
+        self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else \
+                                    Entry(entry.lower, best)
 
         return best
 

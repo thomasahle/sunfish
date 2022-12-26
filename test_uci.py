@@ -147,15 +147,17 @@ class Selfplay(Command):
                 black_inc=binc,
                 ))
             if board.turn == chess.WHITE:
-                wtime -= time.time() - start - winc
+                wtime -= time.time() - start
                 if wtime <= 0:
                     print('White lose on time.')
                     break
+                wtime += winc
             else:
-                btime -= time.time() - start - binc
+                btime -= time.time() - start
                 if btime <= 0:
                     print('Black lose on time.')
                     break
+                btime += binc
             if result.resigned:
                 print('Resigned')
                 break
