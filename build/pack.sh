@@ -26,7 +26,7 @@ do
    head="""#!/bin/sh
 T=\`mktemp\`
 tail -c +$((lh+1)) "\$0"|xz -d>\$T
-(sleep 3;rm \$T)&python3 -u \$T
+(sleep 3;rm \$T)&pypy3 -u \$T
 exit
 """
    echo "Length of head: $lh"
