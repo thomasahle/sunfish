@@ -537,6 +537,21 @@ while True:
                 i, j = 119 - i, 119 - j
             hist.append(hist[-1].move(Move(i, j, prom)))
 
+    elif args[:2] == ["position", "fen"]:
+        fen = args[2:]
+        board, color, castling, enpas, _hclock, _fclock = fen
+        board = re.sub(r"\d", (lambda m: "." * int(m.group(0))), board)
+        board = list(21 * " " + "  ".join(board.split("/")) + 21 * " ")
+        board[9::10] = ["\n"] * 12
+        board = "".join(board)
+        wc = ("Q" in castling, "K" in castling)
+        bc = ("k" in castling, "q" in castling)
+        ep = parse(enpas) if enpas != "-" else 0
+        wf, bf = features(board)
+        pos = Position(board, 0, wf, bf, wc, bc, ep, 0)
+        pos = pos._replace(score=pos.compute_value())
+        hist = [pos] if color == "w" else [pos, pos.rotate()]
+
     elif args[0] == "go":
         if len(args) > 1:
             wtime, btime, winc, binc = map(int, args[2::2])
