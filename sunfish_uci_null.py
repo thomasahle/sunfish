@@ -274,8 +274,11 @@ class Searcher:
         if entry.upper < gamma:
             return entry.upper
 
-        # Here extensions may be added
-        # Such as 'if in_check: depth += 1'
+        # Check extension. It doesn't matter so much that we run the null-move multiple times,
+        # since the TT will catch the problem.
+        #in_check = depth > 2 and -self.bound(pos.nullmove(), 1-gamma, depth-3) <= -MATE_LOWER
+        #if in_check:
+            #depth += 1
 
         # Generator of moves to search in order.
         # This allows us to define the moves, but only calculate them if needed.
@@ -327,6 +330,8 @@ class Searcher:
             if all(is_dead(pos.move(m)) for m in pos.gen_moves()):
                 in_check = is_dead(pos.nullmove())
                 best = -MATE_UPPER if in_check else 0
+        #if best < gamma and best < 0 and depth > 2 and not in_check:
+        #    best = 0
 
         # Table part 2
         if best >= gamma:
@@ -403,8 +408,10 @@ while True:
             hist.append(hist[-1].move(Move(i, j, prom)))
 
     elif args[0] == "go":
-        _, wtime, _, btime, _, winc, _, binc = args[1:]
-        think = int(wtime) / 1000 / 40 + int(winc) / 1000
+        wtime, btime, winc, binc = [int(a)/1000 for a in args[2::2]]
+        if len(hist) % 2 == 0:
+            wtime, winc = btime, binc
+        think = min(wtime / 40 + winc, wtime / 2 - 1)
         start = time.time()
         best_move = None
         for depth, move, score in Searcher().search(hist):

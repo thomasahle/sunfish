@@ -403,8 +403,10 @@ while True:
             hist.append(hist[-1].move(Move(i, j, prom)))
 
     elif args[0] == "go":
-        _, wtime, _, btime, _, winc, _, binc = args[1:]
-        think = int(wtime) / 1000 / 40 + int(winc) / 1000
+        wtime, btime, winc, binc = map(int, args[2::2])
+        if len(hist) % 2 == 0:
+            wtime, winc = btime, binc
+        think = min(wtime / 1000 / 40 + winc / 1000, wtime / 2000 - 1)
         start = time.time()
         best_move = None
         for depth, move, score in Searcher().search(hist):
