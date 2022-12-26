@@ -247,8 +247,7 @@ class Searcher:
         self.history = set()
         self.nodes = 0
 
-    def bound(self, pos, gamma, depth, root=True):
-        #root = False # Just testing
+    def bound(self, pos, gamma, depth):
         """ returns r where
                 s(pos) <= r < gamma    if gamma > s(pos)
                 gamma <= r <= s(pos)   if gamma <= s(pos)"""
@@ -269,7 +268,7 @@ class Searcher:
         # Look in the table if we have already searched this position before.
         # We also need to be sure, that the stored search was over the same
         # nodes as the current search.
-        entry = self.tp_score.get((pos, depth, root), Entry(-MATE_UPPER, MATE_UPPER))
+        entry = self.tp_score.get((pos, depth), Entry(-MATE_UPPER, MATE_UPPER))
         if entry.lower >= gamma:
             return entry.lower
         if entry.upper < gamma:
@@ -283,8 +282,8 @@ class Searcher:
         def moves():
             # First try not moving at all. We only do this if there is at least one major
             # piece left on the board, since otherwise zugzwangs are too dangerous.
-            if depth > 2 and not root and any(c in pos.board for c in 'RBNQ'):
-                yield None, -self.bound(pos.nullmove(), 1-gamma, depth-3, root=False)
+            if depth > 2 and any(c in pos.board for c in 'RBNQ'):
+                yield None, -self.bound(pos.nullmove(), 1-gamma, depth-3)
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else.
             if depth == 0:
@@ -295,13 +294,13 @@ class Searcher:
             # will be non deterministic.
             killer = self.tp_move.get(pos)
             if killer and (depth > 0 or pos.value(killer) >= QS_LIMIT):
-                yield killer, -self.bound(pos.move(killer), 1-gamma, depth-1, root=False)
+                yield killer, -self.bound(pos.move(killer), 1-gamma, depth-1)
             # Then all the other moves
             for move in sorted(pos.gen_moves(), key=pos.value, reverse=True):
                 # If depth == 0 we only try moves with high intrinsic score (captures and
                 # promotions). Otherwise we do all moves.
                 if depth > 0 or pos.value(move) >= QS_LIMIT:
-                    yield move, -self.bound(pos.move(move), 1-gamma, depth-1, root=False)
+                    yield move, -self.bound(pos.move(move), 1-gamma, depth-1)
 
         # Run through the moves, shortcutting when possible
         best = -MATE_UPPER
@@ -309,7 +308,8 @@ class Searcher:
             best = max(best, score)
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
-                self.tp_move[pos] = move
+                if move:
+                    self.tp_move[pos] = move
                 break
 
         # Stalemate checking is a bit tricky: Say we failed low, because
@@ -330,9 +330,9 @@ class Searcher:
 
         # Table part 2
         if best >= gamma:
-            self.tp_score[pos, depth, root] = Entry(best, entry.upper)
+            self.tp_score[pos, depth] = Entry(best, entry.upper)
         if best < gamma:
-            self.tp_score[pos, depth, root] = Entry(entry.lower, best)
+            self.tp_score[pos, depth] = Entry(entry.lower, best)
 
         return best
 

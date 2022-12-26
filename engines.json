@@ -1,9 +1,15 @@
 [
    {
       "name": "sunfish",
-      "command": "sunfish_uci.sh",
+      "command": "build/sunfish.sh",
       "protocol": "uci",
       "stderrFile": "sunfish.err"
+   },
+   {
+      "name": "sunfish-null",
+      "command": "build/sunfish_null.sh",
+      "protocol": "uci",
+      "stderrFile": "null.err"
    },
    {
       "name": "sunfish-nnue",

@@ -191,7 +191,8 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
 
     def move(self, move):
         put = lambda pos, i, p: pos._replace(
-            board=pos.board[:i] + p + pos.board[i + 1 :],
+            # f-strings are a bit faster in python, but the same in pypy
+            board=f"{pos.board[:i]}{p}{pos.board[i + 1 :]}",
             wf=pos.wf + pst[p][i] - pst[pos.board[i]][i],
             bf=pos.bf + pst[p.swapcase()][119 - i] - pst[pos.board[i].swapcase()][119 - i],
         )
@@ -375,16 +376,13 @@ class Searcher:
             # before. Also note that in QS the killer must be a capture, otherwise we
             # will be non deterministic.
             def mvv_lva(move):
-                # Need to make sure capturing the king is included
-                # Well, only if we use this for stopping QS, not if we just 
-                # if abs(move.j - pos.kp) < 2:
-                #     return -MATE
+                if abs(move.j - pos.kp) < 2: return -MATE
                 i, j = move.i, move.j
                 p, q = pos.board[i], pos.board[j]
-                score = pst[q][j][0] - (pst[p][j][0] - pst[p][i][0])
-                pp, qq = p.swapcase(), q.swapcase()
-                score -= pst[qq][119-j][0] - (pst[pp][119-j][0] - pst[pp][119-i][0])
-                # score /= 2
+                p2 = move.prom or p
+                score = pst[q][j][0] - (pst[p2][j][0] - pst[p][i][0])
+                pp, qq, pp2 = p.swapcase(), q.swapcase(), p2.swapcase()
+                score -= pst[qq][119-j][0] - (pst[pp2][119-j][0] - pst[pp][119-i][0])
                 return score
 
             if killer := self.tp_move.get(pos.hash()):
