@@ -489,9 +489,13 @@ class Searcher:
             # 'while lower != upper' would work, but play tests show a margin of 20 plays
             # better.
             lower, upper = -MATE_UPPER, MATE_UPPER
+            
+            pre_time_score = -MATE_UPPER
+
             while lower < upper - EVAL_ROUGHNESS:
-                score = self.bound(pos, gamma, depth)
+                pre_time_score = self.bound(pos, gamma, depth)
                 if (time.time() - start < think/1000 * 0.8):
+                    score = pre_time_score
                     if score >= gamma:
                         lower = score
                     if score < gamma:
