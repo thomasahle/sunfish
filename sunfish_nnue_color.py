@@ -1,7 +1,7 @@
 #!/usr/bin/env pypy
 # -*- coding: utf-8 -*-
 
-import re, sys, time, pickle
+import sys, time, pickle
 from itertools import count
 from collections import namedtuple
 import numpy as np
@@ -521,6 +521,7 @@ hist = [Position(initial, 0, wf, bf, (True, True), (True, True), 0, 0)]
 while True:
     args = input().split()
     if args[0] == "uci":
+        print(f"option name EVAL_ROUGHNESS type spin default {EVAL_ROUGHNESS} min 1 max 100")
         print("uciok")
 
     elif args[0] == "isready":
@@ -537,9 +538,14 @@ while True:
                 i, j = 119 - i, 119 - j
             hist.append(hist[-1].move(Move(i, j, prom)))
 
+    elif args[0] == "setoption":
+        _, uci_key, _, uci_value = args[1:]
+        globals()[uci_key] = int(uci_value)
+
     #elif args[:2] == ["position", "fen"]:
     #    fen = args[2:]
     #    board, color, castling, enpas, _hclock, _fclock = fen
+    #    import re
     #    board = re.sub(r"\d", (lambda m: "." * int(m.group(0))), board)
     #    board = list(21 * " " + "  ".join(board.split("/")) + 21 * " ")
     #    board[9::10] = ["\n"] * 12

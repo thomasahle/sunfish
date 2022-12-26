@@ -317,11 +317,20 @@ class Searcher:
         # This doesn't prevent sunfish from making a move that results in stalemate,
         # but only if depth == 1, so that's probably fair enough.
         # (Btw, at depth 1 we can also mate without realizing.)
-        #if best < gamma and best < 0 and depth > 2:
-        #    null_move_score = -self.bound(pos.nullmove(), 1-gamma, depth-3)
-        #    #print(f'{best=}, {null_move_score=}, {depth=}, {gamma=}')
-        #    if null_move_score > -MATE_LOWER:
-        #        best = 0
+
+        # if best < gamma and best < 0 and depth > 2:
+        #     #null_move_score = -self.bound(pos.nullmove(), 1-gamma, depth-3)
+        #     # This will check if we can be captures right here and now.
+        #     # In other words, if we are in check.
+        #     null_move_score = -self.bound(pos.nullmove(), MATE_LOWER, 0)
+        #     # But assuming we are not, it's only stalemate if all our actual
+        #     # moves lead to death.
+        #     # We just ran all our actual moves, so it should be easy, right?
+        #     # No.. Beucause null moving was a part of those moves...
+        #     #print(f'{best=}, {null_move_score=}, {depth=}, {gamma=}')
+        #     if null_move_score > -MATE_LOWER:
+        #         best = 0
+
         if best < gamma and best < 0 and depth > 3:
             is_dead = lambda pos: any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
             if all(is_dead(pos.move(m)) for m in pos.gen_moves()):

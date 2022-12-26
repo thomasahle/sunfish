@@ -210,12 +210,15 @@ class Mate(Command):
         pb = tqdm.tqdm(lines)
         for line in pb:
             total += 1
+            print('Loading new position', line)
             board, _ = chess.Board.from_epd(line)
             with await engine.analysis(board, limit) as analysis:
                 async for info in analysis:
                     pb.set_description(info_to_desc(info))
                     score = info['score']
+                    print(info)
                     if score.is_mate() or score.relative.cp > 10000:
+                        print('Found it!')
                         success += 1
                         break
                 else:
