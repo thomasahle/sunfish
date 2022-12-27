@@ -13,7 +13,10 @@ get_file_size() {
 }
 
 T=`mktemp`
-pyminify --rename-globals --remove-literal-statements "$1" > "$T"
+pyminify \
+   --rename-globals \
+   --remove-literal-statements \
+   "$1" > "$T"
 xz "$T"
 lt=$(get_file_size "$T.xz")
 echo "Length of script: $lt"
