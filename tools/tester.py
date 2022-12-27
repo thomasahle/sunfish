@@ -34,11 +34,6 @@ class Command:
 
 
 ###############################################################################
-# Test uci
-###############################################################################
-
-
-###############################################################################
 # Perft test
 ###############################################################################
 
@@ -270,7 +265,7 @@ class Draw(Command):
         parser.add_argument(
             "--quick",
             action="store_true",
-            help="Use mate specific search in the engine, if supported",
+            help="Sadly this is not supported by UCI",
         )
 
     @classmethod
@@ -306,32 +301,6 @@ class Draw(Command):
             print('Depths:')
             for depth, c in cnt.most_common():
                 print(f'{depth}: {c}')
-
-
-def quickdraw(f, depth):
-    k, n = 0, 0
-    for line in f:
-        line = line.strip()
-        print(line)
-        n += 1
-
-        pos = tools.parseFEN(line)
-        searcher = sunfish.Searcher()
-        for d in range(depth, 10):
-            s0 = searcher.bound(pos, 0, d, root=True)
-            s1 = searcher.bound(pos, 1, d, root=True)
-            if s0 >= 0 and s1 < 1:
-                k += 1
-                break
-            else:
-                print("depth {}, s0 {}, s1 {}".format(d, s0, s1))
-            # print(d, s0, s1, tools.pv(0, pos))
-        else:
-            print("Fail: Unable to find draw!")
-            # return
-        print(tools.pv(searcher, pos, False))
-    print("Found {}/{} draws".format(k, n))
-
 
 ###############################################################################
 # Best move test

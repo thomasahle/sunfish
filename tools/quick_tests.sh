@@ -13,7 +13,7 @@ $T "$1" ${2:-"--quiet"} mate $TOOLS/test_files/mate1.fen --depth 2
 
 # These mates should be findable at depth=4, but because of null-move
 # We need to go to depth=6.
-$T "$1" ${2:-"--quiet"} mate $TOOLS/test_files/mate2.fen --depth 6 --quick
+$T "$1" ${2:-"--quiet"} mate $TOOLS/test_files/mate2.fen --depth 7 --quick
 
 $T "$1" ${2:-"--quiet"} draw $TOOLS/test_files/stalemate2.fen --depth 4
 echo "Should be about 73/130"

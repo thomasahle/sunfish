@@ -446,9 +446,11 @@ while True:
     elif args[0] == "go":
         if args[1:] == []:
             think = 24 * 3600
+
         elif args[1] == "movetime":
             movetime = args[2]
             think = int(movetime) / 1000
+
         elif args[1] == "wtime":
             wtime, btime, winc, binc = [int(a) / 1000 for a in args[2::2]]
             # we always consider ourselves white, but uci doesn't
@@ -458,21 +460,32 @@ while True:
             # let's go fast for the first moves
             if len(hist) < 3:
                 think = min(think, 1)
+
         elif args[1] == 'depth':
             max_depth = args[2]
             think = None
             max_depth = int(max_depth)
-        elif args[1] == 'mate':
+
+        elif args[1] in ('mate', 'draw'):
             max_depth = args[2]
-            for i in range(int(max_depth)):
-                score = searcher.bound(hist[-1], MATE_LOWER, i+1)
-                move = searcher.tp_move.get(hist[-1])
-                move_str = render_move(move, white_pov=len(hist)%2==1)
-                print("info", "score cp", score, "pv", move_str)
-                if score >= MATE_LOWER:
-                    break
+            for d in range(int(max_depth)):
+                if args[1] == 'draw':
+                    s0 = searcher.bound(hist[-1], 0, d)
+                    print("info", "depth", d, "score cp", s0, "lowerbound")
+                    s1 = searcher.bound(hist[-1], 1, d)
+                    print("info", "depth", d, "score cp", s1, "upperbound")
+                    if s0 >= 0 and s1 < 1:
+                        break
+                if args[1] == 'mate':
+                    score = searcher.bound(hist[-1], MATE_LOWER, d)
+                    print("info", "depth", d, "score cp", score)
+                    if score >= MATE_LOWER:
+                        break
+            move = searcher.tp_move.get(hist[-1])
+            move_str = render_move(move, white_pov=len(hist)%2==1)
             print("bestmove", move_str, "score cp", score)
             continue
+
         if debug:
             print(f"i want to think for {think} seconds.")
         start = time.time()
