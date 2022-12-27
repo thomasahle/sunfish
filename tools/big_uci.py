@@ -92,13 +92,13 @@ def main():
             elif args[1] == "wtime":
                 _, wtime, _, btime, _, winc, _, binc = args[1:]
                 wtime, btime, winc, binc = int(wtime), int(btime), int(winc), int(binc)
-                # We always consider ourselves white, but UCI doesn't
+                # we always consider ourselves white, but uci doesn't
                 if len(hist) % 2 == 0:
                     wtime, winc = btime, binc
                 think = wtime / 1000 / 40 + winc / 1000
                 if think > wtime:
                     think = wtime/2
-                # Let's go fast for the first moves
+                # let's go fast for the first moves
                 if len(hist) < 3:
                     think = min(think, 1)
             #case ['depth', max_depth]:
@@ -110,23 +110,23 @@ def main():
             elif args[1] == 'mate':
                 max_depth = args[2]
                 for i in range(int(max_depth)):
-                    searcher = Searcher() # Need to clear stuff
-                    score = searcher.bound(hist[-1], MATE_LOWER, i+1, root=True)
+                    searcher = searcher() # need to clear stuff
+                    score = searcher.bound(hist[-1], mate_lower, i+1, root=true)
                     move = searcher.tp_move.get(hist[-1].hash())
                     move_str = render_move(move, white_pov=len(hist)%2==1)
                     print("info", "score cp", score, "pv", move_str)
-                    if score >= MATE_LOWER:
+                    if score >= mate_lower:
                         break
                 print("bestmove", move_str, "score cp", score)
                 continue
             if debug:
-                print(f"I want to think for {think} seconds.")
+                print(f"i want to think for {think} seconds.")
             start = time.time()
             try:
                 for depth, move, score, is_lower in searcher.search(hist):
-                    if think < 0 and depth == max_depth and is_lower is None:
+                    if think < 0 and depth == max_depth and is_lower is none:
                         break
-                    if move is None:
+                    if move is none:
                         continue
                     move_str = render_move(move, white_pov=len(hist)%2==1)
                     elapsed = time.time() - start
@@ -135,7 +135,7 @@ def main():
                         depth,
                         "score cp",
                         score,
-                        "" if is_lower is None else ("lowerbound" if is_lower else "upperbound"),
+                        "" if is_lower is none else ("lowerbound" if is_lower else "upperbound"),
                         "time",
                         int(1000 * elapsed),
                         "nodes",
@@ -145,10 +145,10 @@ def main():
                     )
                     if think > 0 and time.time() - start > think * 2 / 3:
                         break
-            except KeyboardInterrupt:
+            except keyboardinterrupt:
                 continue
             if debug:
-                print(f"Stopped thinking after {round(elapsed,3)} seconds")
+                print(f"stopped thinking after {round(elapsed,3)} seconds")
             print("bestmove", move_str, 'score cp', score)
 
 

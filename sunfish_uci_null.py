@@ -300,9 +300,13 @@ class Searcher:
         # Run through the moves, shortcutting when possible
         best = -MATE_UPPER
         for move, score in moves():
+            #if depth == 1:
+                #print(move)
             best = max(best, score)
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
+                # TODO: What if I just saved all the moves? Maybe even with their score
+                # for sorting next time?
                 if move:
                     self.tp_move[pos] = move
                 break
@@ -331,7 +335,8 @@ class Searcher:
         #     if null_move_score > -MATE_LOWER:
         #         best = 0
 
-        if best < gamma and best < 0 and depth > 3:
+
+        if best < gamma and best < 0 and depth > 0:
             is_dead = lambda pos: any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
             if all(is_dead(pos.move(m)) for m in pos.gen_moves()):
                 in_check = is_dead(pos.nullmove())
@@ -364,8 +369,9 @@ class Searcher:
                     lower = score
                 if score < gamma:
                     upper = score
+                yield depth, score, gamma
                 gamma = (lower + upper + 1) // 2
-                yield depth, self.tp_move.get(history[-1]), score
+            yield depth, gamma, None
 
 
 ###############################################################################
@@ -389,6 +395,11 @@ def render_move(move, white_pov):
         i, j = 119 - i, 119 - j
     return render(i) + render(j) + move.prom.lower()
 
+# minifier-hide start
+debug = False
+searcher = Searcher()
+# minifier-hide end
+
 hist = [Position(initial, 0, (True,True), (True,True), 0, 0)]
 while True:
     args = input().split()
@@ -409,7 +420,11 @@ while True:
                 i, j = 119 - i, 119 - j
             hist.append(hist[-1].move(Move(i, j, prom)))
 
-    # TODO: Remove this before packing:
+# minifier-hide start
+
+    elif args[0] == "debug":
+        debug = args[1] == 'on'
+
     elif args[:2] == ["position", "fen"]:
         fen = args[2:]
         board, color, castling, enpas, _hclock, _fclock = fen
@@ -422,18 +437,79 @@ while True:
         ep = parse(enpas) if enpas != "-" else 0
         pos = Position(board, 0, wc, bc, ep, 0)
         hist = [pos] if color == "w" else [pos, pos.rotate()]
+        if debug:
+            print(f'Loaded new position with score {pos.score}')
+            print(pos.board)
+            print('Moves:', [render_move(move, len(hist)%2) for move in pos.gen_moves()])
 
-    elif args[:2] == ["go", "depth"]:
-        max_depth = int(args[2])
-        for depth, move, score in Searcher().search(hist):
-            move_str = render_move(move, white_pov=len(hist) % 2 == 1)
-            print(f"info depth {depth} score cp {score} pv {move_str}")
-            if move is not None:
-                best_move = move_str
-            if best_move and depth > max_depth:
-                break
-        print("bestmove", move_str)
+    # case ["go", *args]:
+    elif args[0] == "go":
+        if args[1:] == []:
+            think = 24 * 3600
+        elif args[1] == "movetime":
+            movetime = args[2]
+            think = int(movetime) / 1000
+        elif args[1] == "wtime":
+            wtime, btime, winc, binc = [int(a) / 1000 for a in args[2::2]]
+            # we always consider ourselves white, but uci doesn't
+            if len(hist) % 2 == 0:
+                wtime, winc = btime, binc
+            think = min(wtime / 40 + winc, wtime / 2)
+            # let's go fast for the first moves
+            if len(hist) < 3:
+                think = min(think, 1)
+        elif args[1] == 'depth':
+            max_depth = args[2]
+            think = None
+            max_depth = int(max_depth)
+        elif args[1] == 'mate':
+            max_depth = args[2]
+            for i in range(int(max_depth)):
+                score = searcher.bound(hist[-1], MATE_LOWER, i+1)
+                move = searcher.tp_move.get(hist[-1])
+                move_str = render_move(move, white_pov=len(hist)%2==1)
+                print("info", "score cp", score, "pv", move_str)
+                if score >= MATE_LOWER:
+                    break
+            print("bestmove", move_str, "score cp", score)
+            continue
+        if debug:
+            print(f"i want to think for {think} seconds.")
+        start = time.time()
+        try:
+            for depth, score, gamma in searcher.search(hist):
+                # gamma == None means the score is final for the depth.
+                if think is None and gamma is None and depth >= max_depth:
+                    break
+                move = searcher.tp_move.get(hist[-1])
+                move_str = render_move(move, white_pov=len(hist)%2==1)
+                elapsed = time.time() - start
+                if gamma is None:
+                    score_type = ""
+                elif score >= gamma:
+                    score_type = "lowerbound"
+                elif score < gamma:
+                    score_type = "upperbound"
+                print(
+                    "info depth", depth,
+                    "score cp", score, score_type,
+                    "time", round(1000 * elapsed),
+                    "nodes", searcher.nodes,
+                    "nps", round(searcher.nodes / elapsed),
+                    "pv", move_str,
+                )
+                if think is not None and elapsed > think * 2 / 3:
+                    break
+        except KeyboardInterrupt:
+            if debug:
+                raise
+            continue
+        if debug:
+            print(f"stopped thinking after {round(elapsed,3)} seconds")
+        print("bestmove", move_str, 'score cp', score)
 
+
+# minifier-hide end
 
     elif args[0] == "go":
         wtime, btime, winc, binc = [int(a)/1000 for a in args[2::2]]
