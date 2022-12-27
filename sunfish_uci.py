@@ -358,8 +358,14 @@ class Searcher:
                     lower = score
                 if score < gamma:
                     upper = score
+                # TODO: But could a partial result from a higher depth sometimes
+                # be better than a fully searched move from a more shallow one?
+                yield depth, None, score
                 gamma = (lower + upper + 1) // 2
-                yield depth, self.tp_move.get(history[-1]), score
+            # The only way we can be sure to have the real move in tp_move,
+            # is if we have just failed high.
+            score = self.bound(history[-1], lower, depth)
+            yield depth, self.tp_move.get(history[-1]), score
 
 
 ###############################################################################
@@ -384,6 +390,7 @@ def render_move(move, white_pov):
     return render(i) + render(j) + move.prom.lower()
 
 hist = [Position(initial, 0, (True,True), (True,True), 0, 0)]
+searcher = Searcher()
 while True:
     args = input().split()
     if args[0] == "uci":
@@ -427,10 +434,10 @@ while True:
             think = min(wtime / 1000 / 40 + winc / 1000, wtime / 2000 - 1)
         start = time.time()
         best_move = None
-        for depth, move, score in Searcher().search(hist):
-            print(f"info depth {depth} score cp {score}")
-            if move is not None:
-                best_move = move
+        for depth, move, score in searcher.search(hist):
+            if move:
+                print(f"info depth {depth} nodes {searcher.nodes} score cp {score}")
+                best_move = move or best_move
             if best_move and time.time() - start > think * 0.8:
                 break
         move_str = render_move(best_move, white_pov=len(hist) % 2 == 1)
