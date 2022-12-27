@@ -105,7 +105,7 @@ directions = {
 }
 
 # Constants for tuning search
-EVAL_ROUGHNESS = 13
+#EVAL_ROUGHNESS = 13
 #QS_LIMIT = 200
 #QS_CAPTURE, QS_SINGLE, QS_DOUBLE = range(3)
 #QS_TYPE = QS_CAPTURE
@@ -192,7 +192,7 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
     def move(self, move):
         put = lambda pos, i, p: pos._replace(
             # f-strings are a bit faster in python, but the same in pypy
-            board=f"{pos.board[:i]}{p}{pos.board[i + 1 :]}",
+            board=pos.board[:i] + p + pos.board[i + 1 :],
             wf=pos.wf + pst[p][i] - pst[pos.board[i]][i],
             bf=pos.bf + pst[p.swapcase()][119 - i] - pst[pos.board[i].swapcase()][119 - i],
         )
@@ -364,9 +364,7 @@ class Searcher:
             # opponents turn. This seems like it should be a major bug?
             #if (depth >= 3 or depth == 1) and not root and any(c in pos.board for c in "NBRQ"):
             if depth >= 3 and not root:
-                yield None, -self.bound(
-                    pos.rotate(nullmove=True), 1 - gamma, depth - 3, root=False
-                )
+                yield None, -self.bound(pos.rotate(nullmove=True), 1-gamma, depth-3, False)
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else.
             if depth == 0:
@@ -381,8 +379,11 @@ class Searcher:
                 p, q = pos.board[i], pos.board[j]
                 p2 = move.prom or p
                 score = pst[q][j][0] - (pst[p2][j][0] - pst[p][i][0])
+                #score = pst[q][j][0] - (pst[p][j][0] - pst[p][i][0])
                 pp, qq, pp2 = p.swapcase(), q.swapcase(), p2.swapcase()
+                #pp, qq = p.swapcase(), q.swapcase()
                 score -= pst[qq][119-j][0] - (pst[pp2][119-j][0] - pst[pp][119-i][0])
+                #score -= pst[qq][119-j][0] - (pst[pp][119-j][0] - pst[pp][119-i][0])
                 return score
 
             if killer := self.tp_move.get(pos.hash()):
@@ -392,8 +393,7 @@ class Searcher:
                 if depth > 0 or pos.is_capture(killer):
                 #if depth > 0 or (QS_TYPE == QS_CAPTURE and pos.is_capture(killer)) or (QS_TYPE != QS_CAPTURE and -mvv_lva(killer) >= QS_LIMIT/360):
                 # if depth > 0 or pos.is_capture(killer):
-                    pos1 = pos.move(killer)
-                    yield killer, -self.bound(pos1, 1 - gamma, depth - 1, root=False)
+                    yield killer, -self.bound(pos.move(killer), 1-gamma, depth-1, False)
 
             # Then all the other moves
             # moves = [(move, pos.move(move)) for move in pos.gen_moves()]
@@ -422,8 +422,7 @@ class Searcher:
                 #print(mvv_lva(move)*360)
                 #if -mvv_lva(move)*360 >= 30  - depth * 10:
                 #if depth > 0 or (QS_TYPE == QS_CAPTURE and pos.is_capture(move)) or (QS_TYPE != QS_CAPTURE and -mvv_lva(move) >= QS_LIMIT/360):
-                    pos1 = pos.move(move)
-                    yield move, -self.bound(pos1, 1 - gamma, depth - 1, root=False)
+                    yield move, -self.bound(pos.move(move), 1-gamma, depth-1, False)
 
         # Run through the moves, shortcutting when possible
         best = -MATE_UPPER
@@ -431,7 +430,8 @@ class Searcher:
             best = max(best, score)
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
-                self.tp_move[pos.hash()] = move
+                if move is not None:
+                    self.tp_move[pos.hash()] = move
                 break
 
         # Stalemate checking is a bit tricky: Say we failed low, because
@@ -444,12 +444,6 @@ class Searcher:
         # This doesn't prevent sunfish from making a move that results in stalemate,
         # but only if depth == 1, so that's probably fair enough.
         # (Btw, at depth 1 we can also mate without realizing.)
-        # TODO: This is terribly slow right now. Luckily it doesn't happen too often,
-        # so it only ends up accounting for about 10% of our total search time.
-        # That is still not nothing though, so it might be worth it to make a real
-        # is_check test somewhere...
-        # TODO: Can we use ideas from Micromax to improve this?
-        # https://home.hccnet.nl/h.g.muller/mate.html
         if best < gamma and best < 0 and depth > 0:
             # A position is dead if the curent player has a move that captures the king
             is_dead = lambda pos: any(
@@ -487,7 +481,7 @@ class Searcher:
             # 'while lower != upper' would work, but play tests show a margin of 20 plays
             # better.
             lower, upper = -MATE_UPPER, MATE_UPPER
-            while lower < upper - EVAL_ROUGHNESS:
+            while lower < upper - 1:
                 score = self.bound(pos, gamma, depth)
                 if score >= gamma:
                     lower = score
@@ -511,6 +505,7 @@ def render(i):
     return chr(fil + ord("a")) + str(-rank + 1)
 
 def render_move(move, white_pov):
+    if move is None: return '0000'
     a, b = move.i, move.j
     if not white_pov:
         a, b = 119 - a, 119 - b
@@ -521,7 +516,7 @@ hist = [Position(initial, 0, wf, bf, (True, True), (True, True), 0, 0)]
 while True:
     args = input().split()
     if args[0] == "uci":
-        print(f"option name EVAL_ROUGHNESS type spin default {EVAL_ROUGHNESS} min 1 max 100")
+    #    print(f"option name EVAL_ROUGHNESS type spin default {EVAL_ROUGHNESS} min 1 max 100")
         print("uciok")
 
     elif args[0] == "isready":
@@ -538,25 +533,25 @@ while True:
                 i, j = 119 - i, 119 - j
             hist.append(hist[-1].move(Move(i, j, prom)))
 
-    elif args[0] == "setoption":
-        _, uci_key, _, uci_value = args[1:]
-        globals()[uci_key] = int(uci_value)
+    # elif args[0] == "setoption":
+    #     _, uci_key, _, uci_value = args[1:]
+    #     globals()[uci_key] = int(uci_value)
 
-    #elif args[:2] == ["position", "fen"]:
-    #    fen = args[2:]
-    #    board, color, castling, enpas, _hclock, _fclock = fen
-    #    import re
-    #    board = re.sub(r"\d", (lambda m: "." * int(m.group(0))), board)
-    #    board = list(21 * " " + "  ".join(board.split("/")) + 21 * " ")
-    #    board[9::10] = ["\n"] * 12
-    #    board = "".join(board)
-    #    wc = ("Q" in castling, "K" in castling)
-    #    bc = ("k" in castling, "q" in castling)
-    #    ep = parse(enpas) if enpas != "-" else 0
-    #    wf, bf = features(board)
-    #    pos = Position(board, 0, wf, bf, wc, bc, ep, 0)
-    #    pos = pos._replace(score=pos.compute_value())
-    #    hist = [pos] if color == "w" else [pos, pos.rotate()]
+    # elif args[:2] == ["position", "fen"]:
+    #     fen = args[2:]
+    #     board, color, castling, enpas, _hclock, _fclock = fen
+    #     import re
+    #     board = re.sub(r"\d", (lambda m: "." * int(m.group(0))), board)
+    #     board = list(21 * " " + "  ".join(board.split("/")) + 21 * " ")
+    #     board[9::10] = ["\n"] * 12
+    #     board = "".join(board)
+    #     wc = ("Q" in castling, "K" in castling)
+    #     bc = ("k" in castling, "q" in castling)
+    #     ep = parse(enpas) if enpas != "-" else 0
+    #     wf, bf = features(board)
+    #     pos = Position(board, 0, wf, bf, wc, bc, ep, 0)
+    #     pos = pos._replace(score=pos.compute_value())
+    #     hist = [pos] if color == "w" else [pos, pos.rotate()]
 
     elif args[0] == "go":
         if len(args) > 1:
@@ -570,12 +565,14 @@ while True:
         # print('Thinking for', think)
         start = time.time()
         best_move = None
-        for depth, move, score in Searcher().search(hist):
-            print(f"info depth {depth} score cp {score}")
+        searcher = Searcher()
+        for depth, move, score in searcher.search(hist):
+            move_str = render_move(move, white_pov=len(hist) % 2 == 1)
+            elapsed = time.time() - start
+            print(f"info depth {depth} score cp {score} time {round(elapsed*1000)} nodes {searcher.nodes} pv {move_str}")
             if move is not None:
-                best_move = move
-            if time.time() - start > think/1000 * 0.8:
+                best_move = move_str
+            if best_move and elapsed > think/1000 * 0.8:
                 break
-        move_str = render_move(best_move, white_pov=len(hist) % 2 == 1)
-        print("bestmove", move_str)
+        print("bestmove", best_move)
 
