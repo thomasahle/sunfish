@@ -249,8 +249,7 @@ class Mate(Command):
                 else:
                     print("Failed on", line)
                     print("Result:", info)
-        if not args.quiet:
-            print(f"Succeeded in {success}/{total} cases.")
+        print(f"Succeeded in {success}/{total} cases.")
 
 
 class Draw(Command):
