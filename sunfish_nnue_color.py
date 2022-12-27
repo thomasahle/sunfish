@@ -377,13 +377,13 @@ class Searcher:
                 if abs(move.j - pos.kp) < 2: return -MATE
                 i, j = move.i, move.j
                 p, q = pos.board[i], pos.board[j]
-                p2 = move.prom or p
-                score = pst[q][j][0] - (pst[p2][j][0] - pst[p][i][0])
-                #score = pst[q][j][0] - (pst[p][j][0] - pst[p][i][0])
-                pp, qq, pp2 = p.swapcase(), q.swapcase(), p2.swapcase()
-                #pp, qq = p.swapcase(), q.swapcase()
-                score -= pst[qq][119-j][0] - (pst[pp2][119-j][0] - pst[pp][119-i][0])
-                #score -= pst[qq][119-j][0] - (pst[pp][119-j][0] - pst[pp][119-i][0])
+                #p2 = move.prom or p
+                #score = pst[q][j][0] - (pst[p2][j][0] - pst[p][i][0])
+                #pp, qq, pp2 = p.swapcase(), q.swapcase(), p2.swapcase()
+                #score -= pst[qq][119-j][0] - (pst[pp2][119-j][0] - pst[pp][119-i][0])
+                pp, qq = p.swapcase(), q.swapcase()
+                score = pst[q][j][0] - (pst[p][j][0] - pst[p][i][0])
+                score -= pst[qq][119-j][0] - (pst[pp][119-j][0] - pst[pp][119-i][0])
                 return score
 
             if killer := self.tp_move.get(pos.hash()):
@@ -567,11 +567,13 @@ while True:
         best_move = None
         searcher = Searcher()
         for depth, move, score in searcher.search(hist):
-            move_str = render_move(move, white_pov=len(hist) % 2 == 1)
             elapsed = time.time() - start
-            print(f"info depth {depth} score cp {score} time {round(elapsed*1000)} nodes {searcher.nodes} pv {move_str}")
+            info = f"info depth {depth} score cp {score} time {round(elapsed*1000)} nodes {searcher.nodes}"
             if move is not None:
-                best_move = move_str
+                best_move = render_move(move, white_pov=len(hist) % 2 == 1)
+                print(f"{info} pv {best_move}")
+            else:
+                print(info)
             if best_move and elapsed > think/1000 * 0.8:
                 break
         print("bestmove", best_move)
