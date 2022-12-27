@@ -35,7 +35,7 @@ T=\`mktemp\`
 M=\`mktemp\`
 tail -c +$((lh+1)) "\$0"|head -c $lt|xz -d>\$T
 tail -c $lm "\$0">\$M
-(sleep 3;rm \$T \$M)&python3 -u \$T \$M
+(sleep 9;rm \$T \$M)&python3 -u \$T \$M
 exit
 """
    echo "Length of head: $lh"
