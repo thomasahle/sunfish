@@ -322,25 +322,35 @@ class Searcher:
         # but only if depth == 1, so that's probably fair enough.
         # (Btw, at depth 1 we can also mate without realizing.)
 
-        # if best < gamma and best < 0 and depth > 2:
-        #     #null_move_score = -self.bound(pos.nullmove(), 1-gamma, depth-3)
-        #     # This will check if we can be captures right here and now.
-        #     # In other words, if we are in check.
-        #     null_move_score = -self.bound(pos.nullmove(), MATE_LOWER, 0)
-        #     # But assuming we are not, it's only stalemate if all our actual
-        #     # moves lead to death.
-        #     # We just ran all our actual moves, so it should be easy, right?
-        #     # No.. Beucause null moving was a part of those moves...
-        #     #print(f'{best=}, {null_move_score=}, {depth=}, {gamma=}')
-        #     if null_move_score > -MATE_LOWER:
-        #         best = 0
+        # We can only check stalemate when there is no null-move, right?
+        if best < gamma and best < 0 and 0 < depth:
+        #if best <= -MATE_LOWER and depth <= 2:
+        #if best <= -MATE_LOWER and 0 < depth <= 2:
+            #null_move_score = -self.bound(pos.nullmove(), 1-gamma, depth-3)
+            # This will check if we can be captures right here and now.
+            # In other words, if we are in check.
+
+            # Maybe make another check for the king dying or something?
+            if best > -MATE_LOWER:
+                 self.bound(pos, MATE_LOWER, depth, root=root)
+
+            null_move_score = -self.bound(pos.nullmove(), MATE_LOWER, 0)
+            # But assuming we are not, it's only stalemate if all our actual
+            # moves lead to death.
+            # We just ran all our actual moves, so it should be easy, right?
+            # No.. Beucause null moving was a part of those moves...
+            #print(f'{best=}, {null_move_score=}, {depth=}, {gamma=}')
+
+            # If I don't do anything, things are good.
+            if null_move_score > -MATE_LOWER:
+                best = 0
 
 
-        if best < gamma and best < 0 and depth > 0:
-            is_dead = lambda pos: any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
-            if all(is_dead(pos.move(m)) for m in pos.gen_moves()):
-                in_check = is_dead(pos.nullmove())
-                best = -MATE_UPPER if in_check else 0
+        #if best < gamma and best < 0 and depth > 0:
+        #    is_dead = lambda pos: any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
+        #    if all(is_dead(pos.move(m)) for m in pos.gen_moves()):
+        #        in_check = is_dead(pos.nullmove())
+        #        best = -MATE_UPPER if in_check else 0
 
         # Update the table with the result
         self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else \
