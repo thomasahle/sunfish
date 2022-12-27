@@ -17,11 +17,11 @@ import chess.engine
 import pathlib
 import tqdm
 import asyncio
-
-import tools
+import collections
 
 
 root = pathlib.Path(__file__).parent
+
 
 class Command:
     @classmethod
@@ -32,10 +32,10 @@ class Command:
     async def run(cls, args):
         raise NotImplementedError
 
+
 ###############################################################################
 # Test uci
 ###############################################################################
-
 
 
 ###############################################################################
@@ -44,13 +44,15 @@ class Command:
 
 
 class Perft(Command):
-    name="perft"
-    help="tests for correctness and speed of move generator."
+    name = "perft"
+    help = "tests for correctness and speed of move generator."
 
     @classmethod
     def add_arguments(cls, parser):
         parser.add_argument("--depth", type=int)
-        parser.add_argument("file", type=argparse.FileType("r"), help="such as tests/queen.fen.")
+        parser.add_argument(
+            "file", type=argparse.FileType("r"), help="such as tests/queen.fen."
+        )
 
     @classmethod
     async def run(cls, args):
@@ -90,23 +92,30 @@ class Perft(Command):
 
 
 class Bench(Command):
-    name="bench"
-    help="""Run through a fen file, search every position to a certain depth."""
+    name = "bench"
+    help = """Run through a fen file, search every position to a certain depth."""
 
     @classmethod
     def add_arguments(self, parser):
         parser.add_argument(
             "file", type=argparse.FileType("r"), help="such as tests/mate{1,2,3}.fen."
         )
-        parser.add_argument("--depth", type=int, default=100, help="Maximum plies at which to find the mate")
-        parser.add_argument("--limit", type=int, default=100, help="Maximum positions to analyse")
+        parser.add_argument(
+            "--depth",
+            type=int,
+            default=100,
+            help="Maximum plies at which to find the mate",
+        )
+        parser.add_argument(
+            "--limit", type=int, default=100, help="Maximum positions to analyse"
+        )
 
     @classmethod
     async def run(self, engine, args):
         # Run through
         limit = chess.engine.Limit(depth=args.depth)
         lines = args.file.readlines()
-        lines = lines[:args.limit]
+        lines = lines[: args.limit]
 
         total_nodes = 0
         start = time.time()
@@ -117,20 +126,22 @@ class Bench(Command):
             with await engine.analysis(board, limit) as analysis:
                 async for info in analysis:
                     pb.set_description(info_to_desc(info))
-            total_nodes += info.get('nodes', 0)
+            total_nodes += info.get("nodes", 0)
 
-        print(f'Total nodes: {total_nodes}.')
-        print(f'Average knps: {round(total_nodes/(time.time() - start)/1000, 2)}.')
+        print(f"Total nodes: {total_nodes}.")
+        print(f"Average knps: {round(total_nodes/(time.time() - start)/1000, 2)}.")
 
 
 class Selfplay(Command):
-    name="self-play"
-    help="Play the engine a single game against itself, using increments"
+    name = "self-play"
+    help = "Play the engine a single game against itself, using increments"
 
     @classmethod
     def add_arguments(self, parser):
         parser.add_argument("--time", type=int, default=3, help="White time in seconds")
-        parser.add_argument("--inc", type=int, default=1, help="Increment time in seconds")
+        parser.add_argument(
+            "--inc", type=int, default=1, help="Increment time in seconds"
+        )
 
     @classmethod
     async def run(self, engine, args):
@@ -140,33 +151,36 @@ class Selfplay(Command):
         while not board.is_game_over():
             print(board)
             start = time.time()
-            result = await engine.play(board, chess.engine.Limit(
-                white_clock=wtime,
-                black_clock=btime,
-                white_inc=winc,
-                black_inc=binc,
-                ))
+            result = await engine.play(
+                board,
+                chess.engine.Limit(
+                    white_clock=wtime,
+                    black_clock=btime,
+                    white_inc=winc,
+                    black_inc=binc,
+                ),
+            )
             if board.turn == chess.WHITE:
                 wtime -= time.time() - start
                 if wtime <= 0:
-                    print('White lose on time.')
+                    print("White lose on time.")
                     break
                 wtime += winc
             else:
                 btime -= time.time() - start
                 if btime <= 0:
-                    print('Black lose on time.')
+                    print("Black lose on time.")
                     break
                 btime += binc
             if result.resigned:
-                print('Resigned')
+                print("Resigned")
                 break
             print(
                 f"{board.fullmove_number}{'..' if board.turn == chess.BLACK else '.'}",
                 board.san(result.move),
                 f"wtime={round(wtime,1)}, btime={round(btime,1)}",
-                #f"score={result.score}"
-                )
+                # f"score={result.score}"
+            )
             board.push(result.move)
 
 
@@ -174,19 +188,20 @@ class Selfplay(Command):
 # Find mate test
 ###############################################################################
 
+
 def info_to_desc(info):
     desc = []
-    if 'nodes' in info and 'time' in info:
+    if "nodes" in info and "time" in info:
         # Add 1 to denominator, since time could be rounded to 0
-        nps = info['nodes'] / (info['time'] + 1)
+        nps = info["nodes"] / (info["time"] + 1)
         desc.append(f"knps: {round(nps/1000, 2)}")
-    if 'depth' in info:
+    if "depth" in info:
         desc.append(f"depth: {info['depth']}")
-    return ', '.join(desc)
+    return ", ".join(desc)
 
 
 class Mate(Command):
-    name='mate'
+    name = "mate"
     help = "Find the mates"
 
     @classmethod
@@ -194,8 +209,17 @@ class Mate(Command):
         parser.add_argument(
             "file", type=argparse.FileType("r"), help="such as tests/mate{1,2,3}.fen."
         )
-        parser.add_argument("--depth", type=int, default=100, help="Maximum plies at which to find the mate")
-        parser.add_argument("--quick", action="store_true", help="Use mate specific search in the engine, if supported")
+        parser.add_argument(
+            "--depth",
+            type=int,
+            default=100,
+            help="Maximum plies at which to find the mate",
+        )
+        parser.add_argument(
+            "--quick",
+            action="store_true",
+            help="Use mate specific search in the engine, if supported",
+        )
 
     @classmethod
     async def run(cls, engine, args):
@@ -210,42 +234,55 @@ class Mate(Command):
         pb = tqdm.tqdm(lines)
         for line in pb:
             total += 1
-            print('Loading new position', line)
             board, _ = chess.Board.from_epd(line)
             with await engine.analysis(board, limit) as analysis:
                 async for info in analysis:
                     pb.set_description(info_to_desc(info))
-                    score = info['score']
-                    print(info)
+                    if not 'score' in info:
+                        continue
+                    score = info["score"]
                     if score.is_mate() or score.relative.cp > 10000:
-                        print('Found it!')
+                        if args.debug:
+                            print("Found it!")
                         success += 1
                         break
                 else:
-                    print('Failed on', line)
-                    print('Result:', info)
-        print(f'Succeeded in {success}/{total} cases.')
+                    print("Failed on", line)
+                    print("Result:", info)
+        if not args.quiet:
+            print(f"Succeeded in {success}/{total} cases.")
 
 
 class Draw(Command):
-    name='draw'
-    help="Find the draws"
+    name = "draw"
+    help = "Find the draws"
 
     @classmethod
     def add_arguments(cls, parser):
-        parser.add_argument("file",
-                            type=argparse.FileType("r"), help="such as tests/stalemate2.fen.")
-        parser.add_argument("--depth", type=int, default=100, help="Maximum plies at which to find the mate")
-        parser.add_argument("--quick", action="store_true", help="Use mate specific search in the engine, if supported")
+        parser.add_argument(
+            "file", type=argparse.FileType("r"), help="such as tests/stalemate2.fen."
+        )
+        parser.add_argument(
+            "--depth",
+            type=int,
+            default=100,
+            help="Maximum plies at which to find the mate",
+        )
+        parser.add_argument(
+            "--quick",
+            action="store_true",
+            help="Use mate specific search in the engine, if supported",
+        )
 
     @classmethod
     async def run(cls, engine, args):
         if args.quick:
-            # This is not currently supported by any engines
+             #This is not currently supported by any engines
             limit = chess.engine.Limit(draw=args.depth)
         else:
             limit = chess.engine.Limit(depth=args.depth)
         total, success = 0, 0
+        cnt = collections.Counter()
         pb = tqdm.tqdm(args.file.readlines())
         for line in pb:
             total += 1
@@ -253,14 +290,24 @@ class Draw(Command):
             with await engine.analysis(board, limit) as analysis:
                 async for info in analysis:
                     pb.set_description(info_to_desc(info))
-                    score = info['score']
-                    if score.is_mate() or score.relative.cp > 10000:
+                    if not 'score' in info:
+                        continue
+                    score = info["score"]
+                    # It should be draw here
+                    if not score.is_mate() and score.relative.cp == 0:
                         success += 1
+                        cnt[info["depth"]] += 1
                         break
                 else:
-                    print('Failed on', line)
-                    print('Result:', info)
-        print(f'Succeeded in {success}/{total} cases.')
+                    if not args.quiet:
+                        print("Failed on", line.strip())
+                        print("Result:", info)
+        print(f"Succeeded in {success}/{total} cases.")
+        if not args.quiet:
+            print('Depths:')
+            for depth, c in cnt.most_common():
+                print(f'{depth}: {c}')
+
 
 def quickdraw(f, depth):
     k, n = 0, 0
@@ -333,14 +380,18 @@ def findbest(f, times):
 ###############################################################################
 
 
-
 def main():
     parser = argparse.ArgumentParser(
         description="Run various tests for speed and correctness of sunfish."
     )
-    parser.add_argument('args', help="Command and arguments to run")
-    parser.add_argument('--debug', action='store_true')
-    parser.add_argument('--xboard', action='store_true')
+    parser.add_argument("args", help="Command and arguments to run")
+    parser.add_argument(
+        "--debug", action="store_true", help="Write lots of extra stuff"
+    )
+    parser.add_argument("--quiet", action="store_true", help="Only write pass/fail")
+    parser.add_argument(
+        "--xboard", action="store_true", help="Use xboard protocol instead of uci"
+    )
     subparsers = parser.add_subparsers()
     subparsers.required = True
 
@@ -353,6 +404,7 @@ def main():
 
     if args.debug:
         import logging
+
         logging.basicConfig(level=logging.DEBUG)
 
     async def run():
@@ -368,7 +420,7 @@ def main():
     asyncio.set_event_loop_policy(chess.engine.EventLoopPolicy())
     start = time.time()
     asyncio.run(run())
-    print(f'Took {round(time.time() - start, 2)} seconds.')
+    print(f"Took {round(time.time() - start, 2)} seconds.")
 
 
 if __name__ == "__main__":
