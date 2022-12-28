@@ -13,7 +13,10 @@ get_file_size() {
 }
 
 T=`mktemp`
-pyminify --rename-globals --remove-literal-statements "$1" > "$T"
+
+pyminify --rename-globals --remove-literal-statements \
+   <(sed '/# minifier-hide start/,/# minifier-hide end/d' "$1") \
+   > "$T"
 xz "$T"
 lt=$(get_file_size "$T.xz")
 echo "Length of script: $lt"
@@ -26,7 +29,7 @@ do
    head="""#!/bin/sh
 T=\`mktemp\`
 tail -c +$((lh+1)) "\$0"|xz -d>\$T
-(sleep 9;rm \$T)&pypy3 -u \$T
+(sleep 9;rm \$T)&python3 -u \$T
 exit
 """
    echo "Length of head: $lh"

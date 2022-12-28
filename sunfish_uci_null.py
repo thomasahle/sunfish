@@ -1,7 +1,4 @@
-#!/usr/bin/env pypy
-# -*- coding: utf-8 -*-
-
-import re, sys, time
+import time
 from itertools import count
 from collections import namedtuple, defaultdict
 
@@ -248,9 +245,13 @@ class Searcher:
         self.nodes = 0
 
     def bound(self, pos, gamma, depth):
-        """ returns r where
-                s(pos) <= r < gamma    if gamma > s(pos)
-                gamma <= r <= s(pos)   if gamma <= s(pos)"""
+        """ Let s* be the "true" score of the sub-tree we are searching.
+            The method returns r, where
+            if gamma >  s*, s* <= r < gamma  (A better upper bound)
+            if gamma <= s*, gamma <= r <= s* (A better lower bound) """
+        # TODO: We should probably add some condition saying the function
+        # must always return >= MATE_LOWER if we can capture the opponent king.
+
         self.nodes += 1
 
         # Depth <= 0 is QSearch. Here any position is searched as deeply as is needed for
@@ -272,11 +273,16 @@ class Searcher:
         if entry.lower >= gamma: return entry.lower
         if entry.upper < gamma: return entry.upper
 
+        in_check = depth > 0 and -self.bound(pos.nullmove(), MATE_LOWER, 0) <= -MATE_LOWER
+        if in_check:
+            depth += 1
+
         # Generator of moves to search in order.
         # This allows us to define the moves, but only calculate them if needed.
         def moves():
             # First try not moving at all. We only do this if there is at least one major
             # piece left on the board, since otherwise zugzwangs are too dangerous.
+            # The effect of this can be easily seen in the stalemate draw tests.
             if depth > 2 and any(c in pos.board for c in 'RBNQ'):
                 yield None, -self.bound(pos.nullmove(), 1-gamma, depth-3)
             # For QSearch we have a different kind of null-move, namely we can just stop
@@ -300,8 +306,6 @@ class Searcher:
         # Run through the moves, shortcutting when possible
         best = -MATE_UPPER
         for move, score in moves():
-            #if depth == 1:
-                #print(move)
             best = max(best, score)
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
@@ -322,39 +326,14 @@ class Searcher:
         # but only if depth == 1, so that's probably fair enough.
         # (Btw, at depth 1 we can also mate without realizing.)
 
-        # We can only check stalemate when there is no null-move, right?
-        if best < gamma and best < 0 and 0 < depth:
-        #if best <= -MATE_LOWER and depth <= 2:
-        #if best <= -MATE_LOWER and 0 < depth <= 2:
-            #null_move_score = -self.bound(pos.nullmove(), 1-gamma, depth-3)
-            # This will check if we can be captures right here and now.
-            # In other words, if we are in check.
+        if depth > 0 and best <= -MATE_LOWER and not in_check:
+            best = 0
 
-            # Maybe make another check for the king dying or something?
-            if best > -MATE_LOWER:
-                 self.bound(pos, MATE_LOWER, depth, root=root)
-
-            null_move_score = -self.bound(pos.nullmove(), MATE_LOWER, 0)
-            # But assuming we are not, it's only stalemate if all our actual
-            # moves lead to death.
-            # We just ran all our actual moves, so it should be easy, right?
-            # No.. Beucause null moving was a part of those moves...
-            #print(f'{best=}, {null_move_score=}, {depth=}, {gamma=}')
-
-            # If I don't do anything, things are good.
-            if null_move_score > -MATE_LOWER:
-                best = 0
-
-
-        #if best < gamma and best < 0 and depth > 0:
-        #    is_dead = lambda pos: any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
-        #    if all(is_dead(pos.move(m)) for m in pos.gen_moves()):
-        #        in_check = is_dead(pos.nullmove())
-        #        best = -MATE_UPPER if in_check else 0
-
-        # Update the table with the result
-        self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else \
-                                    Entry(entry.lower, best)
+        # Update the table with the result.
+        # We subtract 1 if in_check, since we check the tp before the check_extension
+        self.tp_score[pos, depth-int(in_check)] = \
+                Entry(best, entry.upper) if best >= gamma else \
+                Entry(entry.lower, best)
 
         return best
 
@@ -362,6 +341,9 @@ class Searcher:
         """ Iterative deepening MTD-bi search """
         self.nodes = 0
         self.history = set(history)
+
+        # We have to clear the scores, since they are no longer valid given the
+        # history has changed
         self.tp_score.clear()
 
         gamma = 0
@@ -436,6 +418,7 @@ while True:
         debug = args[1] == 'on'
 
     elif args[:2] == ["position", "fen"]:
+        import re
         fen = args[2:]
         board, color, castling, enpas, _hclock, _fclock = fen
         board = re.sub(r"\d", (lambda m: "." * int(m.group(0))), board)
@@ -498,12 +481,15 @@ while True:
 
         if debug:
             print(f"i want to think for {think} seconds.")
+
         start = time.time()
         try:
             for depth, score, gamma in searcher.search(hist):
                 # gamma == None means the score is final for the depth.
                 if think is None and gamma is None and depth >= max_depth:
                     break
+                # TODO: It's not really clear if a half-searched move at depth
+                # d+1 is better or worse than a fully searched move at depth d...
                 move = searcher.tp_move.get(hist[-1])
                 move_str = render_move(move, white_pov=len(hist)%2==1)
                 elapsed = time.time() - start
@@ -541,12 +527,18 @@ while True:
         think = min(wtime / 40 + winc, wtime / 2 - 1)
         start = time.time()
         best_move = None
-        for depth, move, score in Searcher().search(hist):
-            print(f"info depth {depth} score cp {score}")
+        searcher = Searcher()
+        for depth, score, gamma in searcher.search(hist):
+            # TODO: It's not really clear if a half-searched move at depth
+            # d+1 is better or worse than a fully searched move at depth d...
+            move = searcher.tp_move.get(hist[-1])
             if move is not None:
-                best_move = move
+                # cutechess doesn't like 0000 (null move) in pvs, so I guess we'll
+                # just not output it
+                best_move = render_move(move, white_pov=len(hist)%2==1)
+                print(f"info depth {depth} score cp {score} nodes {searcher.nodes} pv {best_move}")
             if best_move and time.time() - start > think * 0.8:
                 break
-        move_str = render_move(best_move, white_pov=len(hist) % 2 == 1)
-        print("bestmove", move_str)
+        assert best_move != '0000'
+        print("bestmove", best_move)
 
