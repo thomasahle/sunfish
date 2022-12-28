@@ -1,6 +1,3 @@
-#!/usr/bin/env pypy
-# -*- coding: utf-8 -*-
-
 import sys, time, pickle
 from itertools import count
 from collections import namedtuple
@@ -377,13 +374,13 @@ class Searcher:
                 if abs(move.j - pos.kp) < 2: return -MATE
                 i, j = move.i, move.j
                 p, q = pos.board[i], pos.board[j]
-                #p2 = move.prom or p
-                #score = pst[q][j][0] - (pst[p2][j][0] - pst[p][i][0])
-                #pp, qq, pp2 = p.swapcase(), q.swapcase(), p2.swapcase()
-                #score -= pst[qq][119-j][0] - (pst[pp2][119-j][0] - pst[pp][119-i][0])
-                pp, qq = p.swapcase(), q.swapcase()
-                score = pst[q][j][0] - (pst[p][j][0] - pst[p][i][0])
-                score -= pst[qq][119-j][0] - (pst[pp][119-j][0] - pst[pp][119-i][0])
+                p2 = move.prom or p
+                score = pst[q][j][0] - (pst[p2][j][0] - pst[p][i][0])
+                pp, qq, pp2 = p.swapcase(), q.swapcase(), p2.swapcase()
+                score -= pst[qq][119-j][0] - (pst[pp2][119-j][0] - pst[pp][119-i][0])
+                #pp, qq = p.swapcase(), q.swapcase()
+                #score = pst[q][j][0] - (pst[p][j][0] - pst[p][i][0])
+                #score -= pst[qq][119-j][0] - (pst[pp][119-j][0] - pst[pp][119-i][0])
                 return score
 
             if killer := self.tp_move.get(pos.hash()):

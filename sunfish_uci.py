@@ -266,6 +266,10 @@ class Searcher:
         if pos.score <= -MATE_LOWER:
             return -MATE_UPPER
 
+        # Let's not repeat positions
+        if not root and pos in self.history:
+            return 0
+
         # Look in the table if we have already searched this position before.
         # We also need to be sure, that the stored search was over the same
         # nodes as the current search.
@@ -360,12 +364,13 @@ class Searcher:
                     upper = score
                 # TODO: But could a partial result from a higher depth sometimes
                 # be better than a fully searched move from a more shallow one?
-                yield depth, None, score
+                #yield depth, None, score
+                yield depth, self.tp_move.get(history[-1]), score
                 gamma = (lower + upper + 1) // 2
             # The only way we can be sure to have the real move in tp_move,
             # is if we have just failed high.
-            score = self.bound(history[-1], lower, depth)
-            yield depth, self.tp_move.get(history[-1]), score
+            #score = self.bound(history[-1], lower, depth)
+            #yield depth, self.tp_move.get(history[-1]), score
 
 
 ###############################################################################
