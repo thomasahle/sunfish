@@ -267,13 +267,14 @@ class Searcher:
             return -MATE_UPPER
 
         # Let's not repeat positions
-        if not root and pos in self.history:
+        if not root and depth > 0 and pos in self.history:
             return 0
 
         # Look in the table if we have already searched this position before.
         # We also need to be sure, that the stored search was over the same
         # nodes as the current search.
-        entry = self.tp_score[pos, depth, root]
+        #entry = self.tp_score[pos, depth, root]
+        entry = self.tp_score[pos, depth]
         if entry.lower >= gamma: return entry.lower
         if entry.upper < gamma: return entry.upper
 
@@ -288,7 +289,7 @@ class Searcher:
             # piece left on the board, since otherwise zugzwangs are too dangerous.
             # The effect of this can be easily seen in the stalemate draw tests.
             #if not root and depth > 2 and any(c in pos.board for c in 'RBNQ'):
-            if not root and depth > 2 and any(c in pos.board for c in 'RBNQ'):
+            if depth > 0 and any(c in pos.board for c in 'RBNQ'):
                 yield None, -self.bound(pos.nullmove(), 1-gamma, depth-3, root=False)
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else.
@@ -338,7 +339,7 @@ class Searcher:
 
         # Update the table with the result.
         # We subtract 1 if in_check, since we check the tp before the check_extension
-        self.tp_score[pos, depth-int(in_check), root] = \
+        self.tp_score[pos, depth-int(in_check)] = \
                 Entry(best, entry.upper) if best >= gamma else \
                 Entry(entry.lower, best)
 
