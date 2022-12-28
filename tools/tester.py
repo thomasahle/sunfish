@@ -211,6 +211,12 @@ class Mate(Command):
             help="Maximum plies at which to find the mate",
         )
         parser.add_argument(
+            "--limit",
+            type=int,
+            default=2000,
+            help="Maximum number of lines to take from file",
+        )
+        parser.add_argument(
             "--quick",
             action="store_true",
             help="Use mate specific search in the engine, if supported",
@@ -228,6 +234,8 @@ class Mate(Command):
         lines = args.file.readlines()
         pb = tqdm.tqdm(lines)
         for line in pb:
+            if total >= args.limit:
+                break
             total += 1
             board, _ = chess.Board.from_epd(line)
             with await engine.analysis(board, limit) as analysis:
@@ -242,8 +250,9 @@ class Mate(Command):
                         success += 1
                         break
                 else:
-                    print("Failed on", line)
-                    print("Result:", info)
+                    if not args.quiet:
+                        print("Failed on", line)
+                        print("Result:", info)
         print(f"Succeeded in {success}/{total} cases.")
 
 
