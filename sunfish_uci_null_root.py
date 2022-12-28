@@ -244,7 +244,7 @@ class Searcher:
         self.history = set()
         self.nodes = 0
 
-    def bound(self, pos, gamma, depth):
+    def bound(self, pos, gamma, depth, root=True):
         """ Let s* be the "true" score of the sub-tree we are searching.
             The method returns r, where
             if gamma >  s*, s* <= r < gamma  (A better upper bound)
@@ -269,7 +269,7 @@ class Searcher:
         # Look in the table if we have already searched this position before.
         # We also need to be sure, that the stored search was over the same
         # nodes as the current search.
-        entry = self.tp_score[pos, depth]
+        entry = self.tp_score[pos, depth, root]
         if entry.lower >= gamma: return entry.lower
         if entry.upper < gamma: return entry.upper
 
@@ -283,8 +283,9 @@ class Searcher:
             # First try not moving at all. We only do this if there is at least one major
             # piece left on the board, since otherwise zugzwangs are too dangerous.
             # The effect of this can be easily seen in the stalemate draw tests.
-            if depth > 2 and any(c in pos.board for c in 'RBNQ'):
-                yield None, -self.bound(pos.nullmove(), 1-gamma, depth-3)
+            #if not root and depth > 2 and any(c in pos.board for c in 'RBNQ'):
+            if not root and depth > 0 and any(c in pos.board for c in 'RBNQ'):
+                yield None, -self.bound(pos.nullmove(), 1-gamma, depth-3, root=False)
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else.
             if depth == 0:
@@ -296,7 +297,7 @@ class Searcher:
             if killer := self.tp_move.get(pos):
                 if depth > 0 or pos.value(killer) >= QS_LIMIT:
                 #if pos.value(killer) >= QS_LIMIT - depth*100:
-                    yield killer, -self.bound(pos.move(killer), 1-gamma, depth-1)
+                    yield killer, -self.bound(pos.move(killer), 1-gamma, depth-1, root=False)
             # Then all the other moves
             for move in sorted(pos.gen_moves(), key=pos.value, reverse=True):
                 # If depth == 0 we only try moves with high intrinsic score (captures and
@@ -333,7 +334,7 @@ class Searcher:
 
         # Update the table with the result.
         # We subtract 1 if in_check, since we check the tp before the check_extension
-        self.tp_score[pos, depth-int(in_check)] = \
+        self.tp_score[pos, depth-int(in_check), root] = \
                 Entry(best, entry.upper) if best >= gamma else \
                 Entry(entry.lower, best)
 
