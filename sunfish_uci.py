@@ -410,7 +410,7 @@ while True:
                 i, j = 119 - i, 119 - j
             hist.append(hist[-1].move(Move(i, j, prom)))
 
-    # TODO: Remove this before packing:
+# minifier-hide start
     elif args[:2] == ["position", "fen"]:
         fen = args[2:]
         board, color, castling, enpas, _hclock, _fclock = fen
@@ -423,6 +423,7 @@ while True:
         ep = parse(enpas) if enpas != "-" else 0
         pos = Position(board, 0, wc, bc, ep, 0)
         hist = [pos] if color == "w" else [pos, pos.rotate()]
+# minifier-hide end
 
     elif args[0] == "go":
         if len(args) <= 4:
