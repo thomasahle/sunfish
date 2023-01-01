@@ -306,6 +306,8 @@ class Searcher:
             for move in sorted(pos.gen_moves(), key=pos.value, reverse=True):
                 # If depth == 0 we only try moves with high intrinsic score (captures and
                 # promotions). Otherwise we do all moves.
+                # TODO: Would it be cleaner to put king-recapture here? We still wouldn't have
+                # to actually search the child.
                 if depth > 0 or pos.value(move) >= QS_LIMIT:
                     #if pos.value(move) >= QS_LIMIT - depth*100:
                     yield move, -self.bound(pos.move(move), 1-gamma, depth-1)

@@ -1,5 +1,6 @@
 *.py[cod]
 .DS_Store
+engines.json
 
 # Sunfish files
 *.log
