@@ -114,6 +114,7 @@ MATE_UPPER = piece['K'] + 10*piece['Q']
 # Constants for tuning search
 QS_LIMIT = 219
 EVAL_ROUGHNESS = 13
+FUTILITY = 0
 
 
 ###############################################################################
@@ -160,6 +161,7 @@ class Position(namedtuple('Position', 'board score wc bc ep kp')):
                     # Stop crawlers from sliding, and sliding after captures
                     if p in 'PNK' or q.islower(): break
                     # Castling, by sliding the rook next to the king
+                    # TODO: Why not just j == A1+E+E+E and j == H1+W+W
                     if i == A1 and self.board[j+E] == 'K' and self.wc[0]: yield Move(j+E, j+W, '')
                     if i == H1 and self.board[j+W] == 'K' and self.wc[1]: yield Move(j+W, j+E, '')
 
@@ -267,6 +269,9 @@ class Searcher:
             return -MATE_UPPER
 
         # Let's not repeat positions
+        # TODO: Is there a way to combine this with the tp_score lookup?
+        # Also, would we rather do this before or after the tp_score check?
+        # I think it doesn't really matter.
         if not root and pos in self.history:
             return 0
 
@@ -274,47 +279,58 @@ class Searcher:
         # We also need to be sure, that the stored search was over the same
         # nodes as the current search.
         entry = self.tp_score.get((pos, depth, root), Entry(-MATE_UPPER, MATE_UPPER))
-        if entry.lower >= gamma:
-            return entry.lower
-        if entry.upper < gamma:
-            return entry.upper
-
-        # Here extensions may be added
-        # Such as 'if in_check: depth += 1'
+        if entry.lower >= gamma: return entry.lower
+        if entry.upper < gamma: return entry.upper
 
         # Generator of moves to search in order.
         # This allows us to define the moves, but only calculate them if needed.
         def moves():
+            score_moves = sorted(((pos.value(m), m) for m in pos.gen_moves()), reverse=True)
+            # We have to check for king-capture (legality) at the VERY first, since otherwise
+            # null-move or standing pat might make us not realize an illegal move.
+            if score_moves and score_moves[0][0] >= MATE_LOWER:
+                yield score_moves[0][1], MATE_UPPER
+
             # First try not moving at all. We only do this if there is at least one major
             # piece left on the board, since otherwise zugzwangs are too dangerous.
             if depth > 2 and not root and any(c in pos.board for c in 'RBNQ'):
                 yield None, -self.bound(pos.nullmove(), 1-gamma, depth-3, root=False)
+
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else.
             if depth == 0:
                 yield None, pos.score
+
             # Then killer move. We search it twice, but the tp will fix things for us.
             # Note, we don't have to check for legality, since we've already done it
             # before. Also note that in QS the killer must be a capture, otherwise we
             # will be non deterministic.
-            killer = self.tp_move.get(pos)
+            killer = self.tp_move.get((pos, root))
             if killer and (depth > 0 or pos.value(killer) >= QS_LIMIT):
                 yield killer, -self.bound(pos.move(killer), 1-gamma, depth-1, root=False)
+
             # Then all the other moves
-            for move in sorted(pos.gen_moves(), key=pos.value, reverse=True):
+            for move_score, move in score_moves:
+                # Futility pruning
+                if FUTILITY and depth == 0 and pos.score + move_score < gamma:
+                    # Yield/return the move, so we can return a good lower bound.
+                    yield move, pos.score + move_score
+                    break
+
                 # If depth == 0 we only try moves with high intrinsic score (captures and
                 # promotions). Otherwise we do all moves.
-                if depth > 0 or pos.value(move) >= QS_LIMIT:
+                if depth > 0 or move_score >= QS_LIMIT:
                     yield move, -self.bound(pos.move(move), 1-gamma, depth-1, root=False)
 
         # Run through the moves, shortcutting when possible
+        # TODO: Rename MATE_UPPER to ILLEGAL
         best = -MATE_UPPER
         for move, score in moves():
             best = max(best, score)
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
-                if move is not None:
-                    self.tp_move[pos] = move
+                #if move is not None:
+                self.tp_move[pos, root] = move
                 break
 
         # Stalemate checking is a bit tricky: Say we failed low, because
@@ -328,16 +344,10 @@ class Searcher:
         # but only if depth == 1, so that's probably fair enough.
         # (Btw, at depth 1 we can also mate without realizing.)
 
-        #if best < gamma and best < 0 and depth > 0:
-        #    is_dead = lambda pos: any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
-        #    if all(is_dead(pos.move(m)) for m in pos.gen_moves()):
-        #        in_check = is_dead(pos.nullmove())
-        #        best = -MATE_UPPER if in_check else 0
-
-        if depth > 0 and best <= -MATE_LOWER:
-            in_check = -self.bound(pos.nullmove(), MATE_LOWER, 0) <= -MATE_LOWER
-            if not in_check:
-                best = 0
+        # If there we no legal moves
+        if depth > 0 and best == -MATE_UPPER:
+            in_check = self.bound(pos.nullmove(), 0, 0, root=False) == MATE_UPPER
+            best = -MATE_LOWER if in_check else 0
 
         # Table part 2
         if best >= gamma:
@@ -361,22 +371,15 @@ class Searcher:
             # Inv: lower <= score <= upper
             # 'while lower != upper' would work, but play tests show a margin of 20 plays
             # better.
-            lower, upper = -MATE_UPPER, MATE_UPPER
+            lower, upper = -MATE_LOWER, MATE_LOWER
             while lower < upper - EVAL_ROUGHNESS:
                 score = self.bound(history[-1], gamma, depth)
                 if score >= gamma:
                     lower = score
                 if score < gamma:
                     upper = score
-                # TODO: But could a partial result from a higher depth sometimes
-                # be better than a fully searched move from a more shallow one?
-                #yield depth, None, score
-                yield depth, self.tp_move.get(history[-1]), score
+                yield depth, self.tp_move.get((history[-1], True)), score
                 gamma = (lower + upper + 1) // 2
-            # The only way we can be sure to have the real move in tp_move,
-            # is if we have just failed high.
-            #score = self.bound(history[-1], lower, depth)
-            #yield depth, self.tp_move.get(history[-1]), score
 
 
 ###############################################################################
@@ -391,20 +394,35 @@ def render(i):
     rank, fil = divmod(i - A1, 10)
     return chr(fil + ord("a")) + str(-rank + 1)
 
-
 def render_move(move, white_pov):
     if move is None:
-        return '0000'
+        return '(none)'
     i, j = move.i, move.j
     if not white_pov:
         i, j = 119 - i, 119 - j
     return render(i) + render(j) + move.prom.lower()
 
-hist = [Position(initial, 0, (True,True), (True,True), 0, 0)]
+def parse_move(mstr, white_pov):
+    i, j, prom = parse(move[:2]), parse(move[2:4]), move[4:].upper()
+    if not white_pov:
+        i, j = 119 - i, 119 - j
+    return Move(i, j, prom)
+
+# minifier-hide start
+debug = False
 searcher = Searcher()
+# minifier-hide end
+
+hist = [Position(initial, 0, (True,True), (True,True), 0, 0)]
 while True:
     args = input().split()
     if args[0] == "uci":
+        print("id name sunfish")
+# minifier-hide start
+        print(f"option name EVAL_ROUGHNESS type spin default {EVAL_ROUGHNESS} min 1 max 100")
+        print(f"option name QS_LIMIT type spin default {QS_LIMIT} min 0 max 2000")
+        print(f"option name FUTILITY type spin default {FUTILITY} min 0 max 1")
+# minifier-hide end
         print("uciok")
 
     elif args[0] == "isready":
@@ -416,13 +434,18 @@ while True:
     elif args[:2] == ["position", "startpos"]:
         del hist[1:]
         for ply, move in enumerate(args[3:]):
-            i, j, prom = parse(move[:2]), parse(move[2:4]), move[4:].upper()
-            if ply % 2 == 1:
-                i, j = 119 - i, 119 - j
-            hist.append(hist[-1].move(Move(i, j, prom)))
+            hist.append(hist[-1].move(parse_move(move, ply % 2 == 0)))
 
 # minifier-hide start
+    elif args[0] == "debug":
+        debug = args[1] == 'on'
+
+    elif args[0] == "setoption":
+        _, uci_key, _, uci_value = args[1:]
+        globals()[uci_key] = int(uci_value)
+
     elif args[:2] == ["position", "fen"]:
+        import re
         fen = args[2:]
         board, color, castling, enpas, _hclock, _fclock = fen
         board = re.sub(r"\d", (lambda m: "." * int(m.group(0))), board)
@@ -434,19 +457,104 @@ while True:
         ep = parse(enpas) if enpas != "-" else 0
         pos = Position(board, 0, wc, bc, ep, 0)
         hist = [pos] if color == "w" else [pos, pos.rotate()]
+        if debug:
+            print(f'Loaded new position with score {pos.score}')
+            print(pos.board)
+            print('Moves:', [render_move(move, len(hist)%2) for move in pos.gen_moves()])
+
+    # case ["go", *args]:
+    elif args[0] == "go":
+        think = 10**6
+        max_depth = 100
+
+        if args[1:] == []:
+            think = 24 * 3600
+
+        elif args[1] == "movetime":
+            movetime = args[2]
+            think = int(movetime) / 1000
+
+        elif args[1] == "wtime":
+            wtime, btime, winc, binc = [int(a) / 1000 for a in args[2::2]]
+            # we always consider ourselves white, but uci doesn't
+            if len(hist) % 2 == 0:
+                wtime, winc = btime, binc
+            think = min(wtime / 40 + winc, wtime / 2)
+            # let's go fast for the first moves
+            if len(hist) < 3:
+                think = min(think, 1)
+
+        elif args[1] == 'depth':
+            max_depth = int(args[2])
+
+        elif args[1] in ('mate', 'draw'):
+            max_depth = args[2]
+            for d in range(int(max_depth) + 1):
+                if args[1] == 'draw':
+                    s0 = searcher.bound(hist[-1], 0, d)
+                    print("info", "depth", d, "score lowerbound cp", s0)
+                    s1 = searcher.bound(hist[-1], 1, d)
+                    print("info", "depth", d, "score upperbound cp", s1)
+                    if s0 >= 0 and s1 < 1:
+                        break
+                if args[1] == 'mate':
+                    score = searcher.bound(hist[-1], MATE_LOWER, d)
+                    print("info", "depth", d, "score cp", score)
+                    if score >= MATE_LOWER:
+                        break
+            move = searcher.tp_move.get((hist[-1], True))
+            # If we didn't get a fail-high, we didn't find the mate, and dont' have a move.
+            if not move:
+                print("bestmove 0000")
+            else:
+                move_str = render_move(move, white_pov=len(hist)%2==1)
+                print("bestmove", move_str)
+            continue
+
+        if debug:
+            print(f"i want to think for {think} seconds.")
+
+        # TODO: Say we search depth=100, looking for a mate, and we find
+        # one already at depth=4, then we need a way to break out of this
+        # loop. Python-chess will send "stop". I guess we could support that.
+        start = time.time()
+        best_move = None
+        try:
+            for depth, move, score in searcher.search(hist):
+                # We never know when we've seen the last at a certain depth
+                # before we get to the next one
+                if depth-1 >= max_depth:
+                    break
+                best_move = render_move(move, white_pov=len(hist)%2==1)
+                elapsed = time.time() - start
+                print(
+                    "info depth", depth,
+                    "score cp", score,
+                    "time", round(1000 * elapsed),
+                    "nodes", searcher.nodes,
+                    "nps", round(searcher.nodes / elapsed),
+                    "pv", best_move if move else '',
+                )
+                if best_move and elapsed > think * 2 / 3:
+                    break
+        except KeyboardInterrupt:
+            if debug:
+                raise
+            continue
+        if debug:
+            print(f"stopped thinking after {round(elapsed,3)} seconds")
+        print("bestmove", best_move)
+
 # minifier-hide end
 
     elif args[0] == "go":
-        if len(args) <= 4:
-            think = 1
-        else:
-            wtime, btime, winc, binc = map(int, args[2::2])
-            if len(hist) % 2 == 0:
-                wtime, winc = btime, binc
-            think = min(wtime / 1000 / 40 + winc / 1000, wtime / 2000 - 1)
+        wtime, btime, winc, binc = map(int, args[2::2])
+        if len(hist) % 2 == 0:
+            wtime, winc = btime, binc
+        think = min(wtime / 1000 / 40 + winc / 1000, wtime / 2000 - 1)
         start = time.time()
         best_move = None
-        for depth, move, score in searcher.search(hist):
+        for depth, move, score in Searcher().search(hist):
             if move:
                 print(f"info depth {depth} nodes {searcher.nodes} score cp {score}")
                 best_move = move or best_move

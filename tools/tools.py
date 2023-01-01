@@ -154,6 +154,15 @@ def readPGN(file):
 # Parse and Render positions
 ################################################################################
 
+def print_unicode(pos):
+    print()
+    # board = pos.board if get_color(pos) == WHITE else pos.rotate().board
+    uni_pieces = {'R':'♜', 'N':'♞', 'B':'♝', 'Q':'♛', 'K':'♚', 'P':'♟',
+                  'r':'♖', 'n':'♘', 'b':'♗', 'q':'♕', 'k':'♔', 'p':'♙', '.':'·'}
+    for i, row in enumerate(pos.board.split()):
+        print(' ', 8-i, ' '.join(uni_pieces.get(p, p) for p in row))
+    print('    a b c d e f g h \n\n')
+
 def get_color(pos):
     ''' A slightly hacky way to to get the color from a sunfish position '''
     return BLACK if pos.board.startswith('\n') else WHITE

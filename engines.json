@@ -12,6 +12,12 @@
       "stderrFile": "null.err"
    },
    {
+      "name": "sunfish-2",
+      "command": "sunfish_uci2.sh",
+      "protocol": "uci",
+      "stderrFile": "uci2.err"
+   },
+   {
       "name": "sunfish-nnue",
       "command": "sunfish_nnue.sh",
       "protocol": "uci",
