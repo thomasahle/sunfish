@@ -333,9 +333,13 @@ class Searcher:
                 #    pos.score + val < gamma === -(pos.score + val) >= 1-gamma
                 # This is known as futility pruning. We can also break, since
                 # we have ordered the moves by value.
-                if depth == 0 and pos.score + val < gamma:
+                if depth == 0 and val >= QS_LIMIT and pos.score + val < gamma:
+                    # TODO: Is there some problem here regarding converting mate_lower
+                    # to mate_upper? I don't think so, since that happens if, in the child
+                    # node, the score is really low. While futulity pruning is about if,
+                    # in the child node, the score is really high.
                     yield move, pos.score + val
-                    break
+                    #break
                 # If depth == 0 we only try moves with high intrinsic score (captures and
                 # promotions). Otherwise we do all moves.
                 if depth > 0 or val >= QS_LIMIT:
@@ -368,6 +372,8 @@ class Searcher:
         #    best < gamma and best < 0
         #    and all(pos.move(m).is_dead() for m in pos.gen_moves())
         #)):
+        # We are adding an extra assumption, that we always take the king if we can.
+        # That means we don't have to worry about the impact of 
         if depth > 0 and best == -MATE_UPPER:
             best = 0 if not pos.nullmove().is_dead() else -MATE_LOWER
 
