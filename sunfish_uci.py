@@ -333,9 +333,9 @@ class Searcher:
                 #    pos.score + val < gamma === -(pos.score + val) >= 1-gamma
                 # This is known as futility pruning. We can also break, since
                 # we have ordered the moves by value.
-                #if depth == 0 and pos.score + val < gamma:
-                #    yield move, pos.score + val
-                #    break
+                if depth == 0 and pos.score + val < gamma:
+                    yield move, pos.score + val
+                    break
                 # If depth == 0 we only try moves with high intrinsic score (captures and
                 # promotions). Otherwise we do all moves.
                 if depth > 0 or val >= QS_LIMIT:
