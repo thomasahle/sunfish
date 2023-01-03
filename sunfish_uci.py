@@ -364,10 +364,11 @@ class Searcher:
         # but only if depth == 1, so that's probably fair enough.
         # (Btw, at depth 1 we can also mate without realizing.)
 
-        if depth > 0 and (best == -MATE_UPPER or (
-            best < gamma and best < 0
-            and all(pos.move(m).is_dead() for m in pos.gen_moves())
-        )):
+        #if depth > 0 and (best == -MATE_UPPER or (
+        #    best < gamma and best < 0
+        #    and all(pos.move(m).is_dead() for m in pos.gen_moves())
+        #)):
+        if depth > 0 and best == -MATE_UPPER:
             best = 0 if not pos.nullmove().is_dead() else -MATE_LOWER
 
         # Table part 2
