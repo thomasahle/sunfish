@@ -327,9 +327,18 @@ class Searcher:
                 )
             # Then all the other moves
             for move in sorted(pos.gen_moves(), key=pos.value, reverse=True):
+                val = pos.value(move)
+                # If the new score is less than gamma, the opponent will for sure just
+                # stand pat, since
+                #    pos.score + val < gamma === -(pos.score + val) >= 1-gamma
+                # This is known as futility pruning. We can also break, since
+                # we have ordered the moves by value.
+                if depth == 0 and pos.score + val < gamma:
+                    yield move, pos.score + val
+                    break
                 # If depth == 0 we only try moves with high intrinsic score (captures and
                 # promotions). Otherwise we do all moves.
-                if depth > 0 or pos.value(move) >= QS_LIMIT:
+                if depth > 0 or val >= QS_LIMIT:
                     yield move, -self.bound(
                         pos.move(move), 1 - gamma, depth - 1, root=False
                     )
