@@ -333,9 +333,9 @@ class Searcher:
                 #    pos.score + val < gamma === -(pos.score + val) >= 1-gamma
                 # This is known as futility pruning. We can also break, since
                 # we have ordered the moves by value.
-                if depth == 0 and pos.score + val < gamma:
-                    yield move, pos.score + val
-                    break
+                #if depth == 0 and pos.score + val < gamma:
+                #    yield move, pos.score + val
+                #    break
                 # If depth == 0 we only try moves with high intrinsic score (captures and
                 # promotions). Otherwise we do all moves.
                 if depth > 0 or val >= QS_LIMIT:
@@ -575,7 +575,7 @@ while True:
         best_move = None
         for depth, move, score in Searcher().search(hist):
             if move:
-                print(f"info depth {depth} nodes {searcher.nodes} score cp {score}")
+                print(f"info depth {depth} score cp {score}")
                 best_move = move or best_move
             if best_move and time.time() - start > think * 0.8:
                 break
