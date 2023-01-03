@@ -2,11 +2,16 @@
 .DS_Store
 engines.json
 
+
 # Sunfish files
 *.log
 *.txt
 *.err
 *.pickle
+
+# Test files
+cute.sh
+out.pgn
 
 # C extensions
 *.so
