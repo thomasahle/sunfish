@@ -20,7 +20,7 @@ import asyncio
 import collections
 
 
-root = pathlib.Path(__file__).parent
+random.seed(42)
 
 
 class Command:
@@ -192,6 +192,9 @@ def info_to_desc(info):
         desc.append(f"knps: {round(nps/1000, 2)}")
     if "depth" in info:
         desc.append(f"depth: {info['depth']}")
+    if "score" in info:
+        #:wprint(dir(info['score']))
+        desc.append(f"score: {info['score'].pov(chess.WHITE).cp/100:.1f}")
     return ", ".join(desc)
 
 
@@ -232,11 +235,9 @@ class Mate(Command):
         total = 0
         success = 0
         lines = args.file.readlines()
+        lines = lines[:args.limit]
         pb = tqdm.tqdm(lines)
         for line in pb:
-            if total >= args.limit:
-                break
-            total += 1
             board, _ = chess.Board.from_epd(line)
             with await engine.analysis(board, limit) as analysis:
                 async for info in analysis:
@@ -253,7 +254,7 @@ class Mate(Command):
                     if not args.quiet:
                         print("Failed on", line)
                         print("Result:", info)
-        print(f"Succeeded in {success}/{total} cases.")
+        print(f"Succeeded in {success}/{len(lines)} cases.")
 
 
 class Draw(Command):
@@ -268,6 +269,12 @@ class Draw(Command):
         parser.add_argument(
             "--depth",
             type=int,
+            default=0,
+            help="Maximum plies at which to find the mate",
+        )
+        parser.add_argument(
+            "--ms",
+            type=int,
             default=100,
             help="Maximum plies at which to find the mate",
         )
@@ -279,11 +286,10 @@ class Draw(Command):
 
     @classmethod
     async def run(cls, engine, args):
-        if args.quick:
-             #This is not currently supported by any engines
-            limit = chess.engine.Limit(draw=args.depth)
-        else:
+        if args.depth:
             limit = chess.engine.Limit(depth=args.depth)
+        else:
+            limit = chess.engine.Limit(time=args.ms/1000)
         total, success = 0, 0
         cnt = collections.Counter()
         pb = tqdm.tqdm(args.file.readlines())
@@ -305,6 +311,7 @@ class Draw(Command):
                     if not args.quiet:
                         print("Failed on", line.strip())
                         print("Result:", info)
+                        pass
         print(f"Succeeded in {success}/{total} cases.")
         if not args.quiet:
             print('Depths:')
@@ -316,41 +323,53 @@ class Draw(Command):
 ###############################################################################
 
 
-def findbest(f, times):
-    pos = tools.parseFEN(tools.FEN_INITIAL)
-    searcher = sunfish.Searcher()
+class Best(Command):
+    name = "best"
+    help = "Find the best move"
 
-    print("Printing best move after seconds", times)
-    print("-" * 60)
-    totalpoints = 0
-    totaltests = 0
-    for line in f:
-        fen, opts = tools.parseEPD(line, opt_dict=True)
-        if type(opts) != dict or ("am" not in opts and "bm" not in opts):
-            print("Line didn't have am/bm in opts", line, opts)
-            continue
-        pos = tools.parseFEN(fen)
-        # am -> avoid move; bm -> best move
-        am = tools.parseSAN(pos, opts["am"]) if "am" in opts else None
-        bm = tools.parseSAN(pos, opts["bm"]) if "bm" in opts else None
-        print("Looking for am/bm", opts.get("am"), opts.get("bm"))
-        points = 0
-        print(opts.get("id", "unnamed"), end=" ", flush=True)
-        for t in times:
-            move, _, _ = tools.search(searcher, pos, t)
-            mark = tools.renderSAN(pos, move)
-            if am and move != am or bm and move == bm:
-                mark += "(1)"
+    @classmethod
+    def add_arguments(cls, parser):
+        parser.add_argument(
+            "file", type=argparse.FileType("r"), help="such as bratko_kopec_test.epd."
+        )
+        parser.add_argument(
+            "--ms",
+            type=int,
+            default=100,
+            help="Milli seconds per move",
+        )
+        parser.add_argument(
+            "--limit",
+            type=int,
+            default=2000,
+            help="Maximum number of lines to take from file",
+        )
+
+    @classmethod
+    async def run(cls, engine, args):
+        limit = chess.engine.Limit(time=args.ms/1000)
+        points, total = 0, 0
+        lines = args.file.readlines()
+        random.shuffle(lines)
+        lines = lines[:args.limit]
+        for line in (pb := tqdm.tqdm(lines)):
+            total += 1
+            board, opts = chess.Board.from_epd(line)
+            if "am" not in opts and "bm" not in opts:
+                if not args.quiet:
+                    print("Line didn't have am/bm in opts", line, opts)
+                continue
+            # am -> avoid move; bm -> best move
+            am = opts["am"][0] if "am" in opts else None
+            bm = opts["bm"][0] if "bm" in opts else None
+            pb.set_description(f"{opts.get('id','')}")
+            result = await engine.play(board, limit)
+            if 'bm' in opts and result.move in opts['bm']:
                 points += 1
-            else:
-                mark += "(0)"
-            print(mark, end=" ", flush=True)
-            totaltests += 1
-        print(points)
-        totalpoints += points
-    print("-" * 60)
-    print("Total Points: %d/%d", totalpoints, totaltests)
-
+            elif 'am' in opts and result.move not in opts['am']:
+                points += 1
+            pb.set_postfix(acc=points/total)
+        print(f"Succeeded in {points}/{total} cases.")
 
 ###############################################################################
 # Actions

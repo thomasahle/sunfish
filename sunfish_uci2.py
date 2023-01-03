@@ -285,6 +285,7 @@ class Searcher:
         # Generator of moves to search in order.
         # This allows us to define the moves, but only calculate them if needed.
         def moves():
+            # TODO: Right now we're doing this even in depth == 0. That seems not ideal?
             score_moves = sorted(((pos.value(m), m) for m in pos.gen_moves()), reverse=True)
             # We have to check for king-capture (legality) at the VERY first, since otherwise
             # null-move or standing pat might make us not realize an illegal move.
@@ -305,7 +306,8 @@ class Searcher:
             # Note, we don't have to check for legality, since we've already done it
             # before. Also note that in QS the killer must be a capture, otherwise we
             # will be non deterministic.
-            killer = self.tp_move.get((pos, root))
+            #killer = self.tp_move.get((pos, root))
+            killer = self.tp_move.get(pos)
             if killer and (depth > 0 or pos.value(killer) >= QS_LIMIT):
                 yield killer, -self.bound(pos.move(killer), 1-gamma, depth-1, root=False)
 
@@ -329,8 +331,9 @@ class Searcher:
             best = max(best, score)
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
-                #if move is not None:
-                self.tp_move[pos, root] = move
+                #self.tp_move[pos, root] = move
+                if move is not None:
+                    self.tp_move[pos] = move
                 break
 
         # Stalemate checking is a bit tricky: Say we failed low, because
@@ -378,7 +381,8 @@ class Searcher:
                     lower = score
                 if score < gamma:
                     upper = score
-                yield depth, self.tp_move.get((history[-1], True)), score
+                #yield depth, self.tp_move.get((history[-1], True)), score
+                yield depth, self.tp_move.get(history[-1]), score
                 gamma = (lower + upper + 1) // 2
 
 
