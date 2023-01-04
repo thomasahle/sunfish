@@ -1,9 +1,11 @@
 #!/usr/bin/env pypy
 # -*- coding: utf-8 -*-
 
-import re, sys, time
+import time, math
 from itertools import count
-from collections import namedtuple
+from collections import namedtuple, defaultdict
+
+version = "Sunfish 2"
 
 ###############################################################################
 # Piece-Square tables. Tune these to change sunfish's behaviour
@@ -112,8 +114,25 @@ MATE_LOWER = piece["K"] - 10 * piece["Q"]
 MATE_UPPER = piece["K"] + 10 * piece["Q"]
 
 # Constants for tuning search
-QS_LIMIT = 219
+QS_A = 100
+QS_B = 219
 EVAL_ROUGHNESS = 13
+
+# Constants to be removed later
+USE_BOUND_FOR_CHECK_TEST = 0
+IID_LIMIT = 2 # depth > 2
+IID_REDUCE = 1 # depth reduction in IID
+
+# minifier-hide start
+opt_ranges = dict(
+    QS_A = (0, 500),
+    QS_B = (0, 500),
+    EVAL_ROUGHNESS = (0, 50),
+    USE_BOUND_FOR_CHECK_TEST = (0, 1),
+    IID_LIMIT = (0, 5),
+    IID_REDUCE = (1, 5),
+)
+# minifier-hide end
 
 
 ###############################################################################
@@ -149,14 +168,13 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                         break
                     # Pawn move, double move and capture
                     if p == "P":
-                        if d in (N, N + N) and q != ".":
-                            break
-                        if d == N + N and (i < A1 + N or self.board[i + N] != "."):
-                            break
+                        if d in (N, N + N) and q != ".": break
+                        if d == N + N and (i < A1 + N or self.board[i + N] != "."): break
                         if (
                             d in (N + W, N + E)
                             and q == "."
                             and j not in (self.ep, self.kp, self.kp - 1, self.kp + 1)
+                            #and j != self.ep and abs(j - self.kp) >= 2
                         ):
                             break
                         # If we move to the last row, we can be anything
@@ -175,21 +193,12 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                     if i == H1 and self.board[j + W] == "K" and self.wc[1]:
                         yield Move(j + W, j + E, "")
 
-    def rotate(self):
-        """Rotates the board, preserving enpassant"""
+    def rotate(self, nullmove=False):
+        """Rotates the board, preserving enpassant, unless nullmove"""
         return Position(
-            self.board[::-1].swapcase(),
-            -self.score,
-            self.bc,
-            self.wc,
-            119 - self.ep if self.ep else 0,
-            119 - self.kp if self.kp else 0,
-        )
-
-    def nullmove(self):
-        """Like rotate, but clears ep and kp"""
-        return Position(
-            self.board[::-1].swapcase(), -self.score, self.bc, self.wc, 0, 0
+            self.board[::-1].swapcase(), -self.score, self.bc, self.wc,
+            119 - self.ep if self.ep and not nullmove else 0,
+            119 - self.kp if self.kp and not nullmove else 0,
         )
 
     def move(self, move):
@@ -249,30 +258,27 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                 score += pst["P"][119 - (j + S)]
         return score
 
-    def is_dead(self):
-        return any(self.value(m) >= MATE_LOWER for m in self.gen_moves())
-
 
 ###############################################################################
 # Search logic
 ###############################################################################
 
 # lower <= s(pos) <= upper
-Entry = namedtuple("Entry", "lower upper")
+Entry = namedtuple("Entry", "lower upper", defaults=(-MATE_UPPER, MATE_UPPER))
 
 
 class Searcher:
     def __init__(self):
-        self.tp_score = {}
+        self.tp_score = defaultdict(Entry)
         self.tp_move = {}
         self.history = set()
         self.nodes = 0
 
     def bound(self, pos, gamma, depth, root=True):
-        # root = False # Just testing
-        """returns r where
-        s(pos) <= r < gamma    if gamma > s(pos)
-        gamma <= r <= s(pos)   if gamma <= s(pos)"""
+        """ Let s* be the "true" score of the sub-tree we are searching.
+            The method returns r, where
+            if gamma >  s*, s* <= r < gamma  (A better upper bound)
+            if gamma <= s*, gamma <= r <= s* (A better lower bound) """
         self.nodes += 1
 
         # Depth <= 0 is QSearch. Here any position is searched as deeply as is needed for
@@ -290,17 +296,16 @@ class Searcher:
         # Look in the table if we have already searched this position before.
         # We also need to be sure, that the stored search was over the same
         # nodes as the current search.
-        entry = self.tp_score.get((pos, depth, root), Entry(-MATE_UPPER, MATE_UPPER))
-        if entry.lower >= gamma:
-            return entry.lower
-        if entry.upper < gamma:
-            return entry.upper
+        entry = self.tp_score[pos, depth, root]
+        if entry.lower >= gamma: return entry.lower
+        if entry.upper < gamma: return entry.upper
 
         # Let's not repeat positions
         # This happens so rarely that we only check it after TT.
         # Alternatively we could just fill tp_score with zeros in advance...
         if not root and pos in self.history:
-            self.tp_score[pos, depth, root] = Entry(0, 0)
+            # This seems to not add any ELO
+            # self.tp_score[pos, depth, root] = Entry(0, 0)
             return 0
 
         # Generator of moves to search in order.
@@ -308,10 +313,8 @@ class Searcher:
         def moves():
             # First try not moving at all. We only do this if there is at least one major
             # piece left on the board, since otherwise zugzwangs are too dangerous.
-            if depth > 2 and not root and any(c in pos.board for c in "RBNQ"):
-                yield None, -self.bound(
-                    pos.nullmove(), 1 - gamma, depth - 3, root=False
-                )
+            if depth > 0 and not root and any(c in pos.board for c in "RBNQ"):
+                yield None, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3, root=False)
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else.
             if depth == 0:
@@ -320,31 +323,52 @@ class Searcher:
             # Note, we don't have to check for legality, since we've already done it
             # before. Also note that in QS the killer must be a capture, otherwise we
             # will be non deterministic.
+
+            # TODO: Tune this formula. Could also use B - A * depth^C?
+            val_lower = QS_B - QS_A * depth
+            # Look for the strongest ove from last time
             killer = self.tp_move.get(pos)
-            if killer and (depth > 0 or pos.value(killer) >= QS_LIMIT):
-                yield killer, -self.bound(
-                    pos.move(killer), 1 - gamma, depth - 1, root=False
-                )
+            # If there isn't one, try to find one with a more shallow search
+            if not killer and depth > IID_LIMIT:
+                # TODO: Not sure if I should use "gamma" or some other bound here
+                iid = self.bound(pos, pos.score + val_lower, depth - IID_REDUCE, root=False)
+                #iid = self.bound(pos, gamma, depth-1, root=False)
+                killer = self.tp_move.get(pos)
+            # Only play the move if it would be included at the current val-limit,
+            # since otherwise we'd get search instability. Is it silly that we will
+            # sometimes skip the move that is actually most likely to be good...
+            # Maybe there's some way to redefine our search tree that doesn't have this
+            # problem?
+            if killer and pos.value(killer) >= val_lower:
+                yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1, root=False)
             # Then all the other moves
-            for move in sorted(pos.gen_moves(), key=pos.value, reverse=True):
-                val = pos.value(move)
-                # If the new score is less than gamma, the opponent will for sure just
-                # stand pat, since
-                #    pos.score + val < gamma === -(pos.score + val) >= 1-gamma
-                # This is known as futility pruning. We can also break, since
-                # we have ordered the moves by value.
-                if depth == 0 and val >= QS_LIMIT and pos.score + val < gamma:
-                    # TODO: Is there some problem here regarding converting mate_lower
-                    # to mate_upper? I don't think so, since that happens if, in the child
-                    # node, the score is really low. While futulity pruning is about if,
-                    # in the child node, the score is really high.
-                    yield move, pos.score + val
-                    #break
+            for val, move in sorted(((pos.value(m), m) for m in pos.gen_moves()), reverse=True):
+                # Late move pruning
                 # If depth == 0 we only try moves with high intrinsic score (captures and
                 # promotions). Otherwise we do all moves.
-                if depth > 0 or val >= QS_LIMIT:
+                if val >= val_lower:
+                    # If the new score is less than gamma, the opponent will for sure just
+                    # stand pat, since ""pos.score + val < gamma === -(pos.score + val) >= 1-gamma""
+                    # This is known as futility pruning. We can also break, since
+                    # we have ordered the moves by value.
+                    if depth <= 1 and pos.score + val < gamma:
+                        yield move, pos.score + val
+                        break
+                    # This is a similar simple optimization. Needs testing to see if it adds
+                    # any useful elo
+                    if pos.score + val >= MATE_LOWER:
+                        yield move, MATE_UPPER
+                        break
+                    # If val >= QS_LIMIT - 100 * depth, what was the first depth at which
+                    # the move was included?
+                    # I guess at (QS_LIMIT - val)/100 <= depth, so
+                    #d0 = max(int(math.ceil((QS_LIMIT - val) / 100)), 1)
+                    #d0 = max(((QS_LIMIT - val) // 100), 0) + 1
+                    # TODO: For now it seems I don't get any benefit of reducing the depth
+                    # this way
+                    d0 = 1
                     yield move, -self.bound(
-                        pos.move(move), 1 - gamma, depth - 1, root=False
+                        pos.move(move), 1 - gamma, depth - d0, root=False
                     )
 
         # Run through the moves, shortcutting when possible
@@ -364,18 +388,24 @@ class Searcher:
         # However, what if gamma = -10 and we don't have any legal moves?
         # Then the score is actaully a draw and we should fail high!
         # Thus, if best < gamma and best < 0 we need to double check what we are doing.
-        # This doesn't prevent sunfish from making a move that results in stalemate,
-        # but only if depth == 1, so that's probably fair enough.
-        # (Btw, at depth 1 we can also mate without realizing.)
 
-        #if depth > 0 and (best == -MATE_UPPER or (
-        #    best < gamma and best < 0
-        #    and all(pos.move(m).is_dead() for m in pos.gen_moves())
-        #)):
-        # We are adding an extra assumption, that we always take the king if we can.
-        # That means we don't have to worry about the impact of 
+        # We will fix this problem another way: We add the requirement to bound, that
+        # it always returns MATE_UPPER if the king is capturable. Even if another move
+        # was also sufficient to go above gamma. If we see this value we know we are either
+        # mate, or stalemate. It then suffices to check whether we're in check.
+
+        # Note that at low depths, this may not actually be true, since maybe we just pruned
+        # all the legal moves. So sunfish may report "mate", but then after more search
+        # realize it's not a mate after all. That's fair.
+
         if depth > 0 and best == -MATE_UPPER:
-            best = 0 if not pos.nullmove().is_dead() else -MATE_LOWER
+            flipped = pos.rotate(nullmove=True)
+            # Both of these check-tests work. Is one of them better?
+            if USE_BOUND_FOR_CHECK_TEST:
+                in_check = self.bound(flipped, MATE_UPPER, 0, root=False) == MATE_UPPER
+            else:
+                in_check = any(flipped.value(m) >= MATE_LOWER for m in flipped.gen_moves())
+            best = 0 if not in_check else -MATE_LOWER
 
         # Table part 2
         if best >= gamma:
@@ -399,25 +429,22 @@ class Searcher:
         for depth in range(1, 1000):
             # The inner loop is a binary search on the score of the position.
             # Inv: lower <= score <= upper
-            # 'while lower != upper' would work, but play tests show a margin of 20 plays
-            # better.
-            lower, upper = -MATE_UPPER, MATE_UPPER
+            # 'while lower != upper' would work, but it's too much effort to spend
+            # on what's probably not going to change the move played.
+            lower, upper = -MATE_LOWER, MATE_LOWER
             while lower < upper - EVAL_ROUGHNESS:
                 score = self.bound(history[-1], gamma, depth)
                 if score >= gamma:
                     lower = score
+                    # The only way we can be sure to have the real move in tp_move,
+                    # is if we have just failed high.
                     best_move = self.tp_move.get(history[-1])
                 if score < gamma:
                     upper = score
-                # TODO: But could a partial result from a higher depth sometimes
-                # be better than a fully searched move from a more shallow one?
-                # yield depth, None, score
-                # yield depth, self.tp_move.get(history[-1]), score
                 gamma = (lower + upper + 1) // 2
-                # You can't trust this score... It's just a lower/upper bound.
+                # Could try to yield upperbound / lowerbound, but it seems no
+                # UCI interfaces support it very well.
                 yield depth, best_move, score
-            # The only way we can be sure to have the real move in tp_move,
-            # is if we have just failed high.
 
 
 ###############################################################################
@@ -435,24 +462,18 @@ def render(i):
     return chr(fil + ord("a")) + str(-rank + 1)
 
 
-def render_move(move, white_pov):
-    if move is None:
-        return "0000"
-    i, j = move.i, move.j
-    if not white_pov:
-        i, j = 119 - i, 119 - j
-    return render(i) + render(j) + move.prom.lower()
-
-
 # minifier-hide start
-debug = False
-searcher = Searcher()
+import sys, uci
+uci.run(sys.modules[__name__])
+sys.exit()
 # minifier-hide end
+
 
 hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
 while True:
     args = input().split()
     if args[0] == "uci":
+        print(f"id name {version}")
         print("uciok")
 
     elif args[0] == "isready":
@@ -469,115 +490,12 @@ while True:
                 i, j = 119 - i, 119 - j
             hist.append(hist[-1].move(Move(i, j, prom)))
 
-    # minifier-hide start
-    elif args[:2] == ["position", "fen"]:
-        fen = args[2:]
-        board, color, castling, enpas, _hclock, _fclock = fen
-        board = re.sub(r"\d", (lambda m: "." * int(m.group(0))), board)
-        board = list(21 * " " + "  ".join(board.split("/")) + 21 * " ")
-        board[9::10] = ["\n"] * 12
-        board = "".join(board)
-        wc = ("Q" in castling, "K" in castling)
-        bc = ("k" in castling, "q" in castling)
-        ep = parse(enpas) if enpas != "-" else 0
-        pos = Position(board, 0, wc, bc, ep, 0)
-        hist = [pos] if color == "w" else [pos, pos.rotate()]
-
     elif args[0] == "go":
-        think = 10**6
-        max_depth = 100
+        wtime, btime, winc, binc = map(int, args[2::2])
+        if len(hist) % 2 == 0:
+            wtime, winc = btime, binc
+        think = min(wtime / 1000 / 40 + winc / 1000, wtime / 2000 - 1)
 
-        if args[1:] == []:
-            think = 24 * 3600
-
-        elif args[1] == "movetime":
-            movetime = args[2]
-            think = int(movetime) / 1000
-
-        elif args[1] == "wtime":
-            wtime, btime, winc, binc = [int(a) / 1000 for a in args[2::2]]
-            # we always consider ourselves white, but uci doesn't
-            if len(hist) % 2 == 0:
-                wtime, winc = btime, binc
-            think = min(wtime / 40 + winc, wtime / 2)
-            # let's go fast for the first moves
-            if len(hist) < 3:
-                think = min(think, 1)
-
-        elif args[1] == "depth":
-            max_depth = int(args[2])
-
-        elif args[1] in ("mate", "draw"):
-            max_depth = args[2]
-            for d in range(int(max_depth) + 1):
-                if args[1] == "draw":
-                    s0 = searcher.bound(hist[-1], 0, d)
-                    print("info", "depth", d, "score lowerbound cp", s0)
-                    s1 = searcher.bound(hist[-1], 1, d)
-                    print("info", "depth", d, "score upperbound cp", s1)
-                    if s0 >= 0 and s1 < 1:
-                        break
-                if args[1] == "mate":
-                    score = searcher.bound(hist[-1], MATE_LOWER, d)
-                    print("info", "depth", d, "score cp", score)
-                    if score >= MATE_LOWER:
-                        break
-            move = searcher.tp_move.get((hist[-1], True))
-            # If we didn't get a fail-high, we didn't find the mate, and dont' have a move.
-            if not move:
-                print("bestmove 0000")
-            else:
-                move_str = render_move(move, white_pov=len(hist) % 2 == 1)
-                print("bestmove", move_str)
-            continue
-
-        if debug:
-            print(f"i want to think for {think} seconds.")
-
-        start = time.time()
-        best_move = None
-        try:
-            for depth, move, score in searcher.search(hist):
-                # We never know when we've seen the last at a certain depth
-                # before we get to the next one
-                if depth - 1 >= max_depth:
-                    break
-                best_move = render_move(move, white_pov=len(hist) % 2 == 1)
-                elapsed = time.time() - start
-                print(
-                    "info depth",
-                    depth,
-                    "score cp",
-                    score,
-                    "time",
-                    round(1000 * elapsed),
-                    "nodes",
-                    searcher.nodes,
-                    "nps",
-                    round(searcher.nodes / elapsed),
-                    "pv",
-                    best_move if move else "",
-                )
-                if best_move and elapsed > think * 2 / 3:
-                    break
-        except KeyboardInterrupt:
-            if debug:
-                raise
-            continue
-        if debug:
-            print(f"stopped thinking after {round(elapsed,3)} seconds")
-        print("bestmove", best_move)
-
-    # minifier-hide end
-
-    elif args[0] == "go":
-        if len(args) <= 4:
-            think = 1
-        else:
-            wtime, btime, winc, binc = map(int, args[2::2])
-            if len(hist) % 2 == 0:
-                wtime, winc = btime, binc
-            think = min(wtime / 1000 / 40 + winc / 1000, wtime / 2000 - 1)
         start = time.time()
         best_move = None
         for depth, move, score in Searcher().search(hist):
@@ -586,5 +504,10 @@ while True:
                 best_move = move or best_move
             if best_move and time.time() - start > think * 0.8:
                 break
-        move_str = render_move(best_move, white_pov=len(hist) % 2 == 1)
+
+        i, j = best_move.i, best_move.j
+        if len(hist) % 2 == 0:
+            i, j = 119 - i, 119 - j
+        move_str = render(i) + render(j) + move.prom.lower()
         print("bestmove", move_str)
+

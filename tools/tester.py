@@ -102,7 +102,7 @@ class Bench(Command):
             help="Maximum plies at which to find the mate",
         )
         parser.add_argument(
-            "--limit", type=int, default=100, help="Maximum positions to analyse"
+            "--limit", type=int, default=10000, help="Maximum positions to analyse"
         )
 
     @classmethod
@@ -197,6 +197,36 @@ def info_to_desc(info):
         desc.append(f"score: {info['score'].pov(chess.WHITE).cp/100:.1f}")
     return ", ".join(desc)
 
+def add_limit_argument(parser):
+    parser.add_argument(
+        "--depth",
+        dest="limit_depth",
+        type=int,
+        default=0,
+        help="Maximum plies at which to find the move",
+    )
+    parser.add_argument(
+        "--mate-depth",
+        dest="limit_mate",
+        type=int,
+        default=0,
+        help="Maximum plies at which to find the mate",
+    )
+    parser.add_argument(
+        "--movetime",
+        dest="limit_movetime",
+        type=int,
+        default=100,
+        help="Movetime in ms",
+    )
+
+def get_limit(args):
+    if args.limit_depth:
+        return chess.engine.Limit(depth=args.limit_depth)
+    elif args.limit_mate:
+        return chess.engine.Limit(mate=args.limit_mate)
+    elif args.limit_movetime:
+        return chess.engine.Limit(time=args.limit_movetime/1000)
 
 class Mate(Command):
     name = "mate"
@@ -208,30 +238,16 @@ class Mate(Command):
             "file", type=argparse.FileType("r"), help="such as tests/mate{1,2,3}.fen."
         )
         parser.add_argument(
-            "--depth",
-            type=int,
-            default=100,
-            help="Maximum plies at which to find the mate",
-        )
-        parser.add_argument(
             "--limit",
             type=int,
-            default=2000,
-            help="Maximum number of lines to take from file",
+            default=10000,
+            help="Take only this many lines from the file"
         )
-        parser.add_argument(
-            "--quick",
-            action="store_true",
-            help="Use mate specific search in the engine, if supported",
-        )
+        add_limit_argument(parser)
 
     @classmethod
     async def run(cls, engine, args):
-        if args.quick:
-            # Use "go mate" which allows engine to only look for mates
-            limit = chess.engine.Limit(mate=args.depth)
-        else:
-            limit = chess.engine.Limit(depth=args.depth)
+        limit = get_limit(args)
         total = 0
         success = 0
         lines = args.file.readlines()
@@ -266,30 +282,11 @@ class Draw(Command):
         parser.add_argument(
             "file", type=argparse.FileType("r"), help="such as tests/stalemate2.fen."
         )
-        parser.add_argument(
-            "--depth",
-            type=int,
-            default=0,
-            help="Maximum plies at which to find the mate",
-        )
-        parser.add_argument(
-            "--ms",
-            type=int,
-            default=100,
-            help="Maximum plies at which to find the mate",
-        )
-        parser.add_argument(
-            "--quick",
-            action="store_true",
-            help="Sadly this is not supported by UCI",
-        )
+        add_limit_argument(parser)
 
     @classmethod
     async def run(cls, engine, args):
-        if args.depth:
-            limit = chess.engine.Limit(depth=args.depth)
-        else:
-            limit = chess.engine.Limit(time=args.ms/1000)
+        limit = get_limit(args)
         total, success = 0, 0
         cnt = collections.Counter()
         pb = tqdm.tqdm(args.file.readlines())
@@ -333,21 +330,16 @@ class Best(Command):
             "file", type=argparse.FileType("r"), help="such as bratko_kopec_test.epd."
         )
         parser.add_argument(
-            "--ms",
-            type=int,
-            default=100,
-            help="Milli seconds per move",
-        )
-        parser.add_argument(
             "--limit",
             type=int,
-            default=2000,
-            help="Maximum number of lines to take from file",
+            default=10000,
+            help="Take only this many lines from the file"
         )
+        add_limit_argument(parser)
 
     @classmethod
     async def run(cls, engine, args):
-        limit = chess.engine.Limit(time=args.ms/1000)
+        limit = get_limit(args)
         points, total = 0, 0
         lines = args.file.readlines()
         random.shuffle(lines)
