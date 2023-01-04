@@ -2,7 +2,7 @@ import chess, chess.pgn, chess.engine
 engine = chess.engine.SimpleEngine.popen_uci('stockfish')
 do = open('3fold_do.pgn', 'w')
 dont = open('3fold_dont.pgn', 'w')
-with open('3fold.pgn') as file:
+with open('test_files/3fold.pgn') as file:
     for i, game in enumerate(iter(lambda:chess.pgn.read_game(file), None)):
         print(i)
         res = engine.analyse(game.end().parent.board(), limit=chess.engine.Limit(time=.01))
