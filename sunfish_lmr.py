@@ -332,7 +332,18 @@ class Searcher:
                 # Reduce 1 extra on negative values
                 #return int(val < 0 and depth > 3)
                 #return int(val < 0)
-                return int(val < QS_B - QS_A * depth)
+                #return int(val < QS_B - QS_A * depth)
+                #return max(QS_B - val, 0) // QS_A
+                #return int(val < QS_B - QS_A * depth) + int(val < QS_B - 2 * QS_A * depth)
+                #return int(val < QS_B - QS_A * depth) + int(val < QS_B - 2 * QS_A * depth) + int(val < QS_B - 3 * QS_A * depth)
+                #val = QS_B - x * QS_A * depth => x = (QS_B - val)/(QS_A * depth)
+                return max(QS_B - val, 0) // (QS_A * max(depth, 1))
+                #return int(math.ceil(max(QS_B - val, 0) / (QS_A * (depth + 1))))
+                #def sig(x):
+                #    if x < -30: return 0
+                #    if x >  30: return 1
+                #    return 1/(1+math.exp(-x))
+                #return int(sig(- val / QS_A) * depth)
                 #return 0
             # Look for the strongest ove from last time
             killer = self.tp_move.get(pos)
