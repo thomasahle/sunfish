@@ -120,15 +120,18 @@ MATE_LOWER = piece["K"] - 10 * piece["Q"]
 MATE_UPPER = piece["K"] + 10 * piece["Q"]
 
 # Constants for tuning search
-QS_B = 219
-QS_A = 500
-EVAL_ROUGHNESS = 13
+#QS_B = 219
+#QS_A = 500
+#EVAL_ROUGHNESS = 13
+QS_B = 86
+QS_A = 300
+EVAL_ROUGHNESS = 9
 
 # Constants to be removed later
 USE_BOUND_FOR_CHECK_TEST = 0
 IID_LIMIT = 2 # depth > 2
 IID_REDUCE = 1 # depth reduction in IID
-IID_TYPE = 1 # None, gamma=pos.score, gamma=gamma
+IID_TYPE = 3 # None, gamma=pos.score, gamma=gamma
 
 # minifier-hide start
 opt_ranges = dict(
@@ -138,7 +141,7 @@ opt_ranges = dict(
     USE_BOUND_FOR_CHECK_TEST = (0, 1),
     IID_LIMIT = (0, 5),
     IID_REDUCE = (1, 5),
-    IID_TYPE = (0, 2),
+    IID_TYPE = (0, 3),
 )
 # minifier-hide end
 
@@ -285,8 +288,8 @@ class Searcher:
     def bound(self, pos, gamma, depth, root=True):
         """ Let s* be the "true" score of the sub-tree we are searching.
             The method returns r, where
-            if gamma >  s*, s* <= r < gamma  (A better upper bound)
-            if gamma <= s*, gamma <= r <= s* (A better lower bound) """
+            if gamma >  s* then s* <= r < gamma  (A better upper bound)
+            if gamma <= s* then gamma <= r <= s* (A better lower bound) """
         self.nodes += 1
 
         # Depth <= 0 is QSearch. Here any position is searched as deeply as is needed for
@@ -375,9 +378,22 @@ class Searcher:
                 # care about it, so we might as well not have a move. Maybe that's an
                 # argument for just using gamma in the search?
                 if IID_TYPE == 1:
-                    self.bound(pos, pos.score, depth - IID_REDUCE, root=False)
+                    # We use root=True to disable null-move
+                    self.bound(pos, pos.score, depth - IID_REDUCE, root=True)
                 elif IID_TYPE == 2:
-                    self.bound(pos, gamma, depth - IID_REDUCE, root=False)
+                    self.bound(pos, gamma, depth - IID_REDUCE, root=True)
+                elif IID_TYPE == 3:
+                    g = gamma
+                    while not killer:
+                        iid = self.bound(pos, g, depth - IID_REDUCE, root=True)
+                        # If we still don't have a move, it will nearly always be
+                        # because the move failed low. If not, it's too confusing and
+                        # we just stop.
+                        if not iid < g:
+                            break
+                        killer = self.tp_move.get(pos)
+                        g = iid
+
                 #iid = self.bound(pos, pos.score + val_lower, depth - IID_REDUCE, root=False)
                 #iid = self.bound(pos, pos.score - QS_B, depth - IID_REDUCE, root=False)
                 killer = self.tp_move.get(pos)
