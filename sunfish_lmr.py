@@ -121,7 +121,7 @@ MATE_UPPER = piece["K"] + 10 * piece["Q"]
 
 # Constants for tuning search
 QS_B = 219
-QS_A = 100
+QS_A = 500
 EVAL_ROUGHNESS = 13
 
 # Constants to be removed later
