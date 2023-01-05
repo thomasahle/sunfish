@@ -1,5 +1,4 @@
-#!/usr/bin/env pypy
-# -*- coding: utf-8 -*-
+#!/usr/bin/env pypy3 -u
 
 import time, math
 from itertools import count
@@ -122,6 +121,7 @@ EVAL_ROUGHNESS = 13
 USE_BOUND_FOR_CHECK_TEST = 0
 IID_LIMIT = 2 # depth > 2
 IID_REDUCE = 1 # depth reduction in IID
+IID_TYPE = 1 # None, gamma=pos.score, gamma=gamma
 
 # minifier-hide start
 opt_ranges = dict(
@@ -131,6 +131,7 @@ opt_ranges = dict(
     USE_BOUND_FOR_CHECK_TEST = (0, 1),
     IID_LIMIT = (0, 5),
     IID_REDUCE = (1, 5),
+    IID_TYPE = (0, 2),
 )
 # minifier-hide end
 
@@ -329,7 +330,7 @@ class Searcher:
             if depth == 0:
                 val_lower = QS_B
             elif depth == 1:
-                val_lower = 0
+                val_lower = QS_A
             else:
                 val_lower = -MATE_LOWER
             # Depth reduce function
@@ -359,14 +360,19 @@ class Searcher:
             # Look for the strongest ove from last time
             killer = self.tp_move.get(pos)
             # If there isn't one, try to find one with a more shallow search
-            if not killer and depth > IID_LIMIT:
+            if IID_TYPE > 0 and not killer and depth > IID_LIMIT:
                 # TODO: Not sure if I should use "gamma" or some other bound here
                 # We want gamma to be small enough that we get a fail-high, but
                 # not small enough that the null-move fails high.
+                # Also, if the move is not good enough to get >= gamma, we don't even
+                # care about it, so we might as well not have a move. Maybe that's an
+                # argument for just using gamma in the search?
+                if IID_TYPE == 1:
+                    self.bound(pos, pos.score, depth - IID_REDUCE, root=False)
+                elif IID_TYPE == 2:
+                    self.bound(pos, gamma, depth - IID_REDUCE, root=False)
                 #iid = self.bound(pos, pos.score + val_lower, depth - IID_REDUCE, root=False)
-                iid = self.bound(pos, pos.score, depth - IID_REDUCE, root=False)
                 #iid = self.bound(pos, pos.score - QS_B, depth - IID_REDUCE, root=False)
-                #iid = self.bound(pos, gamma, depth - IID_REDUCE, root=False)
                 killer = self.tp_move.get(pos)
             # Only play the move if it would be included at the current val-limit,
             # since otherwise we'd get search instability. Is it silly that we will
@@ -520,10 +526,10 @@ while True:
             hist.append(hist[-1].move(Move(i, j, prom)))
 
     elif args[0] == "go":
-        wtime, btime, winc, binc = map(int, args[2::2])
+        wtime, btime, winc, binc = [int(a) / 1000 for a in args[2::2]]
         if len(hist) % 2 == 0:
             wtime, winc = btime, binc
-        think = min(wtime / 1000 / 40 + winc / 1000, wtime / 2000 - 1)
+        think = min(wtime / 40 + winc, wtime / 2 - .1)
 
         start = time.time()
         best_move = None

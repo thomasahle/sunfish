@@ -19,10 +19,10 @@ def render_move(move, white_pov):
 
 def parse_move(move_str, white_pov):
     parse = sunfish.parse
-    i, j, prom = parse(move[:2]), parse(move[2:4]), move[4:].upper()
+    i, j, prom = parse(move_str[:2]), parse(move_str[2:4]), move_str[4:].upper()
     if not white_pov:
         i, j = 119 - i, 119 - j
-    return Move(i, j, prom)
+    return sunfish.Move(i, j, prom)
 
 
 def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False):
@@ -126,7 +126,7 @@ def run(sunfish_module):
                 go_future.result(timeout=0)
 
                 if args[0] == "uci":
-                    print("id name {sunfish.version}")
+                    print(f"id name {sunfish.version}")
                     for attr, (lo, hi) in sunfish.opt_ranges.items():
                         default = getattr(sunfish, attr)
                         print(f"option name {attr} type spin default {default} min {lo} max {hi}")
@@ -148,7 +148,7 @@ def run(sunfish_module):
                         hist.append(hist[-1].move(parse_move(move, ply % 2 == 0)))
 
                 elif args[:2] == ["position", "fen"]:
-                    fen = args[2:]
+                    fen = args[2:8]
                     board, color, castling, enpas, _hclock, _fclock = fen
                     board = re.sub(r"\d", (lambda m: "." * int(m.group(0))), board)
                     board = list(21 * " " + "  ".join(board.split("/")) + 21 * " ")
@@ -159,6 +159,9 @@ def run(sunfish_module):
                     ep = sunfish.parse(enpas) if enpas != "-" else 0
                     pos = sunfish.Position(board, 0, wc, bc, ep, 0)
                     hist = [pos] if color == "w" else [pos, pos.rotate()]
+                    if len(args) > 8 and args[8] == "moves":
+                        for move in args[9:]:
+                            hist.append(hist[-1].move(parse_move(move, len(hist) % 2 == 1)))
 
                 elif args[0] == 'go':
                     think = 10**6
@@ -177,7 +180,7 @@ def run(sunfish_module):
                         # we always consider ourselves white, but uci doesn't
                         if len(hist) % 2 == 0:
                             wtime, winc = btime, binc
-                        think = min(wtime / 40 + winc, wtime / 2)
+                        think = min(wtime / 40 + winc, wtime / 2 - 0.1)
                         # let's go fast for the first moves
                         if len(hist) < 3:
                             think = min(think, 1)

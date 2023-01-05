@@ -1,43 +1,25 @@
 [
-   {
-      "name": "sunfish",
-      "command": "build/sunfish.sh",
-      "protocol": "uci",
-      "stderrFile": "sunfish.err"
-   },
-   {
-      "name": "sunfish-null",
-      "command": "build/sunfish_null.sh",
-      "protocol": "uci",
-      "stderrFile": "null.err"
-   },
-   {
-      "name": "sunfish-2",
-      "command": "sunfish_uci2.sh",
-      "protocol": "uci",
-      "stderrFile": "uci2.err"
-   },
-   {
-      "name": "sunfish-nnue",
-      "command": "sunfish_nnue.sh",
-      "protocol": "uci",
-      "stderrFile": "nnue.err"
-   },
-   {
-      "name": "sunfish-nnue-color",
-      "command": "sunfish_nnue_color.sh",
-      "protocol": "uci",
-      "stderrFile": "color.err"
-   },
-   {
-      "name": "sunfish-king",
-      "command": "./sunfish_king.sh",
-      "protocol": "uci",
-      "stderrFile": "king.err"
-   },
-   {
-      "name": "sf",
-      "command": "stockfish",
-      "protocol": "uci"
-   }
+    {
+        "command": "sunfish_lmr.py",
+        "initStrings": [
+            "uci",
+            "setoption name QS_A value 421",
+            "setoption name QS_B value 325",
+            "setoption name EVAL_ROUGHNESS value 8",
+            "setoption name USE_BOUND_FOR_CHECK_TEST value 0",
+            "setoption name IID_LIMIT value 3",
+            "setoption name IID_REDUCE value 5",
+            "setoption name IID_TYPE value 0"
+        ],
+        "name": "engine1",
+        "protocol": "uci"
+    },
+    {
+        "command": "sunfish_lmr.py",
+        "initStrings": [
+            "uci"
+        ],
+        "name": "engine2",
+        "protocol": "uci"
+    }
 ]

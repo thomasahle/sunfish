@@ -342,24 +342,43 @@ class Best(Command):
         limit = get_limit(args)
         points, total = 0, 0
         lines = args.file.readlines()
-        random.shuffle(lines)
+        #random.shuffle(lines)
         lines = lines[:args.limit]
         for line in (pb := tqdm.tqdm(lines)):
-            total += 1
             board, opts = chess.Board.from_epd(line)
+            if "pv" in opts:
+                for move in opts["pv"]:
+                    board.push(move)
+            # When using a pv I need to supply bm/am using a comment, because
+            # otherwise python-chess won't parse it
+            if "c0" in opts:
+                # The comment format is expected to be like 'am f1f2; bm f2f3'
+                for key, val in re.findall("(\w+) (\w+)", opts["c0"]):
+                    opts[key] = [chess.Move.from_uci(val)]
             if "am" not in opts and "bm" not in opts:
                 if not args.quiet:
                     print("Line didn't have am/bm in opts", line, opts)
                 continue
             # am -> avoid move; bm -> best move
-            am = opts["am"][0] if "am" in opts else None
-            bm = opts["bm"][0] if "bm" in opts else None
-            pb.set_description(f"{opts.get('id','')}")
+            pb.set_description(opts.get('id',''))
             result = await engine.play(board, limit)
-            if 'bm' in opts and result.move in opts['bm']:
-                points += 1
-            elif 'am' in opts and result.move not in opts['am']:
-                points += 1
+            errors = []
+            if 'bm' in opts:
+                total += 1
+                if result.move in opts['bm']:
+                    points += 1
+                else:
+                    errors.append(f'Gave move {result.move} rather than {opts["bm"]}')
+            if 'am' in opts:
+                total += 1
+                if result.move not in opts['am']:
+                    points += 1
+                else:
+                    errors.append(f'Gave move {result.move} which is in {opts["am"]}')
+            if errors:
+                print('Failed on', line.strip())
+                for er in errors:
+                    print(er)
             pb.set_postfix(acc=points/total)
         print(f"Succeeded in {points}/{total} cases.")
 
