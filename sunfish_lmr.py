@@ -330,7 +330,7 @@ class Searcher:
             if depth == 0:
                 val_lower = QS_B
             elif depth == 1:
-                val_lower = QS_A
+                val_lower = QS_B - QS_A
             else:
                 val_lower = -MATE_LOWER
             # Depth reduce function
