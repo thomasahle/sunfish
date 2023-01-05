@@ -326,19 +326,30 @@ class Searcher:
 
             # TODO: Tune this formula. Could also use B - A * depth^C?
             #val_lower = QS_B - QS_A * depth
-            val_lower = QS_B
+            if depth == 0:
+                val_lower = QS_B
+            elif depth == 1:
+                val_lower = 0
+            else:
+                val_lower = -MATE_LOWER
             # Depth reduce function
             def reduce(val):
+                return 0
                 # Reduce 1 extra on negative values
-                #return int(val < 0 and depth > 3)
+                #return int(val < 0 and depth < 3)
                 #return int(val < 0)
                 #return int(val < QS_B - QS_A * depth)
                 #return max(QS_B - val, 0) // QS_A
+                # LMR:
+                #return int(val < QS_B - QS_A * depth)
+                #return 3 * int(val < QS_B - QS_A * depth)
                 #return int(val < QS_B - QS_A * depth) + int(val < QS_B - 2 * QS_A * depth)
                 #return int(val < QS_B - QS_A * depth) + int(val < QS_B - 2 * QS_A * depth) + int(val < QS_B - 3 * QS_A * depth)
                 #val = QS_B - x * QS_A * depth => x = (QS_B - val)/(QS_A * depth)
-                return max(QS_B - val, 0) // (QS_A * max(depth, 1))
+                # LMR 2:
+                #return max(QS_B - val, 0) // (QS_A * max(depth, 1))
                 #return int(math.ceil(max(QS_B - val, 0) / (QS_A * (depth + 1))))
+                #return max(QS_B - val, 0) // (QS_B)
                 #def sig(x):
                 #    if x < -30: return 0
                 #    if x >  30: return 1
@@ -365,7 +376,7 @@ class Searcher:
 
             if killer:
                 val = pos.value(killer)
-                if depth > 0 or val >= val_lower:
+                if val >= val_lower:
                     d1 = depth - 1 - reduce(val)
                     yield killer, -self.bound(pos.move(killer), 1 - gamma, d1, root=False)
             # Then all the other moves
@@ -373,7 +384,7 @@ class Searcher:
                 # Late move pruning
                 # If depth == 0 we only try moves with high intrinsic score (captures and
                 # promotions). Otherwise we do all moves.
-                if depth > 0 or val >= val_lower:
+                if val >= val_lower:
                     d1 = depth - 1 - reduce(val)
                     # If the new score is less than gamma, the opponent will for sure just
                     # stand pat, since ""pos.score + val < gamma === -(pos.score + val) >= 1-gamma""
