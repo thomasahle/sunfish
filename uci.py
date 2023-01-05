@@ -181,7 +181,7 @@ def run(sunfish_module):
                         # we always consider ourselves white, but uci doesn't
                         if len(hist) % 2 == 0:
                             wtime, winc = btime, binc
-                        think = min(wtime / 40 + winc, wtime / 2 - 0.1)
+                        think = min(wtime / 40 + winc, wtime / 2 - 1)
                         # let's go fast for the first moves
                         if len(hist) < 3:
                             think = min(think, 1)

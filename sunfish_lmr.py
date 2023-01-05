@@ -537,7 +537,7 @@ while True:
         wtime, btime, winc, binc = [int(a) / 1000 for a in args[2::2]]
         if len(hist) % 2 == 0:
             wtime, winc = btime, binc
-        think = min(wtime / 40 + winc, wtime / 2 - .1)
+        think = min(wtime / 40 + winc, wtime / 2 - 1)
 
         start = time.time()
         best_move = None
