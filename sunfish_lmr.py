@@ -1,4 +1,4 @@
-#!/usr/bin/env pypy3 -u
+#!/usr/bin/env -S pypy3 -u
 
 import time, math
 from itertools import count
@@ -433,6 +433,7 @@ class Searcher:
         # all the legal moves. So sunfish may report "mate", but then after more search
         # realize it's not a mate after all. That's fair.
 
+        # This is too expensive to test at depth==0
         if depth > 0 and best == -MATE_UPPER:
             flipped = pos.rotate(nullmove=True)
             # Both of these check-tests work. Is one of them better?
