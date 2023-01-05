@@ -6,10 +6,12 @@ from collections import namedtuple, defaultdict
 
 # If we could rely on the env -S argument, we could just use "pypy3 -u"
 # as the shebang to unbuffer stdout. But alas we have to do this instead:
+# TODO: I we really want to save bytes, maybe wrap this in minifier-hide,
+# and put pypy3 directly in pack.sh instead of using exec on the .py file.
 from functools import partial
 print = partial(print, flush=True)
 
-version = "Sunfish 2"
+version = "sunfish 2"
 
 ###############################################################################
 # Piece-Square tables. Tune these to change sunfish's behaviour
@@ -118,8 +120,8 @@ MATE_LOWER = piece["K"] - 10 * piece["Q"]
 MATE_UPPER = piece["K"] + 10 * piece["Q"]
 
 # Constants for tuning search
-QS_A = 100
 QS_B = 219
+QS_A = 100
 EVAL_ROUGHNESS = 13
 
 # Constants to be removed later
