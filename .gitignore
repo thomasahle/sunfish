@@ -9,6 +9,10 @@ engines.json
 *.err
 *.pickle
 
+# Tuning
+data.npz
+model.pkl
+
 # Test files
 cute.sh
 out.pgn

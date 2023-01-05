@@ -1,23 +1,26 @@
-   {
+{
     "engines": [
         {
-            "command": "engine1",
-            "fixed_parameters": {
-                "Threads": 2
-            }
+            "command": "sunfish_lmr.py",
+            "fixed_parameters": {}
         },
         {
-            "command": "engine2",
-            "fixed_parameters": {
-                "Threads": 4
-            }
+            "command": "sunfish_lmr.py",
+            "fixed_parameters": {}
         }
     ],
     "parameter_ranges": {
-        "CPuct": "Real(0.0, 10.0)"
+        "QS_A": "Integer(0, 500)",
+        "QS_B": "Integer(0, 500)",
+        "EVAL_ROUGHNESS": "Integer(0, 50)",
+        "USE_BOUND_FOR_CHECK_TEST": "Integer(0, 1)",
+        "IID_LIMIT": "Integer(0, 5)",
+        "IID_REDUCE": "Integer(1, 5)",
+        "IID_TYPE": "Integer(0, 2)"
     },
-    "engine1_tc": "1+0.1",
-    "engine2_tc": "1+0.1",
+    "engine1_tc": "60+1",
+    "engine2_tc": "60+1",
     "rounds": 20,
-    "opening_file": "openings.pgn"
+    "concurrency": 8,
+    "opening_file": "tools/test_files/gaviota-starters.pgn"
 }
