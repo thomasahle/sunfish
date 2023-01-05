@@ -1,8 +1,13 @@
-#!/usr/bin/env -S pypy3 -u
+#!/usr/bin/env pypy3
 
 import time, math
 from itertools import count
 from collections import namedtuple, defaultdict
+
+# If we could rely on the env -S argument, we could just use "pypy3 -u"
+# as the shebang to unbuffer stdout. But alas we have to do this instead:
+from functools import partial
+print = partial(print, flush=True)
 
 version = "Sunfish 2"
 

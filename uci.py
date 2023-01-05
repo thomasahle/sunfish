@@ -5,6 +5,7 @@ from tools import tools
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from functools import partial
+print = partial(print, flush=True)
 
 
 def render_move(move, white_pov):
