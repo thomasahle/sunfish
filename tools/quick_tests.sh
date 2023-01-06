@@ -26,11 +26,11 @@ $T "$1" ${2:-"--quiet"} mate $TOOLS/test_files/mate3.fen --movetime 10000 --limi
 echo
 
 echo "Stalemate in 0..."
-$T "$1" ${2:-"--quiet"} draw $TOOLS/test_files/stalemate0.fen --depth 1
+$T "$1" ${2:-"--quiet"} draw $TOOLS/test_files/stalemate0.fen --movetime 10000
 echo
 
 echo "Stalemate in 1..."
-$T "$1" ${2:-"--quiet"} draw $TOOLS/test_files/stalemate1.fen --depth 6
+$T "$1" ${2:-"--quiet"} draw $TOOLS/test_files/stalemate1.fen --movetime 10000
 echo
 
 echo "Stalemate in 2+"

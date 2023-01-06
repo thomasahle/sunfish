@@ -125,15 +125,15 @@ MATE_UPPER = piece["K"] + 10 * piece["Q"]
 #QS_B = 219
 #QS_A = 500
 #EVAL_ROUGHNESS = 13
-QS_B = 40
-QS_A = 150
+QS_B = 100
+QS_A = 200
 EVAL_ROUGHNESS = 17
 
 # Constants to be removed later
-USE_BOUND_FOR_CHECK_TEST = 1
+USE_BOUND_FOR_CHECK_TEST = 0
 IID_LIMIT = 2 # depth > 2
 IID_REDUCE = 3 # depth reduction in IID
-IID_TYPE = 4 # None, gamma=pos.score, gamma=gamma, iterative, depth-reduce
+IID_TYPE = 0 # None, gamma=pos.score, gamma=gamma, iterative, depth-reduce
 REPEAT_NULL = 1 # Whether a null move can be responded too by another null move
 NULL_LIMIT = 2 # Only null-move if depth > NULL_LIMIT
 
