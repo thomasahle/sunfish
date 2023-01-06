@@ -375,7 +375,7 @@ class Best(Command):
                     points += 1
                 else:
                     errors.append(f'Gave move {result.move} which is in {opts["am"]}')
-            if errors:
+            if not args.quiet and errors:
                 print('Failed on', line.strip())
                 for er in errors:
                     print(er)

@@ -3,13 +3,14 @@
         "command": "sunfish_lmr.py",
         "initStrings": [
             "uci",
-            "setoption name QS_A value 421",
-            "setoption name QS_B value 325",
-            "setoption name EVAL_ROUGHNESS value 8",
-            "setoption name USE_BOUND_FOR_CHECK_TEST value 0",
-            "setoption name IID_LIMIT value 3",
-            "setoption name IID_REDUCE value 5",
-            "setoption name IID_TYPE value 0"
+            "setoption name QS_A value 171",
+            "setoption name QS_B value 75",
+            "setoption name EVAL_ROUGHNESS value 33",
+            "setoption name USE_BOUND_FOR_CHECK_TEST value 2",
+            "setoption name IID_LIMIT value 0",
+            "setoption name IID_REDUCE value 3",
+            "setoption name IID_TYPE value 1",
+            "setoption name REPEAT_NULL value 0"
         ],
         "name": "engine1",
         "protocol": "uci"

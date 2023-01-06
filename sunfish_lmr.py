@@ -11,7 +11,7 @@ from collections import namedtuple, defaultdict
 from functools import partial
 print = partial(print, flush=True)
 import sys
-sys.stderr = open('error.log', 'a')
+sys.stderr = open('error.log', 'a', 0)
 
 version = "sunfish 2"
 
@@ -417,8 +417,8 @@ class Searcher:
                 # Late move pruning
                 # If depth == 0 we only try moves with high intrinsic score (captures and
                 # promotions). Otherwise we do all moves.
-                if depth > 1 and val < val_lower:
-                    print(move, val)
+                #if depth > 1 and val < val_lower:
+                #    print(move, val)
                 if val >= val_lower:
                     d1 = depth - 1 - reduce(val)
                     # If the new score is less than gamma, the opponent will for sure just
