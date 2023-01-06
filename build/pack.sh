@@ -1,10 +1,5 @@
 #!/bin/bash
-echo "Usage: pack.sh engine.py model.pickle out.packed"
-
-P='pypy3'
-#P='python3'
-
-echo "Using $P as the interpreter"
+echo "Usage: pack.sh engine.py out.packed"
 
 #if [ -f $3 ]; then
 #    echo "$3 Already exists."
@@ -34,8 +29,8 @@ do
    head="""#!/bin/sh
 T=\`mktemp\`
 tail -c +$((lh+1)) "\$0"|xz -d>\$T
-(sleep 9;rm \$T)&$P -u \$T
-exit
+chmod +x \$T
+(sleep 9;rm \$T)&exec \$T
 """
    echo "Length of head: $lh"
 done
