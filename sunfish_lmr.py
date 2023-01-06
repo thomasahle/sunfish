@@ -125,17 +125,20 @@ MATE_UPPER = piece["K"] + 10 * piece["Q"]
 #QS_B = 219
 #QS_A = 500
 #EVAL_ROUGHNESS = 13
-QS_B = 100
-QS_A = 200
+QS_B = 50
+QS_A = 250
 EVAL_ROUGHNESS = 17
 
 # Constants to be removed later
-USE_BOUND_FOR_CHECK_TEST = 0
+USE_BOUND_FOR_CHECK_TEST = 1
 IID_LIMIT = 2 # depth > 2
 IID_REDUCE = 3 # depth reduction in IID
 IID_TYPE = 0 # None, gamma=pos.score, gamma=gamma, iterative, depth-reduce
 REPEAT_NULL = 1 # Whether a null move can be responded too by another null move
-NULL_LIMIT = 2 # Only null-move if depth > NULL_LIMIT
+NULL_LIMIT = 0 # Only null-move if depth > NULL_LIMIT
+STALEMATE_LIMIT = 0 # Only null-move if depth > NULL_LIMIT
+
+# There is some issue with combining "bound for check test" with a high "null_limit".
 
 # minifier-hide start
 opt_ranges = dict(
@@ -148,6 +151,7 @@ opt_ranges = dict(
     IID_TYPE = (0, 4),
     REPEAT_NULL = (0, 1),
     NULL_LIMIT = (0, 5),
+    STALEMATE_LIMIT = (0, 5),
 )
 # minifier-hide end
 
@@ -494,7 +498,7 @@ class Searcher:
         # realize it's not a mate after all. That's fair.
 
         # This is too expensive to test at depth==0
-        if depth > 0 and best == -MATE_UPPER:
+        if depth > STALEMATE_LIMIT and best == -MATE_UPPER:
             flipped = pos.rotate(nullmove=True)
             # Both of these check-tests work. Is one of them better?
             if USE_BOUND_FOR_CHECK_TEST == 1:
