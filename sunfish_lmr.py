@@ -10,8 +10,8 @@ from collections import namedtuple, defaultdict
 # and put pypy3 directly in pack.sh instead of using exec on the .py file.
 from functools import partial
 print = partial(print, flush=True)
-import sys
-sys.stderr = open('error.log', 'a', 0)
+#import sys
+#sys.stderr = open('error.log', 'a', 0)
 
 version = "sunfish 2"
 
