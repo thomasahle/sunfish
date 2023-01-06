@@ -10,6 +10,8 @@ from collections import namedtuple, defaultdict
 # and put pypy3 directly in pack.sh instead of using exec on the .py file.
 from functools import partial
 print = partial(print, flush=True)
+import sys
+sys.stderr = open('error.log', 'a')
 
 version = "sunfish 2"
 
@@ -132,7 +134,7 @@ USE_BOUND_FOR_CHECK_TEST = 1
 IID_LIMIT = 2 # depth > 2
 IID_REDUCE = 1 # depth reduction in IID
 IID_TYPE = 2 # None, gamma=pos.score, gamma=gamma, iterative
-REPEAT_NULL = 0 # Whether a null move can be responded too by another null move
+REPEAT_NULL = 1 # Whether a null move can be responded too by another null move
 
 # minifier-hide start
 opt_ranges = dict(
