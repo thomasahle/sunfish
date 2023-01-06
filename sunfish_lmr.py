@@ -132,9 +132,10 @@ EVAL_ROUGHNESS = 17
 # Constants to be removed later
 USE_BOUND_FOR_CHECK_TEST = 1
 IID_LIMIT = 2 # depth > 2
-IID_REDUCE = 1 # depth reduction in IID
-IID_TYPE = 2 # None, gamma=pos.score, gamma=gamma, iterative
+IID_REDUCE = 3 # depth reduction in IID
+IID_TYPE = 4 # None, gamma=pos.score, gamma=gamma, iterative, depth-reduce
 REPEAT_NULL = 1 # Whether a null move can be responded too by another null move
+NULL_LIMIT = 2 # Only null-move if depth > NULL_LIMIT
 
 # minifier-hide start
 opt_ranges = dict(
@@ -144,8 +145,9 @@ opt_ranges = dict(
     USE_BOUND_FOR_CHECK_TEST = (0, 2),
     IID_LIMIT = (0, 5),
     IID_REDUCE = (1, 5),
-    IID_TYPE = (0, 3),
+    IID_TYPE = (0, 4),
     REPEAT_NULL = (0, 1),
+    NULL_LIMIT = (0, 5),
 )
 # minifier-hide end
 
@@ -323,12 +325,41 @@ class Searcher:
             # self.tp_score[pos, depth, root] = Entry(0, 0)
             return 0
 
+        # TODO: This seems like a great optimization! Maybe an alternative to IID?
+        # But it also messes with stalemate detection without the depth limit.
+        #if depth > 3 and pos not in self.tp_move:
+        if IID_TYPE == 4 and pos not in self.tp_move:
+            depth -= IID_REDUCE
+
+        # This seems to work, but only detects stale_mates if null_limit = 0
+        #null_score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3, root=not REPEAT_NULL) if depth > NULL_LIMIT else None
+
+        # TODO: Play with check extensions...
+        # For some reason it gives me recursion errors...
+        # Also, in stockfish check-extension gives like 1 ELO. It seems it doesn't
+        # help me much either. However, singular extension (when one move is much
+        # better than all others) gives stockfish like 100 ELO gain. Maybe I need that.
+        #if depth > 2 and null_score == -MATE_UPPER:
+            #depth += 1
+
+        # Singular extension:
+        # Assume hash-move >= gamma.
+        # For each move other than the hash-move, check they are <= gamma - margin.
+        # (or <= hash-move-val - margin, since we are fail-soft.)
+        # Or something like that.
+        # But how do we make it not search-unstable?
+
         # Generator of moves to search in order.
         # This allows us to define the moves, but only calculate them if needed.
         def moves():
             # First try not moving at all. We only do this if there is at least one major
             # piece left on the board, since otherwise zugzwangs are too dangerous.
-            if depth > 0 and not root and any(c in pos.board for c in "RBNQ"):
+            # TODO: Since we nearly always null-move anyway, can't we just save the value
+            # and use it to detect checks? It would interfer a bit with the zugswang detection
+            # (the RBNQ check), but in Micromax he just does null-move and then checks that
+            # afterwards, before he returns the score.
+            if depth > NULL_LIMIT and not root and any(c in pos.board for c in "RBNQ"):
+                #yield None, null_score
                 yield None, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3, root=not REPEAT_NULL)
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else.
@@ -472,6 +503,11 @@ class Searcher:
                 in_check = self.bound(flipped, MATE_UPPER, 0, root=False) == MATE_UPPER
             else:
                 in_check = any(flipped.value(m) >= MATE_LOWER for m in flipped.gen_moves())
+            
+            # null_in_check = null_score == -MATE_UPPER
+            # if in_check != null_in_check:
+            #     print(in_check, null_in_check, null_score)
+
             best = 0 if not in_check else -MATE_LOWER
 
         # Table part 2
