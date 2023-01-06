@@ -123,9 +123,9 @@ MATE_UPPER = piece["K"] + 10 * piece["Q"]
 #QS_B = 219
 #QS_A = 500
 #EVAL_ROUGHNESS = 13
-QS_B = 86
-QS_A = 300
-EVAL_ROUGHNESS = 9
+QS_B = 40
+QS_A = 150
+EVAL_ROUGHNESS = 17
 
 # Constants to be removed later
 USE_BOUND_FOR_CHECK_TEST = 1
@@ -338,13 +338,13 @@ class Searcher:
             # will be non deterministic.
 
             # TODO: Tune this formula. Could also use B - A * depth^C?
-            #val_lower = QS_B - QS_A * depth
-            if depth == 0:
-                val_lower = QS_B
-            elif depth == 1:
-                val_lower = QS_B - QS_A
-            else:
-                val_lower = -MATE_LOWER
+            val_lower = QS_B - QS_A * depth
+            #if depth == 0:
+            #    val_lower = QS_B
+            #elif depth == 1:
+            #    val_lower = QS_B - QS_A
+            #else:
+            #    val_lower = -MATE_LOWER
             # Depth reduce function
             def reduce(val):
                 return 0
@@ -415,6 +415,8 @@ class Searcher:
                 # Late move pruning
                 # If depth == 0 we only try moves with high intrinsic score (captures and
                 # promotions). Otherwise we do all moves.
+                if depth > 1 and val < val_lower:
+                    print(move, val)
                 if val >= val_lower:
                     d1 = depth - 1 - reduce(val)
                     # If the new score is less than gamma, the opponent will for sure just
