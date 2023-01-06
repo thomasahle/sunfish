@@ -128,20 +128,22 @@ QS_A = 300
 EVAL_ROUGHNESS = 9
 
 # Constants to be removed later
-USE_BOUND_FOR_CHECK_TEST = 0
+USE_BOUND_FOR_CHECK_TEST = 1
 IID_LIMIT = 2 # depth > 2
 IID_REDUCE = 1 # depth reduction in IID
-IID_TYPE = 3 # None, gamma=pos.score, gamma=gamma
+IID_TYPE = 2 # None, gamma=pos.score, gamma=gamma, iterative
+REPEAT_NULL = 0 # Whether a null move can be responded too by another null move
 
 # minifier-hide start
 opt_ranges = dict(
     QS_A = (0, 500),
     QS_B = (0, 500),
     EVAL_ROUGHNESS = (0, 50),
-    USE_BOUND_FOR_CHECK_TEST = (0, 1),
+    USE_BOUND_FOR_CHECK_TEST = (0, 2),
     IID_LIMIT = (0, 5),
     IID_REDUCE = (1, 5),
     IID_TYPE = (0, 3),
+    REPEAT_NULL = (0, 1),
 )
 # minifier-hide end
 
@@ -325,7 +327,7 @@ class Searcher:
             # First try not moving at all. We only do this if there is at least one major
             # piece left on the board, since otherwise zugzwangs are too dangerous.
             if depth > 0 and not root and any(c in pos.board for c in "RBNQ"):
-                yield None, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3, root=False)
+                yield None, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3, root=not REPEAT_NULL)
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else.
             if depth == 0:
@@ -460,7 +462,9 @@ class Searcher:
         if depth > 0 and best == -MATE_UPPER:
             flipped = pos.rotate(nullmove=True)
             # Both of these check-tests work. Is one of them better?
-            if USE_BOUND_FOR_CHECK_TEST:
+            if USE_BOUND_FOR_CHECK_TEST == 1:
+                in_check = self.bound(flipped, MATE_UPPER, 0, root=True) == MATE_UPPER
+            elif USE_BOUND_FOR_CHECK_TEST == 2:
                 in_check = self.bound(flipped, MATE_UPPER, 0, root=False) == MATE_UPPER
             else:
                 in_check = any(flipped.value(m) >= MATE_LOWER for m in flipped.gen_moves())
