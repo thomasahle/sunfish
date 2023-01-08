@@ -6,14 +6,10 @@ from collections import namedtuple, defaultdict
 
 # If we could rely on the env -S argument, we could just use "pypy3 -u"
 # as the shebang to unbuffer stdout. But alas we have to do this instead:
-# TODO: I we really want to save bytes, maybe wrap this in minifier-hide,
-# and put pypy3 directly in pack.sh instead of using exec on the .py file.
 from functools import partial
 print = partial(print, flush=True)
-#import sys
-#sys.stderr = open('error.log', 'a', 0)
 
-version = "sunfish lmr"
+version = "sunfish 2023"
 
 ###############################################################################
 # Piece-Square tables. Tune these to change sunfish's behaviour
