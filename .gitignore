@@ -7,7 +7,6 @@ engines.json
 *.log
 *.txt
 *.err
-*.pickle
 
 # Tuning
 data.npz
