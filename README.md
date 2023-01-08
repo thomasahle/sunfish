@@ -1,36 +1,58 @@
 ![Sunfish logo](https://raw.github.com/thomasahle/sunfish/master/docs/logo/sunfish_large.png)
 
 ## Introduction
-Sunfish is a simple, but strong chess engine, written in Python, mostly for teaching purposes. Without tables and its simple interface, it takes up just 111 lines of code! (see [`compressed.py`](https://github.com/thomasahle/sunfish/blob/master/compressed.py)) Yet [it plays at ratings above 2000 at Lichess](https://lichess.org/@/sunfish-engine).
+Sunfish is a simple, but strong chess engine, written in Python. With its simple [UCI](http://wbec-ridderkerk.nl/html/UCIProtocol.html) interface, and removing comments and whitespace, it takes up just 131 lines of code! (`build/clean.sh sunfish.py | wc -l`).
+Yet [it plays at ratings above 2000 at Lichess](https://lichess.org/@/sunfish-engine).
 
 Because Sunfish is small and strives to be simple, the code provides a great platform for experimenting. People have used it for testing parallel search algorithms, experimenting with evaluation functions, and developing deep learning chess programs. Fork it today and see what you can do!
 
-## Screenshot
+# Play against sunfish!
 
-    My move: g8f6
-    
-      8 ♖ ♘ ♗ ♕ ♔ ♗ · ♖
-      7 ♙ ♙ ♙ ♙ ♙ ♙ ♙ ♙
-      6 · · · · · ♘ · ·
-      5 · · · · · · · ·
-      4 · · · · ♟ · · ·
-      3 · · · · · · · ·
-      2 ♟ ♟ ♟ ♟ · ♟ ♟ ♟
-      1 ♜ ♞ ♝ ♛ ♚ ♝ ♞ ♜
-        a b c d e f g h
+The simplest way to run sufish is through the "fancy" terminal interface:
+<pre>
+$ <b>tools/fancy.py -cmd ./sunfish.py</b>
+Playing against sunfish 2023.
+Do you want to be white or black? <b>black</b>
+  1 ♖ ♘ ♗ ♔ ♕ ♗ ♘ ♖
+  2 ♙ ♙ ♙ ♙ ♙ ♙ ♙ ♙
+  3
+  4
+  5
+  6
+  7 ♟ ♟ ♟ ♟ ♟ ♟ ♟ ♟
+  8 ♜ ♞ ♝ ♚ ♛ ♝ ♞ ♜
+    h g f e d c b a
 
+Score: 23, nodes: 11752, nps: 13812, time: 0.9
+ My move: d4
+  1 ♖ ♘ ♗ ♔ ♕ ♗ ♘ ♖
+  2 ♙ ♙ ♙ ♙   ♙ ♙ ♙
+  3
+  4         ♙
+  5
+  6
+  7 ♟ ♟ ♟ ♟ ♟ ♟ ♟ ♟
+  8 ♜ ♞ ♝ ♚ ♛ ♝ ♞ ♜
+    h g f e d c b a
 
-    Your move:
+Your move (e.g. c6 or g8h6): <b>Nf6</b>
+</pre>
 
-# Run it!
+Note this requires the [python-chess](https://github.com/niklasf/python-chess/) package.
+For a true minimalist experience, first we can "pack" sunfish into a compressed executable (less than 3KB!) and run it directly:
+<pre>
+$ <b>build/pack.sh sunfish.py packed.sh</b>
+Total length: 2953
+$ <b>./packed.sh</b>
+<b>go wtime 1000 btime 1000 winc 1000 binc 1000</b>
+info depth 1 score cp 0 pv d2d4
+bestmove d2d4
+</pre>
+(See the [UCI specification](http://wbec-ridderkerk.nl/html/UCIProtocol.html) for the full set of commands.)
 
-Sunfish is self contained in the `sunfish.py` file from the repository. I recommend running it with `pypy` or `pypy3` for optimal performance.
+It is also possible to run Sunfish with a graphical interface, such as [PyChess](http://pychess.org) or [Arena](http://www.playwitharena.de).
 
-If you want a more "fancy" terminal experience, run `fancy.py` instead. (Note this requires the [python-chess](https://github.com/niklasf/python-chess/) package.)
-
-It is also possible to run Sunfish with a graphical interface, such as [PyChess](http://pychess.org), [Arena](http://www.playwitharena.com) or your chess interface of choice. Sunfish' can communicate through the [XBoard](http://www.gnu.org/software/xboard/)/CECP protocol by the command `pypy -u xboard.py`. Ruxy Sylwyka has [a note on making it all work on Windows](http://www.talkchess.com/forum/viewtopic.php?topic_view=threads&p=560462).
-
-You can [play sunfish now on Lichess](https://lichess.org/@/sunfish-engine) (requires log in) or play against [Recursing's Rust port](https://github.com/Recursing/sunfish_rs),
+Finally you can [play sunfish now on Lichess](https://lichess.org/@/sunfish-engine) (requires log in) or play against [Recursing's Rust port](https://github.com/Recursing/sunfish_rs),
 also [on Lichess](https://lichess.org/@/sunfish_rs), which is about 100 ELO stronger.
 
 # Features
