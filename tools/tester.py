@@ -337,7 +337,7 @@ class Best(Command):
                 continue
             # am -> avoid move; bm -> best move
             pb.set_description(opts.get("id", ""))
-            result = await engine.play(board, limit)
+            result = await engine.play(board, limit, info=chess.engine.INFO_SCORE)
             errors = []
             if "bm" in opts:
                 total += 1
@@ -355,6 +355,8 @@ class Best(Command):
                 print("Failed on", line.strip())
                 for er in errors:
                     print(er)
+                print("Full result:", result)
+                print()
             pb.set_postfix(acc=points / total)
         print(f"Succeeded in {points}/{total} cases.")
 
