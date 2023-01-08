@@ -5,6 +5,11 @@ TOOLS=$(dirname "$0")
 echo "$TOOLS"
 T="python3 $TOOLS/tester.py"
 
+
+echo "Perft"
+$T "$1" ${2:-"--quiet"} perft $TOOLS/test_files/perft.epd --depth 2
+echo
+
 echo "Mate in 1..."
 #$T "$1" ${2:-"--quiet"} mate $TOOLS/test_files/mate1.fen --depth 2
 $T "$1" ${2:-"--quiet"} mate $TOOLS/test_files/mate1.fen --movetime 10000

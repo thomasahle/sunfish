@@ -1,4 +1,4 @@
-#!/usr/bin/env pypy
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
 import os
@@ -29,13 +29,39 @@ class Command:
         raise NotImplementedError
 
     @classmethod
-    async def run(cls, args):
+    async def run(cls, engine, args):
         raise NotImplementedError
 
 
 ###############################################################################
 # Perft test
 ###############################################################################
+
+from chess.engine import BaseCommand, UciProtocol
+
+
+async def uci_perft(engine, depth):
+    class UciPerftCommand(BaseCommand[UciProtocol, None]):
+        def __init__(self, engine: UciProtocol):
+            super().__init__(engine)
+            self.moves = []
+
+        def start(self, engine: UciProtocol) -> None:
+            engine.send_line(f"go perft {depth}")
+
+        def line_received(self, engine: UciProtocol, line: str) -> None:
+            match = re.match("(\w+): (\d+)", line)
+            if match:
+                move = chess.Move.from_uci(match.group(1))
+                cnt = int(match.group(2))
+                self.moves.append((move, cnt))
+
+            match = re.match("Nodes searched: (\d+)", line)
+            if match:
+                self.result.set_result(self.moves)
+                self.set_finished()
+
+    return await engine.communicate(UciPerftCommand)
 
 
 class Perft(Command):
@@ -44,46 +70,36 @@ class Perft(Command):
 
     @classmethod
     def add_arguments(cls, parser):
-        parser.add_argument("--depth", type=int)
         parser.add_argument(
             "file", type=argparse.FileType("r"), help="such as tests/queen.fen."
         )
+        parser.add_argument("--depth", type=int, default=3)
 
     @classmethod
-    async def run(cls, args):
-        import gc
+    async def run(cls, engine, args):
+        lines = args.file.readlines()
+        for d in range(1, args.depth + 1):
+            if not args.quiet:
+                print(f"Going to depth {d}/{args.depth}")
 
-        lines = f.readlines()
-        for d in range(1, depth + 1):
-            if verbose:
-                print("Going to depth {}/{}".format(d, depth))
-            for line in lines:
-                parts = line.split(";")
-                if len(parts) <= d:
-                    continue
-                if verbose:
-                    print(parts[0])
+            for line in tqdm.tqdm(lines):
+                board, opts = chess.Board.from_epd(line)
+                engine._position(board)
+                moves = await uci_perft(engine, d)
 
-                pos, score = tools.parseFEN(parts[0]), int(parts[d])
-                res = sum(
-                    1 for _ in tools.collect_tree_depth(tools.expand_position(pos), d)
-                )
-                if res != score:
+                cnt = sum(c for m, c in moves)
+                opt_cnt = int(opts[f"D{d}"])
+
+                # TODO: Also test that the _number_ of different moves is correct
+
+                if cnt != opt_cnt:
                     print("=========================================")
-                    print("ERROR at depth %d. Gave %d rather than %d" % (d, res, score))
+                    print(f"ERROR at depth {d}. Gave {cnt} rather than {opt_cnt}")
                     print("=========================================")
-                    print(tools.renderFEN(pos, 0))
-                    for move in pos.gen_moves():
-                        split = sum(
-                            1
-                            for _ in tools.collect_tree_depth(
-                                tools.expand_position(pos.move(move)), 1
-                            )
-                        )
-                        print("{}: {}".format(tools.mrender(pos, move), split))
-                    return False
-            if verbose:
-                print("")
+                    print(board)
+                    for m, c in moves:
+                        print(m, c)
+                    break
 
 
 class Bench(Command):
@@ -125,58 +141,6 @@ class Bench(Command):
 
         print(f"Total nodes: {total_nodes}.")
         print(f"Average knps: {round(total_nodes/(time.time() - start)/1000, 2)}.")
-
-
-class Selfplay(Command):
-    name = "self-play"
-    help = "Play the engine a single game against itself, using increments"
-
-    @classmethod
-    def add_arguments(self, parser):
-        parser.add_argument("--time", type=int, default=3, help="White time in seconds")
-        parser.add_argument(
-            "--inc", type=int, default=1, help="Increment time in seconds"
-        )
-
-    @classmethod
-    async def run(self, engine, args):
-        board = chess.Board()
-        wtime = btime = int(args.time)
-        winc = binc = int(args.inc)
-        while not board.is_game_over():
-            print(board)
-            start = time.time()
-            result = await engine.play(
-                board,
-                chess.engine.Limit(
-                    white_clock=wtime,
-                    black_clock=btime,
-                    white_inc=winc,
-                    black_inc=binc,
-                ),
-            )
-            if board.turn == chess.WHITE:
-                wtime -= time.time() - start
-                if wtime <= 0:
-                    print("White lose on time.")
-                    break
-                wtime += winc
-            else:
-                btime -= time.time() - start
-                if btime <= 0:
-                    print("Black lose on time.")
-                    break
-                btime += binc
-            if result.resigned:
-                print("Resigned")
-                break
-            print(
-                f"{board.fullmove_number}{'..' if board.turn == chess.BLACK else '.'}",
-                board.san(result.move),
-                f"wtime={round(wtime,1)}, btime={round(btime,1)}",
-                # f"score={result.score}"
-            )
-            board.push(result.move)
 
 
 ###############################################################################
