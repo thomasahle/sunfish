@@ -1,10 +1,10 @@
 # Advanced UCI interface
 
 import re, time
-from tools import tools
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from functools import partial
+
 print = partial(print, flush=True)
 
 
@@ -40,26 +40,40 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
         best_move = render_move(move, white_pov=len(hist) % 2 == 1)
         elapsed = time.time() - start
         print(
-            "info depth", depth,
-            "score cp", score,
-            "time", round(1000 * elapsed),
-            "nodes", searcher.nodes,
-            "nps", round(searcher.nodes / elapsed),
+            "info depth",
+            depth,
+            "score cp",
+            score,
+            "time",
+            round(1000 * elapsed),
+            "nodes",
+            searcher.nodes,
+            "nps",
+            round(searcher.nodes / elapsed),
             # TODO: The PV may not actually be true, since it uses tp_move,
             # in which higher depth moves may be overwritten by lower depth ones.
-            #"pv", best_move,
-            "pv", " ".join(tools.pv(searcher, hist[-1], include_scores=False)),
+            # "pv", best_move,
+            "pv",
+            " ".join(pv(searcher, hist[-1], include_scores=False)),
         )
         if best_move and elapsed > max_movetime * 2 / 3:
             break
         if stop_event.is_set():
             break
 
-    pv = tools.pv(searcher, hist[-1], include_scores=False)
-    print("bestmove", pv[0] if pv else '(none)')
+    my_pv = pv(searcher, hist[-1], include_scores=False)
+    print("bestmove", my_pv[0] if my_pv else "(none)")
 
 
-def mate_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, find_draw=False, debug=False):
+def mate_loop(
+    searcher,
+    hist,
+    stop_event,
+    max_movetime=0,
+    max_depth=0,
+    find_draw=False,
+    debug=False,
+):
     start = time.time()
     for d in range(int(max_depth) + 1):
         if find_draw:
@@ -75,10 +89,14 @@ def mate_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, find_draw
             score = searcher.bound(hist[-1], sunfish.MATE_LOWER, d)
             elapsed = time.time() - start
             print(
-                "info depth", d,
-                "score cp", score,
-                "time", round(1000 * elapsed),
-                "pv", ' '.join(tools.pv(searcher, hist[-1], include_scores=False)),
+                "info depth",
+                d,
+                "score cp",
+                score,
+                "time",
+                round(1000 * elapsed),
+                "pv",
+                " ".join(pv(searcher, hist[-1], include_scores=False)),
             )
             if score >= sunfish.MATE_LOWER:
                 break
@@ -134,7 +152,9 @@ def run(sunfish_module):
                     print(f"id name {sunfish.version}")
                     for attr, (lo, hi) in sunfish.opt_ranges.items():
                         default = getattr(sunfish, attr)
-                        print(f"option name {attr} type spin default {default} min {lo} max {hi}")
+                        print(
+                            f"option name {attr} type spin default {default} min {lo} max {hi}"
+                        )
                     print("uciok")
 
                 elif args[0] == "setoption":
@@ -166,9 +186,11 @@ def run(sunfish_module):
                     hist = [pos] if color == "w" else [pos, pos.rotate()]
                     if len(args) > 8 and args[8] == "moves":
                         for move in args[9:]:
-                            hist.append(hist[-1].move(parse_move(move, len(hist) % 2 == 1)))
+                            hist.append(
+                                hist[-1].move(parse_move(move, len(hist) % 2 == 1))
+                            )
 
-                elif args[0] == 'go':
+                elif args[0] == "go":
                     think = 10**6
                     max_depth = 100
                     loop = go_loop
@@ -195,15 +217,23 @@ def run(sunfish_module):
 
                     elif args[1] in ("mate", "draw"):
                         max_depth = int(args[2])
-                        loop = partial(mate_loop, find_draw=args[1]=="draw")
+                        loop = partial(mate_loop, find_draw=args[1] == "draw")
 
                     do_stop_event.clear()
-                    go_future = executor.submit(loop,
-                        searcher, hist, do_stop_event, think, max_depth, debug=debug)
+                    go_future = executor.submit(
+                        loop,
+                        searcher,
+                        hist,
+                        do_stop_event,
+                        think,
+                        max_depth,
+                        debug=debug,
+                    )
 
                     # Make sure we get informed if the job fails
                     def callback(fut):
                         fut.result(timeout=0)
+
                     go_future.add_done_callback(callback)
 
             except KeyboardInterrupt:
@@ -214,3 +244,46 @@ def run(sunfish_module):
                     go_future.result()
                 break
 
+
+# Old tools stuff
+
+WHITE, BLACK = range(2)
+
+
+def get_color(pos):
+    """A slightly hacky way to to get the color from a sunfish position"""
+    return BLACK if pos.board.startswith("\n") else WHITE
+
+
+def can_kill_king(pos):
+    # If we just checked for opponent moves capturing the king, we would miss
+    # captures in case of illegal castling.
+    MATE_LOWER = 60_000 - 10 * 929
+    return any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
+
+
+def pv(searcher, pos, include_scores=True, include_loop=False):
+    res = []
+    seen_pos = set()
+    color = get_color(pos)
+    origc = color
+    if include_scores:
+        res.append(str(pos.score))
+    while True:
+        if hasattr(searcher, "tp_move"):
+            move = searcher.tp_move.get(pos)
+        elif hasattr(searcher, "tt_new"):
+            move = searcher.tt_new[0][pos, True].move
+        # The tp may have illegal moves, given lower depths don't detect king killing
+        if move is None or can_kill_king(pos.move(move)):
+            break
+        res.append(render_move(move, get_color(pos) == WHITE))
+        pos, color = pos.move(move), 1 - color
+        if pos in seen_pos:
+            if include_loop:
+                res.append("loop")
+            break
+        seen_pos.add(pos)
+        if include_scores:
+            res.append(str(pos.score if color == origc else -pos.score))
+    return res

@@ -197,6 +197,7 @@ def info_to_desc(info):
         desc.append(f"score: {info['score'].pov(chess.WHITE).cp/100:.1f}")
     return ", ".join(desc)
 
+
 def add_limit_argument(parser):
     parser.add_argument(
         "--depth",
@@ -220,13 +221,15 @@ def add_limit_argument(parser):
         help="Movetime in ms",
     )
 
+
 def get_limit(args):
     if args.limit_depth:
         return chess.engine.Limit(depth=args.limit_depth)
     elif args.limit_mate:
         return chess.engine.Limit(mate=args.limit_mate)
     elif args.limit_movetime:
-        return chess.engine.Limit(time=args.limit_movetime/1000)
+        return chess.engine.Limit(time=args.limit_movetime / 1000)
+
 
 class Mate(Command):
     name = "mate"
@@ -241,7 +244,7 @@ class Mate(Command):
             "--limit",
             type=int,
             default=10000,
-            help="Take only this many lines from the file"
+            help="Take only this many lines from the file",
         )
         add_limit_argument(parser)
 
@@ -251,24 +254,24 @@ class Mate(Command):
         total = 0
         success = 0
         lines = args.file.readlines()
-        lines = lines[:args.limit]
+        lines = lines[: args.limit]
         pb = tqdm.tqdm(lines)
         for line in pb:
             board, _ = chess.Board.from_epd(line)
             with await engine.analysis(board, limit) as analysis:
                 async for info in analysis:
                     pb.set_description(info_to_desc(info))
-                    if not 'score' in info:
+                    if not "score" in info:
                         continue
                     score = info["score"]
                     if score.is_mate() or score.relative.cp > 10000:
                         if info["pv"]:
                             b = board.copy()
-                            for move in info['pv']:
+                            for move in info["pv"]:
                                 b.push(move)
                             if not b.is_game_over():
                                 if args.debug:
-                                    print('Got mate score, but PV is not mate...')
+                                    print("Got mate score, but PV is not mate...")
                                 continue
                         if args.debug:
                             print("Found it!")
@@ -304,7 +307,7 @@ class Draw(Command):
             with await engine.analysis(board, limit) as analysis:
                 async for info in analysis:
                     pb.set_description(info_to_desc(info))
-                    if not 'score' in info:
+                    if not "score" in info:
                         continue
                     score = info["score"]
                     # It should be draw here
@@ -319,9 +322,10 @@ class Draw(Command):
                         pass
         print(f"Succeeded in {success}/{total} cases.")
         if not args.quiet:
-            print('Depths:')
+            print("Depths:")
             for depth, c in cnt.most_common():
-                print(f'{depth}: {c}')
+                print(f"{depth}: {c}")
+
 
 ###############################################################################
 # Best move test
@@ -341,7 +345,7 @@ class Best(Command):
             "--limit",
             type=int,
             default=10000,
-            help="Take only this many lines from the file"
+            help="Take only this many lines from the file",
         )
         add_limit_argument(parser)
 
@@ -350,8 +354,8 @@ class Best(Command):
         limit = get_limit(args)
         points, total = 0, 0
         lines = args.file.readlines()
-        #random.shuffle(lines)
-        lines = lines[:args.limit]
+        # random.shuffle(lines)
+        lines = lines[: args.limit]
         for line in (pb := tqdm.tqdm(lines)):
             board, opts = chess.Board.from_epd(line)
             if "pv" in opts:
@@ -368,27 +372,28 @@ class Best(Command):
                     print("Line didn't have am/bm in opts", line, opts)
                 continue
             # am -> avoid move; bm -> best move
-            pb.set_description(opts.get('id',''))
+            pb.set_description(opts.get("id", ""))
             result = await engine.play(board, limit)
             errors = []
-            if 'bm' in opts:
+            if "bm" in opts:
                 total += 1
-                if result.move in opts['bm']:
+                if result.move in opts["bm"]:
                     points += 1
                 else:
                     errors.append(f'Gave move {result.move} rather than {opts["bm"]}')
-            if 'am' in opts:
+            if "am" in opts:
                 total += 1
-                if result.move not in opts['am']:
+                if result.move not in opts["am"]:
                     points += 1
                 else:
                     errors.append(f'Gave move {result.move} which is in {opts["am"]}')
             if not args.quiet and errors:
-                print('Failed on', line.strip())
+                print("Failed on", line.strip())
                 for er in errors:
                     print(er)
-            pb.set_postfix(acc=points/total)
+            pb.set_postfix(acc=points / total)
         print(f"Succeeded in {points}/{total} cases.")
+
 
 ###############################################################################
 # Actions
