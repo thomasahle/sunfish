@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import chess.engine
 import json
 import argparse
@@ -11,9 +14,9 @@ import math
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('conf', default='engines.json', nargs='?',
-                    help='Location of engines.json file to use')
-parser.add_argument('name', default='sunfish', nargs='?', help='Name of engine to use')
+parser.add_argument('-cmd', nargs='?', help='Command of (UCI) engine to use')
+parser.add_argument('-conf', nargs='?', help='Location of engines.json file to use')
+parser.add_argument('-name', nargs='?', help='Name of engine to use from conf')
 parser.add_argument('-selfplay', action='store_true', help='Play against itself')
 parser.add_argument('-debug', action='store_true', help='Enable debugging of engine')
 parser.add_argument('-movetime', type=int, default=0, help='Movetime in ms')
@@ -23,7 +26,15 @@ parser.add_argument('-pvs', nargs='?', const=3, default=0, type=int,
 parser.add_argument('-fen', help='Start from given position',
                     default='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1')
 
-async def load_engine(engine_args, name, debug=False):
+
+async def load_engine_from_cmd(cmd, debug=False):
+    _, engine = await chess.engine.popen_uci(cmd)
+    if hasattr(engine, 'debug'):
+        engine.debug(debug)
+    return engine
+
+
+async def load_engine_from_conf(engine_args, name, debug=False):
     args = next(a for a in engine_args if a['name'] == name)
     curdir = str(pathlib.Path(__file__).parent)
     popen_args = {}
@@ -127,11 +138,14 @@ async def get_engine_move(engine, board, limit, game_id, multipv, debug=False):
                 score = f'Score: {score.score()}' \
                         if score.score() is not None else f'Mate in {score.mate()}'
                 print(f'{score}, nodes: {info.get("nodes", "N/A")}, nps: {info.get("nps", "N/A")},'
-                      f' time: {float(info.get("time", "N/A")):.1f}', end='')
+                      f' time: {float(info.get("time", 0)):.1f}', end='')
                 print()
 
                 for info in infos:
-                    variation = board.variation_san(info['pv'][:10])
+                    if 'pv' in info:
+                        variation = board.variation_san(info['pv'][:10])
+                    else:
+                        variation = ''
 
                     if 'score' in info:
                         score = info['score'].relative
@@ -187,15 +201,25 @@ async def main():
         logging.basicConfig(level=logging.ERROR)
 
     if not args.conf:
-        path = pathlib.Path(__file__).parent / 'engines.json'
-        if not path.is_file():
-            print('Unable to locate engines.json file.')
-            return
-        conf = json.load(path.open())
+        if args.cmd:
+            engine = await load_engine_from_cmd(args.cmd, debug=args.debug)
+        else:
+            path = pathlib.Path(__file__).parent / 'engines.json'
+            if not path.is_file():
+                print('Unable to locate engines.json file.')
+                return
+            conf = json.load(path.open())
     else:
-        conf = json.load(open(args.conf))
+        if args.conf:
+            conf = json.load(open(args.conf))
+        else:
+            path = pathlib.Path(__file__).parent / 'engines.json'
+            if not path.is_file():
+                print('Unable to locate engines.json file.')
+                return
+            conf = json.load(path.open())
+        engine = await load_engine_from_conf(conf, args.name, debug=args.debug)
 
-    engine = await load_engine(conf, args.name, debug=args.debug)
     if 'author' in engine.id:
         print(f"Playing against {engine.id['name']} by {engine.id['author']}.")
     else:
@@ -208,7 +232,9 @@ async def main():
     elif args.nodes:
         limit = chess.engine.Limit(nodes=args.nodes)
     else:
-        limit = chess.engine.Limit(white_clock=30, black_clock=30, remaining_moves=30)
+        limit = chess.engine.Limit(white_clock=30, black_clock=30, white_inc=1, black_inc=1)
+
+    print('Playing with limit', limit)
 
     try:
         await play(engine, board, selfplay=args.selfplay, pvs=args.pvs, time_limit=limit, debug=args.debug)

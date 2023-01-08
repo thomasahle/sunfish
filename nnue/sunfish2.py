@@ -1,11 +1,17 @@
-#!/usr/bin/env pypy
-# -*- coding: utf-8 -*-
+#!/usr/bin/env pypy3
 
 import time, math
 from itertools import count
 from collections import namedtuple, defaultdict
 
-version = "Sunfish 2"
+# If we could rely on the env -S argument, we could just use "pypy3 -u"
+# as the shebang to unbuffer stdout. But alas we have to do this instead:
+# TODO: I we really want to save bytes, maybe wrap this in minifier-hide,
+# and put pypy3 directly in pack.sh instead of using exec on the .py file.
+from functools import partial
+print = partial(print, flush=True)
+
+version = "sunfish 2"
 
 ###############################################################################
 # Piece-Square tables. Tune these to change sunfish's behaviour
@@ -113,24 +119,41 @@ directions = {
 MATE_LOWER = piece["K"] - 10 * piece["Q"]
 MATE_UPPER = piece["K"] + 10 * piece["Q"]
 
+# TODO: It seems my formula B - A * depth doesn't actually work well,
+# and BayesOpt prefers to set A >= 250, making it meaningless.
+# Maybe I should try three values B_0, B_1, B_2 to get a better idea of the
+# right formula
 # Constants for tuning search
-QS_A = 100
-QS_B = 219
-EVAL_ROUGHNESS = 13
+#QS_B = 219
+#QS_A = 500
+#EVAL_ROUGHNESS = 13
+QS_B = 50
+QS_A = 250
+EVAL_ROUGHNESS = 17
 
 # Constants to be removed later
-USE_BOUND_FOR_CHECK_TEST = 0
+USE_BOUND_FOR_CHECK_TEST = 1
 IID_LIMIT = 2 # depth > 2
-IID_REDUCE = 1 # depth reduction in IID
+IID_REDUCE = 3 # depth reduction in IID
+REPEAT_NULL = 1 # Whether a null move can be responded too by another null move
+NULL_LIMIT = 2 # Only null-move if depth > NULL_LIMIT
+STALEMATE_LIMIT = 0 # Only null-move if depth > NULL_LIMIT
+
+
+
+# There is some issue with combining "bound for check test" with a high "null_limit".
 
 # minifier-hide start
 opt_ranges = dict(
     QS_A = (0, 500),
     QS_B = (0, 500),
     EVAL_ROUGHNESS = (0, 50),
-    USE_BOUND_FOR_CHECK_TEST = (0, 1),
+    USE_BOUND_FOR_CHECK_TEST = (0, 2),
     IID_LIMIT = (0, 5),
     IID_REDUCE = (1, 5),
+    REPEAT_NULL = (0, 1),
+    NULL_LIMIT = (0, 5),
+    STALEMATE_LIMIT = (0, 5),
 )
 # minifier-hide end
 
@@ -264,21 +287,21 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
 ###############################################################################
 
 # lower <= s(pos) <= upper
-Entry = namedtuple("Entry", "lower upper", defaults=(-MATE_UPPER, MATE_UPPER))
-
+LO, UP = range(2)
+UpperEntry = namedtuple("UE", "depth score", defaults=(0, MATE_UPPER))
+LowerEntry = namedtuple("LE", "depth score move", defaults=(0, -MATE_UPPER, None))
 
 class Searcher:
     def __init__(self):
-        self.tp_score = defaultdict(Entry)
-        self.tp_move = {}
-        self.history = set()
+        self.tt_old = (defaultdict(LowerEntry), defaultdict(UpperEntry))
+        self.tt_new = (defaultdict(LowerEntry), defaultdict(UpperEntry))
         self.nodes = 0
 
     def bound(self, pos, gamma, depth, root=True):
         """ Let s* be the "true" score of the sub-tree we are searching.
             The method returns r, where
-            if gamma >  s*, s* <= r < gamma  (A better upper bound)
-            if gamma <= s*, gamma <= r <= s* (A better lower bound) """
+            if gamma >  s* then s* <= r < gamma  (A better upper bound)
+            if gamma <= s* then gamma <= r <= s* (A better lower bound) """
         self.nodes += 1
 
         # Depth <= 0 is QSearch. Here any position is searched as deeply as is needed for
@@ -296,89 +319,82 @@ class Searcher:
         # Look in the table if we have already searched this position before.
         # We also need to be sure, that the stored search was over the same
         # nodes as the current search.
-        entry = self.tp_score[pos, depth, root]
-        if entry.lower >= gamma: return entry.lower
-        if entry.upper < gamma: return entry.upper
+        lo_entry, up_entry = self.tt_old[LO][pos, root], self.tt_old[UP][pos, root]
+        # score <= upper < gamma
+        if up_entry.depth >= depth and up_entry.score < gamma: return up_entry.score
+        # gamma <= lower <= score
+        if lo_entry.depth >= depth and lo_entry.score >= gamma: return lo_entry.score
 
-        # Let's not repeat positions
-        # This happens so rarely that we only check it after TT.
-        # Alternatively we could just fill tp_score with zeros in advance...
-        if not root and pos in self.history:
-            # This seems to not add any ELO
-            # self.tp_score[pos, depth, root] = Entry(0, 0)
-            return 0
+        # Kinda like IID?
+        if lo_entry.move is None:
+            depth -= IID_REDUCE
 
         # Generator of moves to search in order.
         # This allows us to define the moves, but only calculate them if needed.
         def moves():
             # First try not moving at all. We only do this if there is at least one major
             # piece left on the board, since otherwise zugzwangs are too dangerous.
-            if depth > 0 and not root and any(c in pos.board for c in "RBNQ"):
-                yield None, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3, root=False)
+            # TODO: Since we nearly always null-move anyway, can't we just save the value
+            # and use it to detect checks? It would interfer a bit with the zugswang detection
+            # (the RBNQ check), but in Micromax he just does null-move and then checks that
+            # afterwards, before he returns the score.
+            if depth > NULL_LIMIT and not root and any(c in pos.board for c in "RBNQ"):
+                #yield None, null_score
+                # TODO: Make NULL_REDUCE argument
+                yield None, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3, root=not REPEAT_NULL)
+
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else.
             if depth == 0:
                 yield None, pos.score
+
             # Then killer move. We search it twice, but the tp will fix things for us.
             # Note, we don't have to check for legality, since we've already done it
-            # before. Also note that in QS the killer must be a capture, otherwise we
-            # will be non deterministic.
+            # before.
+            # We no longer have to worry about search instability
+            if lo_entry.move:
+                # tt_score = -self.bound(pos.move(hi_entry.move), 1 - gamma, depth - 1, root=False)
+                # Singular extension: Check that all other moves are much worse
+                #if depth > 3 and tt_score >= gamma:
+                extend = False
+                if False and depth > 3:
+                    g = lo_entry.score - QS_B - 3 * depth
+                    if all(-self.bound(pos.move(m), 1 - g, (depth - 2), root=False) < g
+                           for m in pos.gen_moves() if m != lo_entry.move):
+                        extend = True
+                        #actual = -self.bound(pos.move(lo_entry.move), 1 - gamma, depth-2, root=False)
+                        #print('extending', depth, render_move(lo_entry.move, True), f'gamma={gamma}, lo_entry.score={lo_entry.score}, g={g}, m={m}, actual={actual}')
+                        #print(pos.board)
+                d1 = depth - 1 + int(extend)
+                tt_score = -self.bound(pos.move(lo_entry.move), 1 - gamma, d1, root=False)
+                yield lo_entry.move, tt_score
 
-            # TODO: Tune this formula. Could also use B - A * depth^C?
+            # Basically just QS if QS_A is high enough
             val_lower = QS_B - QS_A * depth
-            # Look for the strongest ove from last time
-            killer = self.tp_move.get(pos)
-            # If there isn't one, try to find one with a more shallow search
-            if not killer and depth > IID_LIMIT:
-                # TODO: Not sure if I should use "gamma" or some other bound here
-                iid = self.bound(pos, pos.score + val_lower, depth - IID_REDUCE, root=False)
-                #iid = self.bound(pos, gamma, depth-1, root=False)
-                killer = self.tp_move.get(pos)
-            # Only play the move if it would be included at the current val-limit,
-            # since otherwise we'd get search instability. Is it silly that we will
-            # sometimes skip the move that is actually most likely to be good...
-            # Maybe there's some way to redefine our search tree that doesn't have this
-            # problem?
-            if killer and pos.value(killer) >= val_lower:
-                yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1, root=False)
+
             # Then all the other moves
-            for val, move in sorted(((pos.value(m), m) for m in pos.gen_moves()), reverse=True):
-                # Late move pruning
-                # If depth == 0 we only try moves with high intrinsic score (captures and
-                # promotions). Otherwise we do all moves.
-                if val >= val_lower:
-                    # If the new score is less than gamma, the opponent will for sure just
-                    # stand pat, since ""pos.score + val < gamma === -(pos.score + val) >= 1-gamma""
-                    # This is known as futility pruning. We can also break, since
-                    # we have ordered the moves by value.
-                    if depth <= 1 and pos.score + val < gamma:
-                        yield move, pos.score + val
-                        break
-                    # This is a similar simple optimization. Needs testing to see if it adds
-                    # any useful elo
-                    if pos.score + val >= MATE_LOWER:
-                        yield move, MATE_UPPER
-                        break
-                    # If val >= QS_LIMIT - 100 * depth, what was the first depth at which
-                    # the move was included?
-                    # I guess at (QS_LIMIT - val)/100 <= depth, so
-                    #d0 = max(int(math.ceil((QS_LIMIT - val) / 100)), 1)
-                    #d0 = max(((QS_LIMIT - val) // 100), 0) + 1
-                    # TODO: For now it seems I don't get any benefit of reducing the depth
-                    # this way
-                    d0 = 1
-                    yield move, -self.bound(
-                        pos.move(move), 1 - gamma, depth - d0, root=False
-                    )
+            val_moves = sorted(((pos.value(m), m) for m in pos.gen_moves()), reverse=True)
+            for i, (val, move) in enumerate(val_moves):
+                if val < val_lower:
+                    break
+
+                # Late move reduction
+                d1 = depth - 1 - int(i > 5)
+                #d1 = depth - 1 - i.bit_length() // 2
+
+                # A very safe form of futility pruning
+                if d1 <= 0 and pos.score + val < gamma:
+                    yield move, pos.score + val
+                    break
+
+                yield move, -self.bound(pos.move(move), 1 - gamma, d1, root=False)
 
         # Run through the moves, shortcutting when possible
-        best = -MATE_UPPER
+        best, best_move = -MATE_UPPER, None
         for move, score in moves():
-            best = max(best, score)
+            if score > best:
+                best, best_move = score, move
             if best >= gamma:
-                # Save the move for pv construction and killer heuristic
-                if move is not None:
-                    self.tp_move[pos] = move
                 break
 
         # Stalemate checking is a bit tricky: Say we failed low, because
@@ -398,28 +414,37 @@ class Searcher:
         # all the legal moves. So sunfish may report "mate", but then after more search
         # realize it's not a mate after all. That's fair.
 
+        # This is too expensive to test at depth = 0
+        #if depth > STALEMATE_LIMIT and best == -MATE_UPPER:
         if depth > 0 and best == -MATE_UPPER:
             flipped = pos.rotate(nullmove=True)
-            # Both of these check-tests work. Is one of them better?
-            if USE_BOUND_FOR_CHECK_TEST:
-                in_check = self.bound(flipped, MATE_UPPER, 0, root=False) == MATE_UPPER
-            else:
-                in_check = any(flipped.value(m) >= MATE_LOWER for m in flipped.gen_moves())
+            #in_check = self.bound(flipped, MATE_UPPER, 0, root=True) == MATE_UPPER
+            in_check = any(flipped.value(m) >= MATE_LOWER for m in flipped.gen_moves())
             best = 0 if not in_check else -MATE_LOWER
 
-        # Table part 2
-        if best >= gamma:
-            self.tp_score[pos, depth, root] = Entry(best, entry.upper)
-        if best < gamma:
-            self.tp_score[pos, depth, root] = Entry(entry.lower, best)
+        if lo_entry.move is None:
+            depth += IID_REDUCE
+
+        # gamma <= best <= score (new lower bound)
+        if best >= gamma and self.tt_new[LO][pos, root].depth <= depth:
+            self.tt_new[LO][pos, root] = LowerEntry(depth, best, best_move)
+        # score <= best < gamma (new upper bound)
+        if best < gamma and self.tt_new[UP][pos, root].depth <= depth:
+            self.tt_new[UP][pos, root] = UpperEntry(depth, best)
 
         return best
 
     def search(self, history):
         """Iterative deepening MTD-bi search"""
         self.nodes = 0
-        self.history = set(history)
-        self.tp_score.clear()
+
+        # Clear tt since history has changed
+        self.tt_new = (defaultdict(LowerEntry), defaultdict(UpperEntry))
+
+        # Store known position so we don't repeat them
+        for pos in history:
+            self.tt_new[LO][pos, False] = LowerEntry(1000, 0, None)
+            self.tt_new[UP][pos, False] = UpperEntry(1000, 0)
 
         gamma = 0
         # In finished games, we could potentially go far enough to cause a recursion
@@ -427,6 +452,7 @@ class Searcher:
         # that's quiscent search, and we don't always play legal moves there.
         best_move = None
         for depth in range(1, 1000):
+            self.tt_old = (self.tt_new[0].copy(), self.tt_new[1].copy())
             # The inner loop is a binary search on the score of the position.
             # Inv: lower <= score <= upper
             # 'while lower != upper' would work, but it's too much effort to spend
@@ -436,15 +462,12 @@ class Searcher:
                 score = self.bound(history[-1], gamma, depth)
                 if score >= gamma:
                     lower = score
-                    # The only way we can be sure to have the real move in tp_move,
-                    # is if we have just failed high.
-                    best_move = self.tp_move.get(history[-1])
                 if score < gamma:
                     upper = score
                 gamma = (lower + upper + 1) // 2
                 # Could try to yield upperbound / lowerbound, but it seems no
                 # UCI interfaces support it very well.
-                yield depth, best_move, score
+                yield depth, self.tt_new[LO][pos, True].move, score
 
 
 ###############################################################################
@@ -461,6 +484,13 @@ def render(i):
     rank, fil = divmod(i - A1, 10)
     return chr(fil + ord("a")) + str(-rank + 1)
 
+def render_move(move, white_pov):
+    if move is None:
+        return "(none)"
+    i, j = move.i, move.j
+    if not white_pov:
+        i, j = 119 - i, 119 - j
+    return render(i) + render(j) + move.prom.lower()
 
 # minifier-hide start
 import sys, uci
@@ -491,10 +521,10 @@ while True:
             hist.append(hist[-1].move(Move(i, j, prom)))
 
     elif args[0] == "go":
-        wtime, btime, winc, binc = map(int, args[2::2])
+        wtime, btime, winc, binc = [int(a) / 1000 for a in args[2::2]]
         if len(hist) % 2 == 0:
             wtime, winc = btime, binc
-        think = min(wtime / 1000 / 40 + winc / 1000, wtime / 2000 - 1)
+        think = min(wtime / 40 + winc, wtime / 2 - 1)
 
         start = time.time()
         best_move = None
