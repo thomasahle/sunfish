@@ -262,6 +262,14 @@ class Mate(Command):
                         continue
                     score = info["score"]
                     if score.is_mate() or score.relative.cp > 10000:
+                        if info["pv"]:
+                            b = board.copy()
+                            for move in info['pv']:
+                                b.push(move)
+                            if not b.is_game_over():
+                                if args.debug:
+                                    print('Got mate score, but PV is not mate...')
+                                continue
                         if args.debug:
                             print("Found it!")
                         success += 1

@@ -224,7 +224,10 @@ def pv(searcher, pos, include_scores=True, include_loop=False):
     if include_scores:
         res.append(str(pos.score))
     while True:
-        move = searcher.tp_move.get(pos)
+        if hasattr(searcher, 'tp_move'):
+            move = searcher.tp_move.get(pos)
+        elif hasattr(searcher, 'tt_new'):
+            move = searcher.tt_new[0][pos, True].move
         # The tp may have illegal moves, given lower depths don't detect king killing
         if move is None or can_kill_king(pos.move(move)):
             break
@@ -237,7 +240,7 @@ def pv(searcher, pos, include_scores=True, include_loop=False):
         seen_pos.add(pos)
         if include_scores:
             res.append(str(pos.score if color==origc else -pos.score))
-    return ' '.join(res)
+    return res
 
 ################################################################################
 # Bulk move generation
