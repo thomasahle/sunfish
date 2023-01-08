@@ -120,13 +120,11 @@ MATE_UPPER = piece["K"] + 10 * piece["Q"]
 # Constants for tuning search
 QS = 35
 EVAL_ROUGHNESS = 15
-IID_TRESHOLD = 0
 
 # minifier-hide start
 opt_ranges = dict(
     QS = (0, 300),
     EVAL_ROUGHNESS = (0, 50),
-    IID_TRESHOLD = (0, 300),
 )
 # minifier-hide end
 
