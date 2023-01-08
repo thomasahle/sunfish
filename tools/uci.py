@@ -109,12 +109,41 @@ def mate_loop(
     print("bestmove", move_str)
 
 
+def perft(pos, depth, debug=False):
+    total = 0
+    for move in pos.gen_moves():
+        move_uci = render_move(move, get_color(pos) == WHITE)
+        cnt = _perft_count(pos.move(move), depth - 1)
+        if cnt != -1:
+            print(f"{move_uci}: {cnt}")
+            total += cnt
+    print()
+    print("Nodes searched:", total)
+
+
+def _perft_count(pos, depth):
+    # Check that we didn't get to an illegal position
+    if can_kill_king(pos):
+        return -1
+
+    if depth == 0:
+        return 1
+
+    res = 0
+    for move in pos.gen_moves():
+        cnt = _perft_count(pos.move(move), depth - 1)
+        if cnt != -1:
+            res += cnt
+    return res
+
+
 def run(sunfish_module):
     global sunfish
     sunfish = sunfish_module
 
     debug = False
-    hist = [sunfish.Position(sunfish.initial, 0, (True, True), (True, True), 0, 0)]
+    startpos = sunfish.Position(sunfish.initial, 0, (True, True), (True, True), 0, 0)
+    hist = [startpos]
     searcher = sunfish.Searcher()
 
     with ThreadPoolExecutor(max_workers=1) as executor:
@@ -168,7 +197,7 @@ def run(sunfish_module):
                     break
 
                 elif args[:2] == ["position", "startpos"]:
-                    del hist[1:]
+                    hist = [startpos]
                     for ply, move in enumerate(args[3:]):
                         hist.append(hist[-1].move(parse_move(move, ply % 2 == 0)))
 
@@ -218,6 +247,10 @@ def run(sunfish_module):
                     elif args[1] in ("mate", "draw"):
                         max_depth = int(args[2])
                         loop = partial(mate_loop, find_draw=args[1] == "draw")
+
+                    elif args[1] == "perft":
+                        perft(hist[-1], int(args[2]), debug=debug)
+                        continue
 
                     do_stop_event.clear()
                     go_future = executor.submit(
