@@ -57,14 +57,14 @@ also [on Lichess](https://lichess.org/@/sunfish_rs), which is about 100 ELO stro
 
 # Features
 
-1. Built around the simple, but deadly efficient MTD-bi search algorithm.
-2. Filled with classic as well as modern 'chess engine tricks' for simpler and faster code.
-3. Easily adaptive evaluation function through Piece Square Tables.
+1. Built around the simple, but efficient MTD-bi search algorithm, also known as [C*](https://www.chessprogramming.org/NegaC*).
+2. Filled with classic "chess engine tricks" for simpler and faster code.
+3. Efficiently updatedable evaluation function through [Piece Square Tables](https://www.chessprogramming.org/Piece-Square_Tables).
 4. Uses standard Python collections and data structures for clarity and efficiency.
 
 # Limitations
 
-Sunfish supports castling, en passant, and promotion. It doesn't however do minor promotions to rooks, knights or bishops - all input must be done in simple 'two coordinate' notation, as shown in the screenshot.
+Sunfish supports all chess rules, except the 50 moves draw rule.
 
 There are many ways in which you may try to make Sunfish stronger. First you could change from a board representation to a mutable array and add a fast way to enumerate pieces. Then you could implement dedicated capture generation, check detection and check evasions. You could also move everything to bitboards, implement parts of the code in C or experiment with parallel search!
 
