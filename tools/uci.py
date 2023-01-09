@@ -53,10 +53,12 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
             fields["score cp"] = f"{score} upperbound"
         print("info", " ".join(f"{k} {v}" for k, v in fields.items()))
 
-        if best_move and elapsed > max_movetime * 2 / 3:
-            break
-        if stop_event.is_set():
-            break
+        # We may not have a move yet at depth = 1
+        if depth > 1:
+            if elapsed > max_movetime * 2 / 3:
+                break
+            if stop_event.is_set():
+                break
 
     my_pv = pv(searcher, hist[-1], include_scores=False)
     print("bestmove", my_pv[0] if my_pv else "(none)")
@@ -134,12 +136,11 @@ def _perft_count(pos, depth):
     return res
 
 
-def run(sunfish_module):
+def run(sunfish_module, startpos):
     global sunfish
     sunfish = sunfish_module
 
     debug = False
-    startpos = sunfish.Position(sunfish.initial, 0, (True, True), (True, True), 0, 0)
     hist = [startpos]
     searcher = sunfish.Searcher()
 
@@ -208,7 +209,11 @@ def run(sunfish_module):
                     wc = ("Q" in castling, "K" in castling)
                     bc = ("k" in castling, "q" in castling)
                     ep = sunfish.parse(enpas) if enpas != "-" else 0
-                    pos = sunfish.Position(board, 0, wc, bc, ep, 0)
+                    if hasattr(sunfish, 'features'):
+                        wf, bf = sunfish.features(board)
+                        pos = sunfish.Position(board, 0, wf, bf, wc, bc, ep, 0)
+                    else:
+                        pos = sunfish.Position(board, 0, wc, bc, ep, 0)
                     hist = [pos] if color == "w" else [pos, pos.rotate()]
                     if len(args) > 8 and args[8] == "moves":
                         for move in args[9:]:
@@ -288,8 +293,9 @@ def get_color(pos):
 def can_kill_king(pos):
     # If we just checked for opponent moves capturing the king, we would miss
     # captures in case of illegal castling.
-    MATE_LOWER = 60_000 - 10 * 929
-    return any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
+    #MATE_LOWER = 60_000 - 10 * 929
+    #return any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
+    return any(pos.board[m.j] == 'k' or abs(m.j - pos.kp) < 2 for m in pos.gen_moves())
 
 
 def pv(searcher, pos, include_scores=True, include_loop=False):
@@ -300,7 +306,9 @@ def pv(searcher, pos, include_scores=True, include_loop=False):
     if include_scores:
         res.append(str(pos.score))
     while True:
-        if hasattr(searcher, "tp_move"):
+        if hasattr(pos, "wf"):
+            move = searcher.tp_move.get(pos.hash())
+        elif hasattr(searcher, "tp_move"):
             move = searcher.tp_move.get(pos)
         elif hasattr(searcher, "tt_new"):
             move = searcher.tt_new[0][pos, True].move
@@ -309,11 +317,20 @@ def pv(searcher, pos, include_scores=True, include_loop=False):
             break
         res.append(render_move(move, get_color(pos) == WHITE))
         pos, color = pos.move(move), 1 - color
-        if pos in seen_pos:
-            if include_loop:
-                res.append("loop")
-            break
-        seen_pos.add(pos)
+
+        if hasattr(pos, "wf"):
+            if pos.hash() in seen_pos:
+                if include_loop:
+                    res.append("loop")
+                break
+            seen_pos.add(pos.hash())
+        else:
+            if pos in seen_pos:
+                if include_loop:
+                    res.append("loop")
+                break
+            seen_pos.add(pos)
+
         if include_scores:
             res.append(str(pos.score if color == origc else -pos.score))
     return res
