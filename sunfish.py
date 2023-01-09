@@ -435,15 +435,14 @@ def render(i):
     rank, fil = divmod(i - A1, 10)
     return chr(fil + ord("a")) + str(-rank + 1)
 
+hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
 
 # minifier-hide start
 import sys, tools.uci
-tools.uci.run(sys.modules[__name__])
+tools.uci.run(sys.modules[__name__], hist[-1])
 sys.exit()
 # minifier-hide end
 
-
-hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
 searcher = Searcher()
 while True:
     args = input().split()
