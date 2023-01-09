@@ -144,6 +144,43 @@ class Bench(Command):
 
 
 ###############################################################################
+# Self-play
+###############################################################################
+
+
+class SelfPlay(Command):
+    name = "self-play"
+    help = "make sure the engine can complete a game without crashing."
+
+    @classmethod
+    def add_arguments(cls, parser):
+        parser.add_argument("--time", type=int, default=4000, help="start time in ms")
+        parser.add_argument("--inc", type=int, default=100, help="increment in ms")
+
+    @classmethod
+    async def run(cls, engine, args):
+        wtime = btime = args.time / 1000
+        inc = args.inc / 1000
+        board = chess.Board()
+        with tqdm.tqdm(total=100) as pbar:
+            while not board.is_game_over():
+                limit = chess.engine.Limit(white_clock=wtime, black_clock=btime, white_inc=inc, black_inc=inc)
+
+                start = time.time()
+                result = await engine.play(board, limit)
+                elasped = time.time() - start
+
+                if board.turn == chess.WHITE:
+                    wtime -= elasped - inc
+                else:
+                    btime -= elasped - inc
+
+                board.push(result.move)
+                pbar.update(1)
+            pbar.update(100 - pbar.n)
+
+
+###############################################################################
 # Find mate test
 ###############################################################################
 
