@@ -65,7 +65,9 @@ There is an experimental version using an [Efficiently updatable neural network]
 ...
 </pre>
 
-It will play better positionally, but worse tactically.
+In contrast to the large NNUE in say, Stockfish, this network is only 1207 bytes!
+That makes sure sunfish NNUE can still be packed into less than 4KB.
+Using NNUE, sunfish will play better positionally, but worse tactically, since the implementation is still not fast enough.
 
 # Features
 
