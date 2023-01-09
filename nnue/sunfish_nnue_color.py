@@ -1,3 +1,5 @@
+#!/usr/bin/env pypy3
+
 import sys, time, pickle
 from itertools import count
 from collections import namedtuple
@@ -383,13 +385,9 @@ class Searcher:
                 #score -= pst[qq][119-j][0] - (pst[pp][119-j][0] - pst[pp][119-i][0])
                 return score
 
-            if killer := self.tp_move.get(pos.hash()):
-                #if depth > 0 or -pos1.score - pos.score >= QS_LIMIT:
-                #if -mvv_lva(killer)*360 >= 30  - depth * 10:
-                #if depth > 0 or -mvv_lva(killer) >= QS_LIMIT/360:
+            killer = self.tp_move.get(pos.hash())
+            if killer:
                 if depth > 0 or pos.is_capture(killer):
-                #if depth > 0 or (QS_TYPE == QS_CAPTURE and pos.is_capture(killer)) or (QS_TYPE != QS_CAPTURE and -mvv_lva(killer) >= QS_LIMIT/360):
-                # if depth > 0 or pos.is_capture(killer):
                     yield killer, -self.bound(pos.move(killer), 1-gamma, depth-1, False)
 
             # Then all the other moves
@@ -513,7 +511,7 @@ hist = [Position(initial, 0, wf, bf, (True, True), (True, True), 0, 0)]
 while True:
     args = input().split()
     if args[0] == "uci":
-    #    print(f"option name EVAL_ROUGHNESS type spin default {EVAL_ROUGHNESS} min 1 max 100")
+        print(f"id name sunfish nnue")
         print("uciok")
 
     elif args[0] == "isready":
@@ -561,7 +559,7 @@ while True:
             if len(hist) % 2 == 0:
                 wtime, winc = btime, binc
             think = min(wtime / 40 + winc, wtime / 2 - 1000)
-        # print('Thinking for', think)
+        print('Thinking for', think)
         start = time.time()
         best_move = None
         searcher = Searcher()

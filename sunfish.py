@@ -405,7 +405,6 @@ class Searcher:
         # In finished games, we could potentially go far enough to cause a recursion
         # limit exception. Hence we bound the ply. We also can't start at 0, since
         # that's quiscent search, and we don't always play legal moves there.
-        best_move = None
         for depth in range(1, 1000):
             # The inner loop is a binary search on the score of the position.
             # Inv: lower <= score <= upper
@@ -416,14 +415,9 @@ class Searcher:
                 score = self.bound(history[-1], gamma, depth, can_null=False)
                 if score >= gamma:
                     lower = score
-                    # The only way we can be sure to have the real move in tp_move,
-                    # is if we have just failed high.
-                    best_move = self.tp_move.get(history[-1])
                 if score < gamma:
                     upper = score
-                # Could try to yield upperbound / lowerbound, but it seems no
-                # UCI interfaces support it very well.
-                yield depth, best_move, score
+                yield depth, gamma, score, self.tp_move.get(history[-1])
                 gamma = (lower + upper + 1) // 2
 
 
@@ -450,6 +444,7 @@ sys.exit()
 
 
 hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
+searcher = Searcher()
 while True:
     args = input().split()
     if args[0] == "uci":
@@ -478,8 +473,10 @@ while True:
 
         start = time.time()
         move_str = None
-        for depth, move, score in Searcher().search(hist):
-            if move:
+        for depth, gamma, score, move in Searcher().search(hist):
+            # The only way we can be sure to have the real move in tp_move,
+            # is if we have just failed high.
+            if score >= gamma:
                 i, j = move.i, move.j
                 if len(hist) % 2 == 0:
                     i, j = 119 - i, 119 - j

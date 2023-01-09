@@ -37,7 +37,7 @@ parser.add_argument(
 
 
 async def load_engine_from_cmd(cmd, debug=False):
-    _, engine = await chess.engine.popen_uci(cmd)
+    _, engine = await chess.engine.popen_uci(cmd.split())
     if hasattr(engine, "debug"):
         engine.debug(debug)
     return engine
