@@ -4,6 +4,8 @@ import sys, time, pickle
 from itertools import count
 from collections import namedtuple
 import numpy as np
+from functools import partial
+print = partial(print, flush=True)
 
 ###############################################################################
 # A small neural network to evaluate positions
@@ -87,8 +89,7 @@ initial = (
 N, E, S, W = -10, 1, 10, -1
 directions = {
     "P": (N, N + N, N + W, N + E),
-    "N": (
-        N + N + E,
+    "N": (N + N + E,
         E + N + E,
         E + S + E,
         S + S + E,
@@ -482,7 +483,7 @@ class Searcher:
                     lower = score
                 if score < gamma:
                     upper = score
-                yield depth, self.tp_move.get(pos.hash()), score
+                yield depth, gamma, score, self.tp_move.get(pos.hash())
                 gamma = (lower + upper + 1) // 2
 
 
@@ -495,19 +496,15 @@ def parse(c):
     fil, rank = ord(c[0]) - ord("a"), int(c[1]) - 1
     return A1 + fil - 10 * rank
 
+
 def render(i):
     rank, fil = divmod(i - A1, 10)
     return chr(fil + ord("a")) + str(-rank + 1)
 
-def render_move(move, white_pov):
-    if move is None: return '0000'
-    a, b = move.i, move.j
-    if not white_pov:
-        a, b = 119 - a, 119 - b
-    return render(a) + render(b) + move.prom.lower()
 
 wf, bf = features(initial)
 hist = [Position(initial, 0, wf, bf, (True, True), (True, True), 0, 0)]
+searcher = Searcher()
 while True:
     args = input().split()
     if args[0] == "uci":
@@ -528,50 +525,24 @@ while True:
                 i, j = 119 - i, 119 - j
             hist.append(hist[-1].move(Move(i, j, prom)))
 
-    # elif args[0] == "setoption":
-    #     _, uci_key, _, uci_value = args[1:]
-    #     globals()[uci_key] = int(uci_value)
-
-    elif args[:2] == ["position", "fen"]:
-        fen = args[2:]
-        board, color, castling, enpas, _hclock, _fclock = fen
-        import re
-        board = re.sub(r"\d", (lambda m: "." * int(m.group(0))), board)
-        board = list(21 * " " + "  ".join(board.split("/")) + 21 * " ")
-        board[9::10] = ["\n"] * 12
-        board = "".join(board)
-        wc = ("Q" in castling, "K" in castling)
-        bc = ("k" in castling, "q" in castling)
-        ep = parse(enpas) if enpas != "-" else 0
-        wf, bf = features(board)
-        pos = Position(board, 0, wf, bf, wc, bc, ep, 0)
-        pos = pos._replace(score=pos.compute_value())
-        hist = [pos] if color == "w" else [pos, pos.rotate()]
-
     elif args[0] == "go":
-        if len(args) == 1:
-            think = 5000
-        elif args[1] == 'movetime':
-            think = int(args[2])
-        else:
-            wtime, btime, winc, binc = map(int, args[2::2])
-            # We always consider ourselves white, but UCI doesn't
-            if len(hist) % 2 == 0:
-                wtime, winc = btime, binc
-            think = min(wtime / 40 + winc, wtime / 2 - 1000)
-        print('Thinking for', think)
-        start = time.time()
-        best_move = None
-        searcher = Searcher()
-        for depth, move, score in searcher.search(hist):
-            elapsed = time.time() - start
-            info = f"info depth {depth} score cp {score} time {round(elapsed*1000)} nodes {searcher.nodes}"
-            if move is not None:
-                best_move = render_move(move, white_pov=len(hist) % 2 == 1)
-                print(f"{info} pv {best_move}")
-            else:
-                print(info)
-            if best_move and elapsed > think/1000 * 0.8:
-                break
-        print("bestmove", best_move)
+        wtime, btime, winc, binc = [int(a) / 1000 for a in args[2::2]]
+        if len(hist) % 2 == 0:
+            wtime, winc = btime, binc
+        think = min(wtime / 40 + winc, wtime / 2 - 1)
 
+        start = time.time()
+        move_str = None
+        for depth, gamma, score, move in Searcher().search(hist):
+            # The only way we can be sure to have the real move in tp_move,
+            # is if we have just failed high.
+            if score >= gamma:
+                i, j = move.i, move.j
+                if len(hist) % 2 == 0:
+                    i, j = 119 - i, 119 - j
+                move_str = render(i) + render(j) + move.prom.lower()
+                print(f"info depth {depth} score cp {score} pv {move_str}")
+            if move_str and time.time() - start > think * 0.8:
+                break
+
+        print("bestmove", move_str or '(none)')

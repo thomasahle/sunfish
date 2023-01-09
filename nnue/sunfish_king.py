@@ -1,10 +1,11 @@
 #!/usr/bin/env pypy
-# -*- coding: utf-8 -*-
 
 import re, sys, time, pickle
 from itertools import count, product
 from collections import namedtuple, defaultdict
 import numpy as np
+from functools import partial
+print = partial(print, flush=True)
 
 ###############################################################################
 # Load and expand the Piece-Square tables.
