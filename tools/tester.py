@@ -266,7 +266,7 @@ class Mate(Command):
                         continue
                     score = info["score"]
                     if score.is_mate() or score.relative.cp > 10000:
-                        if info["pv"]:
+                        if "pv" in info and info["pv"]:
                             b = board.copy()
                             for move in info["pv"]:
                                 b.push(move)

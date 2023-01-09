@@ -7,6 +7,8 @@ import numpy as np
 from functools import partial
 print = partial(print, flush=True)
 
+version = 'sunfish nnue'
+
 ###############################################################################
 # A small neural network to evaluate positions
 ###############################################################################
@@ -105,11 +107,13 @@ directions = {
 }
 
 # Constants for tuning search
-#EVAL_ROUGHNESS = 13
-#QS_LIMIT = 200
-#QS_CAPTURE, QS_SINGLE, QS_DOUBLE = range(3)
-#QS_TYPE = QS_CAPTURE
-#debug = False
+EVAL_ROUGHNESS = 13
+
+# minifier-hide start
+opt_ranges = dict(
+    EVAL_ROUGHNESS = (0, 50),
+)
+# minifier-hide end
 
 
 ###############################################################################
@@ -258,11 +262,7 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
         # to last forever (until python stackoverflows.) Thus we need to either
         # dampen the eval function, or like here, reduce QS search to captures
         # only. Well, captures plus promotions.
-        return (
-            self.board[move.j] != "."
-            or abs(move.j - self.kp) < 2
-            or self.board[move.i] == "P" and (A8 <= move.j <= H8 or move.j == self.ep)
-        )
+        return self.board[move.j] != "." or abs(move.j - self.kp) < 2 or move.prom
 
     def compute_value(self):
         #relu6 = lambda x: np.minimum(np.maximum(x, 0), 6)
@@ -287,7 +287,6 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
         return hash((self.board, self.wc, self.bc, self.ep, self.kp))
         # return (self.wf + self.bf).sum()
         # return self._replace(wf=0, bf=0)
-
 
 ###############################################################################
 # Search logic
@@ -359,11 +358,7 @@ class Searcher:
         def moves():
             # First try not moving at all. We only do this if there is at least one major
             # piece left on the board, since otherwise zugzwangs are too dangerous.
-            # It doesn't make sense to use this function for depth 2, since it will take us
-            # to depth max(0, d-2)=0, meaning reducing by two. So it's not actually the
-            # opponents turn. This seems like it should be a major bug?
-            #if (depth >= 3 or depth == 1) and not root and any(c in pos.board for c in "NBRQ"):
-            if depth >= 3 and not root:
+            if depth > 2 and not root and any(c in pos.board for c in "NBRQ"):
                 yield None, -self.bound(pos.rotate(nullmove=True), 1-gamma, depth-3, False)
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else.
@@ -387,9 +382,8 @@ class Searcher:
                 return score
 
             killer = self.tp_move.get(pos.hash())
-            if killer:
-                if depth > 0 or pos.is_capture(killer):
-                    yield killer, -self.bound(pos.move(killer), 1-gamma, depth-1, False)
+            if killer and (depth > 0 or pos.is_capture(killer)):
+                yield killer, -self.bound(pos.move(killer), 1-gamma, depth-1, False)
 
             # Then all the other moves
             # moves = [(move, pos.move(move)) for move in pos.gen_moves()]
@@ -430,24 +424,12 @@ class Searcher:
                     self.tp_move[pos.hash()] = move
                 break
 
-        # Stalemate checking is a bit tricky: Say we failed low, because
-        # we can't (legally) move and so the (real) score is -infty.
-        # At the next depth we are allowed to just return r, -infty <= r < gamma,
-        # which is normally fine.
-        # However, what if gamma = -10 and we don't have any legal moves?
-        # Then the score is actaully a draw and we should fail high!
-        # Thus, if best < gamma and best < 0 we need to double check what we are doing.
-        # This doesn't prevent sunfish from making a move that results in stalemate,
-        # but only if depth == 1, so that's probably fair enough.
-        # (Btw, at depth 1 we can also mate without realizing.)
-        if best < gamma and best < 0 and depth > 0:
-            # A position is dead if the curent player has a move that captures the king
-            is_dead = lambda pos: any(
-                pos.move(m).score <= -MATE_LOWER for m in pos.gen_moves()
-            )
-            if all(is_dead(pos.move(m)) for m in pos.gen_moves()):
-                in_check = is_dead(pos.rotate(nullmove=True))
-                best = -MATE_UPPER if in_check else 0
+        # Stalemate checking
+        if depth > 0 and best == -MATE_UPPER:
+            flipped = pos.rotate(nullmove=True)
+            # Hopefully this is already in the TT because of null-move
+            in_check = self.bound(flipped, MATE_UPPER, 0) == MATE_UPPER
+            best = -MATE_LOWER if in_check else 0
 
         # Table part 2
         self.tp_score[pos.hash(), depth, root] = (
@@ -477,7 +459,7 @@ class Searcher:
             # 'while lower != upper' would work, but play tests show a margin of 20 plays
             # better.
             lower, upper = -MATE_UPPER, MATE_UPPER
-            while lower < upper - 1:
+            while lower < upper - EVAL_ROUGHNESS:
                 score = self.bound(pos, gamma, depth)
                 if score >= gamma:
                     lower = score
@@ -504,11 +486,20 @@ def render(i):
 
 wf, bf = features(initial)
 hist = [Position(initial, 0, wf, bf, (True, True), (True, True), 0, 0)]
+
+
+# minifier-hide start
+import sys, tools.uci
+tools.uci.run(sys.modules[__name__], hist[-1])
+sys.exit()
+# minifier-hide end
+
+
 searcher = Searcher()
 while True:
     args = input().split()
     if args[0] == "uci":
-        print(f"id name sunfish nnue")
+        print(f"id name {version}")
         print("uciok")
 
     elif args[0] == "isready":
