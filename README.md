@@ -61,7 +61,7 @@ also [on Lichess](https://lichess.org/@/sunfish_rs), which is about 100 ELO stro
 
 There is an experimental version using an [Efficiently updatable neural network](https://en.wikipedia.org/wiki/Efficiently_updatable_neural_network). You can test it using the fancy terminal interface as above:
 
-<pre>$ <b>py tools/fancy.py -cmd "nnue/sunfish_nnue_color.py nnue/models/tanh.pickle"</b>
+<pre>$ <b>py tools/fancy.py -cmd "./sunfish_nnue.py nnue/models/tanh.pickle"</b>
 ...
 </pre>
 
