@@ -50,10 +50,22 @@ bestmove d2d4
 </pre>
 (See the [UCI specification](http://wbec-ridderkerk.nl/html/UCIProtocol.html) for the full set of commands.)
 
+## Playing with a graphical interface
+
 It is also possible to run Sunfish with a graphical interface, such as [PyChess](http://pychess.org) or [Arena](http://www.playwitharena.de).
 
 Finally you can [play sunfish now on Lichess](https://lichess.org/@/sunfish-engine) (requires log in) or play against [Recursing's Rust port](https://github.com/Recursing/sunfish_rs),
 also [on Lichess](https://lichess.org/@/sunfish_rs), which is about 100 ELO stronger.
+
+## NNUE version
+
+There is an experimental version using an [Efficiently updatable neural network](https://en.wikipedia.org/wiki/Efficiently_updatable_neural_network). You can test it using the fancy terminal interface as above:
+
+<pre>$ <b>py tools/fancy.py -cmd "nnue/sunfish_nnue_color.py nnue/models/tanh.pickle"<b>
+...
+</pre>
+
+It will play better positionally, but worse tactically.
 
 # Features
 
