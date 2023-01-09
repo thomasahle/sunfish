@@ -32,30 +32,27 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
 
     start = time.time()
     best_move = None
-    for depth, move, score in searcher.search(hist):
+    for depth, gamma, score, move in searcher.search(hist):
+        # Our max_depth implementation is a bit wasteful.
         # We never know when we've seen the last at a certain depth
         # before we get to the next one
         if depth - 1 >= max_depth:
             break
-        best_move = render_move(move, white_pov=len(hist) % 2 == 1)
         elapsed = time.time() - start
-        print(
-            "info depth",
-            depth,
-            "score cp",
-            score,
-            "time",
-            round(1000 * elapsed),
-            "nodes",
-            searcher.nodes,
-            "nps",
-            round(searcher.nodes / elapsed),
-            # TODO: The PV may not actually be true, since it uses tp_move,
-            # in which higher depth moves may be overwritten by lower depth ones.
-            # "pv", best_move,
-            "pv",
-            " ".join(pv(searcher, hist[-1], include_scores=False)),
-        )
+        fields = {
+            "depth": depth,
+            "time": round(1000 * elapsed),
+            "nodes": searcher.nodes,
+            "nps": round(searcher.nodes / elapsed),
+        }
+        if score >= gamma:
+            fields["score cp"] = f"{score} lowerbound"
+            best_move = render_move(move, white_pov=len(hist) % 2 == 1)
+            fields["pv"] = " ".join(pv(searcher, hist[-1], include_scores=False))
+        else:
+            fields["score cp"] = f"{score} upperbound"
+        print("info", " ".join(f"{k} {v}" for k, v in fields.items()))
+
         if best_move and elapsed > max_movetime * 2 / 3:
             break
         if stop_event.is_set():
