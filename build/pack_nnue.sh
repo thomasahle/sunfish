@@ -6,10 +6,6 @@ echo "Usage: pack.sh engine.py model.pickle out.packed"
 #    exit 0
 #fi
 
-#P="pypy3"
-P="python3"
-echo "Using $P"
-
 get_file_size() {
    local file="$1"
    local size=$(wc -c < "$file" | awk '{$1=$1};1')
@@ -39,8 +35,8 @@ T=\`mktemp\`
 M=\`mktemp\`
 tail -c +$((lh+1)) "\$0"|head -c $lt|xz -d>\$T
 tail -c $lm "\$0">\$M
-(sleep 9;rm \$T \$M)&$P -u \$T \$M
-exit
+chmod +x \$T
+(sleep 9;rm \$T \$M)&exec \$T \$M
 """
    echo "Length of head: $lh"
 done
