@@ -1,1 +1,1 @@
-python-chess==0.31.3
+chess==1.9.4
