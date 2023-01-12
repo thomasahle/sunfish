@@ -109,6 +109,20 @@ def mate_loop(
 
 
 def perft(pos, depth, debug=False):
+
+    def _perft_count(pos, depth):
+        # Check that we didn't get to an illegal position
+        if can_kill_king(pos):
+            return -1
+        if depth == 0:
+            return 1
+        res = 0
+        for move in pos.gen_moves():
+            cnt = _perft_count(pos.move(move), depth - 1)
+            if cnt != -1:
+                res += cnt
+        return res
+
     total = 0
     for move in pos.gen_moves():
         move_uci = render_move(move, get_color(pos) == WHITE)
@@ -118,22 +132,6 @@ def perft(pos, depth, debug=False):
             total += cnt
     print()
     print("Nodes searched:", total)
-
-
-def _perft_count(pos, depth):
-    # Check that we didn't get to an illegal position
-    if can_kill_king(pos):
-        return -1
-
-    if depth == 0:
-        return 1
-
-    res = 0
-    for move in pos.gen_moves():
-        cnt = _perft_count(pos.move(move), depth - 1)
-        if cnt != -1:
-            res += cnt
-    return res
 
 
 def run(sunfish_module, startpos):
@@ -200,26 +198,12 @@ def run(sunfish_module, startpos):
                         hist.append(hist[-1].move(parse_move(move, ply % 2 == 0)))
 
                 elif args[:2] == ["position", "fen"]:
-                    fen = args[2:8]
-                    board, color, castling, enpas, _hclock, _fclock = fen
-                    board = re.sub(r"\d", (lambda m: "." * int(m.group(0))), board)
-                    board = list(21 * " " + "  ".join(board.split("/")) + 21 * " ")
-                    board[9::10] = ["\n"] * 12
-                    board = "".join(board)
-                    wc = ("Q" in castling, "K" in castling)
-                    bc = ("k" in castling, "q" in castling)
-                    ep = sunfish.parse(enpas) if enpas != "-" else 0
-                    if hasattr(sunfish, 'features'):
-                        wf, bf = sunfish.features(board)
-                        pos = sunfish.Position(board, 0, wf, bf, wc, bc, ep, 0)
-                    else:
-                        pos = sunfish.Position(board, 0, wc, bc, ep, 0)
-                    hist = [pos] if color == "w" else [pos, pos.rotate()]
-                    if len(args) > 8 and args[8] == "moves":
+                    pos = from_fen(*args[2:8])
+                    hist = [pos] if get_color(pos) == WHITE else [pos.rotate(), pos]
+                    if len(args) > 8:
+                        assert args[8] == "moves"
                         for move in args[9:]:
-                            hist.append(
-                                hist[-1].move(parse_move(move, len(hist) % 2 == 1))
-                            )
+                            hist.append(hist[-1].move(parse_move(move, len(hist) % 2 == 1)))
 
                 elif args[0] == "go":
                     think = 10**6
@@ -271,7 +255,7 @@ def run(sunfish_module, startpos):
 
                     go_future.add_done_callback(callback)
 
-            except KeyboardInterrupt:
+            except (KeyboardInterrupt, EOFError):
                 if go_future.running():
                     if debug:
                         print("Stopping go loop...")
@@ -283,6 +267,25 @@ def run(sunfish_module, startpos):
 # Old tools stuff
 
 WHITE, BLACK = range(2)
+
+
+def from_fen(board, color, castling, enpas, _hclock, _fclock):
+    board = re.sub(r"\d", (lambda m: "." * int(m.group(0))), board)
+    board = list(21 * " " + "  ".join(board.split("/")) + 21 * " ")
+    board[9::10] = ["\n"] * 12
+    board = "".join(board)
+    wc = ("Q" in castling, "K" in castling)
+    bc = ("k" in castling, "q" in castling)
+    ep = sunfish.parse(enpas) if enpas != "-" else 0
+    if hasattr(sunfish, 'features'):
+        wf, bf = sunfish.features(board)
+        pos = sunfish.Position(board, 0, wf, bf, wc, bc, ep, 0)
+        pos = pos._replace(score=pos.calculate_score())
+    else:
+        score = sum(sunfish.pst[c][i] for i, c in enumerate(board) if c.isupper())
+        score -= sum(sunfish.pst[c.upper()][119-i] for i, c in enumerate(board) if c.islower())
+        pos = sunfish.Position(board, score, wc, bc, ep, 0)
+    return pos if color == 'w' else pos.rotate()
 
 
 def get_color(pos):
