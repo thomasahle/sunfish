@@ -5,6 +5,8 @@ from itertools import count
 from collections import namedtuple
 import numpy as np
 from functools import partial
+from contextlib import contextmanager
+
 print = partial(print, flush=True)
 
 version = 'sunfish nnue'
@@ -227,11 +229,11 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
 
         # Capture the moving king. Actually we get an extra free king. Same thing.
         if abs(j - self.kp) < 2:
-            self.put(pos, self.kp, "K")
+            self.put(self.board.find('k'), ' ')
 
         # Castling
         if p == "K":
-            pos = pos._replace(wc=(False, False))
+            self.wc=(False, False)
             if abs(j - i) == 2:
                 self.kp=(i + j) // 2
                 self.put(A1 if j < i else H1, ".", stack)
