@@ -1,4 +1,5 @@
 #!/usr/bin/env pypy3
+from __future__ import print_function
 
 import time, math
 from itertools import count
@@ -6,8 +7,8 @@ from collections import namedtuple, defaultdict
 
 # If we could rely on the env -S argument, we could just use "pypy3 -u"
 # as the shebang to unbuffer stdout. But alas we have to do this instead:
-from functools import partial
-print = partial(print, flush=True)
+#from functools import partial
+#print = partial(print, flush=True)
 
 version = "sunfish 2023"
 
@@ -118,12 +119,14 @@ MATE_LOWER = piece["K"] - 10 * piece["Q"]
 MATE_UPPER = piece["K"] + 10 * piece["Q"]
 
 # Constants for tuning search
-QS = 35
+QS = 40
+QS_A = 140
 EVAL_ROUGHNESS = 15
 
 # minifier-hide start
 opt_ranges = dict(
     QS = (0, 300),
+    QS_A = (0, 300),
     EVAL_ROUGHNESS = (0, 50),
 )
 # minifier-hide end
@@ -258,12 +261,12 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
 ###############################################################################
 
 # lower <= s(pos) <= upper
-Entry = namedtuple("Entry", "lower upper", defaults=(-MATE_UPPER, MATE_UPPER))
+Entry = namedtuple("Entry", "lower upper")
 
 
 class Searcher:
     def __init__(self):
-        self.tp_score = defaultdict(Entry)
+        self.tp_score = {}
         self.tp_move = {}
         self.history = set()
         self.nodes = 0
@@ -290,7 +293,7 @@ class Searcher:
         # Look in the table if we have already searched this position before.
         # We also need to be sure, that the stored search was over the same
         # nodes as the current search.
-        entry = self.tp_score[pos, depth, can_null]
+        entry = self.tp_score.get((pos, depth, can_null), Entry(-MATE_UPPER, MATE_UPPER))
         if entry.lower >= gamma: return entry.lower
         if entry.upper < gamma: return entry.upper
 
@@ -305,7 +308,14 @@ class Searcher:
         def moves():
             # First try not moving at all. We only do this if there is at least one major
             # piece left on the board, since otherwise zugzwangs are too dangerous.
-            if depth > 2 and can_null and any(c in pos.board for c in "RBNQ"):
+            # FIXME: We also can't null move if we can capture the opponent king.
+            # Since if we do, we won't spot illegal moves that could lead to stalemate.
+            # For now we just solve this by not using null-move in very unbalanced positions.
+            # TODO: We could actually use null-move in QS as well. Not sure it would be very useful.
+            # But still.... We just have to move stand-pat to be before null-move.
+            #if depth > 2 and can_null and any(c in pos.board for c in "RBNQ"):
+            #if depth > 2 and can_null and any(c in pos.board for c in "RBNQ") and abs(pos.score) < 500:
+            if depth > 2 and can_null and abs(pos.score) < 500:
                 yield None, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
 
             # For QSearch we have a different kind of null-move, namely we can just stop
@@ -325,7 +335,7 @@ class Searcher:
 
             # If depth == 0 we only try moves with high intrinsic score (captures and
             # promotions). Otherwise we do all moves. This is called quiescent search.
-            val_lower = QS if depth == 0 else -MATE_LOWER
+            val_lower = QS - depth * QS_A
 
             # Only play the move if it would be included at the current val-limit,
             # since otherwise we'd get search instability.
@@ -381,7 +391,7 @@ class Searcher:
         # realize it's not a mate after all. That's fair.
 
         # This is too expensive to test at depth == 0
-        if depth > 0 and best == -MATE_UPPER:
+        if depth > 2 and best == -MATE_UPPER:
             flipped = pos.rotate(nullmove=True)
             # Hopefully this is already in the TT because of null-move
             in_check = self.bound(flipped, MATE_UPPER, 0) == MATE_UPPER
@@ -437,6 +447,8 @@ def render(i):
 
 hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
 
+#input = raw_input
+
 # minifier-hide start
 import sys, tools.uci
 tools.uci.run(sys.modules[__name__], hist[-1])
@@ -447,7 +459,7 @@ searcher = Searcher()
 while True:
     args = input().split()
     if args[0] == "uci":
-        print(f"id name {version}")
+        print("id name", version)
         print("uciok")
 
     elif args[0] == "isready":
@@ -480,7 +492,7 @@ while True:
                 if len(hist) % 2 == 0:
                     i, j = 119 - i, 119 - j
                 move_str = render(i) + render(j) + move.prom.lower()
-                print(f"info depth {depth} score cp {score} pv {move_str}")
+                print("info depth", depth, "score cp", score, "pv", move_str)
             if move_str and time.time() - start > think * 0.8:
                 break
 

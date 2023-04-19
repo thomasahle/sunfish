@@ -127,6 +127,176 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
     # The state of a chess game
     # board -- a 120 char representation of the board
     # score -- the board evaluation
+    # turn
+    # wf -- our features
+    # bf -- opponent features
+    # wc -- the castling rights, [west/queen side, east/king side]
+    # bc -- the opponent castling rights, [west/king side, east/queen side]
+    # ep - the en passant square
+    # kp - the king passant square
+
+    def gen_moves(self):
+        # For each of our pieces, iterate through each possible 'ray' of moves,
+        # as defined in the 'directions' map. The rays are broken e.g. by
+        # captures or immediately in case of pieces such as knights.
+        for i, p in enumerate(self.board):
+            if not p.isupper():
+                continue
+            for d in directions[p]:
+                for j in count(i + d, d):
+                    q = self.board[j]
+                    # Stay inside the board, and off friendly pieces
+                    if q.isspace() or q.isupper():
+                        break
+                    if p == "P":
+                        # If the pawn moves forward, it has to not hit anybody
+                        if d in (N, N + N) and q != ".":
+                            break
+                        # If the pawn moves forward twice, it has to be on the first row
+                        # and it has to not jump over anybody
+                        if d == N + N and (i < A1 + N or self.board[i + N] != "."):
+                            break
+                        # If the pawn captures, it has to either be a piece, an
+                        # enpassant square, or a moving king.
+                        if (
+                            d in (N + W, N + E)
+                            and q == "."
+                            and j not in (self.ep, self.kp, self.kp - 1, self.kp + 1)
+                            # and j != self.ep and abs(j - self.kp) >= 2
+                        ):
+                            break
+                        # If we move to the last row, we can be anything
+                        if A8 <= j <= H8:
+                            yield from (Move(i, j, prom) for prom in "NBRQ")
+                            break
+                    # Move it
+                    yield Move(i, j, "")
+                    # Stop crawlers from sliding, and sliding after captures
+                    if p in "PNK" or q.islower():
+                        break
+                    # Castling, by sliding the rook next to the king. This way we don't
+                    # need to worry about jumping over pieces while castling.
+                    # We don't need to check for being a root, since if the piece starts
+                    # at A1 and castling queen side is still allowed, it must be a rook.
+                    if i == A1 and self.board[j + E] == "K" and self.wc[0]:
+                        yield Move(j + E, j + W, "")
+                    if i == H1 and self.board[j + W] == "K" and self.wc[1]:
+                        yield Move(j + W, j + E, "")
+
+    @contextmanager
+    def rotate(self, nullmove=False):
+        # Rotates the board, preserving enpassant.
+        # A nullmove is nearly a rotate, but it always clear enpassant.
+        pos = Position(
+            self.board[::-1].swapcase(),
+            0, self.bf, self.wf, self.bc, self.wc,
+            0 if nullmove or not self.ep else 119 - self.ep,
+            0 if nullmove or not self.kp else 119 - self.kp,
+        )
+        return pos._replace(score=pos.compute_value())
+
+    def put(self, i, p, stack=None):
+        q = self.board[i]
+        # TODO: I could update a zobrist hash here as well...
+        # Then we are really becoming a real chess program...
+        self.board[i] = p
+        self.wf += pst[p][i] - pst[q][i]
+        self.bf += pst[p.swapcase()][119 - i] - pst[q.swapcase()][119 - i]
+        if stack:
+            self.stack.append((i, q))
+
+    @contextmanager
+    def move(self, move):
+        i, j, pr = move
+        p, q = self.board[i], self.board[j]
+        # We make this stack to keep track of what we change
+        stack = []
+
+        old_ep, old_kp, old_wc, old_bc = self.ep, self.kp, self.ec, self.bc
+        self.ep, self.kp = 0, 0
+
+        # Actual move
+        self.put(j, p, stack)
+        self.put(i, ".", stack)
+
+        # Castling rights, we move the rook or capture the opponent's
+        if i == A1: self.wc=(False, self.wc[1])
+        if i == H1: self.wc=(self.wc[0], False)
+        if j == A8: self.bc=(self.bc[0], False)
+        if j == H8: self.bc=(False, self.bc[1])
+
+        # Capture the moving king. Actually we get an extra free king. Same thing.
+        if abs(j - self.kp) < 2:
+            self.put(pos, self.kp, "K")
+
+        # Castling
+        if p == "K":
+            pos = pos._replace(wc=(False, False))
+            if abs(j - i) == 2:
+                self.kp=(i + j) // 2
+                self.put(A1 if j < i else H1, ".", stack)
+                self.put((i + j) // 2, "R", stack)
+
+        # Pawn promotion, double move and en passant capture
+        if p == "P":
+            if A8 <= j <= H8:
+                self.put(j, pr, stack)
+            if j - i == 2 * N:
+                self.ep = i + N
+            if j == self.ep:
+                self.put(j + S, ".", stack)
+
+        # Should this also be a context manager then?
+        self.rotate()
+        yield self
+        self.rotate()
+
+        # Now unmove by putting the pieces back
+        for i, q in self.stack[::-1]:
+            self.put(i, q)
+
+        # And restore the fields
+        self.ep, self.kp, self.ec, self.bc = old_ep, old_kp, old_wc, old_bc
+
+    def is_capture(self, move):
+        # The original sunfish just checked that the evaluation of a move
+        # was larger than a certain constant. However the current NN version
+        # can have too much fluctuation in the evals, which can lead QS-search
+        # to last forever (until python stackoverflows.) Thus we need to either
+        # dampen the eval function, or like here, reduce QS search to captures
+        # only. Well, captures plus promotions.
+        return self.board[move.j] != "." or abs(move.j - self.kp) < 2 or move.prom
+
+    def compute_value(self):
+        #relu6 = lambda x: np.minimum(np.maximum(x, 0), 6)
+        # TODO: We can maybe speed this up using a fixed `out` array,
+        # as well as using .dot istead of @.
+        act = np.tanh
+        wf, bf = self.wf, self.bf
+        # Pytorch matrices are in the shape (out_features, in_features)
+        #hidden = layer1 @ act(np.concatenate([wf[1:], bf[1:]]))
+        hidden = (layer1[:,:9] @ act(wf[1:])) + (layer1[:,9:] @ act(bf[1:]))
+        score = layer2 @ act(hidden)
+        #if verbose:
+        #    print(f"Score: {score + model['scale'] * (wf[0] - bf[0])}")
+        #    print(f"from model: {score}, pieces: {wf[0]-bf[0]}")
+        #    print(f"{wf=}")
+        #    print(f"{bf=}")
+        return int((score + model["scale"] * (wf[0] - bf[0])) * 360)
+
+    def hash(self):
+        # return self.board
+        # return self.score
+        # return hash(self.board)
+        return hash((self.board, self.wc, self.bc, self.ep, self.kp))
+        # return (self.wf + self.bf).sum()
+        # return self._replace(wf=0, bf=0)
+
+
+class MutablePosition(namedtuple("Position", "board score wf bf wc bc ep kp")):
+    # The state of a chess game
+    # board -- a 120 char representation of the board
+    # score -- the board evaluation
     # wf -- our features
     # bf -- opponent features
     # wc -- the castling rights, [west/queen side, east/king side]
@@ -271,7 +441,8 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
         act = np.tanh
         wf, bf = self.wf, self.bf
         # Pytorch matrices are in the shape (out_features, in_features)
-        hidden = layer1 @ act(np.concatenate([wf[1:], bf[1:]]))
+        #hidden = layer1 @ act(np.concatenate([wf[1:], bf[1:]]))
+        hidden = (layer1[:,:9] @ act(wf[1:])) + (layer1[:,9:] @ act(bf[1:]))
         score = layer2 @ act(hidden)
         #if verbose:
         #    print(f"Score: {score + model['scale'] * (wf[0] - bf[0])}")
@@ -287,6 +458,7 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
         return hash((self.board, self.wc, self.bc, self.ep, self.kp))
         # return (self.wf + self.bf).sum()
         # return self._replace(wf=0, bf=0)
+
 
 ###############################################################################
 # Search logic
@@ -323,17 +495,6 @@ class Searcher:
         if pos.score <= -MATE_LOWER:
             return -MATE_UPPER
 
-        # We detect 3-fold captures by comparing against previously
-        # _actually played_ positions.
-        # Note that we need to do this before we look in the table, as the
-        # position may have been previously reached with a different score.
-        # This is what prevents a search instability.
-        # Actually, this is not true, since other positions will be affected by
-        # the new values for all the drawn positions.
-        # This is why I've decided to just clear tp_score every time history changes.
-        if not root and pos.hash() in self.history:
-            return 0
-
         # Look in the table if we have already searched this position before.
         # We also need to be sure, that the stored search was over the same
         # nodes as the current search.
@@ -350,8 +511,16 @@ class Searcher:
         if entry.upper < gamma:
             return entry.upper
 
-        # Here extensions may be added
-        # Such as 'if in_check: depth += 1'
+        # We detect 3-fold captures by comparing against previously
+        # _actually played_ positions.
+        # Note that we need to do this before we look in the table, as the
+        # position may have been previously reached with a different score.
+        # This is what prevents a search instability.
+        # Actually, this is not true, since other positions will be affected by
+        # the new values for all the drawn positions.
+        # This is why I've decided to just clear tp_score every time history changes.
+        if not root and pos.hash() in self.history:
+            return 0
 
         # Generator of moves to search in order.
         # This allows us to define the moves, but only calculate them if needed.
@@ -369,6 +538,7 @@ class Searcher:
             # before. Also note that in QS the killer must be a capture, otherwise we
             # will be non deterministic.
             def mvv_lva(move):
+                # Recall mvv_lva gives the _negative_ score
                 if abs(move.j - pos.kp) < 2: return -MATE
                 i, j = move.i, move.j
                 p, q = pos.board[i], pos.board[j]
@@ -486,16 +656,24 @@ def render(i):
 
 wf, bf = features(initial)
 hist = [Position(initial, 0, wf, bf, (True, True), (True, True), 0, 0)]
+searcher = Searcher()
 
 
 # minifier-hide start
-import sys, tools.uci
-tools.uci.run(sys.modules[__name__], hist[-1])
+if '--profile' in sys.argv:
+    import cProfile
+    def go_depth_5():
+        for depth, _, _, _ in searcher.search(hist):
+            if depth == 5:
+                break
+    cProfile.run('go_depth_5()')
+else:
+    import tools.uci
+    tools.uci.run(sys.modules[__name__], hist[-1])
 sys.exit()
 # minifier-hide end
 
 
-searcher = Searcher()
 while True:
     args = input().split()
     if args[0] == "uci":
