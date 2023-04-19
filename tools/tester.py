@@ -306,20 +306,31 @@ class Draw(Command):
             total += 1
             board, _ = chess.Board.from_epd(line)
             with await engine.analysis(board, limit) as analysis:
+                last_lower = -10**10
+                last_upper = 10**10
                 async for info in analysis:
                     pb.set_description(info_to_desc(info))
                     if not "score" in info:
                         continue
                     score = info["score"]
-                    # It should be draw here
-                    if not score.is_mate() and score.relative.cp == 0:
+                    if score.is_mate():
+                        continue
+                    if info.get('lowerbound'):
+                        last_lower = score.relative.cp
+                    elif info.get('upperbound'):
+                        last_upper = score.relative.cp
+                    elif score.relative.cp == 0:
+                        success += 1
+                        cnt[info["depth"]] += 1
+                        break
+                    if -30 < last_lower and last_upper < 30:
                         success += 1
                         cnt[info["depth"]] += 1
                         break
                 else:
                     if not args.quiet:
                         print("Failed on", line.strip())
-                        print("Result:", info)
+                        print("Result:", info, 'lower', last_lower, 'upper', last_upper)
                         pass
         print(f"Succeeded in {success}/{total} cases.")
         if not args.quiet:

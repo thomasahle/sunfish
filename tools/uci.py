@@ -60,6 +60,10 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
             if stop_event.is_set():
                 break
 
+    # FIXME: If we are in "go infinite" we aren't actually supposed to stop the
+    # go-loop before we got stop_event. Unfortunately we currently don't know if
+    # we are in "go infinite" since it's simply translated to "go depth 100".
+
     my_pv = pv(searcher, hist[-1], include_scores=False)
     print("bestmove", my_pv[0] if my_pv else "(none)")
 
@@ -186,6 +190,8 @@ def run(sunfish_module, startpos):
                     _, uci_key, _, uci_value = args[1:]
                     setattr(sunfish, uci_key, int(uci_value))
 
+                # FIXME: It seems we should reply to "isready" even while thinking.
+                # See: https://talkchess.com/forum3/viewtopic.php?f=7&t=81233&start=10
                 elif args[0] == "isready":
                     print("readyok")
 

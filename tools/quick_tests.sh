@@ -5,15 +5,6 @@ TOOLS=$(dirname "$0")
 echo "$TOOLS"
 T="python3 $TOOLS/tester.py"
 
-
-echo "Perft"
-$T "$1" ${2:-"--quiet"} perft $TOOLS/test_files/perft.epd --depth 2
-echo
-
-echo "Self play"
-$T "$1" ${2:-"--quiet"} self-play --time 1000 --inc 100
-echo
-
 echo "Mate in 1..."
 #$T "$1" ${2:-"--quiet"} mate $TOOLS/test_files/mate1.fen --depth 2
 $T "$1" ${2:-"--quiet"} mate $TOOLS/test_files/mate1.fen --movetime 10000
@@ -50,3 +41,13 @@ echo
 echo "Other puzzles..."
 $T "$1" ${2:-"--quiet"} best $TOOLS/test_files/win_at_chess_test.epd --movetime 100
 echo
+
+echo "Perft"
+$T "$1" ${2:-"--quiet"} perft $TOOLS/test_files/perft.epd --depth 2
+echo
+
+echo "Self play"
+$T "$1" ${2:-"--quiet"} self-play --time 1000 --inc 100
+echo
+
+
