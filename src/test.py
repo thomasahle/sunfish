@@ -139,6 +139,7 @@ class Tests(unittest.TestCase):
                 if move == last_move:
                     print('Score was', score, pos.score)
                     print('Failed at', i)
+                    print('Hey')
                     print(_pgn)
                 self.assertNotEqual(move, last_move)
 
