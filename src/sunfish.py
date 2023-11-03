@@ -411,7 +411,7 @@ def main_init():
         print_pos(hist[-1])
 
         if hist[-1].score <= -MATE_LOWER:
-            print("You lost")
+            print("You lost!")
             break
 
         # We query the user until she enters a (pseudo) legal move.
