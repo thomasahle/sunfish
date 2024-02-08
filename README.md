@@ -38,6 +38,25 @@ Score: 23, nodes: 11752, nps: 13812, time: 0.9
 Your move (e.g. c6 or g8h6): <b>Nf6</b>
 </pre>
 
+### Notation
+
+The terminal interface uses algebraic notation for inputting moves. Here is a brief overview of how it works:
+From white's perspective, the columns are labeled a-h from left to right and the rows are labeled 1-8 from the bottom to the top.
+Each square is named with its respective letter than number (eg. a2, c3, h8).
+A move is communicated by the first letter of the moving piece followed by the destination square (the P for pawn moves is omitted and N is used for knights).
+If more than one of the same piece can move to a square, specify the file of the moving piece. If that is still ambiguous, specify the column.
+
+In order to use the terminal interface, the notation used must be of a specific format, otherwise the entered move will not be read correctly.
+An "x" is sometimes used to denote a capture, but must be omitted (eg. Bd4 not Bxd4).
+Do not use a "+" to denote a check (eg. Bf7 not Bf7+).
+Do not use an "=" to denote pawn promotion (eg. e8Q not e8=Q)
+To denote a pawn capture the required notation is starting file followed by the ending square (eg. gf4 not gf).
+Castling must be denoted with lowercase 'o's (eg. o-o and o-o-o).
+Specifying a file or columm must be after stating the piece (eg. Rae1 not aRe1).
+When notating en passant, the destination square should be the square the pawn ends up on, not th quare of the pawn that was captured (eg. ef6 not ef5).
+
+The terminal interface also supports explicit notation. This is where the source square is stated followed by the destination square (eg. e2e4).
+
 Note this requires the [python-chess](https://github.com/niklasf/python-chess/) package.
 For a true minimalist experience, first we can "pack" sunfish into a compressed executable (less than 3KB!) and run it directly:
 <pre>
