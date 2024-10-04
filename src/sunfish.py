@@ -450,51 +450,54 @@ hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
 #input = raw_input
 
 # minifier-hide start
-import sys, tools.uci
-tools.uci.run(sys.modules[__name__], hist[-1])
-sys.exit()
+if __name__ == "__main__":
+    print('aaa')
+    import sys, tools.uci
+    tools.uci.run(sys.modules[__name__], hist[-1])
+    sys.exit()
+
 # minifier-hide end
+if 0:
+    searcher = Searcher()
+    while True:
+        args = input().split()
+        if args[0] == "uci":
+            print("id name", version)
+            print("uciok")
 
-searcher = Searcher()
-while True:
-    args = input().split()
-    if args[0] == "uci":
-        print("id name", version)
-        print("uciok")
+        elif args[0] == "isready":
+            print("readyok")
 
-    elif args[0] == "isready":
-        print("readyok")
+        elif args[0] == "quit":
+            break
 
-    elif args[0] == "quit":
-        break
-
-    elif args[:2] == ["position", "startpos"]:
-        del hist[1:]
-        for ply, move in enumerate(args[3:]):
-            i, j, prom = parse(move[:2]), parse(move[2:4]), move[4:].upper()
-            if ply % 2 == 1:
-                i, j = 119 - i, 119 - j
-            hist.append(hist[-1].move(Move(i, j, prom)))
-
-    elif args[0] == "go":
-        wtime, btime, winc, binc = [int(a) / 1000 for a in args[2::2]]
-        if len(hist) % 2 == 0:
-            wtime, winc = btime, binc
-        think = min(wtime / 40 + winc, wtime / 2 - 1)
-
-        start = time.time()
-        move_str = None
-        for depth, gamma, score, move in Searcher().search(hist):
-            # The only way we can be sure to have the real move in tp_move,
-            # is if we have just failed high.
-            if score >= gamma:
-                i, j = move.i, move.j
-                if len(hist) % 2 == 0:
+        elif args[:2] == ["position", "startpos"]:
+            del hist[1:]
+            for ply, move in enumerate(args[3:]):
+                i, j, prom = parse(move[:2]), parse(move[2:4]), move[4:].upper()
+                if ply % 2 == 1:
                     i, j = 119 - i, 119 - j
-                move_str = render(i) + render(j) + move.prom.lower()
-                print("info depth", depth, "score cp", score, "pv", move_str)
-            if move_str and time.time() - start > think * 0.8:
-                break
+                hist.append(hist[-1].move(Move(i, j, prom)))
 
-        print("bestmove", move_str or '(none)')
+        elif args[0] == "go":
+            wtime, btime, winc, binc = [int(a) / 1000 for a in args[2::2]]
+            if len(hist) % 2 == 0:
+                wtime, winc = btime, binc
+            think = min(wtime / 40 + winc, wtime / 2 - 1)
+
+            start = time.time()
+            move_str = None
+            for depth, gamma, score, move in Searcher().search(hist):
+                # The only way we can be sure to have the real move in tp_move,
+                # is if we have just failed high.
+                if score >= gamma:
+                    i, j = move.i, move.j
+                    if len(hist) % 2 == 0:
+                        i, j = 119 - i, 119 - j
+                    move_str = render(i) + render(j) + move.prom.lower()
+                    print("info depth", depth, "score cp", score, "pv", move_str)
+                if move_str and time.time() - start > think * 0.8:
+                    break
+
+            print("bestmove", move_str or '(none)')
 
