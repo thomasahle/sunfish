@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sunfish"
+version = "1.0.0"
+description = "Sunfish: a Python Chess Engine in 111 lines of code"
+authors = [
+    { name = "Thomas Ahle", email = "thomasahle@example.com" }
+]
+readme = "README.md"
+license = { text = "GNU GPL v3" }
+requires-python = ">=3.6"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",
+    "Operating System :: OS Independent",
+]
+
+[tool.setuptools]
+packages = ["sunfish"]
+
+[tool.setuptools.package-dir]
+"sunfish" = "src"
+
+[tool.setuptools.package-data]
+"sunfish"= ["**/*"]
+
+
