@@ -8,7 +8,7 @@ Because Sunfish is small and strives to be simple, the code provides a great pla
 
 # Play against sunfish!
 
-The simplest way to run sufish is through the "fancy" terminal interface:
+The simplest way to run sunfish is through the "fancy" terminal interface:
 <pre>
 $ <b>tools/fancy.py -cmd ./sunfish.py</b>
 Playing against sunfish 2023.
@@ -52,8 +52,8 @@ Do not use a "+" to denote a check (eg. Bf7 not Bf7+).
 Do not use an "=" to denote pawn promotion (eg. e8Q not e8=Q)
 To denote a pawn capture the required notation is starting file followed by the ending square (eg. gf4 not gf).
 Castling must be denoted with lowercase 'o's (eg. o-o and o-o-o).
-Specifying a file or columm must be after stating the piece (eg. Rae1 not aRe1).
-When notating en passant, the destination square should be the square the pawn ends up on, not th quare of the pawn that was captured (eg. ef6 not ef5).
+Specifying a file or column must be after stating the piece (eg. Rae1 not aRe1).
+When notating en passant, the destination square should be the square the pawn ends up on, not the square of the pawn that was captured (eg. ef6 not ef5).
 
 The terminal interface also supports explicit notation. This is where the source square is stated followed by the destination square (eg. e2e4).
 
@@ -92,18 +92,18 @@ Using NNUE, sunfish will play better positionally, but worse tactically, since t
 
 1. Built around the simple, but efficient MTD-bi search algorithm, also known as [C*](https://www.chessprogramming.org/NegaC*).
 2. Filled with classic "chess engine tricks" for simpler and faster code.
-3. Efficiently updatedable evaluation function through [Piece Square Tables](https://www.chessprogramming.org/Piece-Square_Tables).
+3. Efficiently updatable evaluation function through [Piece Square Tables](https://www.chessprogramming.org/Piece-Square_Tables).
 4. Uses standard Python collections and data structures for clarity and efficiency.
 
 # Limitations
 
-Sunfish supports all chess rules, except the 50 moves draw rule.
+Sunfish supports all chess rules, except the 50-move draw rule.
 
 There are many ways in which you may try to make Sunfish stronger. First you could change from a board representation to a mutable array and add a fast way to enumerate pieces. Then you could implement dedicated capture generation, check detection and check evasions. You could also move everything to bitboards, implement parts of the code in C or experiment with parallel search!
 
 The other way to make Sunfish stronger is to give it more knowledge of chess. The current evaluation function only uses piece square tables - it doesn't even distinguish between midgame and endgame. You can also experiment with more pruning - currently only null move is done - and extensions - currently none are used. Finally Sunfish might benefit from a more advanced move ordering, MVV/LVA and SEE perhaps?
 
-An easy way to get a strong Sunfish is to run with with the [PyPy Just-In-Time intepreter](https://pypy.org/). In particular the python2.7 version of pypy gives a 250 ELO boost compared to the cpython (2 or 3) intepreters at fast time controls:
+An easy way to get a strong Sunfish is to run with the [PyPy Just-In-Time interpreter](https://pypy.org/). In particular, the Python 2.7 version of PyPy gives a 250 ELO boost compared to the CPython (2 or 3) interpreters at fast time controls:
 
     Rank Name                    Elo     +/-   Games   Score   Draws
        1 pypy2.7 (7.1)           166      38     300   72.2%   19.7%
