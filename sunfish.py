@@ -299,7 +299,7 @@ class Searcher:
 
         # Let's not repeat positions. We don't chat
         # - at the root (can_null=False) since it is in history, but not a draw.
-        # - at depth=0, since it would be expensive and break "futulity pruning".
+        # - at depth=0, since it would be expensive and break "futility pruning".
         if can_null and depth > 0 and pos in self.history:
             return 0
 
