@@ -34,4 +34,4 @@ jobs:
         flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
     - name: Test
       run: |
-        bash tools/quick_tests.sh ./sunfish.py
+        bash tools/quick_tests.sh "python ./sunfish.py"
