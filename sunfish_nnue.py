@@ -214,7 +214,7 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
         # We make this stack to keep track of what we change
         stack = []
 
-        old_ep, old_kp, old_wc, old_bc = self.ep, self.kp, self.ec, self.bc
+        old_ep, old_kp, old_wc, old_bc = self.ep, self.kp, self.wc, self.bc
         self.ep, self.kp = 0, 0
 
         # Actual move
@@ -258,7 +258,7 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
             self.put(i, q)
 
         # And restore the fields
-        self.ep, self.kp, self.ec, self.bc = old_ep, old_kp, old_wc, old_bc
+        self.ep, self.kp, self.wc, self.bc = old_ep, old_kp, old_wc, old_bc
 
     def is_capture(self, move):
         # The original sunfish just checked that the evaluation of a move
