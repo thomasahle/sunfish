@@ -1,14 +1,14 @@
 #!/usr/bin/env pypy3
+# Preferred runtime: PyPy3 (faster JIT for the search loop).
+# Also compatible with CPython 3.10+ thanks to modern syntax (match-case,
+# type hints). If you only have CPython, run as: python3 sunfish_50move.py
+
 from __future__ import print_function
 
-import time, math
+import time
+import math
 from itertools import count
 from collections import namedtuple, defaultdict
-
-# If we could rely on the env -S argument, we could just use "pypy3 -u"
-# as the shebang to unbuffer stdout. But alas we have to do this instead:
-#from functools import partial
-#print = partial(print, flush=True)
 
 version = "sunfish 2023"
 
@@ -123,6 +123,11 @@ QS = 40
 QS_A = 140
 EVAL_ROUGHNESS = 15
 
+# When the 50-move clock passes this many plies, non-mate scores begin to be
+# pulled toward 0. At 100 plies the score is flattened completely, reflecting
+# that the side to move can claim a draw.
+FIFTY_MOVE_DECAY_START = 80
+
 # minifier-hide start
 opt_ranges = dict(
     QS = (0, 300),
@@ -140,14 +145,16 @@ opt_ranges = dict(
 Move = namedtuple("Move", "i j prom")
 
 
-class Position(namedtuple("Position", "board score wc bc ep kp")):
+class Position(namedtuple("Position", "board score wc bc ep kp halfmove_clock", defaults=(0,))):
     """A state of a chess game
     board -- a 120 char representation of the board
     score -- the board evaluation
     wc -- the castling rights, [west/queen side, east/king side]
-    bc -- the opponent castling rights, [west/king side, east/queen side]
+    bc -- the opponent castling rights, [west/king side, east/king side]
     ep - the en passant square
     kp - the king passant square
+    halfmove_clock -- plies since last pawn move or capture (for the 50/75-move rule).
+                      Defaults to 0 so old 6-argument Position(...) calls still work.
     """
 
     def gen_moves(self):
@@ -192,16 +199,29 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
 
     def rotate(self, nullmove=False):
         """Rotates the board, preserving enpassant, unless nullmove"""
+        # The halfmove clock counts plies for both sides together, so it must
+        # be preserved when swapping colours.
         return Position(
             self.board[::-1].swapcase(), -self.score, self.bc, self.wc,
             119 - self.ep if self.ep and not nullmove else 0,
             119 - self.kp if self.kp and not nullmove else 0,
+            self.halfmove_clock,
         )
 
     def move(self, move):
         i, j, prom = move
         p, q = self.board[i], self.board[j]
         put = lambda board, i, p: board[:i] + p + board[i + 1 :]
+
+        # Update the 50/75-move clock. It resets on any pawn move (including a
+        # promotion, because the pawn is still the moving piece), any capture,
+        # or any en passant capture (where the target square itself is empty).
+        # Otherwise it ticks up by one half-move.
+        if p == "P" or q != "." or j == self.ep:
+            halfmove_clock = 0
+        else:
+            halfmove_clock = self.halfmove_clock + 1
+
         # Copy variables and reset ep and kp
         board = self.board
         wc, bc, ep, kp = self.wc, self.bc, 0, 0
@@ -230,7 +250,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             if j == self.ep:
                 board = put(board, j + S, ".")
         # We rotate the returned position, so it's ready for the next player
-        return Position(board, score, wc, bc, ep, kp).rotate()
+        return Position(board, score, wc, bc, ep, kp, halfmove_clock).rotate()
 
     def value(self, move):
         i, j, prom = move
@@ -265,6 +285,25 @@ Entry = namedtuple("Entry", "lower upper")
 
 
 class Searcher:
+    @staticmethod
+    def apply_fifty_move_decay(score: int, halfmove_clock: int) -> int:
+        """Pull non-mate scores toward 0 as the 50-move claim point approaches.
+
+        When the clock is high, the side to move can claim a draw, so:
+        - A positive score (advantage) shrinks: the engine avoids reckless
+          sacrifices that could throw away the draw claim.
+        - A negative score (disadvantage) rises toward 0: the engine is happy
+          to steer toward the claim instead of fighting a lost position.
+        Mate scores are never decayed.
+        """
+        if abs(score) >= MATE_LOWER:
+            return score
+        if halfmove_clock <= FIFTY_MOVE_DECAY_START:
+            return score
+        # Linear fade from full score at FIFTY_MOVE_DECAY_START to 0 at 100 ply.
+        factor = max(0.0, (100 - halfmove_clock) / (100 - FIFTY_MOVE_DECAY_START))
+        return int(score * factor)
+
     def __init__(self):
         self.tp_score = {}
         self.tp_move = {}
@@ -289,6 +328,14 @@ class Searcher:
         # or able to capture the opponent king.
         if pos.score <= -MATE_LOWER:
             return -MATE_UPPER
+
+        # FIDE 9.6.2: 75-move rule. If 75 full moves (150 half-moves) have
+        # passed without a pawn move or a capture, the game is an automatic
+        # draw. Note that FIDE 9.3 allows a player to CLAIM a draw after only
+        # 50 full moves (100 half-moves), but that claim must be made by the
+        # player/GUI; the engine does not automatically enforce it here.
+        if pos.halfmove_clock >= 150:
+            return 0
 
         # Look in the table if we have already searched this position before.
         # We also need to be sure, that the stored search was over the same
@@ -319,9 +366,10 @@ class Searcher:
                 yield None, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
 
             # For QSearch we have a different kind of null-move, namely we can just stop
-            # and not capture anything else.
+            # and not capture anything else. Fade the score toward 0 when a
+            # 50-move draw claim is approaching.
             if depth == 0:
-                yield None, pos.score
+                yield None, self.apply_fifty_move_decay(pos.score, pos.halfmove_clock)
 
             # Look for the strongest ove from last time, the hash-move.
             killer = self.tp_move.get(pos)
@@ -403,7 +451,8 @@ class Searcher:
         if best < gamma:
             self.tp_score[pos, depth, can_null] = Entry(entry.lower, best)
 
-        return best
+        # Fade non-mate scores toward 0 when the 50-move claim point is close.
+        return self.apply_fifty_move_decay(best, pos.halfmove_clock)
 
     def search(self, history):
         """Iterative deepening MTD-bi search"""
@@ -436,65 +485,87 @@ class Searcher:
 ###############################################################################
 
 
-def parse(c):
+def parse(c: str) -> int:
+    """Convert a UCI square like 'e2' to a 120-char board index."""
     fil, rank = ord(c[0]) - ord("a"), int(c[1]) - 1
     return A1 + fil - 10 * rank
 
 
-def render(i):
+def render(i: int) -> str:
+    """Convert a 120-char board index back to a UCI square like 'e2'."""
     rank, fil = divmod(i - A1, 10)
     return chr(fil + ord("a")) + str(-rank + 1)
 
-hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
 
-#input = raw_input
+# Game history, starting from the standard initial position.
+# halfmove_clock starts at 0.
+hist = [Position(initial, 0, (True, True), (True, True), 0, 0, 0)]
 
-# minifier-hide start
-import sys, tools.uci
-tools.uci.run(sys.modules[__name__], hist[-1])
-sys.exit()
-# minifier-hide end
+# The following block is used by the original sunfish test harness.
+# It is disabled here so the script works as a standalone UCI engine.
+# import sys, tools.uci
+# tools.uci.run(sys.modules[__name__], hist[-1])
+# sys.exit()
 
-searcher = Searcher()
-while True:
-    args = input().split()
-    if args[0] == "uci":
-        print("id name", version)
-        print("uciok")
 
-    elif args[0] == "isready":
-        print("readyok")
+if __name__ == "__main__":
+    # Standard UCI command loop. We use Python 3.10's structural pattern
+    # matching (match-case) to dispatch commands, which is available in
+    # PyPy3.9+ and CPython 3.10+.
+    while True:
+        args = input().split()
+        match args:
+            case ["uci"]:
+                print("id name", version)
+                print("uciok")
 
-    elif args[0] == "quit":
-        break
+            case ["isready"]:
+                print("readyok")
 
-    elif args[:2] == ["position", "startpos"]:
-        del hist[1:]
-        for ply, move in enumerate(args[3:]):
-            i, j, prom = parse(move[:2]), parse(move[2:4]), move[4:].upper()
-            if ply % 2 == 1:
-                i, j = 119 - i, 119 - j
-            hist.append(hist[-1].move(Move(i, j, prom)))
-
-    elif args[0] == "go":
-        wtime, btime, winc, binc = [int(a) / 1000 for a in args[2::2]]
-        if len(hist) % 2 == 0:
-            wtime, winc = btime, binc
-        think = min(wtime / 40 + winc, wtime / 2 - 1)
-
-        start = time.time()
-        move_str = None
-        for depth, gamma, score, move in Searcher().search(hist):
-            # The only way we can be sure to have the real move in tp_move,
-            # is if we have just failed high.
-            if score >= gamma:
-                i, j = move.i, move.j
-                if len(hist) % 2 == 0:
-                    i, j = 119 - i, 119 - j
-                move_str = render(i) + render(j) + move.prom.lower()
-                print("info depth", depth, "score cp", score, "pv", move_str)
-            if move_str and time.time() - start > think * 0.8:
+            case ["quit"]:
                 break
 
-        print("bestmove", move_str or '(none)')
+            case ["position", "startpos", *rest]:
+                # Reset history to the starting position, then play the move list.
+                # Black moves are given from White's point of view, so we flip
+                # their coordinates before applying them.
+                del hist[1:]
+                moves = rest[1:] if rest and rest[0] == "moves" else rest
+                for ply, move in enumerate(moves):
+                    i, j, prom = parse(move[:2]), parse(move[2:4]), move[4:].upper()
+                    if ply % 2 == 1:
+                        i, j = 119 - i, 119 - j
+                    hist.append(hist[-1].move(Move(i, j, prom)))
 
+            case ["go", *_]:
+                # Parse time control fields. The original command format is e.g.
+                #   go wtime 300000 btime 300000 winc 0 binc 0
+                # We take every second token starting at index 2.
+                wtime = btime = winc = binc = 0
+                try:
+                    wtime, btime, winc, binc = [int(a) / 1000 for a in args[2::2]]
+                except ValueError:
+                    pass
+                if len(hist) % 2 == 0:
+                    wtime, winc = btime, binc
+                think = min(wtime / 40 + winc, wtime / 2 - 1)
+
+                start = time.time()
+                move_str = None
+                for depth, gamma, score, move in Searcher().search(hist):
+                    # The only way we can be sure to have the real move in tp_move,
+                    # is if we have just failed high.
+                    if score >= gamma and move is not None:
+                        i, j = move.i, move.j
+                        if len(hist) % 2 == 0:
+                            i, j = 119 - i, 119 - j
+                        move_str = render(i) + render(j) + move.prom.lower()
+                        print("info depth", depth, "score cp", score, "pv", move_str)
+                    if move_str and time.time() - start > think * 0.8:
+                        break
+
+                print("bestmove", move_str or '(none)')
+
+            case _:
+            
+                pass
