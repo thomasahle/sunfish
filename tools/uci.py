@@ -122,7 +122,13 @@ def perft(pos, depth, debug=False):
             return 1
         res = 0
         for move in pos.gen_moves():
-            cnt = _perft_count(pos.move(move), depth - 1)
+            mv = pos.move(move)
+            if hasattr(mv, '__enter__'):
+                # Position is mutable; use context manager to apply move
+                with mv as next_pos:
+                    cnt = _perft_count(next_pos, depth - 1)
+            else:
+                cnt = _perft_count(mv, depth - 1)
             if cnt != -1:
                 res += cnt
         return res
@@ -130,7 +136,13 @@ def perft(pos, depth, debug=False):
     total = 0
     for move in pos.gen_moves():
         move_uci = render_move(move, get_color(pos) == WHITE)
-        cnt = _perft_count(pos.move(move), depth - 1)
+        mv = pos.move(move)
+        if hasattr(mv, '__enter__'):
+            # Position is mutable; use context manager to apply move
+            with mv as next_pos:
+                cnt = _perft_count(next_pos, depth - 1)
+        else:
+            cnt = _perft_count(mv, depth - 1)
         if cnt != -1:
             print(f"{move_uci}: {cnt}")
             total += cnt
@@ -201,7 +213,11 @@ def run(sunfish_module, startpos):
                 elif args[:2] == ["position", "startpos"]:
                     hist = [startpos]
                     for ply, move in enumerate(args[3:]):
-                        hist.append(hist[-1].move(parse_move(move, ply % 2 == 0)))
+                        # Try to use move_return if available, otherwise fall back to move
+                        if hasattr(hist[-1], "move_return"):
+                            hist.append(hist[-1].move_return(parse_move(move, ply % 2 == 0)))
+                        else:
+                            hist.append(hist[-1].move(parse_move(move, ply % 2 == 0)))
 
                 elif args[:2] == ["position", "fen"]:
                     pos = from_fen(*args[2:8])
@@ -209,7 +225,11 @@ def run(sunfish_module, startpos):
                     if len(args) > 8:
                         assert args[8] == "moves"
                         for move in args[9:]:
-                            hist.append(hist[-1].move(parse_move(move, len(hist) % 2 == 1)))
+                            # Try to use move_return if available, otherwise fall back to move
+                            if hasattr(hist[-1], "move_return"):
+                                hist.append(hist[-1].move_return(parse_move(move, len(hist) % 2 == 1)))
+                            else:
+                                hist.append(hist[-1].move(parse_move(move, len(hist) % 2 == 1)))
 
                 elif args[0] == "go":
                     think = 10**6
@@ -322,10 +342,38 @@ def pv(searcher, pos, include_scores=True, include_loop=False):
         elif hasattr(searcher, "tt_new"):
             move = searcher.tt_new[0][pos, True].move
         # The tp may have illegal moves, given lower depths don't detect king killing
-        if move is None or can_kill_king(pos.move(move)):
+        if move is None:
             break
+            
+        # Check if the move leads to king capture - use non-context manager version
+        # This is okay for the PV construction since we're not doing search
+        moved_pos = None
+        
+        # Try different methods for moving
+        if hasattr(pos, "move_return"):
+            # Use the special method designed for UCI interface
+            moved_pos = pos.move_return(move)
+        elif hasattr(pos, "move") and not hasattr(pos.move, "__enter__"):
+            # Use the regular move function that returns a new position
+            moved_pos = pos.move(move)
+        elif hasattr(pos, "move"):
+            # Handle context manager version
+            with pos.move(move) as temp_pos:
+                # Make a copy of the position
+                if hasattr(temp_pos, "_replace"):
+                    # For namedtuples
+                    moved_pos = temp_pos._replace()
+                else:
+                    # For custom objects, try to make a copy
+                    moved_pos = temp_pos
+        
+        if moved_pos is None or can_kill_king(moved_pos):
+            break
+            
         res.append(render_move(move, get_color(pos) == WHITE))
-        pos, color = pos.move(move), 1 - color
+        
+        # For the next iteration
+        pos, color = moved_pos, 1 - color
 
         if hasattr(pos, "wf"):
             if pos.hash() in seen_pos:

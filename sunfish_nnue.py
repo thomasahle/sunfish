@@ -136,7 +136,7 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
     # bc -- the opponent castling rights, [west/king side, east/queen side]
     # ep - the en passant square
     # kp - the king passant square
-
+        
     def gen_moves(self):
         # For each of our pieces, iterate through each possible 'ray' of moves,
         # as defined in the 'directions' map. The rays are broken e.g. by
@@ -187,15 +187,17 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
 
     @contextmanager
     def rotate(self, nullmove=False):
+        """Context manager that yields a rotated position"""
         # Rotates the board, preserving enpassant.
         # A nullmove is nearly a rotate, but it always clear enpassant.
-        pos = Position(
+        rotated = Position(
             self.board[::-1].swapcase(),
             0, self.bf, self.wf, self.bc, self.wc,
             0 if nullmove or not self.ep else 119 - self.ep,
             0 if nullmove or not self.kp else 119 - self.kp,
         )
-        return pos._replace(score=pos.compute_value())
+        rotated = rotated._replace(score=rotated.calculate_score())
+        yield rotated
 
     def put(self, i, p, stack=None):
         q = self.board[i]
@@ -209,56 +211,114 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
 
     @contextmanager
     def move(self, move):
+        """Context manager for making a move and temporarily yielding the resulting position."""
         i, j, pr = move
         p, q = self.board[i], self.board[j]
-        # We make this stack to keep track of what we change
-        stack = []
-
-        old_ep, old_kp, old_wc, old_bc = self.ep, self.kp, self.ec, self.bc
-        self.ep, self.kp = 0, 0
-
-        # Actual move
-        self.put(j, p, stack)
-        self.put(i, ".", stack)
-
-        # Castling rights, we move the rook or capture the opponent's
-        if i == A1: self.wc=(False, self.wc[1])
-        if i == H1: self.wc=(self.wc[0], False)
-        if j == A8: self.bc=(self.bc[0], False)
-        if j == H8: self.bc=(False, self.bc[1])
-
-        # Capture the moving king. Actually we get an extra free king. Same thing.
+        
+        # Save original state for restoration
+        orig_board = self.board
+        orig_score = self.score
+        orig_wf = self.wf.copy()
+        orig_bf = self.bf.copy()
+        orig_wc = self.wc
+        orig_bc = self.bc
+        orig_ep = self.ep
+        orig_kp = self.kp
+        
+        # Create a mutable version of our position
+        board_list = list(self.board)
+        
+        # Create temporary Position objects for each stage
+        # For move
+        board_list[j] = p
+        board_list[i] = "."
+        
+        # Update feature vectors
+        wf = self.wf.copy()
+        bf = self.bf.copy()
+        wf += pst[p][j] - pst[q][j]  # Add piece at target
+        wf += pst['.'][i] - pst[p][i]  # Remove piece from source
+        bf += pst[p.swapcase()][119-j] - pst[q.swapcase()][119-j]
+        bf += pst['.'.swapcase()][119-i] - pst[p.swapcase()][119-i]
+        
+        # Update castling rights
+        wc, bc = self.wc, self.bc
+        if i == A1: wc = (False, wc[1])
+        if i == H1: wc = (wc[0], False)
+        if j == A8: bc = (bc[0], False)
+        if j == H8: bc = (False, bc[1])
+        
+        # Start with clean ep and kp
+        ep, kp = 0, 0
+        
+        # Capture the moving king
         if abs(j - self.kp) < 2:
-            self.put(self.board.find('k'), ' ')
-
+            king_pos = ''.join(board_list).find('k')
+            if king_pos >= 0:
+                board_list[king_pos] = ' '
+                wf += pst[' '][king_pos] - pst['k'][king_pos]
+                bf += pst[' '.swapcase()][119-king_pos] - pst['k'.swapcase()][119-king_pos]
+        
         # Castling
         if p == "K":
-            self.wc=(False, False)
+            wc = (False, False)
             if abs(j - i) == 2:
-                self.kp=(i + j) // 2
-                self.put(A1 if j < i else H1, ".", stack)
-                self.put((i + j) // 2, "R", stack)
-
+                kp = (i + j) // 2
+                # Move the rook
+                rook_from = A1 if j < i else H1
+                rook_to = (i + j) // 2
+                board_list[rook_from] = '.'
+                board_list[rook_to] = 'R'
+                # Update features for the rook move
+                wf += pst['.'][rook_from] - pst['R'][rook_from]
+                wf += pst['R'][rook_to] - pst[board_list[rook_to]][rook_to]
+                bf += pst['.'.swapcase()][119-rook_from] - pst['R'.swapcase()][119-rook_from]
+                bf += pst['R'.swapcase()][119-rook_to] - pst[board_list[rook_to].swapcase()][119-rook_to]
+        
         # Pawn promotion, double move and en passant capture
         if p == "P":
             if A8 <= j <= H8:
-                self.put(j, pr, stack)
+                board_list[j] = pr
+                # Update features for promotion
+                wf += pst[pr][j] - pst['P'][j]
+                bf += pst[pr.swapcase()][119-j] - pst['P'.swapcase()][119-j]
             if j - i == 2 * N:
-                self.ep = i + N
+                ep = i + N
             if j == self.ep:
-                self.put(j + S, ".", stack)
-
-        # Should this also be a context manager then?
-        self.rotate()
-        yield self
-        self.rotate()
-
-        # Now unmove by putting the pieces back
-        for i, q in self.stack[::-1]:
-            self.put(i, q)
-
-        # And restore the fields
-        self.ep, self.kp, self.ec, self.bc = old_ep, old_kp, old_wc, old_bc
+                ep_pawn_pos = j + S
+                board_list[ep_pawn_pos] = '.'
+                # Update features for en passant capture
+                wf += pst['.'][ep_pawn_pos] - pst[board_list[ep_pawn_pos]][ep_pawn_pos]
+                bf += pst['.'.swapcase()][119-ep_pawn_pos] - pst[board_list[ep_pawn_pos].swapcase()][119-ep_pawn_pos]
+        
+        # Build the position after our move
+        current_board = ''.join(board_list)
+        pos = Position(current_board, 0, wf, bf, wc, bc, ep, kp)
+        
+        # Now create the rotated position to yield
+        rotated_board = current_board[::-1].swapcase()
+        rotated = Position(
+            rotated_board, 0, 
+            pos.bf, pos.wf,  # Swap features
+            pos.bc, pos.wc,  # Swap castling rights
+            0 if not pos.ep else 119-pos.ep,  # Rotate ep square
+            0 if not pos.kp else 119-pos.kp   # Rotate kp square
+        )
+        rotated = rotated._replace(score=rotated.calculate_score())
+        
+        # Yield the position from the opponent's perspective
+        yield rotated
+        
+        # No explicit cleanup needed - original position is immutable
+        
+    def move_return(self, move):
+        """Non-context manager version that returns a new position after the move.
+        This is used by the UCI interface for things like PV construction.
+        """
+        # Execute the context manager and return the yielded value
+        with self.move(move) as pos:
+            # Return a copy of the position to ensure it lives outside the context
+            return pos._replace()
 
     def is_capture(self, move):
         # The original sunfish just checked that the evaluation of a move
@@ -269,7 +329,8 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
         # only. Well, captures plus promotions.
         return self.board[move.j] != "." or abs(move.j - self.kp) < 2 or move.prom
 
-    def compute_value(self):
+    def calculate_score(self):
+        """Calculate the score for this position using the neural network"""
         #relu6 = lambda x: np.minimum(np.maximum(x, 0), 6)
         # TODO: We can maybe speed this up using a fixed `out` array,
         # as well as using .dot istead of @.
@@ -295,171 +356,6 @@ class Position(namedtuple("Position", "board score wf bf wc bc ep kp")):
         # return self._replace(wf=0, bf=0)
 
 
-class MutablePosition(namedtuple("Position", "board score wf bf wc bc ep kp")):
-    # The state of a chess game
-    # board -- a 120 char representation of the board
-    # score -- the board evaluation
-    # wf -- our features
-    # bf -- opponent features
-    # wc -- the castling rights, [west/queen side, east/king side]
-    # bc -- the opponent castling rights, [west/king side, east/queen side]
-    # ep - the en passant square
-    # kp - the king passant square
-
-    def gen_moves(self):
-        # For each of our pieces, iterate through each possible 'ray' of moves,
-        # as defined in the 'directions' map. The rays are broken e.g. by
-        # captures or immediately in case of pieces such as knights.
-        for i, p in enumerate(self.board):
-            if not p.isupper():
-                continue
-            for d in directions[p]:
-                for j in count(i + d, d):
-                    q = self.board[j]
-                    # Stay inside the board, and off friendly pieces
-                    if q.isspace() or q.isupper():
-                        break
-                    if p == "P":
-                        # If the pawn moves forward, it has to not hit anybody
-                        if d in (N, N + N) and q != ".":
-                            break
-                        # If the pawn moves forward twice, it has to be on the first row
-                        # and it has to not jump over anybody
-                        if d == N + N and (i < A1 + N or self.board[i + N] != "."):
-                            break
-                        # If the pawn captures, it has to either be a piece, an
-                        # enpassant square, or a moving king.
-                        if (
-                            d in (N + W, N + E)
-                            and q == "."
-                            and j not in (self.ep, self.kp, self.kp - 1, self.kp + 1)
-                            # and j != self.ep and abs(j - self.kp) >= 2
-                        ):
-                            break
-                        # If we move to the last row, we can be anything
-                        if A8 <= j <= H8:
-                            yield from (Move(i, j, prom) for prom in "NBRQ")
-                            break
-                    # Move it
-                    yield Move(i, j, "")
-                    # Stop crawlers from sliding, and sliding after captures
-                    if p in "PNK" or q.islower():
-                        break
-                    # Castling, by sliding the rook next to the king. This way we don't
-                    # need to worry about jumping over pieces while castling.
-                    # We don't need to check for being a root, since if the piece starts
-                    # at A1 and castling queen side is still allowed, it must be a rook.
-                    if i == A1 and self.board[j + E] == "K" and self.wc[0]:
-                        yield Move(j + E, j + W, "")
-                    if i == H1 and self.board[j + W] == "K" and self.wc[1]:
-                        yield Move(j + W, j + E, "")
-
-    def rotate(self, nullmove=False):
-        # Rotates the board, preserving enpassant.
-        # A nullmove is nearly a rotate, but it always clear enpassant.
-        pos = Position(
-            self.board[::-1].swapcase(),
-            0, self.bf, self.wf, self.bc, self.wc,
-            0 if nullmove or not self.ep else 119 - self.ep,
-            0 if nullmove or not self.kp else 119 - self.kp,
-        )
-        return pos._replace(score=pos.compute_value())
-
-    def move(self, move):
-        put = lambda pos, i, p: pos._replace(
-            # f-strings are a bit faster in python, but the same in pypy
-            board=pos.board[:i] + p + pos.board[i + 1 :],
-            wf=pos.wf + pst[p][i] - pst[pos.board[i]][i],
-            bf=pos.bf + pst[p.swapcase()][119 - i] - pst[pos.board[i].swapcase()][119 - i],
-        )
-
-        i, j, pr = move
-        p, q = self.board[i], self.board[j]
-        # Copy variables and reset ep and kp
-        pos = self._replace(ep=0, kp=0)
-        # Actual move
-        pos = put(pos, j, p)
-        pos = put(pos, i, ".")
-
-        # Would something like this be easier?
-        # if i in pos.castl:
-        #     pos = pos._replace(castl=pos.castle - {i})
-        # if j in pos.castl:
-        #     pos = pos._replace(castl=pos.castle - {j})
-
-        # Castling rights, we move the rook or capture the opponent's
-        if i == A1: pos = pos._replace(wc=(False, pos.wc[1]))
-        if i == H1: pos = pos._replace(wc=(pos.wc[0], False))
-        if j == A8: pos = pos._replace(bc=(pos.bc[0], False))
-        if j == H8: pos = pos._replace(bc=(False, pos.bc[1]))
-        # Capture the moving king. Actually we get an extra free king. Same thing.
-        if abs(j - self.kp) < 2:
-            pos = put(pos, self.kp, "K")
-            # If using king-nnue, we might have to do some stuff here as well...
-            # Or maybe it doesn't matter whether scoring is correct when the king
-            # is dead anyway.
-            # Actually: Storing the king position would allow us to do this in a less
-            # hacky way.
-        # Castling
-        if p == "K":
-            pos = pos._replace(wc=(False, False))
-            if abs(j - i) == 2:
-                pos = pos._replace(kp=(i + j) // 2)
-                pos = put(pos, A1 if j < i else H1, ".")
-                pos = put(pos, (i + j) // 2, "R")
-            # If we used "king" NNUE we could recompute features here
-            # wf, bf = features(pos.board)
-            # Actually we'd only have to recompute wf...
-            # We'd also have to add king-position to Position so the right
-            # tables can be used at every normal move.
-        # Pawn promotion, double move and en passant capture
-        if p == "P":
-            if A8 <= j <= H8:
-                pos = put(pos, j, pr)
-            if j - i == 2 * N:
-                pos = pos._replace(ep=i + N)
-            if j == self.ep:
-                pos = put(pos, j + S, ".")
-
-        # wf, bf = features(pos.board)
-        # assert np.allclose(pos.wf, wf)
-        # assert np.allclose(pos.bf, bf)
-
-        return pos.rotate()
-
-    def is_capture(self, move):
-        # The original sunfish just checked that the evaluation of a move
-        # was larger than a certain constant. However the current NN version
-        # can have too much fluctuation in the evals, which can lead QS-search
-        # to last forever (until python stackoverflows.) Thus we need to either
-        # dampen the eval function, or like here, reduce QS search to captures
-        # only. Well, captures plus promotions.
-        return self.board[move.j] != "." or abs(move.j - self.kp) < 2 or move.prom
-
-    def compute_value(self):
-        #relu6 = lambda x: np.minimum(np.maximum(x, 0), 6)
-        # TODO: We can maybe speed this up using a fixed `out` array,
-        # as well as using .dot istead of @.
-        act = np.tanh
-        wf, bf = self.wf, self.bf
-        # Pytorch matrices are in the shape (out_features, in_features)
-        #hidden = layer1 @ act(np.concatenate([wf[1:], bf[1:]]))
-        hidden = (layer1[:,:9] @ act(wf[1:])) + (layer1[:,9:] @ act(bf[1:]))
-        score = layer2 @ act(hidden)
-        #if verbose:
-        #    print(f"Score: {score + model['scale'] * (wf[0] - bf[0])}")
-        #    print(f"from model: {score}, pieces: {wf[0]-bf[0]}")
-        #    print(f"{wf=}")
-        #    print(f"{bf=}")
-        return int((score + model["scale"] * (wf[0] - bf[0])) * 360)
-
-    def hash(self):
-        # return self.board
-        # return self.score
-        # return hash(self.board)
-        return hash((self.board, self.wc, self.bc, self.ep, self.kp))
-        # return (self.wf + self.bf).sum()
-        # return self._replace(wf=0, bf=0)
 
 
 ###############################################################################
@@ -530,7 +426,8 @@ class Searcher:
             # First try not moving at all. We only do this if there is at least one major
             # piece left on the board, since otherwise zugzwangs are too dangerous.
             if depth > 2 and not root and any(c in pos.board for c in "NBRQ"):
-                yield None, -self.bound(pos.rotate(nullmove=True), 1-gamma, depth-3, False)
+                with pos.rotate(nullmove=True) as rotated:
+                    yield None, -self.bound(rotated, 1-gamma, depth-3, False)
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else.
             if depth == 0:
@@ -555,7 +452,8 @@ class Searcher:
 
             killer = self.tp_move.get(pos.hash())
             if killer and (depth > 0 or pos.is_capture(killer)):
-                yield killer, -self.bound(pos.move(killer), 1-gamma, depth-1, False)
+                with pos.move(killer) as new_pos:
+                    yield killer, -self.bound(new_pos, 1-gamma, depth-1, False)
 
             # Then all the other moves
             # moves = [(move, pos.move(move)) for move in pos.gen_moves()]
@@ -584,7 +482,8 @@ class Searcher:
                 #print(mvv_lva(move)*360)
                 #if -mvv_lva(move)*360 >= 30  - depth * 10:
                 #if depth > 0 or (QS_TYPE == QS_CAPTURE and pos.is_capture(move)) or (QS_TYPE != QS_CAPTURE and -mvv_lva(move) >= QS_LIMIT/360):
-                    yield move, -self.bound(pos.move(move), 1-gamma, depth-1, False)
+                    with pos.move(move) as new_pos:
+                        yield move, -self.bound(new_pos, 1-gamma, depth-1, False)
 
         # Run through the moves, shortcutting when possible
         best = -MATE_UPPER
@@ -598,10 +497,10 @@ class Searcher:
 
         # Stalemate checking
         if depth > 0 and best == -MATE_UPPER:
-            flipped = pos.rotate(nullmove=True)
-            # Hopefully this is already in the TT because of null-move
-            in_check = self.bound(flipped, MATE_UPPER, 0) == MATE_UPPER
-            best = -MATE_LOWER if in_check else 0
+            with pos.rotate(nullmove=True) as flipped:
+                # Hopefully this is already in the TT because of null-move
+                in_check = self.bound(flipped, MATE_UPPER, 0) == MATE_UPPER
+                best = -MATE_LOWER if in_check else 0
 
         # Table part 2
         self.tp_score[pos.hash(), depth, root] = (
