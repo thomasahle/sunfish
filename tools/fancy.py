@@ -4,6 +4,7 @@
 import chess.engine
 import json
 import argparse
+import os
 import random
 import time
 import sys
@@ -36,8 +37,16 @@ parser.add_argument(
 )
 
 
+def python_launcher(argv):
+    # Windows can't execute .py files directly (issue #113), so run them
+    # through the current Python interpreter.
+    if os.name == "nt" and argv and argv[0].endswith(".py"):
+        return [sys.executable] + argv
+    return argv
+
+
 async def load_engine_from_cmd(cmd, debug=False):
-    _, engine = await chess.engine.popen_uci(cmd.split())
+    _, engine = await chess.engine.popen_uci(python_launcher(cmd.split()))
     if hasattr(engine, "debug"):
         engine.debug(debug)
     return engine

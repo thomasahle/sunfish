@@ -1,14 +1,18 @@
-#!/usr/bin/env pypy3
+#!/bin/sh
+""":"
+# Polyglot header: run with pypy3 when available, else python3 (issue #102).
+# No -u needed: all UCI output is flushed explicitly (tools/uci.py).
+for cmd in pypy3 python3; do
+   command -v "$cmd" > /dev/null && exec "$cmd" "$0" "$@"
+done
+echo "Error: sunfish requires pypy3 or python3" >&2
+exit 1
+":"""
 from __future__ import print_function
 
 import time, math
 from itertools import count
 from collections import namedtuple, defaultdict
-
-# If we could rely on the env -S argument, we could just use "pypy3 -u"
-# as the shebang to unbuffer stdout. But alas we have to do this instead:
-#from functools import partial
-#print = partial(print, flush=True)
 
 version = "sunfish 2023"
 
@@ -480,10 +484,18 @@ while True:
             hist.append(hist[-1].move(Move(i, j, prom)))
 
     elif args[0] == "go":
-        wtime, btime, winc, binc = [int(a) / 1000 for a in args[2::2]]
+        # The times may come in any order and combination, e.g. plain
+        # "go wtime 100 btime 100" for sudden death, or just "go"
+        times = dict(zip(args[1::2], args[2::2]))
+        wtime = int(times.get("wtime", 60000)) / 1000
+        btime = int(times.get("btime", 60000)) / 1000
+        winc = int(times.get("winc", 0)) / 1000
+        binc = int(times.get("binc", 0)) / 1000
         if len(hist) % 2 == 0:
             wtime, winc = btime, binc
         think = min(wtime / 40 + winc, wtime / 2 - 1)
+        if "movetime" in times:
+            think = int(times["movetime"]) / 1000
 
         start = time.time()
         move_str = None

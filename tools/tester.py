@@ -442,10 +442,15 @@ def main():
         logging.basicConfig(level=logging.DEBUG)
 
     async def run():
+        argv = args.args.split()
+        # Windows can't execute .py files directly (issue #113), so run them
+        # through the current Python interpreter.
+        if os.name == "nt" and argv[0].endswith(".py"):
+            argv.insert(0, sys.executable)
         if args.xboard:
-            _, engine = await chess.engine.popen_xboard(args.args.split())
+            _, engine = await chess.engine.popen_xboard(argv)
         else:
-            _transport, engine = await chess.engine.popen_uci(args.args.split())
+            _transport, engine = await chess.engine.popen_uci(argv)
         try:
             await args.func(engine, args)
         finally:
