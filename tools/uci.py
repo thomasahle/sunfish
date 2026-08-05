@@ -77,7 +77,10 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
         # Suggest the expected reply for the GUI to let us ponder on
         print("bestmove", my_pv[0], "ponder", my_pv[1])
     else:
-        print("bestmove", my_pv[0] if my_pv else "(none)")
+        # The root's tp_move entry may have been evicted by the table cap
+        # during a long search; best_move remembers the last fail-high, and
+        # answering (none) would forfeit the game.
+        print("bestmove", my_pv[0] if my_pv else (best_move or "(none)"))
 
 
 def mate_loop(
