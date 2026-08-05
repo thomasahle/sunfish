@@ -100,6 +100,40 @@ tactic only, so a full build takes seconds.
   invariant holds forever. Empirical corroboration cited in comments:
   0 violations in 694,533 killer cutoffs over 1,270 real-game positions.
 
+- **`Sunfish/Lmr.lean`** — Late Move Reductions (commit `58883ea`,
+  sunfish.py lines 370, 386–397: late quiet moves probed at `depth - 2`,
+  a reduced fail low yielded as-is, a reduced fail high re-searched at
+  full depth). All proven sorry-free:
+  - **`boundLmr_spec`**: the honest **interval spec**. No single value
+    function can back both sides of the docstring any more; the sound
+    statement is a *mutually recursive* pair `Vhi`/`Vlo` (`lmrVal`):
+    fail highs are ≤ `Vhi`, fail lows are ≥ `Vlo`, and
+    **`lmrVal_sandwich`** proves `Vlo ≤ negamax ≤ Vhi` pointwise.
+    Two surprises from modeling the merged code (see the module comment):
+    (1) the folklore fail-low target "reducible moves valued one ply
+    shallower" (`negamaxShallow`) is *wrong* — the re-search fall-through
+    yields a deep-value fact while the shallow value has just failed
+    high, so the sound `Vlo` entry is the `min` of the two depths; and
+    (2) fail highs are *not* sound against full `negamax` either — the
+    re-search guard protects only the immediately reduced move, while a
+    parent fail high inherits its children's fail-low (reduced-value)
+    facts recursively, which is why `Vhi`'s children are `Vlo`-valued.
+  - **`lmr_tt_crossing`** + **`bound_no_crossing`**: machine-checked
+    3-position game where the same `(pos, depth)` produces a fail-high
+    report (+10) strictly above a fail-low report (−50) — a `tp_score`
+    entry with `lower > upper`, provably impossible for the unreduced
+    `bound`. MTD-bi's `lower ≤ score ≤ upper` bracket is therefore
+    conditional on the `Vhi − Vlo` gap staying within what
+    `EVAL_ROUGHNESS` and re-probing absorb.
+  - `RedRespectsCaptures` + comments confirm Killer and Stalemate are
+    unaffected: king captures have `val ≥ MATE_LOWER > QS = 40` (never
+    reducible), the killer is pre-loop (structurally never reduced),
+    reduced fail lows are `< gamma` (never reach the `tp_move` store),
+    reduced fail highs store only the full-depth result, and the
+    `-MATE_UPPER` king-loss sentinel is depth-independent
+    (`boundKill_kingGone`/`negamaxDraw_kingGone`), so the stalemate
+    detection still sees exact sentinels from reduced searches.
+
 - **`Sunfish/Tricks.lean`**, the proven parts:
   - `soften_null_window` — the mate-score softening lemma: for a window
     strictly above the mate band (`gamma > ML + 1`, `ML ≥ 0`), testing the
@@ -200,7 +234,9 @@ content:
 | `Game.eval` | `pos.score` (QS collapsed into eval; lines 335–336) |
 | `LOSS = -MATE_UPPER` | `best = -MATE_UPPER` (line 379) |
 | `negamax` | the "true score `s*`" of the docstring (lines 287–290) |
-| `searchMoves` | the `best` loop + cutoff (lines 378–388) |
+| `searchMoves` | the `best` loop + cutoff (lines 378–388; **NOTE**: since commit `58883ea` the real loop also carries LMR — `Bound.lean` models the loop *without* it, which is exact for early/loud moves; the reduction is modeled by `boundLmr`/`searchMovesIdx` in `Sunfish/Lmr.lean`) |
+| `boundLmr`, `red` | the LMR block: `depth >= 3 and i_m >= 5 and val < QS`, reduced probe at `depth - 2`, re-search on fail high (lines 386–397) |
+| `lmrVal` (`Vhi`/`Vlo`) | the interval that replaces the docstring's single `s*` under LMR |
 | `-(bound d m (1 - gamma))` | `-self.bound(pos.move(move), 1 - gamma, depth - 1)` (line 376) |
 | `BoundSpec` | the docstring (lines 287–290) |
 | `NullGame.pass` | `pos.rotate(nullmove=True)` (line 331) |
@@ -255,6 +291,19 @@ check against:
   state whether it serves only deeper (needs `MateDepthMonotone`) or also
   shallower (needs `MateDepthStable`, and should declare itself a
   weakening of `BoundSpec` to mate-band membership).
+- **LMR (`boundLmr_spec`)** — Late Move Reductions weaken `BoundSpec`
+  from point to interval: fail highs are sound against `Vhi`, fail lows
+  against `Vlo`, with `Vlo ≤ negamax ≤ Vhi` (`lmrVal_sandwich`) — and
+  provably *not* against full `negamax` on either side
+  (`lmr_tt_crossing`). TT consistency is margin-conditional: entries can
+  cross (`lower > upper`) by up to the `Vhi − Vlo` gap, which
+  `EVAL_ROUGHNESS` + MTD-bi re-probing must absorb. Killer and Stalemate
+  lemmas are preserved (`RedRespectsCaptures`: king captures are never
+  reducible; the killer is pre-loop; reduced fail lows never store). A PR
+  touching the reduction condition must keep captures un-reducible and
+  keep yielding only *full-depth* results on fail high — dropping the
+  re-search, or yielding a reduced fail high, breaks `boundLmr_spec`'s
+  fail-high leg *and* the killer/stalemate sentinel arguments at once.
 
 ## Prior art
 
