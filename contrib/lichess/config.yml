@@ -1,0 +1,31 @@
+# lichess-bot configuration for sunfish.
+# Copied to /opt/lichess-bot/config.yml by setup.sh, which fills in the token.
+token: "YOUR_TOKEN_HERE"
+url: "https://lichess.org/"
+
+engine:
+  dir: "/opt/sunfish"
+  name: "sunfish.py"
+  working_dir: "/opt/sunfish"
+  protocol: "uci"
+  ponder: true
+  uci_options:
+    # ~100MB of transposition tables: sized for a 1GB free-tier VM.
+    # Raise to 1000000 (~1GB) on a machine with 4GB+.
+    TABLE_SIZE: 100000
+
+challenge:
+  concurrency: 1
+  accept_bot: true
+  variants:
+    - standard
+  time_controls:
+    - bullet
+    - blitz
+    - rapid
+  modes:
+    - casual
+    - rated
+
+matchmaking:
+  allow_matchmaking: false

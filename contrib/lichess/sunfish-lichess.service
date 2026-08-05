@@ -1,0 +1,14 @@
+[Unit]
+Description=Sunfish lichess bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=sunfish
+WorkingDirectory=/opt/lichess-bot
+ExecStart=/opt/lichess-bot/venv/bin/python lichess-bot.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
