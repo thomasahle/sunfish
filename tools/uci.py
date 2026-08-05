@@ -169,17 +169,25 @@ def run(sunfish_module, startpos):
                 if not args:
                     continue
 
-                elif args[0] in ("stop", "quit"):
-                    if go_future.running():
+                elif args[0] in ("stop", "quit", "ponderhit"):
+                    # Check done() rather than running(): the future is still
+                    # pending if "stop" arrives right after "go", and the stop
+                    # must not be lost.
+                    if not go_future.done():
                         if debug:
                             print("Stopping go loop...")
                         do_stop_event.set()
                         go_future.result()
-                    else:
-                        if debug:
-                            print("Go loop not running...")
+                    elif debug:
+                        print("Go loop not running...")
                     if args[0] == "quit":
                         break
+
+                # The UCI spec requires us to answer "isready" even while
+                # searching.
+                elif args[0] == "isready":
+                    print("readyok")
+                    continue
 
                 elif not go_future.done():
                     print(f"Ignoring input {args}. Please call 'stop' first.")
@@ -201,14 +209,6 @@ def run(sunfish_module, startpos):
                 elif args[0] == "setoption":
                     _, uci_key, _, uci_value = args[1:]
                     setattr(sunfish, uci_key, int(uci_value))
-
-                # FIXME: It seems we should reply to "isready" even while thinking.
-                # See: https://talkchess.com/forum3/viewtopic.php?f=7&t=81233&start=10
-                elif args[0] == "isready":
-                    print("readyok")
-
-                elif args[0] == "quit":
-                    break
 
                 elif args[:2] == ["position", "startpos"]:
                     hist = [startpos]
@@ -236,32 +236,56 @@ def run(sunfish_module, startpos):
                     max_depth = 100
                     loop = go_loop
 
-                    if args[1:] == [] or args[1] == "infinite":
-                        pass
+                    # Per the UCI spec the go arguments are key(-value) tokens
+                    # that may come in any order and combination. E.g. a GUI
+                    # may send "go wtime 60000 btime 60000" for sudden death,
+                    # or "go btime 5000 wtime 5000 movestogo 10".
+                    opts = {}
+                    tokens = iter(args[1:])
+                    for tok in tokens:
+                        if tok in ("infinite", "ponder"):
+                            opts[tok] = True
+                        elif tok == "searchmoves":
+                            # All remaining tokens are moves
+                            opts[tok] = list(tokens)
+                        elif tok in ("wtime", "btime", "winc", "binc",
+                                     "movestogo", "depth", "nodes", "mate",
+                                     "movetime", "draw", "perft"):
+                            opts[tok] = int(next(tokens))
 
-                    elif args[1] == "movetime":
-                        movetime = args[2]
-                        think = int(movetime) / 1000
+                    if "movetime" in opts:
+                        think = opts["movetime"] / 1000
 
-                    elif args[1] == "wtime":
-                        wtime, btime, winc, binc = [int(a) / 1000 for a in args[2::2]]
+                    elif "wtime" in opts or "btime" in opts:
+                        wtime = opts.get("wtime", 0) / 1000
+                        btime = opts.get("btime", 0) / 1000
+                        winc = opts.get("winc", 0) / 1000
+                        binc = opts.get("binc", 0) / 1000
                         # we always consider ourselves white, but uci doesn't
                         if len(hist) % 2 == 0:
                             wtime, winc = btime, binc
-                        think = min(wtime / 40 + winc, wtime / 2 - 1)
+                        # Without movestogo, assume the game lasts another
+                        # 40 moves.
+                        movestogo = opts.get("movestogo", 40)
+                        think = min(wtime / movestogo + winc, wtime / 2 - 1)
                         # let's go fast for the first moves
                         if len(hist) < 3:
                             think = min(think, 1)
 
-                    elif args[1] == "depth":
-                        max_depth = int(args[2])
+                    if "depth" in opts:
+                        max_depth = opts["depth"]
 
-                    elif args[1] in ("mate", "draw"):
-                        max_depth = int(args[2])
-                        loop = partial(mate_loop, find_draw=args[1] == "draw")
+                    # We can't ponder, so treat "go ponder" as "go infinite"
+                    # and let "ponderhit"/"stop" end the search.
+                    if "infinite" in opts or "ponder" in opts:
+                        think = 10**6
 
-                    elif args[1] == "perft":
-                        perft(hist[-1], int(args[2]), debug=debug)
+                    if "mate" in opts or "draw" in opts:
+                        max_depth = opts.get("mate", opts.get("draw"))
+                        loop = partial(mate_loop, find_draw="draw" in opts)
+
+                    if "perft" in opts:
+                        perft(hist[-1], opts["perft"], debug=debug)
                         continue
 
                     do_stop_event.clear()

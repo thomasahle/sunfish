@@ -1,0 +1,26 @@
+[project]
+name = "sunfish"
+version = "2023"
+description = "Sunfish: a Python Chess Engine in 111 lines of code"
+requires-python = ">=3.7"
+# The engine itself has no dependencies; these are for the tools/ scripts.
+dependencies = [
+    "chess==1.9.4",
+    "tqdm==4.57.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.20.0",
+    "flake8",
+]
+# For the experimental NNUE engine and its speed tests
+nnue = [
+    "numpy<2",
+    "numba>=0.56.0; platform_machine != 'arm64' and platform_python_implementation == 'CPython'",
+]
+
+[tool.uv]
+# Not a package: install dependencies only, don't try to build/install sunfish itself.
+package = false
