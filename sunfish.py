@@ -327,6 +327,10 @@ class Searcher:
 
         # Generator of moves to search in order.
         # This allows us to define the moves, but only calculate them if needed.
+        # If depth == 0 we only try moves with high intrinsic score (captures and
+        # promotions). Otherwise we do all moves. This is called quiescent search.
+        val_lower = QS - depth * QS_A
+
         def moves():
             # First try not moving at all. We only do this if there is at least one major
             # piece left on the board, since otherwise zugzwangs are too dangerous.
@@ -354,10 +358,6 @@ class Searcher:
             if not killer and depth > 2:
                 self.bound(pos, gamma, depth - 3, can_null=False)
                 killer = self.tp_move.get(pos)
-
-            # If depth == 0 we only try moves with high intrinsic score (captures and
-            # promotions). Otherwise we do all moves. This is called quiescent search.
-            val_lower = QS - depth * QS_A
 
             # Only play the move if it would be included at the current val-limit,
             # since otherwise we'd get search instability.
@@ -424,8 +424,20 @@ class Searcher:
         # all the legal moves. So sunfish may report "mate", but then after more search
         # realize it's not a mate after all. That's fair.
 
-        # This is too expensive to test at depth == 0
-        if depth > 2 and best == -MATE_UPPER:
+        # If the quiescent val-limit never skipped a move (no legal move falls below val_lower), then
+        # exhausting the generator means every legal move was searched and lost the
+        # king, so the mate/stalemate test is sound at ANY depth:
+        # - best == -MATE_UPPER implies the generator was exhausted, since the
+        #   consumption break needs best >= gamma and gamma > -MATE_UPPER here
+        #   (a call with gamma <= -MATE_UPPER is answered by the entry cutoff).
+        # - the futility break always yields a value > -MATE_UPPER first, so it
+        #   cannot leave best == -MATE_UPPER with moves unseen.
+        # - at depth == 0 stand-pat yields pos.score > -MATE_LOWER, so the
+        #   correction still never fires in plain QS nodes.
+        # Without this, a depth <= 2 node above a stalemate returns +MATE_UPPER for
+        # the stalemating move, poisoning tp_move at the root (Qc4?? on lichess).
+        if best == -MATE_UPPER and (depth > 2 or
+                all(pos.value(m) >= val_lower for m in pos.gen_moves())):
             flipped = pos.rotate(nullmove=True)
             # Hopefully this is already in the TT because of null-move
             in_check = self.bound(flipped, MATE_UPPER, 0) == MATE_UPPER
