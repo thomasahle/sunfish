@@ -272,6 +272,10 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
 # Search logic
 ###############################################################################
 
+# Raised inside the search when the wall-clock deadline passes
+class Stop(Exception): pass
+
+
 # lower <= s(pos) <= upper
 Entry = namedtuple("Entry", "lower upper")
 
@@ -282,6 +286,7 @@ class Searcher:
         self.tp_move = {}
         self.history = set()
         self.nodes = 0
+        self.deadline = None
 
     def bound(self, pos, gamma, depth, can_null=True):
         """ Let s* be the "true" score of the sub-tree we are searching.
@@ -289,6 +294,11 @@ class Searcher:
             if gamma >  s* then s* <= r < gamma  (A better upper bound)
             if gamma <= s* then gamma <= r <= s* (A better lower bound) """
         self.nodes += 1
+        # Enforce the time budget inside the search: iteration boundaries can
+        # be seconds apart on slow hardware, this is checked every ~2k nodes.
+        if self.deadline is not None and self.nodes % 2048 == 0 \
+                and time.time() > self.deadline:
+            raise Stop
 
         # Depth <= 0 is QSearch. Here any position is searched as deeply as is needed for
         # calmness, and from this point on there is no difference in behaviour depending on

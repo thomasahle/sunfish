@@ -2,7 +2,7 @@
 
 import re, time
 from concurrent.futures import ThreadPoolExecutor
-from threading import Event, Timer
+from threading import Event
 from functools import partial
 
 print = partial(print, flush=True)
@@ -26,13 +26,21 @@ def parse_move(move_str, white_pov):
     return sunfish.Move(i, j, prom)
 
 
+def stop_softly(searcher, gen):
+    # Yield from the search until the in-search deadline aborts it
+    try:
+        yield from gen
+    except getattr(sunfish, "Stop", ()):
+        pass
+
+
 def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False):
     if debug:
         print(f"Going movetime={max_movetime}, depth={max_depth}")
 
     start = time.time()
     best_move = None
-    for depth, gamma, score, move in searcher.search(hist):
+    for depth, gamma, score, move in stop_softly(searcher, searcher.search(hist)):
         # Our max_depth implementation is a bit wasteful.
         # We never know when we've seen the last at a certain depth
         # before we get to the next one
@@ -82,7 +90,8 @@ def mate_loop(
     debug=False,
 ):
     start = time.time()
-    for d in range(int(max_depth) + 1):
+    try:
+      for d in range(int(max_depth) + 1):
         if find_draw:
             s0 = searcher.bound(hist[-1], 0, d)
             elapsed = time.time() - start
@@ -111,6 +120,8 @@ def mate_loop(
             break
         if stop_event.is_set():
             break
+    except getattr(sunfish, "Stop", ()):
+        pass
     move = searcher.tp_move.get(hist[-1])
     move_str = render_move(move, white_pov=len(hist) % 2 == 1)
     print("bestmove", move_str)
@@ -154,10 +165,8 @@ def run(sunfish_module, startpos):
         # Noop future to get started
         go_future = executor.submit(lambda: None)
         do_stop_event = Event()
-        # Pondering state: the think time to apply when "ponderhit" arrives,
-        # and the timer that stops the search when it runs out.
+        # The think time to apply when "ponderhit" arrives
         ponder_think = None
-        ponder_timer = None
 
         while True:
             try:
@@ -166,8 +175,7 @@ def run(sunfish_module, startpos):
                     continue
 
                 elif args[0] in ("stop", "quit"):
-                    if ponder_timer:
-                        ponder_timer.cancel()
+                    searcher.deadline = 0
                     # Check done() rather than running(): the future is still
                     # pending if "stop" arrives right after "go", and the stop
                     # must not be lost.
@@ -183,10 +191,10 @@ def run(sunfish_module, startpos):
 
                 elif args[0] == "ponderhit":
                     # The predicted move was played, so our clock starts now:
-                    # give the (already running) ponder search its time budget.
+                    # give the (already running) ponder search its time budget,
+                    # enforced by the in-search deadline.
                     if ponder_think and not go_future.done():
-                        ponder_timer = Timer(ponder_think * 2 / 3, do_stop_event.set)
-                        ponder_timer.start()
+                        searcher.deadline = time.time() + ponder_think * 2 / 3
                     continue
 
                 # The UCI spec requires us to answer "isready" even while
@@ -196,8 +204,18 @@ def run(sunfish_module, startpos):
                     continue
 
                 elif not go_future.done():
-                    print(f"Ignoring input {args}. Please call 'stop' first.")
-                    continue
+                    # The previous search may have just printed its bestmove,
+                    # with the thread still winding down for a few more
+                    # microseconds. Commands racing that window (as pondering
+                    # GUIs do) must be processed, not dropped. If the search
+                    # is genuinely still running, the GUI broke protocol:
+                    # stop the search rather than hang.
+                    try:
+                        go_future.result(timeout=1)
+                    except TimeoutError:
+                        do_stop_event.set()
+                        searcher.deadline = 0
+                        go_future.result()
 
                 # Make sure we are really done, and throw any errors that may have
                 # happened in the go loop.
@@ -276,9 +294,10 @@ def run(sunfish_module, startpos):
                         # 40 moves.
                         movestogo = opts.get("movestogo", 40)
                         think = min(wtime / movestogo + winc, wtime / 2 - 1)
-                        # let's go fast for the first moves
-                        if len(hist) < 3:
-                            think = min(think, 1)
+                        # Play the opening quickly: early moves benefit
+                        # least from deep search, and banked time is worth
+                        # more in the middlegame.
+                        think = min(think, 0.1 * len(hist))
 
                     if "depth" in opts:
                         max_depth = opts["depth"]
@@ -297,9 +316,11 @@ def run(sunfish_module, startpos):
                         perft(hist[-1], opts["perft"], debug=debug)
                         continue
 
-                    if ponder_timer:
-                        ponder_timer.cancel()
                     do_stop_event.clear()
+                    # Hard wall-clock cap, checked inside the search itself
+                    # (sunfish.py Searcher.bound), so budgets hold even when
+                    # single iterations run long on slow hardware.
+                    searcher.deadline = time.time() + think if think < 10**5 else None
                     go_future = executor.submit(
                         loop,
                         searcher,
