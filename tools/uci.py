@@ -1,6 +1,7 @@
 # Advanced UCI interface
 
 import re, time
+from random import random
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 from functools import partial
@@ -299,11 +300,12 @@ def run(sunfish_module, startpos):
                         think = min(wtime / movestogo + winc, wtime / 2 - 1)
                         # Play the opening quickly: early moves benefit
                         # least from deep search, and banked time is worth
-                        # more in the middlegame. Opening ONLY: an unscoped
-                        # ramp starved the whole game of clock at long TCs
-                        # (at 15+3 it governed until move ~127; see #95).
-                        if len(hist) < 30:
-                            think = min(think, 0.1 * len(hist))
+                        # more in the middlegame. Opening ONLY (an unscoped
+                        # ramp starved whole games at long TCs; see #95).
+                        # The random() varies the depth reached, giving our
+                        # deterministic engine some opening variety.
+                        if len(hist) < 8:
+                            think = min(think, len(hist) + random())
 
                     if "depth" in opts:
                         max_depth = opts["depth"]
