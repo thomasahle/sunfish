@@ -233,12 +233,19 @@ def run(sunfish_module, startpos):
                             f"option name {attr} type spin default {default} min {lo} max {hi}"
                         )
                     print("option name Ponder type check default false")
+                    if hasattr(sunfish, "TABLE_SIZE"):
+                        # The standard UCI Hash option is in MB; a sunfish
+                        # table entry costs roughly 1KB.
+                        print(f"option name Hash type spin default {sunfish.TABLE_SIZE // 1000} min 1 max 32768")
                     print("uciok")
 
                 elif args[0] == "setoption":
                     _, uci_key, _, uci_value = args[1:]
+                    if uci_key == "Hash" and hasattr(sunfish, "TABLE_SIZE"):
+                        # Standard UCI Hash is in MB, ~1KB per table entry
+                        sunfish.TABLE_SIZE = int(uci_value) * 1000
                     # Skip options we don't store, like "Ponder"
-                    if uci_key in sunfish.opt_ranges:
+                    elif uci_key in sunfish.opt_ranges:
                         setattr(sunfish, uci_key, int(uci_value))
 
                 # Tournament managers reuse the engine process for many games.
