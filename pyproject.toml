@@ -6,7 +6,7 @@ requires-python = ">=3.7"
 # The engine itself has no dependencies; these are for the tools/ scripts.
 dependencies = [
     "chess==1.9.4",
-    "tqdm==4.57.0",
+    "tqdm==4.67.1",
 ]
 
 [dependency-groups]
