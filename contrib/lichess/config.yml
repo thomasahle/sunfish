@@ -30,9 +30,7 @@ challenge:
     - rated
 
 greeting:
-  # Sent in chat when a game starts; also reassures opponents that the
-  # long first-move think (~10s) is thinking, not stalling.
-  hello: "Hi {opponent}! I'm {me}, a tiny open-source Python engine. My first move can take ~10s - just thinking, not stalling. Good luck!"
+  hello: "Hi {opponent}! I'm sunfish, a tiny python chess engine by Thomas D. Ahle. Good luck and have fun!"
   goodbye: "Good game! Play me again any time, or read my source at github.com/thomasahle/sunfish"
   hello_spectators: "Hi! I'm {me}, a tiny open-source Python chess engine (github.com/thomasahle/sunfish)"
   goodbye_spectators: "Thanks for watching!"
