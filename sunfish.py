@@ -432,11 +432,15 @@ class Searcher:
             in_check = self.bound(flipped, MATE_UPPER, 0) == MATE_UPPER
             best = -MATE_LOWER if in_check else 0
 
-        # Table part 2
+        # Table part 2. Never store a crossing (lower > upper) entry: LMR's
+        # gamma-dependent re-search means the two sides can reflect different
+        # effective value functions (formal/Sunfish/Lmr.lean, lmr_tt_crossing
+        # exhibits a real crossing); widen the stale side instead of asserting
+        # a contradiction. Measured at +12 +/- 28 vs storing them.
         if best >= gamma:
-            self.tp_score[pos, depth, can_null] = Entry(best, entry.upper)
+            self.tp_score[pos, depth, can_null] = Entry(best, max(entry.upper, best))
         if best < gamma:
-            self.tp_score[pos, depth, can_null] = Entry(entry.lower, best)
+            self.tp_score[pos, depth, can_null] = Entry(min(entry.lower, best), best)
         if len(self.tp_score) > TABLE_SIZE:
             del self.tp_score[next(iter(self.tp_score))]
 
