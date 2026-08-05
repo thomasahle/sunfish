@@ -219,6 +219,13 @@ def run(sunfish_module, startpos):
                     if uci_key in sunfish.opt_ranges:
                         setattr(sunfish, uci_key, int(uci_value))
 
+                # Tournament managers reuse the engine process for many games.
+                # Start each game with fresh tables: it frees the memory of
+                # finished games, and tournament-testing showed stale
+                # cross-game entries actually cost strength.
+                elif args[0] == "ucinewgame":
+                    searcher = sunfish.Searcher()
+
                 elif args[:2] == ["position", "startpos"]:
                     hist = [startpos]
                     for ply, move in enumerate(args[3:]):

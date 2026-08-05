@@ -380,11 +380,8 @@ class Searcher:
         for move, score in moves():
             best = max(best, score)
             if best >= gamma:
-                # Save the move for pv construction and killer heuristic.
-                # Re-inserting moves the entry to the end of the table, so
-                # frequently updated entries (like the root) survive eviction.
+                # Save the move for pv construction and killer heuristic
                 if move is not None:
-                    self.tp_move.pop(pos, None)
                     self.tp_move[pos] = move
                     if len(self.tp_move) > TABLE_SIZE:
                         del self.tp_move[next(iter(self.tp_move))]
