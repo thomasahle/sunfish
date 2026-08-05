@@ -383,18 +383,17 @@ class Searcher:
                     # so it can't get any better than this.
                     break
 
-                # Late Move Reductions: quiet moves sorted late rarely fail
-                # high, so search them a ply shallower first and re-search
-                # at full depth only if they surprise us. Every node is a
-                # null-window scout node under MTD-bi, so the usual 'don't
-                # reduce PV nodes' exclusion is vacuous here; the hash move
-                # is yielded above and thus never reduced.
-                if depth >= 3 and i_m >= 5 and val < QS:
-                    score = -self.bound(pos.move(move), 1 - gamma, depth - 2)
-                    if score < gamma:
-                        yield move, score
-                        continue
-                yield move, -self.bound(pos.move(move), 1 - gamma, depth - 1)
+                # Late Move Reductions, deterministic: clearly-late, clearly
+                # bad-looking quiet moves are searched one ply shallower. The
+                # reduction depends only on (depth, index, value) - never on
+                # gamma - so the search computes exact fail-soft bounds on a
+                # single value function and stays provably consistent. The
+                # gamma-adaptive re-search variant measured ~16 ELO stronger
+                # but weakens the spec from a point to an interval and lets
+                # transposition entries contradict each other; consistency
+                # was chosen deliberately (formal/README.md).
+                LMR = int(depth >= 4 and i_m >= 8 and val < 0)
+                yield move, -self.bound(pos.move(move), 1 - gamma, depth - 1 - LMR)
 
         # Run through the moves, shortcutting when possible
         best = -MATE_UPPER
@@ -432,15 +431,15 @@ class Searcher:
             in_check = self.bound(flipped, MATE_UPPER, 0) == MATE_UPPER
             best = -MATE_LOWER if in_check else 0
 
-        # Table part 2. Never store a crossing (lower > upper) entry: LMR's
-        # gamma-dependent re-search means the two sides can reflect different
-        # effective value functions (formal/Sunfish/Lmr.lean, lmr_tt_crossing
-        # exhibits a real crossing); widen the stale side instead of asserting
-        # a contradiction. Measured at +12 +/- 28 vs storing them.
+        # Table part 2. With every pruning decision gamma-independent, all
+        # bounds target one value function and entries can never contradict
+        # each other (lower > upper) - the store needs no clamp. Any future
+        # gamma-dependent evaluation choice (e.g. re-search LMR) must
+        # reinstate the clamp and the interval spec; see formal/README.md.
         if best >= gamma:
-            self.tp_score[pos, depth, can_null] = Entry(best, max(entry.upper, best))
+            self.tp_score[pos, depth, can_null] = Entry(best, entry.upper)
         if best < gamma:
-            self.tp_score[pos, depth, can_null] = Entry(min(entry.lower, best), best)
+            self.tp_score[pos, depth, can_null] = Entry(entry.lower, best)
         if len(self.tp_score) > TABLE_SIZE:
             del self.tp_score[next(iter(self.tp_score))]
 
