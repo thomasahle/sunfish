@@ -237,7 +237,7 @@ theorem extended_value_not_key_independent :
   have h0 := h 0 true false ()
   simp [negamaxExt, recaptureCounterexample, foldMax, LOSS, MATE_UPPER] at h0
 
-/-! ### (e) The futility yield  (STATED)
+/-! ### (e) The futility yield  (DISCHARGED -- see `boundFut_spec` below)
 
 sunfish.py lines 360-374: at `depth ≤ 1`, moves come in decreasing order
 of `pos.value(move)`, and once `pos.score + val < gamma` the child search
@@ -272,7 +272,11 @@ structure FutGame extends Game where
   val : Pos → Pos → Int
 
 /-- **FutilityOK**: the static estimate dominates the true child value at
-the futility depths, so a pruned move only ever under-promises. -/
+the futility depths, so a pruned move only ever under-promises.
+HISTORICAL: kept for reference -- this is no longer a hypothesis.  Its
+only instance the search consumes (`d = 0`) is discharged as an
+*equality* by the score identity (`futilityOK_discharged` below), and
+`boundFut_spec` is now proven without it. -/
 def FutilityOK (G : FutGame) : Prop :=
   ∀ (d : Nat) (p : G.Pos), ∀ m ∈ G.moves p,
     -(negamax G.toGame d m) ≤ G.eval p + G.val p m
@@ -306,25 +310,225 @@ def boundFut (G : FutGame) : Nat → G.Pos → Int → Int
   | d + 2, p, gamma =>
     searchMoves gamma (fun m => -(boundFut G (d + 1) m (1 - gamma))) (G.moves p) LOSS
 
-/-- Futility-pruned search is fail-soft correct ONLY under `FutilityOK`
-(fail-low estimates) and `FutilityMateOK` (the fail-high `MATE_UPPER`
-yield); the in-band window makes the `MATE_UPPER` yield always a fail-high
-(cf. the window discussion in `Sunfish/Stalemate.lean`).
+/-! #### FutilityOK, DISCHARGED
 
-Proof sketch (`sorry`d): induction on depth as in `bound_spec`.  At depth
-1 the per-move clause required by the loop invariant splits three ways:
-a futile quiet move reports `eval p + val p m < gamma` and `FutilityOK`
-gives `w m ≤ f m`, exactly the fail-low clause; a futile king capture
-reports `MATE_UPPER ≥ gamma` and `FutilityMateOK` gives `f m ≤ w m`, the
-fail-high clause; a non-futile move is an ordinary (exact) depth-0 child.
-The only new machinery needed is a variant of `searchMoves_spec` whose
-per-child hypothesis is restricted to members of the move list, since
-`FutilityOK` speaks only about actual moves. -/
-theorem boundFut_spec (G : FutGame) (hF : FutilityOK G) (hFM : FutilityMateOK G) :
+The maintainer's observation: `FutilityOK` is not a hypothesis at all --
+it is a theorem, once the model records how sunfish actually builds child
+positions.  `pos.move(move)` computes the child's score *incrementally*:
+
+    child.score = -(pos.score + pos.value(move))        (score identity)
+
+This is literal in sunfish (`Position.move` ends with
+`Position(...).rotate()`, negating the accumulated `score + value`), and
+the comment at lines 365-367 -- `pos.score + val < gamma  ===
+-(pos.score + val) >= 1 - gamma` -- is exactly this identity applied to
+the futility test.  `ValGame` adds the identity as a structural property:
+model-faithful, not an assumption.
+
+With it, the futility yield is *not an estimate*:
+
+1. `pos.score + val < gamma` is integer-equivalent to
+   `child.score ≥ 1 - gamma` -- the child's stand-pat meets its window.
+2. At `depth ≤ 1` the child is searched at depth 0, where stand-pat is
+   yielded FIRST; by (1) it fails high immediately, and fail-soft returns
+   exactly `child.score = -(pos.score + val)`.  So the parent's yield
+   `pos.score + val` equals *exactly* what the search would have
+   returned (`futilityOK_discharged` below is an equality, not a `≤`).
+3. The child's true QS value is ≥ its stand-pat (stand-pat is always
+   among the options), so the yield upper-bounds the move's true value --
+   precisely the direction a fail-low report needs.  (A child TT hit may
+   return a different number, but with the same fail direction, bounding
+   the same function.)
+4. The `break` after the futility yield is covered by sort order: the
+   remaining moves have smaller `val`, hence smaller estimates, all
+   upper-bounded by the yielded one (our model yields them all, which is
+   equivalent for the fail-low facts).
+
+Note the fine print made explicit by the model: the *quantified*
+`FutilityOK` (∀ depths) is not dischargeable -- plain `negamax` at
+`d ≥ 1` has no stand-pat option, so "true value ≥ stand-pat" is a QS
+property.  But the search only ever consumes the `d = 0` instance (the
+futility zone searches children at depth 0), and *that* instance is the
+score identity on the nose.  The old statement over-required.
+
+Contrast with LMR (`Sunfish/Lmr.lean`): futility's shortcut provably
+one-side-bounds the SAME value function the full search targets -- hence
+a single-function `BoundSpec` and no interval; LMR's reduced value is
+incomparable to the full value -- hence the `Vlo`/`Vhi` interval and the
+TT crossing.  `FutilityMateOK` (the `val ≥ MATE_LOWER` king-capture
+bypass of line 371) remains a hypothesis as before: it asserts a fact
+about king captures, not about the score arithmetic. -/
+
+/-- A `FutGame` whose evaluation is incremental, as sunfish's really is:
+the child of `p` by a move valued `val p m` evaluates to
+`-(eval p + val p m)` (the board is rotated, hence the negation). -/
+structure ValGame extends FutGame where
+  score_identity : ∀ (p m : Pos), m ∈ moves p → eval m = -(eval p + val p m)
+
+/-- **The old `FutilityOK` hypothesis, discharged as an equality** at the
+depth where futility actually fires: the static estimate IS the depth-0
+child search result, exactly. -/
+theorem futilityOK_discharged (G : ValGame) :
+    ∀ (p : G.Pos), ∀ m ∈ G.toFutGame.toGame.moves p,
+      -(negamax G.toFutGame.toGame 0 m)
+        = G.toFutGame.toGame.eval p + G.toFutGame.val p m := by
+  intro p m hm
+  have hid := G.score_identity p m hm
+  have hn : negamax G.toFutGame.toGame 0 m = G.toFutGame.toGame.eval m := rfl
+  omega
+
+/-- `searchMoves_spec` with the per-child hypothesis restricted to actual
+members of the move list (the score identity only speaks about legal
+moves). -/
+theorem searchMoves_spec_mem {α : Type _} (gamma : Int) (f w : α → Int) :
+    ∀ (ms : List α),
+      (∀ m ∈ ms, (gamma ≤ f m → f m ≤ w m) ∧ (f m < gamma → w m ≤ f m)) →
+      ∀ (best acc : Int),
+      (gamma ≤ best → best ≤ acc) →
+      (best < gamma → acc ≤ best) →
+      (gamma ≤ searchMoves gamma f ms best →
+        searchMoves gamma f ms best ≤ foldMax w ms acc) ∧
+      (searchMoves gamma f ms best < gamma →
+        foldMax w ms acc ≤ searchMoves gamma f ms best) := by
+  intro ms
+  induction ms with
+  | nil =>
+    intro _ best acc h1 h2
+    simp only [searchMoves, foldMax]
+    exact ⟨h1, h2⟩
+  | cons m ms ih =>
+    intro hchild best acc h1 h2
+    have hm1 := (hchild m (by simp)).1
+    have hm2 := (hchild m (by simp)).2
+    simp only [searchMoves, foldMax]
+    by_cases hcut : gamma ≤ max best (f m)
+    · rw [if_pos hcut]
+      have hrest := foldMax_ge_init w ms (max acc (w m))
+      constructor
+      · intro _
+        by_cases hf : gamma ≤ f m
+        · have := hm1 hf
+          by_cases hb : gamma ≤ best
+          · have := h1 hb; omega
+          · omega
+        · have hb : gamma ≤ best := by omega
+          have := h1 hb
+          omega
+      · intro hlt; omega
+    · rw [if_neg hcut]
+      have hf : f m < gamma := by omega
+      have hb : best < gamma := by omega
+      have hwm := hm2 hf
+      have hacc := h2 hb
+      exact ih (fun x hx => hchild x (by simp [hx])) (max best (f m)) (max acc (w m))
+        (fun hge => absurd hge hcut)
+        (fun _ => by omega)
+
+/-- **Futility-pruned search satisfies `BoundSpec` -- proven, with no
+`FutilityOK` hypothesis.**  Single value function, no interval: the
+futility yield provably one-side-bounds the same `negamax` the full
+search targets.  Only `FutilityMateOK` (line 371's king-capture bypass)
+and the in-band window (which makes the `MATE_UPPER` yield always a
+fail-high; cf. `Sunfish/Stalemate.lean`) remain as hypotheses. -/
+theorem boundFut_spec (G : ValGame) (hFM : FutilityMateOK G.toFutGame) :
     ∀ (d : Nat) (p : G.Pos) (gamma : Int),
       -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
-      BoundSpec G.toGame d p gamma (boundFut G d p gamma) := by
-  sorry
+      BoundSpec G.toFutGame.toGame d p gamma (boundFut G.toFutGame d p gamma) := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 50710 := rfl
+  intro d
+  induction d with
+  | zero =>
+    intro p gamma _ _
+    refine ⟨fun _ => ?_, fun _ => ?_⟩ <;> (simp only [boundFut, negamax]; omega)
+  | succ d ih =>
+    intro p gamma hg1 hg2
+    have hw1 : -MATE_UPPER < 1 - gamma := by omega
+    have hw2 : 1 - gamma ≤ MATE_UPPER := by omega
+    cases d with
+    | zero =>
+      -- Depth 1: the futility zone.  Children are depth-0 (= stand-pat)
+      -- searches, so the score identity makes every futile yield exact.
+      have hchild : ∀ m ∈ G.toFutGame.toGame.moves p,
+          (gamma ≤ (if G.toFutGame.toGame.eval p + G.toFutGame.val p m < gamma then
+              (if G.toFutGame.val p m < MATE_LOWER then
+                G.toFutGame.toGame.eval p + G.toFutGame.val p m
+              else MATE_UPPER)
+            else -(G.toFutGame.toGame.eval m)) →
+            (if G.toFutGame.toGame.eval p + G.toFutGame.val p m < gamma then
+              (if G.toFutGame.val p m < MATE_LOWER then
+                G.toFutGame.toGame.eval p + G.toFutGame.val p m
+              else MATE_UPPER)
+            else -(G.toFutGame.toGame.eval m)) ≤ -(G.toFutGame.toGame.eval m)) ∧
+          ((if G.toFutGame.toGame.eval p + G.toFutGame.val p m < gamma then
+              (if G.toFutGame.val p m < MATE_LOWER then
+                G.toFutGame.toGame.eval p + G.toFutGame.val p m
+              else MATE_UPPER)
+            else -(G.toFutGame.toGame.eval m)) < gamma →
+            -(G.toFutGame.toGame.eval m) ≤
+            (if G.toFutGame.toGame.eval p + G.toFutGame.val p m < gamma then
+              (if G.toFutGame.val p m < MATE_LOWER then
+                G.toFutGame.toGame.eval p + G.toFutGame.val p m
+              else MATE_UPPER)
+            else -(G.toFutGame.toGame.eval m))) := by
+        intro m hm
+        have hid := G.score_identity p m hm
+        by_cases hfut : G.toFutGame.toGame.eval p + G.toFutGame.val p m < gamma
+        · rw [if_pos hfut]
+          by_cases hq : G.toFutGame.val p m < MATE_LOWER
+          · -- Futile quiet move: the yield is exactly -(eval child).
+            rw [if_pos hq]
+            constructor
+            · intro hge; omega
+            · intro _; omega
+          · -- Futile king capture: the exact-sentinel bypass (line 371).
+            rw [if_neg hq]
+            have hmate := hFM 0 p m hm (by omega)
+            have hn : negamax G.toFutGame.toGame 0 m = G.toFutGame.toGame.eval m := rfl
+            constructor
+            · intro _; omega
+            · intro hlt; omega
+        · -- Non-futile: an exact depth-0 child.
+          rw [if_neg hfut]
+          exact ⟨fun _ => Int.le_refl _, fun _ => Int.le_refl _⟩
+      have h := searchMoves_spec_mem gamma
+        (fun m =>
+          if G.toFutGame.toGame.eval p + G.toFutGame.val p m < gamma then
+            (if G.toFutGame.val p m < MATE_LOWER then
+              G.toFutGame.toGame.eval p + G.toFutGame.val p m
+            else MATE_UPPER)
+          else -(G.toFutGame.toGame.eval m))
+        (fun m => -(G.toFutGame.toGame.eval m))
+        (G.toFutGame.toGame.moves p) hchild LOSS LOSS
+        (fun _ => Int.le_refl _) (fun _ => Int.le_refl _)
+      simp only [BoundSpec, boundFut, negamax]
+      exact h
+    | succ d' =>
+      -- Depth d'+2: the ordinary loop, exactly as in `bound_spec`.
+      have hchild : ∀ m : G.Pos,
+          (gamma ≤ -(boundFut G.toFutGame (d' + 1) m (1 - gamma)) →
+            -(boundFut G.toFutGame (d' + 1) m (1 - gamma))
+              ≤ -(negamax G.toFutGame.toGame (d' + 1) m)) ∧
+          (-(boundFut G.toFutGame (d' + 1) m (1 - gamma)) < gamma →
+            -(negamax G.toFutGame.toGame (d' + 1) m)
+              ≤ -(boundFut G.toFutGame (d' + 1) m (1 - gamma))) := by
+        intro m
+        have h1 := (ih m (1 - gamma) hw1 hw2).1
+        have h2 := (ih m (1 - gamma) hw1 hw2).2
+        constructor
+        · intro hge
+          have := h2 (by omega)
+          omega
+        · intro hlt
+          have := h1 (by omega)
+          omega
+      have h := searchMoves_spec gamma
+        (fun m => -(boundFut G.toFutGame (d' + 1) m (1 - gamma)))
+        (fun m => -(negamax G.toFutGame.toGame (d' + 1) m))
+        hchild (G.toFutGame.toGame.moves p) LOSS LOSS
+        (fun _ => Int.le_refl _) (fun _ => Int.le_refl _)
+      simp only [BoundSpec, boundFut, negamax]
+      simpa only [negamax] using h
 
 /-! ### (f) Depth-independent mate entries  (STATED + one proven lemma)
 
