@@ -484,18 +484,12 @@ while True:
             hist.append(hist[-1].move(Move(i, j, prom)))
 
     elif args[0] == "go":
-        # The times may come in any order and combination, e.g. plain
-        # "go wtime 100 btime 100" for sudden death, or just "go"
-        times = dict(zip(args[1::2], args[2::2]))
-        wtime = int(times.get("wtime", 60000)) / 1000
-        btime = int(times.get("btime", 60000)) / 1000
-        winc = int(times.get("winc", 0)) / 1000
-        binc = int(times.get("binc", 0)) / 1000
-        if len(hist) % 2 == 0:
-            wtime, winc = btime, binc
-        think = min(wtime / 40 + winc, wtime / 2 - 1)
-        if "movetime" in times:
-            think = int(times["movetime"]) / 1000
+        # The times may come in any order and combination, e.g. "go wtime 100 btime 100"
+        times = dict(zip(args[1::2], map(int, args[2::2])))
+        side = "wb"[len(hist) % 2 == 0]
+        wtime, winc = times.get(side + "time", 60000), times.get(side + "inc", 0)
+        think = min(wtime / 40 + winc, wtime / 2 - 1000)
+        think = times.get("movetime", think) / 1000
 
         start = time.time()
         move_str = None
