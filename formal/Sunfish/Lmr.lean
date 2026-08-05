@@ -53,15 +53,19 @@ between".  Neither side individually brackets `negamax` any more --
 report strictly exceeds a fail-low report at the same `(pos, depth)`,
 which `bound_no_crossing` shows is impossible for the unreduced search.
 
-Consequences for the transposition table (deliverable 3): `tp_score`
-entries now mix lower bounds on `Vhi` with upper bounds on `Vlo`, so an
-entry with `entry.lower > entry.upper` is possible exactly when
-`Vlo < Vhi` at that key.  sunfish's MTD-bi consistency reasoning
+Consequences for the transposition table: `tp_score` entries now mix
+lower bounds on `Vhi` with upper bounds on `Vlo`, so crossing REPORTS
+(`fail-high value > fail-low value` at the same key) are possible exactly
+when `Vlo < Vhi` there.  sunfish's MTD-bi consistency reasoning
 (sunfish.py lines 449-461: `lower <= score <= upper`) becomes conditional
 on the `Vhi - Vlo` gap staying within what `EVAL_ROUGHNESS` and the
 re-probing loop absorb: the binary search still terminates (each probe
 still tightens the side it reported), but the bracket it maintains is
-around the interval, not around a single true value.
+around the interval, not around a single true value.  Since commit
+2c95ab0 the store CLAMPS (widening the stale side), so a crossing can no
+longer be *stored* -- `Sunfish/TableClamp.lean` proves the clamp keeps
+every entry an honest interval claim (`IntervalTableOK`) and non-crossing
+by construction (`clamp_no_crossing`).
 
 KillerIsKingCapture and the stalemate correction are UNAFFECTED:
 
@@ -454,11 +458,14 @@ theorem lmr_fail_high : boundLmr LG lred 2 LPos.X (-60) = 10 := by decide
 theorem lmr_fail_low : boundLmr LG lred 2 LPos.X 0 = -50 := by decide
 
 /-- **TT crossing, machine-checked**: the same position and depth yields
-a fail-high report (a stored `lower`) strictly ABOVE a fail-low report
-(a stored `upper`).  `TableOK`-style reasoning about `tp_score` is
-therefore only valid up to the `Vhi - Vlo` gap; MTD-bi's bracket
-`lower ≤ score ≤ upper` becomes conditional on that gap staying within
-what `EVAL_ROUGHNESS` and re-probing absorb. -/
+a fail-high report (a would-be stored `lower`) strictly ABOVE a fail-low
+report (a would-be stored `upper`).  Point-`TableOK` reasoning about
+`tp_score` is therefore unachievable under LMR; MTD-bi's bracket
+`lower ≤ score ≤ upper` becomes conditional on the `Vhi - Vlo` gap
+staying within what `EVAL_ROUGHNESS` and re-probing absorb.  (Since
+commit 2c95ab0 the store clamp prevents the crossing from being STORED --
+see `Sunfish/TableClamp.lean` -- but the crossing reports themselves, as
+exhibited here, remain.) -/
 theorem lmr_tt_crossing :
     ∃ (glo ghi : Int),
       ghi ≤ boundLmr LG lred 2 LPos.X ghi ∧

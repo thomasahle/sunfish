@@ -120,11 +120,15 @@ tactic only, so a full build takes seconds.
     facts recursively, which is why `Vhi`'s children are `Vlo`-valued.
   - **`lmr_tt_crossing`** + **`bound_no_crossing`**: machine-checked
     3-position game where the same `(pos, depth)` produces a fail-high
-    report (+10) strictly above a fail-low report (−50) — a `tp_score`
-    entry with `lower > upper`, provably impossible for the unreduced
-    `bound`. MTD-bi's `lower ≤ score ≤ upper` bracket is therefore
-    conditional on the `Vhi − Vlo` gap staying within what
-    `EVAL_ROUGHNESS` and re-probing absorb.
+    report (+10) strictly above a fail-low report (−50) — provably
+    impossible for the unreduced `bound`. MTD-bi's
+    `lower ≤ score ≤ upper` bracket is therefore conditional on the
+    `Vhi − Vlo` gap staying within what `EVAL_ROUGHNESS` and re-probing
+    absorb. Post-`2c95ab0`, the accurate statement is: crossing
+    *reports* still occur (this theorem), but crossing *entries* can no
+    longer be stored (`clamp_no_crossing`), and stored entries remain
+    honest interval claims (`IntervalTableOK`) — see
+    `Sunfish/TableClamp.lean`.
   - `RedRespectsCaptures` + comments confirm Killer and Stalemate are
     unaffected: king captures have `val ≥ MATE_LOWER > QS = 40` (never
     reducible), the killer is pre-loop (structurally never reduced),
@@ -133,6 +137,27 @@ tactic only, so a full build takes seconds.
     `-MATE_UPPER` king-loss sentinel is depth-independent
     (`boundKill_kingGone`/`negamaxDraw_kingGone`), so the stalemate
     detection still sees exact sentinels from reduced searches.
+
+- **`Sunfish/TableClamp.lean`** — the clamped store (commit `2c95ab0`,
+  sunfish.py lines 435–443: fail-high stores
+  `Entry(best, max(entry.upper, best))`, fail-low
+  `Entry(min(entry.lower, best), best)`). All proven sorry-free:
+  - **`IntervalTableOK`** — the honest post-LMR table invariant: every
+    stored entry satisfies `lower ≤ Vhi(pos, depth)` and
+    `Vlo(pos, depth) ≤ upper` (the `lmrVal` pair), the interval weakening
+    of `TableOK` exactly parallel to how `boundLmr_spec` weakens
+    `bound_spec`.
+  - **`intervalTableOK_clampHigh` / `intervalTableOK_clampLow`** — the
+    clamped store *preserves* the invariant, given only that the
+    incoming bound is sound on its own side (exactly what
+    `boundLmr_spec` returns). Key step: when a new lower `L` exceeds
+    the stored upper `U`, the clamped entry `(L, max U L)` satisfies
+    both sides — `L ≤ Vhi` from the new bound, `Vlo ≤ U ≤ max U L` from
+    the old entry; symmetric on the other side.
+  - **`clamp_no_crossing`** + **`NoCrossingTable`/`noCrossingTable_store`**
+    — clamped entries satisfy `lower ≤ upper` by construction: with the
+    clamp, the search-level crossing phenomenon remains
+    (`lmr_tt_crossing`) but the table-level contradiction is gone.
 
 - **`Sunfish/Tricks.lean`**, the proven parts:
   - `soften_null_window` — the mate-score softening lemma: for a window
@@ -146,6 +171,20 @@ tactic only, so a full build takes seconds.
   - `mateEntry_deep_service` — `MateDepthMonotone` lifted to arbitrary
     deeper depths: exactly what serving a stored mate entry at a *deeper*
     query depth requires.
+  - **`boundTT_spec` — the transposition-table invariant, proven** (the
+    sorry discharged): every stored `(lower, upper)` brackets
+    `negamax d p` — literally the comment at sunfish.py line 275
+    (`# lower <= s(pos) <= upper`). Lookups (lines 309–310) are sound
+    *because* every exit re-establishes the invariant; the proof is
+    `bound_spec` plus invariant-threading through the state-passing loop
+    (`searchMovesTT_spec`), with `tableOK_store`/`tablePart2_ok` for the
+    store step and `negamax_bounded` discharging the fresh-entry default
+    (the easily-missed `Bounded` side condition, without which
+    `Entry(-MATE_UPPER, MATE_UPPER)` is not a valid bracket and the
+    theorem is false). This is the **point-spec version, sound for the
+    pre-LMR search model** (`Bound.lean`'s loop); under LMR the point
+    invariant is unachievable and the honest story is
+    `Sunfish/TableClamp.lean`, below.
   - **`boundFut_spec` + `futilityOK_discharged` — `FutilityOK`
     discharged: from stated hypothesis to theorem.** `ValGame` records
     sunfish's *score identity* — `pos.move(move)` builds the child with
@@ -184,16 +223,6 @@ content:
   routine given `bound_spec`'s machinery and is `sorry`d; the deliverable is
   the named hypothesis. (Sunfish's extra `depth - 3` reduction would further
   need a depth-stability hypothesis, deliberately not modeled.)
-
-- **`TableOK` / `boundTT_spec`** — the transposition-table invariant:
-  every stored `(lower, upper)` brackets `negamax d p`. This is literally
-  the comment at sunfish.py line 275 (`# lower <= s(pos) <= upper`); lookups
-  (lines 309–310) are sound *because* every exit re-establishes it (lines
-  415–418). The statement includes the easily-missed side condition
-  `Bounded` (all evals in `[-MATE_UPPER, MATE_UPPER]`), without which the
-  fresh entry `Entry(-MATE_UPPER, MATE_UPPER)` of line 308 is not a valid
-  bracket and the theorem is false. Proof `sorry`d (it is `bound_spec` plus
-  invariant-threading through the state-passing loop).
 
 - **`FutilityMateOK`** — the one hypothesis left on the futility yield:
   the `else MATE_UPPER` king-capture bypass at line 371 can fail *high*
@@ -253,7 +282,8 @@ content:
 | `-(bound d m (1 - gamma))` | `-self.bound(pos.move(move), 1 - gamma, depth - 1)` (line 376) |
 | `BoundSpec` | the docstring (lines 287–290) |
 | `NullGame.pass` | `pos.rotate(nullmove=True)` (line 331) |
-| `Table`, `TableOK` | `tp_score`, `Entry` (lines 275–276, 305–310, 414–420) |
+| `Table`, `TableOK`, `tablePart2` | `tp_score`, `Entry`, lookup + point store (lines 275–276, 305–310, and the pre-`2c95ab0` Table part 2) |
+| `clampHigh`, `clampLow`, `IntervalTableOK` | the clamped Table part 2 (`2c95ab0`, lines 435–443) and the interval invariant it maintains |
 | `negamaxDraw`, `boundStale`, `staleFix` | king-capture normalization + stalemate correction (lines 298–303, 388–412) |
 | `inCheckB`, `CheckProbeOK` | the null-position check probe `bound(flipped, MATE_UPPER, 0) == MATE_UPPER` (lines 409–411) |
 | `MateValuesAreKingCaptures` | the requirement of lines 398–401 and the caveat of lines 403–405 |
@@ -312,6 +342,13 @@ The later files add further named conditions to check against:
   state whether it serves only deeper (needs `MateDepthMonotone`) or also
   shallower (needs `MateDepthStable`, and should declare itself a
   weakening of `BoundSpec` to mate-band membership).
+- **`IntervalTableOK`** — a PR touching Table part 2 (the store at lines
+  435–443) must preserve `IntervalTableOK`: every stored lower must be a
+  sound `Vhi` claim and every stored upper a sound `Vlo` claim, and the
+  entry must stay non-crossing (`clamp_no_crossing`). Reverting the clamp
+  reintroduces storable contradictions (`lmr_tt_crossing` is the
+  witness); "fixing" it by discarding the old side instead of widening
+  would break the preservation lemmas' use of the *old* entry's validity.
 - **LMR (`boundLmr_spec`)** — Late Move Reductions weaken `BoundSpec`
   from point to interval: fail highs are sound against `Vhi`, fail lows
   against `Vlo`, with `Vlo ≤ negamax ≤ Vhi` (`lmrVal_sandwich`) — and
