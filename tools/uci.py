@@ -2,7 +2,7 @@
 
 import re, time
 from concurrent.futures import ThreadPoolExecutor
-from threading import Event
+from threading import Event, Timer
 from functools import partial
 
 print = partial(print, flush=True)
@@ -65,7 +65,11 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
     # we are in "go infinite" since it's simply translated to "go depth 100".
 
     my_pv = pv(searcher, hist[-1], include_scores=False)
-    print("bestmove", my_pv[0] if my_pv else "(none)")
+    if len(my_pv) > 1:
+        # Suggest the expected reply for the GUI to let us ponder on
+        print("bestmove", my_pv[0], "ponder", my_pv[1])
+    else:
+        print("bestmove", my_pv[0] if my_pv else "(none)")
 
 
 def mate_loop(
@@ -150,6 +154,10 @@ def run(sunfish_module, startpos):
         # Noop future to get started
         go_future = executor.submit(lambda: None)
         do_stop_event = Event()
+        # Pondering state: the think time to apply when "ponderhit" arrives,
+        # and the timer that stops the search when it runs out.
+        ponder_think = None
+        ponder_timer = None
 
         while True:
             try:
@@ -157,7 +165,9 @@ def run(sunfish_module, startpos):
                 if not args:
                     continue
 
-                elif args[0] in ("stop", "quit", "ponderhit"):
+                elif args[0] in ("stop", "quit"):
+                    if ponder_timer:
+                        ponder_timer.cancel()
                     # Check done() rather than running(): the future is still
                     # pending if "stop" arrives right after "go", and the stop
                     # must not be lost.
@@ -170,6 +180,14 @@ def run(sunfish_module, startpos):
                         print("Go loop not running...")
                     if args[0] == "quit":
                         break
+
+                elif args[0] == "ponderhit":
+                    # The predicted move was played, so our clock starts now:
+                    # give the (already running) ponder search its time budget.
+                    if ponder_think and not go_future.done():
+                        ponder_timer = Timer(ponder_think * 2 / 3, do_stop_event.set)
+                        ponder_timer.start()
+                    continue
 
                 # The UCI spec requires us to answer "isready" even while
                 # searching.
@@ -192,11 +210,14 @@ def run(sunfish_module, startpos):
                         print(
                             f"option name {attr} type spin default {default} min {lo} max {hi}"
                         )
+                    print("option name Ponder type check default false")
                     print("uciok")
 
                 elif args[0] == "setoption":
                     _, uci_key, _, uci_value = args[1:]
-                    setattr(sunfish, uci_key, int(uci_value))
+                    # Skip options we don't store, like "Ponder"
+                    if uci_key in sunfish.opt_ranges:
+                        setattr(sunfish, uci_key, int(uci_value))
 
                 elif args[:2] == ["position", "startpos"]:
                     hist = [startpos]
@@ -255,8 +276,9 @@ def run(sunfish_module, startpos):
                     if "depth" in opts:
                         max_depth = opts["depth"]
 
-                    # We can't ponder, so treat "go ponder" as "go infinite"
-                    # and let "ponderhit"/"stop" end the search.
+                    # A ponder search runs as "infinite", but remembers the
+                    # think time computed above so "ponderhit" can apply it.
+                    ponder_think = think if "ponder" in opts else None
                     if "infinite" in opts or "ponder" in opts:
                         think = 10**6
 
@@ -268,6 +290,8 @@ def run(sunfish_module, startpos):
                         perft(hist[-1], opts["perft"], debug=debug)
                         continue
 
+                    if ponder_timer:
+                        ponder_timer.cancel()
                     do_stop_event.clear()
                     go_future = executor.submit(
                         loop,
