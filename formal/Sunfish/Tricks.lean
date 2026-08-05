@@ -61,11 +61,6 @@ reduction needs an additional depth-stability hypothesis that is orthogonal
 to the zugzwang question being named here.
 -/
 
-/-- A `Game` together with a pass ("null") move:
-`pass p` = `pos.rotate(nullmove=True)` (sunfish.py line 331). -/
-structure NullGame extends Game where
-  pass : Pos → Pos
-
 /-- **The null-move hypothesis**: in every non-terminal position, some legal
 move scores at least as well (for us) as passing, i.e. the opponent's value
 after some real move is at most their value after the pass.  Zugzwang is
@@ -131,10 +126,6 @@ lines 419-420, only ever *forgets* entries, which trivially preserves
 def Table.store {G : Game} [DecidableEq G.Pos] (t : Table G) (d : Nat)
     (p : G.Pos) (e : Int × Int) : Table G :=
   ⟨fun d' p' => if d' = d ∧ p' = p then some e else t.find d' p'⟩
-
-/-- All static evaluations live in sunfish's score band. -/
-def Bounded (G : Game) : Prop :=
-  ∀ p, -MATE_UPPER ≤ G.eval p ∧ G.eval p ≤ MATE_UPPER
 
 /-- The move loop of `boundTT`, threading the table through the child
 searches (state-passing version of `searchMoves`). -/
@@ -245,5 +236,179 @@ theorem extended_value_not_key_independent :
   intro h
   have h0 := h 0 true false ()
   simp [negamaxExt, recaptureCounterexample, foldMax, LOSS, MATE_UPPER] at h0
+
+/-! ### (e) The futility yield  (STATED)
+
+sunfish.py lines 360-374: at `depth ≤ 1`, moves come in decreasing order
+of `pos.value(move)`, and once `pos.score + val < gamma` the child search
+is replaced by the STATIC ESTIMATE `pos.score + val` (and the loop breaks;
+all later moves have smaller `val`).
+
+The estimate is below `gamma`, so it is only ever a *fail-low* report, and
+`BoundSpec` demands of a fail-low report exactly one thing: that it be an
+upper bound on the move's true value,
+
+    -(negamax d child)  ≤  pos.score + val.
+
+That inequality is `FutilityOK`.  It is sunfish's own justification read
+off the comment at lines 365-367 ("the opponent will for sure just stand
+pat"): after our move the opponent's value is at least their stand-pat
+score `-(pos.score + val)`, hence ours is at most `pos.score + val`.  The
+hypothesis can fail exactly where stand-pat reasoning fails -- e.g. when
+the opponent is in check after the move (they cannot "stand pat" out of a
+king capture), which is why futility is confined to the QS-adjacent depths
+where `eval` is trusted to be a stand-pat bound.
+
+The special case at line 371 (`pos.score + val if val < MATE_LOWER else
+MATE_UPPER`) routes king captures around the estimate: they must report
+the exact sentinel `MATE_UPPER` (the requirement of sunfish.py lines
+398-401; see `Sunfish/Stalemate.lean`).  It is also the one futility yield
+that can fail HIGH, so its soundness is a separate named hypothesis,
+`FutilityMateOK`. -/
+
+/-- A `Game` together with sunfish's move valuation `pos.value(move)`
+(indexed here by the child position the move reaches). -/
+structure FutGame extends Game where
+  val : Pos → Pos → Int
+
+/-- **FutilityOK**: the static estimate dominates the true child value at
+the futility depths, so a pruned move only ever under-promises. -/
+def FutilityOK (G : FutGame) : Prop :=
+  ∀ (d : Nat) (p : G.Pos), ∀ m ∈ G.moves p,
+    -(negamax G.toGame d m) ≤ G.eval p + G.val p m
+
+/-- **FutilityMateOK**: a move valued as a king capture
+(`val ≥ MATE_LOWER`) really wins everything -- the fail-high side of the
+`else MATE_UPPER` yield of line 371. -/
+def FutilityMateOK (G : FutGame) : Prop :=
+  ∀ (d : Nat) (p : G.Pos), ∀ m ∈ G.moves p,
+    MATE_LOWER ≤ G.val p m → MATE_UPPER ≤ -(negamax G.toGame d m)
+
+/-- `bound` with the futility yield at depth 1 (the `depth ≤ 1` zone of
+line 368; our depth-0 bound is already a bare eval).  Modeling choice: we
+yield the estimate for every futile move instead of breaking at the first
+one; under the sorted order of line 360 the break skips only moves with
+even smaller estimates, so the two variants report the same fail-low
+facts, and we do not model the ordering. -/
+def boundFut (G : FutGame) : Nat → G.Pos → Int → Int
+  | 0, p, _gamma => G.eval p
+  | 1, p, gamma =>
+    searchMoves gamma
+      (fun m =>
+        if G.eval p + G.val p m < gamma then
+          -- futility: yield the static estimate (sunfish.py line 371) ...
+          if G.val p m < MATE_LOWER then G.eval p + G.val p m
+          -- ... unless the move is a king capture, which must report the
+          -- exact sentinel (line 371, `else MATE_UPPER`)
+          else MATE_UPPER
+        else -(boundFut G 0 m (1 - gamma)))
+      (G.moves p) LOSS
+  | d + 2, p, gamma =>
+    searchMoves gamma (fun m => -(boundFut G (d + 1) m (1 - gamma))) (G.moves p) LOSS
+
+/-- Futility-pruned search is fail-soft correct ONLY under `FutilityOK`
+(fail-low estimates) and `FutilityMateOK` (the fail-high `MATE_UPPER`
+yield); the in-band window makes the `MATE_UPPER` yield always a fail-high
+(cf. the window discussion in `Sunfish/Stalemate.lean`).
+
+Proof sketch (`sorry`d): induction on depth as in `bound_spec`.  At depth
+1 the per-move clause required by the loop invariant splits three ways:
+a futile quiet move reports `eval p + val p m < gamma` and `FutilityOK`
+gives `w m ≤ f m`, exactly the fail-low clause; a futile king capture
+reports `MATE_UPPER ≥ gamma` and `FutilityMateOK` gives `f m ≤ w m`, the
+fail-high clause; a non-futile move is an ordinary (exact) depth-0 child.
+The only new machinery needed is a variant of `searchMoves_spec` whose
+per-child hypothesis is restricted to members of the move list, since
+`FutilityOK` speaks only about actual moves. -/
+theorem boundFut_spec (G : FutGame) (hF : FutilityOK G) (hFM : FutilityMateOK G) :
+    ∀ (d : Nat) (p : G.Pos) (gamma : Int),
+      -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
+      BoundSpec G.toGame d p gamma (boundFut G d p gamma) := by
+  sorry
+
+/-! ### (f) Depth-independent mate entries  (STATED + one proven lemma)
+
+An experimental sunfish variant stores mate results under a depth
+sentinel (e.g. depth = 1000) and serves them at ANY queried depth,
+including shallower ones.  What would justify that?
+
+* Serving at DEEPER depths needs exactly `MateDepthMonotone`: a mate-band
+  lower bound survives one more ply.  `mateEntry_deep_service` (proven,
+  sorry-free) lifts it to arbitrary deeper depths.
+
+* Serving at SHALLOWER depths is NOT justified by monotonicity: the
+  depth-indexed `BoundSpec` is violated outright -- the stored number is a
+  fact about `negamax d p`, the query is answered about `negamax d' p`
+  with `d' < d`, and no lemma connects them downward.  The violation is
+  not hypothetical: `negamaxDraw_depth_inconsistent`
+  (`Sunfish/Stalemate.lean`) exhibits a position whose value flips between
+  `LOSS` and `0` purely with depth.
+
+* Shallow service can still be *chess-harmless* if a mate-band value
+  reflects a permanent fact -- in a king-capture engine, "the king is
+  captured regardless of horizon".  `KingGoneStable` is the eval-level
+  seed (a shown king capture never evaporates with more search, on either
+  side of the sign alternation), and together with the mates-are-real
+  hypothesis (the `Game`-level analogue of `MateValuesAreKingCaptures`)
+  it yields `MateDepthStable`, mate-band membership at every depth ≥ 1.
+  Depth 0 must stay excluded: a bare `eval` cannot see a hanging king.
+
+Even under `MateDepthStable`, such a variant should document itself as
+WEAKENING `BoundSpec`: what survives is only which side of the mate band
+the score is on, not the depth-indexed numeric bracket that `TableOK` and
+the MTD-bi driver are stated against. -/
+
+/-- A mate-band lower bound survives one extra ply of search. -/
+def MateDepthMonotone (G : Game) (ML : Int) : Prop :=
+  ∀ (d : Nat) (p : G.Pos), ML ≤ negamax G d p → ML ≤ negamax G (d + 1) p
+
+/-- PROVEN: `MateDepthMonotone` is exactly what serving a mate entry at
+any *deeper* depth requires. -/
+theorem mateEntry_deep_service (G : Game) (ML : Int)
+    (h : MateDepthMonotone G ML) :
+    ∀ (d d' : Nat) (p : G.Pos), d ≤ d' →
+      ML ≤ negamax G d p → ML ≤ negamax G d' p := by
+  intro d d' p
+  induction d' with
+  | zero =>
+    intro hdd hm
+    have hz : d = 0 := by omega
+    subst hz
+    exact hm
+  | succ d' ih =>
+    intro hdd hm
+    by_cases hlt : d ≤ d'
+    · exact h d' p (ih hlt hm)
+    · have he : d = d' + 1 := by omega
+      subst he
+      exact hm
+
+/-- Mate-band membership is depth-independent (away from depth 0, where a
+bare `eval` cannot see a hanging king).  This -- not `MateDepthMonotone` --
+is what SHALLOW service of sentinel mate entries assumes. -/
+def MateDepthStable (G : Game) (ML : Int) : Prop :=
+  ∀ (d d' : Nat) (p : G.Pos), 1 ≤ d → 1 ≤ d' →
+    ML ≤ negamax G d p → ML ≤ negamax G d' p
+
+/-- **KingGoneStable**: a captured king is permanent, on both sides of the
+sign alternation.  If the static score already shows the opponent king
+gone, every horizon confirms the win; if it shows our king gone, every
+horizon confirms the loss. -/
+def KingGoneStable (G : Game) (ML : Int) : Prop :=
+  (∀ p, ML ≤ G.eval p → ∀ (d : Nat), ML ≤ negamax G d p) ∧
+  (∀ p, G.eval p ≤ -ML → ∀ (d : Nat), negamax G d p ≤ -ML)
+
+/-- STATED: permanence of king capture plus "mate scores only come from
+real king captures" (the `Game`-level analogue of
+`MateValuesAreKingCaptures`) give depth-stability of the mate band.
+`sorry`d; a proof runs on the `foldMax` member lemmas: a depth-`d+1` mate
+finds a capture move `m` by `hOnly`, and `hK.2` pins `m` below `-ML` at
+every depth, so the parent stays above `ML` at every depth ≥ 1. -/
+theorem mateDepthStable_of_kingGoneStable (G : Game) (ML : Int)
+    (hK : KingGoneStable G ML)
+    (hOnly : ∀ (d : Nat) (p : G.Pos), ML ≤ negamax G (d + 1) p →
+      ∃ m ∈ G.moves p, G.eval m ≤ -ML) :
+    MateDepthStable G ML := by
+  sorry
 
 end Sunfish
