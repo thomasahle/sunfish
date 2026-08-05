@@ -126,12 +126,17 @@ MATE_UPPER = piece["K"] + 10 * piece["Q"]
 QS = 40
 QS_A = 140
 EVAL_ROUGHNESS = 15
+# Max entries kept in each transposition table, roughly 1GB per million.
+# Python dicts keep insertion order, so we cheaply evict the oldest entry
+# when full (see issue #95).
+TABLE_SIZE = 10**6
 
 # minifier-hide start
 opt_ranges = dict(
     QS = (0, 300),
     QS_A = (0, 300),
     EVAL_ROUGHNESS = (0, 50),
+    TABLE_SIZE = (10**4, 10**8),
 )
 # minifier-hide end
 
@@ -375,9 +380,14 @@ class Searcher:
         for move, score in moves():
             best = max(best, score)
             if best >= gamma:
-                # Save the move for pv construction and killer heuristic
+                # Save the move for pv construction and killer heuristic.
+                # Re-inserting moves the entry to the end of the table, so
+                # frequently updated entries (like the root) survive eviction.
                 if move is not None:
+                    self.tp_move.pop(pos, None)
                     self.tp_move[pos] = move
+                    if len(self.tp_move) > TABLE_SIZE:
+                        del self.tp_move[next(iter(self.tp_move))]
                 break
 
         # Stalemate checking is a bit tricky: Say we failed low, because
@@ -409,6 +419,8 @@ class Searcher:
             self.tp_score[pos, depth, can_null] = Entry(best, entry.upper)
         if best < gamma:
             self.tp_score[pos, depth, can_null] = Entry(entry.lower, best)
+        if len(self.tp_score) > TABLE_SIZE:
+            del self.tp_score[next(iter(self.tp_score))]
 
         return best
 
