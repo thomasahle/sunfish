@@ -39,6 +39,12 @@ jobs:
       run: |
         printf 'uci\nisready\nposition startpos moves e2e4\ngo movetime 500\nquit\n' \
           | python ./sunfish.py | tee /dev/stderr | grep -q bestmove
+        # Sudden-death time control, no increments (regression test for #117)
+        printf 'uci\nposition startpos moves e2e4\ngo wtime 60000 btime 60000\nquit\n' \
+          | timeout 60 python ./sunfish.py | tee /dev/stderr | grep -q bestmove
+        # "stop" right after "go infinite" must yield a bestmove (regression test for #117)
+        printf 'uci\nposition startpos\ngo infinite\nstop\nquit\n' \
+          | timeout 60 python ./sunfish.py | tee /dev/stderr | grep -q bestmove
     - name: UCI smoke test (sunfish_nnue)
       # The NNUE version lives on the nnue branch until it works well.
       if: hashFiles('sunfish_nnue.py') != ''
