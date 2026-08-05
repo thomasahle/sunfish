@@ -109,10 +109,10 @@ Or even specific tests:
 python3.12 -m pytest tests/test_mate_puzzles.py::test_mate_in_one
 ```
 
-Make sure you have installed the required dependencies:
+Make sure you have installed the required dependencies (defined in `pyproject.toml`):
 
 ```bash
-python3.12 -m pip install -r requirements.txt
+uv sync  # or: pip install chess tqdm pytest pytest-asyncio
 ```
 
 # Limitations
