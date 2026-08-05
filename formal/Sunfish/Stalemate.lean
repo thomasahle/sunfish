@@ -37,13 +37,15 @@ turned up three things that are easy to miss when reading the Python:
     `MATE_UPPER` via the child's line 302) plus the explicit
     `else MATE_UPPER` in the futility yield (line 371).  Our model
     enforces it by construction with an explicit king-capture pre-check.
-    NOTE (potential gap in sunfish itself): the killer move is yielded
-    *before* the sorted moves (lines 356-357).  A non-capture killer that
-    fails high makes `bound` return a value `< MATE_UPPER` even when the
-    king is capturable, breaking the stated requirement; a parent
-    stalemate can then be mis-reported as an ordinary fail-low bound
-    (the null-move yield is harmless here only because of its
-    `abs(pos.score) < 500` guard).
+    NOTE: the killer move is yielded *before* the sorted moves (lines
+    356-357), so a non-capture killer failing high would break the
+    requirement.  `Sunfish/Killer.lean` proves this cannot happen
+    (`boundKill_spec`): the position-keyed `tp_move` maintains the
+    invariant that its entry at a king-capturable position is itself a
+    king capture, so the killer path also reports the exact sentinel.
+    The residual exception is the null-move yield, harmless only because
+    of its `abs(pos.score) < 500` guard
+    (`NullGuardBlocksAtCaptures` in `Sunfish/Killer.lean`).
 
 3.  **Even with the sentinel invariant and in-band windows the faithful,
     depth-gated correction does not satisfy the docstring against the

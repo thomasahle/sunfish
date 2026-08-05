@@ -78,11 +78,27 @@ tactic only, so a full build takes seconds.
     the `±MATE_UPPER` band), `boundStale_of_capture` (the sentinel
     invariant holds by construction), `searchMoves_ge_init`,
     `searchMoves_eq_init`, `cex_violates_hypothesis`.
-  - The module comment records a **potential gap in sunfish itself** found
-    while modeling: the killer move is yielded before the sorted moves
-    (lines 356–357), so a non-capture killer that fails high breaks the
-    stated "always return `MATE_UPPER` if the king is capturable"
-    requirement, which a parent's stalemate detection relies on.
+  - The module comment records a killer-move exception found while
+    modeling (a non-capture killer failing high would break the "always
+    return `MATE_UPPER` if the king is capturable" requirement) — since
+    upgraded to *provably impossible* by `Sunfish/Killer.lean`, see below.
+
+- **`Sunfish/Killer.lean`** — **KillerIsKingCapture**, proven sorry-free
+  (`boundKill_spec`): threading `tp_move` through the search as state
+  (position-keyed, store-on-fail-high-only, sunfish.py lines 339, 356–357,
+  382–387), a single call starting from an invariant-satisfying table
+  (i) preserves the invariant — *at a king-capturable position the stored
+  entry, if any, is itself a king capture* — and (ii) returns exactly the
+  `MATE_UPPER` sentinel at every king-capturable node (depth ≥ 1, in-band
+  window), on the killer path *and* the loop path. So a killer cutoff can
+  never under-report the sentinel: the exception is impossible given
+  (a) in-band windows and (b) value ordering (king captures, value
+  ≥ `MATE_LOWER`, sort strictly first — modeled by `orderedMoves`).
+  Hypothesis (c), position-keying, is load-bearing: a ply-shared killer
+  table would break the induction (noted in comments). Applied along any
+  execution history from the empty table (`killerEmpty_OK`), the
+  invariant holds forever. Empirical corroboration cited in comments:
+  0 violations in 694,533 killer cutoffs over 1,270 real-game positions.
 
 - **`Sunfish/Tricks.lean`**, the proven parts:
   - `soften_null_window` — the mate-score softening lemma: for a window
@@ -152,6 +168,21 @@ content:
   Such a variant should document itself as **weakening `BoundSpec`** to
   mate-band membership only.
 
+- **`NullGuardBlocksAtCaptures` / `killer_probe_sound`**
+  (`Sunfish/Killer.lean`) — the residual exception to the sentinel
+  invariant: the null-move yield carries `None` (stores nothing, so
+  `KillerOK` survives) but can end the loop below `MATE_UPPER`;
+  sunfish guards it only by `abs(pos.score) < 500` (line 330, with its own
+  FIXME at 323–329 conceding the guard is heuristic).
+  `NullGuardBlocksAtCaptures` names the condition under which the guard
+  closes the hole. `killer_probe_sound` states that the stalemate probe is
+  a complete decision procedure for king-capturability (no null move at
+  depth 0, stand-pat below the sentinel by `QuietEvalsInBand`, killer
+  covered by `boundKill_spec`, capture-first order otherwise); the `mpr`
+  direction is `boundKill_spec`, the no-false-positives direction is
+  `sorry`d pending a `MateValuesAreKingCaptures`-style characterization of
+  where `MATE_UPPER` reports originate.
+
 - **`ExtKeyIndependent`** — *not* `sorry`d, but stated as the false claim a
   `(pos, depth)`-keyed table makes once search extensions depend on history
   (e.g. a recapture extension keyed on the last-capture square), and refuted
@@ -178,6 +209,8 @@ content:
 | `inCheckB`, `CheckProbeOK` | the null-position check probe `bound(flipped, MATE_UPPER, 0) == MATE_UPPER` (lines 409–411) |
 | `MateValuesAreKingCaptures` | the requirement of lines 398–401 and the caveat of lines 403–405 |
 | `FutGame.val`, `boundFut` | `pos.value(move)` and the futility yield (lines 360–374) |
+| `KTable`, `kstore`, `boundKill` | `tp_move`, killer try + store-on-cutoff (lines 339, 356–357, 382–387) |
+| `orderedMoves` | the sort of line 360 (king captures, value ≥ `MATE_LOWER`, first) |
 
 Not modeled at all (they change *what* is computed, not whether bounds are
 honest, or are performance-only): move ordering (line 360 — except for its
@@ -207,6 +240,13 @@ check against:
   what goes wrong if so). Changes to MTD-bi's probe range must keep
   `gamma` inside `(-MATE_UPPER, MATE_UPPER]`, or the correction's
   soundness argument collapses at the window edge.
+- **`KillerOK` (KillerIsKingCapture)** — the killer-cutoff exception to
+  the sentinel invariant is *provably impossible* given in-band windows +
+  value ordering (`boundKill_spec`); residual exception: the null-move
+  path (`NullGuardBlocksAtCaptures`). A PR that re-keys the killer table
+  (e.g. ply-shared killers), reorders king captures below anything, stores
+  moves outside the fail-high cutoff, or widens the probe windows must say
+  which leg of `boundKill_spec`'s induction it breaks.
 - **`FutilityOK` / `FutilityMateOK`** — any change to `pos.value`, to the
   futility threshold or to the depth at which futility applies must
   re-justify that the static estimate still dominates the true child value
