@@ -425,12 +425,18 @@ class Searcher:
         # every reply lost the king (or there were no replies): we are either
         # mated or stalemated, and it suffices to check whether we're in check.
 
-        # Exceptions (formal/Sunfish/Stalemate.lean makes these precise):
-        # - A killer-move cutoff can fire before the king capture is ever
-        #   generated, so a child may under-report a position where its king
-        #   hangs. Like all low-depth pruning artifacts, deeper search
-        #   corrects it; the in-check probe below is immune either way, since
-        #   with gamma = MATE_UPPER nothing smaller can fail high.
+        # Exceptions and non-exceptions (formal/Sunfish/Stalemate.lean and
+        # Killer.lean make these precise):
+        # - The killer path is provably safe: a killer stored at a king-
+        #   capturable position is always itself a king capture (Killer.lean,
+        #   boundKill_spec), so a killer cutoff still returns the sentinel.
+        #   This relies on tp_move being keyed by exact position and on king
+        #   captures sorting first; change either and the proof breaks.
+        # - The null-move yield is the one remaining path that can end the
+        #   loop below MATE_UPPER at a king-capturable node (it yields
+        #   move=None, so nothing corrects it). Only the abs(pos.score) < 500
+        #   zugzwang guard limits this; deeper search corrects the rare
+        #   cases that slip through.
         # - At low depths we may have pruned all legal moves, so sunfish may
         #   report "mate" and retract it after more search. That's fair.
 
