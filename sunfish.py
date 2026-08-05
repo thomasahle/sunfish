@@ -367,7 +367,7 @@ class Searcher:
                 yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)
 
             # Then all the other moves
-            for val, move in sorted(((pos.value(m), m) for m in pos.gen_moves()), reverse=True):
+            for i_m, (val, move) in enumerate(sorted(((pos.value(m), m) for m in pos.gen_moves()), reverse=True)):
                 # Quiescent search
                 if val < val_lower:
                     break
@@ -383,6 +383,17 @@ class Searcher:
                     # so it can't get any better than this.
                     break
 
+                # Late Move Reductions: quiet moves sorted late rarely fail
+                # high, so search them a ply shallower first and re-search
+                # at full depth only if they surprise us. Every node is a
+                # null-window scout node under MTD-bi, so the usual 'don't
+                # reduce PV nodes' exclusion is vacuous here; the hash move
+                # is yielded above and thus never reduced.
+                if depth >= 3 and i_m >= 5 and val < QS:
+                    score = -self.bound(pos.move(move), 1 - gamma, depth - 2)
+                    if score < gamma:
+                        yield move, score
+                        continue
                 yield move, -self.bound(pos.move(move), 1 - gamma, depth - 1)
 
         # Run through the moves, shortcutting when possible
