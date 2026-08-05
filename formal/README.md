@@ -146,6 +146,28 @@ tactic only, so a full build takes seconds.
   - `mateEntry_deep_service` — `MateDepthMonotone` lifted to arbitrary
     deeper depths: exactly what serving a stored mate entry at a *deeper*
     query depth requires.
+  - **`boundFut_spec` + `futilityOK_discharged` — `FutilityOK`
+    discharged: from stated hypothesis to theorem.** `ValGame` records
+    sunfish's *score identity* — `pos.move(move)` builds the child with
+    `score = -(pos.score + pos.value(move))`, literal in the code and in
+    the comment at lines 365–367 — as a structural property
+    (model-faithful, not an assumption). With it, the futility yield is
+    *exactly* the depth-0 child search result (`futilityOK_discharged`
+    is an equality, not an inequality): the futility test
+    `pos.score + val < gamma` is integer-equivalent to the child's
+    stand-pat meeting its window, so the child fails high immediately
+    and fail-soft returns precisely `-(pos.score + val)`.
+    `boundFut_spec` now proves `BoundSpec` for the futility-augmented
+    search **unconditionally** (single value function, no interval),
+    with only `FutilityMateOK` (line 371's king-capture bypass) and the
+    in-band window remaining. Fine print made explicit: the ∀-depth
+    `FutilityOK` is *not* dischargeable (plain negamax has no stand-pat
+    at `d ≥ 1`) — but the search only ever consumes the `d = 0`
+    instance; the old statement over-required. **Contrast with LMR**:
+    futility's shortcut is a provable one-sided bound of the *same*
+    value function (hence consistent, point spec); LMR's reduced value
+    is incomparable to the full value (hence the `Vlo`/`Vhi` interval
+    and the TT crossing).
 
 ## What is stated with `sorry`, and why
 
@@ -173,20 +195,11 @@ content:
   bracket and the theorem is false. Proof `sorry`d (it is `bound_spec` plus
   invariant-threading through the state-passing loop).
 
-- **`FutilityOK` / `FutilityMateOK` / `boundFut_spec`** — the futility
-  yield (sunfish.py lines 360–374): at `depth ≤ 1` a move with
-  `pos.score + val < gamma` is answered by the *static estimate*
-  `pos.score + val` instead of a child search. The estimate is always a
-  fail-low report, so `BoundSpec` needs exactly
-  `-(negamax d child) ≤ pos.score + val` — that is `FutilityOK` (the
-  formal reading of the "opponent will just stand pat" comment at lines
-  365–367; it fails precisely where stand-pat reasoning fails, e.g. the
-  opponent in check). The `else MATE_UPPER` special case at line 371
-  (king captures bypass the estimate and report the exact sentinel) can
-  fail *high* and needs its own hypothesis, `FutilityMateOK`.
-  `boundFut_spec` is stated for in-band windows and `sorry`d with a full
-  sketch (the only missing machinery is a member-restricted variant of
-  `searchMoves_spec`).
+- **`FutilityMateOK`** — the one hypothesis left on the futility yield:
+  the `else MATE_UPPER` king-capture bypass at line 371 can fail *high*
+  and asserts a fact about king captures, not about score arithmetic.
+  (`FutilityOK` itself is **discharged** — see the proven inventory
+  above.)
 
 - **`MateDepthMonotone` / `MateDepthStable` / `KingGoneStable`** — the
   honest spec for an experimental variant that stores mate results under a
@@ -265,8 +278,16 @@ Does it preserve `TableOK` (is every store still a valid bracket, and is the
 key still complete — cf. `ExtKeyIndependent`)? If the answer is "it weakens
 X in positions Y", that is exactly the sentence the PR description needs.
 
-The stalemate/futility/mate-entry work adds three more named hypotheses to
-check against:
+The maintainer's design principle, distilled from the futility-vs-LMR
+contrast: **"`gamma` may shape termination, and may trigger shortcuts
+whose value provably one-side-bounds the same function; `gamma` must
+never select between incomparable evaluations of a move."** Futility
+passes (its shortcut equals the depth-0 search it replaces —
+`futilityOK_discharged`); LMR fails it (the reduced and full values are
+incomparable), which is exactly why futility keeps the point `BoundSpec`
+while LMR pays with the interval spec and crossable TT entries.
+
+The later files add further named conditions to check against:
 
 - **`MateValuesAreKingCaptures`** — anything touching move ordering, the
   killer yield, king-capture scoring or the stalemate block must say
