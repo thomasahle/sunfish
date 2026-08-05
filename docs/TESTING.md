@@ -58,17 +58,26 @@ fastchess \
    `-sprt elo0=0 elo1=10 alpha=0.05 beta=0.05` (accepts/rejects "at least
    10 ELO better" with 5% error rates).
 
-5. **Time control: short but with an increment.**
+5. **Time-management changes need validation at MULTIPLE time controls.**
+   Fast-TC matches are structurally blind to long-TC time bugs: a change
+   that mis-spends the clock at 15+3 can be behavior-identical at 4+0.04
+   (this happened: an opening think-time ramp accidentally governed entire
+   long games and sailed through 300-game fast-TC matches). For any change
+   to think-time computation, additionally verify the per-move time curve
+   directly at a long TC (drive the engine over a scripted game and assert
+   the budget is actually reached mid-game).
+
+6. **Time control: short but with an increment.**
    Sunfish is slow; sudden-death blitz makes every game a timeout lottery.
    `tc=4+0.04` works well for regression tests; use longer (e.g. `tc=10+0.1`)
    when the change affects time management or pondering. A handful of time
    losses over hundreds of games is normal; dozens mean the TC is too fast.
 
-6. **Adjudicate finished games** (`-draw`/`-resign` flags above) — sunfish has
+7. **Adjudicate finished games** (`-draw`/`-resign` flags above) — sunfish has
    no resign logic and weak endgames, so unadjudicated games drag on and waste
    most of the wall time on decided positions.
 
-7. **Distrust surprising results — verify before believing.**
+8. **Distrust surprising results — verify before believing.**
    Before accepting a big ELO swing:
    - **Run an old-vs-old control match** under the same conditions. It must
      come out near 0 within the error bars; if it doesn't, the harness or the
@@ -85,7 +94,7 @@ fastchess \
    If anything was contaminated, rerun — never average a dirty match into a
    clean one.
 
-8. **Know that tournament managers reuse engine processes across games.**
+9. **Know that tournament managers reuse engine processes across games.**
    fastchess (and cutechess by default) starts an engine once per match slot
    and plays dozens of games in that one process, sending `ucinewgame`
    between them. Engine state that survives `ucinewgame` — like sunfish's
@@ -97,7 +106,7 @@ fastchess \
    is provably identical. Check the trace (`-log file=x level=trace
    engine=true`) to see what your engines actually receive.
 
-9. **Report the numbers, not the vibe.** A PR claiming a strength change must
+10. **Report the numbers, not the vibe.** A PR claiming a strength change must
    quote: games, TC, book, ELO ± error bounds, and time-loss/crash counts —
    plus the exact commits of both frozen engines.
 
