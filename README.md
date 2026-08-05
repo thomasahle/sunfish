@@ -95,6 +95,44 @@ Using NNUE, sunfish will play better positionally, but worse tactically, since t
 3. Efficiently updatedable evaluation function through [Piece Square Tables](https://www.chessprogramming.org/Piece-Square_Tables).
 4. Uses standard Python collections and data structures for clarity and efficiency.
 
+# Testing
+
+Sunfish uses pytest for testing. To run the tests:
+
+```bash
+python3.12 -m pytest
+```
+
+You can also run specific test files:
+
+```bash
+python3.12 -m pytest tests/test_mate_puzzles.py
+```
+
+Or even specific tests:
+
+```bash
+python3.12 -m pytest tests/test_mate_puzzles.py::test_mate_in_one
+```
+
+For benchmarking NNUE performance:
+
+```bash
+python3.12 -m pytest tests/test_nnue_speed.py -v
+```
+
+To run tests that require the NNUE engine (if available):
+
+```bash
+python3.12 -m pytest tests/test_nnue_bugs.py -v
+```
+
+Make sure you have installed the required dependencies:
+
+```bash
+python3.12 -m pip install -r requirements.txt
+```
+
 # Limitations
 
 Sunfish supports all chess rules, except the 50 moves draw rule.
