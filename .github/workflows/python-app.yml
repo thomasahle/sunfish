@@ -82,3 +82,9 @@ jobs:
     - name: Pytest suite
       run: |
         if [ -d tests ]; then python -m pytest tests -q; else echo "no tests/ directory on this branch"; fi
+    - name: Lichess bot integration test (mock server)
+      # Runs the real lichess-bot process against tests/mock_lichess.py with
+      # pondering on and realistic opponent pacing; catches UCI protocol
+      # races and time-forfeit regressions (~100s).
+      run: BOT_CI=1 python -m pytest tests/test_bot_integration.py -q
+      timeout-minutes: 8
