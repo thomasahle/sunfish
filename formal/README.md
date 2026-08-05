@@ -159,6 +159,34 @@ tactic only, so a full build takes seconds.
     clamp, the search-level crossing phenomenon remains
     (`lmr_tt_crossing`) but the table-level contradiction is gone.
 
+- **`Sunfish/CanNull.lean`** — the `can_null` layering, modeled exactly
+  as master uses it in all four roles: null-move gate (line 340, pass
+  searched at `depth - 3` with `can_null=True` — sunfish permits
+  consecutive null moves, reproduced exactly), repetition gate (line
+  325, `history` a fixed per-search parameter), transposition key (line
+  318, `CTable` keyed on `(depth, can_null, pos)`), and IID (line 355,
+  `can_null=False` — the code, not the comment at 352–353, which is
+  being fixed in PR #135). Proven sorry-free:
+  - **`boundNullTT_spec` (Layer 1, unconditional)**: the
+    null-and-repetition-augmented search brackets its own value
+    function `nullValue` with a *point* spec, and the keyed table stays
+    consistent (`CTableOK`). No zugzwang hypothesis anywhere:
+    self-consistency of search + table is unconditional.
+  - **`ctableOK_empty`**: the empty table satisfies the invariant for
+    *any* history — the fact that justifies sunfish clearing `tp_score`
+    whenever `history` changes (the invariant is history-relative).
+  - Layer 2 (`nullValue_negamax`, stated under **`NullBetOK`**):
+    relating `nullValue` to plain `negamax` is where the zugzwang bet
+    lives — the bet only ever threatens the value, never
+    self-consistency. This restructures (and halves) the former
+    `boundNull_spec` sorry.
+  - Audit surprises recorded in the module comment: sunfish's
+    `can_null` does **not** prevent consecutive null moves (the pass is
+    searched with the default `True`); and the move generator's
+    *laziness* is semantically load-bearing — a null cutoff means the
+    IID recursion never runs, so the table state depends on the cutoff,
+    and an eager model would mis-model `tp_score`.
+
 - **`Sunfish/Tricks.lean`**, the proven parts:
   - `soften_null_window` — the mate-score softening lemma: for a window
     strictly above the mate band (`gamma > ML + 1`, `ML ≥ 0`), testing the
@@ -291,13 +319,39 @@ content:
 | `KTable`, `kstore`, `boundKill` | `tp_move`, killer try + store-on-cutoff (lines 339, 356–357, 382–387) |
 | `orderedMoves` | the sort of line 360 (king captures, value ≥ `MATE_LOWER`, first) |
 
-Not modeled at all (they change *what* is computed, not whether bounds are
-honest, or are performance-only): move ordering (line 360 — except for its
-load-bearing consequence, the `MATE_UPPER` sentinel invariant, which
-`boundStale` enforces by construction), killer/IID (lines 338–357; see the
-killer-move caveat in `Sunfish/Stalemate.lean`), repetition/history
-(lines 315–316), table eviction (lines 419–420 — eviction only forgets
-entries, which trivially preserves `TableOK`).
+| `nullValue`, `boundNullTT`, `CTable` | the can_null-aware search: null move (340–341), repetition (325), keyed table (318), IID (355) |
+| `nullGuard` | `abs(pos.score) < 500` (line 340), gamma-free |
+
+## Model fidelity
+
+Audited against master at commit `9b1a7b4` (2026-08-05), sunfish.py lines
+286–448. The model tracks the code exactly except these explicitly listed
+abstractions, each with its justification:
+
+- **QS-as-eval at the `Bound.lean` layer**: depth 0 returns `eval`
+  directly; QS's interior (stand-pat + capture recursion at clamped
+  depth 0) is a fixpoint the abstract model treats as its evaluation.
+  Its one load-bearing property — the stand-pat identity — is what
+  `ValGame.score_identity` captures and `boundFut_spec` consumes.
+- **Deadline/`Stop`** (lines 297–301): raises at node *entry*, before
+  any store, so an abort can leave a search unfinished but never a
+  table entry unjustified — aborts cannot corrupt `TableOK`/`CTableOK`.
+- **Eviction** (`TABLE_SIZE`, lines 445–446 and the `tp_move` twin):
+  only forgets entries, which trivially preserves every table invariant
+  here.
+- **`depth = max(depth, 0)`** (line 306): corresponds to the model's
+  `Nat` depths with saturating subtraction — verified aligned.
+- **Killer val-gate** (line 366) not modeled in `Killer.lean`; cannot
+  affect `boundKill_spec` (king captures have `val ≥ MATE_LOWER`, far
+  above every `val_lower`) — see the audit note there. The killer's
+  in-loop duplicate follows normal LMR rules (see `Lmr.lean`'s refined
+  claim and `foldMax_dup`); the stalemate probe's table key is
+  `(flipped, 0, True)` (both `can_null` gates are dead at depth 0).
+- **Move ordering** (line 360) is modeled only through its load-bearing
+  consequence: king captures sort first (`orderedMoves`), and
+  `FutilityLmrDisjoint` (futility at depth ≤ 1 vs LMR at depth ≥ 3 —
+  never co-occur, which is why their models compose from separate
+  files).
 
 ## Guideline for search-changing PRs
 

@@ -70,27 +70,19 @@ def NullOK (G : NullGame) : Prop :=
     ∃ m, m ∈ G.moves p ∧
       negamax G.toGame d m ≤ negamax G.toGame d (G.pass p)
 
-/-- `bound` with null-move pruning: before the move loop, try passing; if
-the pass already fails high (and the position is not terminal -- a terminal
-position has no move to back the claim), cut off with the pass's value. -/
-def boundNull (G : NullGame) : Nat → G.Pos → Int → Int
-  | 0, p, _gamma => G.eval p
-  | d + 1, p, gamma =>
-    let nullVal := -(boundNull G d (G.pass p) (1 - gamma))
-    if (G.moves p).isEmpty = false ∧ gamma ≤ nullVal then
-      nullVal
-    else
-      searchMoves gamma (fun m => -(boundNull G d m (1 - gamma))) (G.moves p) LOSS
+/- RESTRUCTURED (audit): the former `boundNull`/`boundNull_spec` here are
+superseded by the LAYERED story of `Sunfish/CanNull.lean`, which models
+`can_null` exactly as the code uses it (null gate, repetition gate,
+transposition key, IID) and splits the old sorried claim in two:
 
-/-- Null-move-pruned search is fail-soft correct ONLY under `NullOK`.
-Proof sketch: as `bound_spec`, plus: when the null cutoff fires, the spec of
-the recursive call gives `gamma ≤ nullVal ≤ -(negamax d (pass p))`, and
-`NullOK` supplies a real move `m` with
-`-(negamax d (pass p)) ≤ -(negamax d m) ≤ negamax (d+1) p`. -/
-theorem boundNull_spec (G : NullGame) (hnull : NullOK G) :
-    ∀ (d : Nat) (p : G.Pos) (gamma : Int),
-      BoundSpec G.toGame d p gamma (boundNull G d p gamma) := by
-  sorry
+* Layer 1, `boundNullTT_spec` (PROVEN, unconditional): the
+  null-and-repetition-augmented search brackets its own value function
+  `nullValue` with a point spec, and the `(pos, depth, can_null)`-keyed
+  table stays consistent.  Zugzwang cannot break self-consistency.
+* Layer 2, `nullValue_negamax` (stated under `NullBetOK`): relating
+  `nullValue` to plain `negamax` is where the zugzwang bet lives --
+  `NullOK` above is its same-depth core, `NullBetOK` its code-exact form
+  with the `depth - 3` reduction folded in. -/
 
 /-! ### (c) The transposition-table invariant  (STATED)
 

@@ -478,16 +478,37 @@ theorem lmr_tt_crossing :
 /-- Reductions never touch king captures.  True by construction in
 sunfish: a king capture has `pos.value ≥ MATE_LOWER = 50710`, far above
 `QS = 40`, so `val < QS` fails.  Under this condition every leg of
-`boundKill_spec` survives LMR verbatim: the killer is yielded before the
-sorted loop (never reduced), the capture still heads the ordered moves
-un-reduced and cuts off at the exact sentinel, a reduced fail low is
-`< gamma` and so never reaches the `tp_move` store, and a reduced fail
-high stores only the full-depth re-search result.  Likewise the stalemate
-correction: the `-MATE_UPPER` king-loss normalization is depth-independent
-(`boundKill_kingGone` / `negamaxDraw_kingGone` hold at every depth), so
-reduced searches still return the sentinel for king-loss children and the
-`best == -MATE_UPPER` detection is unchanged. -/
+`boundKill_spec` survives LMR verbatim.  The precise killer claim (audit
+refinement): the PRE-LOOP killer yield (sunfish.py line 367) is
+structurally never reduced -- LMR lives inside the sorted loop -- but the
+killer's DUPLICATE in the sorted loop (it is among `gen_moves`) follows
+normal LMR rules and CAN be reduced when late-sorted and quiet.  That is
+still sound: a reduced fail high falls through to the full-depth search
+before any store, a reduced fail low is `< gamma` and never reaches the
+`tp_move` store, and the duplicate itself contributes the same move to
+the loop's `max` twice, which is harmless (`foldMax_dup` below).
+Likewise the stalemate correction: the `-MATE_UPPER` king-loss
+normalization is depth-independent (`boundKill_kingGone` /
+`negamaxDraw_kingGone` hold at every depth), so reduced searches still
+return the sentinel for king-loss children and the `best == -MATE_UPPER`
+detection is unchanged. -/
 def RedRespectsCaptures (G : Game) (red : Nat → Nat → G.Pos → Bool) : Prop :=
   ∀ (d i : Nat) (m : G.Pos), G.eval m ≤ -MATE_LOWER → red d i m = false
+
+/-- A duplicated move contributes to the fold's max twice, which changes
+nothing: the killer's re-appearance in the sorted loop is value-neutral. -/
+theorem foldMax_dup {α : Type _} (w : α → Int) (m : α) (ms : List α) (acc : Int) :
+    foldMax w (m :: m :: ms) acc = foldMax w (m :: ms) acc := by
+  simp only [foldMax]
+  congr 1
+  omega
+
+/-- **FutilityLmrDisjoint**: futility fires only at `depth ≤ 1`
+(sunfish.py line 375), LMR only at `depth ≥ 3` (line 392) -- they never
+co-occur at a node.  This is the unstated reason `Sunfish/Tricks.lean`'s
+futility model and this file's LMR model may be studied separately and
+composed freely: no node runs both.  A future PR overlapping the depth
+ranges would be composing something unstudied and should say so. -/
+theorem futilityLmrDisjoint (d : Nat) : ¬ (d ≤ 1 ∧ 3 ≤ d) := by omega
 
 end Sunfish

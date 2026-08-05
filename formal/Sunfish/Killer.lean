@@ -50,6 +50,15 @@ so it is covered by the same induction and not modeled separately.
 The model omits the TT-score table and the null move (simplification 5 of
 the proof architecture); the null-move residual exception is stated as its
 own named condition `NullGuardBlocksAtCaptures` below.
+
+Audit note (exactness): sunfish gates the killer yield by
+`pos.value(killer) >= val_lower` (line 366).  The gate is not modeled
+here; it CANNOT affect `boundKill_spec`, because the load-bearing killer
+is a king capture with `val ≥ MATE_LOWER = 50710`, far above every
+`val_lower = QS - depth * QS_A ≤ 40` -- a king-capture killer always
+passes the gate, and a quiet killer that the gate suppresses only removes
+a yield, which the sorted loop re-supplies.  Exactness of a full-engine
+model would require it; this file's invariant does not.
 -/
 
 import Sunfish.Stalemate
