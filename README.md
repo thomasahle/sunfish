@@ -78,15 +78,9 @@ also [on Lichess](https://lichess.org/@/sunfish_rs), which is about 100 ELO stro
 
 ### NNUE version
 
-There is an experimental version using an [Efficiently updatable neural network](https://en.wikipedia.org/wiki/Efficiently_updatable_neural_network). You can test it using the fancy terminal interface as above:
-
-<pre>$ <b>tools/fancy.py -cmd "./sunfish_nnue.py nnue/models/tanh.pickle"</b>
-...
-</pre>
-
-In contrast to the large NNUE in say, Stockfish, this network is only 1207 bytes!
-That makes sure sunfish NNUE can still be packed into less than 4KB.
-Using NNUE, sunfish will play better positionally, but worse tactically, since the implementation is still not fast enough.
+There is an experimental version using an [Efficiently updatable neural network](https://en.wikipedia.org/wiki/Efficiently_updatable_neural_network).
+It is not yet fast enough to be stronger than classic sunfish, so it lives on the
+[nnue branch](https://github.com/thomasahle/sunfish/tree/nnue-mutable-board) until it works well.
 
 # Features
 
@@ -115,22 +109,10 @@ Or even specific tests:
 python3.12 -m pytest tests/test_mate_puzzles.py::test_mate_in_one
 ```
 
-For benchmarking NNUE performance:
+Make sure you have installed the required dependencies (defined in `pyproject.toml`):
 
 ```bash
-python3.12 -m pytest tests/test_nnue_speed.py -v
-```
-
-To run tests that require the NNUE engine (if available):
-
-```bash
-python3.12 -m pytest tests/test_nnue_bugs.py -v
-```
-
-Make sure you have installed the required dependencies:
-
-```bash
-python3.12 -m pip install -r requirements.txt
+uv sync  # or: pip install chess tqdm pytest pytest-asyncio
 ```
 
 # Limitations
