@@ -50,6 +50,40 @@ tactic only, so a full build takes seconds.
     step is the integer fact `b < 1 - gamma ↔ gamma ≤ -b`.
   - `#print axioms bound_spec` reports only `propext, Quot.sound`.
 
+- **`Sunfish/Stalemate.lean`** — the stalemate-correction block
+  (sunfish.py lines 388–412), modeled faithfully (king-capture
+  normalization of lines 298–303, the `MATE_UPPER` sentinel invariant of
+  lines 398–401, the `depth > 2` gate, the null-position in-check probe of
+  lines 408–412). Proven sorry-free:
+  - **`boundStale_spec`**: the corrected search satisfies the docstring
+    against the draw-aware value `negamaxDraw`, under four hypotheses that
+    modeling showed to be *individually necessary*: a band-`Bounded`
+    evaluation, a correct probe (`CheckProbeOK`), an in-band window
+    `-MATE_UPPER < gamma ≤ MATE_UPPER` (an interval closed under the
+    null-window flip `gamma ↦ 1 - gamma`), and
+    **`MateValuesAreKingCaptures`** — mate-band sentinel values always come
+    from a real king capture, never from a shallow-horizon artifact.
+  - **`boundStale_not_unconditional`**: a machine-checked 7-position
+    counterexample (`Cex`) showing the last hypothesis is *not optional*:
+    with bounded evals, a perfect probe and an in-band window, the
+    depth-gated correction still returns a fail-low "upper bound" (−20)
+    that the draw-aware value (0, a stalemate two plies down scored as a
+    fabricated mate) exceeds. This is sunfish's own caveat at lines
+    403–405 turned into a refutation.
+  - **`negamaxDraw_depth_inconsistent`**: the `depth > 2` gate makes the
+    draw-aware value itself depth-dependent (the same stalemate is `LOSS`
+    at remaining depth 2 and `0` at depth 3) — the honest statement of the
+    divergence between `negamaxDraw` and any depth-independent game value.
+  - Supporting sorry-free lemmas: `negamaxDraw_bounded` (values stay in
+    the `±MATE_UPPER` band), `boundStale_of_capture` (the sentinel
+    invariant holds by construction), `searchMoves_ge_init`,
+    `searchMoves_eq_init`, `cex_violates_hypothesis`.
+  - The module comment records a **potential gap in sunfish itself** found
+    while modeling: the killer move is yielded before the sorted moves
+    (lines 356–357), so a non-capture killer that fails high breaks the
+    stated "always return `MATE_UPPER` if the king is capturable"
+    requirement, which a parent's stalemate detection relies on.
+
 - **`Sunfish/Tricks.lean`**, the proven parts:
   - `soften_null_window` — the mate-score softening lemma: for a window
     strictly above the mate band (`gamma > ML + 1`, `ML ≥ 0`), testing the
@@ -59,6 +93,9 @@ tactic only, so a full build takes seconds.
   - `extended_value_not_key_independent` — a concrete counterexample showing
     the extended-search value is **not** a function of `(pos, depth)` alone
     (see below).
+  - `mateEntry_deep_service` — `MateDepthMonotone` lifted to arbitrary
+    deeper depths: exactly what serving a stored mate entry at a *deeper*
+    query depth requires.
 
 ## What is stated with `sorry`, and why
 
@@ -86,6 +123,35 @@ content:
   bracket and the theorem is false. Proof `sorry`d (it is `bound_spec` plus
   invariant-threading through the state-passing loop).
 
+- **`FutilityOK` / `FutilityMateOK` / `boundFut_spec`** — the futility
+  yield (sunfish.py lines 360–374): at `depth ≤ 1` a move with
+  `pos.score + val < gamma` is answered by the *static estimate*
+  `pos.score + val` instead of a child search. The estimate is always a
+  fail-low report, so `BoundSpec` needs exactly
+  `-(negamax d child) ≤ pos.score + val` — that is `FutilityOK` (the
+  formal reading of the "opponent will just stand pat" comment at lines
+  365–367; it fails precisely where stand-pat reasoning fails, e.g. the
+  opponent in check). The `else MATE_UPPER` special case at line 371
+  (king captures bypass the estimate and report the exact sentinel) can
+  fail *high* and needs its own hypothesis, `FutilityMateOK`.
+  `boundFut_spec` is stated for in-band windows and `sorry`d with a full
+  sketch (the only missing machinery is a member-restricted variant of
+  `searchMoves_spec`).
+
+- **`MateDepthMonotone` / `MateDepthStable` / `KingGoneStable`** — the
+  honest spec for an experimental variant that stores mate results under a
+  depth-1000 sentinel key and serves them at any depth. Deeper service is
+  justified by `MateDepthMonotone` (and `mateEntry_deep_service` proves
+  the lift). *Shallower* service violates the depth-indexed `BoundSpec`
+  outright (`negamaxDraw_depth_inconsistent` shows depth-dependence is
+  real); it is chess-harmless only under `MateDepthStable` (mate-band
+  membership independent of depth ≥ 1), which
+  `mateDepthStable_of_kingGoneStable` (`sorry`d) derives from
+  `KingGoneStable` (a captured king is permanent, on both sides of the
+  sign alternation) plus "mate scores only come from real king captures".
+  Such a variant should document itself as **weakening `BoundSpec`** to
+  mate-band membership only.
+
 - **`ExtKeyIndependent`** — *not* `sorry`d, but stated as the false claim a
   `(pos, depth)`-keyed table makes once search extensions depend on history
   (e.g. a recapture extension keyed on the last-capture square), and refuted
@@ -108,13 +174,18 @@ content:
 | `BoundSpec` | the docstring (lines 287–290) |
 | `NullGame.pass` | `pos.rotate(nullmove=True)` (line 331) |
 | `Table`, `TableOK` | `tp_score`, `Entry` (lines 275–276, 305–310, 414–420) |
+| `negamaxDraw`, `boundStale`, `staleFix` | king-capture normalization + stalemate correction (lines 298–303, 388–412) |
+| `inCheckB`, `CheckProbeOK` | the null-position check probe `bound(flipped, MATE_UPPER, 0) == MATE_UPPER` (lines 409–411) |
+| `MateValuesAreKingCaptures` | the requirement of lines 398–401 and the caveat of lines 403–405 |
+| `FutGame.val`, `boundFut` | `pos.value(move)` and the futility yield (lines 360–374) |
 
 Not modeled at all (they change *what* is computed, not whether bounds are
-honest, or are performance-only): move ordering (line 360), killer/IID
-(lines 338–357), futility pruning (lines 362–374), repetition/history
-(lines 315–316), the stalemate correction (lines 390–412), table eviction
-(lines 419–420 — eviction only forgets entries, which trivially preserves
-`TableOK`).
+honest, or are performance-only): move ordering (line 360 — except for its
+load-bearing consequence, the `MATE_UPPER` sentinel invariant, which
+`boundStale` enforces by construction), killer/IID (lines 338–357; see the
+killer-move caveat in `Sunfish/Stalemate.lean`), repetition/history
+(lines 315–316), table eviction (lines 419–420 — eviction only forgets
+entries, which trivially preserves `TableOK`).
 
 ## Guideline for search-changing PRs
 
@@ -124,6 +195,26 @@ logic)? Does it strengthen or newly rely on `NullOK` (zugzwang exposure)?
 Does it preserve `TableOK` (is every store still a valid bracket, and is the
 key still complete — cf. `ExtKeyIndependent`)? If the answer is "it weakens
 X in positions Y", that is exactly the sentence the PR description needs.
+
+The stalemate/futility/mate-entry work adds three more named hypotheses to
+check against:
+
+- **`MateValuesAreKingCaptures`** — anything touching move ordering, the
+  killer yield, king-capture scoring or the stalemate block must say
+  whether `bound` still returns the exact `MATE_UPPER` sentinel whenever
+  the king is capturable, and whether mate-band values can now be
+  fabricated from shallow artifacts (`boundStale_not_unconditional` shows
+  what goes wrong if so). Changes to MTD-bi's probe range must keep
+  `gamma` inside `(-MATE_UPPER, MATE_UPPER]`, or the correction's
+  soundness argument collapses at the window edge.
+- **`FutilityOK` / `FutilityMateOK`** — any change to `pos.value`, to the
+  futility threshold or to the depth at which futility applies must
+  re-justify that the static estimate still dominates the true child value
+  (and that king captures still bypass it with the exact sentinel).
+- **`MateDepthStable`** — a PR serving table entries across depths must
+  state whether it serves only deeper (needs `MateDepthMonotone`) or also
+  shallower (needs `MateDepthStable`, and should declare itself a
+  weakening of `BoundSpec` to mate-band membership).
 
 ## Prior art
 
