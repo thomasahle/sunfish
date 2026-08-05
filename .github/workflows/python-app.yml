@@ -43,6 +43,32 @@ jobs:
         # "stop" right after "go infinite" must yield a bestmove (regression test for #117)
         printf 'uci\nposition startpos\ngo infinite\nstop\nquit\n' \
           | timeout 60 python ./sunfish.py | tee /dev/stderr | grep -q bestmove
+        # The polyglot shebang must make the script directly executable (issue #102)
+        printf 'uci\nquit\n' | ./sunfish.py | tee /dev/stderr | grep -q uciok
+    - name: UCI smoke test (packed/tiny interface)
+      # The packed 4K build strips the minifier-hide block and uses the tiny
+      # built-in UCI loop at the bottom of sunfish.py. Test that loop directly.
+      run: |
+        sed '/# minifier-hide start/,/# minifier-hide end/d' sunfish.py > tiny_sunfish.py
+        printf 'uci\nisready\nposition startpos moves e2e4\ngo wtime 60000 btime 60000\nquit\n' \
+          | timeout 60 python tiny_sunfish.py | tee /dev/stderr | grep -q bestmove
+        printf 'uci\nposition startpos\ngo movetime 500\nquit\n' \
+          | timeout 60 python tiny_sunfish.py | tee /dev/stderr | grep -q bestmove
+        rm tiny_sunfish.py
+    - name: cutechess-cli match
+      # Play quick self-play matches under a real tournament manager (as used
+      # by TCEC and major GUIs): one TC with increment, one sudden death.
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq cutechess-cli || sudo apt-get install -y -qq cutechess
+        cutechess-cli -engine cmd=./sunfish.py name=sunfish-a \
+                      -engine cmd=./sunfish.py name=sunfish-b \
+                      -each proto=uci tc=8+0.1 -games 2 | tee cc.log
+        cutechess-cli -engine cmd=./sunfish.py name=sunfish-a \
+                      -engine cmd=./sunfish.py name=sunfish-b \
+                      -each proto=uci tc=8 -games 2 | tee -a cc.log
+        # Time losses are tolerated at these speeds; crashes and rule bugs are not
+        ! grep -Ei "disconnect|stall|illegal|invalid" cc.log
     - name: UCI smoke test (sunfish_nnue)
       # The NNUE version lives on the nnue branch until it works well.
       if: hashFiles('sunfish_nnue.py') != ''

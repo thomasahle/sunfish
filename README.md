@@ -69,6 +69,13 @@ bestmove d2d4
 </pre>
 (See the [UCI specification](http://wbec-ridderkerk.nl/html/UCIProtocol.html) for the full set of commands.)
 
+### Troubleshooting
+
+`./sunfish.py` automatically runs with `pypy3` if installed (recommended, much stronger), otherwise `python3`.
+If the engine fails to start, run `tools/fancy.py` with `-debug` to see the underlying error,
+and make sure `python3` is on your PATH. On Windows, `.py` engines are launched
+through your current Python interpreter automatically.
+
 ### Playing with a graphical interface
 
 It is also possible to run Sunfish with a graphical interface, such as [PyChess](http://pychess.org) or [Arena](http://www.playwitharena.de).
