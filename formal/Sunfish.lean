@@ -5,3 +5,4 @@ import Sunfish.Killer
 import Sunfish.Lmr
 import Sunfish.Tricks
 import Sunfish.TableClamp
+import Sunfish.CanNull
