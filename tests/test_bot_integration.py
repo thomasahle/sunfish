@@ -76,7 +76,8 @@ LICHESS_BOT_COMMIT = os.environ.get(
 STARTUP_TIMEOUT = 120  # engine config check + connect to the event stream
 ACCEPT_TIMEOUT = 60  # challenge event -> accepted -> gameStart
 GAME_TIMEOUT = 240  # both clocks are 60s; a finished 60+0 game fits easily
-MAX_MOVE_SECONDS = 10.0  # any move (lichess-bot searches 10 s for the first)
+MAX_MOVE_SECONDS = 12.0  # any move: lichess-bot searches a full 10 s for the
+# first, and the engine is entitled to all of it; allow IO/runner overhead
 MAX_LATER_MOVE_SECONDS = 4.0  # moves after the first (sunfish thinks ~1.5 s)
 
 
