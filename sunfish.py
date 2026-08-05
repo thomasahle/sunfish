@@ -121,6 +121,9 @@ directions = {
 # E.g. Mate in 3 will be MATE_UPPER - 6
 MATE_LOWER = piece["K"] - 10 * piece["Q"]
 MATE_UPPER = piece["K"] + 10 * piece["Q"]
+# Every static evaluation must stay within [-MATE_UPPER, MATE_UPPER]: the
+# transposition table's fresh entries assume it (formal/Sunfish/Tricks.lean,
+# `Bounded`). The tables above guarantee it; keep it true if you change them.
 
 # Constants for tuning search
 QS = 40
@@ -415,14 +418,21 @@ class Searcher:
         # Then the score is actaully a draw and we should fail high!
         # Thus, if best < gamma and best < 0 we need to double check what we are doing.
 
-        # We will fix this problem another way: We add the requirement to bound, that
-        # it always returns MATE_UPPER if the king is capturable. Even if another move
-        # was also sufficient to go above gamma. If we see this value we know we are either
-        # mate, or stalemate. It then suffices to check whether we're in check.
+        # We fix this problem another way: the sorted move loop above always
+        # yields a king capture first when one exists (it has the highest
+        # value), so barring the exceptions below, bound returns MATE_UPPER
+        # whenever the king is capturable. If we see best == -MATE_UPPER here,
+        # every reply lost the king (or there were no replies): we are either
+        # mated or stalemated, and it suffices to check whether we're in check.
 
-        # Note that at low depths, this may not actually be true, since maybe we just pruned
-        # all the legal moves. So sunfish may report "mate", but then after more search
-        # realize it's not a mate after all. That's fair.
+        # Exceptions (formal/Sunfish/Stalemate.lean makes these precise):
+        # - A killer-move cutoff can fire before the king capture is ever
+        #   generated, so a child may under-report a position where its king
+        #   hangs. Like all low-depth pruning artifacts, deeper search
+        #   corrects it; the in-check probe below is immune either way, since
+        #   with gamma = MATE_UPPER nothing smaller can fail high.
+        # - At low depths we may have pruned all legal moves, so sunfish may
+        #   report "mate" and retract it after more search. That's fair.
 
         # If the quiescent val-limit never skipped a move (no legal move falls below val_lower), then
         # exhausting the generator means every legal move was searched and lost the
@@ -441,6 +451,10 @@ class Searcher:
             flipped = pos.rotate(nullmove=True)
             # Hopefully this is already in the TT because of null-move
             in_check = self.bound(flipped, MATE_UPPER, 0) == MATE_UPPER
+            # Mated scores as -MATE_LOWER, not -MATE_UPPER: the latter stays a
+            # reserved sentinel meaning "the king is literally capturable",
+            # which the best == -MATE_UPPER test above depends on. A parent
+            # whose child is merely mated must not look king-capturable itself.
             best = -MATE_LOWER if in_check else 0
 
         # Table part 2. With every pruning decision gamma-independent, all
@@ -472,6 +486,10 @@ class Searcher:
             # Inv: lower <= score <= upper
             # 'while lower != upper' would work, but it's too much effort to spend
             # on what's probably not going to change the move played.
+            # This probe range also keeps the stalemate correction in bound()
+            # sound: it is only valid for windows inside (-MATE_UPPER,
+            # MATE_UPPER] (formal/Sunfish/Stalemate.lean proves both
+            # directions). Widen this range and stalemates break silently.
             lower, upper = -MATE_LOWER, MATE_LOWER
             while lower < upper - EVAL_ROUGHNESS:
                 score = self.bound(history[-1], gamma, depth, can_null=False)
