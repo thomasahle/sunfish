@@ -824,27 +824,154 @@ theorem boundNullTT_spec (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.P
 
 /-! ### Layer 2: where the bet lives -/
 
-/-- **NullBetOK** -- the layer-2 hypothesis, exactly as the code places
-the bet: for a guard-passing, non-terminal position, some real move at
-the CHILDREN's depth (`depth - 1`, i.e. `d + 2` when the pass sits at
-`d`) matches the pass searched at its REDUCED depth (`depth - 3`).  This
-folds the old `NullOK` (zugzwang: passing beats every move) together
-with the depth-reduction stability that `depth - 3` additionally needs.
-Its negation is zugzwang or a pass-favoring depth artifact. -/
-def NullBetOK (G : NullGame) : Prop :=
-  ∀ (d : Nat) (p : G.Pos), nullGuard G.toGame p → G.moves p ≠ [] →
-    ∃ m ∈ G.moves p, negamax G.toGame (d + 2) m ≤ negamax G.toGame d (G.pass p)
+/-- The null-free value: king-capture-normalized negamax, i.e. exactly
+`nullValue` with the pass option and the repetition gate deleted.  This
+is the honest "s*" of a king-capture engine (the same normalization
+`Sunfish/Stalemate.lean` established as the sentinel semantics); it
+differs from the raw `negamax` of `GameTree.lean` only at king-gone
+positions, which score the exact `-MATE_UPPER` sentinel. -/
+def plainValue (G : NullGame) : Nat → G.Pos → Int
+  | 0, p => if G.eval p ≤ -MATE_LOWER then -MATE_UPPER else G.eval p
+  | d + 1, p =>
+    if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+    else foldMax (fun m => -(plainValue G d m)) (G.moves p) LOSS
 
-/-- Layer 2 (STATED): under `NullBetOK` -- and with an empty history, so
-the repetition gate never fires -- the layer-1 value coincides with plain
-`negamax`, and hence layer 1's point spec composes into the original
-docstring.  `sorry`d: the named hypothesis is the point.  Zugzwang
+/-- Pointwise-equal weights give equal folds. -/
+theorem foldMax_congr {α : Type _} (w w' : α → Int) :
+    ∀ (ms : List α) (acc : Int), (∀ m ∈ ms, w m = w' m) →
+      foldMax w ms acc = foldMax w' ms acc := by
+  intro ms
+  induction ms with
+  | nil => intro acc _; rfl
+  | cons m ms ih =>
+    intro acc h
+    simp only [foldMax]
+    rw [h m (by simp)]
+    exact ih _ (fun x hx => h x (by simp [hx]))
+
+/-- The fold commutes with a `max` in its initial accumulator. -/
+theorem foldMax_max {α : Type _} (w : α → Int) :
+    ∀ (ms : List α) (a x : Int),
+      foldMax w ms (max a x) = max (foldMax w ms a) x := by
+  intro ms
+  induction ms with
+  | nil => intro a x; rfl
+  | cons m ms ih =>
+    intro a x
+    simp only [foldMax]
+    rw [show max (max a x) (w m) = max (max a (w m)) x from by omega]
+    exact ih (max a (w m)) x
+
+/-- **NullBetOK** -- the layer-2 hypothesis, exactly as the code places
+the bet: at every guard-passing position, some real move at the
+CHILDREN's depth (`depth - 1`, i.e. `d + 2` when the pass sits at `d`)
+matches the pass searched at its REDUCED depth (`depth - 3`).  This
+folds the old `NullOK` (zugzwang: passing beats every real move)
+together with the depth-reduction stability that `depth - 3`
+additionally needs, and -- since it demands a WITNESS move -- also
+excludes guard-passing TERMINAL positions (where the pass option has no
+move to back it: the stalemate corner of the same bet).  Its negation
+is zugzwang, a pass-favoring depth artifact, or a guard-passing
+stalemate. -/
+def NullBetOK (G : NullGame) : Prop :=
+  ∀ (d : Nat) (p : G.Pos), nullGuard G.toGame p →
+    ∃ m ∈ G.moves p, plainValue G (d + 2) m ≤ plainValue G d (G.pass p)
+
+/-- **Layer 2, proven under the named hypothesis**: with `NullBetOK` and
+an empty history (so the repetition gate never fires), the layer-1 value
+coincides with the null-free `plainValue` at every `(depth, can_null)` --
+the pass option never raises the fold, so composing with layer 1's point
+spec recovers the original docstring against `plainValue`.  Zugzwang
 (¬`NullBetOK`) breaks exactly this bridge and nothing in layer 1;
-non-empty histories additionally shift `negamax` itself toward the
-draw-aware semantics of `Sunfish/Stalemate.lean`. -/
-theorem nullValue_negamax (G : NullGame) (hbet : NullBetOK G) :
+non-empty histories additionally shift the target toward the draw-aware
+semantics of `Sunfish/Stalemate.lean`. -/
+theorem nullValue_plain (G : NullGame) (hbet : NullBetOK G) :
     ∀ (d : Nat) (cn : Bool) (p : G.Pos),
-      nullValue G (fun _ => false) d cn p = negamax G.toGame d p := by
-  sorry
+      nullValue G (fun _ => false) d cn p = plainValue G d p := by
+  suffices H : ∀ (n d : Nat), d ≤ n → ∀ (cn : Bool) (p : G.Pos),
+      nullValue G (fun _ => false) d cn p = plainValue G d p by
+    exact fun d => H d d (Nat.le_refl d)
+  intro n
+  induction n with
+  | zero =>
+    intro d hd cn p
+    have hd0 : d = 0 := by omega
+    subst hd0
+    rfl
+  | succ n ihn =>
+    intro d hd cn p
+    have hrep : ¬ (cn = true ∧ (fun _ : G.Pos => false) p = true) :=
+      fun h => Bool.noConfusion h.2
+    match d, hd with
+    | 0, _ => rfl
+    | 1, _ =>
+      have hL : nullValue G (fun _ => false) 1 cn p
+          = (if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+            else if cn = true ∧ (fun _ : G.Pos => false) p = true then 0
+            else foldMax (fun m => -(nullValue G (fun _ => false) 0 true m))
+              (G.moves p) LOSS) := rfl
+      have hR : plainValue G 1 p
+          = (if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+            else foldMax (fun m => -(plainValue G 0 m)) (G.moves p) LOSS) := rfl
+      rw [hL, hR]
+      by_cases hkg : G.eval p ≤ -MATE_LOWER
+      · rw [if_pos hkg, if_pos hkg]
+      · rw [if_neg hkg, if_neg hkg, if_neg hrep]
+        exact foldMax_congr _ _ (G.moves p) LOSS (fun m _ => by
+          show -(nullValue G (fun _ => false) 0 true m) = -(plainValue G 0 m)
+          rw [ihn 0 (by omega) true m])
+    | 2, hd =>
+      have hL : nullValue G (fun _ => false) 2 cn p
+          = (if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+            else if cn = true ∧ (fun _ : G.Pos => false) p = true then 0
+            else foldMax (fun m => -(nullValue G (fun _ => false) 1 true m))
+              (G.moves p) LOSS) := rfl
+      have hR : plainValue G 2 p
+          = (if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+            else foldMax (fun m => -(plainValue G 1 m)) (G.moves p) LOSS) := rfl
+      rw [hL, hR]
+      by_cases hkg : G.eval p ≤ -MATE_LOWER
+      · rw [if_pos hkg, if_pos hkg]
+      · rw [if_neg hkg, if_neg hkg, if_neg hrep]
+        exact foldMax_congr _ _ (G.moves p) LOSS (fun m _ => by
+          show -(nullValue G (fun _ => false) 1 true m) = -(plainValue G 1 m)
+          rw [ihn 1 (by omega) true m])
+    | (d + 3), hd =>
+      have hL : nullValue G (fun _ => false) (d + 3) cn p
+          = (if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+            else if cn = true ∧ (fun _ : G.Pos => false) p = true then 0
+            else foldMax (fun m => -(nullValue G (fun _ => false) (d + 2) true m))
+              (G.moves p)
+              (if cn = true ∧ nullGuard G.toGame p then
+                max LOSS (-(nullValue G (fun _ => false) d true (G.pass p)))
+              else LOSS)) := rfl
+      have hR : plainValue G (d + 3) p
+          = (if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+            else foldMax (fun m => -(plainValue G (d + 2) m)) (G.moves p) LOSS) := rfl
+      rw [hL, hR]
+      by_cases hkg : G.eval p ≤ -MATE_LOWER
+      · rw [if_pos hkg, if_pos hkg]
+      · rw [if_neg hkg, if_neg hkg, if_neg hrep]
+        have hcong : foldMax (fun m => -(nullValue G (fun _ => false) (d + 2) true m))
+              (G.moves p) LOSS
+            = foldMax (fun m => -(plainValue G (d + 2) m)) (G.moves p) LOSS :=
+          foldMax_congr _ _ (G.moves p) LOSS (fun m _ => by
+            show -(nullValue G (fun _ => false) (d + 2) true m) = -(plainValue G (d + 2) m)
+            rw [ihn (d + 2) (by omega) true m])
+        by_cases hg : cn = true ∧ nullGuard G.toGame p
+        · rw [if_pos hg]
+          rw [show (-(nullValue G (fun _ => false) d true (G.pass p)))
+              = (-(plainValue G d (G.pass p))) from by
+            rw [ihn d (by omega) true (G.pass p)]]
+          rw [foldMax_max, hcong]
+          -- The bet: the pass option never exceeds the real fold.
+          cases hbet d p hg.2 with
+          | intro m hm =>
+            have hmem : -(plainValue G (d + 2) m)
+                ≤ foldMax (fun x => -(plainValue G (d + 2) x)) (G.moves p) LOSS :=
+              foldMax_le_of_mem _ _ _ m hm.1
+            omega
+        · rw [if_neg hg]
+          exact hcong
 
 end Sunfish

@@ -1,9 +1,10 @@
 /-
 Precise statements of the search "tricks" that the proven model in
-`Sunfish/Bound.lean` deliberately leaves out.  Some are proven (the easy
-ones), the rest are `sorry`d on purpose: the point is that each trick has a
-*name* and a *hypothesis*, so that a search-changing PR can say which lemma
-it preserves, weakens, or newly depends on.
+`Sunfish/Bound.lean` deliberately leaves out.  Everything here is now
+PROVEN -- unconditionally where possible, otherwise under explicit named
+hypotheses in the statement (the honest form): the point is that each
+trick has a *name* and a *hypothesis*, so that a search-changing PR can
+say which lemma it preserves, weakens, or newly depends on.
 -/
 
 import Sunfish.Bound
@@ -786,17 +787,34 @@ def KingGoneStable (G : Game) (ML : Int) : Prop :=
   (∀ p, ML ≤ G.eval p → ∀ (d : Nat), ML ≤ negamax G d p) ∧
   (∀ p, G.eval p ≤ -ML → ∀ (d : Nat), negamax G d p ≤ -ML)
 
-/-- STATED: permanence of king capture plus "mate scores only come from
-real king captures" (the `Game`-level analogue of
-`MateValuesAreKingCaptures`) give depth-stability of the mate band.
-`sorry`d; a proof runs on the `foldMax` member lemmas: a depth-`d+1` mate
-finds a capture move `m` by `hOnly`, and `hK.2` pins `m` below `-ML` at
-every depth, so the parent stays above `ML` at every depth ≥ 1. -/
+/-- **Proven under its named hypotheses**: permanence of king capture
+plus "mate scores only come from real king captures" (the `Game`-level
+analogue of `MateValuesAreKingCaptures`) give depth-stability of the
+mate band.  The proof runs exactly on the `foldMax` member lemma: a
+depth-`d+1` mate finds a capture move `m` by `hOnly`, and `hK.2` pins
+`m` below `-ML` at EVERY depth, so the parent stays above `ML` at every
+depth ≥ 1. -/
 theorem mateDepthStable_of_kingGoneStable (G : Game) (ML : Int)
     (hK : KingGoneStable G ML)
     (hOnly : ∀ (d : Nat) (p : G.Pos), ML ≤ negamax G (d + 1) p →
       ∃ m ∈ G.moves p, G.eval m ≤ -ML) :
     MateDepthStable G ML := by
-  sorry
+  intro d d' p hd hd' hm
+  cases d with
+  | zero => exact absurd hd (by omega)
+  | succ d0 =>
+    cases hOnly d0 p hm with
+    | intro m hmm =>
+      cases d' with
+      | zero => exact absurd hd' (by omega)
+      | succ d1 =>
+        have hv := hK.2 m hmm.2 d1
+        have hfold : -(negamax G d1 m)
+            ≤ foldMax (fun x => -(negamax G d1 x)) (G.moves p) LOSS :=
+          foldMax_le_of_mem _ _ _ m hmm.1
+        have hneq : negamax G (d1 + 1) p
+            = foldMax (fun x => -(negamax G d1 x)) (G.moves p) LOSS := rfl
+        rw [hneq]
+        omega
 
 end Sunfish

@@ -1,5 +1,15 @@
 /-
-Late Move Reductions (commit 58883ea, sunfish.py lines 370, 386-397):
+HISTORICAL (commits 58883ea..7f9f164): this file describes the
+gamma-adaptive RE-SEARCH Late Move Reductions that shipped in 58883ea
+and were replaced on master by the DETERMINISTIC rule of 7f9f164
+(`Sunfish/LmrDet.lean`, point spec, no interval).  It is kept as the
+formal record of a shipped-then-retired mechanism -- and of WHY it was
+retired: the interval spec, the `Vlo`/`Vhi` pair and the TT crossing
+below are exactly the consistency price the re-search paid, and the
+~16 ELO it bought was deliberately traded back (see formal/README.md).
+
+Re-search Late Move Reductions (commit 58883ea, sunfish.py lines 370,
+386-397 as of that commit):
 
     for i_m, (val, move) in enumerate(sorted(...)):
         ...

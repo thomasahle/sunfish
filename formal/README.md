@@ -15,6 +15,27 @@ This is the property the MTD-bi driver `Searcher.search` (lines 424–447)
 relies on for its binary search: every call to `bound` must move one end of
 the `lower <= score <= upper` bracket, whatever `gamma` it is probed with.
 
+## The consistency decision (enforced on master)
+
+As of commit `7f9f164` the maintainer's design principle is **enforced on
+master, not grandfathered**: *"`gamma` may shape termination, and may
+trigger shortcuts whose value provably one-side-bounds the same function;
+`gamma` must never select between incomparable evaluations of a move."*
+Every pruning decision in the shipped search is gamma-independent —
+LMR is deterministic (`LMR = int(depth >= 4 and i_m >= 8 and val < 0)`,
+searched once at `depth - 1 - LMR`) — so the engine has **point specs
+end-to-end** on single value functions, transposition entries are
+contradiction-free by construction (`boundLmrDet_no_crossing`), and the
+store clamp became a provable no-op and was removed
+(`clamp_noop_high`/`clamp_noop_low`). The price: the gamma-adaptive
+re-search LMR measured ~16 ELO stronger (−16 ± 38 direct; both are large
+wins over no LMR). That trade was made deliberately, and
+`Sunfish/Lmr.lean` + `Sunfish/TableClamp.lean` remain as the formal
+record of what the 16 ELO would cost in spec strength.
+
+**`formal/` has zero sorries**: every theorem is proven, either
+unconditionally or under named hypotheses carried in the statement.
+
 ## Build
 
 ```sh
@@ -100,7 +121,23 @@ tactic only, so a full build takes seconds.
   invariant holds forever. Empirical corroboration cited in comments:
   0 violations in 694,533 killer cutoffs over 1,270 real-game positions.
 
-- **`Sunfish/Lmr.lean`** — Late Move Reductions (commit `58883ea`,
+- **`Sunfish/LmrDet.lean`** — **deterministic LMR (commit `7f9f164`,
+  current master)**: the reduction depends only on (depth, index, value),
+  never on gamma; each move searched once at `depth - 1 - LMR`. All
+  proven sorry-free:
+  - **`boundLmrDet_spec`**: the point `BoundSpec` against the single
+    value function `negamaxDet` (reducible moves valued one ply
+    shallower, recursively) — unconditional; `bound_spec` with per-move
+    depths, no interval, no mutual recursion.
+  - **`boundLmrDet_no_crossing`**: fail-high reports never exceed
+    fail-low reports at the same `(pos, depth)` — contradiction-free
+    entries by construction, `bound_no_crossing` generalized.
+  - **`clamp_noop_high` / `clamp_noop_low`**: under single-function
+    bounds the `2c95ab0` clamp is a no-op — the formal justification for
+    its removal; a future gamma-dependent choice must reinstate it.
+
+- **`Sunfish/Lmr.lean`** *(HISTORICAL: commits `58883ea..7f9f164`)* —
+  re-search Late Move Reductions (commit `58883ea`,
   sunfish.py lines 370, 386–397: late quiet moves probed at `depth - 2`,
   a reduced fail low yielded as-is, a reduced fail high re-searched at
   full depth). All proven sorry-free:
@@ -138,7 +175,9 @@ tactic only, so a full build takes seconds.
     (`boundKill_kingGone`/`negamaxDraw_kingGone`), so the stalemate
     detection still sees exact sentinels from reduced searches.
 
-- **`Sunfish/TableClamp.lean`** — the clamped store (commit `2c95ab0`,
+- **`Sunfish/TableClamp.lean`** *(HISTORICAL: commits
+  `2c95ab0..7f9f164`, removed with the re-search LMR)* — the clamped
+  store (commit `2c95ab0`,
   sunfish.py lines 435–443: fail-high stores
   `Entry(best, max(entry.upper, best))`, fail-low
   `Entry(min(entry.lower, best), best)`). All proven sorry-free:
@@ -175,11 +214,13 @@ tactic only, so a full build takes seconds.
   - **`ctableOK_empty`**: the empty table satisfies the invariant for
     *any* history — the fact that justifies sunfish clearing `tp_score`
     whenever `history` changes (the invariant is history-relative).
-  - Layer 2 (`nullValue_negamax`, stated under **`NullBetOK`**):
-    relating `nullValue` to plain `negamax` is where the zugzwang bet
-    lives — the bet only ever threatens the value, never
-    self-consistency. This restructures (and halves) the former
-    `boundNull_spec` sorry.
+  - **Layer 2 (`nullValue_plain`), proven under `NullBetOK`**: with the
+    bet hypothesis (some real move matches the reduced-depth pass;
+    witness required, so guard-passing stalemates are excluded too) and
+    an empty history, `nullValue` collapses to the null-free
+    `plainValue` — composing with layer 1 recovers the docstring.
+    Zugzwang threatens only this bridge, never self-consistency. This
+    completes (and replaces) the former `boundNull_spec` sorry.
   - Audit surprises recorded in the module comment: sunfish's
     `can_null` does **not** prevent consecutive null moves (the pass is
     searched with the default `True`); and the move generator's
@@ -236,21 +277,23 @@ tactic only, so a full build takes seconds.
     is incomparable to the full value (hence the `Vlo`/`Vhi` interval
     and the TT crossing).
 
-## What is stated with `sorry`, and why
+## Zero sorries: named hypotheses instead
 
-Each pruning trick is kept out of the proven model and instead given a
-*named hypothesis* in `Sunfish/Tricks.lean`, because each one is only sound
-conditionally — and the condition, not the induction, is the interesting
-content:
+**`grep -rn sorry formal/Sunfish/*.lean` finds nothing outside prose.**
+Every theorem about the shipped search is proven; where a claim is only
+conditionally true, the condition is a *named hypothesis in the
+statement* — the honest form — not a deferred proof:
 
-- **`NullOK` / `boundNull_spec`** — null-move pruning (sunfish.py lines
-  330–331) is correct *only under* `NullOK`: "in every non-terminal position
-  some legal move scores at least the pass value." Zugzwang is precisely
-  `¬ NullOK`; that is why sunfish guards the trick with
-  `abs(pos.score) < 500` instead of trusting it everywhere. The proof is
-  routine given `bound_spec`'s machinery and is `sorry`d; the deliverable is
-  the named hypothesis. (Sunfish's extra `depth - 3` reduction would further
-  need a depth-stability hypothesis, deliberately not modeled.)
+- **`NullBetOK` / `nullValue_plain`** (`Sunfish/CanNull.lean`, proven) —
+  the null-move bet, exactly as the code places it: some real move at the
+  children's depth matches the pass at its reduced `depth - 3`; the
+  witness requirement also excludes guard-passing stalemates. Under it
+  (and an empty history) the layer-1 value `nullValue` collapses to the
+  null-free `plainValue`, composing with the unconditional
+  `boundNullTT_spec` into the original docstring. Zugzwang is precisely
+  `¬ NullBetOK` and threatens only this bridge, never layer-1
+  self-consistency. (`NullOK` in Tricks.lean remains as the same-depth
+  core of the bet.)
 
 - **`FutilityMateOK`** — the one hypothesis left on the futility yield:
   the `else MATE_UPPER` king-capture bypass at line 371 can fail *high*
@@ -266,7 +309,7 @@ content:
   outright (`negamaxDraw_depth_inconsistent` shows depth-dependence is
   real); it is chess-harmless only under `MateDepthStable` (mate-band
   membership independent of depth ≥ 1), which
-  `mateDepthStable_of_kingGoneStable` (`sorry`d) derives from
+  `mateDepthStable_of_kingGoneStable` (proven) derives from
   `KingGoneStable` (a captured king is permanent, on both sides of the
   sign alternation) plus "mate scores only come from real king captures".
   Such a variant should document itself as **weakening `BoundSpec`** to
@@ -279,13 +322,14 @@ content:
   sunfish guards it only by `abs(pos.score) < 500` (line 330, with its own
   FIXME at 323–329 conceding the guard is heuristic).
   `NullGuardBlocksAtCaptures` names the condition under which the guard
-  closes the hole. `killer_probe_sound` states that the stalemate probe is
-  a complete decision procedure for king-capturability (no null move at
-  depth 0, stand-pat below the sentinel by `QuietEvalsInBand`, killer
-  covered by `boundKill_spec`, capture-first order otherwise); the `mpr`
-  direction is `boundKill_spec`, the no-false-positives direction is
-  `sorry`d pending a `MateValuesAreKingCaptures`-style characterization of
-  where `MATE_UPPER` reports originate.
+  closes the hole. `killer_probe_sound` (proven, both directions) shows
+  the stalemate probe is a complete decision procedure for
+  king-capturability *at the probe's depth* — the depth the engine
+  actually runs it at. The statement is pinned there deliberately: at
+  deeper depths the no-false-positives direction is genuinely unprovable
+  without a sentinel-origins characterization (a "mated" killer fakes
+  `-MATE_UPPER` one level down — the `boundStale_not_unconditional`
+  artifact family), and the docstring documents why.
 
 - **`ExtKeyIndependent`** — *not* `sorry`d, but stated as the false claim a
   `(pos, depth)`-keyed table makes once search extensions depend on history
@@ -305,13 +349,15 @@ content:
 | `LOSS = -MATE_UPPER` | `best = -MATE_UPPER` (line 379) |
 | `negamax` | the "true score `s*`" of the docstring (lines 287–290) |
 | `searchMoves` | the `best` loop + cutoff (lines 378–388; **NOTE**: since commit `58883ea` the real loop also carries LMR — `Bound.lean` models the loop *without* it, which is exact for early/loud moves; the reduction is modeled by `boundLmr`/`searchMovesIdx` in `Sunfish/Lmr.lean`) |
-| `boundLmr`, `red` | the LMR block: `depth >= 3 and i_m >= 5 and val < QS`, reduced probe at `depth - 2`, re-search on fail high (lines 386–397) |
+| `boundLmrDet`, `negamaxDet` | the deterministic LMR block on master: `LMR = int(depth >= 4 and i_m >= 8 and val < 0)`, one search at `depth - 1 - LMR` (`7f9f164`) |
+| `tablePart2` (plain stores) | Table part 2 on master: `Entry(best, entry.upper)` / `Entry(entry.lower, best)` — no clamp needed under point specs |
+| `boundLmr`, `red` *(historical)* | the re-search LMR block of `58883ea..7f9f164`: `depth >= 3 and i_m >= 5 and val < QS`, reduced probe at `depth - 2`, re-search on fail high |
 | `lmrVal` (`Vhi`/`Vlo`) | the interval that replaces the docstring's single `s*` under LMR |
 | `-(bound d m (1 - gamma))` | `-self.bound(pos.move(move), 1 - gamma, depth - 1)` (line 376) |
 | `BoundSpec` | the docstring (lines 287–290) |
 | `NullGame.pass` | `pos.rotate(nullmove=True)` (line 331) |
 | `Table`, `TableOK`, `tablePart2` | `tp_score`, `Entry`, lookup + point store (lines 275–276, 305–310, and the pre-`2c95ab0` Table part 2) |
-| `clampHigh`, `clampLow`, `IntervalTableOK` | the clamped Table part 2 (`2c95ab0`, lines 435–443) and the interval invariant it maintains |
+| `clampHigh`, `clampLow`, `IntervalTableOK` *(historical)* | the clamped Table part 2 of `2c95ab0..7f9f164` and the interval invariant it maintained |
 | `negamaxDraw`, `boundStale`, `staleFix` | king-capture normalization + stalemate correction (lines 298–303, 388–412) |
 | `inCheckB`, `CheckProbeOK` | the null-position check probe `bound(flipped, MATE_UPPER, 0) == MATE_UPPER` (lines 409–411) |
 | `MateValuesAreKingCaptures` | the requirement of lines 398–401 and the caveat of lines 403–405 |
@@ -363,13 +409,15 @@ key still complete — cf. `ExtKeyIndependent`)? If the answer is "it weakens
 X in positions Y", that is exactly the sentence the PR description needs.
 
 The maintainer's design principle, distilled from the futility-vs-LMR
-contrast: **"`gamma` may shape termination, and may trigger shortcuts
-whose value provably one-side-bounds the same function; `gamma` must
-never select between incomparable evaluations of a move."** Futility
-passes (its shortcut equals the depth-0 search it replaces —
-`futilityOK_discharged`); LMR fails it (the reduced and full values are
-incomparable), which is exactly why futility keeps the point `BoundSpec`
-while LMR pays with the interval spec and crossable TT entries.
+contrast and **now enforced on master** (commit `7f9f164`): **"`gamma`
+may shape termination, and may trigger shortcuts whose value provably
+one-side-bounds the same function; `gamma` must never select between
+incomparable evaluations of a move."** Futility passes (its shortcut
+equals the depth-0 search it replaces — `futilityOK_discharged`);
+deterministic LMR passes (the reduction is gamma-free, `boundLmrDet_spec`
+is a point spec); re-search LMR failed it, which is exactly why it paid
+with the interval spec and crossable TT entries — and why it was
+retired.
 
 The later files add further named conditions to check against:
 

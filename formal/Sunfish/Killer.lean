@@ -385,20 +385,124 @@ stand-pat can never fake the sentinel. -/
 def QuietEvalsInBand (G : Game) : Prop :=
   ∀ p, ¬ (G.eval p ≤ -MATE_LOWER) → -MATE_LOWER < G.eval p ∧ G.eval p < MATE_LOWER
 
-/-- STATED: the stalemate block's in-check probe
-(`bound(flipped, MATE_UPPER, 0) == MATE_UPPER`, sunfish.py line 411) is a
-complete decision procedure for king-capturability at the probed position:
-no null move runs inside it (depth 0), the stand-pat is below the sentinel
-by `QuietEvalsInBand`, the killer path reports the sentinel iff a capture
-exists (`boundKill_spec`), and otherwise the capture-first order decides.
-The `mpr` direction is `boundKill_spec.2` at `gamma = MATE_UPPER`; the
-`mp` direction ("no false positives") additionally needs a
-characterization of where `MATE_UPPER` reports can originate, analogous to
-`MateValuesAreKingCaptures`, and is left `sorry`d. -/
+/-- The loop's fail-soft result never exceeds a bound respected by the
+initial `best` and by every move's report. -/
+theorem killLoop_le (G : Game) [DecidableEq G.Pos] (gamma B : Int)
+    (f : G.Pos → KTable G → Int × KTable G) (p : G.Pos) :
+    ∀ (ms : List G.Pos), (∀ m ∈ ms, ∀ s : KTable G, (f m s).1 ≤ B) →
+      ∀ (best : Int) (t : KTable G), best ≤ B →
+      (killLoop G gamma f p ms best t).1 ≤ B := by
+  intro ms
+  induction ms with
+  | nil =>
+    intro _ best _t hb
+    exact hb
+  | cons m ms ih =>
+    intro hB best t hb
+    have hm := hB m (by simp) t
+    simp only [killLoop]
+    by_cases hcut : gamma ≤ max best (f m t).1
+    · rw [if_pos hcut]
+      show max best (f m t).1 ≤ B
+      omega
+    · rw [if_neg hcut]
+      exact ih (fun x hx s => hB x (by simp [hx]) s) (max best (f m t).1) (f m t).2
+        (by omega)
+
+/-- **Proven, at the probe's depth**: the stalemate block's in-check
+probe (`bound(flipped, MATE_UPPER, 0) == MATE_UPPER`, sunfish.py line
+434) is a COMPLETE decision procedure for king-capturability at the
+probed position.  The model's depth 1 is the probe: the real probe is a
+depth-0 QS -- static leaves plus a scan of the captures -- which is
+exactly what `boundKill` at depth 1 computes (eval leaves, `orderedMoves`
+capture scan).  Both directions:
+
+* `mpr` (capturable → sentinel) is `boundKill_spec` at
+  `gamma = MATE_UPPER`.
+* `mp` (no false positives): at a non-capturable position every child
+  answer is a negated quiet eval, strictly inside the mate band by
+  `QuietEvalsInBand`; the killer, legal by `KillerOK`, is quiet too, so
+  its yield cannot reach the sentinel and the loop's fail-soft maximum
+  stays `≤ MATE_LOWER < MATE_UPPER` (`killLoop_le`).
+
+Why the statement is pinned to the probe depth rather than `∀ d ≥ 1`:
+at deeper `d` the no-false-positives direction is NOT provable without a
+sentinel-origins characterization (a "mated" killer -- all its moves
+refuted at the exact sentinel -- reports `-MATE_UPPER` one level down
+without any king being capturable, the same artifact family as
+`boundStale_not_unconditional`).  The engine only ever runs the probe at
+depth 0, so the depth-pinned statement is the faithful one. -/
 theorem killer_probe_sound (G : Game) [DecidableEq G.Pos]
-    (hQ : QuietEvalsInBand G) (d : Nat) (p : G.Pos) (t : KTable G)
-    (ht : KillerOK G t) (hd : 1 ≤ d) (hkg : ¬ (G.eval p ≤ -MATE_LOWER)) :
-    (boundKill G d p MATE_UPPER t).1 = MATE_UPPER ↔ hasKingCapture G p = true := by
-  sorry
+    (hQ : QuietEvalsInBand G) (p : G.Pos) (t : KTable G)
+    (ht : KillerOK G t) (hkg : ¬ (G.eval p ≤ -MATE_LOWER)) :
+    (boundKill G 1 p MATE_UPPER t).1 = MATE_UPPER ↔ hasKingCapture G p = true := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 50710 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  constructor
+  · intro hr
+    by_cases hcap : hasKingCapture G p = true
+    · exact hcap
+    · exfalso
+      have hquiet : ∀ m ∈ G.moves p, ¬ (G.eval m ≤ -MATE_LOWER) :=
+        fun m hm hkgm => hcap ((hasKingCapture_iff G p).mpr ⟨m, hm, hkgm⟩)
+      have hchildB : ∀ m ∈ orderedMoves G p, ∀ s : KTable G,
+          -(boundKill G 0 m (1 - MATE_UPPER) s).1 ≤ MATE_LOWER := by
+        intro m hm s
+        have hmm := orderedMoves_subset G p m hm
+        have hq := hQ m (hquiet m hmm)
+        have hb0 : boundKill G 0 m (1 - MATE_UPPER) s = (G.eval m, s) := by
+          simp only [boundKill]
+          rw [if_neg (hquiet m hmm)]
+        rw [hb0]
+        show -(G.eval m) ≤ MATE_LOWER
+        omega
+      have hunf : boundKill G 1 p MATE_UPPER t
+          = (if G.eval p ≤ -MATE_LOWER then (-MATE_UPPER, t)
+            else
+              match t p with
+              | some k =>
+                if MATE_UPPER ≤ -(boundKill G 0 k (1 - MATE_UPPER) t).1 then
+                  (-(boundKill G 0 k (1 - MATE_UPPER) t).1,
+                    kstore G (boundKill G 0 k (1 - MATE_UPPER) t).2 p k)
+                else
+                  killLoop G MATE_UPPER
+                    (fun m t' => (-(boundKill G 0 m (1 - MATE_UPPER) t').1,
+                      (boundKill G 0 m (1 - MATE_UPPER) t').2))
+                    p (orderedMoves G p)
+                    (max LOSS (-(boundKill G 0 k (1 - MATE_UPPER) t).1))
+                    (boundKill G 0 k (1 - MATE_UPPER) t).2
+              | none =>
+                killLoop G MATE_UPPER
+                  (fun m t' => (-(boundKill G 0 m (1 - MATE_UPPER) t').1,
+                    (boundKill G 0 m (1 - MATE_UPPER) t').2))
+                  p (orderedMoves G p) LOSS t) := rfl
+      rw [hunf, if_neg hkg] at hr
+      cases hkil : t p with
+      | some k =>
+        have hkinfo := ht p k hkil
+        have hkq : ¬ (G.eval k ≤ -MATE_LOWER) := hquiet k hkinfo.1
+        have hqk := hQ k hkq
+        have hb0 : boundKill G 0 k (1 - MATE_UPPER) t = (G.eval k, t) := by
+          simp only [boundKill]
+          rw [if_neg hkq]
+        simp only [hkil, hb0] at hr
+        rw [if_neg (show ¬ (MATE_UPPER ≤ -(G.eval k)) from by omega)] at hr
+        have hloop := killLoop_le G MATE_UPPER MATE_LOWER
+          (fun m t' => (-(boundKill G 0 m (1 - MATE_UPPER) t').1,
+            (boundKill G 0 m (1 - MATE_UPPER) t').2))
+          p (orderedMoves G p) hchildB
+          (max LOSS (-(G.eval k))) t (by omega)
+        omega
+      | none =>
+        simp only [hkil] at hr
+        have hloop := killLoop_le G MATE_UPPER MATE_LOWER
+          (fun m t' => (-(boundKill G 0 m (1 - MATE_UPPER) t').1,
+            (boundKill G 0 m (1 - MATE_UPPER) t').2))
+          p (orderedMoves G p) hchildB LOSS t (by omega)
+        omega
+  · intro hcap
+    exact (boundKill_spec G 1 p MATE_UPPER t (by decide) (Int.le_refl _) ht).2
+      (by omega) hkg hcap
 
 end Sunfish

@@ -1,6 +1,14 @@
 /-
+HISTORICAL (commits 2c95ab0..7f9f164): the clamp documented here
+shipped alongside re-search LMR and was removed together with it when
+master switched to deterministic LMR (7f9f164) -- under single-function
+bounds the clamp is a provable no-op (`clamp_noop_high`/`clamp_noop_low`
+in `Sunfish/LmrDet.lean`).  Kept as the formal record: any future
+gamma-dependent evaluation choice must reinstate BOTH this clamp and
+the interval spec of `Sunfish/Lmr.lean`.
+
 The clamped store, commit 2c95ab0 ("Never store contradictory
-transposition entries"), sunfish.py lines 435-443:
+transposition entries"), sunfish.py lines 435-443 as of that commit:
 
     if best >= gamma:
         self.tp_score[...] = Entry(best, max(entry.upper, best))
