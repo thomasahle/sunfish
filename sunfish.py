@@ -335,15 +335,19 @@ class Searcher:
         val_lower = QS - depth * QS_A
 
         def moves():
-            # First try not moving at all. We only do this if there is at least one major
-            # piece left on the board, since otherwise zugzwangs are too dangerous.
-            # FIXME: We also can't null move if we can capture the opponent king.
-            # Since if we do, we won't spot illegal moves that could lead to stalemate.
-            # For now we just solve this by not using null-move in very unbalanced positions.
-            # TODO: We could actually use null-move in QS as well. Not sure it would be very useful.
-            # But still.... We just have to move stand-pat to be before null-move.
-            #if depth > 2 and can_null and any(c in pos.board for c in "RBNQ"):
-            #if depth > 2 and can_null and any(c in pos.board for c in "RBNQ") and abs(pos.score) < 500:
+            # First try not moving at all, i.e. the null move. Two caveats,
+            # both now measured and consciously accepted (formal/README.md):
+            # - Zugzwang: passing may be an un-chess-like free tempo; the
+            #   score guard below limits exposure. Re-adding the classic
+            #   majors-only guard measured -5 +/- 30 ELO: a wash, declined.
+            # - King-capturable nodes: a null cutoff can mask the MATE_UPPER
+            #   sentinel that mate/stalemate detection consumes. The killer
+            #   path is provably safe (formal/Sunfish/Killer.lean); the null
+            #   path is the one remaining exception. Closing it measured
+            #   -28 ELO (move-scan check) and -12 with no benchmark gain
+            #   (killer-only check): declined, exception tolerated.
+            # Null move in QS (a search-verified stand-pat) measured
+            # -13 +/- 34 ELO: declined.
             if depth > 2 and can_null and abs(pos.score) < 500:
                 yield None, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
 
@@ -357,7 +361,9 @@ class Searcher:
 
             # If there isn't one, try to find one with a more shallow search.
             # This is known as Internal Iterative Deepening (IID). We set
-            # can_null=True, since we want to make sure we actually find a move.
+            # can_null=False: with True, a null cutoff could end the probe
+            # without storing any move, and the repetition check could
+            # truncate it before it finds one.
             if not killer and depth > 2:
                 self.bound(pos, gamma, depth - 3, can_null=False)
                 killer = self.tp_move.get(pos)
@@ -415,7 +421,7 @@ class Searcher:
         # At the next depth we are allowed to just return r, -infty <= r < gamma,
         # which is normally fine.
         # However, what if gamma = -10 and we don't have any legal moves?
-        # Then the score is actaully a draw and we should fail high!
+        # Then the score is actually a draw and we should fail high!
         # Thus, if best < gamma and best < 0 we need to double check what we are doing.
 
         # We fix this problem another way: the sorted move loop above always
