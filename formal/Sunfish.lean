@@ -4,3 +4,4 @@ import Sunfish.Stalemate
 import Sunfish.Killer
 import Sunfish.Lmr
 import Sunfish.Tricks
+import Sunfish.TableClamp

@@ -127,6 +127,47 @@ def Table.store {G : Game} [DecidableEq G.Pos] (t : Table G) (d : Nat)
     (p : G.Pos) (e : Int × Int) : Table G :=
   ⟨fun d' p' => if d' = d ∧ p' = p then some e else t.find d' p'⟩
 
+/-- Storing a valid bracket preserves the invariant. -/
+theorem tableOK_store {G : Game} [DecidableEq G.Pos] {t : Table G} {d : Nat}
+    {p : G.Pos} {lo hi : Int} (ht : TableOK G t)
+    (h : lo ≤ negamax G d p ∧ negamax G d p ≤ hi) :
+    TableOK G (Table.store t d p (lo, hi)) := by
+  intro d' p' lo' hi' hfind
+  simp only [Table.store] at hfind
+  by_cases hdp : d' = d ∧ p' = p
+  · rw [if_pos hdp] at hfind
+    injection hfind with h1
+    rw [Prod.mk.injEq] at h1
+    rw [hdp.1, hdp.2, ← h1.1, ← h1.2]
+    exact h
+  · rw [if_neg hdp] at hfind
+    exact ht d' p' lo' hi' hfind
+
+/-- Under `Bounded`, negamax values live in the band -- what makes the
+fresh entry `Entry(-MATE_UPPER, MATE_UPPER)` of line 308 a valid bracket. -/
+theorem negamax_bounded (G : Game) (hb : Bounded G) :
+    ∀ (d : Nat) (p : G.Pos),
+      -MATE_UPPER ≤ negamax G d p ∧ negamax G d p ≤ MATE_UPPER := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  intro d
+  induction d with
+  | zero =>
+    intro p
+    have := hb p
+    simp only [negamax]
+    omega
+  | succ d ih =>
+    intro p
+    simp only [negamax]
+    constructor
+    · have := foldMax_ge_init (fun m => -(negamax G d m)) (G.moves p) LOSS
+      omega
+    · refine foldMax_le _ _ _ (fun m _ => ?_) (by omega)
+      show -(negamax G d m) ≤ MATE_UPPER
+      have := ih m
+      omega
+
 /-- The move loop of `boundTT`, threading the table through the child
 searches (state-passing version of `searchMoves`). -/
 def searchMovesTT {G : Game} (gamma : Int)
@@ -134,39 +175,190 @@ def searchMovesTT {G : Game} (gamma : Int)
     List G.Pos → Int → Table G → Int × Table G
   | [], best, t => (best, t)
   | m :: ms, best, t =>
-    let r := f m t
-    if gamma ≤ max best r.1 then (max best r.1, r.2)
-    else searchMovesTT gamma f ms (max best r.1) r.2
+    if gamma ≤ max best (f m t).1 then (max best (f m t).1, (f m t).2)
+    else searchMovesTT gamma f ms (max best (f m t).1) (f m t).2
+
+/-- Table part 2, PRE-2c95ab0 point version (the historical lines
+415-418): tighten the reported side, keep the other.  The clamped
+post-LMR version is `clampHigh`/`clampLow` in `Sunfish/TableClamp.lean`. -/
+def tablePart2 (G : Game) [DecidableEq G.Pos] (d : Nat) (p : G.Pos)
+    (gamma : Int) (e : Int × Int) (r : Int × Table G) : Int × Table G :=
+  if gamma ≤ r.1 then (r.1, Table.store r.2 d p (r.1, e.2))
+  else (r.1, Table.store r.2 d p (e.1, r.1))
 
 /-- `bound` with a transposition table: lookup before searching
-(sunfish.py lines 308-310), store the tightened bound on exit (415-418). -/
+(sunfish.py lines 308-310), store the tightened bound on exit. -/
 def boundTT (G : Game) [DecidableEq G.Pos] :
     Nat → G.Pos → Int → Table G → Int × Table G
   | 0, p, _gamma, t => (G.eval p, t)
   | d + 1, p, gamma, t =>
     -- entry = tp_score.get(..., Entry(-MATE_UPPER, MATE_UPPER))  (line 308)
-    let e := (t.find (d + 1) p).getD (LOSS, MATE_UPPER)
-    if gamma ≤ e.1 then (e.1, t)          -- if entry.lower >= gamma  (line 309)
-    else if e.2 < gamma then (e.2, t)     -- if entry.upper < gamma   (line 310)
+    if gamma ≤ ((t.find (d + 1) p).getD (LOSS, MATE_UPPER)).1 then
+      (((t.find (d + 1) p).getD (LOSS, MATE_UPPER)).1, t)   -- line 309
+    else if ((t.find (d + 1) p).getD (LOSS, MATE_UPPER)).2 < gamma then
+      (((t.find (d + 1) p).getD (LOSS, MATE_UPPER)).2, t)   -- line 310
     else
-      let r := searchMovesTT gamma
-        (fun m t' =>
-          let s := boundTT G d m (1 - gamma) t'
-          (-s.1, s.2))
-        (G.moves p) LOSS t
-      -- Table part 2 (lines 414-418): tighten one side, keep the other.
-      let t' := if gamma ≤ r.1 then Table.store r.2 (d + 1) p (r.1, e.2)
-                else Table.store r.2 (d + 1) p (e.1, r.1)
-      (r.1, t')
+      tablePart2 G (d + 1) p gamma ((t.find (d + 1) p).getD (LOSS, MATE_UPPER))
+        (searchMovesTT gamma
+          (fun m t' => (-(boundTT G d m (1 - gamma) t').1,
+            (boundTT G d m (1 - gamma) t').2))
+          (G.moves p) LOSS t)
 
-/-- A table-using `bound` both answers correctly and *preserves* `TableOK`.
-The preservation half is the real content: it is what makes it sound for
-later queries (with different `gamma`!) to trust lines 309-310. -/
-theorem boundTT_spec (G : Game) [DecidableEq G.Pos] (hb : Bounded G)
-    (d : Nat) (p : G.Pos) (gamma : Int) (t : Table G) (ht : TableOK G t) :
-    BoundSpec G d p gamma (boundTT G d p gamma t).1 ∧
+/-- The state-passing loop is fail-soft correct AND preserves the table
+invariant, provided every child call is (`searchMoves_spec` fused with
+invariant threading). -/
+theorem searchMovesTT_spec (G : Game) (gamma : Int)
+    (f : G.Pos → Table G → Int × Table G) (w : G.Pos → Int)
+    (hf : ∀ (m : G.Pos) (t : Table G), TableOK G t →
+      TableOK G (f m t).2 ∧
+      (gamma ≤ (f m t).1 → (f m t).1 ≤ w m) ∧
+      ((f m t).1 < gamma → w m ≤ (f m t).1)) :
+    ∀ (ms : List G.Pos) (best acc : Int) (t : Table G), TableOK G t →
+      (gamma ≤ best → best ≤ acc) →
+      (best < gamma → acc ≤ best) →
+      TableOK G (searchMovesTT gamma f ms best t).2 ∧
+      (gamma ≤ (searchMovesTT gamma f ms best t).1 →
+        (searchMovesTT gamma f ms best t).1 ≤ foldMax w ms acc) ∧
+      ((searchMovesTT gamma f ms best t).1 < gamma →
+        foldMax w ms acc ≤ (searchMovesTT gamma f ms best t).1) := by
+  intro ms
+  induction ms with
+  | nil =>
+    intro best acc t ht h1 h2
+    simp only [searchMovesTT, foldMax]
+    exact ⟨ht, h1, h2⟩
+  | cons m ms ih =>
+    intro best acc t ht h1 h2
+    have hfm := hf m t ht
+    have hm1 := hfm.2.1
+    have hm2 := hfm.2.2
+    simp only [searchMovesTT, foldMax]
+    by_cases hcut : gamma ≤ max best (f m t).1
+    · rw [if_pos hcut]
+      have hrest := foldMax_ge_init w ms (max acc (w m))
+      refine ⟨hfm.1, fun _ => ?_, fun hlt => ?_⟩
+      · show max best (f m t).1 ≤ foldMax w ms (max acc (w m))
+        by_cases hfge : gamma ≤ (f m t).1
+        · have := hm1 hfge
+          by_cases hb : gamma ≤ best
+          · have := h1 hb; omega
+          · omega
+        · have hb : gamma ≤ best := by omega
+          have := h1 hb
+          omega
+      · omega
+    · rw [if_neg hcut]
+      have hfl : (f m t).1 < gamma := by omega
+      have hb : best < gamma := by omega
+      have hwm := hm2 hfl
+      have hacc := h2 hb
+      exact ih (max best (f m t).1) (max acc (w m)) (f m t).2 hfm.1
+        (fun hge => absurd hge hcut)
+        (fun _ => by omega)
+
+/-- The point-version store step: given a valid old entry and a fail-soft
+correct report, the tightened entry is a valid bracket. -/
+theorem tablePart2_ok (G : Game) [DecidableEq G.Pos] (d : Nat) (p : G.Pos)
+    (gamma : Int) (e : Int × Int) (r : Int × Table G)
+    (htok : TableOK G r.2)
+    (he1 : e.1 ≤ negamax G d p) (he2 : negamax G d p ≤ e.2)
+    (hr1 : gamma ≤ r.1 → r.1 ≤ negamax G d p)
+    (hr2 : r.1 < gamma → negamax G d p ≤ r.1) :
+    (tablePart2 G d p gamma e r).1 = r.1 ∧
+      TableOK G (tablePart2 G d p gamma e r).2 := by
+  unfold tablePart2
+  by_cases hcut : gamma ≤ r.1
+  · rw [if_pos hcut]
+    exact ⟨rfl, tableOK_store htok ⟨hr1 hcut, he2⟩⟩
+  · rw [if_neg hcut]
+    exact ⟨rfl, tableOK_store htok ⟨he1, hr2 (by omega)⟩⟩
+
+/-- **A table-using `bound` both answers correctly and preserves
+`TableOK` -- proven.**  The preservation half is the real content: it is
+what makes it sound for later queries (with different `gamma`!) to trust
+lines 309-310.  This is the POINT-spec version -- `bound_spec` plus
+invariant-threading through the state-passing loop -- and is sound for
+the pre-LMR search model (`Sunfish/Bound.lean`); under LMR the point
+invariant is unachievable (`lmr_tt_crossing`) and the honest table story
+is the interval invariant of `Sunfish/TableClamp.lean`. -/
+theorem boundTT_spec (G : Game) [DecidableEq G.Pos] (hb : Bounded G) :
+    ∀ (d : Nat) (p : G.Pos) (gamma : Int) (t : Table G), TableOK G t →
+      BoundSpec G d p gamma (boundTT G d p gamma t).1 ∧
       TableOK G (boundTT G d p gamma t).2 := by
-  sorry
+  intro d
+  induction d with
+  | zero =>
+    intro p gamma t ht
+    refine ⟨⟨fun _ => ?_, fun _ => ?_⟩, ?_⟩
+    · simp only [boundTT, negamax]; omega
+    · simp only [boundTT, negamax]; omega
+    · simp only [boundTT]; exact ht
+  | succ d ih =>
+    intro p gamma t ht
+    -- The current entry is a valid bracket (stored, or the band default).
+    have hE : ((t.find (d + 1) p).getD (LOSS, MATE_UPPER)).1 ≤ negamax G (d + 1) p ∧
+        negamax G (d + 1) p ≤ ((t.find (d + 1) p).getD (LOSS, MATE_UPPER)).2 := by
+      cases hfind : t.find (d + 1) p with
+      | none =>
+        have hband := negamax_bounded G hb (d + 1) p
+        have hLOSS : LOSS = -MATE_UPPER := rfl
+        refine ⟨?_, ?_⟩
+        · show LOSS ≤ negamax G (d + 1) p
+          omega
+        · show negamax G (d + 1) p ≤ MATE_UPPER
+          omega
+      | some e =>
+        exact ht (d + 1) p e.1 e.2 (by rw [hfind])
+    simp only [boundTT]
+    by_cases hlo : gamma ≤ ((t.find (d + 1) p).getD (LOSS, MATE_UPPER)).1
+    · -- Entry lower already answers (line 309): a valid lower bound.
+      rw [if_pos hlo]
+      refine ⟨⟨fun _ => ?_, fun hlt => ?_⟩, ht⟩
+      · exact hE.1
+      · omega
+    · rw [if_neg hlo]
+      by_cases hhi : ((t.find (d + 1) p).getD (LOSS, MATE_UPPER)).2 < gamma
+      · -- Entry upper already answers (line 310): a valid upper bound.
+        rw [if_pos hhi]
+        refine ⟨⟨fun hge => ?_, fun _ => ?_⟩, ht⟩
+        · omega
+        · exact hE.2
+      · -- The searched branch: loop spec + store step.
+        rw [if_neg hhi]
+        have hf : ∀ (m : G.Pos) (t' : Table G), TableOK G t' →
+            TableOK G (boundTT G d m (1 - gamma) t').2 ∧
+            (gamma ≤ -(boundTT G d m (1 - gamma) t').1 →
+              -(boundTT G d m (1 - gamma) t').1 ≤ -(negamax G d m)) ∧
+            (-(boundTT G d m (1 - gamma) t').1 < gamma →
+              -(negamax G d m) ≤ -(boundTT G d m (1 - gamma) t').1) := by
+          intro m t' ht'
+          have hih := ih m (1 - gamma) t' ht'
+          have h1 := hih.1.1
+          have h2 := hih.1.2
+          refine ⟨hih.2, fun hge => ?_, fun hlt => ?_⟩
+          · have := h2 (by omega); omega
+          · have := h1 (by omega); omega
+        have hloop := searchMovesTT_spec G gamma
+          (fun m t' => (-(boundTT G d m (1 - gamma) t').1,
+            (boundTT G d m (1 - gamma) t').2))
+          (fun m => -(negamax G d m)) hf
+          (G.moves p) LOSS LOSS t ht
+          (fun _ => Int.le_refl _) (fun _ => Int.le_refl _)
+        have hneq : negamax G (d + 1) p
+            = foldMax (fun m => -(negamax G d m)) (G.moves p) LOSS := rfl
+        have htp := tablePart2_ok G (d + 1) p gamma
+          ((t.find (d + 1) p).getD (LOSS, MATE_UPPER))
+          (searchMovesTT gamma
+            (fun m t' => (-(boundTT G d m (1 - gamma) t').1,
+              (boundTT G d m (1 - gamma) t').2))
+            (G.moves p) LOSS t)
+          hloop.1 hE.1 hE.2
+          (fun hge => by rw [hneq]; exact hloop.2.1 hge)
+          (fun hlt => by rw [hneq]; exact hloop.2.2 hlt)
+        rw [htp.1]
+        refine ⟨⟨fun hge => ?_, fun hlt => ?_⟩, htp.2⟩
+        · rw [hneq]; exact hloop.2.1 hge
+        · rw [hneq]; exact hloop.2.2 hlt
 
 /-! ### (d) The recapture-extension key problem  (STATED + counterexample)
 
