@@ -16,7 +16,9 @@ engine:
 
 challenge:
   concurrency: 1
-  accept_bot: true
+  # Humans only: bot-vs-bot games mostly farm rating off sunfish and burn
+  # the VM's CPU without anyone watching.
+  accept_bot: false
   variants:
     - standard
   time_controls:
