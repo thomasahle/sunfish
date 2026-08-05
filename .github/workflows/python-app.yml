@@ -40,8 +40,8 @@ jobs:
         printf 'uci\nisready\nposition startpos moves e2e4\ngo movetime 500\nquit\n' \
           | python ./sunfish.py | tee /dev/stderr | grep -q bestmove
     - name: UCI smoke test (sunfish_nnue)
-      # sunfish_nnue.py is currently broken on master (#117, #120); it is being
-      # fixed on the nnue branch. Remove continue-on-error once that lands.
+      # The NNUE version lives on the nnue branch until it works well.
+      if: hashFiles('sunfish_nnue.py') != ''
       continue-on-error: true
       run: |
         pip install "numpy<2"
