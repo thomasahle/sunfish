@@ -229,6 +229,7 @@ async def main():
     else:
         logging.basicConfig(level=logging.ERROR)
 
+    print("Loading engine...")
     if not args.conf:
         if args.cmd:
             engine = await load_engine_from_cmd(args.cmd, debug=args.debug)
