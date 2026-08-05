@@ -2,4 +2,4 @@ chess==1.9.4
 tqdm==4.57.0
 pytest>=7.0.0
 pytest-asyncio>=0.20.0
-numba>=0.56.0; platform_machine != "arm64"
+numba>=0.56.0; platform_machine != "arm64" and platform_python_implementation == "CPython"
