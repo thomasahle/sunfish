@@ -35,3 +35,18 @@ jobs:
     - name: Test
       run: |
         bash tools/quick_tests.sh "python ./sunfish.py"
+    - name: UCI smoke test (sunfish)
+      run: |
+        printf 'uci\nisready\nposition startpos moves e2e4\ngo movetime 500\nquit\n' \
+          | python ./sunfish.py | tee /dev/stderr | grep -q bestmove
+    - name: UCI smoke test (sunfish_nnue)
+      # sunfish_nnue.py is currently broken on master (#117, #120); it is being
+      # fixed on the nnue branch. Remove continue-on-error once that lands.
+      continue-on-error: true
+      run: |
+        pip install "numpy<2"
+        printf 'uci\nisready\nposition startpos moves e2e4\ngo movetime 500\nquit\n' \
+          | python ./sunfish_nnue.py nnue/models/tanh.pickle | tee /dev/stderr | grep -q bestmove
+    - name: Pytest suite
+      run: |
+        if [ -d tests ]; then python -m pytest tests -q; else echo "no tests/ directory on this branch"; fi
