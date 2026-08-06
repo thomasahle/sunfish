@@ -54,7 +54,7 @@ own named condition `NullGuardBlocksAtCaptures` below.
 Audit note (exactness): sunfish gates the killer yield by
 `pos.value(killer) >= val_lower` (line 366).  The gate is not modeled
 here; it CANNOT affect `boundKill_spec`, because the load-bearing killer
-is a king capture with `val ≥ MATE_LOWER = 50710`, far above every
+is a king capture with `val ≥ MATE_LOWER = 47923`, far above every
 `val_lower = QS - depth * QS_A ≤ 40` -- a king-capture killer always
 passes the gate, and a quiet killer that the gate suppresses only removes
 a yield, which the sorted loop re-supplies.  Exactness of a full-engine
@@ -437,7 +437,7 @@ theorem killer_probe_sound (G : Game) [DecidableEq G.Pos]
     (ht : KillerOK G t) (hkg : ¬ (G.eval p ≤ -MATE_LOWER)) :
     (boundKill G 1 p MATE_UPPER t).1 = MATE_UPPER ↔ hasKingCapture G p = true := by
   have hMU : MATE_UPPER = 69290 := rfl
-  have hML : MATE_LOWER = 50710 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
   constructor
   · intro hr

@@ -20,10 +20,10 @@ a named constant; no proof depends on its exact value. -/
 def MATE_UPPER : Int := 69290
 
 /-- The mate threshold (sunfish.py line 122:
-`MATE_LOWER = piece["K"] - 10 * piece["Q"] = 50710`).  A position whose
+`MATE_LOWER = piece["K"] - 13 * piece["Q"] = 47923`).  A position whose
 static score is `≤ -MATE_LOWER` has already lost its king (sunfish.py
 lines 298-303); scores of magnitude above `MATE_LOWER` are mate scores. -/
-def MATE_LOWER : Int := 50710
+def MATE_LOWER : Int := 47923
 
 /-- The score of a position in which the side to move has no moves.
 Corresponds to `best = -MATE_UPPER` at sunfish.py line 379: if no move

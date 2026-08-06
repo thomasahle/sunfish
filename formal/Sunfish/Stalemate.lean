@@ -197,7 +197,7 @@ theorem negamaxDraw_bounded (G : NullGame) (hB : Bounded G.toGame) :
     ∀ (d : Nat) (p : G.Pos),
       -MATE_UPPER ≤ negamaxDraw G d p ∧ negamaxDraw G d p ≤ MATE_UPPER := by
   have hMU : MATE_UPPER = 69290 := rfl
-  have hML : MATE_LOWER = 50710 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
   intro d
   induction d with
