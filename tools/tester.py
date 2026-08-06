@@ -50,13 +50,13 @@ async def uci_perft(engine, depth):
             engine.send_line(f"go perft {depth}")
 
         def line_received(self, engine: UciProtocol, line: str) -> None:
-            match = re.match("(\w+): (\d+)", line)
+            match = re.match(r"(\w+): (\d+)", line)
             if match:
                 move = chess.Move.from_uci(match.group(1))
                 cnt = int(match.group(2))
                 self.moves.append((move, cnt))
 
-            match = re.match("Nodes searched: (\d+)", line)
+            match = re.match(r"Nodes searched: (\d+)", line)
             if match:
                 self.result.set_result(self.moves)
                 self.set_finished()
@@ -95,6 +95,8 @@ class Perft(Command):
                 if cnt != opt_cnt:
                     print("=========================================")
                     print(f"ERROR at depth {d}. Gave {cnt} rather than {opt_cnt}")
+                    global EXIT_CODE
+                    EXIT_CODE = 1
                     print("=========================================")
                     print(board)
                     for m, c in moves:
@@ -282,7 +284,7 @@ class Mate(Command):
                     if not args.quiet:
                         print("Failed on", line)
                         print("Result:", info)
-        print(f"Succeeded in {success}/{len(lines)} cases.")
+        report(success, len(lines), args)
 
 
 class Draw(Command):
@@ -332,7 +334,7 @@ class Draw(Command):
                         print("Failed on", line.strip())
                         print("Result:", info, 'lower', last_lower, 'upper', last_upper)
                         pass
-        print(f"Succeeded in {success}/{total} cases.")
+        report(success, total, args)
         if not args.quiet:
             print("Depths:")
             for depth, c in cnt.most_common():
@@ -377,7 +379,7 @@ class Best(Command):
             # otherwise python-chess won't parse it
             if "c0" in opts:
                 # The comment format is expected to be like 'am f1f2; bm f2f3'
-                for key, val in re.findall("(\w+) (\w+)", opts["c0"]):
+                for key, val in re.findall(r"(\w+) (\w+)", opts["c0"]):
                     opts[key] = [chess.Move.from_uci(val)]
             if "am" not in opts and "bm" not in opts:
                 if not args.quiet:
@@ -406,12 +408,24 @@ class Best(Command):
                 print("Full result:", result)
                 print()
             pb.set_postfix(acc=points / total)
-        print(f"Succeeded in {points}/{total} cases.")
+        report(points, total, args)
 
 
 ###############################################################################
 # Actions
 ###############################################################################
+
+
+EXIT_CODE = 0
+
+
+def report(success, total, args):
+    """Print the standard result line; honor --floor for CI."""
+    global EXIT_CODE
+    print(f"Succeeded in {success}/{total} cases.")
+    if getattr(args, "floor", None) is not None and success < args.floor:
+        print(f"FAIL: {success}/{total} is below the floor of {args.floor}")
+        EXIT_CODE = 1
 
 
 def main():
@@ -431,6 +445,10 @@ def main():
 
     for cls in Command.__subclasses__():
         sub = subparsers.add_parser(cls.name, help=cls.help)
+        sub.add_argument(
+            "--floor", type=int, default=None,
+            help="Exit non-zero if fewer than this many cases succeed (for CI)",
+        )
         cls.add_arguments(sub)
         sub.set_defaults(func=cls.run)
 
@@ -460,6 +478,7 @@ def main():
     start = time.time()
     asyncio.run(run())
     print(f"Took {round(time.time() - start, 2)} seconds.")
+    sys.exit(EXIT_CODE)
 
 
 if __name__ == "__main__":

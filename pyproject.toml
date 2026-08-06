@@ -1,21 +1,41 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "sunfish"
-version = "2023"
-description = "Sunfish: a Python Chess Engine in 111 lines of code"
+dynamic = ["version"]
+description = "Sunfish: a minimalist chess engine written in Python"
+readme = "README.md"
+license = { file = "LICENSE.md" }
 requires-python = ">=3.7"
-# The engine itself has no dependencies; these are for the tools/ scripts.
-dependencies = [
+# The engine itself has no dependencies.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/thomasahle/sunfish"
+
+[project.scripts]
+sunfish = "sunfish:main"
+
+[project.optional-dependencies]
+# For the tools/ scripts (terminal play, testing) in a repo checkout.
+tools = [
     "chess==1.9.4",
     "tqdm==4.67.1",
 ]
 
 [dependency-groups]
 dev = [
+    "chess==1.9.4",
+    "tqdm==4.67.1",
     "pytest>=7.0.0",
     "pytest-asyncio>=0.20.0",
     "flake8",
 ]
 
-[tool.uv]
-# Not a package: install dependencies only, don't try to build/install sunfish itself.
-package = false
+[tool.setuptools]
+py-modules = ["sunfish"]
+
+[tool.setuptools.dynamic]
+version = { attr = "sunfish.__version__" }
