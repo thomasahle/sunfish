@@ -132,7 +132,7 @@ jobs:
         python-version: '3.12'
     - name: UCI smoke test on Windows
       run: |
-        python -c "import subprocess,sys; p=subprocess.run([sys.executable,'sunfish.py'],input=b'uci\nisready\nposition startpos\ngo movetime 300\nquit\n',capture_output=True,timeout=120); out=p.stdout.decode(); print(out); sys.exit(0 if ('uciok' in out and 'bestmove' in out) else 1)"
+        python -c "import subprocess,sys; p=subprocess.run([sys.executable,'-u','sunfish.py'],input=b'uci\nisready\nposition startpos\ngo movetime 300\nquit\n',capture_output=True,timeout=120); print(p.stdout.decode()); print('STDERR:', p.stderr.decode(), file=sys.stderr); sys.exit(0 if ('uciok' in p.stdout.decode() and 'bestmove' in p.stdout.decode()) else 1)"
     - name: Installed entry point on Windows
       run: |
         pip install .
