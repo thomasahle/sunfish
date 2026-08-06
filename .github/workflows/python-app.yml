@@ -64,6 +64,18 @@ jobs:
         { printf 'uci\nisready\nposition startpos\ngo movetime 300\n'; sleep 3; printf 'quit\n'; } \
           | timeout 60 ./sunfish.packed | tee /dev/stderr | grep -q bestmove
         rm sunfish.packed
+    - name: Minify test (build/clean.sh) + README line-count claim
+      # clean.sh is the source of the README's "N lines of code" claim.
+      # Assert the minified engine actually runs, and that the README
+      # number matches reality - numbers in prose rot, asserts don't.
+      run: |
+        bash build/clean.sh sunfish.py > clean_sunfish.py
+        { printf 'uci\nisready\nposition startpos\ngo movetime 300\n'; sleep 3; printf 'quit\n'; } \
+          | timeout 60 python clean_sunfish.py | tee /dev/stderr | grep -q bestmove
+        n=$(wc -l < clean_sunfish.py | tr -d ' ')
+        grep -qF "just $n lines of code" README.md \
+          || { echo "README line-count claim is stale: clean.sh now yields $n lines"; exit 1; }
+        rm clean_sunfish.py
     - name: Tournament manager match (fastchess)
       # Play quick self-play matches under a real tournament manager, like the
       # ones TCEC and major GUIs use: one TC with increment, one sudden death.
