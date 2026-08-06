@@ -39,7 +39,11 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
     if debug:
         print(f"Going movetime={max_movetime}, depth={max_depth}")
 
-    start = time.time()
+    # perf_counter: monotonic and high-resolution everywhere - on Windows
+    # time.time() ticks at ~15.6ms, so a fast first iteration measured 0.0
+    # elapsed and the nps division crashed the search thread (found by the
+    # Windows CI smoke job).
+    start = time.perf_counter()
     best_move = None
     for depth, gamma, score, move in stop_softly(searcher, searcher.search(hist)):
         # Our max_depth implementation is a bit wasteful.
@@ -47,12 +51,12 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
         # before we get to the next one
         if depth - 1 >= max_depth:
             break
-        elapsed = time.time() - start
+        elapsed = time.perf_counter() - start
         fields = {
             "depth": depth,
             "time": round(1000 * elapsed),
             "nodes": searcher.nodes,
-            "nps": round(searcher.nodes / elapsed),
+            "nps": round(searcher.nodes / max(elapsed, 1e-6)),
         }
         if score >= gamma:
             fields["score cp"] = f"{score} lowerbound"
@@ -98,16 +102,16 @@ def mate_loop(
       for d in range(int(max_depth) + 1):
         if find_draw:
             s0 = searcher.bound(hist[-1], 0, d)
-            elapsed = time.time() - start
+            elapsed = time.perf_counter() - start
             print("info", "depth", d, "score lowerbound cp", s0)
             s1 = searcher.bound(hist[-1], 1, d)
-            elapsed = time.time() - start
+            elapsed = time.perf_counter() - start
             print("info", "depth", d, "score upperbound cp", s1)
             if s0 >= 0 and s1 < 1:
                 break
         else:
             score = searcher.bound(hist[-1], sunfish.MATE_LOWER, d)
-            elapsed = time.time() - start
+            elapsed = time.perf_counter() - start
             print(
                 "info depth",
                 d,
