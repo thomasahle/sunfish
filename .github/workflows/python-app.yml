@@ -55,6 +55,15 @@ jobs:
         printf 'uci\nposition startpos\ngo movetime 500\nquit\n' \
           | timeout 60 python tiny_sunfish.py | tee /dev/stderr | grep -q bestmove
         rm tiny_sunfish.py
+    - name: Pack test (build/pack.sh end-to-end)
+      # The packed build is a release artifact; run the real packer and
+      # smoke the self-extracting executable it produces. See build/README.md.
+      run: |
+        pip install python-minifier
+        bash build/pack.sh sunfish.py sunfish.packed
+        { printf 'uci\nisready\nposition startpos\ngo movetime 300\n'; sleep 3; printf 'quit\n'; } \
+          | timeout 60 ./sunfish.packed | tee /dev/stderr | grep -q bestmove
+        rm sunfish.packed
     - name: Tournament manager match (fastchess)
       # Play quick self-play matches under a real tournament manager, like the
       # ones TCEC and major GUIs use: one TC with increment, one sudden death.
