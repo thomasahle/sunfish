@@ -40,7 +40,7 @@ echo "Stalemate in 2+"
 # 85/130)" was an artifact of a pre-89d6741 FEN-loader bug that built
 # test positions with score=0, making nearly every quiet line count as
 # a found draw; the honest baseline at depth 4 is below.
-STALE2_FLOOR=10
+STALE2_FLOOR=11
 stale2_out=$($T "$1" ${2:-"--quiet"} draw $TOOLS/test_files/stalemate2.fen --depth 4)
 echo "$stale2_out"
 stale2_n=$(echo "$stale2_out" | grep -o "Succeeded in [0-9]*" | grep -o "[0-9]*$" | tail -1)
