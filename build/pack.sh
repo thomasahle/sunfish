@@ -30,7 +30,7 @@ do
 T=\`mktemp\`
 tail -c +$((lh+1)) "\$0"|xz -d>\$T
 chmod +x \$T
-(sleep 9;rm \$T)&exec \$T
+(sleep 9;rm \$T)&exec python3 \$T
 """
    echo "Length of head: $lh"
 done
