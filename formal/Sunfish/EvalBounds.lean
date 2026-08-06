@@ -110,15 +110,12 @@ theorem armyMax_exceeds_margin : armyMax > 10 * 929 := by decide
 score above -MATE_LOWER, so the king-gone short-circuit misses it.
 (Worst case: opponent keeps king on its cheapest square, kingless side
 holds armyMax.) -/
-theorem kingGone_check_leaks : armyMax - tmin sqK > -MATE_LOWER := by decide
+theorem kingGone_check_leaked : armyMax - tmin sqK > -(60000 - 10 * 929) := by decide
 
-/-- The proposed repair `MATE_LOWER' = K - 13 * Q = 47923` closes it:
-every kingless position scores at or below -MATE_LOWER', while static
-evals (evalBound) and king-capture move values stay strictly inside
-their bands. -/
-theorem repaired_margin_covers : (60000 : Int) - 13 * 929 <= tmin sqK - armyMax := by decide
-
-theorem evalBound_lt_repaired : evalBound < (60000 : Int) - 13 * 929 := by decide
+/-- The repair (now shipped): `MATE_LOWER = K - 13 * Q = 47923` closes
+the leak - every kingless position scores at or below -MATE_LOWER,
+while static evals keep their margin (`evalBound_lt_MATE_LOWER`). -/
+theorem margin_covers : MATE_LOWER <= tmin sqK - armyMax := by decide
 
 end EvalBounds
 end Sunfish

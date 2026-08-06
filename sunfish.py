@@ -119,7 +119,13 @@ directions = {
 # 8 queens up, but we got the king, we still exceed MATE_VALUE.
 # When a MATE is detected, we'll set the score to MATE_UPPER - plies to get there
 # E.g. Mate in 3 will be MATE_UPPER - 6
-MATE_LOWER = piece["K"] - 10 * piece["Q"]
+# The margin must cover the largest army a kingless side can face: nine
+# queens (8 promotions + original) plus 2R+2B+2N with piece-square
+# bonuses sums to 11749, which the old 10-queen margin (9290) missed by
+# 2459 - a kingless position could evade the king-gone check below.
+# 13 queens covers it with slack (formal/Sunfish/EvalBounds.lean proves
+# both the leak and the repair).
+MATE_LOWER = piece["K"] - 13 * piece["Q"]
 MATE_UPPER = piece["K"] + 10 * piece["Q"]
 # Every static evaluation must stay within [-MATE_UPPER, MATE_UPPER]: the
 # transposition table's fresh entries assume it (formal/Sunfish/Tricks.lean,

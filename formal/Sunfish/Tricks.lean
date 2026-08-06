@@ -14,7 +14,7 @@ namespace Sunfish
 /-! ### (a) Mate-score softening  (PROVEN)
 
 Mate scores live strictly beyond the band `[-ML, ML]` (in sunfish:
-`MATE_LOWER = 50710`, sunfish.py line 122).  When such a score is passed one
+`MATE_LOWER = 47923`, sunfish.py line 122).  When such a score is passed one
 ply up the tree it must be pulled one step toward zero -- "mate in k" becomes
 "mate in k+1" -- otherwise the engine cannot distinguish faster from slower
 mates.  `soften` is that adjustment.
@@ -620,7 +620,7 @@ theorem boundFut_spec (G : ValGame) (hFM : FutilityMateOK G.toFutGame) :
       -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
       BoundSpec G.toFutGame.toGame d p gamma (boundFut G.toFutGame d p gamma) := by
   have hMU : MATE_UPPER = 69290 := rfl
-  have hML : MATE_LOWER = 50710 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
   intro d
   induction d with
   | zero =>

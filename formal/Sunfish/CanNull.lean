@@ -176,7 +176,7 @@ theorem nullValue_bounded (G : NullGame) (hist : G.Pos → Bool)
       -MATE_UPPER ≤ nullValue G hist d cn p ∧
       nullValue G hist d cn p ≤ MATE_UPPER := by
   have hMU : MATE_UPPER = 69290 := rfl
-  have hML : MATE_LOWER = 50710 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
   suffices H : ∀ (n d : Nat), d ≤ n → ∀ (cn : Bool) (p : G.Pos),
       -MATE_UPPER ≤ nullValue G hist d cn p ∧
