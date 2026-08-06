@@ -57,3 +57,4 @@ profile.pstats
 
 # Vim
 *.swp
+.claude/

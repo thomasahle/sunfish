@@ -13,7 +13,8 @@ import time
 from itertools import count
 from collections import namedtuple
 
-version = "sunfish 2023"
+__version__ = "2026"
+version = "sunfish " + __version__
 
 ###############################################################################
 # Piece-Square tables. Tune these to change sunfish's behaviour
@@ -545,54 +546,67 @@ def render(i):
 hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
 
 
-# minifier-hide start
-import sys, tools.uci
-tools.uci.run(sys.modules[__name__], hist[-1])
-sys.exit()
-# minifier-hide end
 
-searcher = Searcher()
-while True:
-    args = input().split()
-    if args[0] == "uci":
-        print("id name", version)
-        print("uciok")
+def main():
+    # minifier-hide start
+    # Development checkout: use the full-featured UCI interface in
+    # tools/ (pondering, Hash option, spec-complete go parsing). An
+    # installed or packed sunfish has no tools/ and falls through to
+    # the built-in loop below, which is all a GUI needs.
+    try:
+        import sys, tools.uci
+        tools.uci.run(sys.modules[__name__], hist[-1])
+        sys.exit()
+    except ImportError:
+        pass
+    # minifier-hide end
 
-    elif args[0] == "isready":
-        print("readyok")
+    searcher = Searcher()
+    while True:
+        args = input().split()
+        if args[0] == "uci":
+            print("id name", version)
+            print("uciok")
 
-    elif args[0] == "quit":
-        break
+        elif args[0] == "isready":
+            print("readyok")
 
-    elif args[:2] == ["position", "startpos"]:
-        del hist[1:]
-        for ply, move in enumerate(args[3:]):
-            i, j, prom = parse(move[:2]), parse(move[2:4]), move[4:].upper()
-            if ply % 2 == 1:
-                i, j = 119 - i, 119 - j
-            hist.append(hist[-1].move(Move(i, j, prom)))
+        elif args[0] == "quit":
+            break
 
-    elif args[0] == "go":
-        # The times may come in any order and combination, e.g. "go wtime 100 btime 100"
-        times = dict(zip(args[1::2], map(int, args[2::2])))
-        side = "wb"[len(hist) % 2 == 0]
-        wtime, winc = times.get(side + "time", 60000), times.get(side + "inc", 0)
-        think = min(wtime / 40 + winc, wtime / 2 - 1000)
-        think = times.get("movetime", think) / 1000
-
-        start = time.time()
-        move_str = None
-        for depth, gamma, score, move in searcher.search(hist):
-            # The only way we can be sure to have the real move in tp_move,
-            # is if we have just failed high.
-            if score >= gamma:
-                i, j = move.i, move.j
-                if len(hist) % 2 == 0:
+        elif args[:2] == ["position", "startpos"]:
+            del hist[1:]
+            for ply, move in enumerate(args[3:]):
+                i, j, prom = parse(move[:2]), parse(move[2:4]), move[4:].upper()
+                if ply % 2 == 1:
                     i, j = 119 - i, 119 - j
-                move_str = render(i) + render(j) + move.prom.lower()
-                print("info depth", depth, "score cp", score, "pv", move_str)
-            if move_str and time.time() - start > think * 0.8:
-                break
+                hist.append(hist[-1].move(Move(i, j, prom)))
 
-        print("bestmove", move_str or '(none)')
+        elif args[0] == "go":
+            # The times may come in any order and combination, e.g. "go wtime 100 btime 100"
+            times = dict(zip(args[1::2], map(int, args[2::2])))
+            side = "wb"[len(hist) % 2 == 0]
+            wtime, winc = times.get(side + "time", 60000), times.get(side + "inc", 0)
+            think = min(wtime / 40 + winc, wtime / 2 - 1000)
+            think = times.get("movetime", think) / 1000
 
+            start = time.time()
+            move_str = None
+            for depth, gamma, score, move in Searcher().search(hist):
+                # The only way we can be sure to have the real move in tp_move,
+                # is if we have just failed high.
+                if score >= gamma:
+                    i, j = move.i, move.j
+                    if len(hist) % 2 == 0:
+                        i, j = 119 - i, 119 - j
+                    move_str = render(i) + render(j) + move.prom.lower()
+                    print("info depth", depth, "score cp", score, "pv", move_str)
+                if move_str and time.time() - start > think * 0.8:
+                    break
+
+            print("bestmove", move_str or '(none)')
+
+
+
+if __name__ == "__main__":
+    main()

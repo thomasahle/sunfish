@@ -19,7 +19,7 @@ jobs:
     - name: Set up Pypy 3.9
       uses: actions/setup-python@v4
       with:
-        python-version: 'pypy3.9'
+        python-version: 'pypy3.10'
     - name: Install uv
       uses: astral-sh/setup-uv@v5
     - name: Install dependencies
@@ -122,3 +122,18 @@ jobs:
     - name: Lichess bot integration test (mock server)
       run: BOT_CI=1 python -m pytest tests/test_bot_integration.py -q
       timeout-minutes: 10
+
+  windows-smoke:
+    runs-on: windows-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: UCI smoke test on Windows
+      run: |
+        python -c "import subprocess,sys; p=subprocess.run([sys.executable,'sunfish.py'],input=b'uci\nisready\nposition startpos\ngo movetime 300\nquit\n',capture_output=True,timeout=120); out=p.stdout.decode(); print(out); sys.exit(0 if ('uciok' in out and 'bestmove' in out) else 1)"
+    - name: Installed entry point on Windows
+      run: |
+        pip install .
+        python -c "import subprocess,sys; p=subprocess.run(['sunfish'],input=b'uci\nisready\nquit\n',capture_output=True,timeout=60,shell=True); out=p.stdout.decode(); print(out); sys.exit(0 if 'uciok' in out else 1)"
