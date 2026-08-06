@@ -128,24 +128,28 @@ tactic only, so a full build takes seconds.
   - **`boundLmrDet_spec`**: the point `BoundSpec` against the single
     value function `negamaxDet` (reducible moves valued one ply
     shallower, recursively) — unconditional; `bound_spec` with per-move
-    depths, no interval, no mutual recursion.
+    depths, no mutual recursion.
   - **`boundLmrDet_no_crossing`**: fail-high reports never exceed
     fail-low reports at the same `(pos, depth)` — contradiction-free
     entries by construction, `bound_no_crossing` generalized.
   - **`clamp_noop_high` / `clamp_noop_low`**: under single-function
     bounds the `2c95ab0` clamp is a no-op — the formal justification for
-    its removal; a future gamma-dependent choice must reinstate it.
+    its removal. There is nothing to "reinstate" for a future
+    gamma-dependent choice: such a choice is a bug (see the doctrine
+    note below), not a configuration.
 
 - **`Sunfish/Lmr.lean`** *(HISTORICAL: commits `58883ea..7f9f164`)* —
   re-search Late Move Reductions (commit `58883ea`,
   sunfish.py lines 370, 386–397: late quiet moves probed at `depth - 2`,
   a reduced fail low yielded as-is, a reduced fail high re-searched at
-  full depth). All proven sorry-free:
-  - **`boundLmr_spec`**: the honest **interval spec**. No single value
-    function can back both sides of the docstring any more; the sound
-    statement is a *mutually recursive* pair `Vhi`/`Vlo` (`lmrVal`):
-    fail highs are ≤ `Vhi`, fail lows are ≥ `Vlo`, and
-    **`lmrVal_sandwich`** proves `Vlo ≤ negamax ≤ Vhi` pointwise.
+  full depth). Load-bearing content:
+  - **The `Vlo`/`Vhi` "interval spec" was deleted.** It showed fail
+    highs bound one function and fail lows another with the truth in
+    between — but the gap between those functions admits no provable
+    bound (one ply can hide a mate), and a guarantee relative to an
+    uncontrollable gap guarantees nothing. Maintainer's verdict: never
+    a spec, only a description of the bug. The file now keeps only what
+    supports the doctrine — the definitions and the counterexample:
     Two surprises from modeling the merged code (see the module comment):
     (1) the folklore fail-low target "reducible moves valued one ply
     shallower" (`negamaxShallow`) is *wrong* — the re-search fall-through
@@ -162,10 +166,9 @@ tactic only, so a full build takes seconds.
     `lower ≤ score ≤ upper` bracket is therefore conditional on the
     `Vhi − Vlo` gap staying within what `EVAL_ROUGHNESS` and re-probing
     absorb. Post-`2c95ab0`, the accurate statement is: crossing
-    *reports* still occur (this theorem), but crossing *entries* can no
-    longer be stored (`clamp_no_crossing`), and stored entries remain
-    honest interval claims (`IntervalTableOK`) — see
-    `Sunfish/TableClamp.lean`.
+    *reports* still occur (this theorem); the `2c95ab0` clamp merely
+    kept them from being *stored* (`clamp_no_crossing`) while the
+    search went on consuming them — containment, not repair.
   - `RedRespectsCaptures` + comments confirm Killer and Stalemate are
     unaffected: king captures have `val ≥ MATE_LOWER > QS = 40` (never
     reducible), the killer is pre-loop (structurally never reduced),
@@ -180,23 +183,18 @@ tactic only, so a full build takes seconds.
   store (commit `2c95ab0`,
   sunfish.py lines 435–443: fail-high stores
   `Entry(best, max(entry.upper, best))`, fail-low
-  `Entry(min(entry.lower, best), best)`). All proven sorry-free:
-  - **`IntervalTableOK`** — the honest post-LMR table invariant: every
-    stored entry satisfies `lower ≤ Vhi(pos, depth)` and
-    `Vlo(pos, depth) ≤ upper` (the `lmrVal` pair), the interval weakening
-    of `TableOK` exactly parallel to how `boundLmr_spec` weakens
-    `bound_spec`.
-  - **`intervalTableOK_clampHigh` / `intervalTableOK_clampLow`** — the
-    clamped store *preserves* the invariant, given only that the
-    incoming bound is sound on its own side (exactly what
-    `boundLmr_spec` returns). Key step: when a new lower `L` exceeds
-    the stored upper `U`, the clamped entry `(L, max U L)` satisfies
-    both sides — `L ≤ Vhi` from the new bound, `Vlo ≤ U ≤ max U L` from
-    the old entry; symmetric on the other side.
-  - **`clamp_no_crossing`** + **`NoCrossingTable`/`noCrossingTable_store`**
-    — clamped entries satisfy `lower ≤ upper` by construction: with the
-    clamp, the search-level crossing phenomenon remains
-    (`lmr_tt_crossing`) but the table-level contradiction is gone.
+  `Entry(min(entry.lower, best), best)`). What remains:
+  - **`clampHigh`/`clampLow`/`clamp_no_crossing`** — the record of what
+    the clamp did (stored entries cannot cross), retained because
+    `LmrDet`'s `clamp_noop_*` theorems prove it a no-op under a point
+    spec. The `IntervalTableOK` invariant that once dressed the clamp
+    up as a guarantee was deleted with the interval spec (an invariant
+    relative to an unboundable gap certifies nothing).
+  - **`clamp_no_crossing`** — clamped entries satisfy `lower ≤ upper`
+    by construction: the clamp kept the table from *storing* the
+    contradiction while the search went on consuming it. (The
+    `intervalTableOK_*` preservation theorems that once accompanied
+    this are deleted — see the doctrine note.)
 
 - **`Sunfish/CanNull.lean`** — the `can_null` layering, modeled exactly
   as master uses it in all four roles: null-move gate (line 340, pass
@@ -266,7 +264,7 @@ tactic only, so a full build takes seconds.
     stand-pat meeting its window, so the child fails high immediately
     and fail-soft returns precisely `-(pos.score + val)`.
     `boundFut_spec` now proves `BoundSpec` for the futility-augmented
-    search **unconditionally** (single value function, no interval),
+    search **unconditionally** (single value function),
     with only `FutilityMateOK` (line 371's king-capture bypass) and the
     in-band window remaining. Fine print made explicit: the ∀-depth
     `FutilityOK` is *not* dischargeable (plain negamax has no stand-pat
@@ -274,8 +272,8 @@ tactic only, so a full build takes seconds.
     instance; the old statement over-required. **Contrast with LMR**:
     futility's shortcut is a provable one-sided bound of the *same*
     value function (hence consistent, point spec); LMR's reduced value
-    is incomparable to the full value (hence the `Vlo`/`Vhi` interval
-    and the TT crossing).
+    is incomparable to the full value (hence the TT crossing, and no
+    honest weaker claim to retreat to).
 
 ## Zero sorries: named hypotheses instead
 
@@ -352,12 +350,11 @@ statement* — the honest form — not a deferred proof:
 | `boundLmrDet`, `negamaxDet` | the deterministic LMR block on master: `LMR = int(depth >= 4 and i_m >= 8 and val < 0)`, one search at `depth - 1 - LMR` (`7f9f164`) |
 | `tablePart2` (plain stores) | Table part 2 on master: `Entry(best, entry.upper)` / `Entry(entry.lower, best)` — no clamp needed under point specs |
 | `boundLmr`, `red` *(historical)* | the re-search LMR block of `58883ea..7f9f164`: `depth >= 3 and i_m >= 5 and val < QS`, reduced probe at `depth - 2`, re-search on fail high |
-| `lmrVal` (`Vhi`/`Vlo`) | the interval that replaces the docstring's single `s*` under LMR |
 | `-(bound d m (1 - gamma))` | `-self.bound(pos.move(move), 1 - gamma, depth - 1)` (line 376) |
 | `BoundSpec` | the docstring (lines 287–290) |
 | `NullGame.pass` | `pos.rotate(nullmove=True)` (line 331) |
 | `Table`, `TableOK`, `tablePart2` | `tp_score`, `Entry`, lookup + point store (lines 275–276, 305–310, and the pre-`2c95ab0` Table part 2) |
-| `clampHigh`, `clampLow`, `IntervalTableOK` *(historical)* | the clamped Table part 2 of `2c95ab0..7f9f164` and the interval invariant it maintained |
+| `clampHigh`, `clampLow` *(historical)* | the clamped Table part 2 of `2c95ab0..7f9f164` (kept only for the `clamp_noop_*` no-op proofs) |
 | `negamaxDraw`, `boundStale`, `staleFix` | king-capture normalization + stalemate correction (lines 298–303, 388–412) |
 | `inCheckB`, `CheckProbeOK` | the null-position check probe `bound(flipped, MATE_UPPER, 0) == MATE_UPPER` (lines 409–411) |
 | `MateValuesAreKingCaptures` | the requirement of lines 398–401 and the caveat of lines 403–405 |
@@ -415,9 +412,16 @@ one-side-bounds the same function; `gamma` must never select between
 incomparable evaluations of a move."** Futility passes (its shortcut
 equals the depth-0 search it replaces — `futilityOK_discharged`);
 deterministic LMR passes (the reduction is gamma-free, `boundLmrDet_spec`
-is a point spec); re-search LMR failed it, which is exactly why it paid
-with the interval spec and crossable TT entries — and why it was
-retired.
+is a point spec); re-search LMR failed it, which is exactly why its TT
+entries could contradict each other — and why it was retired. The
+doctrine, stated once for the whole repository: **there is no "interval
+spec."** A claim of the form "the truth lies within a gap" is a
+guarantee only if the gap is bounded, and no bound on search
+instability is provable — one ply of depth can hide a mate, so the gap
+is unbounded precisely in the positions that decide games. What such a
+claim describes is a bug with a ledger. The only recognized contract is
+the point spec: every stored bound describes one value function
+determined by the transposition key.
 
 The later files add further named conditions to check against:
 
@@ -444,26 +448,19 @@ The later files add further named conditions to check against:
   state whether it serves only deeper (needs `MateDepthMonotone`) or also
   shallower (needs `MateDepthStable`, and should declare itself a
   weakening of `BoundSpec` to mate-band membership).
-- **`IntervalTableOK`** — a PR touching Table part 2 (the store at lines
-  435–443) must preserve `IntervalTableOK`: every stored lower must be a
-  sound `Vhi` claim and every stored upper a sound `Vlo` claim, and the
-  entry must stay non-crossing (`clamp_no_crossing`). Reverting the clamp
-  reintroduces storable contradictions (`lmr_tt_crossing` is the
-  witness); "fixing" it by discarding the old side instead of widening
-  would break the preservation lemmas' use of the *old* entry's validity.
-- **LMR (`boundLmr_spec`)** — Late Move Reductions weaken `BoundSpec`
-  from point to interval: fail highs are sound against `Vhi`, fail lows
-  against `Vlo`, with `Vlo ≤ negamax ≤ Vhi` (`lmrVal_sandwich`) — and
-  provably *not* against full `negamax` on either side
-  (`lmr_tt_crossing`). TT consistency is margin-conditional: entries can
-  cross (`lower > upper`) by up to the `Vhi − Vlo` gap, which
-  `EVAL_ROUGHNESS` + MTD-bi re-probing must absorb. Killer and Stalemate
-  lemmas are preserved (`RedRespectsCaptures`: king captures are never
-  reducible; the killer is pre-loop; reduced fail lows never store). A PR
-  touching the reduction condition must keep captures un-reducible and
-  keep yielding only *full-depth* results on fail high — dropping the
-  re-search, or yielding a reduced fail high, breaks `boundLmr_spec`'s
-  fail-high leg *and* the killer/stalemate sentinel arguments at once.
+- **Table part 2 (the store at lines 435–443)** — a PR touching the
+  store must preserve the point-spec `TableOK`: every stored bound a
+  sound claim about the single key-determined value function. The
+  historical clamp and its `IntervalTableOK` invariant are gone
+  (deleted, not merely retired — see the doctrine note above); a change
+  that cannot state a point spec is rejected, not clamped.
+- **LMR** — any reduction scheme must assign per-move depths as a
+  function of position-derived data alone and claim only bounds on the
+  resulting single value function (deterministic LMR:
+  `boundLmrDet_spec`; min-semantics LMR: the conjunction
+  `min(reduced, full)`, key-determined by construction). Re-search LMR
+  with full-value propagation is the canonical counterexample
+  (`lmr_tt_crossing`) and is not mergeable
 
 ## Prior art
 

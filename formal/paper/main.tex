@@ -21,6 +21,22 @@
 \usepackage{microtype}
 \usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
 \usepackage{xcolor}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning,calc,fit}
+
+% ---------- tikz styles -------------------------------------------------
+\tikzset{
+  pybox/.style={draw=black!60, rounded corners=2pt, fill=black!6,
+    font=\ttfamily\scriptsize, inner sep=4pt, align=left},
+  leanbox/.style={draw=blue!50!black!60, rounded corners=2pt, fill=blue!8,
+    font=\ttfamily\scriptsize, inner sep=4pt, align=left},
+  notebox/.style={draw=black!40, rounded corners=2pt, fill=yellow!12,
+    font=\scriptsize, inner sep=4pt, align=left},
+  lbl/.style={font=\scriptsize, align=left},
+  maparrow/.style={{Stealth}-{Stealth}, dashed, black!55, semithick},
+  posnode/.style={draw, circle, minimum size=6.5mm, inner sep=0pt,
+    font=\small},
+}
 
 % ---------- editorial macros -------------------------------------------
 \newcommand{\todopar}[1]{\par\noindent\textcolor{red}{\textbf{TODO:} #1}\par}
@@ -71,9 +87,16 @@ deliverables include a sorry-free proof of the engine's core fail-soft
 null-window contract, a machine-checked seven-position counterexample
 showing the engine's stalemate correction is sound only under a named
 hypothesis, a same-day proof of a maintainer-conjectured invariant about
-killer moves, and an interval-valued specification for Late Move
-Reductions together with a machine-checked transposition-table
-inconsistency it induces.  These results organize into a soundness
+killer moves, and a machine-checked transposition-table inconsistency
+induced by gamma-adaptive Late Move Reductions.  For the latter we
+first proved an interval-shaped statement --- fail highs bound one
+value function, fail lows another, the truth in between --- and then
+deleted it: such a claim is a guarantee only if the gap between the two
+functions is bounded, and no bound on search instability is provable
+(one ply of depth can hide a mate), so the interval reading was never a
+specification, only a description of a bug.  The only contract the
+engine recognizes is the point spec: every stored bound describes one
+value function determined by the transposition key.  These results organize into a soundness
 taxonomy for selective search: the search window may shape termination,
 and may trigger shortcuts whose value provably one-side-bounds the same
 value function; it must never select between incomparable evaluations.
@@ -128,8 +151,11 @@ earns) \emph{in ELO}.  Several of our measured numbers
 (Table~\ref{tab:elo}) show soundness restorations that are strictly ELO-negative,
 and unsound-in-the-point-sense optimizations that are strongly
 ELO-positive; the formal work is what lets us merge the latter with our
-eyes open, with a two-line mitigation for the specific inconsistency the
-proof predicts.
+eyes open, with a two-line containment for the specific inconsistency
+the proof predicts --- and, once the interval reading of that
+containment was recognized as guaranteeing nothing, to retire the
+optimization deliberately at a measured price
+(Section~\ref{sec:lmrdet}).
 
 \paragraph{Contributions.}
 (1) A sorry-free Lean~4 proof that sunfish's fail-soft null-window
@@ -150,6 +176,351 @@ Reductions as the canonical citizens of its two nontrivial classes.
 empirical methodology with honest numbers, including artifacts we
 initially believed (Section~\ref{sec:empirical}).
 
+\paragraph{Reading guide.}
+Section~\ref{sec:model} defines, once and explicitly, the model in which
+every theorem of this paper is stated --- what is a Lean definition,
+what is a named hypothesis, what is not modeled at all --- so that each
+later ``Theorem'' can be read with its exact scope in mind.
+Section~\ref{sec:inventory} then inventories every machine-checked
+result: Table~\ref{tab:theorems} lists the proved theorems with their
+Lean names and files, and Table~\ref{tab:cex} lists the machine-checked
+\emph{counterexamples}, which are deliverables of equal rank.  The
+remaining sections tell the story of the main results in the order they
+were found.
+
+% =========================================================================
+\section{The Model: What the Theorems Quantify Over}
+\label{sec:model}
+
+Every result in this paper is a theorem about a small Lean~4 development
+(\texttt{formal/} in the sunfish repository: nine files, no dependencies
+beyond core Lean and the \texttt{omega} tactic), not about the Python
+text of \texttt{sunfish.py}.  This section fixes the model once, so that
+each later theorem can be read with its exact scope in mind; how the
+model--code gap is managed is discussed in Section~\ref{sec:lessons},
+and Figure~\ref{fig:model} shows the correspondence at a glance.
+
+\subsection{Abstract games, king-capture legality, and the true value}
+\label{sec:model-games}
+
+The base structure is chess-free:
+
+\begin{definition}[Game]
+\label{def:game}
+A \emph{game} $G$ consists of a type of positions $\mathrm{Pos}$, a
+successor function $\mathrm{moves} : \mathrm{Pos} \to
+\mathrm{List\ Pos}$, and a static evaluation $\mathrm{eval} :
+\mathrm{Pos} \to \mathbb{Z}$.  The empty move list means \emph{the side
+to move has lost}.  \leanref{Game}{GameTree.lean}
+\end{definition}
+
+Sunfish is a \emph{king-capture} engine: it generates pseudo-legal
+moves, and legality is enforced one ply late by making king capture
+decisive.  The model adopts this convention wholesale: a position with
+$\mathrm{eval}(p) \le -\ML$ has already lost its king, and every search
+in the development normalizes such positions to the exact sentinel
+$-\MU$.  ``Check'', ``mate'' and ``stalemate'' are therefore not
+primitives of the model; they are emergent, exactly as in the engine
+(Section~\ref{sec:stalemate}).  Features that need more structure extend
+$\mathrm{Game}$ conservatively: a \emph{NullGame} adds a pass move
+$\mathrm{pass} : \mathrm{Pos} \to \mathrm{Pos}$ (the model of
+\texttt{pos.rotate(nullmove=True)}); a \emph{ValGame} adds per-move
+values $\mathrm{val}$ together with sunfish's incremental-score identity
+$\mathrm{eval}(m) = -(\mathrm{eval}(p) + \mathrm{val}(p,m))$ as a
+structural field (Section~\ref{sec:taxonomy}); killer- and
+transposition-table models additionally assume decidable equality of
+positions, for table keying.
+
+The ``true score'' $s^*$ of the docstring is \emph{defined} to be
+depth-limited negamax: $\negamax_d(p) = \mathrm{eval}(p)$ at $d = 0$,
+otherwise the maximum of $-\negamax_{d-1}(m)$ over
+$m \in \mathrm{moves}(p)$, folded from $\LOSS = -\MU$
+\leanref{negamax}{GameTree.lean}.  Variants of the value function ---
+$\negamaxD$ (draw-aware, Section~\ref{sec:stalemate}),
+$\mathrm{negamaxDet}$ (per-move reduced depths,
+Section~\ref{sec:lmrdet}), $\mathrm{nullValue}$ (null-move- and
+repetition-augmented, Section~\ref{sec:nullmove}) --- are likewise
+definitions, not axioms.  (A fourth variant, the $(\Vhi, \Vlo)$ pair
+once defined for re-search LMR, has been \emph{deleted} from the
+development; Section~\ref{sec:taxonomy} tells that story and states
+the doctrine behind the deletion.)
+
+\subsection{The searches are Lean functions, one per feature}
+\label{sec:model-searches}
+
+\texttt{Searcher.bound} is modeled as a total recursive Lean function
+mirroring the Python control flow, and each search feature is modeled in
+its own file as a variant of that function: the bare fail-soft skeleton
+$\mathrm{bound}$ \leanref{bound}{Bound.lean}; table threading
+($\mathrm{boundTT}$), futility ($\mathrm{boundFut}$) and mate-score
+softening in \texttt{Tricks.lean}; the stalemate correction
+($\mathrm{boundStale}$, \texttt{Stalemate.lean}); the killer table as
+state ($\mathrm{boundKill}$, \texttt{Killer.lean}); deterministic LMR as
+shipped on master ($\mathrm{boundLmrDet}$, \texttt{LmrDet.lean}) and the
+historical re-search LMR ($\mathrm{boundLmr}$, \texttt{Lmr.lean}); and the
+\texttt{can\_null}-aware search with null move, repetition check, keyed
+table and IID ($\mathrm{boundNullTT}$, \texttt{CanNull.lean}).  Studying
+features in separate models is itself a modeling decision, and where
+features could interact the development proves they do not: futility
+(depth $\le 1$) and LMR (depth $\ge 3$) never co-occur
+\leanref{futilityLmrDisjoint}{Lmr.lean}, and reductions never touch king
+captures \leanref{RedRespectsCaptures}{Lmr.lean}, which is what lets the
+killer and stalemate arguments survive under LMR.
+
+\subsection{Nothing is axiomatized; conditions are named hypotheses}
+\label{sec:model-axioms}
+
+The development contains no \texttt{axiom} declarations and no
+\texttt{sorry}.  Everything above is a Lean \emph{definition}; every
+theorem is proven from those definitions, and \texttt{\#print axioms}
+on the main theorems reports only \texttt{propext} and
+\texttt{Quot.sound} (the ambient axioms of Lean's kernel).  Where a
+claim about the engine is only \emph{conditionally} true, the condition
+is not assumed globally: it is a \emph{named hypothesis carried in the
+theorem statement} --- e.g.\ \emph{Bounded} (evaluations lie in
+$[-\MU,\MU]$), \emph{CheckProbeOK}, \emph{MateValuesAreKingCaptures},
+\emph{NullBetOK}, \emph{FutilityMateOK} --- and
+Section~\ref{sec:ledger} maintains the full ledger.  Machine-checked
+counterexamples are concrete finite games (three to seven positions)
+whose search values are computed by Lean's kernel via \texttt{decide};
+they are theorems of the form ``this universally quantified statement is
+false'', not informal counterarguments.
+
+\subsection{What is \emph{not} modeled}
+\label{sec:model-not}
+
+Theorems quantify over \emph{all} games of
+Definition~\ref{def:game}; sunfish's chess is one intended instance, but
+board representation and move generation are entirely abstract.
+Explicitly outside the model, each with the reason the omission is
+harmless (audited against master at commit \texttt{9b1a7b4}, sunfish.py
+lines 286--448):
+
+\begin{itemize}
+  \item \textbf{Move generation and the board.}  $\mathrm{moves}$ is an
+    opaque function; no chess rules are formalized.  Consequently the
+    theorems cannot certify that \texttt{gen\_moves} implements chess
+    --- only how the search treats whatever moves it is given.
+  \item \textbf{The quiescence interior.}  Depth 0 returns
+    $\mathrm{eval}$ directly; QS's stand-pat-plus-captures recursion is
+    collapsed into the evaluation.  Its one load-bearing property, the
+    stand-pat/score identity, is retained as the \emph{ValGame}
+    structure and is exactly what the futility proof consumes
+    (Theorem~\ref{thm:futility}).
+  \item \textbf{Timing and aborts.}  The deadline exception
+    \texttt{Stop} raises at node \emph{entry}, before any store, so an
+    abort can leave a search unfinished but never a table entry
+    unjustified --- table invariants cannot be corrupted, and time is
+    otherwise irrelevant to the specs.
+  \item \textbf{Table eviction.}  \texttt{TABLE\_SIZE} eviction only
+    forgets entries, which trivially preserves every table invariant
+    stated here.
+  \item \textbf{Move ordering}, except its load-bearing consequence:
+    king captures (value $\ge \ML$) sort strictly first
+    \leanref{orderedMoves}{Killer.lean}.
+  \item \textbf{The iterative-deepening driver's scheduling} (when to
+    stop deepening, time allocation).  The driver's \emph{bracket
+    logic} is modeled --- it is exactly what
+    Theorem~\ref{thm:bound-spec} serves (Section~\ref{sec:mtdbi}).
+\end{itemize}
+
+\begin{figure}[p]
+\centering
+\begin{tikzpicture}[font=\scriptsize]
+  \node[font=\small\bfseries] at (2.5,0.8) {sunfish.py};
+  \node[font=\small\bfseries] at (10.2,0.8) {Lean model (\texttt{formal/Sunfish/})};
+  % rows
+  \foreach \y/\py/\lean/\file in {%
+    0/{gen\_moves() (pseudo-legal);\\ king capture decides legality}/{Game.moves : Pos $\to$ List Pos;\\ {[]} = side to move has lost}/{GameTree.lean},%
+    -1.15/{pos.score (QS collapsed)}/{Game.eval : Pos $\to$ $\mathbb{Z}$}/{GameTree.lean},%
+    -2.3/{docstring: ``true score s*''}/{negamax : Nat $\to$ Pos $\to$ Int}/{GameTree.lean},%
+    -3.45/{bound(): fail-soft best loop,\\ cutoff on best >= gamma}/{bound, searchMoves, BoundSpec}/{Bound.lean},%
+    -4.6/{tp\_score : (pos,depth,can\_null)\\ $\to$ Entry(lower, upper)}/{Table, TableOK; CTable, CTableOK}/{Tricks, CanNull},%
+    -5.75/{tp\_move killer,\\ stored on fail high only}/{KTable, boundKill, KillerOK}/{Killer.lean},%
+    -6.9/{null move, repetition, IID\\ (gated by can\_null)}/{nullValue, boundNullTT}/{CanNull.lean},%
+    -8.05/{futility: yield pos.score + val\\ at depth <= 1}/{boundFut, ValGame.score\_identity}/{Tricks.lean},%
+    -9.2/{deterministic LMR:\\ depth - 1 - LMR, gamma-free}/{boundLmrDet, negamaxDet}/{LmrDet.lean},%
+    -10.35/{stalemate correction:\\ best == -MATE\_UPPER, probe}/{negamaxDraw, boundStale}/{Stalemate.lean}}%
+  {
+    \node[pybox, text width=4.9cm, anchor=north west] (p) at (0,\y) {\py};
+    \node[leanbox, text width=5.4cm, anchor=north west] (l) at (7.5,\y) {\lean};
+    \draw[maparrow] ($(p.north east)!0.5!(p.south east)$)
+      -- ($(l.north west)!0.5!(l.south west)$);
+    \node[lbl, anchor=west, black!60]
+      at ($(l.north east)!0.5!(l.south east)+(0.08,0)$) {\texttt{\file}};
+  }
+\end{tikzpicture}
+\caption{The model--code correspondence, feature by feature.  Left:
+the mechanism in \texttt{sunfish.py} (audited at commit
+\texttt{9b1a7b4}); right: the Lean definition that transcribes it, with
+its file.  The full line-by-line map is the correspondence table in
+\texttt{formal/README.md}.  Everything on the right is a
+\emph{definition}; the theorems of Table~\ref{tab:theorems} are proven
+about these definitions with no axioms beyond Lean's kernel.}
+\label{fig:model}
+\end{figure}
+
+% =========================================================================
+\section{What Is Proved: The Theorem Inventory}
+\label{sec:inventory}
+
+Tables~\ref{tab:theorems} and~\ref{tab:cex} inventory every
+machine-checked result cited in this paper, by Lean name and file.  The
+separation matters: Table~\ref{tab:theorems} lists \emph{proved
+theorems} --- positive soundness statements, unconditional unless a
+named hypothesis is listed --- while Table~\ref{tab:cex} lists
+\emph{machine-checked counterexamples}: kernel-checked refutations of
+statements one might have hoped were theorems.  Both build sorry-free
+with \texttt{lake build}; \texttt{grep -rn sorry} over
+\texttt{formal/Sunfish/} finds nothing outside prose.
+
+\begin{table}[p]
+\centering
+\scriptsize
+\begin{tabular}{@{}lp{2.9cm}p{7.1cm}@{}}
+\toprule
+\textbf{Lean theorem} & \textbf{Hypotheses} & \textbf{Informal statement}\\
+\midrule
+\multicolumn{3}{@{}l}{\texttt{Bound.lean} --- the core contract (Section~\ref{sec:contract})}\\
+\texttt{bound\_spec} (Thm~\ref{thm:bound-spec}) & --- &
+The fail-soft null-window search satisfies its docstring against
+$\negamax$, at every depth, position and window.\\
+\texttt{searchMoves\_spec} & --- &
+Loop invariant: the running $\mathit{best}$ is a fail-soft-correct
+report of the running true maximum.\\
+\midrule
+\multicolumn{3}{@{}l}{\texttt{Tricks.lean} --- transposition table, futility, mate tricks (Sections~\ref{sec:taxonomy},~\ref{sec:ledger})}\\
+\texttt{boundTT\_spec} & Bounded &
+Table threading preserves $\mathrm{TableOK}$ (every stored entry
+brackets $\negamax_d(p)$) and satisfies $\mathrm{BoundSpec}$.\\
+\texttt{futilityOK\_discharged} (Thm~\ref{thm:futility}) & score identity &
+The futility yield \emph{equals} the depth-0 child search it
+replaces.\\
+\texttt{boundFut\_spec} (Thm~\ref{thm:boundfut}) & FutilityMateOK, in-band $\gamma$ &
+The futility-pruned search satisfies $\mathrm{BoundSpec}$ against plain
+$\negamax$ --- a point spec.\\
+\texttt{soften\_null\_window} & $\gamma > \ML + 1$ &
+Mate-distance softening never changes a fail-high decision.\\
+\texttt{mateEntry\_deep\_service} & MateDepthMonotone &
+A mate-band lower bound may be served at any \emph{deeper} depth.\\
+\texttt{mateDepthStable\_of\_kingGoneStable} & KingGoneStable, MVAKC &
+Depth-stability of mate-band membership follows from permanence of king
+capture.\\
+\midrule
+\multicolumn{3}{@{}l}{\texttt{Stalemate.lean} --- king-capture model and stalemate correction (Section~\ref{sec:stalemate})}\\
+\texttt{boundStale\_spec} (Thm~\ref{thm:boundstale}) &
+Bounded, CheckProbeOK, in-band $\gamma$, MVAKC &
+The stalemate-corrected search satisfies $\mathrm{BoundSpec}$ against
+the draw-aware value $\negamaxD$.\\
+\texttt{boundStale\_of\_capture} & --- &
+King-capturable positions ($d \ge 1$) return exactly the $\MU$
+sentinel.\\
+\texttt{negamaxDraw\_bounded} & Bounded &
+Draw-aware values stay in the $[-\MU, \MU]$ band.\\
+\midrule
+\multicolumn{3}{@{}l}{\texttt{Killer.lean} --- the killer-table invariant (Section~\ref{sec:killer})}\\
+\texttt{boundKill\_spec} (Thm~\ref{thm:killer}) & in-band $\gamma$, captures sort first &
+One call preserves $\mathrm{KillerOK}$ and returns exactly $\MU$ at
+every king-capturable node.\\
+\texttt{killerEmpty\_OK} & --- &
+The invariant holds from the empty table along any execution history.\\
+\texttt{killer\_probe\_sound} & --- &
+The depth-0 probe decides king-capturability (both directions) at the
+depth the engine runs it.\\
+\midrule
+\multicolumn{3}{@{}l}{\texttt{LmrDet.lean} --- deterministic LMR, as shipped on master (Section~\ref{sec:lmrdet})}\\
+\texttt{boundLmrDet\_spec} & --- &
+Gamma-free reductions give a \emph{point} $\mathrm{BoundSpec}$ against
+the single value function $\mathrm{negamaxDet}$.\\
+\texttt{boundLmrDet\_no\_crossing} & --- &
+Fail-high reports never exceed fail-low reports at the same key:
+entries cannot cross.\\
+\midrule
+\multicolumn{3}{@{}l}{\texttt{Lmr.lean} --- re-search LMR (historical: \texttt{58883ea..7f9f164}; Section~\ref{sec:taxonomy})}\\
+\texttt{bound\_no\_crossing} (Thm~\ref{thm:no-crossing}) & --- &
+Without reductions, a fail-high report can never exceed a fail-low
+report at the same key.\\
+\multicolumn{3}{@{}p{13.4cm}@{}}{\emph{Deleted, recognized as vacuous}
+(Section~\ref{sec:taxonomy}): \texttt{boundLmr\_spec},
+\texttt{lmrVal\_sandwich}, and \texttt{IntervalTableOK} with its
+preservation theorems stated an ``interval spec'' for re-search LMR;
+no bound on the $\Vhi - \Vlo$ gap is provable, so they guaranteed
+nothing and were deleted, along with the entire clamp model
+(\texttt{TableClamp.lean}, \texttt{clamp\_noop\_high/low}) once the
+clamp was proven a no-op under point specs.  Git is the archive; the
+code carries no historical artifacts.}\\
+\midrule
+\multicolumn{3}{@{}l}{\texttt{CanNull.lean} --- null move, repetition, keyed table, IID (Section~\ref{sec:nullmove})}\\
+\texttt{boundNullTT\_spec} & Bounded &
+Layer 1, no zugzwang hypothesis: the augmented search brackets its own
+value $\mathrm{nullValue}$ (point spec) and the
+$(\mathrm{pos},\mathrm{depth},\mathrm{can\_null})$-keyed table stays
+consistent.\\
+\texttt{ctableOK\_empty} & --- &
+The empty keyed table satisfies the invariant for \emph{any} history
+(why \texttt{tp\_score} is cleared on history change).\\
+\texttt{nullValue\_plain} & NullBetOK, empty history &
+Layer 2: $\mathrm{nullValue}$ collapses to the null-free value;
+composed with layer 1, this recovers the docstring.\\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Proved theorems} (sorry-free; axioms
+\texttt{propext}, \texttt{Quot.sound} only).  ``---'' means
+unconditional over all games of Definition~\ref{def:game}; listed
+hypotheses are named premises carried in the Lean statement
+(Section~\ref{sec:ledger}).  MVAKC = MateValuesAreKingCaptures;
+in-band means $-\MU < \gamma \le \MU$.  Supporting lemmas are omitted;
+\texttt{formal/README.md} has the complete list.}
+\label{tab:theorems}
+\end{table}
+
+\begin{table}[t]
+\centering
+\scriptsize
+\begin{tabular}{@{}p{4.9cm}p{4.2cm}p{5.7cm}@{}}
+\toprule
+\textbf{Lean counterexample} & \textbf{Refutes} & \textbf{Witness}\\
+\midrule
+\texttt{lmr\_tt\_crossing} \newline (\texttt{Lmr.lean}; Cex~\ref{cex:crossing}, Fig.~\ref{fig:lmrcross}) &
+Point-consistent \texttt{tp\_score} entries under re-search LMR. &
+3-position game: the same $(\mathrm{pos},\mathrm{depth})$ yields a
+fail-high report $+10$ strictly above a fail-low report $-50$.\\
+\addlinespace
+\texttt{boundStale\_not\_unconditional} \newline (\texttt{Stalemate.lean}; Cex~\ref{cex:stale}, Fig.~\ref{fig:stalecex}) &
+Soundness of the stalemate correction \emph{without}
+MateValuesAreKingCaptures (hypotheses (i)--(iii) alone do not
+suffice). &
+7-position game, $\gamma = -5$: the corrected search returns an ``upper
+bound'' $-20$ while the draw-aware value is $0$.\\
+\addlinespace
+\texttt{negamaxDraw\_depth\_inconsistent} \newline (\texttt{Stalemate.lean}; Thm~\ref{thm:depth-inconsistent}) &
+Existence of a depth-independent game value agreeing with the
+depth-gated $\negamaxD$. &
+A stalemate position worth $\LOSS$ at remaining depth 2 and $0$ at
+depth 3.\\
+\addlinespace
+\texttt{cex\_violates\_hypothesis} \newline (\texttt{Stalemate.lean}) &
+(Companion fact:) that the 7-position game satisfies
+Hypothesis~\ref{hyp:mvakc}. &
+$\negamaxD_2(m_0) = \MU$ with no king capture behind it --- a fabricated
+mate.\\
+\addlinespace
+\texttt{extended\_value\_not\_key\_independent} \newline (\texttt{Tricks.lean}) &
+\texttt{ExtKeyIndependent}: that the extended-search value is a function
+of $(\mathrm{pos}, \mathrm{depth})$ alone. &
+2-state game with a history-dependent extension: same key, two values;
+hence such a TT key must include the history component.\\
+\bottomrule
+\end{tabular}
+\caption{\textbf{Machine-checked counterexamples.}  Each is a concrete
+finite game whose search values Lean's kernel computes by
+\texttt{decide}; each is a theorem of the form ``the quantified claim is
+false''.  They carry the same evidential weight as
+Table~\ref{tab:theorems} and did the most to correct the authors'
+beliefs (Section~\ref{sec:lessons}).}
+\label{tab:cex}
+\end{table}
+
 % =========================================================================
 \section{The Core Contract}
 \label{sec:contract}
@@ -166,16 +537,66 @@ if gamma >~ s* then s* <= r < gamma\hspace{1em}(A better upper bound)\\
 if gamma <= s* then gamma <= r <= s*\hspace{0.55em}(A better lower bound)
 \end{quote}
 
-The model is an abstract game: a type of positions, a successor function
-$\mathrm{moves} : \mathrm{Pos} \to \mathrm{List\ Pos}$ where the empty
-list means the side to move has lost, and a static evaluation
-$\mathrm{eval} : \mathrm{Pos} \to \mathbb{Z}$
-\leanref{Game}{GameTree.lean}.  The ``true score'' $s^*$ is depth-limited
-negamax, $\negamax_d(p)$: $\mathrm{eval}(p)$ at depth $0$, otherwise the
-maximum over moves $m$ of $-\negamax_{d-1}(m)$, folded from
-$\LOSS = -\MU$ \leanref{negamax}{GameTree.lean}.  Here
-$\MU = 69290$ and $\ML = 50710$ are sunfish's
-\texttt{MATE\_UPPER} and \texttt{MATE\_LOWER}.
+In the model of Section~\ref{sec:model}, the ``true score'' $s^*$ is the
+depth-limited negamax value $\negamax_d(p)$, and the docstring
+transcribes to a two-sided fail-soft condition on the report $r$,
+illustrated in Figure~\ref{fig:failsoft}.  Here $\MU = 69290$ and
+$\ML = 50710$ are sunfish's \texttt{MATE\_UPPER} and
+\texttt{MATE\_LOWER}.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\small, >={Stealth}]
+  % ---- Case 1: fail low ----
+  \begin{scope}
+    \node[lbl, anchor=west] at (-0.3,0.95)
+      {\textbf{Fail low} ($r < \gamma$, certifying $\gamma > s^*$):
+       $r$ is a tighter \emph{upper} bound};
+    \draw[->, black!70] (-0.3,0) -- (11.3,0)
+      node[right, font=\scriptsize, black!70] {score};
+    \draw[black!70] (3,-0.12) -- (3,0.12);
+    \node[above] at (3,0.14) {$s^*$};
+    \draw[black!70] (8.5,-0.12) -- (8.5,0.12);
+    \node[above] at (8.5,0.14) {$\gamma$};
+    \draw[very thick, blue!70!black] (3,0) -- (8.35,0);
+    \draw[very thick, blue!70!black] (3,-0.14) -- (3,0.14);
+    \draw[very thick, blue!70!black, fill=white] (8.35,0) circle (2.2pt);
+    \fill[blue!70!black] (5.9,0) circle (2.4pt);
+    \node[blue!70!black, below] at (5.9,-0.14) {$r$};
+    \node[lbl, blue!70!black, anchor=west] at (2.9,-0.78)
+      {$s^* \le r < \gamma$ \quad (stored as \texttt{Entry.upper};
+       MTD-bi sets $\mathit{upper} := r$)};
+  \end{scope}
+  % ---- Case 2: fail high ----
+  \begin{scope}[yshift=-2.9cm]
+    \node[lbl, anchor=west] at (-0.3,0.95)
+      {\textbf{Fail high} ($r \ge \gamma$, certifying $\gamma \le s^*$):
+       $r$ is a tighter \emph{lower} bound};
+    \draw[->, black!70] (-0.3,0) -- (11.3,0)
+      node[right, font=\scriptsize, black!70] {score};
+    \draw[black!70] (3,-0.12) -- (3,0.12);
+    \node[above] at (3,0.14) {$\gamma$};
+    \draw[black!70] (8.5,-0.12) -- (8.5,0.12);
+    \node[above] at (8.5,0.14) {$s^*$};
+    \draw[very thick, blue!70!black] (3,0) -- (8.5,0);
+    \draw[very thick, blue!70!black] (3,-0.14) -- (3,0.14);
+    \draw[very thick, blue!70!black] (8.5,-0.14) -- (8.5,0.14);
+    \fill[blue!70!black] (5.9,0) circle (2.4pt);
+    \node[blue!70!black, below] at (5.9,-0.14) {$r$};
+    \node[lbl, blue!70!black, anchor=west] at (2.9,-0.78)
+      {$\gamma \le r \le s^*$ \quad (stored as \texttt{Entry.lower};
+       MTD-bi sets $\mathit{lower} := r$)};
+  \end{scope}
+\end{tikzpicture}
+\caption{$\mathrm{BoundSpec}$
+(Definition~\ref{def:boundspec}) as a picture: wherever the report $r$
+falls relative to the probe window $\gamma$, it is trapped on the
+correct side of the true value $s^* = \negamax_d(p)$.  Fail-soft means
+$r$ carries information beyond the boolean fail-high/fail-low: it is
+itself a valid bound, which is what the transposition table stores and
+what MTD-bi's bracket consumes (Figure~\ref{fig:mtdbi}).}
+\label{fig:failsoft}
+\end{figure}
 
 \begin{definition}[BoundSpec, the docstring]
 \label{def:boundspec}
@@ -223,22 +644,101 @@ sorry-free; \texttt{\#print axioms} reports only \texttt{propext} and
 \end{proof}
 
 \subsection{Why this is the load-bearing spec: the MTD-bi driver}
+\label{sec:mtdbi}
 
 Sunfish's driver \texttt{Searcher.search} is MTD-bi (a bisecting variant
-of MTD($f$)~\cite{plaat1996mtdf}): it maintains a bracket
-$\mathit{lower} \le \mathit{score} \le \mathit{upper}$ and repeatedly
-probes \texttt{bound} at a $\gamma$ inside the bracket.
+of MTD($f$)~\cite{plaat1996mtdf}): at each depth it maintains a bracket
+$\mathit{lower} \le \mathit{score} \le \mathit{upper}$, initialized to
+$[-\ML, \ML]$, and repeatedly probes \texttt{bound} at
+$\gamma = \lfloor(\mathit{lower}+\mathit{upper}+1)/2\rfloor$, stopping
+when the bracket is narrower than \texttt{EVAL\_ROUGHNESS} ($=15$
+centipawns) --- Figure~\ref{fig:mtdbi}.
 Theorem~\ref{thm:bound-spec} is exactly the property the binary search
 needs: \emph{every} probe, whatever its $\gamma$, moves one end of the
-bracket --- a fail high raises $\mathit{lower}$, a fail low lowers
-$\mathit{upper}$, and the two can never cross
+bracket --- a fail high raises $\mathit{lower}$ to $r$, a fail low
+lowers $\mathit{upper}$ to $r$, and the two can never cross
 (Theorem~\ref{thm:no-crossing} below makes the no-crossing claim
-formal, and Section~\ref{sec:taxonomy} shows how Late Move Reductions
-break precisely it).
+formal, and Section~\ref{sec:taxonomy} shows how re-search Late Move
+Reductions break precisely it).  Fail-softness is what makes bisection
+converge fast in practice: the report $r$ typically overshoots
+$\gamma$, so the bracket shrinks by more than half.  Two details of the
+driver are load-bearing for later sections: the probed window range
+stays inside $(-\MU, \MU]$ --- an interval closed under the null-window
+flip $\gamma \mapsto 1 - \gamma$ --- which
+Theorems~\ref{thm:boundstale} and~\ref{thm:killer} require; and the
+bracket invariant is exactly what the LMR crossing counterexample
+(Cex.~\ref{cex:crossing}) breaks --- and, because the spread of the
+crossing reports admits no provable bound, there is no slack (not
+\texttt{EVAL\_ROUGHNESS}, not re-probing) that can honestly be said to
+absorb it (Section~\ref{sec:taxonomy}).
 
-% TODO expand: half a page on MTD-bi vs MTD(f), EVAL_ROUGHNESS as the
-% bisection stopping width, and the gamma range (-MATE_LOWER, MATE_LOWER]
-% actually probed by the driver -- which Section 3 shows is load-bearing.
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\scriptsize, >={Stealth}]
+  % unknown true value, common to all rows
+  \draw[dashed, black!45] (7.2,0.85) -- (7.2,-5.15)
+    node[below, black!60] {$s^*$ (unknown)};
+  % ---- probe 1: fail high ----
+  \begin{scope}
+    \draw[black!70] (0.3,0) -- (10.7,0);
+    \draw[very thick] (0.3,-0.12) -- (0.3,0.12);
+    \node[below] at (0.45,-0.16) {$\mathit{lower} = -\ML$};
+    \draw[very thick] (10.7,-0.12) -- (10.7,0.12);
+    \node[below] at (10.35,-0.16) {$\mathit{upper} = +\ML$};
+    \draw[->, red!70!black, thick] (5.5,0.6) -- (5.5,0.08);
+    \node[red!70!black, above] at (5.5,0.6) {$\gamma_1$};
+    \fill[blue!70!black] (6.3,0) circle (2pt);
+    \node[blue!70!black, below] at (6.3,-0.1) {$r_1$};
+    \node[lbl, anchor=west, text width=3.9cm] at (10.85,0.4)
+      {$r_1 \ge \gamma_1$: fail high,\\ $\mathit{lower} := r_1$};
+  \end{scope}
+  % ---- probe 2: fail low ----
+  \begin{scope}[yshift=-1.7cm]
+    \draw[black!70] (6.3,0) -- (10.7,0);
+    \draw[very thick] (6.3,-0.12) -- (6.3,0.12);
+    \draw[very thick] (10.7,-0.12) -- (10.7,0.12);
+    \draw[->, red!70!black, thick] (8.5,0.6) -- (8.5,0.08);
+    \node[red!70!black, above] at (8.5,0.6) {$\gamma_2$};
+    \fill[blue!70!black] (7.8,0) circle (2pt);
+    \node[blue!70!black, below] at (7.8,-0.1) {$r_2$};
+    \node[lbl, anchor=west, text width=3.9cm] at (10.85,0.1)
+      {$r_2 < \gamma_2$: fail low,\\ $\mathit{upper} := r_2$};
+  \end{scope}
+  % ---- probe 3: fail high ----
+  \begin{scope}[yshift=-3.4cm]
+    \draw[black!70] (6.3,0) -- (7.8,0);
+    \draw[very thick] (6.3,-0.12) -- (6.3,0.12);
+    \draw[very thick] (7.8,-0.12) -- (7.8,0.12);
+    \draw[->, red!70!black, thick] (7.05,0.6) -- (7.05,0.08);
+    \node[red!70!black, above] at (7.05,0.6) {$\gamma_3$};
+    \fill[blue!70!black] (7.15,0) circle (2pt);
+    \node[blue!70!black, below] at (7.1,-0.1) {$r_3$};
+    \node[lbl, anchor=west, text width=3.9cm] at (10.85,0.1)
+      {$r_3 \ge \gamma_3$: fail high,\\ $\mathit{lower} := r_3$};
+  \end{scope}
+  % ---- stop ----
+  \begin{scope}[yshift=-4.75cm]
+    \draw[black!70] (7.15,0) -- (7.8,0);
+    \draw[very thick] (7.15,-0.12) -- (7.15,0.12);
+    \draw[very thick] (7.8,-0.12) -- (7.8,0.12);
+    \node[lbl, anchor=west, text width=3.9cm] at (10.85,0.1)
+      {$\mathit{upper} - \mathit{lower} \le{}$
+        \texttt{EVAL\_ROUGHNESS}:\\ stop, play the best move};
+  \end{scope}
+\end{tikzpicture}
+\caption{MTD-bi as a binary search over the probe window $\gamma$.
+Each row is one call
+$r_i = \texttt{bound}(\mathit{pos}, \gamma_i, d)$ with
+$\gamma_i = \lfloor(\mathit{lower}+\mathit{upper}+1)/2\rfloor$.
+Theorem~\ref{thm:bound-spec} guarantees each report lands on the correct
+side of the (unknown) true value $s^*$, so every probe legitimately
+moves one end of the bracket, and fail-soft overshoot (e.g.\ $r_1 >
+\gamma_1$) shrinks it faster than plain bisection.  The invariant
+$\mathit{lower} \le s^* \le \mathit{upper}$ is
+Theorem~\ref{thm:no-crossing}; Cex.~\ref{cex:crossing} shows what
+re-search LMR does to it.}
+\label{fig:mtdbi}
+\end{figure}
 
 % =========================================================================
 \section{The King-Capture Model and the Stalemate Correction}
@@ -323,6 +823,57 @@ the root inherits a wrong bound.  This is sunfish's own code comment
 not a mate after all'') turned into a machine-checked refutation.
 \leanref{boundStale\_not\_unconditional, Cex, cex\_violates\_hypothesis}{Stalemate.lean}
 \end{counterexample}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\scriptsize, >={Stealth},
+    level distance=11mm]
+  % tree
+  \node[posnode] (root) at (0,0) {\footnotesize root};
+  \node[posnode] (m0) at (-1.6,-1.3) {$m_0$};
+  \node[posnode] (m1) at (1.6,-1.3) {$m_1$};
+  \node[posnode, very thick] (g) at (-1.6,-2.6) {$g$};
+  \node[posnode] (h1) at (0.8,-2.6) {$h_1$};
+  \node[posnode, very thick] (h2) at (2.4,-2.6) {$h_2$};
+  \node[posnode] (e) at (0.8,-3.9) {$e$};
+  \draw[->] (root) -- (m0);
+  \draw[->] (root) -- (m1);
+  \draw[->] (m0) -- (g);
+  \draw[->] (m1) -- (h1);
+  \draw[->] (m1) -- (h2);
+  \draw[->] (h1) -- (e);
+  \node[lbl, anchor=west] at (0.95,-3.9) {$\mathrm{eval}(e)=20$; all other evals $0$};
+  \node[lbl, anchor=east, text width=2.6cm] at (-2.0,-2.6)
+    {\emph{stalemates}: terminal, no king capture behind them};
+  \node[lbl, anchor=west] at (0.6,0.35)
+    {probed at depth 3, $\gamma = -5$};
+  % annotation boxes
+  \node[notebox, text width=5.1cm, anchor=north west] (n1) at (5.3,0.1)
+    {\textbf{Below the gate} (remaining depth $\le 2$): $g$, $h_2$ fold
+     to $\LOSS$ uncorrected, so at depth 2 their parents $m_0$, $m_1$
+     score a fabricated $\MU$ --- mate values with no king capture
+     anywhere (\texttt{cex\_violates\_hypothesis}).};
+  \node[notebox, text width=5.1cm, anchor=north west] (n2) at (5.3,-1.9)
+    {\textbf{At the root}: the search fails low at
+     $\mathit{best} = -20 \ne \LOSS$, so the correction never fires;
+     but the \emph{true} fold is $\LOSS$, and the draw-aware value
+     corrects it to $0$.};
+  \node[notebox, text width=5.1cm, anchor=north west, draw=red!60!black]
+    (n3) at (5.3,-3.35)
+    {$\mathrm{boundStale} = -20 \;<\; \gamma = -5$, \quad yet \quad
+     $\negamaxD_3(\mathrm{root}) = 0 > -20$: \\ the docstring's fail-low
+     clause is violated.};
+\end{tikzpicture}
+\caption{The seven-position counterexample \texttt{Cex}
+(Cex.~\ref{cex:stale}).  Thick circles are terminal stalemates; the
+$\mathrm{depth} > 2$ gate means they are scored $\LOSS$ when first seen
+at shallow remaining depth, their parents inherit fabricated mate
+scores, and the root reports an upper bound the draw-aware value
+exceeds.  Bounded evaluations, a perfect check probe and an in-band
+window all hold; only Hypothesis~\ref{hyp:mvakc} fails --- so the
+hypothesis is not optional.}
+\label{fig:stalecex}
+\end{figure}
 
 \begin{theorem}[Depth inconsistency is intrinsic]
 \label{thm:depth-inconsistent}
@@ -503,8 +1054,8 @@ For any game with the score identity, under in-band windows and the
 remaining hypothesis \emph{FutilityMateOK} (a move valued as a king
 capture, $\mathrm{val} \ge \ML$, really wins: the fail-high
 \texttt{else MATE\_UPPER} bypass), the futility-pruned search satisfies
-$\mathrm{BoundSpec}$ against plain $\negamax$ --- a single value
-function, no interval.
+$\mathrm{BoundSpec}$ against plain $\negamax$ --- a point spec on a
+single value function.
 \leanref{boundFut\_spec}{Tricks.lean}
 \end{theorem}
 
@@ -529,16 +1080,19 @@ nose.  The original statement over-required.
 \subsection{Class (c): \texorpdfstring{$\gamma$}{gamma}-selected
 incomparable evaluations --- unsound in the point sense}
 
-Late Move Reductions is the canonical citizen.  A late quiet move at
-$\mathrm{depth} \ge 3$ is probed at $\mathrm{depth}-2$; a reduced fail
-low is yielded as-is, a reduced fail high is re-searched at full depth
-and only that result is yielded.  Here $\gamma$ \emph{selects which of
+\emph{Re-search} Late Move Reductions --- the gamma-adaptive variant
+that shipped between commits \texttt{58883ea} and \texttt{7f9f164}, and
+whose formal record is kept in \texttt{Lmr.lean} --- is the canonical
+citizen.  A late quiet move at $\mathrm{depth} \ge 3$ is probed at
+$\mathrm{depth}-2$; a reduced fail low is yielded as-is, a reduced fail
+high is re-searched at full depth and only that result is yielded.  Here $\gamma$ \emph{selects which of
 two incomparable value functions the yield is a fact about}, and the
 docstring becomes unprovable as stated: no single value function backs
 both sides.
 
-The honest replacement is an interval.  Define the mutually recursive
-pair $(\Vhi, \Vlo)$ with side alternation:
+Our first reaction was to retreat to an interval-shaped statement.
+Define the mutually recursive pair $(\Vhi, \Vlo)$ with side
+alternation:
 \begin{align*}
   \Vhi_d(p) &= \max_{m}\; -\Vlo_{d-1}(m)
     && \text{(all full depth)}\\
@@ -549,42 +1103,38 @@ pair $(\Vhi, \Vlo)$ with side alternation:
       -\Vhi_{d-1}(m) & \text{otherwise}
     \end{cases}
 \end{align*}
-\leanref{lmrVal}{Lmr.lean}, over an abstract reducibility predicate
+over an abstract reducibility predicate
 $\mathrm{red}(d, i, m)$ generalizing sunfish's
-\texttt{depth >= 3 and i\_m >= 5 and val < QS}.
+\texttt{depth >= 3 and i\_m >= 5 and val < QS}.  We proved,
+machine-checked and sorry-free at the time (as \texttt{boundLmr\_spec}
+and \texttt{lmrVal\_sandwich}), that every fail-high report of the LMR
+search is $\le \Vhi_d(p)$, every fail-low report is $\ge \Vlo_d(p)$,
+and $\Vlo_d(p) \le \negamax_d(p) \le \Vhi_d(p)$ pointwise --- and, for
+a while, we presented this pair of statements as ``the honest
+replacement'' for the docstring: an \emph{interval spec}, with the
+truth trapped in between.
 
-\begin{theorem}[The LMR interval spec]
-\label{thm:lmr}
-For every depth, position and window: a fail-high report of the LMR
-search is $\le \Vhi_d(p)$, and a fail-low report is $\ge \Vlo_d(p)$.
-\leanref{boundLmr\_spec}{Lmr.lean}
-\end{theorem}
+The verdict must be stated as plainly as the retreat was: \textbf{it
+was never a spec}, and the statements --- together with the
+$(\Vhi,\Vlo)$ definition itself --- have been \emph{deleted} from the
+development.  A claim of the form ``fail highs bound $\Vhi$, fail lows
+bound $\Vlo$, and the truth lies in between'' is a guarantee only if
+the gap $\Vhi - \Vlo$ is bounded.  No bound on search instability is
+provable: one ply of depth can hide a mate, so the gap is unbounded
+precisely in the positions that decide games.  A guarantee relative to
+an uncontrollable gap guarantees nothing; the interval reading was only
+a description of the bug --- in the maintainer's phrase, a ``cope
+spec''.  The only contract the repository recognizes is the
+\emph{point} spec: every stored bound describes one value function
+determined by the transposition key.  What \texttt{Lmr.lean} keeps is
+exactly what supports that doctrine: the re-search definition itself
+\leanref{boundLmr}{Lmr.lean} and the machine-checked counterexample
+below.
 
-\begin{theorem}[The sandwich]
-\label{thm:sandwich}
-$\Vlo_d(p) \le \negamax_d(p) \le \Vhi_d(p)$ pointwise: LMR reports still
-confine the full-depth value --- but only from the side that happened to
-be reported, and against the widened pair, not the point.
-\leanref{lmrVal\_sandwich}{Lmr.lean}
-\end{theorem}
-
-\begin{proof}[Proof sketch of Theorems~\ref{thm:lmr}
-and~\ref{thm:sandwich}]
-Strong induction on depth via a two-target generalization of the loop
-lemma \leanref{searchMovesIdx\_spec}{Lmr.lean}: each move's report is
-bounded above by one weight function when it fails high and below by
-another when it fails low, and the loop's fail-soft result inherits both
-bounds against the respective folds.  The per-move case analysis follows
-the merged code: a reduced fail low yields a shallow fact (the child's
-$\Vhi$ at the reduced depth bounds it, whence the $\min$); a reduced
-fail high falls through to the full-depth re-search.  The sandwich is a
-separate induction using monotonicity of the indexed fold.  Both
-sorry-free.
-\end{proof}
-
-Two facts about this modeling were \emph{surprises} --- both were claims
-the authors believed and the proof assistant refused; we recount them
-honestly in Section~\ref{sec:lessons}.
+Two facts about modeling the since-deleted statements were
+\emph{surprises} --- both were claims the authors believed and the
+proof assistant refused; we recount them honestly in
+Section~\ref{sec:lessons}.
 
 The practical consequence is a transposition-table pathology:
 
@@ -610,13 +1160,68 @@ fails high at $+10$.
 \leanref{lmr\_tt\_crossing}{Lmr.lean}
 \end{counterexample}
 
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\scriptsize, >={Stealth}]
+  % ---- the game ----
+  \node[posnode] (X) at (0,0) {$X$};
+  \node[posnode] (m) at (0,-1.5) {$m$};
+  \node[posnode] (g) at (0,-3.0) {$g$};
+  \draw[->] (X) -- node[right=1pt]{reducible} (m);
+  \draw[->] (m) -- (g);
+  \node[lbl, anchor=west] at (0.5,0)
+    {$\mathrm{eval} = 0$;\; searched at depth 2};
+  \node[lbl, anchor=west] at (0.5,-1.5)
+    {$\mathrm{eval} = 50$:\; looks bad for us shallow};
+  \node[lbl, anchor=west] at (0.5,-3.0)
+    {$\mathrm{eval} = 10$:\; the forced reply makes $m$ good deep};
+  % ---- the two probes ----
+  \node[notebox, text width=6.1cm, anchor=north west] (pA) at (6.6,0.4)
+    {\textbf{Probe $\gamma = 0$}: reduced search of $m$ at depth $0$
+     sees $\mathrm{eval}(m) = 50$, i.e.\ $-50$ for us $< \gamma$
+     $\Rightarrow$ reduced fail low, \emph{yielded as-is}.\\
+     Report $-50$: fail low $\Rightarrow$ stored
+     $\mathit{upper} = -50$.};
+  \node[notebox, text width=6.1cm, anchor=north west] (pB) at (6.6,-1.55)
+    {\textbf{Probe $\gamma = -60$}: the reduced probe passes
+     ($-50 \ge \gamma$) $\Rightarrow$ \emph{re-search $m$ at full depth}
+     $1$: reply $g$ gives $m$ value $-10$, i.e.\ $+10$ for us.\\
+     Report $+10$: fail high $\Rightarrow$ stored
+     $\mathit{lower} = +10$.};
+  \node[notebox, draw=red!60!black, text width=6.1cm, anchor=north west]
+    (res) at (6.6,-3.5)
+    {Same table slot $(X, 2)$:\;
+     \texttt{Entry(lower = +10, upper = -50)} ---
+     $\mathit{lower} > \mathit{upper}$.  Provably impossible without
+     reductions (\texttt{bound\_no\_crossing}).};
+\end{tikzpicture}
+\caption{The machine-checked TT-crossing counterexample
+\texttt{lmr\_tt\_crossing} (Cex.~\ref{cex:crossing}).  The window
+$\gamma$ decides whether the yield for move $m$ is a fact about the
+\emph{reduced} (depth-0) or the \emph{full} (depth-1) evaluation ---
+two incomparable value functions --- so two probes of the same
+$(\mathrm{pos}, \mathrm{depth})$ return bounds that cross when stored.}
+\label{fig:lmrcross}
+\end{figure}
+
 MTD-bi's bracket $\mathit{lower} \le \mathit{score} \le \mathit{upper}$
-is therefore conditional on the $\Vhi - \Vlo$ gap staying within what
-\texttt{EVAL\_ROUGHNESS} and re-probing absorb.  On the production
-engine the crossing is real but rare: \textbf{0.016\% of nodes}
-measured over real games.  The mitigation is two lines --- on store,
-widen the stale side of the entry instead of asserting a contradiction
---- and measured ELO-neutral at $+12 \pm 28$ (i.e., free).  Killer and
+is therefore simply broken under re-search LMR: the gap between the two
+value functions admits no provable bound, so there is no theorem of the
+form ``the crossing stays within what \texttt{EVAL\_ROUGHNESS} and
+re-probing absorb'' --- in the positions that decide games, it need
+not.  On the production engine the crossing is real but rare:
+\textbf{0.016\% of nodes} measured over real games.  The two-line
+store clamp shipped at the time --- on store, widen the stale side of
+the entry instead of asserting a contradiction --- measured
+ELO-neutral at $+12 \pm 28$; but it was containment, not repair: it
+kept crossing reports from being \emph{stored} (proved at the time as
+\texttt{clamp\_no\_crossing}) while the search went on consuming them.
+The \texttt{IntervalTableOK} invariant that once dressed the clamp up
+as preserving a guarantee was deleted along with the interval reading
+--- an invariant stated relative to an unboundable gap certifies
+nothing --- and the clamp model (\texttt{TableClamp.lean}) has since
+been deleted from the development entirely; git is the archive.
+Killer and
 stalemate lemmas are unaffected: king captures have
 $\mathrm{val} \ge \ML > \mathit{QS} = 40$ and are never reducible
 \leanref{RedRespectsCaptures}{Lmr.lean}; the killer is pre-loop and
@@ -624,6 +1229,40 @@ structurally never reduced; reduced fail lows are $< \gamma$ and never
 reach the \texttt{tp\_move} store; and the $-\MU$ king-loss sentinel is
 depth-independent, so stalemate detection still sees exact sentinels
 from reduced searches.
+
+\subsection{Epilogue on master: deterministic LMR restores the point
+spec}
+\label{sec:lmrdet}
+
+The story has a resolution.  As of commit \texttt{7f9f164}, master
+retires the re-search variant and ships \emph{deterministic} LMR: the
+reduction depends only on $(\mathrm{depth}, \mathrm{index},
+\mathrm{val})$ --- \texttt{LMR = int(depth >= 4 and i\_m >= 8 and val <
+0)} --- and each move is searched \emph{once}, at
+$\mathrm{depth} - 1 - \mathrm{LMR}$.  Because $\gamma$ no longer selects
+between evaluations, the search is back in class (b$'$): it computes
+exact fail-soft bounds on a \emph{single} value function
+$\mathrm{negamaxDet}$ (reducible moves valued one ply shallower,
+recursively), with a point spec
+\leanref{boundLmrDet\_spec}{LmrDet.lean}; fail-high reports can never
+exceed fail-low reports at the same key, so transposition entries are
+contradiction-free by construction
+\leanref{boundLmrDet\_no\_crossing}{LmrDet.lean}; and the store clamp of
+Cex.~\ref{cex:crossing}'s containment became a provable no-op
+(\texttt{clamp\_noop\_high/low}, proven at the time) and was removed
+from the engine --- after which the no-op theorems and the whole clamp
+model (\texttt{TableClamp.lean}) were themselves deleted from the
+development, under the maintainer's principle that git is the archive
+and the code carries no historical artifacts.  The
+price was measured, not guessed: the gamma-adaptive re-search variant is
+about 16 ELO stronger ($-16 \pm 38$ direct; both are large wins over no
+LMR --- Table~\ref{tab:elo}).  That trade --- 16 ELO for end-to-end
+point specs on single value functions --- was made deliberately;
+\texttt{Lmr.lean} keeps the re-search definition and the crossing
+counterexample as the standing demonstration of what the 16 ELO would
+cost.  Note that $\mathrm{negamaxDet} \ne \negamax$: deterministic
+LMR is honest about \emph{which} value function it computes bounds on,
+rather than unsound about the original one.
 
 % =========================================================================
 \section{The Ledger of Bets: Named Hypotheses}
@@ -638,22 +1277,24 @@ it preserves, weakens, or newly depends on} (see
 unproven assumption is named, stated, and where possible measured.
 
 \begin{center}
-\small
-\begin{tabular}{@{}lp{6.6cm}l@{}}
+\footnotesize
+\begin{tabular}{@{}lp{5.9cm}p{4.4cm}@{}}
 \toprule
 \textbf{Hypothesis} & \textbf{Statement (informal)} & \textbf{Status}\\
 \midrule
-\texttt{NullOK} &
-In every non-terminal position some legal move scores at least the pass
-value.  \emph{Zugzwang is precisely its negation}; hence sunfish's
-$|\mathrm{score}| < 500$ guard. &
-Named; \texttt{boundNull\_spec} sketched\\
+\texttt{NullOK} / \texttt{NullBetOK} &
+Some real move matches the reduced-depth pass value.  \emph{Zugzwang is
+precisely its negation}; hence sunfish's $|\mathrm{score}| < 500$
+guard. &
+Named; confined to the layer-2 bridge \texttt{nullValue\_plain}
+(proven under it); layer 1 is \textbf{unconditional}
+(Sec.~\ref{sec:nullmove})\\
 \texttt{TableOK} &
 Every stored $(\mathit{lower}, \mathit{upper})$ brackets
 $\negamax_d(p)$; requires the \emph{Bounded} side condition, without
 which the fresh entry $(-\MU, \MU)$ is not a valid bracket and the
-theorem is false. &
-Named; \texttt{boundTT\_spec} sketched\\
+claim is false. &
+\textbf{Proven} (\texttt{boundTT\_spec}, under \emph{Bounded})\\
 \texttt{FutilityOK} &
 Static estimate dominates the true child value. &
 \textbf{Discharged} (Thm.~\ref{thm:futility})\\
@@ -693,7 +1334,7 @@ True by construction in sunfish\\
 \texttt{ExtKeyIndependent} &
 Extended-search value is a function of $(\mathrm{pos}, \mathrm{depth})$
 alone. &
-\textbf{Refuted} \leanref{extended\_value\_not\_key\_independent}{Tricks.lean}\\
+\textbf{Refuted} (\texttt{Tricks.lean}; Table~\ref{tab:cex})\\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -710,9 +1351,94 @@ is a small proven lemma: for windows strictly above the mate band,
 mate-distance softening does not disturb null-window fail-high
 decisions.
 
-% TODO expand: one paragraph on the "ledger of bets" framing -- the
-% engine is allowed to bet, but every bet has a name, a statement, and
-% (where possible) a measured exposure.
+\subsection{Shrinking a bet: the layered null-move story}
+\label{sec:nullmove}
+
+The ledger is not static; the null-move entry shows a bet being
+\emph{shrunk} by restructuring (Figure~\ref{fig:nulllayers}).  Sunfish's
+\texttt{can\_null} flag plays four roles at once --- null-move gate,
+repetition gate, transposition-key component, and IID recursion flag ---
+and \texttt{CanNull.lean} models all four exactly as master runs them
+(including two audit surprises recorded there: sunfish permits
+\emph{consecutive} null moves, and the move generator's laziness is
+semantically load-bearing for the table state).  The old, monolithic
+claim ``null-move search satisfies the docstring'' needed a zugzwang
+hypothesis in front of everything.  The layered version needs it almost
+nowhere:
+
+\begin{itemize}
+  \item \textbf{Layer 1 (unconditional).}  Define
+    $\mathrm{nullValue}$ --- the value function of the
+    null-and-repetition-augmented search itself, with the pass option
+    (searched at $\mathrm{depth}-3$ behind the gamma-free guard
+    $|\mathrm{score}| < 500$) as one more option in the fold.  Then the
+    search brackets $\mathrm{nullValue}$ with a \emph{point} spec, and
+    the $(\mathrm{pos}, \mathrm{depth}, \mathrm{can\_null})$-keyed table
+    stays consistent, with no zugzwang hypothesis anywhere
+    \leanref{boundNullTT\_spec, CTableOK}{CanNull.lean}.
+    Self-consistency of search plus table is not a bet.
+  \item \textbf{Layer 2 (the bet, now smaller).}  Relating
+    $\mathrm{nullValue}$ to the null-free value is where the null-move
+    bet lives: under \texttt{NullBetOK} (some real move matches the
+    reduced-depth pass; the required witness also excludes guard-passing
+    stalemates) and an empty history, $\mathrm{nullValue}$ collapses to
+    the plain value \leanref{nullValue\_plain}{CanNull.lean}, and
+    composing the layers recovers the docstring.
+\end{itemize}
+
+Zugzwang --- precisely $\neg\texttt{NullBetOK}$ --- can make the engine
+compute the wrong \emph{value}, but can never make its table contradict
+its search.  A satisfying corollary of the keyed-table invariant being
+history-relative: the empty table satisfies it for \emph{any} history
+\leanref{ctableOK\_empty}{CanNull.lean}, which is exactly why sunfish
+clears \texttt{tp\_score} whenever the game history changes.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[font=\scriptsize, >={Stealth}]
+  \node[leanbox, text width=10.8cm, anchor=north west] (L1) at (0,0)
+    {\textbf{Layer 1 --- unconditional self-consistency}
+     \hfill \texttt{boundNullTT\_spec}\\[2pt]
+     search $\;\Longleftrightarrow\;$ its own value function
+     \texttt{nullValue} (pass option in the fold, repetition gate
+     $\to 0$)\\
+     table keyed $(\mathrm{pos}, \mathrm{depth}, \mathrm{can\_null})$
+     stays consistent: \texttt{CTableOK}
+     \hfill \emph{point spec; no zugzwang hypothesis}};
+  \node[leanbox, text width=10.8cm, anchor=north west] (L2) at (0,-3.1)
+    {\textbf{Layer 2 --- the value the engine wanted}
+     \hfill \texttt{nullValue\_plain}\\[2pt]
+     \texttt{nullValue} $=$ null-free \texttt{plainValue}
+     $\;\Longrightarrow\;$ composing layers recovers the docstring
+     (BoundSpec against plain negamax)};
+  \draw[->, very thick, black!70]
+    ($(L1.south)+(0,-0.05)$) -- ($(L2.north)+(0,0.05)$)
+    node[midway, right=3pt, lbl, text width=6.4cm]
+    {bridge, conditional: \texttt{NullBetOK} (some real move matches the
+     reduced-depth pass) $+$ empty history};
+  \node[notebox, draw=red!60!black, text width=2.9cm, anchor=east]
+    (z) at (-0.5,-2.4)
+    {\textbf{zugzwang}\\ $= \neg\texttt{NullBetOK}$};
+  \draw[->, red!60!black, thick] (z.east)
+    to[bend right=15] ($(L1.south)!0.45!(L2.north)-(0.35,0)$);
+\end{tikzpicture}
+\caption{The layered null-move argument
+(Section~\ref{sec:nullmove}).  The unconditional layer proves the
+search and its keyed table can never disagree with \emph{each other};
+the named hypothesis \texttt{NullBetOK} is confined to the bridge that
+identifies the computed value with the null-free one.  Zugzwang attacks
+only the bridge --- it can make the value wrong, never the table
+inconsistent.}
+\label{fig:nulllayers}
+\end{figure}
+
+The framing, in one paragraph: the engine is \emph{allowed} to bet ---
+that is what selective search is --- but every bet must have a name, a
+statement in the ledger, and, where possible, a measured exposure.
+Restructuring can shrink a bet (this subsection); a counterexample can
+prove a bet is real (Cex.~\ref{cex:stale}); and a discharge can retire
+one (Theorem~\ref{thm:futility}).  What is not allowed is an unnamed
+bet.
 
 % =========================================================================
 \section{Empirical Methodology and Honest Numbers}
@@ -737,11 +1463,11 @@ origin story, is \texttt{docs/TESTING.md} in the repository.
 \toprule
 \textbf{Change} & \textbf{ELO} & \textbf{Disposition}\\
 \midrule
-Late Move Reductions & $+49 \pm 34$ & merged (LOS 99.8\%, 300 games)\\
-TT store-clamp (crossing mitigation) & $+12 \pm 28$ & merged (free; principled)\\
+Late Move Reductions (re-search) & $+49 \pm 34$ & merged (LOS 99.8\%, 300 games); later retired\\
+TT store-clamp (crossing containment) & $+12 \pm 28$ & merged (free); later a no-op\\
 \midrule
-Deterministic LMR (no re-search) & $-48 \pm 33$ & declined\\
-Conservative LMR & $-16 \pm 38$ & declined\\
+Deterministic LMR (first attempt) & $-48 \pm 33$ & declined\\
+Deterministic LMR (conservative) & $-16 \pm 38$ & declined, then \textbf{merged} (\texttt{7f9f164})\\
 Sticky-entry consistency restoration & $-33$ & declined\\
 Ordering-only consistency restoration & $-34$ & declined\\
 Null-move soundness completion & $-28$ & declined\\
@@ -756,7 +1482,13 @@ opening book, adjudication) unless noted.  The middle block prices
 \emph{consistency}: every attempt to restore point-soundness under LMR
 --- making the reduced search deterministic, keeping entries sticky,
 or restoring ordering only --- costs 16--48 ELO.  The proofs say what
-is being traded; these numbers say what the trade is worth.}
+is being traded; these numbers say what the trade is worth.
+Dispositions reflect the full history: after the campaign, the
+maintainer deliberately accepted the cheapest restoration ---
+conservative deterministic LMR at $-16 \pm 38$ --- in exchange for
+end-to-end point specs (Section~\ref{sec:lmrdet}); the re-search rows
+above the line are therefore ``merged, later retired'', and the store
+clamp became a provable no-op and was removed.}
 \label{tab:elo}
 \end{table}
 
@@ -766,14 +1498,23 @@ is being traded; these numbers say what the trade is worth.}
 Three narrative points, because the numbers alone mislead:
 
 \paragraph{The price of point-consistency.}
-Theorem~\ref{thm:lmr} says LMR is sound only as an interval.  One can
-buy back the point spec --- and each way of doing so was priced:
+Re-search LMR admits no point spec (Cex.~\ref{cex:crossing}), and the
+interval-shaped statement we first proved in its place guarantees
+nothing (Section~\ref{sec:taxonomy}).  One can buy the point spec back
+--- and each way of doing so was priced:
 deterministic LMR ($-48 \pm 33$), a conservative reduction condition
 ($-16 \pm 38$), sticky TT entries ($-33$), ordering-only ($-34$).
 Every restoration is ELO-negative.  Likewise, completing null-move
 soundness (searching the pass at a depth for which the spec discharges)
 was priced at $-28$ and declined: the engine keeps the bet, and the
-ledger keeps its name (\texttt{NullOK}).
+ledger keeps its name (\texttt{NullBetOK}).  The epilogue is
+instructive: knowing both the price \emph{and} what it buys, the
+maintainer ultimately chose to pay the smallest one --- master now
+ships the conservative deterministic LMR, trading ${\sim}16$ ELO for
+point specs end-to-end (Section~\ref{sec:lmrdet}).  The decision would
+have been incoherent without both loops: the proofs identified exactly
+what the 16 ELO purchases, and the tournaments certified it costs no
+more than that.
 
 \paragraph{Time-regime artifacts.}
 An earlier survey measured reverse futility at $+45$ and mate-score
@@ -813,10 +1554,12 @@ by clock.
 \subsection{The frame}
 
 Proofs identify the trade; tournaments price it.  Neither loop alone
-would have shipped LMR correctly: without the proof we would not have
-known to clamp the TT store (or that the killer and stalemate arguments
-survive reduction); without the tournaments we would have ``fixed'' the
-inconsistency at a cost of tens of ELO.
+would have handled LMR correctly: without the proof we would not have
+known the crossing existed, that no interval reading rescues it, or
+that the killer and stalemate arguments survive reduction; without the
+tournaments, the eventual restoration of the point spec
+(Section~\ref{sec:lmrdet}) would have been bought blind instead of at
+a known price of ${\sim}16$ ELO.
 
 % =========================================================================
 \section{Related Work}
@@ -843,8 +1586,9 @@ null-window/MTD-bi search, and the first line of work to pair machine
 proofs of search soundness with ELO-measured prices on a production
 engine --- one that plays rated games in public.  We found no prior
 formal treatment of king-capture (pseudo-legal) search, of a stalemate
-correction, of killer-table invariants, or of an interval-valued
-specification for Late Move Reductions.
+correction, of killer-table invariants, or of a machine-checked
+refutation of transposition-table point-consistency under
+gamma-adaptive Late Move Reductions (Cex.~\ref{cex:crossing}).
 % TODO expand: engine-testing literature (SPRT / fishtest practice) and
 % verified game-playing beyond chess.
 
@@ -853,19 +1597,19 @@ specification for Late Move Reductions.
 \label{sec:lessons}
 
 \paragraph{The model--code gap.}
-All theorems are about a Lean model, not about \texttt{sunfish.py}.  The
-gap is managed, not closed: the model is line-mapped (the
-correspondence table in \texttt{formal/README.md} pairs every Lean
-definition with the sunfish lines it transcribes), the counterexamples
-are constructed to exercise exactly the modeled mechanism, and features
-excluded from a given model are excluded \emph{explicitly} with a stated
-reason (e.g.\ table eviction only forgets entries, which trivially
-preserves \texttt{TableOK}).  Still, quiescence is collapsed into
+All theorems are about the Lean model of Section~\ref{sec:model}, not
+about \texttt{sunfish.py}.  The gap is managed, not closed: the model is
+line-mapped (Figure~\ref{fig:model}; the correspondence table in
+\texttt{formal/README.md} pairs every Lean definition with the sunfish
+lines it transcribes, audited at commit \texttt{9b1a7b4}), the
+counterexamples are constructed to exercise exactly the modeled
+mechanism, and features excluded from a given model are excluded
+\emph{explicitly} with a stated reason
+(Section~\ref{sec:model-not}).  Still, quiescence is collapsed into
 \texttt{eval}, move ordering is modeled by its load-bearing consequence
-only, and the null-move depth reduction ($\mathrm{depth}-3$) is
-deliberately unmodeled.  A reader should trust the theorems as
-statements about the mechanisms, not as end-to-end verification of the
-Python.
+only, and no chess rules are formalized at all.  A reader should trust
+the theorems as statements about the mechanisms, quantified over all
+abstract games, not as end-to-end verification of the Python.
 
 \paragraph{Two author claims refuted by the proof assistant,
 mid-project.}
@@ -878,13 +1622,15 @@ fail high is ever yielded.  Lean refused the induction: the guard
 protects only the \emph{immediately} reduced move, while a parent fail
 high is certified by child fail lows, which are only sound against the
 children's \emph{reduced} values --- the contamination is recursive and
-cannot be scrubbed at one level.  This is why $\Vhi$'s children are
-$\Vlo$-valued (Theorem~\ref{thm:lmr}) and why the mutually recursive
-pair exists at all.
+cannot be scrubbed at one level.  This is why the interval-shaped
+statement of Section~\ref{sec:taxonomy} had to make $\Vhi$'s children
+$\Vlo$-valued, and why the mutually recursive pair existed at all ---
+before both were deleted as guaranteeing nothing.
 \emph{(2) The $V_{\mathrm{reduced}}$ target error.}  We claimed the
 folklore fail-low target --- reducible moves simply valued one ply
-shallower ($\mathrm{negamaxShallow}$, kept in the development for the
-record) --- was the right lower target.  Also false: on the re-search
+shallower ($\mathrm{negamaxShallow}$; deleted along with the
+interval-shaped statements it fed) --- was the right lower target.
+Also false: on the re-search
 fall-through, the yielded value bounds the \emph{deep} child value while
 the shallow value has just failed high and can exceed everything
 yielded; the sound per-move entry is the \emph{minimum} of the two
