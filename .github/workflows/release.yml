@@ -1,0 +1,70 @@
+name: Release
+
+# Tag-driven releases: push a tag like v2026 to build, smoke-test, and
+# publish - to PyPI via trusted publishing (OIDC, no tokens), and to a
+# GitHub Release carrying the packed 4K build.
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+    - name: Build sdist and wheel
+      run: |
+        pip install build
+        python -m build
+    - name: Smoke-test the wheel end-to-end
+      run: |
+        pip install dist/*.whl
+        printf 'uci\nisready\nposition startpos\ngo movetime 300\nquit\n' \
+          | timeout 60 sunfish | tee /dev/stderr | grep -q bestmove
+    - name: Build the packed 4K engine
+      run: |
+        pip install python-minifier
+        bash build/pack.sh sunfish.py sunfish-4k.packed
+        wc -c sunfish-4k.packed
+    - uses: actions/upload-artifact@v4
+      with:
+        name: dist
+        path: |
+          dist/
+          sunfish-4k.packed
+
+  publish-pypi:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write   # OIDC for PyPI trusted publishing
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: dist
+    - uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        packages-dir: dist/
+
+  github-release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        name: dist
+    - name: Create GitHub Release with artifacts
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh release create "$GITHUB_REF_NAME" \
+          --repo "$GITHUB_REPOSITORY" \
+          --title "sunfish $GITHUB_REF_NAME" \
+          --generate-notes \
+          dist/*.tar.gz dist/*.whl sunfish-4k.packed
