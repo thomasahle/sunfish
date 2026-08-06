@@ -51,7 +51,7 @@ Exactness notes from the audit:
   lookup (line 318) BEFORE repetition (line 325); the early returns
   (king-gone, TT hit, repetition) store nothing, all loop exits store
   through the clamped Table part 2 (lines 440-443, `cTablePart2` =
-  `clampHigh`/`clampLow` of `Sunfish/TableClamp.lean`).
+  the plain stores of master).
 * The generator's LAZINESS is semantically load-bearing (a surprise of
   this audit): the null yield is pulled first, and if it cuts off, the
   IID recursion never runs -- so the table state differs depending on
@@ -78,9 +78,12 @@ Exactness notes from the audit:
   reduces to `depth > 2`, which is what the model runs.
 -/
 
-import Sunfish.TableClamp
+import Sunfish.Tricks
 
 namespace Sunfish
+
+
+
 
 /-! ### The gamma-free null-move guard and the keyed table -/
 
@@ -372,12 +375,14 @@ theorem searchMovesSt_spec {σ α : Type _} (gamma : Int)
         (fun hge => absurd hge hcut)
         (fun _ => by omega)
 
-/-- The clamped Table part 2 (lines 440-443) on the keyed table:
-`clampHigh`/`clampLow` of `Sunfish/TableClamp.lean`, exact to master. -/
+/-- Table part 2 (lines 439-442) on the keyed table: the PLAIN stores
+of master (`Entry(best, entry.upper)` / `Entry(entry.lower, best)`) --
+the 2c95ab0 clamp was removed from the code at 7f9f164 and from this
+model with it (git has the history). -/
 def cTablePart2 (G : Game) [DecidableEq G.Pos] (D : Nat) (cn : Bool) (p : G.Pos)
     (gamma : Int) (e : Int × Int) (r : Int × CTable G) : Int × CTable G :=
-  if gamma ≤ r.1 then (r.1, CTable.store r.2 D cn p (clampHigh e r.1))
-  else (r.1, CTable.store r.2 D cn p (clampLow e r.1))
+  if gamma ≤ r.1 then (r.1, CTable.store r.2 D cn p (r.1, e.2))
+  else (r.1, CTable.store r.2 D cn p (e.1, r.1))
 
 theorem cTablePart2_ok (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos]
     (D : Nat) (cn : Bool) (p : G.Pos) (gamma : Int) (e : Int × Int)
@@ -395,12 +400,12 @@ theorem cTablePart2_ok (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos
     refine ⟨rfl, cTableOK_store htok ?_ ?_⟩
     · show r.1 ≤ nullValue G hist D cn p
       exact hr1 hcut
-    · show nullValue G hist D cn p ≤ max e.2 r.1
-      omega
+    · show nullValue G hist D cn p ≤ e.2
+      exact he2
   · rw [if_neg hcut]
     refine ⟨rfl, cTableOK_store htok ?_ ?_⟩
-    · show min e.1 r.1 ≤ nullValue G hist D cn p
-      omega
+    · show e.1 ≤ nullValue G hist D cn p
+      exact he1
     · show nullValue G hist D cn p ≤ r.1
       exact hr2 (by omega)
 
