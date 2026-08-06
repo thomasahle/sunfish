@@ -173,7 +173,7 @@ def searchMovesTT {G : Game} (gamma : Int)
 
 /-- Table part 2, PRE-2c95ab0 point version (the historical lines
 415-418): tighten the reported side, keep the other.  The clamped
-post-LMR clamped version is deleted with the clamp (git history; `Sunfish/TableClamp.lean`. -/
+clamped-store era (2c95ab0..7f9f164) lives in git history. -/
 def tablePart2 (G : Game) [DecidableEq G.Pos] (d : Nat) (p : G.Pos)
     (gamma : Int) (e : Int × Int) (r : Int × Table G) : Int × Table G :=
   if gamma ≤ r.1 then (r.1, Table.store r.2 d p (r.1, e.2))
@@ -272,8 +272,8 @@ what makes it sound for later queries (with different `gamma`!) to trust
 lines 309-310.  This is the POINT-spec version -- `bound_spec` plus
 invariant-threading through the state-passing loop -- and is sound for
 the pre-LMR search model (`Sunfish/Bound.lean`); under LMR the point
-invariant is unachievable (`lmr_tt_crossing`) and the honest table story
-was the clamp-era invariant, deleted with the clamp (see git history for `TableClamp.lean`. -/
+invariant was temporarily unachievable (the machine-checked TT crossing,
+deleted with the mechanism -- git history has both). -/
 theorem boundTT_spec (G : Game) [DecidableEq G.Pos] (hb : Bounded G) :
     ∀ (d : Nat) (p : G.Pos) (gamma : Int) (t : Table G), TableOK G t →
       BoundSpec G d p gamma (boundTT G d p gamma t).1 ∧
@@ -536,7 +536,7 @@ property.  But the search only ever consumes the `d = 0` instance (the
 futility zone searches children at depth 0), and *that* instance is the
 score identity on the nose.  The old statement over-required.
 
-Contrast with LMR (`Sunfish/Lmr.lean`): futility's shortcut provably
+Contrast with the retired LMR (git history): futility's shortcut provably
 one-side-bounds the SAME value function the full search targets -- hence
 a single-function `BoundSpec`; LMR's reduced value is
 incomparable to the full value -- hence the crossing and the
