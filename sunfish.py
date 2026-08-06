@@ -367,7 +367,7 @@ class Searcher:
                 yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)
 
             # Then all the other moves
-            for i_m, (val, move) in enumerate(sorted(((pos.value(m), m) for m in pos.gen_moves()), reverse=True)):
+            for val, move in sorted(((pos.value(m), m) for m in pos.gen_moves()), reverse=True):
                 # Quiescent search
                 if val < val_lower:
                     break
@@ -383,17 +383,7 @@ class Searcher:
                     # so it can't get any better than this.
                     break
 
-                # Late Move Reductions, deterministic: clearly-late, clearly
-                # bad-looking quiet moves are searched one ply shallower. The
-                # reduction depends only on (depth, index, value) - never on
-                # gamma - so the search computes exact fail-soft bounds on a
-                # single value function and stays provably consistent. The
-                # gamma-adaptive re-search variant measured ~16 ELO stronger
-                # but weakens the spec from a point to an interval and lets
-                # transposition entries contradict each other; consistency
-                # was chosen deliberately (formal/README.md).
-                LMR = int(depth >= 4 and i_m >= 8 and val < 0)
-                yield move, -self.bound(pos.move(move), 1 - gamma, depth - 1 - LMR)
+                yield move, -self.bound(pos.move(move), 1 - gamma, depth - 1)
 
         # Run through the moves, shortcutting when possible
         best = -MATE_UPPER
@@ -443,11 +433,12 @@ class Searcher:
             in_check = self.bound(flipped, MATE_UPPER, 0) == MATE_UPPER
             best = -MATE_LOWER if in_check else 0
 
-        # Table part 2. With every pruning decision gamma-independent, all
-        # bounds target one value function and entries can never contradict
-        # each other (lower > upper) - the store needs no clamp. Any future
-        # gamma-dependent evaluation choice (e.g. re-search LMR) must
-        # reinstate the clamp and the interval spec; see formal/README.md.
+        # Table part 2. Every search decision is gamma-independent, so all
+        # bounds target one value function determined by the key and stored
+        # entries can never contradict each other (lower > upper). A change
+        # that lets gamma (or any key-external state) select between
+        # incomparable evaluations of a move breaks this - that is a bug,
+        # not a configuration; see formal/README.md.
         if best >= gamma:
             self.tp_score[pos, depth, can_null] = Entry(best, entry.upper)
         if best < gamma:
