@@ -34,20 +34,24 @@ $T "$1" ${2:-"--quiet"} draw $TOOLS/test_files/stalemate1.fen --movetime 10000
 echo
 
 echo "Stalemate in 2+"
-# Regression floor at fixed depth (fully deterministic): fail if the
-# count drops below the current baseline; raise the floor when a change
-# genuinely improves it. Historical note: the old "(Should be about
-# 85/130)" was an artifact of a pre-89d6741 FEN-loader bug that built
-# test positions with score=0, making nearly every quiet line count as
-# a found draw; the honest baseline at depth 4 is below.
-STALE2_FLOOR=11
-stale2_out=$($T "$1" ${2:-"--quiet"} draw $TOOLS/test_files/stalemate2.fen --depth 4)
-echo "$stale2_out"
-stale2_n=$(echo "$stale2_out" | grep -o "Succeeded in [0-9]*" | grep -o "[0-9]*$" | tail -1)
-if [ "${stale2_n:-0}" -lt "$STALE2_FLOOR" ]; then
-    echo "FAIL: stalemate2 regression: got ${stale2_n:-none}/130, floor is $STALE2_FLOOR/130"
-    exit 1
-fi
+# Regression floor (fully deterministic at fixed depth). Historical note:
+# the old "(Should be about 85/130)" was an artifact of a pre-89d6741
+# FEN-loader bug (positions built with score=0) that made nearly every
+# quiet line count as a found draw. Raise the floor when a change
+# genuinely improves it.
+$T "$1" ${2:-"--quiet"} draw $TOOLS/test_files/stalemate2.fen --depth 4 --floor 11
+echo
+
+echo "Regression floors (fixed depth, deterministic; raise when improved)..."
+$T "$1" ${2:-"--quiet"} mate $TOOLS/test_files/mate1.fen --depth 2 --floor 8
+$T "$1" ${2:-"--quiet"} mate $TOOLS/test_files/mate2.fen --depth 6 --limit 20 --floor 20
+$T "$1" ${2:-"--quiet"} mate $TOOLS/test_files/mate3.fen --depth 8 --limit 5 --floor 5
+$T "$1" ${2:-"--quiet"} mate $TOOLS/test_files/mate4.fen --depth 8 --limit 10 --floor 1
+$T "$1" ${2:-"--quiet"} draw $TOOLS/test_files/stalemate0.fen --depth 3 --floor 4
+$T "$1" ${2:-"--quiet"} draw $TOOLS/test_files/stalemate1.fen --depth 4 --floor 2
+$T "$1" ${2:-"--quiet"} best $TOOLS/test_files/win_at_chess_test.epd --depth 3 --floor 87
+$T "$1" ${2:-"--quiet"} best $TOOLS/test_files/bratko_kopec_test.epd --depth 4 --floor 4
+$T "$1" ${2:-"--quiet"} best $TOOLS/test_files/3fold.epd --depth 4 --floor 2
 echo
 
 echo "Other puzzles..."
