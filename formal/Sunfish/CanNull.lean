@@ -50,7 +50,7 @@ Exactness notes from the audit:
 * Order of the prelude is exact: king-gone check (line 312) BEFORE table
   lookup (line 318) BEFORE repetition (line 325); the early returns
   (king-gone, TT hit, repetition) store nothing, all loop exits store
-  through the clamped Table part 2 (lines 440-443, `cTablePart2` =
+  through Table part 2 (lines 442-445, `cTablePart2` =
   the plain stores of master).
 * The generator's LAZINESS is semantically load-bearing (a surprise of
   this audit): the null yield is pulled first, and if it cuts off, the
@@ -72,7 +72,7 @@ Exactness notes from the audit:
   KEY is `True` and the model says so.
 * Not modeled in THIS file (each layered elsewhere): the killer yield
   and `tp_move` (`Sunfish/Killer.lean`), futility (`Sunfish/Tricks.lean`),
-  LMR (`Sunfish/Lmr.lean`), the stalemate block
+  the stalemate block
   (`Sunfish/Stalemate.lean`), QS interior (collapsed to `eval`, see
   README).  With no killer, the IID guard `not killer and depth > 2`
   reduces to `depth > 2`, which is what the model runs.
@@ -411,7 +411,7 @@ theorem cTablePart2_ok (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos
 
 /-- The tail of a searched node: optional null yield first (whose cutoff
 skips everything else -- the generator's laziness), then the IID table
-effect, then the move loop; clamped store on every exit. -/
+effect, then the move loop; plain keyed store on every exit. -/
 def cNodeTail (G : NullGame) [DecidableEq G.Pos] (gamma : Int) (D : Nat)
     (cn : Bool) (p : G.Pos) (e : Int × Int)
     (iid : CTable G.toGame → CTable G.toGame)
@@ -433,8 +433,8 @@ def cNodeTail (G : NullGame) [DecidableEq G.Pos] (gamma : Int) (D : Nat)
 
 /-- `bound` with the full can_null mechanics: king-gone (312), keyed
 lookup (318-320), repetition (325), null move (340-341), IID (355,
-`can_null=False`, result discarded, table kept), move loop, clamped
-store. -/
+`can_null=False`, result discarded, table kept), move loop, plain
+keyed store. -/
 def boundNullTT (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos] :
     Nat → Bool → G.Pos → Int → CTable G.toGame → Int × CTable G.toGame
   | 0, _, p, _gamma, t =>

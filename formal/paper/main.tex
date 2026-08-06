@@ -69,7 +69,7 @@
 \title{Proofs and Prices: Machine-Checked Soundness and Measured
   Trade-offs in a Minimalist Chess Engine}
 \author{\AuthorOne{} \and \AuthorTwo}% TODO: settle the author list
-\date{Draft of August 5, 2026}
+\date{Draft of August 6, 2026}
 
 \begin{document}
 \maketitle
@@ -102,8 +102,13 @@ and may trigger shortcuts whose value provably one-side-bounds the same
 value function; it must never select between incomparable evaluations.
 Each unproven assumption is kept as a named hypothesis --- a ledger of
 bets --- and, where possible, measured on the production engine, which
-plays publicly on Lichess.  Proofs identify the trade; tournaments price
-it.
+plays publicly on Lichess.  The story ends with a measurement: an
+honest variant of the reductions --- identical cutoffs, sound bound
+propagation --- turned out to be worth exactly $0.00$ ELO, so the
+mechanism's entire measured value was its unsoundness, and the engine
+now ships with no reductions at all --- full-width, and provable
+exactly as its docstring is written.  Proofs identify the trade;
+tournaments price it.
 \end{abstract}
 
 % =========================================================================
@@ -155,7 +160,10 @@ eyes open, with a two-line containment for the specific inconsistency
 the proof predicts --- and, once the interval reading of that
 containment was recognized as guaranteeing nothing, to retire the
 optimization deliberately at a measured price
-(Section~\ref{sec:lmrdet}).
+(Section~\ref{sec:lmrdet}) --- and finally, when a last measurement
+campaign showed that the honest form of the optimization is worth
+exactly zero, to delete the mechanism outright, formal apparatus and
+all (Section~\ref{sec:removal}).
 
 \paragraph{Contributions.}
 (1) A sorry-free Lean~4 proof that sunfish's fail-soft null-window
@@ -193,7 +201,7 @@ were found.
 \label{sec:model}
 
 Every result in this paper is a theorem about a small Lean~4 development
-(\texttt{formal/} in the sunfish repository: nine files, no dependencies
+(\texttt{formal/} in the sunfish repository: six files, no dependencies
 beyond core Lean and the \texttt{omega} tactic), not about the Python
 text of \texttt{sunfish.py}.  This section fixes the model once, so that
 each later theorem can be read with its exact scope in mind; how the
@@ -236,14 +244,17 @@ depth-limited negamax: $\negamax_d(p) = \mathrm{eval}(p)$ at $d = 0$,
 otherwise the maximum of $-\negamax_{d-1}(m)$ over
 $m \in \mathrm{moves}(p)$, folded from $\LOSS = -\MU$
 \leanref{negamax}{GameTree.lean}.  Variants of the value function ---
-$\negamaxD$ (draw-aware, Section~\ref{sec:stalemate}),
-$\mathrm{negamaxDet}$ (per-move reduced depths,
-Section~\ref{sec:lmrdet}), $\mathrm{nullValue}$ (null-move- and
+$\negamaxD$ (draw-aware, Section~\ref{sec:stalemate}) and
+$\mathrm{nullValue}$ (null-move- and
 repetition-augmented, Section~\ref{sec:nullmove}) --- are likewise
-definitions, not axioms.  (A fourth variant, the $(\Vhi, \Vlo)$ pair
-once defined for re-search LMR, has been \emph{deleted} from the
-development; Section~\ref{sec:taxonomy} tells that story and states
-the doctrine behind the deletion.)
+definitions, not axioms.  (Two further variants have been
+\emph{deleted} from the development along with the mechanisms they
+specified: the $(\Vhi, \Vlo)$ pair once defined for re-search LMR ---
+Section~\ref{sec:taxonomy} tells that story and states the doctrine
+behind the deletion --- and $\mathrm{negamaxDet}$, the
+per-move-reduced-depth value of the deterministic-LMR era, deleted
+when all reductions were removed at commit \texttt{7fdd741},
+Section~\ref{sec:removal}.)
 
 \subsection{The searches are Lean functions, one per feature}
 \label{sec:model-searches}
@@ -255,17 +266,22 @@ $\mathrm{bound}$ \leanref{bound}{Bound.lean}; table threading
 ($\mathrm{boundTT}$), futility ($\mathrm{boundFut}$) and mate-score
 softening in \texttt{Tricks.lean}; the stalemate correction
 ($\mathrm{boundStale}$, \texttt{Stalemate.lean}); the killer table as
-state ($\mathrm{boundKill}$, \texttt{Killer.lean}); deterministic LMR as
-shipped on master ($\mathrm{boundLmrDet}$, \texttt{LmrDet.lean}) and the
-historical re-search LMR ($\mathrm{boundLmr}$, \texttt{Lmr.lean}); and the
+state ($\mathrm{boundKill}$, \texttt{Killer.lean}); and the
 \texttt{can\_null}-aware search with null move, repetition check, keyed
-table and IID ($\mathrm{boundNullTT}$, \texttt{CanNull.lean}).  Studying
+table and IID ($\mathrm{boundNullTT}$, \texttt{CanNull.lean}).  Two
+further models existed while the mechanisms they specified shipped ---
+deterministic LMR ($\mathrm{boundLmrDet}$, \texttt{LmrDet.lean}) and
+the historical re-search LMR ($\mathrm{boundLmr}$, \texttt{Lmr.lean})
+--- and were deleted with those mechanisms at commit \texttt{7fdd741}
+(Section~\ref{sec:removal}); git is the archive.  Studying
 features in separate models is itself a modeling decision, and where
-features could interact the development proves they do not: futility
-(depth $\le 1$) and LMR (depth $\ge 3$) never co-occur
-\leanref{futilityLmrDisjoint}{Lmr.lean}, and reductions never touch king
-captures \leanref{RedRespectsCaptures}{Lmr.lean}, which is what lets the
-killer and stalemate arguments survive under LMR.
+features could interact the development proved they do not: while the
+reductions existed, futility (depth $\le 1$) and LMR (depth $\ge 3$)
+never co-occurred (\texttt{futilityLmrDisjoint}) and reductions never
+touched king captures (\texttt{RedRespectsCaptures}) --- both theorems
+proven in \texttt{Lmr.lean} and now in git history with it --- which is
+what let the killer and stalemate arguments survive under LMR while it
+shipped.
 
 \subsection{Nothing is axiomatized; conditions are named hypotheses}
 \label{sec:model-axioms}
@@ -293,8 +309,9 @@ Theorems quantify over \emph{all} games of
 Definition~\ref{def:game}; sunfish's chess is one intended instance, but
 board representation and move generation are entirely abstract.
 Explicitly outside the model, each with the reason the omission is
-harmless (audited against master at commit \texttt{9b1a7b4}, sunfish.py
-lines 286--448):
+harmless (audited against master at commit \texttt{9b1a7b4} and
+re-audited after the removal of all reductions at \texttt{7fdd741},
+sunfish.py lines 279--474):
 
 \begin{itemize}
   \item \textbf{Move generation and the board.}  $\mathrm{moves}$ is an
@@ -339,8 +356,7 @@ lines 286--448):
     -5.75/{tp\_move killer,\\ stored on fail high only}/{KTable, boundKill, KillerOK}/{Killer.lean},%
     -6.9/{null move, repetition, IID\\ (gated by can\_null)}/{nullValue, boundNullTT}/{CanNull.lean},%
     -8.05/{futility: yield pos.score + val\\ at depth <= 1}/{boundFut, ValGame.score\_identity}/{Tricks.lean},%
-    -9.2/{deterministic LMR:\\ depth - 1 - LMR, gamma-free}/{boundLmrDet, negamaxDet}/{LmrDet.lean},%
-    -10.35/{stalemate correction:\\ best == -MATE\_UPPER, probe}/{negamaxDraw, boundStale}/{Stalemate.lean}}%
+    -9.2/{stalemate correction:\\ best == -MATE\_UPPER, probe}/{negamaxDraw, boundStale}/{Stalemate.lean}}%
   {
     \node[pybox, text width=4.9cm, anchor=north west] (p) at (0,\y) {\py};
     \node[leanbox, text width=5.4cm, anchor=north west] (l) at (7.5,\y) {\lean};
@@ -352,7 +368,8 @@ lines 286--448):
 \end{tikzpicture}
 \caption{The model--code correspondence, feature by feature.  Left:
 the mechanism in \texttt{sunfish.py} (audited at commit
-\texttt{9b1a7b4}); right: the Lean definition that transcribes it, with
+\texttt{9b1a7b4}, re-audited at \texttt{7fdd741} after the removal of
+all reductions); right: the Lean definition that transcribes it, with
 its file.  The full line-by-line map is the correspondence table in
 \texttt{formal/README.md}.  Everything on the right is a
 \emph{definition}; the theorems of Table~\ref{tab:theorems} are proven
@@ -428,27 +445,24 @@ The invariant holds from the empty table along any execution history.\\
 The depth-0 probe decides king-capturability (both directions) at the
 depth the engine runs it.\\
 \midrule
-\multicolumn{3}{@{}l}{\texttt{LmrDet.lean} --- deterministic LMR, as shipped on master (Section~\ref{sec:lmrdet})}\\
-\texttt{boundLmrDet\_spec} & --- &
-Gamma-free reductions give a \emph{point} $\mathrm{BoundSpec}$ against
-the single value function $\mathrm{negamaxDet}$.\\
-\texttt{boundLmrDet\_no\_crossing} & --- &
-Fail-high reports never exceed fail-low reports at the same key:
-entries cannot cross.\\
-\midrule
-\multicolumn{3}{@{}l}{\texttt{Lmr.lean} --- re-search LMR (historical: \texttt{58883ea..7f9f164}; Section~\ref{sec:taxonomy})}\\
-\texttt{bound\_no\_crossing} (Thm~\ref{thm:no-crossing}) & --- &
-Without reductions, a fail-high report can never exceed a fail-low
-report at the same key.\\
-\multicolumn{3}{@{}p{13.4cm}@{}}{\emph{Deleted, recognized as vacuous}
-(Section~\ref{sec:taxonomy}): \texttt{boundLmr\_spec},
+\multicolumn{3}{@{}p{13.4cm}@{}}{\emph{Deleted with their mechanisms}
+(commit \texttt{7fdd741}; Sections~\ref{sec:taxonomy}
+and~\ref{sec:removal}): \texttt{LmrDet.lean} --- deterministic LMR ---
+proved \texttt{boundLmrDet\_spec} (a point $\mathrm{BoundSpec}$
+against the single value function $\mathrm{negamaxDet}$),
+\texttt{boundLmrDet\_no\_crossing}, and the
+\texttt{clamp\_noop\_high/low} no-op theorems; \texttt{Lmr.lean} ---
+re-search LMR (\texttt{58883ea..7f9f164}) --- proved
+\texttt{bound\_no\_crossing} (Thm~\ref{thm:no-crossing}) and the
+crossing counterexample \texttt{lmr\_tt\_crossing}
+(Cex~\ref{cex:crossing}).  Earlier still, \texttt{boundLmr\_spec},
 \texttt{lmrVal\_sandwich}, and \texttt{IntervalTableOK} with its
-preservation theorems stated an ``interval spec'' for re-search LMR;
-no bound on the $\Vhi - \Vlo$ gap is provable, so they guaranteed
-nothing and were deleted, along with the entire clamp model
-(\texttt{TableClamp.lean}, \texttt{clamp\_noop\_high/low}) once the
-clamp was proven a no-op under point specs.  Git is the archive; the
-code carries no historical artifacts.}\\
+preservation theorems stated an ``interval spec'' for re-search LMR
+and were \emph{deleted as vacuous} (Section~\ref{sec:taxonomy}): no
+bound on the $\Vhi - \Vlo$ gap is provable, so they guaranteed
+nothing; the clamp model (\texttt{TableClamp.lean}) went with them
+once the clamp was proven a no-op under point specs.  Git is the
+archive; the development carries no historical artifacts.}\\
 \midrule
 \multicolumn{3}{@{}l}{\texttt{CanNull.lean} --- null move, repetition, keyed table, IID (Section~\ref{sec:nullmove})}\\
 \texttt{boundNullTT\_spec} & Bounded &
@@ -481,7 +495,9 @@ in-band means $-\MU < \gamma \le \MU$.  Supporting lemmas are omitted;
 \toprule
 \textbf{Lean counterexample} & \textbf{Refutes} & \textbf{Witness}\\
 \midrule
-\texttt{lmr\_tt\_crossing} \newline (\texttt{Lmr.lean}; Cex~\ref{cex:crossing}, Fig.~\ref{fig:lmrcross}) &
+\texttt{lmr\_tt\_crossing} \newline (\texttt{Lmr.lean}, deleted with
+the mechanism at \texttt{7fdd741} --- git history;
+Cex~\ref{cex:crossing}, Fig.~\ref{fig:lmrcross}) &
 Point-consistent \texttt{tp\_score} entries under re-search LMR. &
 3-position game: the same $(\mathrm{pos},\mathrm{depth})$ yields a
 fail-high report $+10$ strictly above a fail-low report $-50$.\\
@@ -658,8 +674,9 @@ needs: \emph{every} probe, whatever its $\gamma$, moves one end of the
 bracket --- a fail high raises $\mathit{lower}$ to $r$, a fail low
 lowers $\mathit{upper}$ to $r$, and the two can never cross
 (Theorem~\ref{thm:no-crossing} below makes the no-crossing claim
-formal, and Section~\ref{sec:taxonomy} shows how re-search Late Move
-Reductions break precisely it).  Fail-softness is what makes bisection
+formal, and Section~\ref{sec:taxonomy} shows how the since-removed
+re-search Late Move Reductions broke precisely it).  Fail-softness is
+what makes bisection
 converge fast in practice: the report $r$ typically overshoots
 $\gamma$, so the bracket shrinks by more than half.  Two details of the
 driver are load-bearing for later sections: the probed window range
@@ -667,10 +684,11 @@ stays inside $(-\MU, \MU]$ --- an interval closed under the null-window
 flip $\gamma \mapsto 1 - \gamma$ --- which
 Theorems~\ref{thm:boundstale} and~\ref{thm:killer} require; and the
 bracket invariant is exactly what the LMR crossing counterexample
-(Cex.~\ref{cex:crossing}) breaks --- and, because the spread of the
-crossing reports admits no provable bound, there is no slack (not
-\texttt{EVAL\_ROUGHNESS}, not re-probing) that can honestly be said to
-absorb it (Section~\ref{sec:taxonomy}).
+(Cex.~\ref{cex:crossing}) broke --- and, because the spread of the
+crossing reports admits no provable bound, there was no slack (not
+\texttt{EVAL\_ROUGHNESS}, not re-probing) that could honestly be said
+to absorb it (Section~\ref{sec:taxonomy}) --- the fact that eventually
+killed the mechanism (Section~\ref{sec:removal}).
 
 \begin{figure}[t]
 \centering
@@ -735,8 +753,8 @@ side of the (unknown) true value $s^*$, so every probe legitimately
 moves one end of the bracket, and fail-soft overshoot (e.g.\ $r_1 >
 \gamma_1$) shrinks it faster than plain bisection.  The invariant
 $\mathit{lower} \le s^* \le \mathit{upper}$ is
-Theorem~\ref{thm:no-crossing}; Cex.~\ref{cex:crossing} shows what
-re-search LMR does to it.}
+Theorem~\ref{thm:no-crossing}; Cex.~\ref{cex:crossing} showed what the
+since-removed re-search LMR did to it.}
 \label{fig:mtdbi}
 \end{figure}
 
@@ -1082,7 +1100,9 @@ incomparable evaluations --- unsound in the point sense}
 
 \emph{Re-search} Late Move Reductions --- the gamma-adaptive variant
 that shipped between commits \texttt{58883ea} and \texttt{7f9f164}, and
-whose formal record is kept in \texttt{Lmr.lean} --- is the canonical
+whose formal record was kept in \texttt{Lmr.lean} until mechanism and
+model were deleted together at \texttt{7fdd741}
+(Section~\ref{sec:removal}; git history) --- is the canonical
 citizen.  A late quiet move at $\mathrm{depth} \ge 3$ is probed at
 $\mathrm{depth}-2$; a reduced fail low is yielded as-is, a reduced fail
 high is re-searched at full depth and only that result is yielded.  Here $\gamma$ \emph{selects which of
@@ -1126,10 +1146,11 @@ an uncontrollable gap guarantees nothing; the interval reading was only
 a description of the bug --- in the maintainer's phrase, a ``cope
 spec''.  The only contract the repository recognizes is the
 \emph{point} spec: every stored bound describes one value function
-determined by the transposition key.  What \texttt{Lmr.lean} keeps is
-exactly what supports that doctrine: the re-search definition itself
-\leanref{boundLmr}{Lmr.lean} and the machine-checked counterexample
-below.
+determined by the transposition key.  What \texttt{Lmr.lean} kept,
+until the mechanism itself was removed and the file deleted with it
+(Section~\ref{sec:removal}), was exactly what supported that doctrine:
+the re-search definition itself (\texttt{boundLmr}) and the
+machine-checked counterexample below.
 
 Two facts about modeling the since-deleted statements were
 \emph{surprises} --- both were claims the authors believed and the
@@ -1144,7 +1165,10 @@ For the unreduced search, a fail-high report can never exceed a fail-low
 report at the same $(\mathrm{pos}, \mathrm{depth})$: both bracket
 $\negamax_d(p)$, so a \texttt{tp\_score} entry always satisfies
 $\mathit{lower} \le \mathit{upper}$.
-\leanref{bound\_no\_crossing}{Lmr.lean}
+(\texttt{bound\_no\_crossing}, proved in \texttt{Lmr.lean} and deleted
+with the file at \texttt{7fdd741}: for the now-shipped full-width
+search the fact is immediate from Theorem~\ref{thm:bound-spec} ---
+both reports bracket the same $\negamax_d(p)$.)
 \end{theorem}
 
 \begin{counterexample}[TT crossing under LMR, machine-checked]
@@ -1157,7 +1181,9 @@ fail-high report of $+10$ and a fail-low report of $-50$: a
 deep; probing $\gamma = 0$ takes the reduced branch and fails low at
 $-50$, probing $\gamma = -60$ bypasses it, re-searches at full depth and
 fails high at $+10$.
-\leanref{lmr\_tt\_crossing}{Lmr.lean}
+(\texttt{lmr\_tt\_crossing}, \texttt{Lmr.lean}; deleted with the
+mechanism at \texttt{7fdd741} --- in git history at
+\texttt{58883ea..7fdd741}.)
 \end{counterexample}
 
 \begin{figure}[t]
@@ -1200,7 +1226,10 @@ fails high at $+10$.
 $\gamma$ decides whether the yield for move $m$ is a fact about the
 \emph{reduced} (depth-0) or the \emph{full} (depth-1) evaluation ---
 two incomparable value functions --- so two probes of the same
-$(\mathrm{pos}, \mathrm{depth})$ return bounds that cross when stored.}
+$(\mathrm{pos}, \mathrm{depth})$ return bounds that cross when stored.
+Mechanism and Lean artifact are both gone from the working tree
+(Section~\ref{sec:removal}); the counterexample survives in git
+history --- and here, as the explanation of why re-search LMR died.}
 \label{fig:lmrcross}
 \end{figure}
 
@@ -1222,47 +1251,106 @@ as preserving a guarantee was deleted along with the interval reading
 nothing --- and the clamp model (\texttt{TableClamp.lean}) has since
 been deleted from the development entirely; git is the archive.
 Killer and
-stalemate lemmas are unaffected: king captures have
-$\mathrm{val} \ge \ML > \mathit{QS} = 40$ and are never reducible
-\leanref{RedRespectsCaptures}{Lmr.lean}; the killer is pre-loop and
+stalemate lemmas were unaffected while the mechanism shipped: king
+captures have
+$\mathrm{val} \ge \ML > \mathit{QS} = 40$ and were never reducible
+(\texttt{RedRespectsCaptures}, deleted with \texttt{Lmr.lean}); the
+killer is pre-loop and
 structurally never reduced; reduced fail lows are $< \gamma$ and never
 reach the \texttt{tp\_move} store; and the $-\MU$ king-loss sentinel is
-depth-independent, so stalemate detection still sees exact sentinels
+depth-independent, so stalemate detection still saw exact sentinels
 from reduced searches.
 
-\subsection{Epilogue on master: deterministic LMR restores the point
+\subsection{First epilogue: deterministic LMR restores the point
 spec}
 \label{sec:lmrdet}
 
-The story has a resolution.  As of commit \texttt{7f9f164}, master
-retires the re-search variant and ships \emph{deterministic} LMR: the
-reduction depends only on $(\mathrm{depth}, \mathrm{index},
+The story seemed, for a day, to have its resolution.  At commit
+\texttt{7f9f164}, master
+retired the re-search variant and shipped \emph{deterministic} LMR: the
+reduction depended only on $(\mathrm{depth}, \mathrm{index},
 \mathrm{val})$ --- \texttt{LMR = int(depth >= 4 and i\_m >= 8 and val <
-0)} --- and each move is searched \emph{once}, at
-$\mathrm{depth} - 1 - \mathrm{LMR}$.  Because $\gamma$ no longer selects
-between evaluations, the search is back in class (b$'$): it computes
+0)} --- and each move was searched \emph{once}, at
+$\mathrm{depth} - 1 - \mathrm{LMR}$.  Because $\gamma$ no longer
+selected
+between evaluations, the search was back in class (b$'$): it computed
 exact fail-soft bounds on a \emph{single} value function
 $\mathrm{negamaxDet}$ (reducible moves valued one ply shallower,
-recursively), with a point spec
-\leanref{boundLmrDet\_spec}{LmrDet.lean}; fail-high reports can never
-exceed fail-low reports at the same key, so transposition entries are
+recursively), with a point spec (\texttt{boundLmrDet\_spec},
+\texttt{LmrDet.lean} --- proven at the time, deleted with the
+mechanism, Section~\ref{sec:removal}); fail-high reports could never
+exceed fail-low reports at the same key, so transposition entries were
 contradiction-free by construction
-\leanref{boundLmrDet\_no\_crossing}{LmrDet.lean}; and the store clamp of
+(\texttt{boundLmrDet\_no\_crossing}); and the store clamp of
 Cex.~\ref{cex:crossing}'s containment became a provable no-op
 (\texttt{clamp\_noop\_high/low}, proven at the time) and was removed
 from the engine --- after which the no-op theorems and the whole clamp
 model (\texttt{TableClamp.lean}) were themselves deleted from the
 development, under the maintainer's principle that git is the archive
 and the code carries no historical artifacts.  The
-price was measured, not guessed: the gamma-adaptive re-search variant is
-about 16 ELO stronger ($-16 \pm 38$ direct; both are large wins over no
-LMR --- Table~\ref{tab:elo}).  That trade --- 16 ELO for end-to-end
-point specs on single value functions --- was made deliberately;
-\texttt{Lmr.lean} keeps the re-search definition and the crossing
-counterexample as the standing demonstration of what the 16 ELO would
-cost.  Note that $\mathrm{negamaxDet} \ne \negamax$: deterministic
-LMR is honest about \emph{which} value function it computes bounds on,
-rather than unsound about the original one.
+price was believed measured, not guessed: the gamma-adaptive re-search
+variant appeared
+about 16 ELO stronger ($-16 \pm 38$ direct; both large wins over no
+LMR, or so the ledger then read --- Table~\ref{tab:elo}).  That trade
+--- 16 ELO for end-to-end
+point specs on single value functions --- was made deliberately.  Note
+that $\mathrm{negamaxDet} \ne \negamax$: deterministic
+LMR was honest about \emph{which} value function it computed bounds on,
+rather than unsound about the original one.  It was also, as the next
+subsection shows, mispriced --- in both directions at once.
+
+\subsection{Second epilogue: the measurement campaign removes the
+mechanism entirely}
+\label{sec:removal}
+
+The resolution of Section~\ref{sec:lmrdet} did not survive its next
+measurement campaign (all matches per \texttt{docs/TESTING.md}: frozen
+snapshots, paired openings, per-engine time-loss accounting).  Three
+results, in the order they dismantled the trade:
+
+\begin{itemize}
+  \item \textbf{Removing deterministic LMR is a gain, not a price.}
+    No-LMR beat the shipped deterministic LMR by $+69 \pm 40$ and
+    $+29 \pm 33$ (two 300-game matches at 4+0.04) and by $+19 \pm 45$
+    at 60+1 (200 games) --- stronger at every time control tested,
+    with fixed-depth suites corroborating (mate-in-4, Bratko--Kopec
+    and Win-at-Chess all improve without LMR).  Deterministic LMR's
+    believed $-16 \pm 38$ price against re-search was really
+    ${\sim}{-50}$: net negative against \emph{no} LMR at all.  The
+    methodological lesson went into \texttt{docs/TESTING.md}: a
+    decision that hinges on a difference smaller than its error bars
+    needs SPRT or a larger sample.
+  \item \textbf{The historical ledger was never wrong.}  Replaying the
+    exact A/B that merged re-search LMR at \texttt{58883ea} ($+49 \pm
+    34$ then) reproduces today: $+41 \pm 36$.
+  \item \textbf{The edge was the bug.}  Re-search LMR grafted onto
+    today's baseline still measures $+20 \pm 36$ over no-LMR --- but
+    an \emph{honest} variant with identical cutoffs and sound
+    min-semantics bound propagation (each stored bound a claim about
+    the minimum over the depths actually searched, key-determined by
+    construction) scores exactly $0.00 \pm 34$ against no-LMR.  The
+    entire measured value of re-search LMR lived in its over-claimed
+    bounds: fail highs propagated as facts about a depth they did not
+    search.  That is not a trade-off between strength and provability;
+    it is strength borrowed from a bug --- the very transposition-table
+    contradiction machine-checked in Cex.~\ref{cex:crossing} while the
+    mechanism existed.
+\end{itemize}
+
+Commit \texttt{7fdd741} therefore removes Late Move Reductions
+entirely.  The move loop is again a single full-width \texttt{for val,
+move in sorted(...)}, every move searched at $\mathrm{depth} - 1$; with
+no reduction anywhere, \texttt{bound}'s docstring is provable exactly
+as written --- Theorem~\ref{thm:bound-spec}, the point spec of
+\texttt{Bound.lean}, now describes the shipped loop with no caveats
+--- and the formal record needs no LMR machinery: \texttt{Lmr.lean},
+\texttt{LmrDet.lean} and \texttt{TableClamp.lean} were deleted with
+the mechanism, under the same git-is-the-archive principle that had
+already claimed the interval spec.  What survives in the development
+is what the episode taught, stated once in \texttt{formal/README.md}:
+every stored bound must describe one value function determined by the
+transposition key; ``the truth lies within an unboundable gap'' is not
+a specification.
 
 % =========================================================================
 \section{The Ledger of Bets: Named Hypotheses}
@@ -1474,6 +1562,11 @@ Null-move soundness completion & $-28$ & declined\\
 \midrule
 Reverse futility & $+45 \to -1$ & artifact (time regime); declined\\
 Mate-score softening & $+19 \to -22$ & artifact (time regime); declined\\
+\midrule
+Removing deterministic LMR & $+69 \pm 40$, $+29 \pm 33$ & \textbf{merged} (\texttt{7fdd741}); also $+19 \pm 45$ at 60+1\\
+Re-search LMR, historical A/B replayed & $+41 \pm 36$ & the \texttt{58883ea} $+49$ reproduces\\
+Re-search LMR vs.\ no-LMR (today) & $+20 \pm 36$ & the unsound variant's residual edge\\
+Honest (min-semantics) LMR vs.\ no-LMR & $0.00 \pm 34$ & the edge was the bug; not merged\\
 \bottomrule
 \end{tabular}
 \caption{Measured prices.  Error bars are 95\% where quoted; all
@@ -1481,14 +1574,19 @@ matches per \texttt{docs/TESTING.md} (300 games, \texttt{tc=4+0.04},
 opening book, adjudication) unless noted.  The middle block prices
 \emph{consistency}: every attempt to restore point-soundness under LMR
 --- making the reduced search deterministic, keeping entries sticky,
-or restoring ordering only --- costs 16--48 ELO.  The proofs say what
+or restoring ordering only --- appeared to cost 16--48 ELO.  The
+proofs say what
 is being traded; these numbers say what the trade is worth.
 Dispositions reflect the full history: after the campaign, the
 maintainer deliberately accepted the cheapest restoration ---
 conservative deterministic LMR at $-16 \pm 38$ --- in exchange for
 end-to-end point specs (Section~\ref{sec:lmrdet}); the re-search rows
 above the line are therefore ``merged, later retired'', and the store
-clamp became a provable no-op and was removed.}
+clamp became a provable no-op and was removed.  The bottom block is
+the final campaign (Section~\ref{sec:removal}): deterministic LMR's
+believed $-16$ was really ${\sim}{-50}$ --- net negative --- and with
+the honest variant worth exactly zero, all reductions were removed at
+\texttt{7fdd741}.}
 \label{tab:elo}
 \end{table}
 
@@ -1504,17 +1602,24 @@ nothing (Section~\ref{sec:taxonomy}).  One can buy the point spec back
 --- and each way of doing so was priced:
 deterministic LMR ($-48 \pm 33$), a conservative reduction condition
 ($-16 \pm 38$), sticky TT entries ($-33$), ordering-only ($-34$).
-Every restoration is ELO-negative.  Likewise, completing null-move
+Every restoration appeared ELO-negative.  Likewise, completing
+null-move
 soundness (searching the pass at a depth for which the spec discharges)
 was priced at $-28$ and declined: the engine keeps the bet, and the
-ledger keeps its name (\texttt{NullBetOK}).  The epilogue is
-instructive: knowing both the price \emph{and} what it buys, the
-maintainer ultimately chose to pay the smallest one --- master now
-ships the conservative deterministic LMR, trading ${\sim}16$ ELO for
-point specs end-to-end (Section~\ref{sec:lmrdet}).  The decision would
-have been incoherent without both loops: the proofs identified exactly
-what the 16 ELO purchases, and the tournaments certified it costs no
-more than that.
+ledger keeps its name (\texttt{NullBetOK}).  The two epilogues are
+instructive.  Knowing both the price \emph{and} what it buys, the
+maintainer first chose to pay the smallest one --- conservative
+deterministic LMR, believed ${\sim}16$ ELO for point specs end-to-end
+(Section~\ref{sec:lmrdet}).  Then the final campaign
+(Section~\ref{sec:removal}) showed there had been nothing to pay for:
+the believed $-16$ was really ${\sim}{-50}$, and the honest form of
+what the point spec supposedly cost is worth exactly $0.00$.  Master
+now ships no reductions at all --- the point spec holds for the code
+as written, at a measured \emph{gain}.  Neither decision --- first
+paying, then unwinding --- would have been coherent without both
+loops: the proofs identified exactly what the ELO was buying (unsound
+bound propagation), and the tournaments certified that buying it
+honestly earns nothing.
 
 \paragraph{Time-regime artifacts.}
 An earlier survey measured reverse futility at $+45$ and mate-score
@@ -1557,9 +1662,11 @@ Proofs identify the trade; tournaments price it.  Neither loop alone
 would have handled LMR correctly: without the proof we would not have
 known the crossing existed, that no interval reading rescues it, or
 that the killer and stalemate arguments survive reduction; without the
-tournaments, the eventual restoration of the point spec
-(Section~\ref{sec:lmrdet}) would have been bought blind instead of at
-a known price of ${\sim}16$ ELO.
+tournaments, the point spec would first have been bought blind --- and
+we would never have learned that its true price was negative: the
+honest variant of the reductions is worth exactly zero
+(Section~\ref{sec:removal}), so the engine now ships full-width and
+provable, stronger than it was with either LMR.
 
 % =========================================================================
 \section{Related Work}
@@ -1601,7 +1708,8 @@ All theorems are about the Lean model of Section~\ref{sec:model}, not
 about \texttt{sunfish.py}.  The gap is managed, not closed: the model is
 line-mapped (Figure~\ref{fig:model}; the correspondence table in
 \texttt{formal/README.md} pairs every Lean definition with the sunfish
-lines it transcribes, audited at commit \texttt{9b1a7b4}), the
+lines it transcribes, audited at commit \texttt{9b1a7b4} and
+re-audited at \texttt{7fdd741}), the
 counterexamples are constructed to exercise exactly the modeled
 mechanism, and features excluded from a given model are excluded
 \emph{explicitly} with a stated reason
