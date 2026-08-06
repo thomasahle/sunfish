@@ -81,6 +81,20 @@ for k, table in pst.items():
     pst[k] = sum((padrow(table[i * 8 : i * 8 + 8]) for i in range(8)), ())
     pst[k] = (0,) * 20 + pst[k] + (0,) * 20
 
+# Mop-up: once one side is down to a bare king, the midgame king table
+# gives the search no progress signal - every shuffle scores alike and
+# won KRK/KQK endings drift to the 50-move horizon. Swap in a formulaic
+# centralization gradient (value falls with distance from the center):
+# because both kings share the table (zero-sum via rotation), the same
+# swap simultaneously rewards driving the bare king to the edge and
+# marching our own king up - the two halves of classical mop-up.
+K_MID = pst["K"]
+K_END = (0,) * 20 + sum(
+    ((0,) + tuple(
+        piece["K"] + 70 - 10 * (abs(2 * rank - 7) + abs(2 * file - 7))
+        for file in range(8)) + (0,)
+     for rank in range(8)), ()) + (0,) * 20
+
 ###############################################################################
 # Global constants
 ###############################################################################
@@ -462,6 +476,11 @@ class Searcher:
         self.nodes = 0
         self.history = set(history)
         self.tp_score.clear()
+        # Table choice is fixed for the whole search (and tp_score is
+        # cleared above), so every bound targets one value function.
+        board = history[-1].board
+        bare = sum(c.isupper() for c in board) == 1 or sum(c.islower() for c in board) == 1
+        pst["K"] = K_END if bare else K_MID
 
         gamma = 0
         # In finished games, we could potentially go far enough to cause a recursion
