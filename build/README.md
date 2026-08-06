@@ -20,7 +20,8 @@ Pipeline:
 3. **Compress** with `xz`.
 4. **Prepend a self-extracting header**: a `/bin/sh` stub that copies its
    own tail (`tail -c +N "$0"`) through `xz -d` into a temp file and
-   `exec python3`'s it. The header's byte length appears inside the
+   execs it with `pypy3` when available, else `python3` (mirroring the
+   polyglot shebang's interpreter preference). The header's byte length appears inside the
    header itself (the `tail -c +N` offset), so it is computed by a small
    fixed-point loop: re-render the header until its length stops
    changing. The `(sleep 9; rm $T)&` arranges for the extracted temp
@@ -46,5 +47,5 @@ The workflow runs `pack.sh` on every push and smoke-tests the produced
 executable end-to-end (uciok/readyok/bestmove) — the packed artifact is
 a release deliverable, and the pipeline has broken silently before (a
 `pyminify` update started stripping the shebang, so the header's
-`exec $T` fed Python source to /bin/sh; fixed by exec'ing `python3`
-explicitly).
+`exec $T` fed Python source to /bin/sh; fixed by exec'ing the
+interpreter explicitly).
