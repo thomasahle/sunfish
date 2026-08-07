@@ -533,20 +533,6 @@ class Searcher:
 # UCI User interface
 ###############################################################################
 
-
-def parse(c):
-    fil, rank = ord(c[0]) - ord("a"), int(c[1]) - 1
-    return A1 + fil - 10 * rank
-
-
-def render(i):
-    rank, fil = divmod(i - A1, 10)
-    return chr(fil + ord("a")) + str(-rank + 1)
-
-hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
-
-
-
 def main():
     # minifier-hide start
     # Development checkout: use the full-featured UCI interface in
@@ -561,6 +547,10 @@ def main():
         pass
     # minifier-hide end
 
+    def parse(c): return A1 + ord(c[0]) - ord("a") - 10 * (int(c[1]) - 1)
+    def render(i): return chr((i - A1) % 10 + ord("a")) + str(1 - (i - A1) // 10)
+   
+    hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
     searcher = Searcher()
     while True:
         args = input().split()
@@ -592,7 +582,7 @@ def main():
 
             start = time.time()
             move_str = None
-            for depth, gamma, score, move in Searcher().search(hist):
+            for depth, gamma, score, move in searcher.search(hist):
                 # The only way we can be sure to have the real move in tp_move,
                 # is if we have just failed high.
                 if score >= gamma:
@@ -605,7 +595,6 @@ def main():
                     break
 
             print("bestmove", move_str or '(none)')
-
 
 
 if __name__ == "__main__":
