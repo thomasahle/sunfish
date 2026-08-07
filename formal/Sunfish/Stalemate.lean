@@ -1405,4 +1405,251 @@ theorem correction_trustworthy (G : QSGame) (hB : Bounded G.toNullGame.toGame)
   have hband := negamaxQS_bounded G hB d m
   omega
 
+/-! ### Counterexample: the low-depth correction NEEDS the `all(...)` guard
+
+A four-position game.  At the root `r` (depth 2, `gamma = -5`) the
+val-filter (threshold `val_lower 2 = -240`) keeps only the move to `a`
+(val 0) and skips the legal quiet move to `q` (val -300).  The searched
+move loses the king (`a`'s only reply `k` is a king capture), so the
+filtered loop ends at the untouched `LOSS` sentinel -- but the sentinel
+LIES about the position: `r` is not stalemated, `q` is a legal, playable
+move the filter hid.  An UNGUARDED correction (fire on `best == -MATE_
+UPPER` alone, no depth/`all(...)` gate) probes `r` (not in check),
+mislabels it a draw and returns a fail-high `0` -- while the filtered
+draw-aware value of `r` at depth 2 is `LOSS`.  Every hypothesis of
+`boundA1_spec` holds for this game (including `MateValuesAreKingCaptures
+QS`, proven for all depths), so the blame is pinned on the missing gate:
+this is the negative result that justifies the gate's existence, and
+`negamaxQS 2 r = LOSS` versus the gated search's own `LOSS` report shows
+the gated search is exactly right here (`cexQ_gated_ok`). -/
+
+/-- The unguarded correction: fire whenever the loop ends at `LOSS`,
+regardless of depth or filtering.  (The naive "just correct at every
+depth" alternative to the #136 gate.) -/
+def staleFixUn (G : QSGame) (probe : G.Pos → Bool) (best : Int) (p : G.Pos) : Int :=
+  if best = LOSS then (if probe p = true then -MATE_LOWER else 0) else best
+
+/-- `boundQS` with the unguarded correction. -/
+def boundQSUngated (G : QSGame) (probe : G.Pos → Bool) : Nat → G.Pos → Int → Int
+  | 0, p, _gamma => if G.eval p ≤ -MATE_LOWER then -MATE_UPPER else G.eval p
+  | d + 1, p, gamma =>
+    if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+    else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
+    else
+      staleFixUn G probe
+        (searchMoves gamma (fun m => -(boundQSUngated G probe d m (1 - gamma)))
+          (movesAbove G (val_lower (d + 1)) p) LOSS) p
+
+/-- Positions of the counterexample game. -/
+inductive QPos where
+  | r | a | q | k
+  deriving DecidableEq
+
+open QPos in
+/-- `r -> {a, q}`; `a -> {k}`; `q`, `k` terminal.  `k` is a captured
+king (`eval -60000`); `q` is an ordinary quiet position; `pass` is the
+identity (nobody is in check under the one-ply probe).  The move to `q`
+is valued -300: below `val_lower 2 = -240` (filtered at depth 2) but
+above `val_lower 3 = -380` (searched at depth 3). -/
+def CexQ : QSGame where
+  Pos := QPos
+  moves := fun p => match p with
+    | r => [a, q]
+    | a => [k]
+    | _ => []
+  eval := fun p => match p with
+    | q => -30
+    | k => -60000
+    | _ => 0
+  pass := fun p => p
+  val := fun p m => match p, m with
+    | r, q => -300
+    | a, k => MATE_LOWER
+    | _, _ => 0
+
+theorem cexQ_bounded : Bounded CexQ.toNullGame.toGame := by
+  intro p
+  cases p <;> decide
+
+theorem cexQ_valHigh : KingCaptureValHigh CexQ := by
+  intro p m hm hev
+  cases p with
+  | r =>
+    have hm' : m ∈ [QPos.a, QPos.q] := hm
+    cases List.mem_cons.mp hm' with
+    | inl h => subst h; exact absurd hev (by decide)
+    | inr h =>
+      have h' : m = QPos.q := List.mem_singleton.mp h
+      subst h'
+      exact absurd hev (by decide)
+  | a =>
+    have hm' : m ∈ [QPos.k] := hm
+    have h' : m = QPos.k := List.mem_singleton.mp hm'
+    subst h'
+    decide
+  | q => exact absurd (show m ∈ ([] : List QPos) from hm) (by simp)
+  | k => exact absurd (show m ∈ ([] : List QPos) from hm) (by simp)
+
+theorem cexQ_probeOK :
+    CheckProbeOK CexQ.toNullGame (fun p => inCheckB CexQ.toNullGame p) :=
+  fun _ => rfl
+
+/-- `q` is a genuine stalemate (moveless, not in check): the #136 gate
+scores it 0 at every depth ≥ 1. -/
+theorem cexQ_q (d : Nat) : negamaxQS CexQ (d + 1) QPos.q = 0 := by
+  rw [stalemate_fixed_all_depths CexQ QPos.q rfl (by decide) d]
+  decide
+
+/-- `a` is king-capturable, hence the exact sentinel at every depth ≥ 1
+(the capture `k` passes the filter at every threshold). -/
+theorem cexQ_a (d : Nat) : negamaxQS CexQ (d + 1) QPos.a = MATE_UPPER := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  have hkmem : QPos.k ∈ movesAbove CexQ (val_lower (d + 1)) QPos.a := by
+    rw [mem_movesAbove]
+    refine ⟨show QPos.k ∈ [QPos.k] from List.mem_singleton.mpr rfl, ?_⟩
+    have hvk : CexQ.val QPos.a QPos.k = MATE_LOWER := rfl
+    have hvl := val_lower_lt_ML (d + 1)
+    omega
+  have hkv := negamaxQS_kingGone CexQ d QPos.k (by decide)
+  have hlow : -(negamaxQS CexQ d QPos.k)
+      ≤ foldMax (fun m => -(negamaxQS CexQ d m))
+          (movesAbove CexQ (val_lower (d + 1)) QPos.a) LOSS :=
+    foldMax_le_of_mem _ _ _ QPos.k hkmem
+  have hup : foldMax (fun m => -(negamaxQS CexQ d m))
+      (movesAbove CexQ (val_lower (d + 1)) QPos.a) LOSS ≤ MATE_UPPER := by
+    refine foldMax_le _ _ _ (fun m _ => ?_) (by omega)
+    show -(negamaxQS CexQ d m) ≤ MATE_UPPER
+    have := negamaxQS_bounded CexQ cexQ_bounded d m
+    omega
+  have hF : foldMax (fun m => -(negamaxQS CexQ d m))
+      (movesAbove CexQ (val_lower (d + 1)) QPos.a) LOSS = MATE_UPPER := by
+    rw [hkv] at hlow
+    omega
+  simp only [negamaxQS]
+  rw [if_neg (by decide), hF]
+  simp only [qsDrawFix]
+  rw [if_neg (fun hand => absurd hand.2 (by decide))]
+
+/-- At depth ≥ 3 the filter admits `q` and `r`'s value is the ordinary
+fold: 0 (the -MATE_UPPER contribution of `a` is dominated by the
+stalemate `q`'s 0). -/
+theorem cexQ_r_deep (d : Nat) : negamaxQS CexQ (d + 3) QPos.r = 0 := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  have hqv : negamaxQS CexQ (d + 2) QPos.q = 0 := cexQ_q (d + 1)
+  have hav : negamaxQS CexQ (d + 2) QPos.a = MATE_UPPER := cexQ_a (d + 1)
+  have hqmem : QPos.q ∈ movesAbove CexQ (val_lower (d + 2 + 1)) QPos.r := by
+    rw [mem_movesAbove]
+    refine ⟨show QPos.q ∈ [QPos.a, QPos.q] from
+      List.mem_cons_of_mem _ (List.mem_singleton.mpr rfl), ?_⟩
+    have hvq : CexQ.val QPos.r QPos.q = -300 := rfl
+    have hvl := val_lower_deep (d + 2 + 1) (by omega)
+    omega
+  have hlow : -(negamaxQS CexQ (d + 2) QPos.q)
+      ≤ foldMax (fun m => -(negamaxQS CexQ (d + 2) m))
+          (movesAbove CexQ (val_lower (d + 2 + 1)) QPos.r) LOSS :=
+    foldMax_le_of_mem _ _ _ QPos.q hqmem
+  have hup : foldMax (fun m => -(negamaxQS CexQ (d + 2) m))
+      (movesAbove CexQ (val_lower (d + 2 + 1)) QPos.r) LOSS ≤ 0 := by
+    refine foldMax_le _ _ _ (fun m hm => ?_) (by omega)
+    show -(negamaxQS CexQ (d + 2) m) ≤ 0
+    have hmm : m ∈ [QPos.a, QPos.q] := movesAbove_subset _ _ _ m hm
+    cases List.mem_cons.mp hmm with
+    | inl h => subst h; omega
+    | inr h =>
+      have h' : m = QPos.q := List.mem_singleton.mp h
+      subst h'
+      omega
+  have hF : foldMax (fun m => -(negamaxQS CexQ (d + 2) m))
+      (movesAbove CexQ (val_lower (d + 2 + 1)) QPos.r) LOSS = 0 := by
+    rw [hqv] at hlow
+    omega
+  show negamaxQS CexQ (d + 2 + 1) QPos.r = 0
+  conv =>
+    lhs
+    rw [negamaxQS]
+  rw [if_neg (by decide), hF]
+  simp only [qsDrawFix]
+  rw [if_neg (fun hand => absurd hand.2 (by decide))]
+
+/-- `MateValuesAreKingCapturesQS` holds for the whole game, at every
+depth: the only mate-band values are `a`'s, backed by the real capture
+`k`. -/
+theorem cexQ_mateValues : MateValuesAreKingCapturesQS CexQ := by
+  intro d p hd hMU'
+  cases p with
+  | a =>
+    exact ⟨QPos.k, show QPos.k ∈ [QPos.k] from List.mem_singleton.mpr rfl, by decide⟩
+  | k =>
+    rw [negamaxQS_kingGone CexQ d QPos.k (by decide)] at hMU'
+    exact absurd hMU' (by decide)
+  | q =>
+    cases d with
+    | zero => exact absurd hd (by omega)
+    | succ n =>
+      rw [cexQ_q n] at hMU'
+      exact absurd hMU' (by decide)
+  | r =>
+    cases d with
+    | zero => exact absurd hd (by omega)
+    | succ n =>
+      cases n with
+      | zero =>
+        rw [(by decide : negamaxQS CexQ 1 QPos.r = 0)] at hMU'
+        exact absurd hMU' (by decide)
+      | succ n' =>
+        cases n' with
+        | zero =>
+          rw [(by decide : negamaxQS CexQ 2 QPos.r = LOSS)] at hMU'
+          exact absurd hMU' (by decide)
+        | succ n'' =>
+          rw [show n'' + 1 + 1 + 1 = n'' + 3 from rfl, cexQ_r_deep n''] at hMU'
+          exact absurd hMU' (by decide)
+
+/-- The filter is depth-keyed, so the filtered draw value is
+depth-inconsistent even where the old gate was not involved: `r` is 0 at
+depth 1 (the capture line is invisible to the depth-0 child), `LOSS` at
+depth 2 (the refutation is seen, `q` is filtered), 0 at depth 3 (`q`
+enters).  The analogue of `negamaxDraw_depth_inconsistent`, now driven
+by `val_lower` instead of the `depth > 2` gate. -/
+theorem negamaxQS_depth_inconsistent :
+    negamaxQS CexQ 1 QPos.r = 0 ∧ negamaxQS CexQ 2 QPos.r = LOSS ∧
+    negamaxQS CexQ 3 QPos.r = 0 :=
+  ⟨by decide, by decide, by decide⟩
+
+/-- **The unguarded low-depth correction is UNSOUND** -- the negative
+result that justifies the #136 gate.  With every `boundA1_spec`
+hypothesis satisfied, the ungated search still mislabels the
+filter-truncated `r` as a draw: it returns a fail-high `0` where the
+filtered draw-aware value is `LOSS`.  (The full-move value is no refuge
+either: the filter hid a merely bad move, not a losing one, so `0` is a
+fabricated draw claim in every reading.) -/
+theorem qsUngated_not_sound :
+    ¬ (∀ (G : QSGame) (probe : G.Pos → Bool),
+        Bounded G.toNullGame.toGame → KingCaptureValHigh G →
+        MateValuesAreKingCapturesQS G → CheckProbeOK G.toNullGame probe →
+        ∀ (d : Nat) (p : G.Pos) (gamma : Int),
+          -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
+          BoundSpecQS G d p gamma (boundQSUngated G probe d p gamma)) := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  intro h
+  have hspec := h CexQ (fun p => inCheckB CexQ.toNullGame p) cexQ_bounded cexQ_valHigh
+    cexQ_mateValues cexQ_probeOK 2 QPos.r (-5) (by decide) (by decide)
+  have hsearch : boundQSUngated CexQ (fun p => inCheckB CexQ.toNullGame p)
+      2 QPos.r (-5) = 0 := by decide
+  have hvalue : negamaxQS CexQ 2 QPos.r = LOSS := by decide
+  have h1 := hspec.1
+  rw [hsearch, hvalue] at h1
+  have := h1 (by omega)
+  omega
+
+/-- The GATED search on the same position reports `LOSS` -- a correct
+fail-low against `negamaxQS 2 r = LOSS` (and one that deeper search
+retracts, exactly as the code comment promises). -/
+theorem cexQ_gated_ok :
+    boundQS CexQ (fun p => inCheckB CexQ.toNullGame p) 2 QPos.r (-5) = LOSS := by
+  decide
+
 end Sunfish
