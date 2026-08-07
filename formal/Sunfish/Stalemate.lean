@@ -885,4 +885,158 @@ theorem stalemate_fixed_all_depths (G : QSGame) (p : G.Pos)
   simp only [foldMax, qsDrawFix]
   rw [if_pos (And.intro hgate (by trivial))]
 
+/-! ### The filtered, A1-fixed search -/
+
+/-- The filtered form of `MateValuesAreKingCaptures`: a `MATE_UPPER`
+value of `negamaxQS` (at remaining depth ≥ 1) is always backed by a real
+king capture.  Same honest caveat as the unfiltered version -- its
+necessity is inherited from `boundStale_not_unconditional`. -/
+def MateValuesAreKingCapturesQS (G : QSGame) : Prop :=
+  ∀ (d : Nat) (p : G.Pos), 1 ≤ d → negamaxQS G d p = MATE_UPPER →
+    ∃ m ∈ G.moves p, G.eval m ≤ -MATE_LOWER
+
+/-- **NullBetQS**: the null-move bet, A1-shaped.  `nully d p gamma`
+abstracts the null yield `-bound(pos.rotate(nullmove=True), 1 - gamma,
+depth - 3)` of lines 371-372 (the `depth - 3` reduction and the
+`can_null` layering live in `Sunfish/CanNull.lean`; here the yield is an
+oracle and this is the one fact the search consumes from it): when the
+guard passes, at depth > 2, a fail-HIGH yield BELOW the mate band really
+lower-bounds the position's value.  Fail-low yields need no hypothesis
+(they only raise a fail-soft upper bound that the real loop already
+justifies), and mate-band yields are suppressed by the A1 fix, so the
+bet is never trusted where `MateValuesAreKingCaptures` doctrine forbids
+fabricated mate scores. -/
+def NullBetQS (G : QSGame) (nully : Nat → G.Pos → Int → Int)
+    (guard : G.Pos → Bool) : Prop :=
+  ∀ (d : Nat) (p : G.Pos) (gamma : Int),
+    guard p = true → 2 < d → gamma ≤ nully d p gamma →
+    nully d p gamma < MATE_LOWER → nully d p gamma ≤ negamaxQS G d p
+
+/-- The A1 null-use test: the engine guard (`can_null` and
+`abs(pos.score) < 500`, abstracted as `guard`), the `depth > 2` gate of
+line 371, and the A1 suppression `rn < MATE_LOWER`. -/
+def useNull (G : QSGame) (nully : Nat → G.Pos → Int → Int)
+    (guard : G.Pos → Bool) (d : Nat) (p : G.Pos) (gamma : Int) : Bool :=
+  guard p && decide (2 < d) && decide (nully d p gamma < MATE_LOWER)
+
+/-- `best`: the null yield joins the fail-soft maximum (when used), but
+never `best_real`. -/
+def nullMax (G : QSGame) (nully : Nat → G.Pos → Int → Int)
+    (guard : G.Pos → Bool) (d : Nat) (p : G.Pos) (gamma : Int) (S : Int) : Int :=
+  if useNull G nully guard d p gamma = true then max (nully d p gamma) S else S
+
+/-- The A1-fixed correction as applied to the search: fire on
+`best < gamma  AND  best_real == -MATE_UPPER  AND  (depth > 2 or all(...))`,
+with the engine's probe.  `best` is the null-inclusive maximum, `S` is
+`best_real`. -/
+def a1Fix (G : QSGame) (probe : G.Pos → Bool) (d : Nat)
+    (gamma best S : Int) (p : G.Pos) : Int :=
+  if best < gamma ∧ S = LOSS ∧ qsGateB G d p = true then
+    (if probe p = true then -MATE_LOWER else 0)
+  else best
+
+/-- The filtered, null-aware, A1-fixed `bound`:
+
+* line 337-338: our king is gone -> `-MATE_UPPER`;
+* the sentinel invariant by construction (as in `boundStale`);
+* the null yield first: cutoff if used and `gamma ≤ rn` (fail-soft, the
+  loop ends before any real move) -- suppressed entirely when
+  `rn ≥ MATE_LOWER` (A1);
+* otherwise the fail-soft loop over the FILTERED moves accumulates
+  `best_real` from `LOSS`, `best = max rn best_real` when the null was
+  used (`searchMoves_init_max` proves this equals the code's single
+  running `best`), and the gated correction reads `best_real`. -/
+def boundA1 (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool) :
+    Nat → G.Pos → Int → Int
+  | 0, p, _gamma => if G.eval p ≤ -MATE_LOWER then -MATE_UPPER else G.eval p
+  | d + 1, p, gamma =>
+    if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+    else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
+    else if useNull G nully guard (d + 1) p gamma = true ∧ gamma ≤ nully (d + 1) p gamma then
+      nully (d + 1) p gamma
+    else
+      a1Fix G probe (d + 1) gamma
+        (nullMax G nully guard (d + 1) p gamma
+          (searchMoves gamma (fun m => -(boundA1 G probe nully guard d m (1 - gamma)))
+            (movesAbove G (val_lower (d + 1)) p) LOSS))
+        (searchMoves gamma (fun m => -(boundA1 G probe nully guard d m (1 - gamma)))
+          (movesAbove G (val_lower (d + 1)) p) LOSS)
+        p
+
+/-- The null-free instance: `boundStale` upgraded with the val-filter and
+the #136 gate.  With `guard ≡ false` the null branch is dead code, `best
+= best_real`, and (for in-band `gamma`, where `best_real = LOSS` implies
+`best < gamma`) the `a1Fix` gate is exactly the code's lines 471-472. -/
+def boundQS (G : QSGame) (probe : G.Pos → Bool) : Nat → G.Pos → Int → Int :=
+  boundA1 G probe (fun _ _ _ => 0) (fun _ => false)
+
+/-- `BoundSpec` against the filtered draw-aware value. -/
+def BoundSpecQS (G : QSGame) (d : Nat) (p : G.Pos) (gamma r : Int) : Prop :=
+  (gamma ≤ r → r ≤ negamaxQS G d p) ∧ (r < gamma → negamaxQS G d p ≤ r)
+
+/-- The sentinel invariant, by construction (mirror of
+`boundStale_of_capture`): king-capturable positions report exactly
+`MATE_UPPER` at depth ≥ 1, before null or loop can interfere. -/
+theorem boundA1_of_capture (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool) (d : Nat)
+    (m : G.Pos) (gamma : Int) (hd : 1 ≤ d) (hkg : ¬ (G.eval m ≤ -MATE_LOWER))
+    (hcap : hasKingCapture G.toNullGame.toGame m = true) :
+    boundA1 G probe nully guard d m gamma = MATE_UPPER := by
+  cases d with
+  | zero => exact absurd hd (by omega)
+  | succ d => simp only [boundA1]; rw [if_neg hkg, if_pos hcap]
+
+/-! ### Loop lemmas -/
+
+/-- Exhaustion of the loop, converse of `searchMoves_eq_init`: a
+below-window loop that ends AT its initial value saw every move fail at
+or below it -- "the consumption break needs `best >= gamma`", the code's
+own argument at lines 462-464. -/
+theorem searchMoves_eq_init_all {α : Type _} (gamma : Int) (f : α → Int) :
+    ∀ (ms : List α) (b : Int), b < gamma → searchMoves gamma f ms b = b →
+      ∀ m ∈ ms, f m ≤ b := by
+  intro ms
+  induction ms with
+  | nil => intro b _ _ m hm; cases hm
+  | cons a ms ih =>
+    intro b hb heq m hm
+    simp only [searchMoves] at heq
+    by_cases hcut : gamma ≤ max b (f a)
+    · rw [if_pos hcut] at heq
+      omega
+    · rw [if_neg hcut] at heq
+      have hge := searchMoves_ge_init gamma f ms (max b (f a))
+      have hmax : max b (f a) = b := by omega
+      cases List.mem_cons.mp hm with
+      | inl he => subst he; omega
+      | inr ht =>
+        rw [hmax] at heq
+        exact ih b hb heq m ht
+
+/-- Fidelity of the `max rn best_real` restructuring: seeding the
+fail-soft loop with a below-window value (the code's null yield updating
+the single running `best` first) is the same as folding from `LOSS` and
+taking the `max` at the end -- the cutoff points coincide because a
+below-window seed never triggers the break. -/
+theorem searchMoves_init_max {α : Type _} (gamma : Int) (f : α → Int) :
+    ∀ (ms : List α) (b : Int), LOSS ≤ b → b < gamma →
+      searchMoves gamma f ms b = max b (searchMoves gamma f ms LOSS) := by
+  intro ms
+  induction ms with
+  | nil =>
+    intro b hL hb
+    simp only [searchMoves]
+    omega
+  | cons a ms ih =>
+    intro b hL hb
+    have hLg : LOSS < gamma := by omega
+    simp only [searchMoves]
+    by_cases hf : gamma ≤ f a
+    · rw [if_pos (by omega), if_pos (by omega)]
+      omega
+    · rw [if_neg (by omega), if_neg (by omega)]
+      rw [ih (max b (f a)) (by omega) (by omega), ih (max LOSS (f a)) (by omega) (by omega)]
+      omega
+
 end Sunfish
