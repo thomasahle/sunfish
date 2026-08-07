@@ -1325,4 +1325,84 @@ theorem boundQS_spec (G : QSGame) (probe : G.Pos → Bool)
   boundA1_spec G probe (fun _ _ _ => 0) (fun _ => false) hB hV hM hP
     (fun _ _ _ hg _ _ _ => absurd hg (by simp))
 
+/-! ### The exhaustion theorems: the sentinel is trustworthy -/
+
+/-- **The exhaustion lemma, search level** (the formal content of the
+#136 gate's `all(...)` arm): if no legal move falls below the threshold
+and the FILTERED loop still ended at the untouched `LOSS` sentinel, then
+EVERY legal move of `p` -- the full, unfiltered list -- has the exact
+king-capture value `MATE_UPPER`: the position is genuinely mate or
+stalemate, at ANY depth.  Compare the module comment's point 3 and the
+code's own argument at lines 459-467, now a theorem. -/
+theorem boundA1_exhaustion (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (hV : KingCaptureValHigh G)
+    (hM : MateValuesAreKingCapturesQS G)
+    (hP : CheckProbeOK G.toNullGame probe)
+    (hN : NullBetQS G nully guard)
+    (d : Nat) (p : G.Pos) (gamma : Int)
+    (hg1 : -MATE_UPPER < gamma) (hg2 : gamma ≤ MATE_UPPER)
+    (hall : allAboveB G (d + 1) p = true)
+    (hS : searchMoves gamma
+        (fun m => -(boundA1 G probe nully guard d m (1 - gamma)))
+        (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS) :
+    ∀ m ∈ G.moves p, negamaxQS G d m = MATE_UPPER := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  intro m hm
+  rw [movesAbove_all G (d + 1) p hall] at hS
+  have hf : -(boundA1 G probe nully guard d m (1 - gamma)) ≤ LOSS :=
+    searchMoves_eq_init_all gamma
+      (fun m => -(boundA1 G probe nully guard d m (1 - gamma)))
+      (G.moves p) LOSS (by omega) hS m hm
+  have hspec := (boundA1_spec G probe nully guard hB hV hM hP hN
+    d m (1 - gamma) (by omega) (by omega)).1
+  have hband := negamaxQS_bounded G hB d m
+  have := hspec (by omega)
+  omega
+
+/-- With `MateValuesAreKingCapturesQS` on top: every legal move is
+refuted by a REAL king capture one ply down (depth ≥ 1; at depth 0 the
+sentinel value is a bare static fact and no capture witness exists --
+the honest limit of the claim). -/
+theorem boundA1_exhaustion_captures (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (hV : KingCaptureValHigh G)
+    (hM : MateValuesAreKingCapturesQS G)
+    (hP : CheckProbeOK G.toNullGame probe)
+    (hN : NullBetQS G nully guard)
+    (d : Nat) (p : G.Pos) (gamma : Int)
+    (hg1 : -MATE_UPPER < gamma) (hg2 : gamma ≤ MATE_UPPER)
+    (hall : allAboveB G (d + 2) p = true)
+    (hS : searchMoves gamma
+        (fun m => -(boundA1 G probe nully guard (d + 1) m (1 - gamma)))
+        (movesAbove G (val_lower (d + 2)) p) LOSS = LOSS) :
+    ∀ m ∈ G.moves p, ∃ c ∈ G.moves m, G.eval c ≤ -MATE_LOWER :=
+  fun m hm => hM (d + 1) m (by omega)
+    (boundA1_exhaustion G probe nully guard hB hV hM hP hN
+      (d + 1) p gamma hg1 hg2 hall hS m hm)
+
+/-- **The exhaustion lemma, value level, both gate arms**: whenever the
+gate condition of lines 471-472 holds -- by EITHER arm, given the value
+floor -- and the filtered fold is the untouched sentinel, every legal
+move's value is the exact king-capture `MATE_UPPER`.  This is the
+statement that discharges the sentinel-trust assumption for the whole
+gate, `depth > 2` arm included (via `gate_implies_no_filtering`). -/
+theorem correction_trustworthy (G : QSGame) (hB : Bounded G.toNullGame.toGame)
+    {B : Int} (hF : ValFloor G B) (hB380 : B ≤ 380) (d : Nat) (p : G.Pos)
+    (hgate : qsGateB G (d + 1) p = true)
+    (hL : foldMax (fun m => -(negamaxQS G d m))
+        (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS) :
+    ∀ m ∈ G.moves p, negamaxQS G d m = MATE_UPPER := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  intro m hm
+  rw [gate_implies_no_filtering G hF hB380 (d + 1) p hgate] at hL
+  have hcontrib : -(negamaxQS G d m)
+      ≤ foldMax (fun x => -(negamaxQS G d x)) (G.moves p) LOSS :=
+    foldMax_le_of_mem (fun x => -(negamaxQS G d x)) (G.moves p) LOSS m hm
+  rw [hL] at hcontrib
+  have hband := negamaxQS_bounded G hB d m
+  omega
+
 end Sunfish
