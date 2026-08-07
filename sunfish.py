@@ -303,9 +303,10 @@ class Stop(Exception): pass
 Entry = namedtuple("Entry", "lower upper")
 
 
-def __init__(self):
-    self.tp_score, self.tp_move, self.history = {}, {}, set()
-    self.nodes, self.deadline = 0, None
+class Searcher:
+    def __init__(self):
+        self.tp_score, self.tp_move, self.history = {}, {}, set()
+        self.nodes, self.deadline = 0, None
 
     def bound(self, pos, gamma, depth, can_null=True):
         """ Let s* be the "true" score of the sub-tree we are searching.
@@ -524,6 +525,15 @@ def __init__(self):
 # UCI User interface
 ###############################################################################
 
+# parse/render/hist live at module level: tools/uci.py (and the tests)
+# reach them as engine-module attributes, and main() uses hist before its
+# own body would define it.
+def parse(c): return A1 + ord(c[0]) - ord("a") - 10 * (int(c[1]) - 1)
+def render(i): return chr((i - A1) % 10 + ord("a")) + str(1 - (i - A1) // 10)
+
+hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
+
+
 def main():
     # minifier-hide start
     # Development checkout: use the full-featured UCI interface in
@@ -534,10 +544,6 @@ def main():
     return tools.uci.run(sys.modules[__name__], hist[-1])
     # minifier-hide end
 
-    def parse(c): return A1 + ord(c[0]) - ord("a") - 10 * (int(c[1]) - 1)
-    def render(i): return chr((i - A1) % 10 + ord("a")) + str(1 - (i - A1) // 10)
-   
-    hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
     searcher = Searcher()
     while True:
         args = input().split()
