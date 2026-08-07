@@ -8,11 +8,10 @@ done
 echo "Error: sunfish requires pypy3 or python3" >&2
 exit 1
 ":"""
-from __future__ import print_function
 
-import time, math
+import time
 from itertools import count
-from collections import namedtuple, defaultdict
+from collections import namedtuple
 
 version = "sunfish 2023"
 
@@ -362,7 +361,7 @@ class Searcher:
             if depth == 0:
                 yield None, pos.score
 
-            # Look for the strongest ove from last time, the hash-move.
+            # Look for the strongest move from last time, the hash-move.
             killer = self.tp_move.get(pos)
 
             # If there isn't one, try to find one with a more shallow search.
@@ -526,7 +525,6 @@ def render(i):
 
 hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
 
-#input = raw_input
 
 # minifier-hide start
 import sys, tools.uci
