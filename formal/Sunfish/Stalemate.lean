@@ -1652,4 +1652,133 @@ theorem cexQ_gated_ok :
     boundQS CexQ (fun p => inCheckB CexQ.toNullGame p) 2 QPos.r (-5) = LOSS := by
   decide
 
+/-! ### Counterexample: the null yield must not feed the sentinel test (A1)
+
+Master's loop lets the null yield update the same `best` the sentinel
+test reads.  Take a single genuinely stalemated position `s` (no moves,
+not in check, quiet eval -50 -- well inside the `abs(pos.score) < 500`
+null guard) and a perfectly well-behaved null oracle that returns -50 (a
+sound, fail-low report; `NullBetQS` holds).  At depth 4, `gamma = -20`:
+the null yield sets `best = -50 ≠ -MATE_UPPER`, the sentinel test never
+fires, and the search returns -50 as an "upper bound" -- but the
+draw-aware value of a stalemate is 0.  Every hypothesis holds; the
+unfixed loop shape is the bug.  The A1-fixed `boundA1` on the same
+inputs reads `best_real = -MATE_UPPER`, corrects, and returns the exact
+0 (`a1_fix_repairs`).  NOTE: `boundA1Un` is the SHIPPED loop shape --
+this hole is in master today; the existing `NullGuardBlocksAtCaptures`
+analysis (Killer.lean) covers king-capturable nodes only, not
+stalemates. -/
+
+/-- Master's gate: sentinel test on the null-inclusive `best`
+(`best == -MATE_UPPER and (depth > 2 or all(...))`, lines 471-472), no
+`best_real`, no mate-band suppression of the null yield. -/
+def a1FixUn (G : QSGame) (probe : G.Pos → Bool) (d : Nat) (best : Int) (p : G.Pos) : Int :=
+  if best = LOSS ∧ qsGateB G d p = true then
+    (if probe p = true then -MATE_LOWER else 0)
+  else best
+
+/-- The UNFIXED search: `boundA1` minus the A1 design -- the null yield
+feeds the single running `best` that the correction gate reads. -/
+def boundA1Un (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool) :
+    Nat → G.Pos → Int → Int
+  | 0, p, _gamma => if G.eval p ≤ -MATE_LOWER then -MATE_UPPER else G.eval p
+  | d + 1, p, gamma =>
+    if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+    else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
+    else if (guard p && decide (2 < d + 1)) = true ∧ gamma ≤ nully (d + 1) p gamma then
+      nully (d + 1) p gamma
+    else
+      a1FixUn G probe (d + 1)
+        (if (guard p && decide (2 < d + 1)) = true then
+          max (nully (d + 1) p gamma)
+            (searchMoves gamma (fun m => -(boundA1Un G probe nully guard d m (1 - gamma)))
+              (movesAbove G (val_lower (d + 1)) p) LOSS)
+        else
+          searchMoves gamma (fun m => -(boundA1Un G probe nully guard d m (1 - gamma)))
+            (movesAbove G (val_lower (d + 1)) p) LOSS)
+        p
+
+/-- The A1 counterexample game: one stalemated position. -/
+def CexN : QSGame where
+  Pos := Unit
+  moves := fun _ => []
+  eval := fun _ => -50
+  pass := fun p => p
+  val := fun _ _ => 0
+
+theorem cexN_value (d : Nat) : negamaxQS CexN (d + 1) () = 0 := by
+  rw [stalemate_fixed_all_depths CexN () rfl (by decide) d]
+  decide
+
+theorem cexN_bounded : Bounded CexN.toNullGame.toGame := by
+  intro p
+  cases p
+  decide
+
+theorem cexN_valHigh : KingCaptureValHigh CexN := by
+  intro p m hm _
+  exact absurd (show m ∈ ([] : List Unit) from hm) (by simp)
+
+theorem cexN_probeOK :
+    CheckProbeOK CexN.toNullGame (fun p => inCheckB CexN.toNullGame p) :=
+  fun _ => rfl
+
+theorem cexN_mateValues : MateValuesAreKingCapturesQS CexN := by
+  intro d p hd hMU'
+  cases p
+  cases d with
+  | zero => exact absurd hd (by omega)
+  | succ n =>
+    rw [cexN_value n] at hMU'
+    exact absurd hMU' (by decide)
+
+/-- The constant -50 null oracle is perfectly well behaved: it never
+fails high above the position's value. -/
+theorem cexN_nullBet : NullBetQS CexN (fun _ _ _ => -50) (fun _ => true) := by
+  intro d p gamma _ _ _ _
+  show (-50 : Int) ≤ negamaxQS CexN d p
+  cases p
+  cases d with
+  | zero => decide
+  | succ n =>
+    rw [cexN_value n]
+    omega
+
+/-- **Master's loop shape is UNSOUND at stalemates** -- audit finding A1,
+machine-checked.  Bounded evals, mate-band king captures, real mates
+only, a correct probe AND a sound null bet are not enough: the fail-low
+null yield masks `best == -MATE_UPPER`, the correction never fires, and
+the returned "upper bound" -50 is exceeded by the stalemate's true value
+0. -/
+theorem a1_unfixed_not_sound :
+    ¬ (∀ (G : QSGame) (probe : G.Pos → Bool)
+          (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool),
+        Bounded G.toNullGame.toGame → KingCaptureValHigh G →
+        MateValuesAreKingCapturesQS G → CheckProbeOK G.toNullGame probe →
+        NullBetQS G nully guard →
+        ∀ (d : Nat) (p : G.Pos) (gamma : Int),
+          -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
+          BoundSpecQS G d p gamma (boundA1Un G probe nully guard d p gamma)) := by
+  intro h
+  have hspec := h CexN (fun p => inCheckB CexN.toNullGame p) (fun _ _ _ => -50)
+    (fun _ => true) cexN_bounded cexN_valHigh cexN_mateValues cexN_probeOK cexN_nullBet
+    4 () (-20) (by decide) (by decide)
+  have hsearch : boundA1Un CexN (fun p => inCheckB CexN.toNullGame p) (fun _ _ _ => -50)
+      (fun _ => true) 4 () (-20) = -50 := by decide
+  have hvalue : negamaxQS CexN 4 () = 0 := cexN_value 3
+  have h2 := hspec.2
+  rw [hsearch, hvalue] at h2
+  have := h2 (by omega)
+  omega
+
+/-- The A1-fixed search on the same inputs: `best_real = -MATE_UPPER`
+survives the null yield, the gate fires, and the stalemate is scored
+exactly 0.  (Its spec is an instance of `boundA1_spec`, whose
+hypotheses `cexN_*` above verify.) -/
+theorem a1_fix_repairs :
+    boundA1 CexN (fun p => inCheckB CexN.toNullGame p) (fun _ _ _ => -50)
+      (fun _ => true) 4 () (-20) = 0 := by
+  decide
+
 end Sunfish
