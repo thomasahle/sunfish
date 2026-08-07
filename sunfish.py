@@ -338,7 +338,8 @@ class Searcher:
         # Look in the table if we have already searched this position before.
         # We also need to be sure, that the stored search was over the same
         # nodes as the current search.
-        entry = self.tp_score.get((pos, depth, can_null), Entry(-MATE_UPPER, MATE_UPPER))
+        key = (pos, depth, can_null)
+        entry = self.tp_score.get(key, Entry(-MATE_UPPER, MATE_UPPER))
         if entry.lower >= gamma: return entry.lower
         if entry.upper < gamma: return entry.upper
 
@@ -485,10 +486,7 @@ class Searcher:
         # that lets gamma (or any key-external state) select between
         # incomparable evaluations of a move breaks this - that is a bug,
         # not a configuration; see formal/README.md.
-        if best >= gamma:
-            self.tp_score[pos, depth, can_null] = Entry(best, entry.upper)
-        if best < gamma:
-            self.tp_score[pos, depth, can_null] = Entry(entry.lower, best)
+        self.tp_score[key] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)
         if len(self.tp_score) > TABLE_SIZE:
             del self.tp_score[next(iter(self.tp_score))]
 
