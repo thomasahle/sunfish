@@ -1025,7 +1025,7 @@ theorem searchMoves_init_max {α : Type _} (gamma : Int) (f : α → Int) :
   intro ms
   induction ms with
   | nil =>
-    intro b hL hb
+    intro b hL _hb
     simp only [searchMoves]
     omega
   | cons a ms ih =>
@@ -1038,5 +1038,291 @@ theorem searchMoves_init_max {α : Type _} (gamma : Int) (f : α → Int) :
     · rw [if_neg (by omega), if_neg (by omega)]
       rw [ih (max b (f a)) (by omega) (by omega), ih (max LOSS (f a)) (by omega) (by omega)]
       omega
+
+/-! ### The main theorem -/
+
+/-- The pointwise heart of the A1-fixed correction (mirror of
+`staleFix_spec_core`, with the gate shared between search and value and
+the null-inflated `best` riding above `best_real = S`):
+
+* `hSb`/`hbS`: `S ≤ best`, and a fail-high `best` collapses to `S` (the
+  null yield sits below the window whenever the loop ran);
+* `hspec1`/`hspec2`: the loop is fail-soft correct against the filtered
+  fold `F`;
+* `hexh`: search exhaustion -- a loop ending at `LOSS` forces the true
+  fold to `LOSS` (every filtered move's value is the exact sentinel);
+* `hmask`: the converse, where `MateValuesAreKingCapturesQS` enters at
+  the call site. -/
+theorem a1Fix_spec_core (G : QSGame) (probe : G.Pos → Bool) (p : G.Pos)
+    (d : Nat) (gamma S F best : Int)
+    (hg1 : -MATE_UPPER < gamma)
+    (hP : CheckProbeOK G.toNullGame probe)
+    (hSb : S ≤ best)
+    (hbS : gamma ≤ best → best ≤ S)
+    (hspec1 : gamma ≤ S → S ≤ F)
+    (hspec2 : S < gamma → F ≤ S)
+    (hexh : S = LOSS → F = LOSS)
+    (hmask : F = LOSS → S = LOSS) :
+    (gamma ≤ a1Fix G probe d gamma best S p →
+      a1Fix G probe d gamma best S p ≤ qsDrawFix G d F p) ∧
+    (a1Fix G probe d gamma best S p < gamma →
+      qsDrawFix G d F p ≤ a1Fix G probe d gamma best S p) := by
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  by_cases hgate : best < gamma ∧ S = LOSS ∧ qsGateB G d p = true
+  · -- The correction fires: search exhaustion makes the value fold LOSS
+    -- too, the gate is shared, and probe correctness aligns the results.
+    have hFL := hexh hgate.2.1
+    have hfix : a1Fix G probe d gamma best S p
+        = (if probe p = true then -MATE_LOWER else 0) := by
+      simp only [a1Fix, if_pos hgate]
+    have hdf : qsDrawFix G d F p
+        = (if inCheckB G.toNullGame p = true then -MATE_LOWER else 0) := by
+      simp only [qsDrawFix, if_pos (And.intro hgate.2.2 hFL)]
+    rw [hfix, hdf, hP p]
+    exact ⟨fun _ => Int.le_refl _, fun _ => Int.le_refl _⟩
+  · have hfix : a1Fix G probe d gamma best S p = best := by
+      simp only [a1Fix, if_neg hgate]
+    rw [hfix]
+    constructor
+    · -- Fail high: best = S ≥ gamma, the loop's lower bound stands, and
+      -- the value gate cannot fire above LOSS.
+      intro hge
+      have hbs := hbS hge
+      have hSF := hspec1 (by omega)
+      have hdf : qsDrawFix G d F p = F := by
+        simp only [qsDrawFix]
+        rw [if_neg (fun hand => absurd hand.2 (by omega))]
+      rw [hdf]
+      omega
+    · -- Fail low: if the value gate fired, hmask forces S = LOSS and the
+      -- search gate would have fired too -- contradiction; otherwise the
+      -- upper bound is the loop's.
+      intro hlt
+      have hFS := hspec2 (by omega)
+      by_cases hfire : qsGateB G d p = true ∧ F = LOSS
+      · exact absurd ⟨hlt, hmask hfire.2, hfire.1⟩ hgate
+      · have hdf : qsDrawFix G d F p = F := by
+          simp only [qsDrawFix]
+          rw [if_neg (fun hand => hfire ⟨hand.1, hand.2⟩)]
+        rw [hdf]
+        omega
+
+/-- **The filtered, A1-fixed search satisfies the docstring against the
+filtered draw-aware value** -- for in-band windows, a correct probe, a
+band-bounded evaluation, king captures valued in the mate band, the
+below-band null bet, and `MateValuesAreKingCapturesQS`.  Sorry-free.
+This is `boundStale_spec` with the assumed exhaustion ("the loop
+searched every move") replaced by the PROVEN gate: the correction only
+consumes the sentinel where the val-filter provably skipped nothing
+(`hexh`/`hmask` below), and the null yield can neither trigger nor mask
+it (`best_real`). -/
+theorem boundA1_spec (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (hV : KingCaptureValHigh G)
+    (hM : MateValuesAreKingCapturesQS G)
+    (hP : CheckProbeOK G.toNullGame probe)
+    (hN : NullBetQS G nully guard) :
+    ∀ (d : Nat) (p : G.Pos) (gamma : Int),
+      -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
+      BoundSpecQS G d p gamma (boundA1 G probe nully guard d p gamma) := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  intro d
+  induction d with
+  | zero =>
+    -- Depth 0: search and value are literally the same expression.
+    intro p gamma _ _
+    simp only [BoundSpecQS, boundA1, negamaxQS]
+    by_cases hkg : G.eval p ≤ -MATE_LOWER
+    · rw [if_pos hkg]
+      exact ⟨fun _ => Int.le_refl _, fun _ => Int.le_refl _⟩
+    · rw [if_neg hkg]
+      exact ⟨fun _ => Int.le_refl _, fun _ => Int.le_refl _⟩
+  | succ d ih =>
+    intro p gamma hg1 hg2
+    simp only [BoundSpecQS, boundA1, negamaxQS]
+    by_cases hkg : G.eval p ≤ -MATE_LOWER
+    · rw [if_pos hkg, if_pos hkg]
+      exact ⟨fun _ => Int.le_refl _, fun _ => Int.le_refl _⟩
+    · rw [if_neg hkg, if_neg hkg]
+      by_cases hcap : hasKingCapture G.toNullGame.toGame p = true
+      · -- King capturable: the capture passes the filter
+        -- (KingCaptureValHigh + val_lower_lt_ML), so the value fold is
+        -- at least MATE_UPPER and its gate cannot fire.
+        rw [if_pos hcap]
+        cases (hasKingCapture_iff G.toNullGame.toGame p).mp hcap with
+        | intro c hc =>
+          have hcval := negamaxQS_kingGone G d c hc.2
+          have hcmem : c ∈ movesAbove G (val_lower (d + 1)) p := by
+            rw [mem_movesAbove]
+            refine ⟨hc.1, ?_⟩
+            have hv := hV p c hc.1 hc.2
+            have hvl := val_lower_lt_ML (d + 1)
+            omega
+          have hcontrib : -(negamaxQS G d c)
+              ≤ foldMax (fun m => -(negamaxQS G d m)) (movesAbove G (val_lower (d + 1)) p) LOSS :=
+            foldMax_le_of_mem _ _ _ c hcmem
+          have hfold : MATE_UPPER
+              ≤ foldMax (fun m => -(negamaxQS G d m)) (movesAbove G (val_lower (d + 1)) p) LOSS := by
+            rw [hcval] at hcontrib
+            omega
+          have hdf : qsDrawFix G (d + 1)
+                (foldMax (fun m => -(negamaxQS G d m)) (movesAbove G (val_lower (d + 1)) p) LOSS) p
+              = foldMax (fun m => -(negamaxQS G d m)) (movesAbove G (val_lower (d + 1)) p) LOSS := by
+            simp only [qsDrawFix]
+            rw [if_neg (fun hand => absurd hand.2 (by omega))]
+          rw [hdf]
+          exact ⟨fun _ => hfold, fun h => absurd h (by omega)⟩
+      · rw [if_neg hcap]
+        -- The loop.  Window flips into itself (the null-window trick).
+        have hw1 : -MATE_UPPER < 1 - gamma := by omega
+        have hw2 : 1 - gamma ≤ MATE_UPPER := by omega
+        have hchild : ∀ m : G.Pos,
+            (gamma ≤ -(boundA1 G probe nully guard d m (1 - gamma)) →
+              -(boundA1 G probe nully guard d m (1 - gamma)) ≤ -(negamaxQS G d m)) ∧
+            (-(boundA1 G probe nully guard d m (1 - gamma)) < gamma →
+              -(negamaxQS G d m) ≤ -(boundA1 G probe nully guard d m (1 - gamma))) := by
+          intro m
+          have h1 := (ih m (1 - gamma) hw1 hw2).1
+          have h2 := (ih m (1 - gamma) hw1 hw2).2
+          constructor
+          · intro hge
+            have := h2 (by omega)
+            omega
+          · intro hlt
+            have := h1 (by omega)
+            omega
+        have hloop := searchMoves_spec gamma
+          (fun m => -(boundA1 G probe nully guard d m (1 - gamma)))
+          (fun m => -(negamaxQS G d m))
+          hchild (movesAbove G (val_lower (d + 1)) p) LOSS LOSS
+          (fun _ => Int.le_refl _) (fun _ => Int.le_refl _)
+        -- hexh: search exhaustion.  A loop ending at LOSS reported every
+        -- filtered move at or below LOSS, so every filtered child search
+        -- returned >= MATE_UPPER; fail-soft correctness plus the band pin
+        -- each child value at exactly MATE_UPPER, so the true fold is
+        -- LOSS as well.  (No MateValues hypothesis needed here.)
+        have hexh : searchMoves gamma
+              (fun m => -(boundA1 G probe nully guard d m (1 - gamma)))
+              (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS →
+            foldMax (fun m => -(negamaxQS G d m)) (movesAbove G (val_lower (d + 1)) p) LOSS
+              = LOSS := by
+          intro hS
+          have hallle := searchMoves_eq_init_all gamma
+            (fun m => -(boundA1 G probe nully guard d m (1 - gamma)))
+            (movesAbove G (val_lower (d + 1)) p) LOSS (by omega) hS
+          have hup : foldMax (fun m => -(negamaxQS G d m))
+              (movesAbove G (val_lower (d + 1)) p) LOSS ≤ LOSS := by
+            refine foldMax_le _ _ _ (fun m hm => ?_) (Int.le_refl _)
+            show -(negamaxQS G d m) ≤ LOSS
+            have hf : -(boundA1 G probe nully guard d m (1 - gamma)) ≤ LOSS := hallle m hm
+            have hband := negamaxQS_bounded G hB d m
+            have := (ih m (1 - gamma) hw1 hw2).1 (by omega)
+            omega
+          have hdown := foldMax_ge_init (fun m => -(negamaxQS G d m))
+            (movesAbove G (val_lower (d + 1)) p) LOSS
+          omega
+        -- hmask: a true fold of LOSS forces every filtered child to be an
+        -- exact king-capture mate (band + MateValuesAreKingCapturesQS +
+        -- the sentinel invariant), hence every report is exactly LOSS and
+        -- the loop ends at LOSS too.
+        have hmask : foldMax (fun m => -(negamaxQS G d m))
+              (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS →
+            searchMoves gamma
+              (fun m => -(boundA1 G probe nully guard d m (1 - gamma)))
+              (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS := by
+          intro hFL
+          have hall : ∀ m ∈ movesAbove G (val_lower (d + 1)) p,
+              -(boundA1 G probe nully guard d m (1 - gamma)) ≤ LOSS := by
+            intro m hm
+            have hwm : -(negamaxQS G d m) ≤ LOSS := by
+              have := foldMax_le_of_mem (fun x => -(negamaxQS G d x))
+                (movesAbove G (val_lower (d + 1)) p) LOSS m hm
+              rw [hFL] at this
+              exact this
+            have hband := negamaxQS_bounded G hB d m
+            have hveq : negamaxQS G d m = MATE_UPPER := by omega
+            have hmkg : ¬ (G.eval m ≤ -MATE_LOWER) := by
+              intro hh
+              have := negamaxQS_kingGone G d m hh
+              omega
+            have hbm : boundA1 G probe nully guard d m (1 - gamma) = MATE_UPPER := by
+              cases d with
+              | zero =>
+                have h0 : negamaxQS G 0 m
+                    = (if G.eval m ≤ -MATE_LOWER then -MATE_UPPER else G.eval m) := by
+                  simp only [negamaxQS]
+                rw [h0] at hveq
+                simp only [boundA1]
+                exact hveq
+              | succ d' =>
+                have hd1 : 1 ≤ d' + 1 := by omega
+                exact boundA1_of_capture G probe nully guard (d' + 1) m (1 - gamma) hd1 hmkg
+                  ((hasKingCapture_iff G.toNullGame.toGame m).mpr (hM (d' + 1) m hd1 hveq))
+            rw [hbm]
+            omega
+          exact searchMoves_eq_init gamma
+            (fun m => -(boundA1 G probe nully guard d m (1 - gamma)))
+            (movesAbove G (val_lower (d + 1)) p) LOSS hall (by omega)
+        by_cases hnc : useNull G nully guard (d + 1) p gamma = true ∧
+            gamma ≤ nully (d + 1) p gamma
+        · -- Null cutoff: fail high on the oracle; NullBetQS (usable only
+          -- because the A1 suppression pinned rn below the mate band) is
+          -- exactly the required lower bound.
+          rw [if_pos hnc]
+          have hun := hnc.1
+          simp only [useNull, Bool.and_eq_true, decide_eq_true_eq] at hun
+          have hbet := hN (d + 1) p gamma hun.1.1 hun.1.2 hnc.2 hun.2
+          have hval : negamaxQS G (d + 1) p
+              = qsDrawFix G (d + 1)
+                  (foldMax (fun m => -(negamaxQS G d m)) (movesAbove G (val_lower (d + 1)) p) LOSS)
+                  p := by
+            simp only [negamaxQS]
+            rw [if_neg hkg]
+          rw [hval] at hbet
+          exact ⟨fun _ => hbet, fun hlt => absurd hnc.2 (by omega)⟩
+        · rw [if_neg hnc]
+          -- No null cutoff: rn (if used at all) is below the window, so
+          -- `best = max rn best_real` collapses onto best_real whenever it
+          -- matters; the core lemma does the rest.
+          refine a1Fix_spec_core G probe p (d + 1) gamma
+            (searchMoves gamma (fun m => -(boundA1 G probe nully guard d m (1 - gamma)))
+              (movesAbove G (val_lower (d + 1)) p) LOSS)
+            (foldMax (fun m => -(negamaxQS G d m)) (movesAbove G (val_lower (d + 1)) p) LOSS)
+            (nullMax G nully guard (d + 1) p gamma
+              (searchMoves gamma (fun m => -(boundA1 G probe nully guard d m (1 - gamma)))
+                (movesAbove G (val_lower (d + 1)) p) LOSS))
+            hg1 hP ?_ ?_ hloop.1 hloop.2 hexh hmask
+          · -- S ≤ best
+            simp only [nullMax]
+            by_cases hu : useNull G nully guard (d + 1) p gamma = true
+            · rw [if_pos hu]; omega
+            · rw [if_neg hu]; exact Int.le_refl _
+          · -- gamma ≤ best → best ≤ S
+            intro hge
+            simp only [nullMax] at hge ⊢
+            by_cases hu : useNull G nully guard (d + 1) p gamma = true
+            · rw [if_pos hu] at hge ⊢
+              have hrn : nully (d + 1) p gamma < gamma := by
+                by_cases h : gamma ≤ nully (d + 1) p gamma
+                · exact absurd ⟨hu, h⟩ hnc
+                · omega
+              omega
+            · rw [if_neg hu] at hge ⊢
+              exact Int.le_refl _
+
+/-- The null-free corollary: the filtered, #136-gated search (the code
+with `can_null=False`, or below the null-depth threshold) satisfies the
+docstring against `negamaxQS` -- no null bet needed. -/
+theorem boundQS_spec (G : QSGame) (probe : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (hV : KingCaptureValHigh G)
+    (hM : MateValuesAreKingCapturesQS G)
+    (hP : CheckProbeOK G.toNullGame probe) :
+    ∀ (d : Nat) (p : G.Pos) (gamma : Int),
+      -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
+      BoundSpecQS G d p gamma (boundQS G probe d p gamma) :=
+  boundA1_spec G probe (fun _ _ _ => 0) (fun _ => false) hB hV hM hP
+    (fun _ _ _ hg _ _ _ => absurd hg (by simp))
 
 end Sunfish
