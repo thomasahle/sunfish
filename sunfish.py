@@ -368,8 +368,17 @@ class Searcher:
             #   (killer-only check): declined, exception tolerated.
             # Null move in QS (a search-verified stand-pat) measured
             # -13 +/- 34 ELO: declined.
-            if depth > 2 and can_null and abs(pos.score) < 500:
-                yield None, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
+            if depth > 2 and can_null and abs(pos.score) < 500 and any(
+                    c in pos.board for c in "RBNQ"):
+                r_null = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
+                # A pass claiming a mate-band value says we could win the
+                # king without moving - then some real move certainly wins
+                # it too, so the claim adds nothing; suppressing it closes
+                # the false-mate-through-null channel (audit finding A1;
+                # formal/Sunfish/Stalemate.lean: a1_unfixed_not_sound is
+                # the machine-checked hole, a1_fix_repairs the repair).
+                if r_null < MATE_LOWER:
+                    yield None, r_null
 
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else.
@@ -416,8 +425,15 @@ class Searcher:
 
         # Run through the moves, shortcutting when possible
         best = -MATE_UPPER
+        # best_real tracks only real-move yields: the mate/stalemate
+        # sentinel below must not be masked by the null option (a pass
+        # yielding a normal material score hid genuine stalemates in
+        # pawn endings - A1).
+        best_real = -MATE_UPPER
         for move, score in moves():
             best = max(best, score)
+            if move is not None:
+                best_real = max(best_real, score)
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
                 if move is not None:
@@ -468,7 +484,7 @@ class Searcher:
         #   correction still never fires in plain QS nodes.
         # Without this, a depth <= 2 node above a stalemate returns +MATE_UPPER for
         # the stalemating move, poisoning tp_move at the root (Qc4?? on lichess).
-        if best == -MATE_UPPER and (depth > 2 or
+        if best < gamma and best_real == -MATE_UPPER and (depth > 2 or
                 all(pos.value(m) >= val_lower for m in pos.gen_moves())):
             flipped = pos.rotate(nullmove=True)
             # Hopefully this is already in the TT because of null-move
