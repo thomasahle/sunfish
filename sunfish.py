@@ -582,7 +582,7 @@ while True:
 
         start = time.time()
         move_str = None
-        for depth, gamma, score, move in Searcher().search(hist):
+        for depth, gamma, score, move in searcher.search(hist):
             # The only way we can be sure to have the real move in tp_move,
             # is if we have just failed high.
             if score >= gamma:
