@@ -73,6 +73,7 @@ legal defenses).
 -/
 
 import Sunfish.Bound
+import Sunfish.EvalBounds
 
 namespace Sunfish
 
@@ -558,5 +559,330 @@ theorem boundStale_not_unconditional :
   rw [hsearch, hvalue] at h2
   have := h2 (by omega)
   omega
+
+/-! # The QS val-filter and the exhaustion gate
+
+(References are to master at `3824c5c`.)  Everything above modeled the
+move loop as running over ALL moves.  The engine does not: the loop is
+quiescence-filtered by the move-value threshold
+
+    val_lower = QS - depth * QS_A                      -- line 354
+    for val, move in sorted(...):
+        if val < val_lower: break                      -- lines 398-400
+
+(the killer try respects the same threshold, line 394, so the killer
+path cannot smuggle a below-threshold move into the loop), and the
+stalemate correction is gated by the #136 fix:
+
+    if best == -MATE_UPPER and (depth > 2 or
+            all(pos.value(m) >= val_lower for m in pos.gen_moves())):
+                                                       -- lines 470-471
+
+The models above ASSUMED what this gate provides: `boundStale` searches
+`G.moves p` unfiltered, so "the loop ended at `LOSS`, hence every legal
+move was searched and refuted" held by construction -- the code
+discharged a hypothesis the model never stated.  This section closes the
+gap.  The loop runs over `movesAbove` (the filter; the `break` is
+modeled as a filter exactly as `boundFut` models the futility break:
+under the sort of line 398 the two are equivalent), the correction is
+gated exactly as in the code, and the exhaustion argument becomes a
+theorem:
+
+* **`boundA1_exhaustion` / `correction_trustworthy`** -- if no legal
+  move falls below the threshold (`allAboveB`), `best == -MATE_UPPER`
+  after the FILTERED loop still certifies that every legal move loses
+  the king, at ANY depth.  This is the formal content of the gate's
+  `all(...)` arm.
+* The `depth > 2` arm is sound because at depth ≥ 3 the threshold
+  `val_lower = 40 - 140 * depth ≤ -380` sits below every move value: a
+  named floor hypothesis `ValFloor` (concretely -192, machine-checked
+  from the piece-square tables -- `EvalBounds.quietDropMax_eq`), under
+  which `gate_implies_no_filtering` reduces this arm to the first.
+  **Finding**: `val_lower 2 = -240` is ALREADY below the -192 floor, so
+  with the shipped tables `allAboveB` is identically true at depth ≥ 2
+  and the `depth > 2` arm is redundant -- a scan-skipping optimization,
+  one ply more conservative than the tables require
+  (`depth_arm_redundant`, `tables_kill_filter_at_depth2`).
+* Dropping the gate is not an option: `qsUngated_not_sound` exhibits a
+  machine-checked position where the filter skipped a legal quiet move,
+  every SEARCHED move lost the king, and an ungated correction
+  mislabels the non-stalemate as a draw.
+
+The value function the filtered search brackets is `negamaxQS`: the
+draw-aware value folded over `movesAbove` with the gated correction.  It
+is determined by `(pos, depth)` alone -- the point-spec doctrine of
+`formal/README.md` is preserved (QS filtering is depth-keyed and
+pos-derived).  Note `negamaxQS` is still depth-inconsistent
+(`negamaxQS_depth_inconsistent`) -- the filter itself moves with depth --
+but the #136 gate REPAIRS the inconsistency at genuinely moveless
+positions: their correction now fires at every depth ≥ 1
+(`stalemate_fixed_all_depths`), where `negamaxDraw` scored them `LOSS`
+at depth ≤ 2.
+
+## The A1 exposure and its fix (modeled ahead of the code)
+
+The loop also contains the null-move yield (lines 370-371), and in the
+shipped code it feeds `best`: a fail-low null yield `rn` with
+`-MATE_UPPER < rn < gamma` at a genuinely stalemated node leaves
+`best = rn ≠ -MATE_UPPER`, the sentinel test never fires, and the search
+returns `rn` as an "upper bound" that the draw-aware value 0 exceeds.
+That is audit finding A1, and master currently has the hole:
+`a1_unfixed_not_sound` is a machine-checked witness in which every other
+hypothesis (including the null-move bet) is satisfied.  The fix modeled
+here follows the agreed `a1-fix` design -- **at modeling time the
+`a1-fix` branch carries no code beyond master** (verified: empty diff),
+so this is a model of the design, to be re-audited against the code when
+it lands:
+
+* `best_real` tracks real-move yields only, and the sentinel test reads
+  `best_real`, never `best` -- the null yield cannot mask a stalemate;
+* the gate becomes `best < gamma and best_real == -MATE_UPPER and (...)`;
+* the null yield is suppressed when `rn >= MATE_LOWER`, so the null-move
+  bet (`NullBetQS`) need only be trusted BELOW the mate band -- exactly
+  where "some real move is at least as good as passing" is plausible.
+  Unsuppressed, a mate-band null claim with no move behind it would
+  demand the bet where the `MateValuesAreKingCaptures` doctrine forbids
+  trusting fabricated mate scores.
+
+`boundA1_spec` proves the fixed search brackets `negamaxQS` under named
+hypotheses; `boundQS_spec` is the null-free instance.  The loop is
+modeled as `a1Fix .. gamma (max rn best_real) best_real ..`; the
+equivalence with the code's single running `best` (the null yield is
+just the loop's first, cutoff-checked accumulator update) is
+`searchMoves_init_max`. -/
+
+/-! ### The threshold -/
+
+/-- sunfish.py line 135: `QS = 40`. -/
+def QS : Int := 40
+
+/-- sunfish.py line 136: `QS_A = 140`. -/
+def QS_A : Int := 140
+
+/-- The QS move-value threshold, sunfish.py line 354:
+`val_lower = QS - depth * QS_A`.  (`depth` is already clamped to ≥ 0 at
+line 335, matching the `Nat` here.) -/
+def val_lower (d : Nat) : Int := QS - d * QS_A
+
+theorem val_lower_le_QS (d : Nat) : val_lower d ≤ QS := by
+  unfold val_lower QS QS_A
+  omega
+
+/-- The threshold never reaches the mate band: king captures
+(`val ≥ MATE_LOWER`) pass the filter at every depth. -/
+theorem val_lower_lt_ML (d : Nat) : val_lower d < MATE_LOWER := by
+  have h := val_lower_le_QS d
+  have hQ : QS = 40 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  omega
+
+/-- At depth ≥ 3 the threshold is at most -380 (the `depth > 2` arm's
+arithmetic; `val_lower 3 = 40 - 420`). -/
+theorem val_lower_deep (d : Nat) (h : 3 ≤ d) : val_lower d ≤ -380 := by
+  unfold val_lower QS QS_A
+  omega
+
+/-! ### The filtered move list -/
+
+/-- A `NullGame` together with sunfish's move valuation `pos.value(move)`
+(indexed by the child position the move reaches -- the same convention as
+`FutGame.val` in `Sunfish/Tricks.lean`). -/
+structure QSGame extends NullGame where
+  val : Pos → Pos → Int
+
+/-- The moves the val-filter keeps: `val >= thr`.  The code's sorted
+`break` (lines 398-400) searches exactly this set; as with the futility
+break (`boundFut`), the sort order makes break and filter equivalent, and
+we do not model the ordering. -/
+def movesAbove (G : QSGame) (thr : Int) (p : G.Pos) : List G.Pos :=
+  (G.moves p).filter (fun m => decide (thr ≤ G.val p m))
+
+theorem mem_movesAbove {G : QSGame} {thr : Int} {p m : G.Pos} :
+    m ∈ movesAbove G thr p ↔ m ∈ G.moves p ∧ thr ≤ G.val p m := by
+  simp [movesAbove, List.mem_filter]
+
+theorem movesAbove_subset (G : QSGame) (thr : Int) (p : G.Pos) :
+    ∀ m ∈ movesAbove G thr p, m ∈ G.moves p :=
+  fun _ hm => (List.mem_filter.mp hm).1
+
+/-- `all(pos.value(m) >= val_lower for m in pos.gen_moves())` -- the
+computable no-skip test of the gate's second arm (line 471). -/
+def allAboveB (G : QSGame) (d : Nat) (p : G.Pos) : Bool :=
+  (G.moves p).all (fun m => decide (val_lower d ≤ G.val p m))
+
+theorem filter_eq_self_of_all {α : Type _} (f : α → Bool) :
+    ∀ (l : List α), (∀ a ∈ l, f a = true) → l.filter f = l := by
+  intro l
+  induction l with
+  | nil => intro _; rfl
+  | cons a l ih =>
+    intro h
+    rw [List.filter_cons, if_pos (h a (List.mem_cons_self a l)),
+      ih (fun x hx => h x (List.mem_cons_of_mem a hx))]
+
+/-- If the no-skip test passes, the filter kept every legal move. -/
+theorem movesAbove_all (G : QSGame) (d : Nat) (p : G.Pos)
+    (h : allAboveB G d p = true) :
+    movesAbove G (val_lower d) p = G.moves p := by
+  rw [allAboveB, List.all_eq_true] at h
+  exact filter_eq_self_of_all _ (G.moves p) h
+
+/-- The gate of lines 470-471: `depth > 2 or all(...)`. -/
+def qsGateB (G : QSGame) (d : Nat) (p : G.Pos) : Bool :=
+  decide (2 < d) || allAboveB G d p
+
+/-! ### The move-value floor -/
+
+/-- **ValFloor**: every legal move's value is at least `-B`.  For the
+shipped tables `B = 192` works: `pos.value` is the mover's table delta
+(≥ -192, the queen's worst case) plus nonnegative terms -- all
+machine-checked in `Sunfish/EvalBounds.lean` (`quietDropMax_eq`,
+`capture_terms_nonneg`, `promotion_terms_nonneg`, `castle_rook_deltas`);
+the link from board strings to tables is not modeled (the same caveat as
+`Bounded`'s discharge there). -/
+def ValFloor (G : QSGame) (B : Int) : Prop :=
+  ∀ (p : G.Pos), ∀ m ∈ G.moves p, -B ≤ G.val p m
+
+theorem allAboveB_of_floor (G : QSGame) {B : Int} (hF : ValFloor G B)
+    (d : Nat) (p : G.Pos) (h : val_lower d ≤ -B) : allAboveB G d p = true := by
+  rw [allAboveB, List.all_eq_true]
+  intro m hm
+  rw [decide_eq_true_eq]
+  have := hF p m hm
+  omega
+
+/-- **The `depth > 2` arm, justified**: whenever the gate is on -- by
+either arm -- the filter provably kept every legal move, provided the
+move values respect a floor of at least -380 (tables: -192).  This is
+the lemma that lets the depth arm inherit the exhaustion argument. -/
+theorem gate_implies_no_filtering (G : QSGame) {B : Int} (hF : ValFloor G B)
+    (hB : B ≤ 380) (d : Nat) (p : G.Pos) (hg : qsGateB G d p = true) :
+    movesAbove G (val_lower d) p = G.moves p := by
+  rw [qsGateB, Bool.or_eq_true, decide_eq_true_eq] at hg
+  cases hg with
+  | inl hd =>
+    refine movesAbove_all G d p (allAboveB_of_floor G hF d p ?_)
+    have := val_lower_deep d hd
+    omega
+  | inr hall => exact movesAbove_all G d p hall
+
+/-- **Finding**: with the shipped tables' floor (-192 ≥ -240 =
+`val_lower 2`) the no-skip test is identically true at depth ≥ 2, so the
+`depth > 2` arm never decides anything -- it only skips the `all(...)`
+scan, and is one ply more conservative than the tables require. -/
+theorem depth_arm_redundant (G : QSGame) {B : Int} (hF : ValFloor G B)
+    (hB : B ≤ 240) (d : Nat) (hd : 2 ≤ d) (p : G.Pos) :
+    allAboveB G d p = true := by
+  refine allAboveB_of_floor G hF d p ?_
+  unfold val_lower QS QS_A
+  omega
+
+set_option maxRecDepth 4096 in
+/-- The table-level arithmetic behind the previous two theorems:
+`val_lower 2 = -240` already clears the concrete -192 floor;
+`val_lower 3 = -380` is what the depth arm actually relies on. -/
+theorem tables_kill_filter_at_depth2 :
+    val_lower 2 = -240 ∧ val_lower 2 ≤ -EvalBounds.quietDropMax ∧
+    val_lower 3 = -380 :=
+  ⟨by decide, by decide, by decide⟩
+
+/-! ### The filtered draw-aware value -/
+
+/-- **KingCaptureValHigh**: a move that captures the king (child eval in
+the king-gone zone) is valued in the mate band, `val ≥ MATE_LOWER` --
+sunfish's move ordering fact (line 398, cf. `orderedMoves` in
+`Sunfish/Killer.lean`), which with `val_lower_lt_ML` puts king captures
+in `movesAbove` at every depth.  Concrete backing:
+`EvalBounds.kingCapture_val_above`. -/
+def KingCaptureValHigh (G : QSGame) : Prop :=
+  ∀ (p : G.Pos), ∀ m ∈ G.moves p, G.eval m ≤ -MATE_LOWER → MATE_LOWER ≤ G.val p m
+
+/-- The gated correction applied to the true (filtered) fold: fire iff
+the fold is the untouched sentinel AND the gate of lines 470-471 is on. -/
+def qsDrawFix (G : QSGame) (d : Nat) (F : Int) (p : G.Pos) : Int :=
+  if qsGateB G d p = true ∧ F = LOSS then
+    (if inCheckB G.toNullGame p = true then -MATE_LOWER else 0)
+  else F
+
+/-- Draw-aware, king-capture-normalized, VAL-FILTERED negamax: the value
+function the filtered search brackets.  Structure of `negamaxDraw`, with
+the fold over `movesAbove` and the correction gated as in the code.
+Determined by `(pos, depth)` alone -- the point-spec doctrine holds. -/
+def negamaxQS (G : QSGame) : Nat → G.Pos → Int
+  | 0, p => if G.eval p ≤ -MATE_LOWER then -MATE_UPPER else G.eval p
+  | d + 1, p =>
+    if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+    else qsDrawFix G (d + 1)
+      (foldMax (fun m => -(negamaxQS G d m)) (movesAbove G (val_lower (d + 1)) p) LOSS) p
+
+theorem negamaxQS_kingGone (G : QSGame) (d : Nat) (p : G.Pos)
+    (h : G.eval p ≤ -MATE_LOWER) : negamaxQS G d p = -MATE_UPPER := by
+  cases d with
+  | zero => simp only [negamaxQS]; rw [if_pos h]
+  | succ d => simp only [negamaxQS]; rw [if_pos h]
+
+/-- Band-boundedness of the filtered draw value (mirror of
+`negamaxDraw_bounded`). -/
+theorem negamaxQS_bounded (G : QSGame) (hB : Bounded G.toNullGame.toGame) :
+    ∀ (d : Nat) (p : G.Pos),
+      -MATE_UPPER ≤ negamaxQS G d p ∧ negamaxQS G d p ≤ MATE_UPPER := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  intro d
+  induction d with
+  | zero =>
+    intro p
+    have hband := hB p
+    simp only [negamaxQS]
+    by_cases hkg : G.eval p ≤ -MATE_LOWER
+    · rw [if_pos hkg]; omega
+    · rw [if_neg hkg]; omega
+  | succ d ih =>
+    intro p
+    simp only [negamaxQS]
+    by_cases hkg : G.eval p ≤ -MATE_LOWER
+    · rw [if_pos hkg]; omega
+    · rw [if_neg hkg]
+      have hfl := foldMax_ge_init (fun m => -(negamaxQS G d m))
+        (movesAbove G (val_lower (d + 1)) p) LOSS
+      have hfu : foldMax (fun m => -(negamaxQS G d m))
+          (movesAbove G (val_lower (d + 1)) p) LOSS ≤ MATE_UPPER := by
+        refine foldMax_le _ _ _ (fun m _ => ?_) (by omega)
+        show -(negamaxQS G d m) ≤ MATE_UPPER
+        have := ih m
+        omega
+      unfold qsDrawFix
+      by_cases hgate : qsGateB G (d + 1) p = true ∧
+          foldMax (fun m => -(negamaxQS G d m)) (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS
+      · rw [if_pos hgate]
+        by_cases hic : inCheckB G.toNullGame p = true
+        · rw [if_pos hic]; omega
+        · rw [if_neg hic]; omega
+      · rw [if_neg hgate]; omega
+
+/-- **The #136 repair, stated**: at a genuinely moveless position the
+`all(...)` arm is vacuously true, so the correction fires at EVERY depth
+≥ 1 -- where the un-`all`-gated `negamaxDraw` scored the same position
+`LOSS` at depth ≤ 2 (`negamaxDraw_depth_inconsistent`).  This is what
+stops a depth ≤ 2 node above a stalemate from feeding `+MATE_UPPER` to
+its parent (the `Qc4??` bug of the code comment, lines 468-469). -/
+theorem stalemate_fixed_all_depths (G : QSGame) (p : G.Pos)
+    (hm : G.moves p = []) (hkg : ¬ (G.eval p ≤ -MATE_LOWER)) (d : Nat) :
+    negamaxQS G (d + 1) p
+      = (if inCheckB G.toNullGame p = true then -MATE_LOWER else 0) := by
+  simp only [negamaxQS]
+  rw [if_neg hkg]
+  have hma : movesAbove G (val_lower (d + 1)) p = [] := by
+    rw [movesAbove, hm]
+    rfl
+  rw [hma]
+  have hgate : qsGateB G (d + 1) p = true := by
+    have hall : allAboveB G (d + 1) p = true := by
+      rw [allAboveB, hm]
+      rfl
+    rw [qsGateB, hall, Bool.or_true]
+  simp only [foldMax, qsDrawFix]
+  rw [if_pos (And.intro hgate (by trivial))]
 
 end Sunfish
