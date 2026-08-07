@@ -110,7 +110,7 @@ def mate_loop(
             if s0 >= 0 and s1 < 1:
                 break
         else:
-            score = searcher.bound(hist[-1], sunfish.MATE_LOWER, d)
+            score = searcher.bound(hist[-1], sunfish.MATE_LOWER, d, root=True)
             elapsed = time.perf_counter() - start
             print(
                 "info depth",
