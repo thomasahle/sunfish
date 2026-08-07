@@ -105,6 +105,72 @@ tactic only, so a full build takes seconds.
     modeling (a non-capture killer failing high would break the "always
     return `MATE_UPPER` if the king is capturable" requirement) — since
     upgraded to *provably impossible* by `Sunfish/Killer.lean`, see below.
+  - **The QS val-filter and the exhaustion gate** (second half of the
+    file; references to master `bf72b43`, sunfish.py lines 355, 399–401,
+    471–472).  The models above searched ALL moves, so "the loop ended at
+    `LOSS`, hence every move was refuted" held by construction — the code
+    discharged a hypothesis the model assumed.  Now closed: `QSGame` adds
+    `pos.value`; the loop runs over `movesAbove (val_lower depth)` (the
+    QS break as a filter, sort-order-equivalent like `boundFut`'s
+    futility break); `negamaxQS` is the filtered draw-aware value (a
+    single `(pos, depth)`-determined function — point-spec doctrine
+    preserved); and the #136 gate `depth > 2 or all(pos.value(m) >=
+    val_lower ...)` is modeled verbatim (`qsGateB`).  Proven sorry-free:
+    - **`boundA1_spec` / `boundQS_spec`**: the filtered, gated (and
+      A1-fixed, see below) search satisfies the docstring against
+      `negamaxQS` under named hypotheses: `Bounded`,
+      `KingCaptureValHigh` (king captures valued ≥ `MATE_LOWER`, so they
+      pass every threshold — backed by `EvalBounds.kingCapture_val_above`),
+      `MateValuesAreKingCapturesQS`, `CheckProbeOK`, in-band window, and
+      (null variant only) `NullBetQS`.
+    - **`boundA1_exhaustion` / `boundA1_exhaustion_captures` /
+      `correction_trustworthy`** — the exhaustion lemma, the formal
+      content of the #136 fix: if no legal move falls below the
+      threshold, a filtered loop ending at the untouched `LOSS` sentinel
+      certifies that EVERY legal move (full, unfiltered list) has the
+      exact king-capture value — at ANY depth; with
+      `MateValuesAreKingCapturesQS`, each is refuted by a real capture.
+      `correction_trustworthy` covers *both* gate arms at once via
+      `gate_implies_no_filtering`: under `ValFloor` (≤ 380) the
+      `depth > 2` arm reduces to the `all(...)` arm.
+    - **`depth_arm_redundant` / `tables_kill_filter_at_depth2`** —
+      finding: the shipped tables' move-value floor is −192, and
+      `val_lower 2 = −240` already sits below it, so `all(...)` is
+      identically true at depth ≥ 2 and the `depth > 2` arm is a
+      scan-skipping optimization, one ply more conservative than the
+      tables require.
+    - **`qsUngated_not_sound`** — machine-checked 4-position
+      counterexample justifying the gate: with every `boundA1_spec`
+      hypothesis satisfied, an UNGATED correction (fire on
+      `best == -MATE_UPPER` alone) mislabels a filter-truncated
+      non-stalemate as a draw (fail-high 0 against value `LOSS`);
+      `cexQ_gated_ok` shows the gated search is exactly right there.
+    - **`stalemate_fixed_all_depths`** — the #136 repair stated
+      positively: moveless positions are corrected at EVERY depth ≥ 1
+      (the `all(...)` arm is vacuously true), where `negamaxDraw` scored
+      them `LOSS` at depth ≤ 2 (the `Qc4??` bug).
+      `negamaxQS_depth_inconsistent` records that depth-inconsistency
+      now stems from the depth-keyed filter itself (0/`LOSS`/0 at depths
+      1/2/3 on the counterexample game).
+    - **The A1 fix, modeled ahead of the code**: `boundA1` follows the
+      agreed `a1-fix` design — `best_real` accumulates real-move yields
+      only, the sentinel test reads `best_real` (never the
+      null-inclusive `best`), the gate becomes `best < gamma and
+      best_real == -MATE_UPPER and (...)`, and mate-band null yields are
+      suppressed so `NullBetQS` (the null bet, oracle form) need only be
+      trusted below the mate band.  **`a1_unfixed_not_sound`** is the
+      machine-checked A1 finding against the SHIPPED loop shape
+      (`boundA1Un`): a sound fail-low null yield masks the sentinel at a
+      genuine stalemate and the returned upper bound is exceeded by the
+      true value 0 — with every hypothesis, including the null bet,
+      satisfied; `a1_fix_repairs` shows `boundA1` returns the exact 0 on
+      the same inputs.  At modeling time the `a1-fix` branch carried no
+      code beyond master (verified: empty diff) — re-audit the model
+      against the code when it lands.
+    - Loop infrastructure: `searchMoves_eq_init_all` (loop exhaustion,
+      the converse of `searchMoves_eq_init`) and `searchMoves_init_max`
+      (the `max rn best_real` restructuring equals the code's single
+      running `best`).
 
 - **`Sunfish/Killer.lean`** — **KillerIsKingCapture**, proven sorry-free
   (`boundKill_spec`): threading `tp_move` through the search as state
@@ -226,6 +292,21 @@ tactic only, so a full build takes seconds.
     full value (hence the TT crossing that ultimately ended it, and no
     honest weaker claim to retreat to).
 
+- **`Sunfish/EvalBounds.lean`** — the numeric facts behind the named
+  hypotheses, machine-checked from the transcribed piece-square tables
+  (`decide`; the board-string → table link is the one unmodeled step,
+  stated in the module comment): the `Bounded` discharge
+  (`evalBound_lt_MATE_LOWER` — static evals never touch the mate band),
+  the `MATE_LOWER` margin leak and its shipped `K − 13Q` repair
+  (`kingGone_check_leaked`, `margin_covers`), the mop-up king table's
+  spread (`kEndSpread_lt`), and — new with the QS-filter model — the
+  **move-value floor**: `quietDropMax = 192` (the queen's worst table
+  delta) with every other `pos.value` term nonnegative
+  (`capture_terms_nonneg`, `promotion_terms_nonneg`,
+  `castle_rook_deltas`), backing `ValFloor G 192`, and
+  `kingCapture_val_above` (a king capture's value clears `MATE_LOWER`
+  even after the worst mover drop), backing `KingCaptureValHigh`.
+
 ## Zero sorries: named hypotheses instead
 
 **`grep -rn sorry formal/Sunfish/*.lean` finds nothing outside prose.**
@@ -280,6 +361,37 @@ statement* — the honest form — not a deferred proof:
   `-MATE_UPPER` one level down — the `boundStale_not_unconditional`
   artifact family), and the docstring documents why.
 
+- **`MateValuesAreKingCapturesQS`** (`Sunfish/Stalemate.lean`) — the
+  filtered form of `MateValuesAreKingCaptures`: `negamaxQS` mate-band
+  sentinels are always backed by a real king capture.  Same necessity
+  argument (the `boundStale_not_unconditional` artifact family), consumed
+  by `boundA1_spec`'s `hmask` leg.
+
+- **`KingCaptureValHigh`** (`Sunfish/Stalemate.lean`) — king captures are
+  valued at or above `MATE_LOWER`, so they pass the QS val-filter at
+  every depth (`val_lower < MATE_LOWER` is proven).  Concrete backing:
+  `EvalBounds.kingCapture_val_above`.  A PR changing `pos.value`'s
+  capture term must re-check it.
+
+- **`ValFloor G B`** (`Sunfish/Stalemate.lean`) — every legal move's
+  value is ≥ −B.  `B = 192` is backed by the tables
+  (`EvalBounds.quietDropMax_eq` plus the nonnegativity of every additive
+  `pos.value` term); `B ≤ 380` is what the `depth > 2` gate arm needs
+  (`gate_implies_no_filtering`), `B ≤ 240` makes that arm redundant
+  (`depth_arm_redundant`).  A PR retuning `QS`/`QS_A` (they are in
+  `opt_ranges`!) or the tables must re-check this arithmetic: the depth
+  arm needs `3·QS_A ≥ QS + floor` (shipped: 420 ≥ 40 + 192, 188 of
+  slack), and a tuner can silently violate it.
+
+- **`NullBetQS`** (`Sunfish/Stalemate.lean`) — the null-move bet in
+  oracle form, as `boundA1_spec` consumes it: a guard-passing,
+  `depth > 2`, fail-HIGH null yield BELOW the mate band lower-bounds the
+  position's `negamaxQS` value.  Fail-low yields need no hypothesis, and
+  the A1 suppression makes mate-band yields dead code — the bet is never
+  trusted where mate scores could be fabricated.  The recursive
+  (non-oracle) form of the bet is `NullBetOK` in `Sunfish/CanNull.lean`;
+  zugzwang is precisely the failure of either.
+
 - **`ExtKeyIndependent`** — *not* `sorry`d, but stated as the false claim a
   `(pos, depth)`-keyed table makes once search extensions depend on history
   (e.g. a recapture extension keyed on the last-capture square), and refuted
@@ -311,6 +423,13 @@ statement* — the honest form — not a deferred proof:
 | `orderedMoves` | the sort of line 370 (king captures, value ≥ `MATE_LOWER`, first) |
 | `nullValue`, `boundNullTT`, `CTable` | the can_null-aware search: null move (344–345), repetition (325), keyed table (318), IID (358–359) |
 | `nullGuard` | `abs(pos.score) < 500` (line 344), gamma-free |
+| `QS`, `QS_A`, `val_lower` | the QS constants and threshold (`bf72b43` lines 149–150, 355) |
+| `movesAbove`, `QSGame.val` | the QS break `if val < val_lower: break` (lines 399–401) and `pos.value(move)`; the killer val-gate (line 395) keeps the killer inside the same set |
+| `allAboveB`, `qsGateB` | the #136 correction gate `depth > 2 or all(pos.value(m) >= val_lower ...)` (lines 471–472) |
+| `negamaxQS`, `qsDrawFix` | the filtered draw-aware value the gated search brackets |
+| `boundA1` (`best_real` = `S`, `nullMax`, `a1Fix`) | the A1-fixed loop design (branch `a1-fix`); `boundA1Un` is the SHIPPED loop shape, `a1_unfixed_not_sound` its machine-checked hole |
+| `ValFloor`, `EvalBounds.quietDropMax` | the `pos.value` floor read off lines 269–290 and the tables |
+| `KingCaptureValHigh` | king captures valued ≥ `MATE_LOWER` (the sort of line 399) |
 
 The historical rows — `boundLmr`/`red` (re-search LMR), `boundLmrDet`/
 `negamaxDet` (deterministic LMR), `clampHigh`/`clampLow` (the `2c95ab0`
@@ -348,6 +467,33 @@ abstractions, each with its justification:
   gates are dead at depth 0).
 - **Move ordering** (line 370) is modeled only through its load-bearing
   consequence: king captures sort first (`orderedMoves`).
+- **QS-filter section** (Stalemate.lean, second half): audited against
+  master at `bf72b43` (2026-08-07); its line references are to that
+  commit.  The sorted `break` of lines 399–401 is modeled as the filter
+  `movesAbove` (identical searched set under the sort order — the same
+  abstraction `boundFut` uses for the futility break, and the killer
+  val-gate of line 395 keeps the killer path inside the filtered set).
+  The futility break of lines 407–413 is not re-modeled in this loop; it
+  cannot disturb the exhaustion argument because its yield
+  `pos.score + val > -MATE_UPPER` always raises `best` off the sentinel
+  before breaking (the code's own comment at lines 464–466), and
+  `boundFut` covers its bound-correctness separately.
+- **A1 status**: `boundA1` models the *agreed design* of branch
+  `a1-fix` (best_real sentinel test, `best < gamma` in the gate,
+  mate-band null suppression); at modeling time that branch carried no
+  code beyond master (empty diff), so the model must be re-audited
+  against the code when it lands.  Master's shipped loop shape is
+  `boundA1Un`, and its stalemate-masking hole is machine-checked
+  (`a1_unfixed_not_sound`) — the fidelity finding here is that the old
+  "residual exception" note on the null yield (killer section above)
+  understated the exposure: it covers stalemate masking, not just
+  king-capturable nodes.
+- **Ungated gate arms**: for in-band windows the model's
+  `best < gamma ∧ best_real = LOSS` gate coincides with the code's bare
+  `best == -MATE_UPPER` test (a `LOSS` loop result is automatically
+  below an in-band window); out-of-band windows never reach the gate in
+  the engine (the table's fresh-entry cutoffs answer them), which is why
+  the spec carries the in-band hypothesis.
 
 ## Guideline for search-changing PRs
 
@@ -409,6 +555,20 @@ The later files add further named conditions to check against:
   historical clamp and its `IntervalTableOK` invariant are gone
   (deleted, not merely retired — see the doctrine note above); a change
   that cannot state a point spec is rejected, not clamped.
+- **The QS gate (`qsGateB` / exhaustion)** — a PR touching `QS`, `QS_A`,
+  `pos.value`, the move sort, or the stalemate gate must preserve the
+  exhaustion argument: each gate arm must imply "no legal move was
+  filtered" (`gate_implies_no_filtering`).  The `all(...)` arm is
+  self-justifying; the `depth > 2` arm rests on `ValFloor` arithmetic —
+  `val_lower 3 = QS − 3·QS_A` must stay at or below −(move-value floor),
+  i.e. `3·QS_A ≥ QS + 192` for the shipped tables (420 vs 232: 188 of
+  slack) — and `QS`/`QS_A` are tunable in `opt_ranges`, so a tuning run
+  CAN silently break this.  A PR touching
+  the null yield must keep it out of the sentinel test (`best_real`,
+  once `a1-fix` lands — `a1_unfixed_not_sound` is the counterexample for
+  feeding it `best`) and keep mate-band null yields suppressed, or
+  strengthen `NullBetQS` into the mate band, which the doctrine forbids.
+
 - **Reductions (LMR)** — the engine ships none (`7fdd741`). A PR
   reintroducing one must (a) assign per-move depths as a function of
   position-derived data alone and claim only bounds on the resulting

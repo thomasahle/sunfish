@@ -70,6 +70,13 @@ correction being distinguishable from king-capture; scoring checkmate as
 capturable and destroy the detection one ply up (it also orders "mated
 next move" above "king already lost", which is what makes sunfish prefer
 legal defenses).
+
+THE SECOND HALF of this file (from "The QS val-filter and the exhaustion
+gate") upgrades this model with the engine's quiescence filtering
+(`val_lower`, `movesAbove`) and the #136 gate: the loop-exhaustion fact
+that this first half gets by construction (it searches ALL moves) is
+proven there from the gate itself, and the A1 `best_real` fix for the
+null-yield/sentinel interaction is modeled ahead of its code.
 -/
 
 import Sunfish.Bound
