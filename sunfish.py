@@ -303,13 +303,9 @@ class Stop(Exception): pass
 Entry = namedtuple("Entry", "lower upper")
 
 
-class Searcher:
-    def __init__(self):
-        self.tp_score = {}
-        self.tp_move = {}
-        self.history = set()
-        self.nodes = 0
-        self.deadline = None
+def __init__(self):
+    self.tp_score, self.tp_move, self.history = {}, {}, set()
+    self.nodes, self.deadline = 0, None
 
     def bound(self, pos, gamma, depth, can_null=True):
         """ Let s* be the "true" score of the sub-tree we are searching.
@@ -494,8 +490,7 @@ class Searcher:
 
     def search(self, history):
         """Iterative deepening MTD-bi search"""
-        self.nodes = 0
-        self.history = set(history)
+        self.nodes, self.history = 0, set(history)
         self.tp_score.clear()
         # Table choice is fixed for the whole search (and tp_score is
         # cleared above), so every bound targets one value function.
@@ -519,10 +514,8 @@ class Searcher:
             lower, upper = -MATE_LOWER, MATE_LOWER
             while lower < upper - EVAL_ROUGHNESS:
                 score = self.bound(history[-1], gamma, depth, can_null=False)
-                if score >= gamma:
-                    lower = score
-                if score < gamma:
-                    upper = score
+                if score >= gamma: lower = score
+                if score < gamma: upper = score
                 yield depth, gamma, score, self.tp_move.get(history[-1])
                 gamma = (lower + upper + 1) // 2
 
@@ -537,12 +530,8 @@ def main():
     # tools/ (pondering, Hash option, spec-complete go parsing). An
     # installed or packed sunfish has no tools/ and falls through to
     # the built-in loop below, which is all a GUI needs.
-    try:
-        import sys, tools.uci
-        tools.uci.run(sys.modules[__name__], hist[-1])
-        sys.exit()
-    except ImportError:
-        pass
+    import sys, tools.uci
+    return tools.uci.run(sys.modules[__name__], hist[-1])
     # minifier-hide end
 
     def parse(c): return A1 + ord(c[0]) - ord("a") - 10 * (int(c[1]) - 1)
