@@ -375,8 +375,7 @@ class Searcher:
                 # false mate that poisons tp_move - suppress it. (A1;
                 # Stalemate.lean: a1_unfixed_not_sound / a1_fix_repairs.)
                 score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
-                if score < MATE_LOWER:
-                    yield None, score
+                yield None, score if score < MATE_LOWER else -MATE_UPPER
 
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else.
@@ -427,9 +426,7 @@ class Searcher:
         # normal material score hid genuine stalemates in pawn endings - A1).
         best = best_real = -MATE_UPPER
         for move, score in moves():
-            best = max(best, score)
-            if move:
-                best_real = max(best_real, score)
+            best, best_real = max(best, score), max(best_real, score) if move else best_real
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
                 if move is not None:
