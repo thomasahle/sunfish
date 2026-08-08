@@ -480,8 +480,8 @@ class Searcher:
         #   correction still never fires in plain QS nodes.
         # Without this, a depth <= 2 node above a stalemate returns +MATE_UPPER for
         # the stalemating move, poisoning tp_move at the root (Qc4?? on lichess).
-        if best < gamma and best_real == -MATE_UPPER and (depth > 2 or
-                all(pos.value(m) >= val_lower for m in pos.gen_moves())):
+        if best < gamma and best_real == -MATE_UPPER and all(
+                pos.value(m) >= val_lower for m in pos.gen_moves()):
             flipped = pos.rotate(nullmove=True)
             # Hopefully this is already in the TT because of null-move
             in_check = self.bound(flipped, MATE_UPPER, 0) == MATE_UPPER
