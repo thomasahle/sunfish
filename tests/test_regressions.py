@@ -115,17 +115,18 @@ class TestNullSentinelMasking:
     probe, and a thrown KPK race (the winning side stalemates the bare
     king at fixed depth 8).
 
-    strict xfail: when the A1 fix lands, these start passing and pytest
-    will fail the build until the markers are removed in the same diff -
-    the fix PR must consciously claim its regression tests."""
+    These began life as strict xfails; the A1 fix PR claimed them as
+    passing tests, per the golden-floor doctrine."""
 
     PROBE_FEN = "k7/P7/1K6/8/8/8/8/8 w - - 0 1"
-    RACE_FEN = "8/5k2/8/8/8/8/P7/K7 w - - 0 1"
+    # A textbook WON KPK (king in front, opposition). The audit's original
+    # race position (8/5k2/... rook pawn) turned out to be a THEORETICAL
+    # DRAW - the defender reaches the corner - so "converts to mate" was
+    # the wrong assertion there; the bug it exhibited (crossed bounds,
+    # stalemate delivered) is covered by the probe test above and the
+    # no-stalemate assertion below.
+    RACE_FEN = "4k3/8/4K3/4P3/8/8/8/8 w - - 0 1"
 
-    @pytest.mark.xfail(
-        reason="A1 unfixed: null yield masks the stalemate sentinel",
-        strict=True,
-    )
     def test_kpk_probe_bounds_do_not_cross(self):
         hist = hist_from_fen(self.PROBE_FEN)
         searcher = sf.Searcher()
@@ -140,18 +141,10 @@ class TestNullSentinelMasking:
         assert lower is not None and upper is not None
         assert lower <= upper, f"contradictory root bounds [{lower}, {upper}]"
 
-    @pytest.mark.xfail(
-        reason="A1 unfixed: winning side stalemates the bare king",
-        strict=True,
-    )
     def test_kpk_race_win_is_not_thrown(self):
-        def in_check_after_null(pos):
-            probe = sf.Searcher()
-            return (
-                probe.bound(pos.rotate(nullmove=True), sf.MATE_UPPER, 0)
-                >= sf.MATE_UPPER
-            )
+        import chess
 
+        board = chess.Board(self.RACE_FEN)
         hist = hist_from_fen(self.RACE_FEN)
         for ply in range(120):
             searcher = sf.Searcher()
@@ -160,13 +153,16 @@ class TestNullSentinelMasking:
                     break
             best = searcher.tp_move.get(hist[-1])
             assert best is not None, f"no move at ply {ply}"
+            uci_move = chess.Move.from_uci(render(hist, best))
+            assert uci_move in board.legal_moves, f"illegal move at ply {ply}"
+            board.push(uci_move)
             hist.append(hist[-1].move(best))
-            pos = hist[-1]
-            if not any(
-                not in_check_after_null(pos.move(m)) for m in pos.gen_moves()
-            ):
-                assert in_check_after_null(pos), (
-                    f"stalemate delivered at ply {ply} in a won KPK race"
-                )
-                return  # checkmate: converted correctly
+            assert not board.is_stalemate(), (
+                f"stalemate delivered at ply {ply + 1} in a won KPK"
+            )
+            if board.is_checkmate():
+                return  # converted correctly
+            assert board.halfmove_clock < 100, (
+                f"50-move draw at ply {ply + 1} in a won KPK"
+            )
         pytest.fail("no conversion within 120 plies")

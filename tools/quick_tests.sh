@@ -39,7 +39,7 @@ echo "Stalemate in 2+"
 # FEN-loader bug (positions built with score=0) that made nearly every
 # quiet line count as a found draw. Raise the floor when a change
 # genuinely improves it.
-$T "$1" ${2:-"--quiet"} draw $TOOLS/test_files/stalemate2.fen --depth 4 --floor 11
+$T "$1" ${2:-"--quiet"} draw $TOOLS/test_files/stalemate2.fen --depth 4 --floor 15
 echo
 
 echo "Regression floors (fixed depth, deterministic; raise when improved)..."
