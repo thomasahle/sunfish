@@ -620,6 +620,43 @@ The later files add further named conditions to check against:
   propagation is the canonical counterexample (`lmr_tt_crossing`, in
   git history at `58883ea..7fdd741^`) and is not mergeable regardless
   of measured strength: its edge is the bug.
+- **The fold rule** (discovered by the tail-yield experiment) — *option
+  removal can be represented by the fold identity*: yielding the
+  max-fold's identity element `-MATE_UPPER` is exactly equivalent to
+  omitting the yield.  The shipped A1 mate-band suppression is this
+  kind (`yield None, score if score < MATE_LOWER else -MATE_UPPER`),
+  which is why the model may disable the option (`useNull`) where the
+  code yields the identity.  *Exact terminal knowledge that may LOWER
+  the accumulated score is an override*, not a fold element, and must
+  remain outside the fold: the stalemate/mate correction ASSIGNS
+  `best = -MATE_LOWER if in_check else 0` after the loop — folding it
+  would let any higher yield erase it.  This is why the correction can
+  never move into the `moves()` generator.
+- **`TerminalPseudoSafe`** (`Sunfish/Stalemate.lean`, final section) —
+  the override's fail-HIGH side, the dual of the fail-low masking that
+  `best_real` fixed (A1): at every correction-terminal node (real-move
+  exhaustion + the gate passes), every ENABLED pseudo-option — the null
+  yield, the depth-0 stand-pat — must score at most the terminal value
+  (0 for stalemate, `-MATE_LOWER` for mate).  If it fails, the crossing
+  shape is: a low-gamma probe cuts off on the pseudo-option before the
+  real-move loop and stores `lower = r > terminal`; a high-gamma probe
+  of the same `(pos, depth)` runs the loop dry, corrects, and stores
+  `upper = terminal` — `lower > upper`, machine-checked in
+  `terminalPseudoSafe_not_free` / `cexT_crossing` (a material-up
+  stalemate trap, on the A1-FIXED loop).  Instances: **`nullAtMate` is
+  a THEOREM** — passing while in check loses the king, so an enabled
+  null yield is exactly `-MATE_UPPER` (the pass-child search reports
+  the exact sentinel; the one other case is killed by the mate-band
+  suppression itself — the same redundancy argument).
+  **`NullAtStalemateNonpositive`** (the pass search at a material-up
+  stalemate can honestly report `pos.score > 0`; no real move exists to
+  match it, so the `NullBetQS` justification fails in principle there)
+  and **`StandPatAtTerminal`** (depth-0; its mate half says the
+  `all(...)` gate never passes at a checkmated QS node —
+  `standPatAtTerminal_mate_arm`) remain hypotheses.  Under the split —
+  bet away from terminals (`NullBetQSNonterminal`), obligation at them —
+  the point spec and table non-crossing are `boundA1_terminalSafe_spec`
+  / `boundA1_no_crossing`.
 
 ## Prior art
 
