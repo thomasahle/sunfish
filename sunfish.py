@@ -308,7 +308,7 @@ class Searcher:
         self.tp_score, self.tp_move, self.history = {}, {}, set()
         self.nodes, self.deadline = 0, None
 
-    def bound(self, pos, gamma, depth, can_null=True):
+    def bound(self, pos, gamma, depth, root=False):
         """ Let s* be the "true" score of the sub-tree we are searching.
             The method returns r, where
             if gamma >  s* then s* <= r < gamma  (A better upper bound)
@@ -333,17 +333,23 @@ class Searcher:
             return -MATE_UPPER
 
         # Look in the table if we have already searched this position before.
-        # We also need to be sure, that the stored search was over the same
-        # nodes as the current search.
-        key = (pos, depth, can_null)
-        entry = self.tp_score.get(key, Entry(-MATE_UPPER, MATE_UPPER))
-        if entry.lower >= gamma: return entry.lower
-        if entry.upper < gamma: return entry.upper
+        # Driver probes (the search root, and IID below) are UNSTORED: they
+        # skip the table in both directions, the repetition-0 and the null
+        # option, and store nothing - so every entry in the table describes
+        # ONE value function, determined by (pos, depth) alone, and the key
+        # needs no flag. (The root's own entry was provably dead weight: the
+        # driver picks each gamma strictly inside its bracket, which is the
+        # same two numbers the entry held.)
+        entry = Entry(-MATE_UPPER, MATE_UPPER)
+        if not root:
+            entry = self.tp_score.get((pos, depth), Entry(-MATE_UPPER, MATE_UPPER))
+            if entry.lower >= gamma: return entry.lower
+            if entry.upper < gamma: return entry.upper
 
         # Let's not repeat positions. We don't chat
-        # - at the root (can_null=False) since it is in history, but not a draw.
+        # - at the root (a driver probe) since it is in history, but not a draw.
         # - at depth=0, since it would be expensive and break "futility pruning".
-        if can_null and depth > 0 and pos in self.history:
+        if not root and depth > 0 and pos in self.history:
             return 0
 
         # Generator of moves to search in order.
@@ -366,7 +372,7 @@ class Searcher:
             #   (killer-only check): declined, exception tolerated.
             # Null move in QS (a search-verified stand-pat) measured
             # -13 +/- 34 ELO: declined.
-            if depth > 2 and can_null and abs(pos.score) < 500 and any(
+            if depth > 2 and not root and abs(pos.score) < 500 and any(
                     c in pos.board for c in "RBNQ"):
                 # A pass claiming a mate-band value is redundant (if passing
                 # wins the king, capturing it is a real move too) and can be a
@@ -384,12 +390,12 @@ class Searcher:
             killer = self.tp_move.get(pos)
 
             # If there isn't one, try to find one with a more shallow search.
-            # This is known as Internal Iterative Deepening (IID). We set
-            # can_null=False: with True, a null cutoff could end the probe
-            # without storing any move, and the repetition check could
-            # truncate it before it finds one.
+            # This is known as Internal Iterative Deepening (IID). The probe
+            # runs as a driver probe (root=True): no null cutoff that would
+            # end it without storing a move, no repetition truncation, and
+            # no table entry under deviant semantics.
             if not killer and depth > 2:
-                self.bound(pos, gamma, depth - 3, can_null=False)
+                self.bound(pos, gamma, depth - 3, root=True)
                 killer = self.tp_move.get(pos)
 
             # Only play the move if it would be included at the current val-limit,
@@ -492,7 +498,8 @@ class Searcher:
         # that lets gamma (or any key-external state) select between
         # incomparable evaluations of a move breaks this - that is a bug,
         # not a configuration; see formal/README.md.
-        self.tp_score[key] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)
+        if not root:
+            self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)
         if len(self.tp_score) > TABLE_SIZE:
             del self.tp_score[next(iter(self.tp_score))]
 
@@ -523,7 +530,7 @@ class Searcher:
             # directions). Widen this range and stalemates break silently.
             lower, upper = -MATE_LOWER, MATE_LOWER
             while lower < upper - EVAL_ROUGHNESS:
-                score = self.bound(pos, gamma, depth, can_null=False)
+                score = self.bound(pos, gamma, depth, root=True)
                 if score >= gamma: lower = score
                 if score < gamma: upper = score
                 yield depth, gamma, score, self.tp_move.get(pos)
