@@ -43,9 +43,10 @@ theorem soften_null_window (ML gamma r : Int) (hML : 0 ≤ ML)
 
 /-! ### (b) The null-move hypothesis  (STATED)
 
-sunfish.py lines 330-331:
+sunfish.py lines 364-365 (since `eda66ee` the gate is position-determined
+plus the driver flag `root`, which never reaches the table):
 
-    if depth > 2 and can_null and abs(pos.score) < 500:
+    if depth > 2 and not root and abs(pos.score) < 500:
         yield None, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
 
 Null-move pruning bets that *doing nothing is never your best option*: if
@@ -71,25 +72,29 @@ def NullOK (G : NullGame) : Prop :=
     ∃ m, m ∈ G.moves p ∧
       negamax G.toGame d m ≤ negamax G.toGame d (G.pass p)
 
-/- RESTRUCTURED (audit): the former `boundNull`/`boundNull_spec` here are
-superseded by the LAYERED story of `Sunfish/CanNull.lean`, which models
-`can_null` exactly as the code uses it (null gate, repetition gate,
-transposition key, IID) and splits the old sorried claim in two:
+/- RESTRUCTURED (audit; re-collapsed after `eda66ee` removed `can_null`):
+the former `boundNull`/`boundNull_spec` here are superseded by
+`Sunfish/CanNull.lean`, now FLAGLESS like the code:
 
-* Layer 1, `boundNullTT_spec` (PROVEN, unconditional): the
-  null-and-repetition-augmented search brackets its own value function
-  `nullValue` with a point spec, and the `(pos, depth, can_null)`-keyed
-  table stays consistent.  Zugzwang cannot break self-consistency.
-* Layer 2, `nullValue_negamax` (stated under `NullBetOK`): relating
-  `nullValue` to plain `negamax` is where the zugzwang bet lives --
-  `NullOK` above is its same-depth core, `NullBetOK` its code-exact form
-  with the `depth - 3` reduction folded in. -/
+* `boundNullTT_spec` (PROVEN, unconditional): the null-and-repetition-
+  augmented interior search brackets its own value function `nullValue`
+  -- ONE function, no flag -- with a point spec, and the
+  `(pos, depth)`-keyed table stays consistent.  Zugzwang cannot break
+  self-consistency.
+* `rootProbe_spec` (PROVEN, unconditional): the driver probes (the
+  search root and IID, `root=True`) skip the table in both directions
+  and store nothing; they bracket their own `rootValue` and cannot
+  disturb the table invariant.
+* `nullValue_plain` (PROVEN under `NullBetOK`): relating `nullValue` to
+  the null-free `plainValue` is where the zugzwang bet lives -- `NullOK`
+  above is its same-depth core, `NullBetOK` its code-exact form with the
+  `depth - 3` reduction folded in. -/
 
 /-! ### (c) The transposition-table invariant  (STATED)
 
-sunfish.py lines 275-276, 305-310, 414-420.  An `Entry(lower, upper)` stored
-under key `(pos, depth, can_null)` promises `lower ≤ s* ≤ upper` for the
-negamax value `s*` of that position at that depth; the comment at line 275
+sunfish.py lines 288-289, 324-336, 481-485.  An `Entry(lower, upper)` stored
+under key `(pos, depth)` promises `lower ≤ s* ≤ upper` for the
+negamax value `s*` of that position at that depth; the comment at line 288
 (`# lower <= s(pos) <= upper`) *is* `TableOK`.  Lookups may then answer a
 query without searching (lines 309-310), and every exit of `bound` tightens
 one side of the entry (lines 415-418).
@@ -101,9 +106,11 @@ guarantees by construction of the evaluation.
 -/
 
 /-- A transposition table, abstracted as a partial map from (depth,
-position) to an `Entry (lower, upper)` pair.  (Sunfish additionally keys on
-`can_null` and clamps QS depths to 0, line 296 -- refinements of the same
-invariant.) -/
+position) to an `Entry (lower, upper)` pair.  (Sunfish clamps QS depths
+to 0, line 315 -- a refinement of the same invariant.  Since `eda66ee`
+the key is exactly `(pos, depth)`: the only deviant-semantics calls, the
+driver probes, never touch the table -- see `Sunfish/CanNull.lean`,
+which reuses this very `Table` for its keyed invariant `CTableOK`.) -/
 structure Table (G : Game) where
   find : Nat → G.Pos → Option (Int × Int)
 
@@ -365,11 +372,14 @@ extension regime.  Hence the TT key must include the last-capture square
 (or whatever state drives the extension).
 
 sunfish sidesteps this by having no recapture extension: its QS (depth 0
-region, lines 348-374) re-derives capture information from `pos` itself via
+region, lines 369-406) re-derives capture information from `pos` itself via
 `pos.value(move)`, so its value IS a function of `pos` alone, and
-`(pos, depth, can_null)` is an honest key.  `can_null` is the same
-phenomenon in miniature: the null-move and repetition checks change the
-value, so the flag must be part of the key (line 308).
+`(pos, depth)` is an honest key.  `can_null` was the same phenomenon in
+miniature: while root/IID calls could store, their no-null,
+no-repetition semantics changed the value, so the flag had to be part of
+the key; at `eda66ee` those calls became table-invisible (unstored in
+both directions) and the flag left the key with them
+(`Sunfish/CanNull.lean`).
 
 We model "how we got there" as an explicit `State` threaded through the
 search, and state the (false!) key-independence claim as a Prop; the

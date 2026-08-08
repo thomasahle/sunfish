@@ -2,9 +2,9 @@
 The core deliverable: sunfish's fail-soft null-window search, without the
 transposition table, and a sorry-free proof of its docstring.
 
-sunfish.py, `Searcher.bound` (lines 286-290):
+sunfish.py, `Searcher.bound` (lines 300-304):
 
-    def bound(self, pos, gamma, depth, can_null=True):
+    def bound(self, pos, gamma, depth, root=False):
         """ Let s* be the "true" score of the sub-tree we are searching.
             The method returns r, where
             if gamma >  s* then s* <= r < gamma  (A better upper bound)
