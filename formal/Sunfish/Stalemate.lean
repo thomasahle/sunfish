@@ -77,6 +77,15 @@ gate") upgrades this model with the engine's quiescence filtering
 that this first half gets by construction (it searches ALL moves) is
 proven there from the gate itself, and the A1 `best_real` fix for the
 null-yield/sentinel interaction is modeled ahead of its code.
+
+THE THIRD PART (from "The refuted-assumptions ledger") records the
+real-chess refutations that retired the gate-and-sentinel design
+entirely, and models its replacement: the verify-on-suspicion search
+(`boundD2`), whose correction and null cutoff are certified by a
+dedicated legality probe (`legalityProbeCorrect`) instead of any
+score-shaped sentinel, with the point spec and table non-crossing
+(`boundD2_spec`, `d2_no_crossing`) holding WITHOUT the pseudo-option
+hypotheses the old design needed.
 -/
 
 import Sunfish.Bound
@@ -1787,5 +1796,1404 @@ theorem a1_fix_repairs :
     boundA1 CexN (fun p => inCheckB CexN.toNullGame p) (fun _ _ _ => -50)
       (fun _ => true) 4 () (-20) = 0 := by
   decide
+
+/-! # The refuted-assumptions ledger, and the verified search (d2)
+
+(References are to branch `d2-verify-pending` at `29c7887`, the
+verify-on-suspicion landing; the A1 fix shipped at `0998739` and the d2
+change reworks the same block.)
+
+The A1 fix protected the correction's FAIL-LOW side: a pseudo-option
+yield can no longer MASK the untouched sentinel.  But the correction is
+an ASSIGNMENT of exact terminal knowledge -- an override outside the
+max-fold (the fold rule, formal/README.md) -- and an override has a
+FAIL-HIGH dual: a pseudo-option scoring ABOVE the terminal value at a
+terminal node stores `lower > terminal` at one window while another
+window stores `upper = terminal` -- a crossed table entry.  The first
+formal treatment of that dual isolated it as a named hypothesis,
+`TerminalPseudoSafe` below, split into a mate side (a theorem -- see
+`nullAtMateD2` further down) and two open sides.  Both open sides were
+then REFUTED on real boards, which is what forced the verified design:
+
+* **`NullAtStalemateNonpositive` is FALSE in real chess.**  Witness
+  `8/8/8/5k1p/3b1P1P/1p1P1P1P/pN1P1P2/K7 w` (score +175): a genuine
+  stalemate -- king-defended pinned knight, promotion-blocked guard
+  pawn, frozen pawn towers -- where the pass search honestly consumed
+  +11.  Pre-fix master stored `lower = 11, upper = 0` on it.
+  Mechanism: the "re-freezing protection" intuition (the opponent can
+  pass right back, re-freezing the stalemate at value ~0) fails at
+  null-depth 1, where the re-frozen stalemate is evaluated by QS as
+  stand-pat -- the static +175-ish score -- not as 0.  `CexT` below is
+  the abstract shape of this witness (eval +30, oracle +30), and
+  `cexT_crossing` machine-checks the crossing on the A1-FIXED loop.
+
+* **`StandPatAtTerminal` is FALSE in real chess.**  Witness
+  `6Rk/6QP/8/8/8/8/8/K7 b`: a mated QS node whose every pseudo-move is
+  a valuable-but-illegal defended capture, so the depth-0 stand-pat
+  carries a normal score while the old depth-0 correction stored the
+  exact mate -- pre-fix `lower = -1711, upper = -47923`.  The automated
+  sweep (formal/scripts/standpat_terminal_search.py, seed 0: 5,000
+  playouts + 1,459,694 sparse positions + 214,004 corner packings)
+  found 100+ natural corner-mate hits (simplest:
+  `8/8/8/7p/7P/1K5P/p7/k5R1 b`, K_MID pricing the mated king's quiet
+  moves at 65-145, above `QS = 40`): the shape is common, not exotic.
+  The d2 answer is not to defend the hypothesis but to remove the
+  consumer: `if depth and ...` excludes depth 0 from the correction
+  entirely -- QS evaluates the fold and never claims an exact terminal
+  value.
+
+* **`KingCapturableReportsExact` is FALSE under general fail-soft
+  windows** (defined and machine-refuted in the probe section below):
+  a king-capturable child may soundly cut off on its stand-pat or on a
+  partial table lower without ever reporting the mate band -- the same
+  move was machine-traced scoring -368 at one window and -69290 at
+  another.  The REPLACEMENT theorem is not that every search of such a
+  node reports `MATE_UPPER`; it is that the DEDICATED legality probe
+  does (`legalityProbeCorrect`).  This refutation names the root cause
+  of the one channel d2 leaves open -- "sentinel masking", a
+  king-capturable child's partial cutoff setting the `live` bit at a
+  terminal node -- and is the next arc's target.
+
+The refuted statements are kept below, re-labeled as countermodels.
+Nothing after this section consumes them: the d2 search (`boundD2`)
+re-derives terminality with the legality oracle instead of assuming
+any pseudo-option inequality. -/
+
+/-! ### The terminal override and the retired obligation -/
+
+/-- **Correction-terminal node** (at remaining depth `d`; meaningful for
+`d ≥ 1`): our king is on the board, the pre-d2 gate is on, and the true
+filtered fold is the untouched sentinel -- real-move exhaustion.  This
+was the firing condition of the pre-d2 correction on the value side
+(`negamaxQS_of_correctionTerminal`).  RETIRED as a load-bearing notion:
+the d2 correction and value function key on `allIllegalB` instead --
+position-intrinsic, not search-history-shaped. -/
+def CorrectionTerminal (G : QSGame) (d : Nat) (p : G.Pos) : Prop :=
+  ¬ (G.eval p ≤ -MATE_LOWER) ∧ qsGateB G d p = true ∧
+  foldMax (fun m => -(negamaxQS G (d - 1) m)) (movesAbove G (val_lower d) p) LOSS = LOSS
+
+/-- The exact terminal value the correction assigns (line 472 on
+`29c7887`): `-MATE_LOWER` for mate (in check), `0` for stalemate. -/
+def terminalValue (G : QSGame) (p : G.Pos) : Int :=
+  if inCheckB G.toNullGame p = true then -MATE_LOWER else 0
+
+/-- At a correction-terminal node the filtered draw-aware value IS the
+terminal value -- the bridge between the old gate condition and the
+exact knowledge the correction asserts. -/
+theorem negamaxQS_of_correctionTerminal (G : QSGame) (d : Nat) (p : G.Pos)
+    (h : CorrectionTerminal G (d + 1) p) :
+    negamaxQS G (d + 1) p = terminalValue G p := by
+  obtain ⟨hkg, hgate, hfold⟩ := h
+  simp only [negamaxQS]
+  rw [if_neg hkg]
+  have hfold' : foldMax (fun m => -(negamaxQS G d m))
+      (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS := hfold
+  rw [hfold']
+  simp only [qsDrawFix]
+  rw [if_pos (And.intro hgate (by trivial))]
+  rfl
+
+/-- **TerminalPseudoSafe** (RETIRED -- an obligation no theorem consumes
+any more): at every correction-terminal node, every ENABLED
+pseudo-option score is at most the terminal value.  This was the named
+hypothesis under which the PRE-d2 loop's point spec could be recovered;
+its stalemate instance is `NullAtStalemateNonpositive` below, REFUTED
+on a real board (module comment above).  Kept because
+`terminalPseudoSafe_not_free` and `cexT_crossing` document what goes
+wrong on any design that assumes rather than verifies. -/
+def TerminalPseudoSafe (G : QSGame) (nully : Nat → G.Pos → Int → Int)
+    (guard : G.Pos → Bool) : Prop :=
+  ∀ (d : Nat) (p : G.Pos) (gamma : Int),
+    CorrectionTerminal G d p → useNull G nully guard d p gamma = true →
+    nully d p gamma ≤ terminalValue G p
+
+/-- **NullAtStalemateNonpositive** (REFUTED in real chess -- the +175
+witness in the module comment): at a correction-terminal node not in
+check, an enabled null yield is at most the draw value 0.  Zugzwang-
+shaped but sharper: at a terminal node there is NO real move to match
+the pass, so the usual `NullBetQS` justification fails in principle.
+The engine now VERIFIES instead of assuming this
+(`positiveNullCutoffVerified`). -/
+def NullAtStalemateNonpositive (G : QSGame) (nully : Nat → G.Pos → Int → Int)
+    (guard : G.Pos → Bool) : Prop :=
+  ∀ (d : Nat) (p : G.Pos) (gamma : Int),
+    CorrectionTerminal G d p → inCheckB G.toNullGame p = false →
+    useNull G nully guard d p gamma = true → nully d p gamma ≤ 0
+
+/-! ### Countermodel: the obligation was never free
+
+A one-position game: a genuinely stalemated position with a POSITIVE
+static score -- the material-up stalemate trap, the abstract shape of
+the real `8/8/8/5k1p/3b1P1P/1p1P1P1P/pN1P1P2/K7 w` witness.  `eval =
+30` fits the engine's `abs(pos.score) < 500` null guard; the null
+oracle answers +30 (exactly what an honest pass search reports when the
+material-down opponent cannot reach 0 either); every non-bet hypothesis
+of `boundA1_spec` holds.  Yet the enabled null scores ABOVE the
+terminal value 0, and the crossing is machine-checked on the A1-FIXED
+loop: `best_real` repaired the fail-low mask, not this fail-high
+dual. -/
+
+/-- The fail-high-dual countermodel game. -/
+def CexT : QSGame where
+  Pos := Unit
+  moves := fun _ => []
+  eval := fun _ => 30
+  pass := fun p => p
+  val := fun _ _ => 0
+
+theorem cexT_value (d : Nat) : negamaxQS CexT (d + 1) () = 0 := by
+  rw [stalemate_fixed_all_depths CexT () rfl (by decide) d]
+  decide
+
+theorem cexT_bounded : Bounded CexT.toNullGame.toGame := by
+  intro p
+  cases p
+  decide
+
+theorem cexT_valHigh : KingCaptureValHigh CexT := by
+  intro p m hm _
+  exact absurd (show m ∈ ([] : List Unit) from hm) (by simp)
+
+theorem cexT_probeOK :
+    CheckProbeOK CexT.toNullGame (fun p => inCheckB CexT.toNullGame p) :=
+  fun _ => rfl
+
+theorem cexT_mateValues : MateValuesAreKingCapturesQS CexT := by
+  intro d p hd hMU'
+  cases p
+  cases d with
+  | zero => exact absurd hd (by omega)
+  | succ n =>
+    rw [cexT_value n] at hMU'
+    exact absurd hMU' (by decide)
+
+/-- The stalemate is correction-terminal at depth 4 (any depth ≥ 1 would
+do). -/
+theorem cexT_correctionTerminal : CorrectionTerminal CexT 4 () :=
+  ⟨by decide, by decide, by decide⟩
+
+/-- The +30 oracle violates `TerminalPseudoSafe`: enabled by every
+engine gate (guard on, depth > 2, well below the mate band), it scores
+above the terminal value 0. -/
+theorem cexT_violates :
+    ¬ TerminalPseudoSafe CexT (fun _ _ _ => 30) (fun _ => true) := by
+  intro h
+  have := h 4 () 10 cexT_correctionTerminal (by decide)
+  exact absurd this (by decide)
+
+/-- **TerminalPseudoSafe was NOT implied by the pre-d2 assumptions.**
+Bounded evaluation, mate-band king captures, real mates only and a
+correct probe -- every non-bet hypothesis of `boundA1_spec` -- leave the
+fail-high pseudo path at terminal nodes entirely unconstrained. -/
+theorem terminalPseudoSafe_not_free :
+    ¬ (∀ (G : QSGame) (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool),
+        Bounded G.toNullGame.toGame → KingCaptureValHigh G →
+        MateValuesAreKingCapturesQS G →
+        CheckProbeOK G.toNullGame (fun p => inCheckB G.toNullGame p) →
+        TerminalPseudoSafe G nully guard) := by
+  intro h
+  exact cexT_violates
+    (h CexT (fun _ _ _ => 30) (fun _ => true)
+      cexT_bounded cexT_valHigh cexT_mateValues cexT_probeOK)
+
+/-- **The crossing, machine-checked, on the A1-FIXED (pre-d2) loop.**
+Low probe `gamma = 10`: the null option cuts off before the (empty)
+real-move loop and `boundA1` returns 30 -- a fail-high, stored as
+`lower = 30` by table part 2.  High probe `gamma = 100` on the same
+`(pos, depth)`: the null fails low, `best_real` keeps the sentinel, the
+correction fires and returns the exact terminal 0 -- a fail-low, stored
+as `upper = 0`.  `lower = 30 > 0 = upper`, and the point value they
+disagree about is `negamaxQS = 0`: the low probe's stored bound is
+simply false.  On the real +175 witness the shipped pre-d2 engine
+stored `lower = 11, upper = 0`.  `d2_repairs_cexT` (below) shows the
+verified loop returning the exact 0 at both windows on the same
+inputs. -/
+theorem cexT_crossing :
+    boundA1 CexT (fun p => inCheckB CexT.toNullGame p) (fun _ _ _ => 30)
+        (fun _ => true) 4 () 10 = 30 ∧
+    boundA1 CexT (fun p => inCheckB CexT.toNullGame p) (fun _ _ _ => 30)
+        (fun _ => true) 4 () 100 = 0 ∧
+    negamaxQS CexT 4 () = 0 :=
+  ⟨by decide, by decide, cexT_value 3⟩
+
+/-! ### The depth-0 pseudo-option: the stand-pat (REFUTED, consumer removed) -/
+
+/-- Depth-0 correction-terminality, by content (this model's depth 0 is
+QS-as-eval, so the old engine's depth-0 loop is stated by what its gate
+certified): our king is on the board, no pseudo-legal move falls below
+the depth-0 threshold `val_lower 0 = QS = 40`, and every pseudo-legal
+move loses the king to an immediate recapture. -/
+def CorrectionTerminal0 (G : QSGame) (p : G.Pos) : Prop :=
+  ¬ (G.eval p ≤ -MATE_LOWER) ∧ allAboveB G 0 p = true ∧
+  ∀ m ∈ G.moves p, hasKingCapture G.toNullGame.toGame m = true
+
+/-- **StandPatAtTerminal** (REFUTED in real chess -- the corner-mate
+witnesses in the module comment): at a depth-0 correction-terminal
+position the stand-pat score does not exceed the terminal value.  The
+pre-d2 depth-0 correction silently consumed this; the sweep found 100+
+natural violations.  d2 removes the consumer: `if depth and ...`
+excludes depth 0 from the correction, so QS evaluates the fold and
+never claims an exact terminal value. -/
+def StandPatAtTerminal (G : QSGame) : Prop :=
+  ∀ p, CorrectionTerminal0 G p → G.eval p ≤ terminalValue G p
+
+/-- The mate arm of `StandPatAtTerminal`, unfolded: the hypothesis
+forces every depth-0 correction-terminal node to be a stalemate, never a
+mate (the stand-pat, living in the static band, always exceeds the mate
+value `-MATE_LOWER`).  This is the crisp shape the counterexample sweep
+probed -- and hit: checkmated depth-0 nodes whose every pseudo-move is
+priced above `QS` exist in ordinary corner mates, so the hypothesis is
+false exactly where it was needed. -/
+theorem standPatAtTerminal_mate_arm (G : QSGame) (hS : StandPatAtTerminal G)
+    (p : G.Pos) (h0 : CorrectionTerminal0 G p) :
+    inCheckB G.toNullGame p = false := by
+  cases hic : inCheckB G.toNullGame p with
+  | false => rfl
+  | true =>
+    have hsp := hS p h0
+    simp only [terminalValue] at hsp
+    rw [if_pos hic] at hsp
+    exact absurd hsp h0.1
+
+/-! # The dedicated legality probe
+
+The d2 engine derives legality from a DEDICATED probe (lines 383, 464
+on `29c7887`):
+
+    self.bound(pos.move(m), MATE_UPPER, 0, root=True) == MATE_UPPER
+
+An unstored driver probe (`root=True`: no table read, no store -- the
+`rootProbe` semantics of `Sunfish/CanNull.lean` -- so no table entry
+can enter the definition of legality), at the one window where QS
+fail-soft cutoffs cannot hide the sentinel: nothing but an exact king
+capture reaches `MATE_UPPER`.  `qsProbe` below models the probed
+child's depth-0 loop by its content -- the stand-pat cutoff, then the
+fail-soft loop over the QS-filtered moves with each grandchild reported
+by its depth-0 value (the same QS-as-eval abstraction the whole file
+uses; in the engine the loop is cut short by the futility break, whose
+king-capture bypass `else MATE_UPPER` at line 421 preserves exactly the
+property the model takes from `KingCaptureValHigh`: the capture tops
+the order and outranks every threshold).
+
+* **`legalityProbeCorrect`** -- at window `MATE_UPPER` the probe is a
+  complete decision procedure: it returns `MATE_UPPER` iff the probed
+  child has a king capture, i.e. iff the move that produced the child
+  left the mover's own king capturable.  The easy direction is
+  `KingCaptureValHigh` (+ `val_lower_lt_ML`); the hard direction is
+  closed by the depth-0 pin -- at the probe's own depth every sentinel
+  has static origins, the same reason `killer_probe_sound`
+  (Killer.lean) is pinned at its probe depth.  At any deeper probe
+  depth the hard direction would demand the sentinel-origins
+  hypothesis (`MateValuesAreKingCapturesQS`), which is exactly the
+  machinery the pre-d2 corrections leaned on.
+* **`kingCapturableReportsExact_refuted`** -- the same loop at a
+  GENERAL window is NOT exact: a king-capturable child can soundly cut
+  off on its stand-pat and report a normal score (machine-checked on
+  `CexR`; machine-traced on real boards as the same move scoring -368
+  and -69290 across two probes).  The replacement theorem is about the
+  dedicated probe, never about search reports in general -- this is the
+  root cause of the open "sentinel masking" channel and the reason the
+  d2 correction trusts the oracle scan, not any score-shaped sentinel.
+-/
+
+/-! ### Loop lemmas for the probe -/
+
+/-- The fail-soft loop never exceeds a bound respected by its seed and
+by every yield (mirror of `foldMax_le`). -/
+theorem searchMoves_le_max {α : Type _} (gamma : Int) (f : α → Int) :
+    ∀ (ms : List α) (b U : Int), (∀ m ∈ ms, f m ≤ U) → b ≤ U →
+      searchMoves gamma f ms b ≤ U := by
+  intro ms
+  induction ms with
+  | nil => intro b U _ hb; simpa [searchMoves] using hb
+  | cons a ms ih =>
+    intro b U hall hb
+    have ha := hall a (List.mem_cons_self a ms)
+    simp only [searchMoves]
+    by_cases hcut : gamma ≤ max b (f a)
+    · rw [if_pos hcut]; omega
+    · rw [if_neg hcut]
+      exact ih (max b (f a)) U (fun m hm => hall m (List.mem_cons_of_mem a hm)) (by omega)
+
+/-- Every member forces the loop's result up to `min (f m) gamma`: the
+loop either reaches `m` (result ≥ f m) or cut off before it
+(result ≥ gamma). -/
+theorem searchMoves_ge_min_of_mem {α : Type _} (gamma : Int) (f : α → Int) :
+    ∀ (ms : List α) (b : Int) (m : α), m ∈ ms →
+      min (f m) gamma ≤ searchMoves gamma f ms b := by
+  intro ms
+  induction ms with
+  | nil => intro b m hm; cases hm
+  | cons a ms ih =>
+    intro b m hm
+    simp only [searchMoves]
+    by_cases hcut : gamma ≤ max b (f a)
+    · rw [if_pos hcut]; omega
+    · rw [if_neg hcut]
+      cases List.mem_cons.mp hm with
+      | inl he =>
+        subst he
+        have := searchMoves_ge_init gamma f ms (max b (f m))
+        omega
+      | inr ht => exact ih (max b (f a)) m ht
+
+/-- A fail-high from a below-window seed names a fail-high yield. -/
+theorem searchMoves_failHigh_witness {α : Type _} (gamma : Int) (f : α → Int) :
+    ∀ (ms : List α) (b : Int), b < gamma → gamma ≤ searchMoves gamma f ms b →
+      ∃ m ∈ ms, gamma ≤ f m := by
+  intro ms
+  induction ms with
+  | nil =>
+    intro b hb hge
+    simp only [searchMoves] at hge
+    omega
+  | cons a ms ih =>
+    intro b hb hge
+    simp only [searchMoves] at hge
+    by_cases hcut : gamma ≤ max b (f a)
+    · exact ⟨a, List.mem_cons_self a ms, by omega⟩
+    · rw [if_neg hcut] at hge
+      obtain ⟨m, hm, hf⟩ := ih (max b (f a)) (by omega) hge
+      exact ⟨m, List.mem_cons_of_mem a hm, hf⟩
+
+/-! ### The probe and its exactness -/
+
+/-- **EvalQuiet**: static evaluations outside the king-gone zone stay
+below the mate band -- the fact `EvalBounds.evalBound_lt_MATE_LOWER`
+machine-checks from the shipped tables, stated as the named hypothesis
+the probe's stand-pat branch needs (a stand-pat can never fake the
+`MATE_UPPER` classification). -/
+def EvalQuiet (G : Game) : Prop :=
+  ∀ p, ¬ (G.eval p ≤ -MATE_LOWER) → G.eval p < MATE_LOWER
+
+/-- The probed child's depth-0 QS loop at window `w`, by content:
+king-gone normalization, the stand-pat cutoff (the depth-0
+`yield None, pos.score` consumed first, lines 390-391), then the
+fail-soft loop over the depth-0-filtered moves seeded with the
+stand-pat, each grandchild reported by its depth-0 value.  The engine
+probe is `qsProbe` at `w = MATE_UPPER`, run unstored (`root=True`). -/
+def qsProbe (G : QSGame) (w : Int) (c : G.Pos) : Int :=
+  if G.eval c ≤ -MATE_LOWER then -MATE_UPPER
+  else if w ≤ G.eval c then G.eval c
+  else searchMoves w (fun m => -(negamaxQS G 0 m)) (movesAbove G (val_lower 0) c) (G.eval c)
+
+/-- **LegalityProbeCorrect**: at window `MATE_UPPER` the probe
+classifies pseudo-moves -- it reports exactly `MATE_UPPER` iff the
+probed child has a king capture (iff the move that reached `c` left the
+moving side's king capturable, i.e. was illegal).  Easy direction:
+king captures are valued in the mate band (`KingCaptureValHigh`), so
+they pass the depth-0 threshold (`val_lower_lt_ML`) and force the loop
+to the exact sentinel.  Hard direction: at depth 0 every yield has
+static origins -- a non-capture grandchild evaluates inside the band and
+its negation cannot reach `MATE_UPPER`, and `EvalQuiet` keeps the
+stand-pat below the band. -/
+theorem legalityProbeCorrect (G : QSGame)
+    (hB : Bounded G.toNullGame.toGame) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hV : KingCaptureValHigh G)
+    (c : G.Pos) (hkg : ¬ (G.eval c ≤ -MATE_LOWER)) :
+    qsProbe G MATE_UPPER c = MATE_UPPER
+      ↔ hasKingCapture G.toNullGame.toGame c = true := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  have hq := hQ c hkg
+  have hsp : ¬ (MATE_UPPER ≤ G.eval c) := by omega
+  simp only [qsProbe]
+  rw [if_neg hkg, if_neg hsp]
+  constructor
+  · intro hres
+    obtain ⟨m, hm, hf⟩ := searchMoves_failHigh_witness MATE_UPPER
+      (fun m => -(negamaxQS G 0 m)) (movesAbove G (val_lower 0) c) (G.eval c)
+      (by omega) (by omega)
+    refine (hasKingCapture_iff G.toNullGame.toGame c).mpr
+      ⟨m, movesAbove_subset G (val_lower 0) c m hm, ?_⟩
+    by_cases hkgm : G.eval m ≤ -MATE_LOWER
+    · exact hkgm
+    · exfalso
+      have hqm := hQ m hkgm
+      simp only [negamaxQS] at hf
+      rw [if_neg hkgm] at hf
+      omega
+  · intro hcap
+    obtain ⟨k, hk, hkev⟩ := (hasKingCapture_iff G.toNullGame.toGame c).mp hcap
+    have hkmem : k ∈ movesAbove G (val_lower 0) c := by
+      rw [mem_movesAbove]
+      refine ⟨hk, ?_⟩
+      have := hV c k hk hkev
+      have := val_lower_lt_ML 0
+      omega
+    have hkv := negamaxQS_kingGone G 0 k hkev
+    have hlow : min (-(negamaxQS G 0 k)) MATE_UPPER
+        ≤ searchMoves MATE_UPPER (fun m => -(negamaxQS G 0 m))
+            (movesAbove G (val_lower 0) c) (G.eval c) :=
+      searchMoves_ge_min_of_mem MATE_UPPER
+        (fun m => -(negamaxQS G 0 m)) (movesAbove G (val_lower 0) c) (G.eval c) k hkmem
+    have hup := searchMoves_le_max MATE_UPPER
+      (fun m => -(negamaxQS G 0 m)) (movesAbove G (val_lower 0) c) (G.eval c) MATE_UPPER
+      (fun m _ => by
+        show -(negamaxQS G 0 m) ≤ MATE_UPPER
+        have := negamaxQS_bounded G hB 0 m
+        omega)
+      (by omega)
+    rw [hkv] at hlow
+    omega
+
+/-- The probe over a parent's pseudo-moves: for `m ∈ moves p` at a
+parent that cannot capture the opponent king (the only place the
+correction runs -- a capturable opponent king fails high long before
+it), the probe decides legality of the move to `m`.  Legality is
+position-intrinsic -- `hasKingCapture` is a function of the child alone
+-- so the certificate can never go stale. -/
+theorem legalityProbe_decides (G : QSGame)
+    (hB : Bounded G.toNullGame.toGame) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hV : KingCaptureValHigh G)
+    (p m : G.Pos) (hm : m ∈ G.moves p)
+    (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true)) :
+    qsProbe G MATE_UPPER m = MATE_UPPER
+      ↔ hasKingCapture G.toNullGame.toGame m = true := by
+  refine legalityProbeCorrect G hB hQ hV m (fun hkg => hcap ?_)
+  exact (hasKingCapture_iff G.toNullGame.toGame p).mpr ⟨m, hm, hkg⟩
+
+/-- A fail-LOW probe report at any window `w ≤ MATE_UPPER` certifies
+legality outright: had the child a king capture, the loop would have
+been forced to at least `min MATE_UPPER w = w`.  This is the depth-0
+half of `storedMoveLegal`: a parent's fail-high real yield is exactly a
+child fail-low, so a stored move's child was scanned past every capture
+without finding one. -/
+theorem qsProbe_failLow_legal (G : QSGame) (hV : KingCaptureValHigh G)
+    (w : Int) (c : G.Pos) (hw : w ≤ MATE_UPPER)
+    (hkg : ¬ (G.eval c ≤ -MATE_LOWER))
+    (hlow : qsProbe G w c < w) :
+    hasKingCapture G.toNullGame.toGame c = false := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  cases hcap : hasKingCapture G.toNullGame.toGame c with
+  | false => rfl
+  | true =>
+    exfalso
+    simp only [qsProbe] at hlow
+    rw [if_neg hkg] at hlow
+    by_cases hsp : w ≤ G.eval c
+    · rw [if_pos hsp] at hlow
+      omega
+    · rw [if_neg hsp] at hlow
+      obtain ⟨k, hk, hkev⟩ := (hasKingCapture_iff G.toNullGame.toGame c).mp hcap
+      have hkmem : k ∈ movesAbove G (val_lower 0) c := by
+        rw [mem_movesAbove]
+        refine ⟨hk, ?_⟩
+        have := hV c k hk hkev
+        have := val_lower_lt_ML 0
+        omega
+      have hkv := negamaxQS_kingGone G 0 k hkev
+      have hlo : min (-(negamaxQS G 0 k)) w
+          ≤ searchMoves w (fun m => -(negamaxQS G 0 m))
+              (movesAbove G (val_lower 0) c) (G.eval c) :=
+        searchMoves_ge_min_of_mem w
+          (fun m => -(negamaxQS G 0 m)) (movesAbove G (val_lower 0) c) (G.eval c) k hkmem
+      rw [hkv] at hlo
+      omega
+
+/-! ### The refuted exactness assumption -/
+
+/-- **KingCapturableReportsExact** (REFUTED -- see
+`kingCapturableReportsExact_refuted`): "every fail-soft QS report of a
+king-capturable child is the exact `MATE_UPPER` sentinel, at every
+window."  The pre-d2 corrections implicitly leaned on report-shaped
+sentinels; under general fail-soft windows the claim is FALSE -- a
+king-capturable child may soundly cut off on its stand-pat (or, in the
+engine, on a partial table lower) and report a normal score.  The
+replacement (`legalityProbeCorrect`) claims exactness only for the
+DEDICATED probe at `w = MATE_UPPER`. -/
+def KingCapturableReportsExact (G : QSGame) : Prop :=
+  ∀ (w : Int) (c : G.Pos), -MATE_UPPER < w → w ≤ MATE_UPPER →
+    ¬ (G.eval c ≤ -MATE_LOWER) → hasKingCapture G.toNullGame.toGame c = true →
+    qsProbe G w c = MATE_UPPER
+
+/-- The countermodel: `c` (eval +30) has exactly one pseudo-move -- a
+king capture.  At a low window the stand-pat cuts off first. -/
+inductive RPos where
+  | c | k
+  deriving DecidableEq
+
+open RPos in
+def CexR : QSGame where
+  Pos := RPos
+  moves := fun p => match p with
+    | c => [k]
+    | k => []
+  eval := fun p => match p with
+    | c => 30
+    | k => -60000
+  pass := fun p => p
+  val := fun _ _ => MATE_LOWER
+
+theorem cexR_bounded : Bounded CexR.toNullGame.toGame := by
+  intro p
+  cases p <;> decide
+
+theorem cexR_quiet : EvalQuiet CexR.toNullGame.toGame := by
+  intro p
+  cases p <;> decide
+
+theorem cexR_valHigh : KingCaptureValHigh CexR := by
+  intro p m _ _
+  cases p <;> cases m <;> decide
+
+/-- The two windows, machine-checked: the same king-capturable child
+reports 30 (a sound stand-pat fail-high -- its true value is
+`MATE_UPPER`, and 30 is a valid lower bound) at window 10, and the
+exact `MATE_UPPER` at the dedicated probe window.  A score-shaped
+sentinel test reading the first report would conclude "no king capture
+here"; only the dedicated probe classifies. -/
+theorem cexR_two_windows :
+    qsProbe CexR 10 RPos.c = 30 ∧
+    qsProbe CexR MATE_UPPER RPos.c = MATE_UPPER ∧
+    hasKingCapture CexR.toNullGame.toGame RPos.c = true :=
+  ⟨by decide, by decide, by decide⟩
+
+/-- **The exactness assumption is FALSE under general fail-soft
+windows**, even with bounded, quiet evaluations and mate-band king
+captures.  Machine-checked on `CexR` at window 10. -/
+theorem kingCapturableReportsExact_refuted :
+    ¬ (∀ (G : QSGame), Bounded G.toNullGame.toGame →
+        EvalQuiet G.toNullGame.toGame → KingCaptureValHigh G →
+        KingCapturableReportsExact G) := by
+  intro h
+  have := h CexR cexR_bounded cexR_quiet cexR_valHigh
+    10 RPos.c (by decide) (by decide) (by decide) (by decide)
+  exact absurd this (by decide)
+
+/-! # The verified search (d2): verify-on-suspicion, both terminal arms
+
+The shipped loop (`d2-verify-pending` at `29c7887`, sunfish.py lines
+361-472) replaces every assumed pseudo-option inequality with a
+verified one:
+
+* The consumption fold carries a one-bit certificate: `best, live` with
+  `live` true iff the current maximum was set by a real-move yield
+  (lines 436-439).  Modeled here without an extra bit: with the null
+  contribution `n` folded first and the real-move fold `S`, `live` is
+  exactly `n < S`, so the code's `not live` is the gate `S ≤ n` in
+  `d2Fix`.
+* **Fail-low arm** (lines 463-472): an uncertified fail-low
+  (`best < gamma and not live`) is SUSPECT -- a virtual option beat
+  every legal move, or no legal move exists -- and the correction
+  re-derives terminality directly: every generated move (searched or
+  QS-filtered alike) is probed with the legality oracle.  The scan is
+  `allIllegalB` -- a predicate of the position alone -- which is what the
+  engine's `all(bound(pos.move(m), MATE_UPPER, 0, root=True) ==
+  MATE_UPPER ...)` computes under `legalityProbeCorrect`
+  (`legalScan_iff_allIllegal`).
+* **Fail-high arm** (lines 382-385): a positive uncertified null cutoff
+  (`0 < score`, `gamma <= score < MATE_LOWER`, no killer) is verified
+  with the same oracle and withdrawn to the fold identity `-MATE_UPPER`
+  at a verified terminal (`nullVerify`).  The killer short-circuit is
+  sound because a stored move is a legal move (`storedMoveLegal`), so a
+  position holding one is never terminal (`KillerLegal`).  The
+  mate-band suppression stays in fold-identity form on the yield
+  (line 386), modeled as option disabling per the fold rule (`useD2`).
+* **Depth 0 is excluded** (`if depth and ...`): QS evaluates the fold,
+  stand-pat included, and never claims an exact terminal value -- the
+  `StandPatAtTerminal` refutation removed, not repaired.
+
+The decisive structural change: the correction's firing condition and
+the value function's terminal branch are the SAME position-intrinsic
+predicate `allIllegalB`, instead of a search-history-shaped sentinel
+(`best_real == -MATE_UPPER`) on one side and a filtered-fold condition
+on the other.  Alignment between search and value becomes definitional,
+and the old hypothesis inventory collapses:
+
+* CONSUMED NO MORE by the spec: `MateValuesAreKingCapturesQS` (the
+  sentinel-origins hypothesis -- nothing reads score-shaped sentinels),
+  `KingCaptureValHigh` (moved into the probe theorem, where the engine
+  actually spends it), the whole-tree `NullBetQS`, `TerminalPseudoSafe`
+  and both its refuted instances, the `qsGateB`/`allAboveB` exhaustion
+  gate and its `ValFloor` arithmetic (the scan covers filtered moves
+  too, so exhaustion is irrelevant to terminality).
+* CONSUMED INSTEAD: `KillerLegal` (backed by `storedMoveLegal`, the
+  invariant the code comment at lines 362-365 states), `NullIsPassSearchD2`
+  (fidelity: the null yield IS the pass search, line 381), and
+  `NullBetD2` -- the null bet needed only AWAY from verified terminals,
+  where its justification ("some real move matches the pass") is at
+  least possible because a legal move exists.
+
+Depth-0 idealization, stated honestly: `boundD2`'s and `negamaxD2`'s
+depth 0 report the exact king-capture-aware QS value (the `MATE_UPPER`
+branch), i.e. the model's depth-0 CHILD reports are sentinel-exact.
+The engine's are NOT -- that is precisely the refuted
+`KingCapturableReportsExact`, and the machine-checked gap (`cexR_two_
+windows`) is the open "sentinel masking" channel: a king-capturable
+child soundly cutting off on a partial bound can set `live` at a
+terminal node and suppress the correction.  The dedicated probe is
+immune (`legalityProbeCorrect` needs no such idealization), so the
+correction itself is certified; the residual exposure is confined to
+the `live`/fold path and is the next arc's target.  A second fidelity
+caution of the same type: the engine's futility yield (line 421)
+carries a truthy `Move` whose child was never searched -- a synthetic
+suffix estimate, not a searched real result -- and the `live` bit
+treats it as a mobility certificate.  The model keeps futility out of
+this loop (as `boundFut` covers it separately) and the formal object
+deliberately does NOT claim that every truthy yield certifies
+mobility; see the yield-species note in formal/README.md. -/
+
+/-! ### The oracle scan -/
+
+/-- Every generated move loses the king to an immediate recapture: the
+position-intrinsic terminality predicate the d2 correction verifies
+(lines 463-465 compute it through the legality probe; the scan runs
+over `pos.gen_moves()`, the FULL move list -- QS filtering is irrelevant
+to terminality).  Vacuously true at genuinely moveless positions. -/
+def allIllegalB (G : QSGame) (p : G.Pos) : Bool :=
+  (G.moves p).all (fun m => hasKingCapture G.toNullGame.toGame m)
+
+theorem allIllegalB_true_iff {G : QSGame} {p : G.Pos} :
+    allIllegalB G p = true
+      ↔ ∀ m ∈ G.moves p, hasKingCapture G.toNullGame.toGame m = true := by
+  simp [allIllegalB, List.all_eq_true]
+
+theorem allIllegalB_false_of_legal {G : QSGame} {p m : G.Pos}
+    (hm : m ∈ G.moves p)
+    (hleg : hasKingCapture G.toNullGame.toGame m = false) :
+    allIllegalB G p = false := by
+  cases h : allIllegalB G p with
+  | false => rfl
+  | true =>
+    have := allIllegalB_true_iff.mp h m hm
+    rw [hleg] at this
+    exact Bool.noConfusion this
+
+/-- The engine's scan (lines 463-465) computes `allIllegalB`: under
+`legalityProbeCorrect`, probing every generated move at the dedicated
+window and testing for the exact sentinel is the same Boolean as "every
+move leaves our king capturable".  Stated at a parent that cannot
+capture the opponent king -- the only kind of node whose correction (or
+null verifier) runs the scan; a capturable opponent king fails high
+before either. -/
+theorem legalScan_iff_allIllegal (G : QSGame)
+    (hB : Bounded G.toNullGame.toGame) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hV : KingCaptureValHigh G) (p : G.Pos)
+    (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true)) :
+    ((G.moves p).all (fun m => decide (qsProbe G MATE_UPPER m = MATE_UPPER))) = true
+      ↔ allIllegalB G p = true := by
+  rw [List.all_eq_true, allIllegalB_true_iff]
+  constructor
+  · intro h m hm
+    have := h m hm
+    rw [decide_eq_true_eq] at this
+    exact (legalityProbe_decides G hB hQ hV p m hm hcap).mp this
+  · intro h m hm
+    rw [decide_eq_true_eq]
+    exact (legalityProbe_decides G hB hQ hV p m hm hcap).mpr (h m hm)
+
+/-! ### The search -/
+
+/-- The null verifier (lines 382-385): a POSITIVE pass score that would
+cut off (`gamma <= score`), below the mate band, with no killer to
+certify mobility, is trusted only if the oracle scan FAILS to prove the
+node terminal; at a verified terminal it is withdrawn to the fold
+identity `-MATE_UPPER`.  Everything else passes through untouched. -/
+def nullVerify (G : QSGame) (kill : G.Pos → Bool) (rn gamma : Int) (p : G.Pos) : Int :=
+  if 0 < rn ∧ gamma ≤ rn ∧ rn < MATE_LOWER ∧ kill p = false ∧ allIllegalB G p = true
+  then -MATE_UPPER else rn
+
+/-- The null-use gate: the engine guard (`abs(pos.score) < 500` and the
+piece test, abstracted as `guard`), the `depth > 2` gate of line 379,
+and the A1 mate-band suppression of line 386 applied to the VERIFIED
+yield -- in the code the suppression is the fold-identity form
+`yield None, score if score < MATE_LOWER else -MATE_UPPER`; disabling
+the option is equivalent by the fold rule (formal/README.md). -/
+def useD2 (G : QSGame) (nully : Nat → G.Pos → Int → Int)
+    (guard kill : G.Pos → Bool) (d : Nat) (p : G.Pos) (gamma : Int) : Bool :=
+  guard p && decide (2 < d) &&
+    decide (nullVerify G kill (nully d p gamma) gamma p < MATE_LOWER)
+
+/-- The null option's contribution to the consumption fold: the
+verified yield when the option is enabled, the fold identity when it is
+not. -/
+def nullPartD2 (G : QSGame) (nully : Nat → G.Pos → Int → Int)
+    (guard kill : G.Pos → Bool) (d : Nat) (p : G.Pos) (gamma : Int) : Int :=
+  if useD2 G nully guard kill d p gamma = true
+  then nullVerify G kill (nully d p gamma) gamma p else LOSS
+
+/-- The verify-on-suspicion correction (lines 463-472), applied to the
+consumption fold: `best` is the full maximum, `S` the real-move fold,
+`n` the null contribution, so `S ≤ n` is exactly the code's `not live`
+(the maximum was not set by a real-move yield).  Fire only on a
+fail-low, uncertified, ORACLE-CONFIRMED terminal; then assign the exact
+terminal value through the check probe. -/
+def d2Fix (G : QSGame) (probe : G.Pos → Bool)
+    (gamma best S n : Int) (p : G.Pos) : Int :=
+  if best < gamma ∧ S ≤ n ∧ allIllegalB G p = true then
+    (if probe p = true then -MATE_LOWER else 0)
+  else best
+
+/-- The verified search.  Structure of `boundA1` with three changes:
+
+* depth 0 reports the king-capture-aware QS value (the sentinel-exact
+  idealization discussed in the section comment -- the engine-side gap
+  is the refuted `KingCapturableReportsExact`);
+* the null yield passes through the verifier (`nullVerify`) before the
+  cutoff test and the fold;
+* the correction is `d2Fix`: gated by the oracle scan `allIllegalB`,
+  not by any score-shaped sentinel, and `best_real` is gone -- the
+  `live` bit is the comparison `S ≤ n`. -/
+def boundD2 (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard kill : G.Pos → Bool) :
+    Nat → G.Pos → Int → Int
+  | 0, p, _gamma =>
+    if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+    else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
+    else G.eval p
+  | d + 1, p, gamma =>
+    if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+    else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
+    else if useD2 G nully guard kill (d + 1) p gamma = true ∧
+        gamma ≤ nullVerify G kill (nully (d + 1) p gamma) gamma p then
+      nullVerify G kill (nully (d + 1) p gamma) gamma p
+    else
+      d2Fix G probe gamma
+        (max (nullPartD2 G nully guard kill (d + 1) p gamma)
+          (searchMoves gamma
+            (fun m => -(boundD2 G probe nully guard kill d m (1 - gamma)))
+            (movesAbove G (val_lower (d + 1)) p) LOSS))
+        (searchMoves gamma
+          (fun m => -(boundD2 G probe nully guard kill d m (1 - gamma)))
+          (movesAbove G (val_lower (d + 1)) p) LOSS)
+        (nullPartD2 G nully guard kill (d + 1) p gamma)
+        p
+
+/-- The value function the verified search brackets: king-capture
+normalization, the sentinel branch, then -- the d2 change -- the exact
+terminal value at ORACLE-TERMINAL positions (`allIllegalB`, the same
+predicate the search verifies) and the plain filtered fold elsewhere.
+Determined by `(pos, depth)` alone: the point-spec doctrine holds, and
+no gamma-dependent condition appears anywhere in it. -/
+def negamaxD2 (G : QSGame) : Nat → G.Pos → Int
+  | 0, p =>
+    if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+    else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
+    else G.eval p
+  | d + 1, p =>
+    if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+    else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
+    else if allIllegalB G p = true then terminalValue G p
+    else foldMax (fun m => -(negamaxD2 G d m)) (movesAbove G (val_lower (d + 1)) p) LOSS
+
+/-- `BoundSpec` against the d2 value. -/
+def BoundSpecD2 (G : QSGame) (d : Nat) (p : G.Pos) (gamma r : Int) : Prop :=
+  (gamma ≤ r → r ≤ negamaxD2 G d p) ∧ (r < gamma → negamaxD2 G d p ≤ r)
+
+/-! ### Branch lemmas -/
+
+theorem boundD2_kingGone (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard kill : G.Pos → Bool)
+    (d : Nat) (p : G.Pos) (gamma : Int) (h : G.eval p ≤ -MATE_LOWER) :
+    boundD2 G probe nully guard kill d p gamma = -MATE_UPPER := by
+  cases d with
+  | zero => simp only [boundD2]; rw [if_pos h]
+  | succ d => simp only [boundD2]; rw [if_pos h]
+
+/-- The sentinel, by construction and AT EVERY DEPTH (depth 0 included:
+the sentinel-exact idealization).  Its contrapositive is
+`storedMoveLegal`. -/
+theorem boundD2_of_capture (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard kill : G.Pos → Bool)
+    (d : Nat) (p : G.Pos) (gamma : Int) (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
+    (hcap : hasKingCapture G.toNullGame.toGame p = true) :
+    boundD2 G probe nully guard kill d p gamma = MATE_UPPER := by
+  cases d with
+  | zero => simp only [boundD2]; rw [if_neg hkg, if_pos hcap]
+  | succ d => simp only [boundD2]; rw [if_neg hkg, if_pos hcap]
+
+theorem negamaxD2_kingGone (G : QSGame) (d : Nat) (p : G.Pos)
+    (h : G.eval p ≤ -MATE_LOWER) : negamaxD2 G d p = -MATE_UPPER := by
+  cases d with
+  | zero => simp only [negamaxD2]; rw [if_pos h]
+  | succ d => simp only [negamaxD2]; rw [if_pos h]
+
+theorem negamaxD2_of_capture (G : QSGame) (d : Nat) (p : G.Pos)
+    (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
+    (hcap : hasKingCapture G.toNullGame.toGame p = true) :
+    negamaxD2 G d p = MATE_UPPER := by
+  cases d with
+  | zero => simp only [negamaxD2]; rw [if_neg hkg, if_pos hcap]
+  | succ d => simp only [negamaxD2]; rw [if_neg hkg, if_pos hcap]
+
+/-- The value-side bridge: at an oracle-terminal node the d2 value IS
+the terminal value.  Search and value share the predicate, so no
+`hexh`/`hmask` alignment machinery (and no `MateValuesAreKingCapturesQS`)
+is needed anywhere. -/
+theorem negamaxD2_of_allIllegal (G : QSGame) (d : Nat) (p : G.Pos)
+    (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
+    (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
+    (hai : allIllegalB G p = true) :
+    negamaxD2 G (d + 1) p = terminalValue G p := by
+  simp only [negamaxD2]
+  rw [if_neg hkg, if_neg hcap, if_pos hai]
+
+theorem negamaxD2_of_fold (G : QSGame) (d : Nat) (p : G.Pos)
+    (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
+    (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
+    (hai : allIllegalB G p = false) :
+    negamaxD2 G (d + 1) p
+      = foldMax (fun m => -(negamaxD2 G d m)) (movesAbove G (val_lower (d + 1)) p) LOSS := by
+  simp only [negamaxD2]
+  rw [if_neg hkg, if_neg hcap, if_neg (by simp [hai])]
+
+/-! ### The certificates -/
+
+/-- **StoredMoveLegal**: `tp_move` stores only on a real fail-high
+(lines 440-445), and a fail-high real yield at an in-band `gamma`
+certifies its move legal -- the yield is `-(child search)` ≥ gamma >
+`-MATE_UPPER`, while a king-capturable child reports the exact
+`MATE_UPPER` sentinel (`boundD2_of_capture`), which would negate to
+exactly `-MATE_UPPER`.  Legality (`hasKingCapture` of the child) is a
+function of the child position alone, so the certificate is
+position-intrinsic and can never go stale, however old the entry.  This
+is the code comment at lines 362-365, and the invariant `KillerLegal`
+consumes. -/
+theorem storedMoveLegal (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard kill : G.Pos → Bool)
+    (d : Nat) (m : G.Pos) (gamma : Int) (hg1 : -MATE_UPPER < gamma)
+    (hkg : ¬ (G.eval m ≤ -MATE_LOWER))
+    (hhi : gamma ≤ -(boundD2 G probe nully guard kill d m (1 - gamma))) :
+    hasKingCapture G.toNullGame.toGame m = false := by
+  cases hcap : hasKingCapture G.toNullGame.toGame m with
+  | false => rfl
+  | true =>
+    exfalso
+    rw [boundD2_of_capture G probe nully guard kill d m (1 - gamma) hkg hcap] at hhi
+    omega
+
+/-- The engine-level depth-0 instance of `storedMoveLegal`, free of the
+sentinel-exact idealization: a depth-1 parent's fail-high real yield is
+a fail-LOW of the child's depth-0 QS loop, and `qsProbe_failLow_legal`
+certifies legality from the fail-low alone (the loop was scanned past
+every king capture without cutting off). -/
+theorem storedMoveLegal_qs (G : QSGame) (hV : KingCaptureValHigh G)
+    (m : G.Pos) (gamma : Int) (hg1 : -MATE_UPPER < gamma)
+    (hkg : ¬ (G.eval m ≤ -MATE_LOWER))
+    (hhi : gamma ≤ -(qsProbe G (1 - gamma) m)) :
+    hasKingCapture G.toNullGame.toGame m = false :=
+  qsProbe_failLow_legal G hV (1 - gamma) m (by omega) hkg (by omega)
+
+/-- **KillerLegal**: any position the killer table holds a move for has
+a legal move.  This is the invariant `storedMoveLegal` maintains --
+`tp_move` is exact-position-keyed and stores only real fail-high moves
+at in-band windows -- consumed by the null verifier's `not killer`
+short-circuit: a killer certifies mobility, so the verification scan
+may be skipped. -/
+def KillerLegal (G : QSGame) (kill : G.Pos → Bool) : Prop :=
+  ∀ p, kill p = true →
+    ∃ m ∈ G.moves p, hasKingCapture G.toNullGame.toGame m = false
+
+/-- A position holding a killer is never oracle-terminal: the `not
+killer` short-circuit skips only scans that would have found a legal
+move. -/
+theorem killerLegal_not_terminal (G : QSGame) (kill : G.Pos → Bool)
+    (hK : KillerLegal G kill) (p : G.Pos) (h : kill p = true) :
+    allIllegalB G p = false := by
+  obtain ⟨m, hm, hleg⟩ := hK p h
+  exact allIllegalB_false_of_legal hm hleg
+
+/-! ### The null-side hypotheses -/
+
+/-- **NullIsPassSearch** (model fidelity, not a bet): the raw null
+yield IS the negated search of the passed position at the reduced
+depth, exactly line 381.  Only the `2 < d` instances matter (the
+engine only asks there). -/
+def NullIsPassSearchD2 (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard kill : G.Pos → Bool) : Prop :=
+  ∀ (d : Nat) (p : G.Pos) (gamma : Int), 2 < d →
+    nully d p gamma
+      = -(boundD2 G probe nully guard kill (d - 3) (G.pass p) (1 - gamma))
+
+/-- **NullBetD2**: the null-move bet, needed only AWAY from
+oracle-terminal nodes -- where a legal move exists, so "some real move
+matches the pass" is at least possible.  AT terminals nothing is
+assumed: the verifier re-derives the facts (`positiveNullCutoffVerified`,
+`nullAtMateD2`).  This is the honest remainder of the retired
+whole-tree `NullBetQS`; zugzwang is precisely its failure, and
+threatens value accuracy at non-terminal nodes only -- never the
+search/table self-consistency at terminals. -/
+def NullBetD2 (G : QSGame) (nully : Nat → G.Pos → Int → Int)
+    (guard : G.Pos → Bool) : Prop :=
+  ∀ (d : Nat) (p : G.Pos) (gamma : Int), allIllegalB G p = false →
+    guard p = true → 2 < d → gamma ≤ nully d p gamma →
+    nully d p gamma < MATE_LOWER → nully d p gamma ≤ negamaxD2 G d p
+
+/-- **NullAtMate, the d2 form -- a THEOREM, not a hypothesis**: at an
+in-check node a suppression-passing null yield is exactly
+`-MATE_UPPER`, the fold identity.  Passing while in check loses the
+king, so the pass-child search reports the exact sentinel
+(`boundD2_of_capture`, at every reduced depth -- the pre-d2 version
+needed a separate `passBound` wrapper because the old model's depth 0
+lacked the sentinel branch); the one other conceivable case (the passed
+king already gone, negating to `+MATE_UPPER`) is excluded by the
+mate-band suppression itself -- the same redundancy argument as the code
+comment at lines 376-378. -/
+theorem nullAtMateD2 (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard kill : G.Pos → Bool)
+    (hrec : NullIsPassSearchD2 G probe nully guard kill)
+    (d : Nat) (p : G.Pos) (gamma : Int) (hd : 2 < d)
+    (hic : inCheckB G.toNullGame p = true)
+    (hsup : nully d p gamma < MATE_LOWER) :
+    nully d p gamma = -MATE_UPPER := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  have heq := hrec d p gamma hd
+  have hcap : hasKingCapture G.toNullGame.toGame (G.pass p) = true := hic
+  by_cases hkg : G.eval (G.pass p) ≤ -MATE_LOWER
+  · exfalso
+    rw [boundD2_kingGone G probe nully guard kill (d - 3) (G.pass p) (1 - gamma) hkg] at heq
+    rw [heq] at hsup
+    omega
+  · rw [boundD2_of_capture G probe nully guard kill (d - 3) (G.pass p) (1 - gamma) hkg hcap] at heq
+    exact heq
+
+/-! ### Boundedness -/
+
+/-- Search reports stay in the score band, for in-band windows.  (The
+lower side of the null oracle needs no hypothesis: an out-of-band pass
+yield is either suppressed or dominated by the fold.) -/
+theorem boundD2_bounded (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) :
+    ∀ (d : Nat) (p : G.Pos) (gamma : Int), -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
+      -MATE_UPPER ≤ boundD2 G probe nully guard kill d p gamma ∧
+        boundD2 G probe nully guard kill d p gamma ≤ MATE_UPPER := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  intro d
+  induction d with
+  | zero =>
+    intro p gamma _ _
+    have hband := hB p
+    simp only [boundD2]
+    by_cases hkg : G.eval p ≤ -MATE_LOWER
+    · rw [if_pos hkg]; omega
+    · rw [if_neg hkg]
+      by_cases hcap : hasKingCapture G.toNullGame.toGame p = true
+      · rw [if_pos hcap]; omega
+      · rw [if_neg hcap]; omega
+  | succ d ih =>
+    intro p gamma hg1 hg2
+    simp only [boundD2]
+    by_cases hkg : G.eval p ≤ -MATE_LOWER
+    · rw [if_pos hkg]; omega
+    · rw [if_neg hkg]
+      by_cases hcap : hasKingCapture G.toNullGame.toGame p = true
+      · rw [if_pos hcap]; omega
+      · rw [if_neg hcap]
+        by_cases hcut : useD2 G nully guard kill (d + 1) p gamma = true ∧
+            gamma ≤ nullVerify G kill (nully (d + 1) p gamma) gamma p
+        · rw [if_pos hcut]
+          have hu := hcut.1
+          simp only [useD2, Bool.and_eq_true, decide_eq_true_eq] at hu
+          omega
+        · rw [if_neg hcut]
+          have hSl := searchMoves_ge_init gamma
+            (fun m => -(boundD2 G probe nully guard kill d m (1 - gamma)))
+            (movesAbove G (val_lower (d + 1)) p) LOSS
+          have hSu := searchMoves_le_max gamma
+            (fun m => -(boundD2 G probe nully guard kill d m (1 - gamma)))
+            (movesAbove G (val_lower (d + 1)) p) LOSS MATE_UPPER
+            (fun m _ => by
+              show -(boundD2 G probe nully guard kill d m (1 - gamma)) ≤ MATE_UPPER
+              have := ih m (1 - gamma) (by omega) (by omega)
+              omega)
+            (by omega)
+          have hn : nullPartD2 G nully guard kill (d + 1) p gamma ≤ MATE_LOWER := by
+            simp only [nullPartD2]
+            by_cases hu : useD2 G nully guard kill (d + 1) p gamma = true
+            · rw [if_pos hu]
+              simp only [useD2, Bool.and_eq_true, decide_eq_true_eq] at hu
+              omega
+            · rw [if_neg hu]; omega
+          simp only [d2Fix]
+          by_cases hfire :
+              max (nullPartD2 G nully guard kill (d + 1) p gamma)
+                (searchMoves gamma
+                  (fun m => -(boundD2 G probe nully guard kill d m (1 - gamma)))
+                  (movesAbove G (val_lower (d + 1)) p) LOSS) < gamma ∧
+              searchMoves gamma
+                (fun m => -(boundD2 G probe nully guard kill d m (1 - gamma)))
+                (movesAbove G (val_lower (d + 1)) p) LOSS
+                ≤ nullPartD2 G nully guard kill (d + 1) p gamma ∧
+              allIllegalB G p = true
+          · rw [if_pos hfire]
+            by_cases hpr : probe p = true
+            · rw [if_pos hpr]; omega
+            · rw [if_neg hpr]; omega
+          · rw [if_neg hfire]; omega
+
+/-! ### The two verifier arms, as standalone theorems -/
+
+/-- **PositiveNullCutoffVerified** (fail-high arm): at an
+oracle-terminal node, any null cutoff that survives the verifier is
+NON-POSITIVE -- so a verified-terminal node never stores a positive
+lower bound.  Mechanics: a killer cannot exist there (`KillerLegal` +
+the scan), so a surviving positive cutoff would have satisfied every
+withdrawal conjunct and been withdrawn to the fold identity, which is
+non-positive outright. -/
+theorem positiveNullCutoffVerified (G : QSGame)
+    (nully : Nat → G.Pos → Int → Int) (guard kill : G.Pos → Bool)
+    (hK : KillerLegal G kill)
+    (d : Nat) (p : G.Pos) (gamma : Int)
+    (hai : allIllegalB G p = true)
+    (hu : useD2 G nully guard kill d p gamma = true)
+    (hge : gamma ≤ nullVerify G kill (nully d p gamma) gamma p) :
+    nullVerify G kill (nully d p gamma) gamma p ≤ 0 := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hkf : kill p = false := by
+    cases hk : kill p with
+    | false => rfl
+    | true =>
+      have := killerLegal_not_terminal G kill hK p hk
+      rw [hai] at this
+      exact Bool.noConfusion this
+  simp only [useD2, Bool.and_eq_true, decide_eq_true_eq] at hu
+  obtain ⟨⟨hgu, hd2⟩, hsup⟩ := hu
+  by_cases hw : 0 < nully d p gamma ∧ gamma ≤ nully d p gamma ∧
+      nully d p gamma < MATE_LOWER ∧ kill p = false ∧ allIllegalB G p = true
+  · have hv : nullVerify G kill (nully d p gamma) gamma p = -MATE_UPPER := by
+      simp only [nullVerify]; rw [if_pos hw]
+    rw [hv]
+    omega
+  · have hv : nullVerify G kill (nully d p gamma) gamma p = nully d p gamma := by
+      simp only [nullVerify]; rw [if_neg hw]
+    rw [hv] at hge hsup ⊢
+    by_cases hpos : 0 < nully d p gamma
+    · exact absurd ⟨hpos, hge, hsup, hkf, hai⟩ hw
+    · omega
+
+/-- **NegativeFailLowVerified** (fail-low arm), exactness half: when the
+correction fires -- fail-low, uncertified (`S ≤ n`, the code's `not
+live`), and ORACLE-CONFIRMED terminal -- it returns exactly the d2
+value.  Under `legalityProbeCorrect` the engine's scan computes the
+same confirmation, so the correction is exact, not a bet. -/
+theorem negativeFailLowVerified (G : QSGame) (probe : G.Pos → Bool)
+    (hP : CheckProbeOK G.toNullGame probe)
+    (d : Nat) (p : G.Pos) (gamma best S n : Int)
+    (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
+    (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
+    (hai : allIllegalB G p = true)
+    (hbest : best < gamma) (hlive : S ≤ n) :
+    d2Fix G probe gamma best S n p = negamaxD2 G (d + 1) p := by
+  have hfix : d2Fix G probe gamma best S n p
+      = (if probe p = true then -MATE_LOWER else 0) := by
+    simp only [d2Fix]; rw [if_pos ⟨hbest, hlive, hai⟩]
+  rw [hfix, negamaxD2_of_allIllegal G d p hkg hcap hai, hP p]
+  simp only [terminalValue]
+
+/-- **NegativeFailLowVerified**, guard half: without the oracle's
+confirmation an uncertified fail-low is NOT converted to a terminal
+value -- the fold result passes through untouched.  (The pre-d2 design
+converted on a score-shaped sentinel instead; `qsUngated_not_sound` and
+`a1_unfixed_not_sound` above are what that cost.) -/
+theorem d2Fix_unverified_passthrough (G : QSGame) (probe : G.Pos → Bool)
+    (gamma best S n : Int) (p : G.Pos)
+    (hai : allIllegalB G p = false) :
+    d2Fix G probe gamma best S n p = best := by
+  simp only [d2Fix]
+  rw [if_neg (fun h => by rw [hai] at h; exact Bool.noConfusion h.2.2)]
+
+/-! ### The point spec -/
+
+/-- The pointwise heart of the d2 correction.  Contrast with
+`a1Fix_spec_core`: the gate is the SHARED, position-intrinsic
+`allIllegalB`, so instead of the exhaustion/masking alignment
+(`hexh`/`hmask`, which is where `MateValuesAreKingCapturesQS` used to
+enter), the lemma needs only: the null part sits below the window
+(`hnlt`, else the cutoff branch would have fired), and at a terminal
+the fold is the identity, the null part is no smaller, and the value is
+the terminal value (`hterm`). -/
+theorem d2Fix_spec_core (G : QSGame) (probe : G.Pos → Bool) (p : G.Pos)
+    (gamma S n V : Int)
+    (hP : CheckProbeOK G.toNullGame probe)
+    (hnlt : n < gamma)
+    (hterm : allIllegalB G p = true → S = LOSS ∧ LOSS ≤ n ∧ V = terminalValue G p)
+    (hsp1 : allIllegalB G p = false → gamma ≤ S → S ≤ V)
+    (hsp2 : allIllegalB G p = false → S < gamma → V ≤ S) :
+    (gamma ≤ d2Fix G probe gamma (max n S) S n p →
+      d2Fix G probe gamma (max n S) S n p ≤ V) ∧
+    (d2Fix G probe gamma (max n S) S n p < gamma →
+      V ≤ d2Fix G probe gamma (max n S) S n p) := by
+  cases hai : allIllegalB G p with
+  | true =>
+    obtain ⟨hSL, hnge, hV⟩ := hterm hai
+    have hfire : max n S < gamma ∧ S ≤ n ∧ allIllegalB G p = true :=
+      ⟨by omega, by omega, hai⟩
+    have hfix : d2Fix G probe gamma (max n S) S n p
+        = (if probe p = true then -MATE_LOWER else 0) := by
+      simp only [d2Fix]; rw [if_pos hfire]
+    rw [hfix, hV, hP p]
+    simp only [terminalValue]
+    exact ⟨fun _ => Int.le_refl _, fun _ => Int.le_refl _⟩
+  | false =>
+    have hfix : d2Fix G probe gamma (max n S) S n p = max n S :=
+      d2Fix_unverified_passthrough G probe gamma (max n S) S n p hai
+    rw [hfix]
+    constructor
+    · intro hge
+      have h1 := hsp1 hai (by omega)
+      omega
+    · intro hlt
+      have h2 := hsp2 hai (by omega)
+      omega
+
+/-- **The verified search satisfies the docstring against the d2
+value** -- for in-band windows, under `Bounded`, a correct check probe,
+the killer-legality invariant, null-yield fidelity, and the null bet
+AWAY from terminals.  Nothing else: no `TerminalPseudoSafe`-style
+pseudo-option obligation, no sentinel-origins hypothesis
+(`MateValuesAreKingCapturesQS`), no exhaustion-gate arithmetic
+(`ValFloor`) -- the oracle scan replaced them all.  Sorry-free. -/
+theorem boundD2_spec (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame)
+    (hP : CheckProbeOK G.toNullGame probe)
+    (hK : KillerLegal G kill)
+    (hrec : NullIsPassSearchD2 G probe nully guard kill)
+    (hN : NullBetD2 G nully guard) :
+    ∀ (d : Nat) (p : G.Pos) (gamma : Int),
+      -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
+      BoundSpecD2 G d p gamma (boundD2 G probe nully guard kill d p gamma) := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  intro d
+  induction d with
+  | zero =>
+    intro p gamma _ _
+    simp only [BoundSpecD2, boundD2, negamaxD2]
+    exact ⟨fun _ => Int.le_refl _, fun _ => Int.le_refl _⟩
+  | succ d ih =>
+    intro p gamma hg1 hg2
+    simp only [BoundSpecD2]
+    by_cases hkg : G.eval p ≤ -MATE_LOWER
+    · rw [boundD2_kingGone G probe nully guard kill (d + 1) p gamma hkg,
+        negamaxD2_kingGone G (d + 1) p hkg]
+      exact ⟨fun _ => Int.le_refl _, fun _ => Int.le_refl _⟩
+    · by_cases hcap : hasKingCapture G.toNullGame.toGame p = true
+      · rw [boundD2_of_capture G probe nully guard kill (d + 1) p gamma hkg hcap,
+          negamaxD2_of_capture G (d + 1) p hkg hcap]
+        exact ⟨fun _ => Int.le_refl _, fun _ => Int.le_refl _⟩
+      · by_cases hcut : useD2 G nully guard kill (d + 1) p gamma = true ∧
+            gamma ≤ nullVerify G kill (nully (d + 1) p gamma) gamma p
+        · -- Null cutoff.
+          have hs : boundD2 G probe nully guard kill (d + 1) p gamma
+              = nullVerify G kill (nully (d + 1) p gamma) gamma p := by
+            simp only [boundD2]; rw [if_neg hkg, if_neg hcap, if_pos hcut]
+          rw [hs]
+          cases hai : allIllegalB G p with
+          | true =>
+            -- Verified terminal: the surviving cutoff is non-positive,
+            -- and the mate side cannot cut off at all (nullAtMateD2).
+            have h0 := positiveNullCutoffVerified G nully guard kill hK
+              (d + 1) p gamma hai hcut.1 hcut.2
+            cases hic : inCheckB G.toNullGame p with
+            | true =>
+              exfalso
+              by_cases hw : 0 < nully (d + 1) p gamma ∧
+                  gamma ≤ nully (d + 1) p gamma ∧
+                  nully (d + 1) p gamma < MATE_LOWER ∧ kill p = false ∧
+                  allIllegalB G p = true
+              · have hv : nullVerify G kill (nully (d + 1) p gamma) gamma p
+                    = -MATE_UPPER := by
+                  simp only [nullVerify]; rw [if_pos hw]
+                have h := hcut.2
+                rw [hv] at h
+                omega
+              · have hv : nullVerify G kill (nully (d + 1) p gamma) gamma p
+                    = nully (d + 1) p gamma := by
+                  simp only [nullVerify]; rw [if_neg hw]
+                have hu := hcut.1
+                simp only [useD2, Bool.and_eq_true, decide_eq_true_eq] at hu
+                obtain ⟨⟨hgu, hd2⟩, hsup⟩ := hu
+                rw [hv] at hsup
+                have hmate := nullAtMateD2 G probe nully guard kill hrec
+                  (d + 1) p gamma hd2 hic hsup
+                have h := hcut.2
+                rw [hv, hmate] at h
+                omega
+            | false =>
+              have hv : negamaxD2 G (d + 1) p = 0 := by
+                rw [negamaxD2_of_allIllegal G d p hkg hcap hai]
+                simp only [terminalValue]
+                rw [if_neg (by simp [hic])]
+              rw [hv]
+              exact ⟨fun _ => h0, fun hlt => absurd hcut.2 (by omega)⟩
+          | false =>
+            -- Non-terminal: the bet, exactly where a real move exists.
+            have hnv : nullVerify G kill (nully (d + 1) p gamma) gamma p
+                = nully (d + 1) p gamma := by
+              simp only [nullVerify]
+              rw [if_neg (fun h => by rw [hai] at h; exact Bool.noConfusion h.2.2.2.2)]
+            have hu := hcut.1
+            simp only [useD2, Bool.and_eq_true, decide_eq_true_eq] at hu
+            obtain ⟨⟨hgu, hd2⟩, hsup⟩ := hu
+            rw [hnv] at hsup
+            have hge := hcut.2
+            rw [hnv] at hge
+            have hbet := hN (d + 1) p gamma hai hgu hd2 hge hsup
+            rw [hnv]
+            exact ⟨fun _ => hbet, fun hlt => absurd hge (by omega)⟩
+        · -- The loop and the correction.
+          have hs : boundD2 G probe nully guard kill (d + 1) p gamma
+              = d2Fix G probe gamma
+                  (max (nullPartD2 G nully guard kill (d + 1) p gamma)
+                    (searchMoves gamma
+                      (fun m => -(boundD2 G probe nully guard kill d m (1 - gamma)))
+                      (movesAbove G (val_lower (d + 1)) p) LOSS))
+                  (searchMoves gamma
+                    (fun m => -(boundD2 G probe nully guard kill d m (1 - gamma)))
+                    (movesAbove G (val_lower (d + 1)) p) LOSS)
+                  (nullPartD2 G nully guard kill (d + 1) p gamma)
+                  p := by
+            simp only [boundD2]; rw [if_neg hkg, if_neg hcap, if_neg hcut]
+          rw [hs]
+          have hchild : ∀ m : G.Pos,
+              (gamma ≤ -(boundD2 G probe nully guard kill d m (1 - gamma)) →
+                -(boundD2 G probe nully guard kill d m (1 - gamma))
+                  ≤ -(negamaxD2 G d m)) ∧
+              (-(boundD2 G probe nully guard kill d m (1 - gamma)) < gamma →
+                -(negamaxD2 G d m)
+                  ≤ -(boundD2 G probe nully guard kill d m (1 - gamma))) := by
+            intro m
+            have h1 := (ih m (1 - gamma) (by omega) (by omega)).1
+            have h2 := (ih m (1 - gamma) (by omega) (by omega)).2
+            constructor
+            · intro hge
+              have := h2 (by omega)
+              omega
+            · intro hlt
+              have := h1 (by omega)
+              omega
+          have hloop := searchMoves_spec gamma
+            (fun m => -(boundD2 G probe nully guard kill d m (1 - gamma)))
+            (fun m => -(negamaxD2 G d m))
+            hchild (movesAbove G (val_lower (d + 1)) p) LOSS LOSS
+            (fun _ => Int.le_refl _) (fun _ => Int.le_refl _)
+          refine d2Fix_spec_core G probe p gamma _ _ _ hP ?_ ?_ ?_ ?_
+          · -- The null part sits below the window (else the cutoff fired).
+            simp only [nullPartD2]
+            by_cases hu : useD2 G nully guard kill (d + 1) p gamma = true
+            · rw [if_pos hu]
+              by_cases hge : gamma ≤ nullVerify G kill (nully (d + 1) p gamma) gamma p
+              · exact absurd ⟨hu, hge⟩ hcut
+              · omega
+            · rw [if_neg hu]; omega
+          · -- At a verified terminal: fold at the identity, null part no
+            -- smaller, value the terminal value.
+            intro hai
+            refine ⟨?_, ?_, negamaxD2_of_allIllegal G d p hkg hcap hai⟩
+            · have hall : ∀ m ∈ movesAbove G (val_lower (d + 1)) p,
+                  -(boundD2 G probe nully guard kill d m (1 - gamma)) ≤ LOSS := by
+                intro m hm
+                have hmm := movesAbove_subset G (val_lower (d + 1)) p m hm
+                have hcm : hasKingCapture G.toNullGame.toGame m = true :=
+                  allIllegalB_true_iff.mp hai m hmm
+                have hmkg : ¬ (G.eval m ≤ -MATE_LOWER) := fun hh =>
+                  hcap ((hasKingCapture_iff G.toNullGame.toGame p).mpr ⟨m, hmm, hh⟩)
+                rw [boundD2_of_capture G probe nully guard kill d m (1 - gamma) hmkg hcm]
+                omega
+              exact searchMoves_eq_init gamma
+                (fun m => -(boundD2 G probe nully guard kill d m (1 - gamma)))
+                (movesAbove G (val_lower (d + 1)) p) LOSS hall (by omega)
+            · simp only [nullPartD2]
+              by_cases hu : useD2 G nully guard kill (d + 1) p gamma = true
+              · rw [if_pos hu]
+                simp only [useD2, Bool.and_eq_true, decide_eq_true_eq] at hu
+                obtain ⟨⟨_, hd2⟩, _⟩ := hu
+                have hrn := hrec (d + 1) p gamma hd2
+                have hpb := boundD2_bounded G probe nully guard kill hB
+                  (d + 1 - 3) (G.pass p) (1 - gamma) (by omega) (by omega)
+                simp only [nullVerify]
+                by_cases hw : 0 < nully (d + 1) p gamma ∧
+                    gamma ≤ nully (d + 1) p gamma ∧
+                    nully (d + 1) p gamma < MATE_LOWER ∧ kill p = false ∧
+                    allIllegalB G p = true
+                · rw [if_pos hw]; omega
+                · rw [if_neg hw, hrn]; omega
+              · rw [if_neg hu]; omega
+          · -- Away from terminals, fail-high: the loop's lower bound.
+            intro hai hge
+            rw [negamaxD2_of_fold G d p hkg hcap hai]
+            exact hloop.1 hge
+          · -- Away from terminals, fail-low: the loop's upper bound.
+            intro hai hlt
+            rw [negamaxD2_of_fold G d p hkg hcap hai]
+            exact hloop.2 hlt
+
+/-! ### The corollaries -/
+
+/-- At a verified-terminal node the two stores bracket the exact
+terminal value: fail-high ⇒ `lower ≤ terminal`, fail-low ⇒
+`terminal ≤ upper`.  This is what the pre-d2 loop provably lacked
+(`cexT_crossing`). -/
+theorem d2_terminal_stores (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame)
+    (hP : CheckProbeOK G.toNullGame probe)
+    (hK : KillerLegal G kill)
+    (hrec : NullIsPassSearchD2 G probe nully guard kill)
+    (hN : NullBetD2 G nully guard)
+    (d : Nat) (p : G.Pos)
+    (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
+    (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
+    (hai : allIllegalB G p = true)
+    (gamma : Int) (hg1 : -MATE_UPPER < gamma) (hg2 : gamma ≤ MATE_UPPER) :
+    (gamma ≤ boundD2 G probe nully guard kill (d + 1) p gamma →
+      boundD2 G probe nully guard kill (d + 1) p gamma ≤ terminalValue G p) ∧
+    (boundD2 G probe nully guard kill (d + 1) p gamma < gamma →
+      terminalValue G p ≤ boundD2 G probe nully guard kill (d + 1) p gamma) := by
+  have h := boundD2_spec G probe nully guard kill hB hP hK hrec hN
+    (d + 1) p gamma hg1 hg2
+  simp only [BoundSpecD2] at h
+  rw [negamaxD2_of_allIllegal G d p hkg hcap hai] at h
+  exact h
+
+/-- **D2NoCrossing**: two in-band probes of the same `(pos, depth)` can
+never store contradictory bounds -- any fail-high report (a stored
+`lower`, table part 2 at line 481) is at most any fail-low report (a
+stored `upper`), because both bracket the SAME `(pos, depth)`-determined
+value `negamaxD2`.  This replaces the pre-d2 `boundA1_no_crossing`-
+under-`TerminalPseudoSafe`: no pseudo-option obligation appears --
+the verifier re-derives at terminals what the old design assumed.
+(The engine-side residual is exactly the depth-0 sentinel-exactness
+idealization -- the open masking channel documented in the section
+comment.) -/
+theorem d2_no_crossing (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame)
+    (hP : CheckProbeOK G.toNullGame probe)
+    (hK : KillerLegal G kill)
+    (hrec : NullIsPassSearchD2 G probe nully guard kill)
+    (hN : NullBetD2 G nully guard)
+    (d : Nat) (p : G.Pos) (g1 g2 : Int)
+    (hg1a : -MATE_UPPER < g1) (hg1b : g1 ≤ MATE_UPPER)
+    (hg2a : -MATE_UPPER < g2) (hg2b : g2 ≤ MATE_UPPER)
+    (hhi : g1 ≤ boundD2 G probe nully guard kill d p g1)
+    (hlo : boundD2 G probe nully guard kill d p g2 < g2) :
+    boundD2 G probe nully guard kill d p g1
+      ≤ boundD2 G probe nully guard kill d p g2 := by
+  have h1 := (boundD2_spec G probe nully guard kill hB hP hK hrec hN
+    d p g1 hg1a hg1b).1 hhi
+  have h2 := (boundD2_spec G probe nully guard kill hB hP hK hrec hN
+    d p g2 hg2a hg2b).2 hlo
+  omega
+
+/-- The verified loop on the countermodel that broke the old one
+(`cexT_crossing`): with the SAME +30 oracle at the SAME material-up
+stalemate, both windows now return the exact 0 -- the low probe's pass
+is withdrawn by the verifier (no killer can exist at a moveless
+position), the fold stays at the identity, and the oracle-confirmed
+correction stores the draw. -/
+theorem d2_repairs_cexT :
+    boundD2 CexT (fun p => inCheckB CexT.toNullGame p) (fun _ _ _ => 30)
+        (fun _ => true) (fun _ => false) 4 () 10 = 0 ∧
+    boundD2 CexT (fun p => inCheckB CexT.toNullGame p) (fun _ _ _ => 30)
+        (fun _ => true) (fun _ => false) 4 () 100 = 0 :=
+  ⟨by decide, by decide⟩
 
 end Sunfish

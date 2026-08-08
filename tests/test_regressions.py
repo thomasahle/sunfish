@@ -166,3 +166,56 @@ class TestNullSentinelMasking:
                 f"50-move draw at ply {ply + 1} in a won KPK"
             )
         pytest.fail("no conversion within 120 plies")
+
+
+class TestStandPatTerminalDepth0:
+    """Claimed golden test (was a strict xfail filed by the formal audit,
+    PR #152): the fail-high dual of A1 at depth 0. At a checkmated
+    depth-0 node whose every pseudo-legal move is valued >= val_lower(0)
+    = QS, the pre-d2 engine's stand-pat pseudo-option and its depth-0
+    mate correction contradicted each other about the same (pos, 0)
+    table key, leaving a crossed entry (lower > upper). Corner mates hit
+    this shape routinely: the K_MID first-row deltas price the mated
+    king's quiet moves at 65-145, above QS = 40. Found by the automated
+    sweep in formal/scripts/standpat_terminal_search.py (this FEN is the
+    terminal position of a random playout; 100+ hits among 6,156 sampled
+    mates).
+
+    The verify-on-suspicion landing claims this test by REMOVING the
+    consumer rather than defending the refuted StandPatAtTerminal
+    hypothesis: `if depth and ...` excludes depth 0 from the correction,
+    so QS evaluates the fold (stand-pat included) and never claims an
+    exact terminal value. Both probe orders must leave ordered
+    entries."""
+
+    # Black to move, checkmated (Rg1 mates along the back rank). Neither
+    # side is bare, so the in-game pst["K"] = K_MID applies as in this
+    # test. Black's only pseudo-legal moves are Kb1/Kb2 into check,
+    # valued 72 and 145.
+    FEN = "8/8/8/7p/7P/1K5P/p7/k5R1 b - - 1 150"
+
+    @pytest.mark.parametrize("order", ["lower_first", "upper_first"])
+    def test_depth0_mate_stores_do_not_cross(self, order):
+        chess = pytest.importorskip("chess")
+
+        assert chess.Board(self.FEN).is_checkmate()
+        # Pin the in-game king table: earlier tests may have run search()
+        # on bare-king endgames, leaving the module-global pst["K"] at
+        # K_END; this position has both sides non-bare, so the engine
+        # would play it with K_MID.
+        sf.pst["K"] = sf.K_MID
+        pos = hist_from_fen(self.FEN)[-1]
+        vals = [pos.value(m) for m in pos.gen_moves()]
+        assert vals and all(v >= sf.QS for v in vals)  # the old all(...) gate shape
+
+        searcher = sf.Searcher()
+        searcher.history = set()
+        gammas = (pos.score - 40, pos.score + 10)
+        if order == "upper_first":
+            gammas = gammas[::-1]
+        for g in gammas:
+            searcher.bound(pos, g, 0)
+        entry = searcher.tp_score[(pos, 0)]
+        assert entry.lower <= entry.upper, (
+            f"crossed table entry [{entry.lower}, {entry.upper}]"
+        )
