@@ -58,3 +58,4 @@ profile.pstats
 # Vim
 *.swp
 .claude/
+_sunfish_probe.py

@@ -490,7 +490,16 @@ class Searcher:
             # reserved sentinel meaning "the king is literally capturable",
             # which the best == -MATE_UPPER test above depends on. A parent
             # whose child is merely mated must not look king-capturable itself.
-            best = -MATE_LOWER if in_check else 0
+            corr = -MATE_LOWER if in_check else 0
+            # At depth >= 1 the correction is exact terminal knowledge - an
+            # override. At depth 0 the stand-pat has already been consumed
+            # into the fold and every surviving node has pos.score >
+            # -MATE_LOWER, so an override could store an upper bound BELOW a
+            # stand-pat lower bound already served to another probe - a
+            # crossed table entry. Folding instead keeps depth-0 a point
+            # spec: QS never claims a mate (max with -MATE_LOWER is a no-op,
+            # classical quiescence), and stalemates still floor at 0.
+            best = corr if depth else max(best, corr)
 
         # Table part 2. Every search decision is gamma-independent, so all
         # bounds target one value function determined by the key and stored
