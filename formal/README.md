@@ -106,8 +106,9 @@ tactic only, so a full build takes seconds.
     return `MATE_UPPER` if the king is capturable" requirement) — since
     upgraded to *provably impossible* by `Sunfish/Killer.lean`, see below.
   - **The QS val-filter and the exhaustion gate** (second half of the
-    file; references to master `bf72b43`, sunfish.py lines 355, 399–401,
-    471–472).  The models above searched ALL moves, so "the loop ended at
+    file; its comments reference master `bf72b43` — on current master
+    `ab90999` the threshold, break and gate live at sunfish.py lines
+    359, 411–412 and 484–485).  The models above searched ALL moves, so "the loop ended at
     `LOSS`, hence every move was refuted" held by construction — the code
     discharged a hypothesis the model assumed.  Now closed: `QSGame` adds
     `pos.value`; the loop runs over `movesAbove (val_lower depth)` (the
@@ -152,21 +153,35 @@ tactic only, so a full build takes seconds.
       `negamaxQS_depth_inconsistent` records that depth-inconsistency
       now stems from the depth-keyed filter itself (0/`LOSS`/0 at depths
       1/2/3 on the counterexample game).
-    - **The A1 fix, modeled ahead of the code**: `boundA1` follows the
-      agreed `a1-fix` design — `best_real` accumulates real-move yields
+    - **The A1 fix, modeled ahead of the code and since SHIPPED**
+      (`0998739`): `boundA1` follows the
+      `a1-fix` design — `best_real` accumulates real-move yields
       only, the sentinel test reads `best_real` (never the
       null-inclusive `best`), the gate becomes `best < gamma and
       best_real == -MATE_UPPER and (...)`, and mate-band null yields are
       suppressed so `NullBetQS` (the null bet, oracle form) need only be
       trusted below the mate band.  **`a1_unfixed_not_sound`** is the
-      machine-checked A1 finding against the SHIPPED loop shape
+      machine-checked A1 finding against the PRE-FIX loop shape
       (`boundA1Un`): a sound fail-low null yield masks the sentinel at a
       genuine stalemate and the returned upper bound is exceeded by the
       true value 0 — with every hypothesis, including the null bet,
       satisfied; `a1_fix_repairs` shows `boundA1` returns the exact 0 on
-      the same inputs.  At modeling time the `a1-fix` branch carried no
-      code beyond master (verified: empty diff) — re-audit the model
-      against the code when it lands.
+      the same inputs.  Re-audited against shipped master `ab90999`:
+      see the A1 status bullet under Model fidelity.
+    - **`TerminalPseudoSafe`** (the fail-high dual of A1, final section
+      of the file): the correction is an ASSIGNMENT of exact terminal
+      knowledge, and a pseudo-option scoring ABOVE the terminal value
+      at a correction-terminal node produces a table crossing that
+      `best_real` cannot prevent — machine-checked
+      (`terminalPseudoSafe_not_free`, `cexT_crossing`, a material-up
+      stalemate trap on the A1-FIXED loop).  `boundA1_terminalSafe_spec`
+      / `boundA1_no_crossing` prove the point spec and non-crossing with
+      the null bet confined to non-terminal nodes
+      (`NullBetQSNonterminal`) plus the named obligation at them;
+      `nullAtMate` DISCHARGES the mate side (an enabled null yield at an
+      in-check node is exactly `-MATE_UPPER` — no bet), leaving
+      `NullAtStalemateNonpositive` and `StandPatAtTerminal` as the open
+      hypotheses (see the guideline section).
     - Loop infrastructure: `searchMoves_eq_init_all` (loop exhaustion,
       the converse of `searchMoves_eq_init`) and `searchMoves_init_max`
       (the `max rn best_real` restructuring equals the code's single
@@ -441,13 +456,14 @@ statement* — the honest form — not a deferred proof:
 | `nullValue`, `boundNullTT`, `CTableOK` | the interior search (`root=False`): null move (364–365), repetition (341), `(pos, depth)`-keyed table (334–336, 481–485), IID as an unstored probe (375–381) |
 | `rootProbe`, `rootValue` | the driver probes (`root=True`): the search root (line 512) and IID (line 381) — no lookup, no store, no repetition-0, no null yield |
 | `nullGuard` | `abs(pos.score) < 500` (line 364), gamma-free |
-| `QS`, `QS_A`, `val_lower` | the QS constants and threshold (`bf72b43` lines 149–150, 355) |
-| `movesAbove`, `QSGame.val` | the QS break `if val < val_lower: break` (lines 399–401) and `pos.value(move)`; the killer val-gate keeps the killer inside the same set |
-| `allAboveB`, `qsGateB` | the correction gate `all(pos.value(m) >= val_lower ...)` (the `depth > 2` arm was removed as a theorem-backed golf: wherever it held, the `all()` scan returns True under `ValFloor`) |
+| `QS`, `QS_A`, `val_lower` | the QS constants and threshold (lines 149–150, 359 on `ab90999`) |
+| `movesAbove`, `QSGame.val` | the QS break `if val < val_lower: break` (lines 411–412) and `pos.value(move)`; the killer val-gate (line 405) keeps the killer inside the same set |
+| `allAboveB`, `qsGateB` | the correction gate `all(pos.value(m) >= val_lower ...)` (lines 484–485; the `depth > 2` arm was removed as a theorem-backed golf: wherever it held, the `all()` scan returns True under `ValFloor`) |
 | `negamaxQS`, `qsDrawFix` | the filtered draw-aware value the gated search brackets |
-| `boundA1` (`best_real` = `S`, `nullMax`, `a1Fix`) | the A1-fixed loop, SHIPPED on master since `0998739`; `boundA1Un` is the pre-fix loop shape, `a1_unfixed_not_sound` its machine-checked hole |
+| `boundA1` (`best_real` = `S`, `nullMax`, `a1Fix`) | the A1-fixed loop, SHIPPED on master since `0998739` (`best_real` lines 431–433, mate-band suppression line 382, gate lines 484–485 on `ab90999`); `boundA1Un` is the pre-fix loop shape, `a1_unfixed_not_sound` its machine-checked hole |
+| `CorrectionTerminal`, `terminalValue`, `TerminalPseudoSafe` | the correction as an override of exact terminal knowledge (line 493) and the fail-high obligation on the pseudo-options (null yield line 382, stand-pat lines 386–387) |
 | `ValFloor`, `EvalBounds.quietDropMax` | the `pos.value` floor read off the tables |
-| `KingCaptureValHigh` | king captures valued ≥ `MATE_LOWER` (the sort of line 392) |
+| `KingCaptureValHigh` | king captures valued ≥ `MATE_LOWER` (the sort of line 409) |
 
 The historical rows — `boundLmr`/`red` (re-search LMR), `boundLmrDet`/
 `negamaxDet` (deterministic LMR), `clampHigh`/`clampLow` (the `2c95ab0`
@@ -488,26 +504,38 @@ abstractions, each with its justification:
 - **Move ordering** (line 392) is modeled only through its load-bearing
   consequence: king captures sort first (`orderedMoves`).
 - **QS-filter section** (Stalemate.lean, second half): audited against
-  master at `bf72b43` (2026-08-07); its line references are to that
-  commit.  The sorted `break` of lines 399–401 is modeled as the filter
+  master at `bf72b43` (2026-08-07), re-audited against `ab90999`
+  (2026-08-08); the bullet's line references are to `ab90999` (the Lean
+  comments still cite `bf72b43`).  The sorted `break` of lines 411–412
+  is modeled as the filter
   `movesAbove` (identical searched set under the sort order — the same
   abstraction `boundFut` uses for the futility break, and the killer
-  val-gate of line 395 keeps the killer path inside the filtered set).
-  The futility break of lines 407–413 is not re-modeled in this loop; it
+  val-gate of line 405 keeps the killer path inside the filtered set).
+  The futility break of lines 417–423 is not re-modeled in this loop; it
   cannot disturb the exhaustion argument because its yield
   `pos.score + val > -MATE_UPPER` always raises `best` off the sentinel
-  before breaking (the code's own comment at lines 464–466), and
+  before breaking (the code's own comment at lines 478–479), and
   `boundFut` covers its bound-correctness separately.
-- **A1 status**: `boundA1` models the *agreed design* of branch
-  `a1-fix` (best_real sentinel test, `best < gamma` in the gate,
-  mate-band null suppression); at modeling time that branch carried no
-  code beyond master (empty diff), so the model must be re-audited
-  against the code when it lands.  Master's shipped loop shape is
-  `boundA1Un`, and its stalemate-masking hole is machine-checked
-  (`a1_unfixed_not_sound`) — the fidelity finding here is that the old
-  "residual exception" note on the null yield (killer section above)
-  understated the exposure: it covers stalemate masking, not just
-  king-capturable nodes.
+- **A1 status**: LANDED — the fix shipped at `0998739` and survives the
+  `can_null` removal unchanged; **`boundA1` now models SHIPPED master
+  code**, re-audited against `ab90999` (2026-08-08).  Point by point:
+  `best_real` sees real-move yields only (lines 431–433, `max(best_real,
+  score) if move else best_real` — the model's `S`); the sentinel test
+  reads `best_real` inside the gate `best < gamma and best_real ==
+  -MATE_UPPER and all(...)` (lines 484–485 — the model's `a1Fix`, whose
+  `qsGateB` keeps the provably-equivalent-under-`ValFloor` `depth > 2`
+  arm the code golfed away); and the mate-band suppression ships in
+  FOLD-IDENTITY form (line 382: `yield None, score if score <
+  MATE_LOWER else -MATE_UPPER`) where the model disables the option
+  (`useNull`) — equivalent because `-MATE_UPPER` is the max-fold's
+  identity, the yield carries `move=None` (never touches `best_real`)
+  and can never meet an in-band window (the fold rule, guideline
+  section).  The pre-fix loop shape is kept as `boundA1Un` with its
+  machine-checked stalemate-masking hole (`a1_unfixed_not_sound`) — the
+  fidelity finding stands that the old "residual exception" note on the
+  null yield (killer section above) understated the exposure.  The
+  fail-HIGH dual of that hole is NOT closed by the fix and is tracked
+  as the `TerminalPseudoSafe` obligation (same file, final section).
 - **Ungated gate arms**: for in-band windows the model's
   `best < gamma ∧ best_real = LOSS` gate coincides with the code's bare
   `best == -MATE_UPPER` test (a `LOSS` loop result is automatically
