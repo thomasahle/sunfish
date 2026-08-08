@@ -544,15 +544,17 @@ class Searcher:
             # Inv: lower <= score <= upper
             # 'while lower != upper' would work, but it's too much effort to spend
             # on what's probably not going to change the move played.
-            # The bracket keeps every window computed at this depth inside
-            # (-MATE_LOWER, MATE_LOWER], where the terminal corrections in
-            # bound() are sound (formal/Sunfish/Stalemate.lean proves both
-            # directions) - but gamma CARRIES across depths, and a mate-band
-            # score at the previous depth parks it outside the band
-            # (formal/Sunfish/Driver.lean, carried_gamma_escapes_band), so
-            # clamp it back in before the first probe.
-            gamma = min(max(gamma, 1 - MATE_LOWER), MATE_LOWER)
-            lower, upper = -MATE_LOWER, MATE_LOWER
+            # The bracket is the full window band [1 - MATE_UPPER,
+            # MATE_UPPER]: the range the terminal corrections in bound()
+            # are proven sound over, and the only interval closed under
+            # the null-window flip gamma -> 1 - gamma, so children stay
+            # inside it too (formal/Sunfish/Stalemate.lean, Driver.lean).
+            # It must reach MATE_UPPER: a fail-soft mate score exceeds any
+            # narrower upper end, inverting the bracket and parking the
+            # carried gamma out of band. Wider costs almost nothing -
+            # fail-soft returns the true value, so the first probe
+            # collapses the bracket wherever it started.
+            lower, upper = 1 - MATE_UPPER, MATE_UPPER
             while lower < upper - EVAL_ROUGHNESS:
                 score = self.bound(pos, gamma, depth, root=True)
                 if score >= gamma: lower = score
