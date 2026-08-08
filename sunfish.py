@@ -425,18 +425,16 @@ class Searcher:
 
                 yield move, -self.bound(pos.move(move), 1 - gamma, depth - 1)
 
-        # Run through the moves, shortcutting when possible. The fold also
-        # carries a certificate about its winner: live means the current
-        # maximum was set by a real-move yield, so the node has a move and
-        # cannot be mate or stalemate. A fail-soft score alone is evidence
-        # about value, never about legality (a child may soundly cut off on
-        # a partial bound at a king-capturable node), which is why the
-        # correction below re-derives terminality with the legality oracle
-        # instead of trusting any score-shaped sentinel.
-        best, live = -MATE_UPPER, False
+        # Run through the moves, shortcutting when possible. The fold is a
+        # plain maximum: no part of it doubles as a mobility certificate.
+        # A fail-soft score is evidence about value, never about legality -
+        # a king-capturable child may soundly cut off on a partial bound,
+        # so even a truthy fold-winner can be an illegal move (that was
+        # channel 3). Legality is re-derived below by verifying, never by
+        # inspecting the fold.
+        best = -MATE_UPPER
         for move, score in moves():
-            if score > best:
-                best, live = score, move is not None
+            best = max(best, score)
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
                 if move is not None:
@@ -445,31 +443,34 @@ class Searcher:
                         del self.tp_move[next(iter(self.tp_move))]
                 break
 
-        # Mate/stalemate correction, verify-on-suspicion: if we failed low
-        # and no real move set the maximum, the node is SUSPECT - either a
-        # virtual option strictly beat every legal move, or no legal move
-        # exists. Only then pay for the direct proof: probe every generated
-        # move (searched or QS-filtered alike - filtering is irrelevant to
-        # terminality) with the legality oracle. probe == MATE_UPPER iff the
-        # move leaves our king capturable, because a king capture always
-        # tops the child's move order and outranks every QS threshold; the
-        # probes run as unstored driver probes (root=True) so no table entry
-        # can enter the definition of legality. The scan short-circuits at
-        # the first legal move, so false suspicions cost ~one QS probe.
-        # Depth 0 is excluded: QS evaluates the fold (stand-pat included)
-        # and never claims an exact terminal value - mates are found from
-        # depth 1 up. At depths 1-2 no virtual yields exist, so 'not live'
-        # degenerates to the classic untouched-sentinel test.
-        if depth and best < gamma and not live and all(
-                self.bound(pos.move(m), MATE_UPPER, 0, root=True) == MATE_UPPER
-                for m in pos.gen_moves()):
-            flipped = pos.rotate(nullmove=True)
-            in_check = self.bound(flipped, MATE_UPPER, 0) == MATE_UPPER
-            # Mated scores as -MATE_LOWER, not -MATE_UPPER: the latter stays
-            # a reserved sentinel meaning "the king is literally capturable".
-            # A parent whose child is merely mated must not look king-
-            # capturable itself.
-            best = -MATE_LOWER if in_check else 0
+        # Mate/stalemate correction, verify-on-suspicion: suspicion is
+        # BOUND-shaped, not score-shaped. We are about to store a fail-low
+        # upper bound; if it is negative it would cross the exact 0 a
+        # stalemate is worth (mates surface through the same scan), so
+        # before storing it we demand a mobility certificate: a cached
+        # tp_move entry (every store path is proven legal - real fail-highs
+        # score above -MATE_UPPER, the verified scan below, and the futility
+        # MATE_UPPER store is a king capture, which only exists where this
+        # block is unreachable), or a direct scan with the legality oracle:
+        # probe == MATE_UPPER iff the move leaves our king capturable, and
+        # the probes run as unstored driver probes (root=True) so no table
+        # entry can enter the definition of legality. A found legal move is
+        # cached as the killer, so a position verifies at most once. If no
+        # legal move exists, the terminal value JOINS the fold monotonically
+        # (max, never assignment): verified knowledge may loosen a too-tight
+        # bound, weaker information must never tighten one. Mated scores as
+        # -MATE_LOWER, not -MATE_UPPER: the latter stays a reserved sentinel
+        # meaning "the king is literally capturable". Depth 0 stays
+        # excluded: QS evaluates the fold (stand-pat included) and never
+        # claims an exact terminal value.
+        if depth and best < min(gamma, 0) and not self.tp_move.get(pos):
+            move = next((m for m in pos.gen_moves() if self.bound(
+                pos.move(m), MATE_UPPER, 0, root=True) < MATE_UPPER), None)
+            if move:
+                self.tp_move[pos] = move
+            else:
+                in_check = self.bound(pos.rotate(nullmove=True), MATE_UPPER, 0) == MATE_UPPER
+                best = max(best, -MATE_LOWER if in_check else 0)
 
         # Table part 2. Every search decision is gamma-independent, so all
         # bounds target one value function determined by the key and stored
