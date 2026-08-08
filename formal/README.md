@@ -610,6 +610,10 @@ statement* — the honest form — not a deferred proof:
   failure of either form, and it threatens only value accuracy at
   non-terminal nodes, never the table's self-consistency.
 
+- **`NoMaskedMobility`** (`Sunfish/Stalemate.lean`, kcx section) — the
+  reduced correction scan's one premise; see the golfed-consumer
+  fidelity bullet and `reducedScan_needs_premise`.
+
 - **`NoZugzwang` / `NoZugzwangInMateBand`** (`Sunfish/Stalemate.lean`,
   two-layer section) — layer 2's validity region ("pass-value ≤ best
   real move") and its mate-band fragment ("if passing wins in the mate
@@ -800,6 +804,40 @@ abstractions, each with its justification:
   change without a same-commit re-audit + hash refresh (`--update`).
   Silent divergence between code and model is thereby impossible until
   the leanpy track checks the correspondence itself.
+- **The golfed consumer (`c72cf6d`) status**: audited; the model
+  tracks it exactly.  `live` is the STICKY two-way-evidence bit
+  (`live or move is not None and score > -MATE_UPPER`), modeled as the
+  untouched-fold test `S = LOSS` — sound because the two-way sentinel
+  is now a THEOREM (`sentinel_two_way_D2`: a quiet node never returns
+  the reserved sentinel and a returned `MATE_UPPER` proves a capture).
+  The reduced correction scan (`depth > 1 and value >= val_lower or
+  probe`) is `scanNewB`/`golfFix`, equal to the oracle gate by
+  `golfFix_eq_d2Fix` — UNDER the new named premise `NoMaskedMobility`
+  ("a position whose every depth-1-admitted move is illegal has no
+  legal move"), which is genuinely required: `reducedScan_needs_premise`
+  is the machine-checked countermodel (all admitted moves illegal, a
+  legal move dropping >100cp filtered at depth 1; the raw identity
+  fold corrupts a depth-2 sentinel and the probe-free depth-3 scan
+  trusts it).  The golf agent's own countermodels for the NAIVE
+  reduction — a raw null fail-low outscoring a legal yield (why `live`
+  is evidence-shaped), depth-1 futility skipping admitted moves (why
+  depth 1 probes everything) — are recorded in the `scanNewB`
+  docstring.  The in-check probe is GONE: the correction computes
+  `pos.rotate(nullmove=True).king_capture()`, which IS `inCheckB`
+  (kp = 0 at the rotation kills the king-passant disjunct), so the
+  `CheckProbeOK`/`CheckProbeQuiet` premise and its discharge theorem
+  are deleted outright.  The killer fast path (`tp_move.get(pos) or
+  pos.king_capture()`, value-tested against the band) decides
+  capturability O(1): `fastPath_decides` / `fastPath_skip_sound`, with
+  `KillerInv` + `KillerAtKingCapturable` now load-bearing INPUTS of
+  the interception (fidelity-class caveat: entries written by other
+  engine versions void them).  Both probe sites now STORE: the warm
+  oracle stays a complete decision procedure because the probe key is
+  always `(child, 0)` and the depth-0 declared value IS capturability
+  (`nullValueD2_zero_MU_iff`, `warm_probe_decides` — the converse
+  invariant for `lower = MATE_UPPER` entries and the absence of
+  `upper < MATE_UPPER` entries at capturable children are the two arms
+  of the point-spec bracket).
 - **The driver-range finding** (`Sunfish/Driver.lean`): "MTD-bi only
   probes `(-MATE_LOWER, MATE_LOWER]`" — asserted by this README and
   the code comment — is TRUE for every window computed at the current
@@ -815,8 +853,11 @@ abstractions, each with its justification:
   reference/production genuinely differ there (a mate-band fail-LOW
   pass report exists only at such windows).  A one-line clamp
   (`gamma = min(max(gamma, 1 - MATE_LOWER), MATE_LOWER)`) or a
-  per-depth `gamma` reset would close the gap — an engine decision,
-  recorded, not taken.
+  per-depth `gamma` reset would close the gap — CLOSED in `c72cf6d`:
+  the clamp shipped, `clampGamma_in_band` + `driver_probe_in_band` +
+  `dstep_bracket_sides` discharge the in-band window hypothesis for
+  EVERY driver probe with no assumption on scores, and
+  `carried_gamma_escapes_band` is historical (the clamp's reason).
 - **Sentinel exactness is now construction, not idealization**: the
   model's king-capture branch (exact `MATE_UPPER` at every window and
   depth) is the reference's eager entry scan verbatim, and production
