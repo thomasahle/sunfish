@@ -1788,4 +1788,512 @@ theorem a1_fix_repairs :
       (fun _ => true) 4 () (-20) = 0 := by
   decide
 
+/-! # TerminalPseudoSafe: the fail-high dual of the A1 witness
+
+(References are to master at `ab90999`; the A1 fix SHIPPED at `0998739`
+and the lines below survive the `ab90999` can_null removal unchanged:
+`best_real` at sunfish.py lines 431-433, the mate-band suppression at
+line 382 -- in fold-identity form, `yield None, score if score <
+MATE_LOWER else -MATE_UPPER` -- and the gate `best < gamma and best_real
+== -MATE_UPPER and all(...)` at lines 484-485.)
+
+`best_real` protects the correction's FAIL-LOW side: a pseudo-option
+yield (the null move, or the depth-0 stand-pat `yield None, pos.score`
+of lines 386-387) can no longer MASK the sentinel (`a1_unfixed_not_sound`
+was the hole, `a1_fix_repairs` the repair).  But the correction itself
+is an ASSIGNMENT of exact terminal knowledge -- `best = -MATE_LOWER if
+in_check else 0` (line 493), an override that may LOWER the accumulated
+score, deliberately outside the max-fold -- and an override has a
+FAIL-HIGH dual that `best_real` does not touch: if an enabled
+pseudo-option can SCORE ABOVE the terminal value at a correction-terminal
+node, then
+
+* a low-gamma probe cuts off on the pseudo-option before the real-move
+  loop and returns `r > terminal` as a fail-high -- table part 2 stores
+  `lower = r`;
+* a high-gamma probe on the SAME `(pos, depth)` runs the loop dry
+  (`best_real` keeps the sentinel), corrects, and returns the exact
+  terminal value as a fail-low -- storing `upper = terminal`.
+
+`lower > upper`: a table crossing, the exact contradiction the
+point-spec doctrine exists to forbid.  In `boundA1_spec` this side is
+covered only by `NullBetQS`, the whole-tree null bet -- but at a
+correction-terminal node the bet's justification ("some real move
+matches the pass") is impossible IN PRINCIPLE: there is no real move.
+This section isolates the obligation:
+
+* **`TerminalPseudoSafe`** -- the named hypothesis: at every
+  correction-terminal node, every enabled pseudo-option score is at most
+  the terminal value.  Gamma-free, as a search-shaping condition must be.
+* **`terminalPseudoSafe_not_free`** -- an abstract countermodel (`CexT`,
+  a material-up stalemate trap): every other hypothesis of
+  `boundA1_spec` holds, the null oracle is enabled and scores +30 at the
+  stalemate, and `cexT_crossing` machine-checks the two contradictory
+  stores.  The A1 fix itself does not help: `boundA1` there IS the fixed
+  loop.
+* **`boundA1_terminalSafe_spec` / `boundA1_no_crossing`** -- the full
+  point spec and table non-crossing, with the bet needed only AWAY from
+  terminals (`NullBetQSNonterminal`) plus `TerminalPseudoSafe` at them.
+* **The split of the obligation**: `nullAtMate` is a THEOREM -- at an
+  in-check node an enabled null yield is exactly `-MATE_UPPER` (passing
+  while in check loses the king; the pass-child search reports the exact
+  sentinel, and the one other conceivable case is killed by the A1
+  mate-band suppression itself -- the same redundancy argument, "if
+  passing wins the king, capturing it is a real move too", of the code
+  comment at lines 377-380).  What genuinely remains assumed:
+  `NullAtStalemateNonpositive` (the stalemate side of the null) and
+  `StandPatAtTerminal` (the depth-0 stand-pat, invisible to this model's
+  QS-as-eval depth 0 and stated as the engine-side obligation).
+-/
+
+/-! ### Correction-terminal nodes and the terminal value -/
+
+/-- **Correction-terminal node** (at remaining depth `d`; meaningful for
+`d ≥ 1`): our king is on the board, the gate of lines 484-485 is on, and
+the true filtered fold is the untouched sentinel -- real-move exhaustion.
+By `negamaxQS_of_correctionTerminal` the position's value IS the terminal
+value: this is exactly where the correction's assignment fires on the
+value side. -/
+def CorrectionTerminal (G : QSGame) (d : Nat) (p : G.Pos) : Prop :=
+  ¬ (G.eval p ≤ -MATE_LOWER) ∧ qsGateB G d p = true ∧
+  foldMax (fun m => -(negamaxQS G (d - 1) m)) (movesAbove G (val_lower d) p) LOSS = LOSS
+
+/-- The exact terminal value the correction assigns (line 493):
+`-MATE_LOWER` for mate (in check), `0` for stalemate. -/
+def terminalValue (G : QSGame) (p : G.Pos) : Int :=
+  if inCheckB G.toNullGame p = true then -MATE_LOWER else 0
+
+/-- At a correction-terminal node the filtered draw-aware value IS the
+terminal value -- the bridge between the gate condition and the exact
+knowledge the correction asserts. -/
+theorem negamaxQS_of_correctionTerminal (G : QSGame) (d : Nat) (p : G.Pos)
+    (h : CorrectionTerminal G (d + 1) p) :
+    negamaxQS G (d + 1) p = terminalValue G p := by
+  obtain ⟨hkg, hgate, hfold⟩ := h
+  simp only [negamaxQS]
+  rw [if_neg hkg]
+  have hfold' : foldMax (fun m => -(negamaxQS G d m))
+      (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS := hfold
+  rw [hfold']
+  simp only [qsDrawFix]
+  rw [if_pos (And.intro hgate (by trivial))]
+  rfl
+
+/-! ### The named obligation -/
+
+/-- **TerminalPseudoSafe**: at every correction-terminal node, every
+ENABLED pseudo-option score is at most the terminal value.  In this
+model the only pseudo-option at depth ≥ 1 is the null yield (gated by
+`useNull`, which carries the engine guard, the `depth > 2` gate and the
+A1 mate-band suppression); the depth-0 stand-pat lives inside the
+QS-as-eval abstraction and gets its own engine-level statement,
+`StandPatAtTerminal` below.  Note the condition is gamma-free -- it is
+the fail-high dual of the fail-low protection `best_real` provides, and
+like every honest search-shaping condition it must not let `gamma`
+select between incomparable evaluations. -/
+def TerminalPseudoSafe (G : QSGame) (nully : Nat → G.Pos → Int → Int)
+    (guard : G.Pos → Bool) : Prop :=
+  ∀ (d : Nat) (p : G.Pos) (gamma : Int),
+    CorrectionTerminal G d p → useNull G nully guard d p gamma = true →
+    nully d p gamma ≤ terminalValue G p
+
+/-- The null bet away from terminals: `NullBetQS` weakened to nodes that
+are NOT correction-terminal.  Away from terminals the bet's usual
+justification ("some real move matches the pass") is at least possible;
+AT a correction-terminal node it is impossible in principle -- there is
+no real move -- so that part of the bet is re-housed as the honest
+`TerminalPseudoSafe`. -/
+def NullBetQSNonterminal (G : QSGame) (nully : Nat → G.Pos → Int → Int)
+    (guard : G.Pos → Bool) : Prop :=
+  ∀ (d : Nat) (p : G.Pos) (gamma : Int), ¬ CorrectionTerminal G d p →
+    guard p = true → 2 < d → gamma ≤ nully d p gamma →
+    nully d p gamma < MATE_LOWER → nully d p gamma ≤ negamaxQS G d p
+
+/-- The split is exhaustive: the whole-tree bet is exactly its
+non-terminal part plus `TerminalPseudoSafe` (via the bridge). -/
+theorem nullBetQS_of_split (G : QSGame) (nully : Nat → G.Pos → Int → Int)
+    (guard : G.Pos → Bool)
+    (hN : NullBetQSNonterminal G nully guard)
+    (hT : TerminalPseudoSafe G nully guard) : NullBetQS G nully guard := by
+  intro d p gamma hg hd hge hlt
+  by_cases hCT : CorrectionTerminal G d p
+  · obtain ⟨d', rfl⟩ : ∃ d', d = d' + 1 := ⟨d - 1, by omega⟩
+    rw [negamaxQS_of_correctionTerminal G d' p hCT]
+    refine hT (d' + 1) p gamma hCT ?_
+    simp only [useNull, Bool.and_eq_true, decide_eq_true_eq]
+    exact ⟨⟨hg, hd⟩, hlt⟩
+  · exact hN d p gamma hCT hg hd hge hlt
+
+/-! ### The point spec and the table non-crossing, under the split -/
+
+/-- **The A1-fixed search satisfies the docstring with the bet confined
+to non-terminal nodes**: at correction-terminal nodes only
+`TerminalPseudoSafe` is consumed -- the fail-high pseudo path is covered
+by the named obligation, not by a bet that cannot hold there. -/
+theorem boundA1_terminalSafe_spec (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (hV : KingCaptureValHigh G)
+    (hM : MateValuesAreKingCapturesQS G)
+    (hP : CheckProbeOK G.toNullGame probe)
+    (hN : NullBetQSNonterminal G nully guard)
+    (hT : TerminalPseudoSafe G nully guard) :
+    ∀ (d : Nat) (p : G.Pos) (gamma : Int),
+      -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
+      BoundSpecQS G d p gamma (boundA1 G probe nully guard d p gamma) :=
+  boundA1_spec G probe nully guard hB hV hM hP
+    (nullBetQS_of_split G nully guard hN hT)
+
+/-- **Table non-crossing** (the `TableOK` shape for the A1-fixed loop):
+two in-band probes of the same `(pos, depth)` can never store
+contradictory bounds -- any fail-high report (a stored `lower`, table
+part 2 at line 502) is at most any fail-low report (a stored `upper`),
+because both bracket the SAME point value `negamaxQS`.  This is the
+statement `terminalPseudoSafe_not_free` shows is lost without the
+obligation. -/
+theorem boundA1_no_crossing (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (hV : KingCaptureValHigh G)
+    (hM : MateValuesAreKingCapturesQS G)
+    (hP : CheckProbeOK G.toNullGame probe)
+    (hN : NullBetQSNonterminal G nully guard)
+    (hT : TerminalPseudoSafe G nully guard)
+    (d : Nat) (p : G.Pos) (g1 g2 : Int)
+    (hg1a : -MATE_UPPER < g1) (hg1b : g1 ≤ MATE_UPPER)
+    (hg2a : -MATE_UPPER < g2) (hg2b : g2 ≤ MATE_UPPER)
+    (hhi : g1 ≤ boundA1 G probe nully guard d p g1)
+    (hlo : boundA1 G probe nully guard d p g2 < g2) :
+    boundA1 G probe nully guard d p g1 ≤ boundA1 G probe nully guard d p g2 := by
+  have h1 := (boundA1_terminalSafe_spec G probe nully guard
+    hB hV hM hP hN hT d p g1 hg1a hg1b).1 hhi
+  have h2 := (boundA1_terminalSafe_spec G probe nully guard
+    hB hV hM hP hN hT d p g2 hg2a hg2b).2 hlo
+  omega
+
+/-- At a correction-terminal node the two stores bracket the terminal
+value itself: fail-high ⇒ `lower ≤ terminal`, fail-low ⇒
+`terminal ≤ upper`.  Its failure is exactly the crossing shape of
+`cexT_crossing` below. -/
+theorem boundA1_terminal_stores (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (hV : KingCaptureValHigh G)
+    (hM : MateValuesAreKingCapturesQS G)
+    (hP : CheckProbeOK G.toNullGame probe)
+    (hN : NullBetQSNonterminal G nully guard)
+    (hT : TerminalPseudoSafe G nully guard)
+    (d : Nat) (p : G.Pos) (hCT : CorrectionTerminal G (d + 1) p)
+    (gamma : Int) (hg1 : -MATE_UPPER < gamma) (hg2 : gamma ≤ MATE_UPPER) :
+    (gamma ≤ boundA1 G probe nully guard (d + 1) p gamma →
+      boundA1 G probe nully guard (d + 1) p gamma ≤ terminalValue G p) ∧
+    (boundA1 G probe nully guard (d + 1) p gamma < gamma →
+      terminalValue G p ≤ boundA1 G probe nully guard (d + 1) p gamma) := by
+  have h := boundA1_terminalSafe_spec G probe nully guard
+    hB hV hM hP hN hT (d + 1) p gamma hg1 hg2
+  rw [BoundSpecQS, negamaxQS_of_correctionTerminal G d p hCT] at h
+  exact h
+
+/-! ### The split instances: what is a theorem, what stays a hypothesis -/
+
+/-- The pass-child search the engine's null yield negates (line 381:
+`-self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)`), with
+the reduced-depth-0 case modeled by its CONTENT: the king-gone
+normalization and the never-pruned king capture (the futility bypass of
+line 420) -- the same abstraction by which `inCheckB` models the depth-0
+probe of line 488.  At reduced depth ≥ 1 the two leading branches are
+`boundA1`'s own, so this IS `boundA1` on the passed position
+(`passBound_eq_boundA1`). -/
+def passBound (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool)
+    (d : Nat) (p : G.Pos) (gamma : Int) : Int :=
+  if G.eval (G.pass p) ≤ -MATE_LOWER then -MATE_UPPER
+  else if hasKingCapture G.toNullGame.toGame (G.pass p) = true then MATE_UPPER
+  else boundA1 G probe nully guard (d - 3) (G.pass p) (1 - gamma)
+
+/-- Fidelity of `passBound`: at reduced depth ≥ 1 it is literally the
+recursive search of the passed position. -/
+theorem passBound_eq_boundA1 (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool)
+    (d : Nat) (p : G.Pos) (gamma : Int) (hd : 4 ≤ d) :
+    passBound G probe nully guard d p gamma
+      = boundA1 G probe nully guard (d - 3) (G.pass p) (1 - gamma) := by
+  obtain ⟨k, hk⟩ : ∃ k, d - 3 = k + 1 := ⟨d - 4, by omega⟩
+  unfold passBound
+  rw [hk]
+  by_cases h1 : G.eval (G.pass p) ≤ -MATE_LOWER
+  · rw [if_pos h1]
+    simp only [boundA1]
+    rw [if_pos h1]
+  · rw [if_neg h1]
+    by_cases h2 : hasKingCapture G.toNullGame.toGame (G.pass p) = true
+    · rw [if_pos h2]
+      simp only [boundA1]
+      rw [if_neg h1, if_pos h2]
+    · rw [if_neg h2]
+
+/-- **NullIsPassSearch** (model fidelity, not a bet): the null yield IS
+the negated search of the passed position at the reduced depth, exactly
+line 381.  Stated on the oracle the way `CheckProbeOK` states probe
+fidelity; only the `2 < d` instances matter (the engine only asks there,
+line 375). -/
+def NullIsPassSearch (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool) : Prop :=
+  ∀ (d : Nat) (p : G.Pos) (gamma : Int), 2 < d →
+    nully d p gamma = -(passBound G probe nully guard d p gamma)
+
+/-- **NullAtMate is a THEOREM, not a hypothesis**: at an in-check node an
+ENABLED null yield is exactly `-MATE_UPPER`.  Passing while in check
+loses the king -- `InCheck` says precisely that the passed position has a
+king capture -- so the pass-child search reports the exact `MATE_UPPER`
+sentinel and the yield is its negation.  The one other conceivable case
+(the PASSED position's king already gone, which would negate to a
+`+MATE_UPPER` yield) is killed by the A1 mate-band suppression carried
+inside `useNull`: the same redundancy argument that justifies the
+suppression ("if passing wins the king, capturing it is a real move
+too", code comment lines 377-380) discharges it here.  No bet anywhere:
+the mate side of `TerminalPseudoSafe` is free. -/
+theorem nullAtMate (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool)
+    (hrec : NullIsPassSearch G probe nully guard)
+    (d : Nat) (p : G.Pos) (gamma : Int)
+    (hic : inCheckB G.toNullGame p = true)
+    (hu : useNull G nully guard d p gamma = true) :
+    nully d p gamma = -MATE_UPPER := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  simp only [useNull, Bool.and_eq_true, decide_eq_true_eq] at hu
+  have heq := hrec d p gamma hu.1.2
+  have hcap : hasKingCapture G.toNullGame.toGame (G.pass p) = true := hic
+  by_cases hkg : G.eval (G.pass p) ≤ -MATE_LOWER
+  · -- Passed king already gone: the yield would be +MATE_UPPER, which the
+    -- suppression (hu.2) forbids -- this case cannot be enabled.
+    have hpb : passBound G probe nully guard d p gamma = -MATE_UPPER := by
+      simp only [passBound]
+      rw [if_pos hkg]
+    rw [hpb] at heq
+    omega
+  · have hpb : passBound G probe nully guard d p gamma = MATE_UPPER := by
+      simp only [passBound]
+      rw [if_neg hkg, if_pos hcap]
+    rw [hpb] at heq
+    exact heq
+
+/-- The mate side of the obligation, discharged: at an in-check node the
+enabled null yield sits at `-MATE_UPPER`, below every terminal value. -/
+theorem nullAtMate_le_terminal (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool)
+    (hrec : NullIsPassSearch G probe nully guard)
+    (d : Nat) (p : G.Pos) (gamma : Int)
+    (hic : inCheckB G.toNullGame p = true)
+    (hu : useNull G nully guard d p gamma = true) :
+    nully d p gamma ≤ terminalValue G p := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  rw [nullAtMate G probe nully guard hrec d p gamma hic hu]
+  simp only [terminalValue]
+  rw [if_pos hic]
+  omega
+
+/-- **NullAtStalemateNonpositive** (hypothesis -- the genuinely open
+side): at a correction-terminal node NOT in check, an enabled null yield
+is at most the draw value 0.  This is NOT free: passing at a stalemate
+hands the opponent a real position whose negated search value can be
+positive -- a material-up stalemate trap has `0 < pos.score < 500` (the
+engine guard passes) and an honest pass search reports roughly
+`pos.score > 0`.  Zugzwang-shaped, but sharper: at a terminal node there
+is NO real move to match the pass, so the usual `NullBetQS`
+justification fails in principle, not merely in bad positions.  `CexT`
+below is the abstract witness that nothing else in the file implies
+this. -/
+def NullAtStalemateNonpositive (G : QSGame) (nully : Nat → G.Pos → Int → Int)
+    (guard : G.Pos → Bool) : Prop :=
+  ∀ (d : Nat) (p : G.Pos) (gamma : Int),
+    CorrectionTerminal G d p → inCheckB G.toNullGame p = false →
+    useNull G nully guard d p gamma = true → nully d p gamma ≤ 0
+
+/-- The split, assembled: `TerminalPseudoSafe` = `nullAtMate` (theorem)
++ `NullAtStalemateNonpositive` (hypothesis).  Only the stalemate side is
+ever assumed. -/
+theorem terminalPseudoSafe_of_stalemate_side (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool)
+    (hrec : NullIsPassSearch G probe nully guard)
+    (hS : NullAtStalemateNonpositive G nully guard) :
+    TerminalPseudoSafe G nully guard := by
+  intro d p gamma hCT hu
+  cases hic : inCheckB G.toNullGame p with
+  | true => exact nullAtMate_le_terminal G probe nully guard hrec d p gamma hic hu
+  | false =>
+    have h := hS d p gamma hCT hic hu
+    simp only [terminalValue]
+    rw [if_neg (by rw [hic]; exact Bool.false_ne_true)]
+    exact h
+
+/-- End-to-end corollary: null yield tied to the pass search (fidelity),
+the bet needed only away from terminals, and the single open
+stalemate-side hypothesis -- the full point spec, hence a crossing-free
+table. -/
+theorem boundA1_spec_split (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (hV : KingCaptureValHigh G)
+    (hM : MateValuesAreKingCapturesQS G)
+    (hP : CheckProbeOK G.toNullGame probe)
+    (hrec : NullIsPassSearch G probe nully guard)
+    (hN : NullBetQSNonterminal G nully guard)
+    (hS : NullAtStalemateNonpositive G nully guard) :
+    ∀ (d : Nat) (p : G.Pos) (gamma : Int),
+      -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
+      BoundSpecQS G d p gamma (boundA1 G probe nully guard d p gamma) :=
+  boundA1_terminalSafe_spec G probe nully guard hB hV hM hP hN
+    (terminalPseudoSafe_of_stalemate_side G probe nully guard hrec hS)
+
+/-! ### The depth-0 pseudo-option: the stand-pat -/
+
+/-- Depth-0 correction-terminality, by content (this model's depth 0 is
+QS-as-eval, so the engine's depth-0 loop is stated by what its gate
+certifies): our king is on the board, no pseudo-legal move falls below
+the depth-0 threshold `val_lower 0 = QS = 40` (the `all(...)` arm, the
+only arm alive at depth 0), and every pseudo-legal move loses the king
+to an immediate recapture. -/
+def CorrectionTerminal0 (G : QSGame) (p : G.Pos) : Prop :=
+  ¬ (G.eval p ≤ -MATE_LOWER) ∧ allAboveB G 0 p = true ∧
+  ∀ m ∈ G.moves p, hasKingCapture G.toNullGame.toGame m = true
+
+/-- **StandPatAtTerminal** (hypothesis -- the depth-0 pseudo-option): at
+a depth-0 correction-terminal position the stand-pat score (lines
+386-387: `yield None, pos.score`, exactly `eval p` here) does not exceed
+the terminal value.  The model cannot consume this (QS-as-eval collapses
+the depth-0 interior), so it is recorded as the engine-side obligation
+the depth-0 loop adds; `standPatAtTerminal_mate_arm` makes its mate half
+explicit: since a static eval above the king-gone zone can never reach
+down to `-MATE_LOWER`, the hypothesis is exactly the claim that the
+`all(...)` gate NEVER passes at a checkmated depth-0 node -- and for
+stalemates, that `pos.score ≤ 0` whenever it does pass.  This is the
+crisp shape the counterexample search over real positions probes
+(formal/scripts/standpat_terminal_search.py). -/
+def StandPatAtTerminal (G : QSGame) : Prop :=
+  ∀ p, CorrectionTerminal0 G p → G.eval p ≤ terminalValue G p
+
+/-- The mate arm of `StandPatAtTerminal`, unfolded: the hypothesis
+forces every depth-0 correction-terminal node to be a stalemate, never a
+mate (the stand-pat, living in the static band, always exceeds the mate
+value `-MATE_LOWER`; only the gate's failure can protect the table
+there). -/
+theorem standPatAtTerminal_mate_arm (G : QSGame) (hS : StandPatAtTerminal G)
+    (p : G.Pos) (h0 : CorrectionTerminal0 G p) :
+    inCheckB G.toNullGame p = false := by
+  cases hic : inCheckB G.toNullGame p with
+  | false => rfl
+  | true =>
+    have hsp := hS p h0
+    simp only [terminalValue] at hsp
+    rw [if_pos hic] at hsp
+    exact absurd hsp h0.1
+
+/-! ### Countermodel: the obligation is not free
+
+A one-position game: a genuinely stalemated position with a POSITIVE
+static score -- the material-up stalemate trap.  `eval = 30` fits the
+engine's `abs(pos.score) < 500` null guard; the null oracle answers +30
+(a perfectly conceivable honest pass search: the opponent, material
+down, cannot reach 0 either); every non-bet hypothesis of
+`boundA1_spec` holds.  Yet the enabled null scores ABOVE the terminal
+value 0, and the crossing is machine-checked on the A1-FIXED loop:
+`best_real` repaired the fail-low mask, not this fail-high dual. -/
+
+/-- The fail-high-dual countermodel game. -/
+def CexT : QSGame where
+  Pos := Unit
+  moves := fun _ => []
+  eval := fun _ => 30
+  pass := fun p => p
+  val := fun _ _ => 0
+
+theorem cexT_value (d : Nat) : negamaxQS CexT (d + 1) () = 0 := by
+  rw [stalemate_fixed_all_depths CexT () rfl (by decide) d]
+  decide
+
+theorem cexT_bounded : Bounded CexT.toNullGame.toGame := by
+  intro p
+  cases p
+  decide
+
+theorem cexT_valHigh : KingCaptureValHigh CexT := by
+  intro p m hm _
+  exact absurd (show m ∈ ([] : List Unit) from hm) (by simp)
+
+theorem cexT_probeOK :
+    CheckProbeOK CexT.toNullGame (fun p => inCheckB CexT.toNullGame p) :=
+  fun _ => rfl
+
+theorem cexT_mateValues : MateValuesAreKingCapturesQS CexT := by
+  intro d p hd hMU'
+  cases p
+  cases d with
+  | zero => exact absurd hd (by omega)
+  | succ n =>
+    rw [cexT_value n] at hMU'
+    exact absurd hMU' (by decide)
+
+/-- The stalemate is correction-terminal at depth 4 (any depth ≥ 1 would
+do). -/
+theorem cexT_correctionTerminal : CorrectionTerminal CexT 4 () :=
+  ⟨by decide, by decide, by decide⟩
+
+/-- The +30 oracle violates `TerminalPseudoSafe`: enabled by every
+engine gate (guard on, depth > 2, well below the mate band), it scores
+above the terminal value 0. -/
+theorem cexT_violates :
+    ¬ TerminalPseudoSafe CexT (fun _ _ _ => 30) (fun _ => true) := by
+  intro h
+  have := h 4 () 10 cexT_correctionTerminal (by decide)
+  exact absurd this (by decide)
+
+/-- **TerminalPseudoSafe is NOT implied by the existing assumptions.**
+Bounded evaluation, mate-band king captures, real mates only and a
+correct probe -- every non-bet hypothesis of `boundA1_spec` -- leave the
+fail-high pseudo path at terminal nodes entirely unconstrained. -/
+theorem terminalPseudoSafe_not_free :
+    ¬ (∀ (G : QSGame) (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool),
+        Bounded G.toNullGame.toGame → KingCaptureValHigh G →
+        MateValuesAreKingCapturesQS G →
+        CheckProbeOK G.toNullGame (fun p => inCheckB G.toNullGame p) →
+        TerminalPseudoSafe G nully guard) := by
+  intro h
+  exact cexT_violates
+    (h CexT (fun _ _ _ => 30) (fun _ => true)
+      cexT_bounded cexT_valHigh cexT_mateValues cexT_probeOK)
+
+/-- **The crossing, machine-checked, on the A1-FIXED loop.**  Low probe
+`gamma = 10`: the null option cuts off before the (empty) real-move loop
+and `boundA1` returns 30 -- a fail-high, stored as `lower = 30` by table
+part 2.  High probe `gamma = 100` on the same `(pos, depth)`: the null
+fails low, `best_real` keeps the sentinel, the correction fires and
+returns the exact terminal 0 -- a fail-low, stored as `upper = 0`.
+`lower = 30 > 0 = upper`, and the point value they disagree about is
+`negamaxQS = 0`: the low probe's stored bound is simply false. -/
+theorem cexT_crossing :
+    boundA1 CexT (fun p => inCheckB CexT.toNullGame p) (fun _ _ _ => 30)
+        (fun _ => true) 4 () 10 = 30 ∧
+    boundA1 CexT (fun p => inCheckB CexT.toNullGame p) (fun _ _ _ => 30)
+        (fun _ => true) 4 () 100 = 0 ∧
+    negamaxQS CexT 4 () = 0 :=
+  ⟨by decide, by decide, cexT_value 3⟩
+
+/-- For the record, the blame is pinned exactly at the terminal: the
+countermodel's oracle satisfies the bet everywhere it CAN be stated
+(`NullBetQSNonterminal` holds -- vacuously, the moveless position is
+correction-terminal at every depth) and fails the whole-tree `NullBetQS`
+only through the terminal node itself. -/
+theorem cexT_bet_fails_only_at_terminal :
+    NullBetQSNonterminal CexT (fun _ _ _ => 30) (fun _ => true) ∧
+    ¬ NullBetQS CexT (fun _ _ _ => 30) (fun _ => true) := by
+  constructor
+  · intro d p gamma hCT _ hd _ _
+    cases p
+    refine absurd ⟨by decide, ?_, rfl⟩ hCT
+    rw [qsGateB, Bool.or_eq_true, decide_eq_true_eq]
+    exact Or.inl hd
+  · intro h
+    have h30 := h 4 () 10 rfl (by omega) (by decide) (by decide)
+    rw [cexT_value 3] at h30
+    exact absurd h30 (by decide)
+
 end Sunfish
