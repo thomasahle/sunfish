@@ -495,8 +495,8 @@ class Searcher:
         self.tp_score.clear()
         # Table choice is fixed for the whole search (and tp_score is
         # cleared above), so every bound targets one value function.
-        board = history[-1].board
-        bare = sum(c.isupper() for c in board) == 1 or sum(c.islower() for c in board) == 1
+        pos = history[-1]
+        bare = sum(c.isupper() for c in board) == 1 or sum(c.islower() for c in pos.board) == 1
         pst["K"] = K_END if bare else K_MID
 
         gamma = 0
@@ -514,10 +514,10 @@ class Searcher:
             # directions). Widen this range and stalemates break silently.
             lower, upper = -MATE_LOWER, MATE_LOWER
             while lower < upper - EVAL_ROUGHNESS:
-                score = self.bound(history[-1], gamma, depth, can_null=False)
+                score = self.bound(pos, gamma, depth, can_null=False)
                 if score >= gamma: lower = score
                 if score < gamma: upper = score
-                yield depth, gamma, score, self.tp_move.get(history[-1])
+                yield depth, gamma, score, self.tp_move.get(pos)
                 gamma = (lower + upper + 1) // 2
 
 
