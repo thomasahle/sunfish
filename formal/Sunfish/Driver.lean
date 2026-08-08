@@ -195,4 +195,51 @@ theorem carried_gamma_escapes_band :
     driverGamma (-MATE_LOWER) (-MATE_LOWER) = -MATE_LOWER := by
   refine ⟨⟨by decide, by decide⟩, by decide⟩
 
+/-- The clamp `c72cf6d` added on this file's finding:
+`gamma = min(max(gamma, 1 - MATE_LOWER), MATE_LOWER)` before each
+depth's first probe. -/
+def clampGamma (g : Int) : Int := min (max g (1 - MATE_LOWER)) MATE_LOWER
+
+theorem clampGamma_in_band (g : Int) :
+    -MATE_LOWER < clampGamma g ∧ clampGamma g ≤ MATE_LOWER := by
+  have hML : MATE_LOWER = 47923 := rfl
+  unfold clampGamma
+  omega
+
+/-- **The in-band premise, discharged for every driver probe**: with
+the clamp, a depth's first window is in-band unconditionally, and every
+LATER probe happens only while the loop condition holds -- which forces
+the bracket back inside the band (a mate-band score always breaks the
+loop: `lower` only moves up from `-MATE_LOWER` and `upper` only moves
+down from `MATE_LOWER`, so an out-of-band endpoint kills
+`lower < upper - EVAL_ROUGHNESS`).  Hence every window `bound()` is
+probed at satisfies the layered theorems' `(-MATE_LOWER, MATE_LOWER]`
+hypothesis, with NO assumption on scores.
+`carried_gamma_escapes_band` above is now HISTORICAL: it is the reason
+the clamp exists. -/
+theorem driver_probe_in_band (st : DState)
+    (hl : -MATE_LOWER ≤ st.lower) (hu : st.upper ≤ MATE_LOWER)
+    (hloop : st.lower < st.upper - EVAL_ROUGHNESS) :
+    -MATE_LOWER < driverGamma st.lower st.upper ∧
+      driverGamma st.lower st.upper ≤ MATE_LOWER := by
+  have hML : MATE_LOWER = 47923 := rfl
+  have hE : EVAL_ROUGHNESS = 15 := rfl
+  unfold driverGamma
+  omega
+
+/-- The bracket endpoints preserve their one-sided bounds through any
+probe made at an in-band window (`lower` rises to a score ≥ gamma >
+-MATE_LOWER; `upper` falls to a score < gamma ≤ MATE_LOWER) -- the
+invariant `driver_probe_in_band` consumes. -/
+theorem dstep_bracket_sides (st : DState) (s : Int)
+    (hl : -MATE_LOWER ≤ st.lower) (hu : st.upper ≤ MATE_LOWER)
+    (hg : -MATE_LOWER < st.gamma ∧ st.gamma ≤ MATE_LOWER) :
+    -MATE_LOWER ≤ (dstep st s).lower ∧ (dstep st s).upper ≤ MATE_LOWER := by
+  unfold dstep
+  by_cases hc : st.gamma ≤ s
+  · simp only [if_pos hc]
+    omega
+  · simp only [if_neg hc]
+    omega
+
 end Sunfish
