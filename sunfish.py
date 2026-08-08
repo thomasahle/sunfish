@@ -359,31 +359,22 @@ class Searcher:
         val_lower = QS - depth * QS_A
 
         def moves():
-            # Look for the strongest move from last time, the hash-move. It
-            # doubles as a mobility certificate below: tp_move stores only
-            # real fail-high moves, and a fail-high at an in-band gamma has
-            # score > -MATE_UPPER, so a stored move is a legal move.
+            # Look for the strongest move from last time, the hash-move.
+            # tp_move stores only real fail-high winners (including the
+            # substituted king capture below), so a stored move is always
+            # a move gen_moves yields at this position.
             killer = self.tp_move.get(pos)
 
             # First try not moving at all, i.e. the null move. Zugzwang -
             # passing may be an un-chess-like free tempo - remains a measured,
             # accepted approximation (formal/README.md); the score guard
-            # limits exposure. What is NOT accepted is a pass outscoring a
-            # stalemate: a positive pass at a terminal node would fail high
-            # above the exact draw the correction later stores - a crossed
-            # table entry. So an uncertified positive pass is verified with
-            # the legality oracle before it is trusted (a killer already
-            # certifies mobility, and a mate-band pass is redundant: if
-            # passing wins the king, capturing it is a real move too, so it
-            # yields the fold identity instead).
+            # limits exposure. The raw score is yielded: a virtual (None)
+            # fail-high is validated in the consumer below before it may
+            # cut, which subsumes the mate-band fold and the null-stalemate
+            # verifier that used to live here.
             if depth > 2 and not root and abs(pos.score) < 500 and any(
                     c in pos.board for c in "RBNQ"):
-                score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
-                if 0 < score and gamma <= score < MATE_LOWER and not killer and all(
-                        self.bound(pos.move(m), MATE_UPPER, 0, root=True) == MATE_UPPER
-                        for m in pos.gen_moves()):
-                    score = -MATE_UPPER
-                yield None, score if score < MATE_LOWER else -MATE_UPPER
+                yield None, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
 
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else.
@@ -417,8 +408,13 @@ class Searcher:
                 # This is known as futility pruning.
                 if depth <= 1 and pos.score + val < gamma:
                     # Need special case for MATE, since it would normally be caught
-                    # before standing pat.
-                    yield move, pos.score + val if val < MATE_LOWER else MATE_UPPER
+                    # before standing pat. A sub-mate futility yield estimates
+                    # the child's stand-pat without searching it, so it is
+                    # value evidence only, never legality evidence: it goes
+                    # out as a virtual (None) yield - it can never cut (its
+                    # score is below gamma by construction), and it must not
+                    # set 'live' and mask the terminality correction below.
+                    yield (move, MATE_UPPER) if val >= MATE_LOWER else (None, pos.score + val)
                     # We can also break, since we have ordered the moves by value,
                     # so it can't get any better than this.
                     break
@@ -433,8 +429,35 @@ class Searcher:
         # a partial bound at a king-capturable node), which is why the
         # correction below re-derives terminality with the legality oracle
         # instead of trusting any score-shaped sentinel.
+        #
+        # A virtual (None) fail-high is validated before it is allowed to
+        # cut, restoring KingCapturableReportsExact - "if we can capture
+        # the opponent king, bound() returns exactly MATE_UPPER":
+        # - if a real king capture exists (same test as gen_moves/value:
+        #   target is 'k' or within one of the king-passant square; kp == 0
+        #   is safe since targets are >= A8), substitute it: the node
+        #   reports MATE_UPPER and tp_move stores the true capture, so a
+        #   stand-pat or null cutoff can never mask the sentinel again;
+        # - a mate-band claim without a capture is vacuous (if passing wins
+        #   the king, capturing it is a real move too): fold identity;
+        # - a positive claim at a verified-terminal node (every generated
+        #   move loses the king to the unstored legality oracle) would
+        #   outscore the exact draw the correction stores: fold identity.
+        #   This arm is depth-gated like the correction itself: at depth 0
+        #   QS evaluates the fold, stand-pat included, and folding a
+        #   terminal stand-pat with no correction to rescue it would make
+        #   the node RETURN the reserved -MATE_UPPER sentinel.
         best, live = -MATE_UPPER, False
         for move, score in moves():
+            if move is None and score >= gamma:
+                king = next((m for m in pos.gen_moves()
+                             if pos.board[m.j] == "k" or abs(m.j - pos.kp) < 2), None)
+                if king:
+                    move, score = king, MATE_UPPER
+                elif depth and (score >= MATE_LOWER or 0 < score and all(
+                        self.bound(pos.move(m), MATE_UPPER, 0, root=True) == MATE_UPPER
+                        for m in pos.gen_moves())):
+                    score = -MATE_UPPER
             if score > best:
                 best, live = score, move is not None
             if best >= gamma:
@@ -458,8 +481,12 @@ class Searcher:
         # the first legal move, so false suspicions cost ~one QS probe.
         # Depth 0 is excluded: QS evaluates the fold (stand-pat included)
         # and never claims an exact terminal value - mates are found from
-        # depth 1 up. At depths 1-2 no virtual yields exist, so 'not live'
-        # degenerates to the classic untouched-sentinel test.
+        # depth 1 up. The gate is 'not live', not 'best == -MATE_UPPER':
+        # with the invariant restored the two coincide for real-move
+        # winners (a real winner above the sentinel is a proven-legal
+        # move), but a fail-LOW null yield is now raw, so at a terminal
+        # node the pass can win the max with best > -MATE_UPPER while no
+        # legal move exists - only 'not live' still fires there.
         if depth and best < gamma and not live and all(
                 self.bound(pos.move(m), MATE_UPPER, 0, root=True) == MATE_UPPER
                 for m in pos.gen_moves()):
