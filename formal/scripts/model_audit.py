@@ -21,6 +21,7 @@ reformatting of surrounding code does not fire):
   - Position.move        (ValGame.score_identity)
   - Position.value       (KingCaptureValHigh / HighValIsKingCapture)
   - Position.gen_moves   (Game.moves, CaptureFirst's list)
+  - Position.king_capture (the substitution/in-check scan, kp = 0 note)
   - constants            (MATE_LOWER, MATE_UPPER, QS, QS_A,
                           EVAL_ROUGHNESS, TABLE_SIZE)
 
@@ -40,6 +41,7 @@ CONSTANTS = ["MATE_LOWER", "MATE_UPPER", "QS", "QS_A", "EVAL_ROUGHNESS", "TABLE_
 
 EXPECTED = {
     "Position.gen_moves": "2f5471b5de1ab8f0",
+    "Position.king_capture": "077e364f886a1826",
     "Position.move": "c95ddc3e690012a8",
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "339f53cfaa228d42",
@@ -67,7 +69,8 @@ def extract_regions():
                 if isinstance(item, ast.FunctionDef):
                     key = f"{node.name}.{item.name}"
                     if key in ("Searcher.bound", "Searcher.search", "Position.rotate",
-                               "Position.move", "Position.value", "Position.gen_moves"):
+                               "Position.move", "Position.value", "Position.gen_moves",
+                               "Position.king_capture"):
                         regions[key] = ast.get_source_segment(src, item)
     consts = []
     for node in tree.body:
@@ -77,7 +80,8 @@ def extract_regions():
                 consts.append(ast.get_source_segment(src, node))
     regions["constants"] = "\n".join(consts)
     missing = {"Searcher.bound", "Searcher.search", "Position.rotate", "Position.move",
-               "Position.value", "Position.gen_moves", "constants"} - set(regions)
+               "Position.value", "Position.gen_moves", "Position.king_capture",
+               "constants"} - set(regions)
     if missing:
         raise SystemExit(f"model_audit: audited region(s) not found in sunfish.py: {sorted(missing)}")
     return regions

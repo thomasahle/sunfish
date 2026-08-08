@@ -2528,11 +2528,15 @@ consumption fold: `best` is the full maximum, `S` the real-move fold,
 `n` the null contribution, so `S ≤ n` is exactly the code's `not live`
 (the maximum was not set by a real-move yield).  Fire only on a
 fail-low, uncertified, ORACLE-CONFIRMED terminal; then assign the exact
-terminal value through the check probe. -/
-def d2Fix (G : QSGame) (probe : G.Pos → Bool)
+terminal value -- computed since `c72cf6d` by the direct
+`pos.rotate(nullmove=True).king_capture()` scan, which IS `inCheckB`
+(the null rotation zeroes `kp`, so the `abs(m.j - kp) < 2` disjunct is
+dead there and the scan is exactly "some rotated move lands on our
+king"); no probe, no `CheckProbeOK`-style premise. -/
+def d2Fix (G : QSGame)
     (gamma best S n : Int) (p : G.Pos) : Int :=
   if best < gamma ∧ S ≤ n ∧ allIllegalB G p = true then
-    (if probe p = true then -MATE_LOWER else 0)
+    (if inCheckB G.toNullGame p = true then -MATE_LOWER else 0)
   else best
 
 /-- The verified search, modeling `reference.py`.  Structure of
@@ -2554,8 +2558,7 @@ def d2Fix (G : QSGame) (probe : G.Pos → Bool)
 The `0/1/2/d+3` pattern split keeps the recursion structural (the pass
 recurses three levels down), exactly as `nullValue` in CanNull.lean;
 `boundD2_succ` restores the uniform `d + 1` equation. -/
-def boundD2 (G : QSGame) (probe : G.Pos → Bool)
-    (guard kill : G.Pos → Bool) :
+def boundD2 (G : QSGame) (guard kill : G.Pos → Bool) :
     Nat → G.Pos → Int → Int
   | 0, p, _gamma =>
     if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
@@ -2564,75 +2567,74 @@ def boundD2 (G : QSGame) (probe : G.Pos → Bool)
   | 1, p, gamma =>
     if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
     else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
-    else if useD2 G guard kill (-(boundD2 G probe guard kill 0 (G.pass p) (1 - gamma))) 1 p gamma = true ∧
-        gamma ≤ nullVerify G kill (-(boundD2 G probe guard kill 0 (G.pass p) (1 - gamma))) gamma p then
-      nullVerify G kill (-(boundD2 G probe guard kill 0 (G.pass p) (1 - gamma))) gamma p
+    else if useD2 G guard kill (-(boundD2 G guard kill 0 (G.pass p) (1 - gamma))) 1 p gamma = true ∧
+        gamma ≤ nullVerify G kill (-(boundD2 G guard kill 0 (G.pass p) (1 - gamma))) gamma p then
+      nullVerify G kill (-(boundD2 G guard kill 0 (G.pass p) (1 - gamma))) gamma p
     else
-      d2Fix G probe gamma
-        (max (nullPartD2 G guard kill (-(boundD2 G probe guard kill 0 (G.pass p) (1 - gamma))) 1 p gamma)
+      d2Fix G gamma
+        (max (nullPartD2 G guard kill (-(boundD2 G guard kill 0 (G.pass p) (1 - gamma))) 1 p gamma)
           (searchMoves gamma
-            (fun m => -(boundD2 G probe guard kill 0 m (1 - gamma)))
+            (fun m => -(boundD2 G guard kill 0 m (1 - gamma)))
             (movesAbove G (val_lower 1) p) LOSS))
         (searchMoves gamma
-          (fun m => -(boundD2 G probe guard kill 0 m (1 - gamma)))
+          (fun m => -(boundD2 G guard kill 0 m (1 - gamma)))
           (movesAbove G (val_lower 1) p) LOSS)
-        (nullPartD2 G guard kill (-(boundD2 G probe guard kill 0 (G.pass p) (1 - gamma))) 1 p gamma)
+        (nullPartD2 G guard kill (-(boundD2 G guard kill 0 (G.pass p) (1 - gamma))) 1 p gamma)
         p
   | 2, p, gamma =>
     if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
     else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
-    else if useD2 G guard kill (-(boundD2 G probe guard kill 0 (G.pass p) (1 - gamma))) 2 p gamma = true ∧
-        gamma ≤ nullVerify G kill (-(boundD2 G probe guard kill 0 (G.pass p) (1 - gamma))) gamma p then
-      nullVerify G kill (-(boundD2 G probe guard kill 0 (G.pass p) (1 - gamma))) gamma p
+    else if useD2 G guard kill (-(boundD2 G guard kill 0 (G.pass p) (1 - gamma))) 2 p gamma = true ∧
+        gamma ≤ nullVerify G kill (-(boundD2 G guard kill 0 (G.pass p) (1 - gamma))) gamma p then
+      nullVerify G kill (-(boundD2 G guard kill 0 (G.pass p) (1 - gamma))) gamma p
     else
-      d2Fix G probe gamma
-        (max (nullPartD2 G guard kill (-(boundD2 G probe guard kill 0 (G.pass p) (1 - gamma))) 2 p gamma)
+      d2Fix G gamma
+        (max (nullPartD2 G guard kill (-(boundD2 G guard kill 0 (G.pass p) (1 - gamma))) 2 p gamma)
           (searchMoves gamma
-            (fun m => -(boundD2 G probe guard kill 1 m (1 - gamma)))
+            (fun m => -(boundD2 G guard kill 1 m (1 - gamma)))
             (movesAbove G (val_lower 2) p) LOSS))
         (searchMoves gamma
-          (fun m => -(boundD2 G probe guard kill 1 m (1 - gamma)))
+          (fun m => -(boundD2 G guard kill 1 m (1 - gamma)))
           (movesAbove G (val_lower 2) p) LOSS)
-        (nullPartD2 G guard kill (-(boundD2 G probe guard kill 0 (G.pass p) (1 - gamma))) 2 p gamma)
+        (nullPartD2 G guard kill (-(boundD2 G guard kill 0 (G.pass p) (1 - gamma))) 2 p gamma)
         p
   | d + 3, p, gamma =>
     if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
     else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
-    else if useD2 G guard kill (-(boundD2 G probe guard kill d (G.pass p) (1 - gamma))) (d + 3) p gamma = true ∧
-        gamma ≤ nullVerify G kill (-(boundD2 G probe guard kill d (G.pass p) (1 - gamma))) gamma p then
-      nullVerify G kill (-(boundD2 G probe guard kill d (G.pass p) (1 - gamma))) gamma p
+    else if useD2 G guard kill (-(boundD2 G guard kill d (G.pass p) (1 - gamma))) (d + 3) p gamma = true ∧
+        gamma ≤ nullVerify G kill (-(boundD2 G guard kill d (G.pass p) (1 - gamma))) gamma p then
+      nullVerify G kill (-(boundD2 G guard kill d (G.pass p) (1 - gamma))) gamma p
     else
-      d2Fix G probe gamma
-        (max (nullPartD2 G guard kill (-(boundD2 G probe guard kill d (G.pass p) (1 - gamma))) (d + 3) p gamma)
+      d2Fix G gamma
+        (max (nullPartD2 G guard kill (-(boundD2 G guard kill d (G.pass p) (1 - gamma))) (d + 3) p gamma)
           (searchMoves gamma
-            (fun m => -(boundD2 G probe guard kill (d + 2) m (1 - gamma)))
+            (fun m => -(boundD2 G guard kill (d + 2) m (1 - gamma)))
             (movesAbove G (val_lower (d + 3)) p) LOSS))
         (searchMoves gamma
-          (fun m => -(boundD2 G probe guard kill (d + 2) m (1 - gamma)))
+          (fun m => -(boundD2 G guard kill (d + 2) m (1 - gamma)))
           (movesAbove G (val_lower (d + 3)) p) LOSS)
-        (nullPartD2 G guard kill (-(boundD2 G probe guard kill d (G.pass p) (1 - gamma))) (d + 3) p gamma)
+        (nullPartD2 G guard kill (-(boundD2 G guard kill d (G.pass p) (1 - gamma))) (d + 3) p gamma)
         p
 
 /-- The uniform successor equation (`d + 1 - 3` covers the three
 patterns definitionally: `1-3 = 2-3 = 0`, `(d+3)-3 = d`). -/
-theorem boundD2_succ (G : QSGame) (probe : G.Pos → Bool)
-    (guard kill : G.Pos → Bool) (d : Nat) (p : G.Pos) (gamma : Int) :
-    boundD2 G probe guard kill (d + 1) p gamma
+theorem boundD2_succ (G : QSGame) (guard kill : G.Pos → Bool) (d : Nat) (p : G.Pos) (gamma : Int) :
+    boundD2 G guard kill (d + 1) p gamma
       = if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
         else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
-        else if useD2 G guard kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma = true ∧
-            gamma ≤ nullVerify G kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p then
-          nullVerify G kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
+        else if useD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma = true ∧
+            gamma ≤ nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p then
+          nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
         else
-          d2Fix G probe gamma
-            (max (nullPartD2 G guard kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma)
+          d2Fix G gamma
+            (max (nullPartD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma)
               (searchMoves gamma
-                (fun m => -(boundD2 G probe guard kill d m (1 - gamma)))
+                (fun m => -(boundD2 G guard kill d m (1 - gamma)))
                 (movesAbove G (val_lower (d + 1)) p) LOSS))
             (searchMoves gamma
-              (fun m => -(boundD2 G probe guard kill d m (1 - gamma)))
+              (fun m => -(boundD2 G guard kill d m (1 - gamma)))
               (movesAbove G (val_lower (d + 1)) p) LOSS)
-            (nullPartD2 G guard kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma)
+            (nullPartD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma)
             p := by
   match d with
   | 0 => rfl
@@ -2662,10 +2664,9 @@ def BoundSpecD2 (G : QSGame) (d : Nat) (p : G.Pos) (gamma r : Int) : Prop :=
 
 /-! ### Branch lemmas -/
 
-theorem boundD2_kingGone (G : QSGame) (probe : G.Pos → Bool)
-    (guard kill : G.Pos → Bool)
+theorem boundD2_kingGone (G : QSGame) (guard kill : G.Pos → Bool)
     (d : Nat) (p : G.Pos) (gamma : Int) (h : G.eval p ≤ -MATE_LOWER) :
-    boundD2 G probe guard kill d p gamma = -MATE_UPPER := by
+    boundD2 G guard kill d p gamma = -MATE_UPPER := by
   cases d with
   | zero => simp only [boundD2]; rw [if_pos h]
   | succ d => rw [boundD2_succ, if_pos h]
@@ -2673,11 +2674,10 @@ theorem boundD2_kingGone (G : QSGame) (probe : G.Pos → Bool)
 /-- The sentinel, by construction and AT EVERY DEPTH (depth 0 included:
 the sentinel-exact idealization).  Its contrapositive is
 `storedMoveLegal`. -/
-theorem boundD2_of_capture (G : QSGame) (probe : G.Pos → Bool)
-    (guard kill : G.Pos → Bool)
+theorem boundD2_of_capture (G : QSGame) (guard kill : G.Pos → Bool)
     (d : Nat) (p : G.Pos) (gamma : Int) (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : hasKingCapture G.toNullGame.toGame p = true) :
-    boundD2 G probe guard kill d p gamma = MATE_UPPER := by
+    boundD2 G guard kill d p gamma = MATE_UPPER := by
   cases d with
   | zero => simp only [boundD2]; rw [if_neg hkg, if_pos hcap]
   | succ d => rw [boundD2_succ, if_neg hkg, if_pos hcap]
@@ -2729,17 +2729,17 @@ function of the child position alone, so the certificate is
 position-intrinsic and can never go stale, however old the entry.  This
 is the code comment at lines 362-365, and the invariant `KillerLegal`
 consumes. -/
-theorem storedMoveLegal (G : QSGame) (probe : G.Pos → Bool)
+theorem storedMoveLegal (G : QSGame)
     (guard kill : G.Pos → Bool)
     (d : Nat) (m : G.Pos) (gamma : Int) (hg1 : -MATE_UPPER < gamma)
     (hkg : ¬ (G.eval m ≤ -MATE_LOWER))
-    (hhi : gamma ≤ -(boundD2 G probe guard kill d m (1 - gamma))) :
+    (hhi : gamma ≤ -(boundD2 G guard kill d m (1 - gamma))) :
     hasKingCapture G.toNullGame.toGame m = false := by
   cases hcap : hasKingCapture G.toNullGame.toGame m with
   | false => rfl
   | true =>
     exfalso
-    rw [boundD2_of_capture G probe guard kill d m (1 - gamma) hkg hcap] at hhi
+    rw [boundD2_of_capture G guard kill d m (1 - gamma) hkg hcap] at hhi
     omega
 
 /-- The engine-level depth-0 instance of `storedMoveLegal`, free of the
@@ -2793,32 +2793,30 @@ is king-capturable, so the (now definitional) pass search reports the
 exact sentinel through the reference's eager branch; the one other
 conceivable case (the passed king already gone, negating to
 `+MATE_UPPER`) is excluded by the suppression itself. -/
-theorem nullAtMateD2 (G : QSGame) (probe : G.Pos → Bool)
-    (guard kill : G.Pos → Bool)
+theorem nullAtMateD2 (G : QSGame) (guard kill : G.Pos → Bool)
     (d : Nat) (p : G.Pos) (gamma : Int)
     (hic : inCheckB G.toNullGame p = true)
-    (hsup : -(boundD2 G probe guard kill d (G.pass p) gamma) < MATE_LOWER) :
-    -(boundD2 G probe guard kill d (G.pass p) gamma) = -MATE_UPPER := by
+    (hsup : -(boundD2 G guard kill d (G.pass p) gamma) < MATE_LOWER) :
+    -(boundD2 G guard kill d (G.pass p) gamma) = -MATE_UPPER := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
   have hcap : hasKingCapture G.toNullGame.toGame (G.pass p) = true := hic
   by_cases hkg : G.eval (G.pass p) ≤ -MATE_LOWER
   · exfalso
-    rw [boundD2_kingGone G probe guard kill d (G.pass p) gamma hkg] at hsup
+    rw [boundD2_kingGone G guard kill d (G.pass p) gamma hkg] at hsup
     omega
-  · rw [boundD2_of_capture G probe guard kill d (G.pass p) gamma hkg hcap]
+  · rw [boundD2_of_capture G guard kill d (G.pass p) gamma hkg hcap]
 
 /-! ### Boundedness -/
 
 /-- Search reports stay in the score band, for in-band windows.  (The
 lower side of the null oracle needs no hypothesis: an out-of-band pass
 yield is either suppressed or dominated by the fold.) -/
-theorem boundD2_bounded (G : QSGame) (probe : G.Pos → Bool)
-    (guard kill : G.Pos → Bool)
+theorem boundD2_bounded (G : QSGame) (guard kill : G.Pos → Bool)
     (hB : Bounded G.toNullGame.toGame) :
     ∀ (d : Nat) (p : G.Pos) (gamma : Int), -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
-      -MATE_UPPER ≤ boundD2 G probe guard kill d p gamma ∧
-        boundD2 G probe guard kill d p gamma ≤ MATE_UPPER := by
+      -MATE_UPPER ≤ boundD2 G guard kill d p gamma ∧
+        boundD2 G guard kill d p gamma ≤ MATE_UPPER := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
@@ -2843,44 +2841,44 @@ theorem boundD2_bounded (G : QSGame) (probe : G.Pos → Bool)
       by_cases hcap : hasKingCapture G.toNullGame.toGame p = true
       · rw [if_pos hcap]; omega
       · rw [if_neg hcap]
-        by_cases hcut : useD2 G guard kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma = true ∧
-            gamma ≤ nullVerify G kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
+        by_cases hcut : useD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma = true ∧
+            gamma ≤ nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
         · rw [if_pos hcut]
           have hu := hcut.1
           simp only [useD2, Bool.and_eq_true, decide_eq_true_eq] at hu
           omega
         · rw [if_neg hcut]
           have hSl := searchMoves_ge_init gamma
-            (fun m => -(boundD2 G probe guard kill d m (1 - gamma)))
+            (fun m => -(boundD2 G guard kill d m (1 - gamma)))
             (movesAbove G (val_lower (d + 1)) p) LOSS
           have hSu := searchMoves_le_max gamma
-            (fun m => -(boundD2 G probe guard kill d m (1 - gamma)))
+            (fun m => -(boundD2 G guard kill d m (1 - gamma)))
             (movesAbove G (val_lower (d + 1)) p) LOSS MATE_UPPER
             (fun m _ => by
-              show -(boundD2 G probe guard kill d m (1 - gamma)) ≤ MATE_UPPER
+              show -(boundD2 G guard kill d m (1 - gamma)) ≤ MATE_UPPER
               have := ih m (1 - gamma) (by omega) (by omega)
               omega)
             (by omega)
-          have hn : nullPartD2 G guard kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma ≤ MATE_LOWER := by
+          have hn : nullPartD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma ≤ MATE_LOWER := by
             simp only [nullPartD2]
-            by_cases hu : useD2 G guard kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma = true
+            by_cases hu : useD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma = true
             · rw [if_pos hu]
               simp only [useD2, Bool.and_eq_true, decide_eq_true_eq] at hu
               omega
             · rw [if_neg hu]; omega
           simp only [d2Fix]
           by_cases hfire :
-              max (nullPartD2 G guard kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma)
+              max (nullPartD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma)
                 (searchMoves gamma
-                  (fun m => -(boundD2 G probe guard kill d m (1 - gamma)))
+                  (fun m => -(boundD2 G guard kill d m (1 - gamma)))
                   (movesAbove G (val_lower (d + 1)) p) LOSS) < gamma ∧
               searchMoves gamma
-                (fun m => -(boundD2 G probe guard kill d m (1 - gamma)))
+                (fun m => -(boundD2 G guard kill d m (1 - gamma)))
                 (movesAbove G (val_lower (d + 1)) p) LOSS
-                ≤ nullPartD2 G guard kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma ∧
+                ≤ nullPartD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma ∧
               allIllegalB G p = true
           · rw [if_pos hfire]
-            by_cases hpr : probe p = true
+            by_cases hpr : inCheckB G.toNullGame p = true
             · rw [if_pos hpr]; omega
             · rw [if_neg hpr]; omega
           · rw [if_neg hfire]; omega
@@ -2932,18 +2930,17 @@ correction fires -- fail-low, uncertified (`S ≤ n`, the code's `not
 live`), and ORACLE-CONFIRMED terminal -- it returns exactly the d2
 value.  Under `legalityProbeCorrect` the engine's scan computes the
 same confirmation, so the correction is exact, not a bet. -/
-theorem negativeFailLowVerified (G : QSGame) (probe : G.Pos → Bool)
+theorem negativeFailLowVerified (G : QSGame)
     (d : Nat) (p : G.Pos) (gamma best S n : Int)
-    (hPp : probe p = inCheckB G.toNullGame p)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
     (hai : allIllegalB G p = true)
     (hbest : best < gamma) (hlive : S ≤ n) :
-    d2Fix G probe gamma best S n p = negamaxD2 G (d + 1) p := by
-  have hfix : d2Fix G probe gamma best S n p
-      = (if probe p = true then -MATE_LOWER else 0) := by
+    d2Fix G gamma best S n p = negamaxD2 G (d + 1) p := by
+  have hfix : d2Fix G gamma best S n p
+      = (if inCheckB G.toNullGame p = true then -MATE_LOWER else 0) := by
     simp only [d2Fix]; rw [if_pos ⟨hbest, hlive, hai⟩]
-  rw [hfix, negamaxD2_of_allIllegal G d p hkg hcap hai, hPp]
+  rw [hfix, negamaxD2_of_allIllegal G d p hkg hcap hai]
   simp only [terminalValue]
 
 /-- **NegativeFailLowVerified**, guard half: without the oracle's
@@ -2951,10 +2948,10 @@ confirmation an uncertified fail-low is NOT converted to a terminal
 value -- the fold result passes through untouched.  (The pre-d2 design
 converted on a score-shaped sentinel instead; `qsUngated_not_sound` and
 `a1_unfixed_not_sound` above are what that cost.) -/
-theorem d2Fix_unverified_passthrough (G : QSGame) (probe : G.Pos → Bool)
+theorem d2Fix_unverified_passthrough (G : QSGame)
     (gamma best S n : Int) (p : G.Pos)
     (hai : allIllegalB G p = false) :
-    d2Fix G probe gamma best S n p = best := by
+    d2Fix G gamma best S n p = best := by
   simp only [d2Fix]
   rw [if_neg (fun h => by rw [hai] at h; exact Bool.noConfusion h.2.2)]
 
@@ -2968,31 +2965,30 @@ enter), the lemma needs only: the null part sits below the window
 (`hnlt`, else the cutoff branch would have fired), and at a terminal
 the fold is the identity, the null part is no smaller, and the value is
 the terminal value (`hterm`). -/
-theorem d2Fix_spec_core (G : QSGame) (probe : G.Pos → Bool) (p : G.Pos)
+theorem d2Fix_spec_core (G : QSGame) (p : G.Pos)
     (gamma S n V : Int)
-    (hPp : probe p = inCheckB G.toNullGame p)
     (hnlt : n < gamma)
     (hterm : allIllegalB G p = true → S = LOSS ∧ LOSS ≤ n ∧ V = terminalValue G p)
     (hsp1 : allIllegalB G p = false → gamma ≤ S → S ≤ V)
     (hsp2 : allIllegalB G p = false → S < gamma → V ≤ max n S) :
-    (gamma ≤ d2Fix G probe gamma (max n S) S n p →
-      d2Fix G probe gamma (max n S) S n p ≤ V) ∧
-    (d2Fix G probe gamma (max n S) S n p < gamma →
-      V ≤ d2Fix G probe gamma (max n S) S n p) := by
+    (gamma ≤ d2Fix G gamma (max n S) S n p →
+      d2Fix G gamma (max n S) S n p ≤ V) ∧
+    (d2Fix G gamma (max n S) S n p < gamma →
+      V ≤ d2Fix G gamma (max n S) S n p) := by
   cases hai : allIllegalB G p with
   | true =>
     obtain ⟨hSL, hnge, hV⟩ := hterm hai
     have hfire : max n S < gamma ∧ S ≤ n ∧ allIllegalB G p = true :=
       ⟨by omega, by omega, hai⟩
-    have hfix : d2Fix G probe gamma (max n S) S n p
-        = (if probe p = true then -MATE_LOWER else 0) := by
+    have hfix : d2Fix G gamma (max n S) S n p
+        = (if inCheckB G.toNullGame p = true then -MATE_LOWER else 0) := by
       simp only [d2Fix]; rw [if_pos hfire]
-    rw [hfix, hV, hPp]
+    rw [hfix, hV]
     simp only [terminalValue]
     exact ⟨fun _ => Int.le_refl _, fun _ => Int.le_refl _⟩
   | false =>
-    have hfix : d2Fix G probe gamma (max n S) S n p = max n S :=
-      d2Fix_unverified_passthrough G probe gamma (max n S) S n p hai
+    have hfix : d2Fix G gamma (max n S) S n p = max n S :=
+      d2Fix_unverified_passthrough G gamma (max n S) S n p hai
     rw [hfix]
     constructor
     · intro hge
@@ -3009,10 +3005,8 @@ is withdrawn by the verifier (no killer can exist at a moveless
 position), the fold stays at the identity, and the oracle-confirmed
 correction stores the draw. -/
 theorem d2_repairs_cexT :
-    boundD2 CexT (fun p => inCheckB CexT.toNullGame p)
-        (fun _ => true) (fun _ => false) 4 () 10 = 0 ∧
-    boundD2 CexT (fun p => inCheckB CexT.toNullGame p)
-        (fun _ => true) (fun _ => false) 4 () 100 = 0 :=
+    boundD2 CexT (fun _ => true) (fun _ => false) 4 () 10 = 0 ∧
+    boundD2 CexT (fun _ => true) (fun _ => false) 4 () 100 = 0 :=
   ⟨by decide, by decide⟩
 
 /-! # The two-layer spec: the fold defines the semantics
@@ -3330,56 +3324,6 @@ theorem noZugzwangInMateBand_of_noZugzwang (G : QSGame) (guard : G.Pos → Bool)
   have := hZ d p hkg hcap hai hgu hd2
   omega
 
-/-! ### The check probe, discharged -/
-
-/-- The probe fidelity the layered specs consume: correct at every
-node whose king is on the board -- the only nodes whose correction ever
-runs the probe.  Strictly weaker than the old `CheckProbeOK` (which
-demanded correctness everywhere, king-gone positions included). -/
-def CheckProbeQuiet (G : QSGame) (probe : G.Pos → Bool) : Prop :=
-  ∀ p, ¬ (G.eval p ≤ -MATE_LOWER) → probe p = inCheckB G.toNullGame p
-
-/-- **RotateNegatesScore** (structural, like `ValGame.score_identity`):
-passing negates the static score -- literal in `Position.rotate`
-(`Position(self.board[::-1].swapcase(), -self.score, ...)`). -/
-def RotateNegatesScore (G : NullGame) : Prop :=
-  ∀ p, G.eval (G.pass p) = -(G.eval p)
-
-/-- The engine's in-check probe, as the code computes it:
-`bound(pos.rotate(nullmove=True), MATE_UPPER, 0) == MATE_UPPER` -- the
-same dedicated legality oracle aimed at the passed position. -/
-def checkProbe (G : QSGame) : G.Pos → Bool :=
-  fun p => decide (qsProbe G MATE_UPPER (G.pass p) = MATE_UPPER)
-
-/-- **CheckProbeOK, DISCHARGED**: the shipped probe is provably correct
-wherever it is consumed, by the same machinery as
-`legalityProbeCorrect` -- the in-check probe IS the legality probe of
-the pass.  `RotateNegatesScore` + `EvalQuiet` put the passed position
-outside the king-gone zone, and the probe theorem classifies it
-exactly.  No probe hypothesis remains in the layered specs beyond this
-theorem's structural premises. -/
-theorem checkProbe_discharged (G : QSGame)
-    (hB : Bounded G.toNullGame.toGame) (hQ : EvalQuiet G.toNullGame.toGame)
-    (hV : KingCaptureValHigh G)
-    (hRot : RotateNegatesScore G.toNullGame) :
-    CheckProbeQuiet G (checkProbe G) := by
-  have hML : MATE_LOWER = 47923 := rfl
-  intro p hkg
-  have hq := hQ p hkg
-  have hrot := hRot p
-  have hkgp : ¬ (G.eval (G.pass p) ≤ -MATE_LOWER) := by omega
-  have hiff := legalityProbeCorrect G hB hQ hV (G.pass p) hkgp
-  show decide (qsProbe G MATE_UPPER (G.pass p) = MATE_UPPER)
-      = hasKingCapture G.toNullGame.toGame (G.pass p)
-  cases h : hasKingCapture G.toNullGame.toGame (G.pass p) with
-  | true => exact decide_eq_true (hiff.mpr h)
-  | false =>
-    apply decide_eq_false
-    intro heq
-    have := hiff.mp heq
-    rw [h] at this
-    exact Bool.noConfusion this
-
 /-! ### Layer 1: the spec against the null-inclusive function -/
 
 /-- **bound_null_spec** (layer 1): the search brackets its OWN declared
@@ -3393,18 +3337,17 @@ the single chess-position statement `NoZugzwangInMateBand` (see the
 section comment for the machine-level scenario showing it cannot be
 dropped while the suppression is report-keyed).  Sorry-free, by strong
 induction (the pass recursion sits at `depth - 3`). -/
-theorem bound_null_spec (G : QSGame) (probe : G.Pos → Bool)
+theorem bound_null_spec (G : QSGame)
     (guard kill : G.Pos → Bool)
     (hB : Bounded G.toNullGame.toGame)
-    (hP : CheckProbeQuiet G probe)
     (hK : KillerLegal G kill)
     (hR : NoZugzwangInMateBand G guard) :
     ∀ (d : Nat) (p : G.Pos) (gamma : Int),
       -MATE_LOWER < gamma → gamma ≤ MATE_LOWER →
-      (gamma ≤ boundD2 G probe guard kill d p gamma →
-        boundD2 G probe guard kill d p gamma ≤ nullValueD2 G guard d p) ∧
-      (boundD2 G probe guard kill d p gamma < gamma →
-        nullValueD2 G guard d p ≤ boundD2 G probe guard kill d p gamma) := by
+      (gamma ≤ boundD2 G guard kill d p gamma →
+        boundD2 G guard kill d p gamma ≤ nullValueD2 G guard d p) ∧
+      (boundD2 G guard kill d p gamma < gamma →
+        nullValueD2 G guard d p ≤ boundD2 G guard kill d p gamma) := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
@@ -3418,22 +3361,22 @@ theorem bound_null_spec (G : QSGame) (probe : G.Pos → Bool)
       exact ⟨fun _ => Int.le_refl _, fun _ => Int.le_refl _⟩
     | succ d =>
       by_cases hkg : G.eval p ≤ -MATE_LOWER
-      · rw [boundD2_kingGone G probe guard kill (d + 1) p gamma hkg,
+      · rw [boundD2_kingGone G guard kill (d + 1) p gamma hkg,
           nullValueD2_kingGone G guard (d + 1) p hkg]
         exact ⟨fun _ => Int.le_refl _, fun _ => Int.le_refl _⟩
       · by_cases hcap : hasKingCapture G.toNullGame.toGame p = true
-        · rw [boundD2_of_capture G probe guard kill (d + 1) p gamma hkg hcap,
+        · rw [boundD2_of_capture G guard kill (d + 1) p gamma hkg hcap,
             nullValueD2_of_capture G guard (d + 1) p hkg hcap]
           exact ⟨fun _ => Int.le_refl _, fun _ => Int.le_refl _⟩
         · have hcapf : hasKingCapture G.toNullGame.toGame p = false := by
             cases h : hasKingCapture G.toNullGame.toGame p
             · rfl
             · exact absurd h hcap
-          by_cases hcut : useD2 G guard kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma = true ∧
-              gamma ≤ nullVerify G kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
+          by_cases hcut : useD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma = true ∧
+              gamma ≤ nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
           · -- The (verified) null cutoff.
-            have hs : boundD2 G probe guard kill (d + 1) p gamma
-                = nullVerify G kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p := by
+            have hs : boundD2 G guard kill (d + 1) p gamma
+                = nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p := by
               rw [boundD2_succ, if_neg hkg, if_neg hcap, if_pos hcut]
             rw [hs]
             cases hai : allIllegalB G p with
@@ -3445,24 +3388,24 @@ theorem bound_null_spec (G : QSGame) (probe : G.Pos → Bool)
               cases hic : inCheckB G.toNullGame p with
               | true =>
                 exfalso
-                by_cases hw : 0 < (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) ∧
-                    gamma ≤ (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) ∧
-                    (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) < MATE_LOWER ∧ kill p = false ∧
+                by_cases hw : 0 < (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) ∧
+                    gamma ≤ (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) ∧
+                    (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) < MATE_LOWER ∧ kill p = false ∧
                     allIllegalB G p = true
-                · have hv : nullVerify G kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
+                · have hv : nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
                       = -MATE_UPPER := by
                     simp only [nullVerify]; rw [if_pos hw]
                   have h := hcut.2
                   rw [hv] at h
                   omega
-                · have hv : nullVerify G kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
-                      = (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) := by
+                · have hv : nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
+                      = (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) := by
                     simp only [nullVerify]; rw [if_neg hw]
                   have hu := hcut.1
                   simp only [useD2, Bool.and_eq_true, decide_eq_true_eq] at hu
                   obtain ⟨⟨hgu, hd2⟩, hsup⟩ := hu
                   rw [hv] at hsup
-                  have hmate := nullAtMateD2 G probe guard kill
+                  have hmate := nullAtMateD2 G guard kill
                     (d + 1 - 3) p (1 - gamma) hic hsup
                   have h := hcut.2
                   rw [hv, hmate] at h
@@ -3478,8 +3421,8 @@ theorem bound_null_spec (G : QSGame) (probe : G.Pos → Bool)
               -- Non-terminal cutoff: the pass IH bounds the report by the
               -- pass value; below the band the declared term admits it,
               -- inside the band the redundancy premise covers it.
-              have hnv : nullVerify G kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
-                  = (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) := by
+              have hnv : nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
+                  = (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) := by
                 simp only [nullVerify]
                 rw [if_neg (fun h => by rw [hai] at h; exact Bool.noConfusion h.2.2.2.2)]
               have hu := hcut.1
@@ -3491,7 +3434,7 @@ theorem bound_null_spec (G : QSGame) (probe : G.Pos → Bool)
               rw [hnv]
               have hpass := ih (d + 1 - 3) (by omega) (G.pass p) (1 - gamma)
                 (by omega) (by omega)
-              have hplow : boundD2 G probe guard kill (d + 1 - 3)
+              have hplow : boundD2 G guard kill (d + 1 - 3)
                   (G.pass p) (1 - gamma) < 1 - gamma := by omega
               have hraw := hpass.2 hplow
               rw [nullValueD2_of_fold G guard d p hkg hcap hai]
@@ -3518,26 +3461,26 @@ theorem bound_null_spec (G : QSGame) (probe : G.Pos → Bool)
               · intro hlt
                 exact absurd hge (by omega)
           · -- The loop and the correction, through the core lemma.
-            have hs : boundD2 G probe guard kill (d + 1) p gamma
-                = d2Fix G probe gamma
-                    (max (nullPartD2 G guard kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma)
+            have hs : boundD2 G guard kill (d + 1) p gamma
+                = d2Fix G gamma
+                    (max (nullPartD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma)
                       (searchMoves gamma
-                        (fun m => -(boundD2 G probe guard kill d m (1 - gamma)))
+                        (fun m => -(boundD2 G guard kill d m (1 - gamma)))
                         (movesAbove G (val_lower (d + 1)) p) LOSS))
                     (searchMoves gamma
-                      (fun m => -(boundD2 G probe guard kill d m (1 - gamma)))
+                      (fun m => -(boundD2 G guard kill d m (1 - gamma)))
                       (movesAbove G (val_lower (d + 1)) p) LOSS)
-                    (nullPartD2 G guard kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma)
+                    (nullPartD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma)
                     p := by
               rw [boundD2_succ, if_neg hkg, if_neg hcap, if_neg hcut]
             rw [hs]
             have hchild : ∀ m : G.Pos,
-                (gamma ≤ -(boundD2 G probe guard kill d m (1 - gamma)) →
-                  -(boundD2 G probe guard kill d m (1 - gamma))
+                (gamma ≤ -(boundD2 G guard kill d m (1 - gamma)) →
+                  -(boundD2 G guard kill d m (1 - gamma))
                     ≤ -(nullValueD2 G guard d m)) ∧
-                (-(boundD2 G probe guard kill d m (1 - gamma)) < gamma →
+                (-(boundD2 G guard kill d m (1 - gamma)) < gamma →
                   -(nullValueD2 G guard d m)
-                    ≤ -(boundD2 G probe guard kill d m (1 - gamma))) := by
+                    ≤ -(boundD2 G guard kill d m (1 - gamma))) := by
               intro m
               have h1 := (ih d (by omega) m (1 - gamma) (by omega) (by omega)).1
               have h2 := (ih d (by omega) m (1 - gamma) (by omega) (by omega)).2
@@ -3549,16 +3492,16 @@ theorem bound_null_spec (G : QSGame) (probe : G.Pos → Bool)
                 have := h1 (by omega)
                 omega
             have hloop := searchMoves_spec gamma
-              (fun m => -(boundD2 G probe guard kill d m (1 - gamma)))
+              (fun m => -(boundD2 G guard kill d m (1 - gamma)))
               (fun m => -(nullValueD2 G guard d m))
               hchild (movesAbove G (val_lower (d + 1)) p) LOSS LOSS
               (fun _ => Int.le_refl _) (fun _ => Int.le_refl _)
-            refine d2Fix_spec_core G probe p gamma _ _ _ (hP p hkg) ?_ ?_ ?_ ?_
+            refine d2Fix_spec_core G p gamma _ _ _ ?_ ?_ ?_ ?_
             · -- The null part sits below the window (else the cutoff fired).
               simp only [nullPartD2]
-              by_cases hu : useD2 G guard kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma = true
+              by_cases hu : useD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma = true
               · rw [if_pos hu]
-                by_cases hge : gamma ≤ nullVerify G kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
+                by_cases hge : gamma ≤ nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
                 · exact absurd ⟨hu, hge⟩ hcut
                 · omega
               · rw [if_neg hu]; omega
@@ -3567,29 +3510,29 @@ theorem bound_null_spec (G : QSGame) (probe : G.Pos → Bool)
               intro hai
               refine ⟨?_, ?_, nullValueD2_of_allIllegal G guard d p hkg hcap hai⟩
               · have hall : ∀ m ∈ movesAbove G (val_lower (d + 1)) p,
-                    -(boundD2 G probe guard kill d m (1 - gamma)) ≤ LOSS := by
+                    -(boundD2 G guard kill d m (1 - gamma)) ≤ LOSS := by
                   intro m hm
                   have hmm := movesAbove_subset G (val_lower (d + 1)) p m hm
                   have hcm : hasKingCapture G.toNullGame.toGame m = true :=
                     allIllegalB_true_iff.mp hai m hmm
                   have hmkg : ¬ (G.eval m ≤ -MATE_LOWER) := fun hh =>
                     hcap ((hasKingCapture_iff G.toNullGame.toGame p).mpr ⟨m, hmm, hh⟩)
-                  rw [boundD2_of_capture G probe guard kill d m (1 - gamma) hmkg hcm]
+                  rw [boundD2_of_capture G guard kill d m (1 - gamma) hmkg hcm]
                   omega
                 exact searchMoves_eq_init gamma
-                  (fun m => -(boundD2 G probe guard kill d m (1 - gamma)))
+                  (fun m => -(boundD2 G guard kill d m (1 - gamma)))
                   (movesAbove G (val_lower (d + 1)) p) LOSS hall (by omega)
               · simp only [nullPartD2]
-                by_cases hu : useD2 G guard kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma = true
+                by_cases hu : useD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma = true
                 · rw [if_pos hu]
                   simp only [useD2, Bool.and_eq_true, decide_eq_true_eq] at hu
                   obtain ⟨⟨_, _⟩, _⟩ := hu
-                  have hpb := boundD2_bounded G probe guard kill hB
+                  have hpb := boundD2_bounded G guard kill hB
                     (d + 1 - 3) (G.pass p) (1 - gamma) (by omega) (by omega)
                   simp only [nullVerify]
-                  by_cases hw : 0 < (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) ∧
-                      gamma ≤ (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) ∧
-                      (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) < MATE_LOWER ∧ kill p = false ∧
+                  by_cases hw : 0 < (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) ∧
+                      gamma ≤ (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) ∧
+                      (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) < MATE_LOWER ∧ kill p = false ∧
                       allIllegalB G p = true
                   · rw [if_pos hw]; omega
                   · rw [if_neg hw]; omega
@@ -3612,12 +3555,12 @@ theorem bound_null_spec (G : QSGame) (probe : G.Pos → Bool)
                 (nullTermD2_ge_LOSS G guard d p)
               have hF0 := hloop.2 hltS
               have hSl := searchMoves_ge_init gamma
-                (fun m => -(boundD2 G probe guard kill d m (1 - gamma)))
+                (fun m => -(boundD2 G guard kill d m (1 - gamma)))
                 (movesAbove G (val_lower (d + 1)) p) LOSS
               have hT : nullTermD2 G guard d p
-                  ≤ max (nullPartD2 G guard kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma)
+                  ≤ max (nullPartD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma)
                       (searchMoves gamma
-                        (fun m => -(boundD2 G probe guard kill d m (1 - gamma)))
+                        (fun m => -(boundD2 G guard kill d m (1 - gamma)))
                         (movesAbove G (val_lower (d + 1)) p) LOSS) := by
                 by_cases hen : guard p = true ∧ 2 < d + 1
                 · by_cases hml : -(nullValueD2 G guard (d + 1 - 3) (G.pass p)) < MATE_LOWER
@@ -3625,26 +3568,26 @@ theorem bound_null_spec (G : QSGame) (probe : G.Pos → Bool)
                         = max LOSS (-(nullValueD2 G guard (d + 1 - 3) (G.pass p))) := by
                       simp only [nullTermD2]
                       rw [if_pos hen, if_pos hml]
-                    by_cases hu : useD2 G guard kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma = true
-                    · have hnlt' : nullVerify G kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
+                    by_cases hu : useD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma = true
+                    · have hnlt' : nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
                           < gamma := by
                         by_cases hge : gamma ≤ nullVerify G kill
-                            ((-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma)))) gamma p
+                            ((-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma)))) gamma p
                         · exact absurd ⟨hu, hge⟩ hcut
                         · omega
-                      have hn : nullPartD2 G guard kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma
-                          = nullVerify G kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p := by
+                      have hn : nullPartD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma
+                          = nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p := by
                         simp only [nullPartD2]; rw [if_pos hu]
-                      by_cases hw : 0 < (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) ∧
-                          gamma ≤ (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) ∧
-                          (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) < MATE_LOWER ∧ kill p = false ∧
+                      by_cases hw : 0 < (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) ∧
+                          gamma ≤ (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) ∧
+                          (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) < MATE_LOWER ∧ kill p = false ∧
                           allIllegalB G p = true
                       · rw [hai] at hw
                         exact absurd hw.2.2.2.2 (fun h => Bool.noConfusion h)
-                      · have hnv : nullVerify G kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
-                            = (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) := by
+                      · have hnv : nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
+                            = (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) := by
                           simp only [nullVerify]; rw [if_neg hw]
-                        have hphigh : 1 - gamma ≤ boundD2 G probe guard kill
+                        have hphigh : 1 - gamma ≤ boundD2 G guard kill
                             (d + 1 - 3) (G.pass p) (1 - gamma) := by omega
                         have hpass := ih (d + 1 - 3) (by omega) (G.pass p) (1 - gamma)
                           (by omega) (by omega)
@@ -3652,26 +3595,26 @@ theorem bound_null_spec (G : QSGame) (probe : G.Pos → Bool)
                         rw [hT', hn, hnv]
                         omega
                     · exfalso
-                      have hnvge : ¬ (nullVerify G kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
+                      have hnvge : ¬ (nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
                           < MATE_LOWER) := by
                         intro hml'
                         exact hu (by
                           simp only [useD2, Bool.and_eq_true, decide_eq_true_eq]
                           exact ⟨⟨hen.1, hen.2⟩, hml'⟩)
-                      by_cases hw : 0 < (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) ∧
-                          gamma ≤ (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) ∧
-                          (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) < MATE_LOWER ∧ kill p = false ∧
+                      by_cases hw : 0 < (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) ∧
+                          gamma ≤ (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) ∧
+                          (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) < MATE_LOWER ∧ kill p = false ∧
                           allIllegalB G p = true
-                      · have hv : nullVerify G kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
+                      · have hv : nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
                             = -MATE_UPPER := by
                           simp only [nullVerify]; rw [if_pos hw]
                         rw [hv] at hnvge
                         omega
-                      · have hnv : nullVerify G kill (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
-                            = (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) := by
+                      · have hnv : nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
+                            = (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) := by
                           simp only [nullVerify]; rw [if_neg hw]
                         rw [hnv] at hnvge
-                        have hplow' : boundD2 G probe guard kill (d + 1 - 3)
+                        have hplow' : boundD2 G guard kill (d + 1 - 3)
                             (G.pass p) (1 - gamma) < 1 - gamma := by omega
                         have hpass := ih (d + 1 - 3) (by omega) (G.pass p) (1 - gamma)
                           (by omega) (by omega)
@@ -3761,17 +3704,16 @@ theorem nullValue_eq_realValue_of_noZugzwang (G : QSGame) (guard : G.Pos → Boo
 layer 2: where `NoZugzwang` holds, the search brackets the REAL-MOVE
 value `negamaxD2`.  The single chess assumption is `hZ`; the band
 fragment layer 1 needs is implied by it. -/
-theorem boundD2_spec (G : QSGame) (probe : G.Pos → Bool)
+theorem boundD2_spec (G : QSGame)
     (guard kill : G.Pos → Bool)
     (hB : Bounded G.toNullGame.toGame)
-    (hP : CheckProbeQuiet G probe)
     (hK : KillerLegal G kill)
     (hZ : NoZugzwang G guard) :
     ∀ (d : Nat) (p : G.Pos) (gamma : Int),
       -MATE_LOWER < gamma → gamma ≤ MATE_LOWER →
-      BoundSpecD2 G d p gamma (boundD2 G probe guard kill d p gamma) := by
+      BoundSpecD2 G d p gamma (boundD2 G guard kill d p gamma) := by
   intro d p gamma h1 h2
-  have h := bound_null_spec G probe guard kill hB hP hK
+  have h := bound_null_spec G guard kill hB hK
     (noZugzwangInMateBand_of_noZugzwang G guard hZ) d p gamma h1 h2
   have he := nullValue_eq_realValue_of_noZugzwang G guard hZ d p
   simp only [BoundSpecD2]
@@ -3781,10 +3723,9 @@ theorem boundD2_spec (G : QSGame) (probe : G.Pos → Bool)
 /-- At a verified-terminal node the two stores bracket the exact
 terminal value -- ZUGZWANG-FREE (layer 1 alone: the declared function's
 terminal branch is the verified exact value). -/
-theorem d2_terminal_stores (G : QSGame) (probe : G.Pos → Bool)
+theorem d2_terminal_stores (G : QSGame)
     (guard kill : G.Pos → Bool)
     (hB : Bounded G.toNullGame.toGame)
-    (hP : CheckProbeQuiet G probe)
     (hK : KillerLegal G kill)
     (hR : NoZugzwangInMateBand G guard)
     (d : Nat) (p : G.Pos)
@@ -3792,11 +3733,11 @@ theorem d2_terminal_stores (G : QSGame) (probe : G.Pos → Bool)
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
     (hai : allIllegalB G p = true)
     (gamma : Int) (hg1 : -MATE_LOWER < gamma) (hg2 : gamma ≤ MATE_LOWER) :
-    (gamma ≤ boundD2 G probe guard kill (d + 1) p gamma →
-      boundD2 G probe guard kill (d + 1) p gamma ≤ terminalValue G p) ∧
-    (boundD2 G probe guard kill (d + 1) p gamma < gamma →
-      terminalValue G p ≤ boundD2 G probe guard kill (d + 1) p gamma) := by
-  have h := bound_null_spec G probe guard kill hB hP hK hR
+    (gamma ≤ boundD2 G guard kill (d + 1) p gamma →
+      boundD2 G guard kill (d + 1) p gamma ≤ terminalValue G p) ∧
+    (boundD2 G guard kill (d + 1) p gamma < gamma →
+      terminalValue G p ≤ boundD2 G guard kill (d + 1) p gamma) := by
+  have h := bound_null_spec G guard kill hB hK hR
     (d + 1) p gamma hg1 hg2
   rw [nullValueD2_of_allIllegal G guard d p hkg hcap hai] at h
   exact h
@@ -3806,22 +3747,21 @@ theorem d2_terminal_stores (G : QSGame) (probe : G.Pos → Bool)
 bracket the SAME `(pos, depth)`-determined `nullValueD2` -- layer 1
 alone.  No bet, no `NoZugzwang`: table consistency never depends on the
 approximation's accuracy. -/
-theorem d2_no_crossing (G : QSGame) (probe : G.Pos → Bool)
+theorem d2_no_crossing (G : QSGame)
     (guard kill : G.Pos → Bool)
     (hB : Bounded G.toNullGame.toGame)
-    (hP : CheckProbeQuiet G probe)
     (hK : KillerLegal G kill)
     (hR : NoZugzwangInMateBand G guard)
     (d : Nat) (p : G.Pos) (g1 g2 : Int)
     (hg1a : -MATE_LOWER < g1) (hg1b : g1 ≤ MATE_LOWER)
     (hg2a : -MATE_LOWER < g2) (hg2b : g2 ≤ MATE_LOWER)
-    (hhi : g1 ≤ boundD2 G probe guard kill d p g1)
-    (hlo : boundD2 G probe guard kill d p g2 < g2) :
-    boundD2 G probe guard kill d p g1
-      ≤ boundD2 G probe guard kill d p g2 := by
-  have h1 := (bound_null_spec G probe guard kill hB hP hK hR
+    (hhi : g1 ≤ boundD2 G guard kill d p g1)
+    (hlo : boundD2 G guard kill d p g2 < g2) :
+    boundD2 G guard kill d p g1
+      ≤ boundD2 G guard kill d p g2 := by
+  have h1 := (bound_null_spec G guard kill hB hK hR
     d p g1 hg1a hg1b).1 hhi
-  have h2 := (bound_null_spec G probe guard kill hB hP hK hR
+  have h2 := (bound_null_spec G guard kill hB hK hR
     d p g2 hg2a hg2b).2 hlo
   omega
 
@@ -4103,14 +4043,52 @@ def nFoldKCX (G : QSGame) (guard : G.Pos → Bool) (rn : Int)
     (if gamma ≤ rn then -MATE_UPPER else rn)
   else -MATE_UPPER
 
+/-- The golfed correction scan (`c72cf6d`): a move needs no probe when
+the depth ≥ 2 threshold admitted it -- a fail-low loop at depth ≥ 2
+searched EXACTLY the admitted moves (no futility above depth 1, the
+killer is val-gated, the sorted break is the filter), and the sticky
+evidence bit already certified every searched move illegal.  Only the
+filtered remainder is probed; at depth 1 futility skips admitted moves,
+so everything is probed (one of the golf agent's two countermodels for
+the naive reduction; the other -- a raw null fail-low outscoring a legal
+real move's yield -- is why `live` is evidence-shaped, not
+winner-shaped). -/
+def scanNewB (G : QSGame) (d : Nat) (p : G.Pos) : Bool :=
+  (G.moves p).all (fun m =>
+    (decide (1 < d) && decide (val_lower d ≤ G.val p m)) ||
+    hasKingCapture G.toNullGame.toGame m)
+
+/-- The golfed correction: fail-low, `not live` (the sticky evidence
+bit: NO searched real yield ever exceeded the sentinel -- exactly
+`S = LOSS`), and the reduced scan. -/
+def golfFix (G : QSGame) (d : Nat) (gamma best S : Int) (p : G.Pos) : Int :=
+  if best < gamma ∧ S = LOSS ∧ scanNewB G d p = true then
+    (if inCheckB G.toNullGame p = true then -MATE_LOWER else 0)
+  else best
+
+/-- **NoMaskedMobility** (the premise the reduced scan genuinely needs
+-- `reducedScan_needs_premise` below is the countermodel; the hoped-for
+"chess-assumption-free" equivalence is FALSE without it): a position
+whose every depth-1-admitted move is illegal has no legal move at all.
+Failure shape: all high-valued moves illegal while some legal move
+drops more than `QS_A - QS` (= 100) of table value -- the depth-1 node
+then returns the raw `-MATE_UPPER` fold although the scan SAW the legal
+move, a depth-2 parent converts that to a spurious `MATE_UPPER`, and
+from depth 3 up the probe-free scan trusts the corrupted sentinel.
+Chess-plausibility: no natural position with ONLY >100cp-dropping legal
+moves is known; table arithmetic does not exclude it (`ValFloor` is
+192 > 100). -/
+def NoMaskedMobility (G : QSGame) : Prop :=
+  ∀ p, (∀ m ∈ movesAbove G (val_lower 1) p, hasKingCapture G.toNullGame.toGame m = true) →
+    ∀ m ∈ G.moves p, hasKingCapture G.toNullGame.toGame m = true
+
 /-- **The production search**: NO eager king-capture branch -- the
 invariant is restored by the consumer.  A virtual fail-high either
 substitutes the real capture (`MATE_UPPER`), cuts validated, or is
 normalized into the fold; the correction is the same `not live`
 verify-on-suspicion block (`d2Fix`).  As in `boundD2`, the null yield
 is the search's OWN pass probe, part of the definition. -/
-def boundKCX (G : QSGame) (probe : G.Pos → Bool)
-    (guard : G.Pos → Bool) :
+def boundKCX (G : QSGame) (guard : G.Pos → Bool) :
     Nat → G.Pos → Int → Int
   | 0, p, _gamma =>
     if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
@@ -4118,81 +4096,75 @@ def boundKCX (G : QSGame) (probe : G.Pos → Bool)
     else G.eval p
   | 1, p, gamma =>
     if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
-    else if NCut G guard (-(boundKCX G probe guard 0 (G.pass p) (1 - gamma))) 1 p gamma then
+    else if NCut G guard (-(boundKCX G guard 0 (G.pass p) (1 - gamma))) 1 p gamma then
       (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
-       else -(boundKCX G probe guard 0 (G.pass p) (1 - gamma)))
+       else -(boundKCX G guard 0 (G.pass p) (1 - gamma)))
     else
-      d2Fix G probe gamma
-        (max (nFoldKCX G guard (-(boundKCX G probe guard 0 (G.pass p) (1 - gamma))) 1 p gamma)
+      golfFix G 1 gamma
+        (max (nFoldKCX G guard (-(boundKCX G guard 0 (G.pass p) (1 - gamma))) 1 p gamma)
           (searchMoves gamma
-            (fun m => -(boundKCX G probe guard 0 m (1 - gamma)))
+            (fun m => -(boundKCX G guard 0 m (1 - gamma)))
             (movesAbove G (val_lower 1) p) LOSS))
         (searchMoves gamma
-          (fun m => -(boundKCX G probe guard 0 m (1 - gamma)))
+          (fun m => -(boundKCX G guard 0 m (1 - gamma)))
           (movesAbove G (val_lower 1) p) LOSS)
-        (nFoldKCX G guard (-(boundKCX G probe guard 0 (G.pass p) (1 - gamma))) 1 p gamma)
         p
   | 2, p, gamma =>
     if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
-    else if NCut G guard (-(boundKCX G probe guard 0 (G.pass p) (1 - gamma))) 2 p gamma then
+    else if NCut G guard (-(boundKCX G guard 0 (G.pass p) (1 - gamma))) 2 p gamma then
       (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
-       else -(boundKCX G probe guard 0 (G.pass p) (1 - gamma)))
+       else -(boundKCX G guard 0 (G.pass p) (1 - gamma)))
     else
-      d2Fix G probe gamma
-        (max (nFoldKCX G guard (-(boundKCX G probe guard 0 (G.pass p) (1 - gamma))) 2 p gamma)
+      golfFix G 2 gamma
+        (max (nFoldKCX G guard (-(boundKCX G guard 0 (G.pass p) (1 - gamma))) 2 p gamma)
           (searchMoves gamma
-            (fun m => -(boundKCX G probe guard 1 m (1 - gamma)))
+            (fun m => -(boundKCX G guard 1 m (1 - gamma)))
             (movesAbove G (val_lower 2) p) LOSS))
         (searchMoves gamma
-          (fun m => -(boundKCX G probe guard 1 m (1 - gamma)))
+          (fun m => -(boundKCX G guard 1 m (1 - gamma)))
           (movesAbove G (val_lower 2) p) LOSS)
-        (nFoldKCX G guard (-(boundKCX G probe guard 0 (G.pass p) (1 - gamma))) 2 p gamma)
         p
   | d + 3, p, gamma =>
     if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
-    else if NCut G guard (-(boundKCX G probe guard d (G.pass p) (1 - gamma))) (d + 3) p gamma then
+    else if NCut G guard (-(boundKCX G guard d (G.pass p) (1 - gamma))) (d + 3) p gamma then
       (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
-       else -(boundKCX G probe guard d (G.pass p) (1 - gamma)))
+       else -(boundKCX G guard d (G.pass p) (1 - gamma)))
     else
-      d2Fix G probe gamma
-        (max (nFoldKCX G guard (-(boundKCX G probe guard d (G.pass p) (1 - gamma))) (d + 3) p gamma)
+      golfFix G (d + 3) gamma
+        (max (nFoldKCX G guard (-(boundKCX G guard d (G.pass p) (1 - gamma))) (d + 3) p gamma)
           (searchMoves gamma
-            (fun m => -(boundKCX G probe guard (d + 2) m (1 - gamma)))
+            (fun m => -(boundKCX G guard (d + 2) m (1 - gamma)))
             (movesAbove G (val_lower (d + 3)) p) LOSS))
         (searchMoves gamma
-          (fun m => -(boundKCX G probe guard (d + 2) m (1 - gamma)))
+          (fun m => -(boundKCX G guard (d + 2) m (1 - gamma)))
           (movesAbove G (val_lower (d + 3)) p) LOSS)
-        (nFoldKCX G guard (-(boundKCX G probe guard d (G.pass p) (1 - gamma))) (d + 3) p gamma)
         p
 
 /-- The uniform successor equation for the production search. -/
-theorem boundKCX_succ (G : QSGame) (probe : G.Pos → Bool)
-    (guard : G.Pos → Bool) (d : Nat) (p : G.Pos) (gamma : Int) :
-    boundKCX G probe guard (d + 1) p gamma
+theorem boundKCX_succ (G : QSGame) (guard : G.Pos → Bool) (d : Nat) (p : G.Pos) (gamma : Int) :
+    boundKCX G guard (d + 1) p gamma
       = if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
-        else if NCut G guard (-(boundKCX G probe guard (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma then
+        else if NCut G guard (-(boundKCX G guard (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma then
           (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
-           else -(boundKCX G probe guard (d + 1 - 3) (G.pass p) (1 - gamma)))
+           else -(boundKCX G guard (d + 1 - 3) (G.pass p) (1 - gamma)))
         else
-          d2Fix G probe gamma
-            (max (nFoldKCX G guard (-(boundKCX G probe guard (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma)
+          golfFix G (d + 1) gamma
+            (max (nFoldKCX G guard (-(boundKCX G guard (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma)
               (searchMoves gamma
-                (fun m => -(boundKCX G probe guard d m (1 - gamma)))
+                (fun m => -(boundKCX G guard d m (1 - gamma)))
                 (movesAbove G (val_lower (d + 1)) p) LOSS))
             (searchMoves gamma
-              (fun m => -(boundKCX G probe guard d m (1 - gamma)))
+              (fun m => -(boundKCX G guard d m (1 - gamma)))
               (movesAbove G (val_lower (d + 1)) p) LOSS)
-            (nFoldKCX G guard (-(boundKCX G probe guard (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma)
             p := by
   match d with
   | 0 => rfl
   | 1 => rfl
   | d + 2 => rfl
 
-theorem boundKCX_kingGone (G : QSGame) (probe : G.Pos → Bool)
-    (guard : G.Pos → Bool)
+theorem boundKCX_kingGone (G : QSGame) (guard : G.Pos → Bool)
     (d : Nat) (p : G.Pos) (gamma : Int) (h : G.eval p ≤ -MATE_LOWER) :
-    boundKCX G probe guard d p gamma = -MATE_UPPER := by
+    boundKCX G guard d p gamma = -MATE_UPPER := by
   cases d with
   | zero => simp only [boundKCX]; rw [if_pos h]
   | succ d => rw [boundKCX_succ, if_pos h]
@@ -4348,6 +4320,340 @@ theorem nullArm_match (G : QSGame)
     rw [if_neg hen, if_neg (by rw [hu]; exact fun h => Bool.noConfusion h)]
     rfl
 
+/-! ### The two-way sentinel, and the reduced-scan bridge -/
+
+/-- A result at least `Y` (above the seed) names a yield at least `Y`. -/
+theorem searchMoves_exists_ge {α : Type _} (gamma : Int) (f : α → Int) :
+    ∀ (ms : List α) (b Y : Int), b < Y → Y ≤ searchMoves gamma f ms b →
+      ∃ m ∈ ms, Y ≤ f m := by
+  intro ms
+  induction ms with
+  | nil =>
+    intro b Y hb hge
+    simp only [searchMoves] at hge
+    omega
+  | cons a ms ih =>
+    intro b Y hb hge
+    simp only [searchMoves] at hge
+    by_cases hcut : gamma ≤ max b (f a)
+    · rw [if_pos hcut] at hge
+      exact ⟨a, List.mem_cons_self a ms, by omega⟩
+    · rw [if_neg hcut] at hge
+      by_cases hfa : Y ≤ f a
+      · exact ⟨a, List.mem_cons_self a ms, hfa⟩
+      · obtain ⟨m, hm, h⟩ := ih (max b (f a)) Y (by omega) hge
+        exact ⟨m, List.mem_cons_of_mem a hm, h⟩
+
+/-- The null contribution never sinks below the fold identity (the
+pass probe is band-bounded). -/
+theorem nullPartD2_ge_LOSS (G : QSGame) (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (d : Nat) (p : G.Pos) (gamma : Int)
+    (hg1 : -MATE_LOWER < gamma) (hg2 : gamma ≤ MATE_LOWER) :
+    LOSS ≤ nullPartD2 G guard kill
+      (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma)))
+      (d + 1) p gamma := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  have hpb := boundD2_bounded G guard kill hB
+    (d + 1 - 3) (G.pass p) (1 - gamma) (by omega) (by omega)
+  simp only [nullPartD2]
+  by_cases hu : useD2 G guard kill
+      (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma = true
+  · rw [if_pos hu]
+    simp only [nullVerify]
+    by_cases hw : 0 < (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) ∧
+        gamma ≤ (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) ∧
+        (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) < MATE_LOWER ∧
+        kill p = false ∧ allIllegalB G p = true
+    · rw [if_pos hw]; omega
+    · rw [if_neg hw]; omega
+  · rw [if_neg hu]; omega
+
+/-- **The two-way sentinel** (the golfed consumer's load-bearing claim,
+proven for the reference semantics): at a quiet node the search never
+returns the reserved sentinel, and a returned `MATE_UPPER` proves a
+king capture.  This is what makes a searched real yield two-way
+legality EVIDENCE.  Premises: the value facts, plus `NoMaskedMobility`
+-- without which the claim is FALSE from depth 2 up
+(`reducedScan_needs_premise`). -/
+theorem sentinel_two_way_D2 (G : QSGame) (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (hQ : EvalQuiet G.toNullGame.toGame)
+    {B : Int} (hF : ValFloor G B) (h240 : B ≤ 240)
+    (hNM : NoMaskedMobility G) :
+    ∀ (d : Nat) (p : G.Pos) (gamma : Int),
+      -MATE_LOWER < gamma → gamma ≤ MATE_LOWER →
+      ¬ (G.eval p ≤ -MATE_LOWER) →
+      (boundD2 G guard kill d p gamma = MATE_UPPER →
+        hasKingCapture G.toNullGame.toGame p = true) ∧
+      (hasKingCapture G.toNullGame.toGame p = false →
+        -MATE_UPPER < boundD2 G guard kill d p gamma) := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  intro d
+  induction d using Nat.strongRecOn with
+  | _ d ih =>
+    intro p gamma hg1 hg2 hkg
+    have hqp := hQ p hkg
+    cases d with
+    | zero =>
+      constructor
+      · intro h
+        cases hc : hasKingCapture G.toNullGame.toGame p with
+        | true => rfl
+        | false =>
+          exfalso
+          simp only [boundD2] at h
+          rw [if_neg hkg, if_neg (by simp [hc])] at h
+          omega
+      · intro hc
+        simp only [boundD2]
+        rw [if_neg hkg, if_neg (by simp [hc])]
+        omega
+    | succ d =>
+      -- The shared branch analysis, once.
+      have core : ∀ r : Int, r = boundD2 G guard kill (d + 1) p gamma →
+          hasKingCapture G.toNullGame.toGame p = false →
+          -MATE_UPPER < r ∧ (r = MATE_UPPER → False) := by
+        intro r hr hc
+        have hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true) := by
+          simp [hc]
+        rw [boundD2_succ, if_neg hkg, if_neg hcap] at hr
+        by_cases hcut : useD2 G guard kill
+            (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma = true ∧
+            gamma ≤ nullVerify G kill
+              (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
+        · rw [if_pos hcut] at hr
+          have hu := hcut.1
+          simp only [useD2, Bool.and_eq_true, decide_eq_true_eq] at hu
+          constructor
+          · omega
+          · intro hMUr; omega
+        · rw [if_neg hcut] at hr
+          -- All quiet-node exits of the correction stay strictly inside
+          -- (-MATE_UPPER, MATE_UPPER).
+          have hSl := searchMoves_ge_init gamma
+            (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+            (movesAbove G (val_lower (d + 1)) p) LOSS
+          -- every admitted child that reports the negated sentinel is a
+          -- king capture (strong IH), so an untouched fold certifies the
+          -- admitted moves illegal
+          have hadm : searchMoves gamma
+              (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+              (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS →
+              ∀ m ∈ movesAbove G (val_lower (d + 1)) p,
+                hasKingCapture G.toNullGame.toGame m = true := by
+            intro hS m hm
+            have hle : -(boundD2 G guard kill d m (1 - gamma)) ≤ LOSS :=
+              searchMoves_eq_init_all gamma
+                (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+                (movesAbove G (val_lower (d + 1)) p) LOSS (by omega) hS m hm
+            have hmkg : ¬ (G.eval m ≤ -MATE_LOWER) := fun hh =>
+              hcap ((hasKingCapture_iff G.toNullGame.toGame p).mpr
+                ⟨m, movesAbove_subset G (val_lower (d + 1)) p m hm, hh⟩)
+            have hmm := (ih d (by omega) m (1 - gamma) (by omega) (by omega) hmkg).1
+            have hub := boundD2_bounded G guard kill hB d m (1 - gamma)
+              (by omega) (by omega)
+            have := hmm (by omega)
+            exact this
+          have hAI : searchMoves gamma
+              (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+              (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS →
+              allIllegalB G p = true := by
+            intro hS
+            rw [allIllegalB_true_iff]
+            by_cases hd1 : d = 0
+            · subst hd1
+              exact hNM p (hadm hS)
+            · have hall : allAboveB G (d + 1) p = true :=
+                allAboveB_of_floor G hF (d + 1) p (by
+                  unfold val_lower QS QS_A
+                  omega)
+              intro m hm
+              refine hadm hS m ?_
+              rw [movesAbove_all G (d + 1) p hall]
+              exact hm
+          have hnge := nullPartD2_ge_LOSS G guard kill hB d p gamma hg1 hg2
+          have hnub : nullPartD2 G guard kill
+              (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma)))
+              (d + 1) p gamma ≤ MATE_LOWER := by
+            simp only [nullPartD2]
+            by_cases hu : useD2 G guard kill
+                (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma = true
+            · rw [if_pos hu]
+              simp only [useD2, Bool.and_eq_true, decide_eq_true_eq] at hu
+              omega
+            · rw [if_neg hu]; omega
+          simp only [d2Fix] at hr
+          by_cases hfire : max (nullPartD2 G guard kill
+                (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma)
+                (searchMoves gamma (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+                  (movesAbove G (val_lower (d + 1)) p) LOSS) < gamma ∧
+              searchMoves gamma (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+                (movesAbove G (val_lower (d + 1)) p) LOSS
+                ≤ nullPartD2 G guard kill
+                    (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma ∧
+              allIllegalB G p = true
+          · rw [if_pos hfire] at hr
+            by_cases hic : inCheckB G.toNullGame p = true
+            · rw [if_pos hic] at hr
+              constructor
+              · omega
+              · intro h; omega
+            · rw [if_neg hic] at hr
+              constructor
+              · omega
+              · intro h; omega
+          · rw [if_neg hfire] at hr
+            -- passthrough: if the fold sits at the identity the gate
+            -- would have fired, so it does not
+            by_cases hS : searchMoves gamma
+                (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+                (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS
+            · exfalso
+              have hnlt : nullPartD2 G guard kill
+                  (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma)))
+                  (d + 1) p gamma < gamma := by
+                simp only [nullPartD2]
+                by_cases hu : useD2 G guard kill
+                    (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma = true
+                · rw [if_pos hu]
+                  by_cases hge : gamma ≤ nullVerify G kill
+                      (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma p
+                  · exact absurd ⟨hu, hge⟩ hcut
+                  · omega
+                · rw [if_neg hu]; omega
+              exact hfire ⟨by omega, by omega, hAI hS⟩
+            · -- a live fold: some yield above the identity, and no yield
+              -- exceeds what a capture-free child can justify
+              constructor
+              · omega
+              · intro hMUr
+                rw [hMUr] at hr
+                -- max n S = MATE_UPPER with n ≤ MATE_LOWER forces S = MATE_UPPER
+                have hSMU : MATE_UPPER ≤ searchMoves gamma
+                    (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+                    (movesAbove G (val_lower (d + 1)) p) LOSS := by omega
+                obtain ⟨m, hm, hf⟩ := searchMoves_exists_ge gamma
+                  (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+                  (movesAbove G (val_lower (d + 1)) p) LOSS MATE_UPPER (by omega) hSMU
+                have hmkg : ¬ (G.eval m ≤ -MATE_LOWER) := fun hh =>
+                  hcap ((hasKingCapture_iff G.toNullGame.toGame p).mpr
+                    ⟨m, movesAbove_subset G (val_lower (d + 1)) p m hm, hh⟩)
+                cases hcm : hasKingCapture G.toNullGame.toGame m with
+                | true =>
+                  have := boundD2_of_capture G guard kill d m (1 - gamma) hmkg hcm
+                  omega
+                | false =>
+                  have := (ih d (by omega) m (1 - gamma) (by omega) (by omega) hmkg).2 hcm
+                  omega
+      constructor
+      · intro h
+        cases hc : hasKingCapture G.toNullGame.toGame p with
+        | true => rfl
+        | false => exact ((core _ rfl hc).2 h).elim
+      · intro hc
+        exact (core _ rfl hc).1
+
+/-- **The reduced scan equals the oracle scan where it fires** -- the
+golfed gate and the reference gate compute the same correction, given
+the two-way sentinel's premises.  (⇐) an oracle-confirmed terminal
+passes the reduced scan move-by-move and pins the fold to the identity;
+(⇒) an identity fold certifies the admitted moves illegal through the
+two-way sentinel, and `ValFloor` (depth ≥ 2) or `NoMaskedMobility`
+(depth 1) extends that to every move -- so the reduced-scan gate can
+only fire where the oracle gate does. -/
+theorem golfFix_eq_d2Fix (G : QSGame) (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (hQ : EvalQuiet G.toNullGame.toGame)
+    {B : Int} (hF : ValFloor G B) (h240 : B ≤ 240) (hNM : NoMaskedMobility G)
+    (d : Nat) (p : G.Pos) (gamma : Int)
+    (hg1 : -MATE_LOWER < gamma) (hg2 : gamma ≤ MATE_LOWER)
+    (_hkg : ¬ (G.eval p ≤ -MATE_LOWER))
+    (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
+    (n : Int) (hnge : LOSS ≤ n) :
+    golfFix G (d + 1) gamma
+        (max n (searchMoves gamma (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+          (movesAbove G (val_lower (d + 1)) p) LOSS))
+        (searchMoves gamma (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+          (movesAbove G (val_lower (d + 1)) p) LOSS) p
+      = d2Fix G gamma
+          (max n (searchMoves gamma (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+            (movesAbove G (val_lower (d + 1)) p) LOSS))
+          (searchMoves gamma (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+            (movesAbove G (val_lower (d + 1)) p) LOSS) n p := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  have hadm : searchMoves gamma (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+      (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS →
+      ∀ m ∈ movesAbove G (val_lower (d + 1)) p,
+        hasKingCapture G.toNullGame.toGame m = true := by
+    intro hS m hm
+    have hle : -(boundD2 G guard kill d m (1 - gamma)) ≤ LOSS :=
+      searchMoves_eq_init_all gamma
+        (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+        (movesAbove G (val_lower (d + 1)) p) LOSS (by omega) hS m hm
+    have hmkg : ¬ (G.eval m ≤ -MATE_LOWER) := fun hh =>
+      hcap ((hasKingCapture_iff G.toNullGame.toGame p).mpr
+        ⟨m, movesAbove_subset G (val_lower (d + 1)) p m hm, hh⟩)
+    have hub := boundD2_bounded G guard kill hB d m (1 - gamma)
+      (by omega) (by omega)
+    exact (sentinel_two_way_D2 G guard kill hB hQ hF h240 hNM
+      d m (1 - gamma) (by omega) (by omega) hmkg).1 (by omega)
+  have hAI : searchMoves gamma (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+      (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS →
+      allIllegalB G p = true := by
+    intro hS
+    rw [allIllegalB_true_iff]
+    by_cases hd1 : d = 0
+    · subst hd1
+      exact hNM p (hadm hS)
+    · have hall : allAboveB G (d + 1) p = true :=
+        allAboveB_of_floor G hF (d + 1) p (by
+          unfold val_lower QS QS_A
+          omega)
+      intro m hm
+      refine hadm hS m ?_
+      rw [movesAbove_all G (d + 1) p hall]
+      exact hm
+  by_cases hai : allIllegalB G p = true
+  · have hSL : searchMoves gamma (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+        (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS := by
+      refine searchMoves_eq_init gamma _ _ LOSS (fun m hm => ?_) (by omega)
+      show -(boundD2 G guard kill d m (1 - gamma)) ≤ LOSS
+      have hmm := movesAbove_subset G (val_lower (d + 1)) p m hm
+      have hcm := allIllegalB_true_iff.mp hai m hmm
+      have hmkg : ¬ (G.eval m ≤ -MATE_LOWER) := fun hh =>
+        hcap ((hasKingCapture_iff G.toNullGame.toGame p).mpr ⟨m, hmm, hh⟩)
+      rw [boundD2_of_capture G guard kill d m (1 - gamma) hmkg hcm]
+      omega
+    have hscan : scanNewB G (d + 1) p = true := by
+      refine List.all_eq_true.mpr fun m hm => ?_
+      rw [Bool.or_eq_true]
+      exact Or.inr (allIllegalB_true_iff.mp hai m hm)
+    simp only [golfFix, d2Fix]
+    by_cases hb : max n (searchMoves gamma
+        (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+        (movesAbove G (val_lower (d + 1)) p) LOSS) < gamma
+    · have hfg : max n (searchMoves gamma
+          (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+          (movesAbove G (val_lower (d + 1)) p) LOSS) < gamma ∧
+          searchMoves gamma (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+            (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS ∧
+          scanNewB G (d + 1) p = true := ⟨hb, hSL, hscan⟩
+      have hfd : max n (searchMoves gamma
+          (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+          (movesAbove G (val_lower (d + 1)) p) LOSS) < gamma ∧
+          searchMoves gamma (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+            (movesAbove G (val_lower (d + 1)) p) LOSS ≤ n ∧
+          allIllegalB G p = true := ⟨hb, by omega, hai⟩
+      rw [if_pos hfg, if_pos hfd]
+    · rw [if_neg (fun h => hb h.1), if_neg (fun h => hb h.1)]
+  · simp only [golfFix, d2Fix]
+    rw [if_neg (fun h => hai (hAI h.2.1)),
+      if_neg (fun h => hai h.2.2)]
+
 /-! ### The top statement: reference ≡ production -/
 
 /-- **production_eq_reference**: the production consumer computes
@@ -4362,14 +4668,16 @@ definitional) pass probe (`nullArm_match`), and the folds agree
 child-by-child.  By strong induction: children one level down, the
 pass three levels down.  Machine-checked twin of the build battery's
 `reference == production` over 9,600 probes. -/
-theorem production_eq_reference (G : QSGame) (probe : G.Pos → Bool)
+theorem production_eq_reference (G : QSGame)
     (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (hQ : EvalQuiet G.toNullGame.toGame)
+    {B : Int} (hF : ValFloor G B) (h240 : B ≤ 240) (hNM : NoMaskedMobility G)
     (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
     (hK : KillerLegal G kill) :
     ∀ (d : Nat) (p : G.Pos) (gamma : Int),
       -MATE_LOWER < gamma → gamma ≤ MATE_LOWER →
-      boundKCX G probe guard d p gamma
-        = boundD2 G probe guard kill d p gamma := by
+      boundKCX G guard d p gamma
+        = boundD2 G guard kill d p gamma := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
@@ -4382,47 +4690,47 @@ theorem production_eq_reference (G : QSGame) (probe : G.Pos → Bool)
       simp only [boundKCX, boundD2]
     | succ d =>
       by_cases hkg : G.eval p ≤ -MATE_LOWER
-      · rw [boundKCX_kingGone G probe guard (d + 1) p gamma hkg,
-          boundD2_kingGone G probe guard kill (d + 1) p gamma hkg]
+      · rw [boundKCX_kingGone G guard (d + 1) p gamma hkg,
+          boundD2_kingGone G guard kill (d + 1) p gamma hkg]
       · -- The two pass probes are the same value, by the induction
         -- hypothesis at the reduced depth (band window flip).
-        have hpasseq : -(boundKCX G probe guard (d + 1 - 3) (G.pass p) (1 - gamma))
-            = -(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma)) := by
+        have hpasseq : -(boundKCX G guard (d + 1 - 3) (G.pass p) (1 - gamma))
+            = -(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma)) := by
           rw [ih (d + 1 - 3) (by omega) (G.pass p) (1 - gamma) (by omega) (by omega)]
         rw [boundKCX_succ, if_neg hkg, hpasseq, boundD2_succ, if_neg hkg]
         by_cases hcap : hasKingCapture G.toNullGame.toGame p = true
         · -- King-capturable: the reference's eager MATE_UPPER, reproduced.
           by_cases hnc : NCut G guard
-              (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma)))
+              (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma)))
               (d + 1) p gamma
           · rw [if_pos hnc, if_pos hcap, if_pos hcap]
           · rw [if_neg hnc, if_pos hcap]
             obtain ⟨k, rest, hmoves, hkev⟩ := hCF p hcap
             obtain ⟨rest', hma⟩ :=
               movesAbove_cons_of_captureFirst G hV hmoves hkev (d + 1)
-            have hfk : -(boundKCX G probe guard d k (1 - gamma))
+            have hfk : -(boundKCX G guard d k (1 - gamma))
                 = MATE_UPPER := by
-              rw [boundKCX_kingGone G probe guard d k (1 - gamma) hkev]
+              rw [boundKCX_kingGone G guard d k (1 - gamma) hkev]
               omega
             have hS : searchMoves gamma
-                (fun m => -(boundKCX G probe guard d m (1 - gamma)))
+                (fun m => -(boundKCX G guard d m (1 - gamma)))
                 (movesAbove G (val_lower (d + 1)) p) LOSS = MATE_UPPER := by
               rw [hma]
               simp only [searchMoves]
               rw [hfk, if_pos (by omega)]
               omega
             have hnF : nFoldKCX G guard
-                (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma)))
+                (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma)))
                 (d + 1) p gamma < gamma := by
               simp only [nFoldKCX]
               by_cases hen : guard p = true ∧ 2 < d + 1
               · rw [if_pos hen]
-                by_cases hge : gamma ≤ -(boundD2 G probe guard kill (d + 1 - 3)
+                by_cases hge : gamma ≤ -(boundD2 G guard kill (d + 1 - 3)
                     (G.pass p) (1 - gamma))
                 · exact absurd ⟨hen, hge, Or.inl hcap⟩ hnc
                 · rw [if_neg hge]; omega
               · rw [if_neg hen]; omega
-            simp only [d2Fix]
+            simp only [golfFix]
             rw [hS, if_neg (fun h => absurd h.1 (by omega))]
             omega
         · -- Not capturable: null arms match, folds agree by induction.
@@ -4432,31 +4740,34 @@ theorem production_eq_reference (G : QSGame) (probe : G.Pos → Bool)
             · exact absurd h hcap
           obtain ⟨hiff, hval, hfold⟩ :=
             nullArm_match G guard kill
-              (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma)))
+              (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma)))
               hK d p gamma hg1 hg2 hkg hcapf
           have hSeq : searchMoves gamma
-              (fun m => -(boundKCX G probe guard d m (1 - gamma)))
+              (fun m => -(boundKCX G guard d m (1 - gamma)))
               (movesAbove G (val_lower (d + 1)) p) LOSS
               = searchMoves gamma
-                  (fun m => -(boundD2 G probe guard kill d m (1 - gamma)))
+                  (fun m => -(boundD2 G guard kill d m (1 - gamma)))
                   (movesAbove G (val_lower (d + 1)) p) LOSS := by
             refine searchMoves_congr gamma _ _ _ LOSS (fun m _ => ?_)
-            show -(boundKCX G probe guard d m (1 - gamma))
-                = -(boundD2 G probe guard kill d m (1 - gamma))
+            show -(boundKCX G guard d m (1 - gamma))
+                = -(boundD2 G guard kill d m (1 - gamma))
             rw [ih d (by omega) m (1 - gamma) (by omega) (by omega)]
           by_cases hnc : NCut G guard
-              (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma)))
+              (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma)))
               (d + 1) p gamma
           · have hcut := hiff.mp hnc
             rw [if_pos hnc, if_neg hcap, if_neg hcap, if_pos hcut, hval hnc]
           · have hcut : ¬ (useD2 G guard kill
-                (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma)))
+                (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma)))
                 (d + 1) p gamma = true ∧
                 gamma ≤ nullVerify G kill
-                  (-(boundD2 G probe guard kill (d + 1 - 3) (G.pass p) (1 - gamma)))
+                  (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma)))
                   gamma p) :=
               fun h => hnc (hiff.mpr h)
             rw [if_neg hnc, if_neg hcap, if_neg hcut, hSeq, hfold hnc]
+            exact golfFix_eq_d2Fix G guard kill hB hQ hF h240 hNM d p gamma
+              hg1 hg2 hkg hcap _
+              (nullPartD2_ge_LOSS G guard kill hB d p gamma hg1 hg2)
 
 /-! ### The restored invariant, and the transfers -/
 
@@ -4467,86 +4778,86 @@ as exactly `MATE_UPPER`, at every depth and driver-range window --
 by construction of the consumer, via the equivalence with the eager
 reference.  This is the invariant the whole pre-kcx ledger orbited;
 `CexR` remains as the record of why the repair was needed. -/
-theorem kingCapturableReportsExact_restored (G : QSGame) (probe : G.Pos → Bool)
+theorem kingCapturableReportsExact_restored (G : QSGame)
     (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (hQ : EvalQuiet G.toNullGame.toGame)
+    {B : Int} (hF : ValFloor G B) (h240 : B ≤ 240) (hNM : NoMaskedMobility G)
     (hV : KingCaptureValHigh G) (hCF : CaptureFirst G) (hK : KillerLegal G kill)
     (d : Nat) (p : G.Pos) (gamma : Int)
     (hg1 : -MATE_LOWER < gamma) (hg2 : gamma ≤ MATE_LOWER)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : hasKingCapture G.toNullGame.toGame p = true) :
-    boundKCX G probe guard d p gamma = MATE_UPPER := by
-  rw [production_eq_reference G probe guard kill hV hCF hK d p gamma hg1 hg2]
-  exact boundD2_of_capture G probe guard kill d p gamma hkg hcap
+    boundKCX G guard d p gamma = MATE_UPPER := by
+  rw [production_eq_reference G guard kill hB hQ hF h240 hNM hV hCF hK d p gamma hg1 hg2]
+  exact boundD2_of_capture G guard kill d p gamma hkg hcap
 
 /-- The layered spec, transferred to production: the shipped consumer
 brackets the null-inclusive declared value function -- no null bet, one
 band premise (see `bound_null_spec`). -/
-theorem boundKCX_null_spec (G : QSGame) (probe : G.Pos → Bool)
+theorem boundKCX_null_spec (G : QSGame)
     (guard kill : G.Pos → Bool)
-    (hB : Bounded G.toNullGame.toGame)
-    (hP : CheckProbeQuiet G probe)
+    (hB : Bounded G.toNullGame.toGame) (hQ : EvalQuiet G.toNullGame.toGame)
+    {B : Int} (hF : ValFloor G B) (h240 : B ≤ 240) (hNM : NoMaskedMobility G)
     (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
     (hK : KillerLegal G kill)
     (hR : NoZugzwangInMateBand G guard) :
     ∀ (d : Nat) (p : G.Pos) (gamma : Int),
       -MATE_LOWER < gamma → gamma ≤ MATE_LOWER →
-      (gamma ≤ boundKCX G probe guard d p gamma →
-        boundKCX G probe guard d p gamma ≤ nullValueD2 G guard d p) ∧
-      (boundKCX G probe guard d p gamma < gamma →
-        nullValueD2 G guard d p ≤ boundKCX G probe guard d p gamma) := by
+      (gamma ≤ boundKCX G guard d p gamma →
+        boundKCX G guard d p gamma ≤ nullValueD2 G guard d p) ∧
+      (boundKCX G guard d p gamma < gamma →
+        nullValueD2 G guard d p ≤ boundKCX G guard d p gamma) := by
   intro d p gamma h1 h2
-  rw [production_eq_reference G probe guard kill hV hCF hK d p gamma h1 h2]
-  exact bound_null_spec G probe guard kill hB hP hK hR d p gamma h1 h2
+  rw [production_eq_reference G guard kill hB hQ hF h240 hNM hV hCF hK d p gamma h1 h2]
+  exact bound_null_spec G guard kill hB hK hR d p gamma h1 h2
 
 /-- **VerifiedSearchNoCrossing**, production form: two driver-range
 probes of the same `(pos, depth)` never store contradictory bounds --
 zugzwang-free, bet-free, exactness restored.  (Table lookups and
 repetition are the CanNull layer; `HistoryLegal` below closes the one
 path that precedes the consumer.) -/
-theorem kcx_no_crossing (G : QSGame) (probe : G.Pos → Bool)
+theorem kcx_no_crossing (G : QSGame)
     (guard kill : G.Pos → Bool)
-    (hB : Bounded G.toNullGame.toGame)
-    (hP : CheckProbeQuiet G probe)
+    (hB : Bounded G.toNullGame.toGame) (hQ : EvalQuiet G.toNullGame.toGame)
+    {B : Int} (hF : ValFloor G B) (h240 : B ≤ 240) (hNM : NoMaskedMobility G)
     (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
     (hK : KillerLegal G kill)
     (hR : NoZugzwangInMateBand G guard)
     (d : Nat) (p : G.Pos) (g1 g2 : Int)
     (hg1a : -MATE_LOWER < g1) (hg1b : g1 ≤ MATE_LOWER)
     (hg2a : -MATE_LOWER < g2) (hg2b : g2 ≤ MATE_LOWER)
-    (hhi : g1 ≤ boundKCX G probe guard d p g1)
-    (hlo : boundKCX G probe guard d p g2 < g2) :
-    boundKCX G probe guard d p g1 ≤ boundKCX G probe guard d p g2 := by
-  have h1 := (boundKCX_null_spec G probe guard kill hB hP hV hCF hK hR
+    (hhi : g1 ≤ boundKCX G guard d p g1)
+    (hlo : boundKCX G guard d p g2 < g2) :
+    boundKCX G guard d p g1 ≤ boundKCX G guard d p g2 := by
+  have h1 := (boundKCX_null_spec G guard kill hB hQ hF h240 hNM hV hCF hK hR
     d p g1 hg1a hg1b).1 hhi
-  have h2 := (boundKCX_null_spec G probe guard kill hB hP hV hCF hK hR
+  have h2 := (boundKCX_null_spec G guard kill hB hQ hF h240 hNM hV hCF hK hR
     d p g2 hg2a hg2b).2 hlo
   omega
 
 /-- The chess-facing production spec: under `NoZugzwang`, production
 brackets the real-move value. -/
-theorem boundKCX_spec (G : QSGame) (probe : G.Pos → Bool)
+theorem boundKCX_spec (G : QSGame)
     (guard kill : G.Pos → Bool)
-    (hB : Bounded G.toNullGame.toGame)
-    (hP : CheckProbeQuiet G probe)
+    (hB : Bounded G.toNullGame.toGame) (hQ : EvalQuiet G.toNullGame.toGame)
+    {B : Int} (hF : ValFloor G B) (h240 : B ≤ 240) (hNM : NoMaskedMobility G)
     (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
     (hK : KillerLegal G kill)
     (hZ : NoZugzwang G guard) :
     ∀ (d : Nat) (p : G.Pos) (gamma : Int),
       -MATE_LOWER < gamma → gamma ≤ MATE_LOWER →
-      BoundSpecD2 G d p gamma (boundKCX G probe guard d p gamma) := by
+      BoundSpecD2 G d p gamma (boundKCX G guard d p gamma) := by
   intro d p gamma h1 h2
-  rw [production_eq_reference G probe guard kill hV hCF hK d p gamma h1 h2]
-  exact boundD2_spec G probe guard kill hB hP hK hZ d p gamma h1 h2
+  rw [production_eq_reference G guard kill hB hQ hF h240 hNM hV hCF hK d p gamma h1 h2]
+  exact boundD2_spec G guard kill hB hK hZ d p gamma h1 h2
 
 /-- The verified loop on the countermodel that broke the pre-kcx
 design, production consumer: exact 0 at both windows (the +30 pass is
 normalized -- positive claim at a verified terminal -- and the
 correction stores the draw). -/
 theorem kcx_repairs_cexT :
-    boundKCX CexT (fun p => inCheckB CexT.toNullGame p)
-        (fun _ => true) 4 () 10 = 0 ∧
-    boundKCX CexT (fun p => inCheckB CexT.toNullGame p)
-        (fun _ => true) 4 () 100 = 0 :=
+    boundKCX CexT (fun _ => true) 4 () 10 = 0 ∧
+    boundKCX CexT (fun _ => true) 4 () 100 = 0 :=
   ⟨by decide, by decide⟩
 
 /-! ### The history hypothesis -/
@@ -4573,5 +4884,152 @@ theorem repetition_never_masks (G : NullGame) (hist : G.Pos → Bool)
   | true =>
     rw [hH p h] at hcap
     exact Bool.noConfusion hcap
+
+/-! ### The reduced scan's countermodel, the warm oracle, the fast path,
+and the clamped driver -/
+
+/-- Countermodel for the premise-free reduced scan: `Q` has one
+admitted-but-illegal move (`A`, whose child `KC` is a captured king)
+and one legal move `F` filtered at depth 1 (value -150 < -100).  `Q`
+returns the raw identity although its scan SAW the legal move; `R`
+converts that to a spurious `MATE_UPPER`; at depth 3 the probe-free
+scan trusts the corrupted sentinel and `P` fires a false terminal.
+`NoMaskedMobility` fails exactly at `Q`. -/
+inductive MPos where
+  | P | R | Q | A | F | KC
+  deriving DecidableEq
+
+open MPos in
+def CexM : QSGame where
+  Pos := MPos
+  moves := fun x => match x with
+    | P => [R]
+    | R => [Q]
+    | Q => [A, F]
+    | A => [KC]
+    | _ => []
+  eval := fun x => match x with
+    | KC => -60000
+    | _ => 0
+  pass := fun x => x
+  val := fun x m => match x, m with
+    | Q, F => -150
+    | _, _ => 0
+
+/-- The golfed gate fires a false terminal at `P` where the oracle gate
+correctly declines; `NoMaskedMobility` is violated.  The reduced scan
+is NOT premise-free -- recorded next to the golf agent's own two
+countermodels (the raw null fail-low outscoring a legal yield, and
+depth-1 futility skipping admitted moves). -/
+theorem reducedScan_needs_premise :
+    boundKCX CexM (fun _ => false) 3 MPos.P 5 = 0 ∧
+    boundD2 CexM (fun _ => false) (fun _ => false) 3 MPos.P 5 = -MATE_UPPER ∧
+    ¬ NoMaskedMobility CexM := by
+  refine ⟨by decide, by decide, fun h => ?_⟩
+  have := h MPos.Q (by decide) MPos.F
+    (show MPos.F ∈ [MPos.A, MPos.F] from List.mem_cons_of_mem _ (List.mem_cons_self _ _))
+  exact absurd this (by decide)
+
+/-- **The warm oracle** (both probe sites store since `c72cf6d`): the
+probe key is always `(child, 0)`, and at depth 0 the declared value IS
+capturability -- `MATE_UPPER` exactly at capturable children, a
+sub-band static value otherwise.  So any sound table bracket of the
+depth-0 value decides the probe: a stored `lower = MATE_UPPER` proves
+capturable (the converse invariant), and a stored `upper < MATE_UPPER`
+proves legal (write-exactness: capturable children never store one,
+because every depth-0 return there is the exact sentinel).  The warm
+probe therefore answers exactly like the cold one, by the same point-
+spec table induction that carries `kcx_no_crossing`. -/
+theorem nullValueD2_zero_MU_iff (G : QSGame) (guard : G.Pos → Bool)
+    (hQ : EvalQuiet G.toNullGame.toGame) (c : G.Pos)
+    (hkg : ¬ (G.eval c ≤ -MATE_LOWER)) :
+    nullValueD2 G guard 0 c = MATE_UPPER
+      ↔ hasKingCapture G.toNullGame.toGame c = true := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  have hq := hQ c hkg
+  simp only [nullValueD2]
+  rw [if_neg hkg]
+  constructor
+  · intro h
+    cases hc : hasKingCapture G.toNullGame.toGame c with
+    | true => rfl
+    | false =>
+      rw [if_neg (by simp [hc])] at h
+      omega
+  · intro hc
+    rw [if_pos hc]
+
+theorem warm_probe_decides (G : QSGame) (guard : G.Pos → Bool)
+    (hQ : EvalQuiet G.toNullGame.toGame)
+    (c : G.Pos) (hkg : ¬ (G.eval c ≤ -MATE_LOWER)) (lo hi : Int)
+    (hlo : lo ≤ nullValueD2 G guard 0 c) (hhi : nullValueD2 G guard 0 c ≤ hi) :
+    (MATE_UPPER ≤ lo → hasKingCapture G.toNullGame.toGame c = true) ∧
+    (hi < MATE_UPPER → hasKingCapture G.toNullGame.toGame c = false) := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  have hq := hQ c hkg
+  constructor
+  · intro h
+    refine (nullValueD2_zero_MU_iff G guard hQ c hkg).mp ?_
+    simp only [nullValueD2] at hlo hhi ⊢
+    rw [if_neg hkg] at hlo hhi ⊢
+    by_cases hc : hasKingCapture G.toNullGame.toGame c = true
+    · rw [if_pos hc]
+    · rw [if_neg hc] at hlo ⊢
+      omega
+  · intro h
+    cases hc : hasKingCapture G.toNullGame.toGame c with
+    | false => rfl
+    | true =>
+      exfalso
+      have := (nullValueD2_zero_MU_iff G guard hQ c hkg).mpr hc
+      omega
+
+/-- **The killer fast path** (`king = self.tp_move.get(pos) or
+pos.king_capture(); if king and pos.value(king) >= MATE_LOWER`): with
+`KillerInv` and `KillerAtKingCapturable` as INPUTS -- they were the
+lifecycle's preserved outputs; the fast path is where they become
+load-bearing -- the O(1) value test decides capturability exactly.
+Fidelity-class caveat: a LIVE `tp_move` carries entries the lifecycle
+theorems built under the current store discipline; entries written by
+other engine versions (or a corrupted table) void the input. -/
+def KillerAtKingCapturable (G : QSGame) (killM : G.Pos → Option G.Pos) : Prop :=
+  ∀ p k, killM p = some k → hasKingCapture G.toNullGame.toGame p = true →
+    G.eval k ≤ -MATE_LOWER
+
+theorem fastPath_decides (G : QSGame) (killM : G.Pos → Option G.Pos)
+    (hV : KingCaptureValHigh G) (hHi : HighValIsKingCapture G)
+    (hInv : KillerInv G killM) (hKAK : KillerAtKingCapturable G killM)
+    (p : G.Pos) :
+    (match killM p with
+      | some k => decide (MATE_LOWER ≤ G.val p k)
+      | none => hasKingCapture G.toNullGame.toGame p)
+      = hasKingCapture G.toNullGame.toGame p := by
+  cases hk : killM p with
+  | none => rfl
+  | some k =>
+    obtain ⟨hm, _⟩ := hInv p k hk
+    cases hc : hasKingCapture G.toNullGame.toGame p with
+    | true => exact decide_eq_true (hV p k hm (hKAK p k hk hc))
+    | false =>
+      apply decide_eq_false
+      intro hval
+      have := (hasKingCapture_iff G.toNullGame.toGame p).mpr
+        ⟨k, hm, hHi p k hm hval⟩
+      rw [hc] at this
+      exact Bool.noConfusion this
+
+/-- A quiet killer certifies mobility, so the terminal arm may skip its
+scan (`not king`). -/
+theorem fastPath_skip_sound (G : QSGame) (killM : G.Pos → Option G.Pos)
+    (hV : KingCaptureValHigh G) (hInv : KillerInv G killM)
+    (p k : G.Pos) (hk : killM p = some k)
+    (hquiet : G.val p k < MATE_LOWER) :
+    allIllegalB G p = false := by
+  obtain ⟨hm, hor⟩ := hInv p k hk
+  cases hor with
+  | inl hcapk => exact absurd (hV p k hm hcapk) (by omega)
+  | inr hleg => exact allIllegalB_false_of_legal hm hleg
 
 end Sunfish
