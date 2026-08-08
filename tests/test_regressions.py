@@ -166,3 +166,56 @@ class TestNullSentinelMasking:
                 f"50-move draw at ply {ply + 1} in a won KPK"
             )
         pytest.fail("no conversion within 120 plies")
+
+
+class TestStandPatTerminalCrossing:
+    """Audit finding: the fail-high dual of A1 (`TerminalPseudoSafe` in
+    formal/Sunfish/Stalemate.lean). At a checkmated depth-0 node whose
+    every pseudo-legal move is valued >= val_lower(0) = QS, the stand-pat
+    pseudo-option and the mate correction contradict each other about the
+    same (pos, 0) table key:
+
+    * a probe with gamma <= pos.score cuts off on the stand-pat and
+      stores lower = pos.score;
+    * a probe with pos.score < gamma <= pos.score + min(move values)
+      runs the loop dry (every child returns the exact MATE_UPPER
+      sentinel, so best_real == -MATE_UPPER), passes the all(...) gate,
+      corrects, and stores upper = -MATE_LOWER;
+
+    leaving a crossed entry (lower > upper). Corner mates hit this shape
+    routinely: the K_MID first-row deltas price the mated king's quiet
+    moves at 65-145, above QS = 40. Found by the automated search in
+    formal/scripts/standpat_terminal_search.py (this FEN is the terminal
+    position of a random playout; 100+ hits among 6156 sampled mates).
+
+    Strict xfail per the golden-floor doctrine: the fixing PR (e.g.
+    folding the depth-0 correction, best = max(best, corr), instead of
+    assigning it) claims this test by removing the marker."""
+
+    # Black to move, checkmated (Rg1 mates along the back rank). Neither
+    # side is bare, so the in-game pst["K"] = K_MID applies as in this
+    # test. Black's only pseudo-legal moves are Kb1/Kb2 into check,
+    # valued 72 and 145.
+    FEN = "8/8/8/7p/7P/1K5P/p7/k5R1 b - - 1 150"
+
+    @pytest.mark.xfail(
+        reason="TerminalPseudoSafe violation: depth-0 stand-pat vs mate "
+        "correction stores a crossed (pos, 0) entry",
+        strict=True,
+    )
+    def test_depth0_mate_stores_do_not_cross(self):
+        import chess
+
+        assert chess.Board(self.FEN).is_checkmate()
+        pos = hist_from_fen(self.FEN)[-1]
+        vals = [pos.value(m) for m in pos.gen_moves()]
+        assert vals and all(v >= sf.QS for v in vals)  # the all(...) gate passes
+
+        searcher = sf.Searcher()
+        r1 = searcher.bound(pos, pos.score - 40, 0)
+        assert r1 >= pos.score - 40  # stand-pat cutoff: lower = pos.score stored
+        searcher.bound(pos, pos.score + 10, 0)  # exhaustion + correction path
+        entry = searcher.tp_score[(pos, 0)]
+        assert entry.lower <= entry.upper, (
+            f"crossed table entry [{entry.lower}, {entry.upper}]"
+        )
