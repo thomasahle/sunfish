@@ -4954,5 +4954,49 @@ theorem scan_sites_unreachable_at_capturable (G : QSGame)
   have hML : MATE_LOWER = 47923 := rfl
   rw [boundD2_of_capture G guard kill d p gamma hkg hcap]
   omega
+/-! ### The band-edge arm (PR #162): the boundary window is decisive
+
+`60df266` adds one elif to the interception: a surviving sub-band
+virtual fail-high re-probes the pass ONCE at the band boundary,
+`bound(pos.rotate(nullmove=True), 1 - MATE_LOWER, depth - 3)`, and a
+fail-low routes the yield to the fold identity.  The window placement
+makes BOTH fail-soft outcomes decisive about band membership of the
+pass value (`boundary_window_decisive`): fail-low proves the sub-band
+report was a loose bound on a mate-band pass (the straddle this file's
+two-layer section documents) -- declined, matching the declared
+function's band-excluded term; fail-high CERTIFIES the pass value
+sub-band, so the declared term admits the cutoff with no chess premise.
+The probe is an ordinary stored interior call at an in-band window
+(`1 - MATE_LOWER ∈ (-MATE_LOWER, MATE_LOWER]`), so it joins the same
+point-spec table induction as the warm legality oracles.
+
+With the arm, `NoZugzwangInMateBand` leaves layer 1: the surviving
+cutoff case of `bound_null_spec` derives `rawTerm < MATE_LOWER` from
+the boundary certificate (this lemma + the pass spec at the boundary
+window) instead of assuming the mate-band redundancy; zugzwang then
+lives ONLY in layer 2 (`NoZugzwang`), and layer 1 is premise-free of
+chess statements.  The definitional plumbing (threading the boundary
+probe `bp` through `nullVerify`/`NCut` and both search recursions, and
+deleting the `hR` premise) is specified here and staged as the
+follow-up commit on this branch; `boundary_window_decisive` is its
+keystone and is proven now. -/
+
+/-- **The boundary window is decisive both ways**: any fail-soft-sound
+report `r` at window `1 - MATE_LOWER` classifies mate-band membership
+of the (negated) value exactly -- a fail-low means the pass wins in the
+band, a fail-high certifies it sub-band. -/
+theorem boundary_window_decisive (V r : Int)
+    (h1 : 1 - MATE_LOWER ≤ r → r ≤ V)
+    (h2 : r < 1 - MATE_LOWER → V ≤ r) :
+    (r < 1 - MATE_LOWER ↔ MATE_LOWER ≤ -V) := by
+  constructor
+  · intro h
+    have := h2 h
+    omega
+  · intro h
+    by_cases hr : 1 - MATE_LOWER ≤ r
+    · have := h1 hr
+      omega
+    · omega
 
 end Sunfish

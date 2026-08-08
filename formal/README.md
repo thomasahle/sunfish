@@ -615,6 +615,18 @@ statement* — the honest form — not a deferred proof:
   consumed by nothing shipped (`8843bb0` restored full coverage on the
   `reducedScan_needs_premise` countermodel).  Kept as the record.
 
+- **`NoZugzwangInMateBand` — elimination ADOPTED (PR #162, the
+  band-edge arm)**: one boundary probe per surviving sub-band virtual
+  cutoff (`bound(rotate(nullmove=True), 1 - MATE_LOWER, depth - 3)`;
+  priced at about +1.0pp nodes) makes both fail directions decisive
+  (`boundary_window_decisive`), so a surviving cutoff carries a
+  CERTIFICATE that the pass value is sub-band and layer 1 sheds its
+  last chess statement — zugzwang then lives only in layer 2.  The
+  probe is an ordinary stored in-band interior call and joins the same
+  table induction as the warm legality oracles.  The `bp`-threading of
+  the model and the `hR` deletion are staged as the follow-up commit
+  on this branch (design in the Lean file's band-edge section).
+
 - **`NoZugzwang` / `NoZugzwangInMateBand`** (`Sunfish/Stalemate.lean`,
   two-layer section) — layer 2's validity region ("pass-value ≤ best
   real move") and its mate-band fragment ("if passing wins in the mate
