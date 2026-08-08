@@ -556,8 +556,11 @@ def main():
     # tools/ (pondering, Hash option, spec-complete go parsing). An
     # installed or packed sunfish has no tools/ and falls through to
     # the built-in loop below, which is all a GUI needs.
-    import sys, tools.uci
-    return tools.uci.run(sys.modules[__name__], hist[-1])
+    try:
+        import sys, tools.uci
+        return tools.uci.run(sys.modules[__name__], hist[-1])
+    except ImportError:
+        pass
     # minifier-hide end
 
     searcher = Searcher()
