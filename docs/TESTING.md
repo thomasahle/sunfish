@@ -162,3 +162,22 @@ doubles CPU demand per game, which is why it was a net *loss* on a
 burst-credit cloud VM: the credits drained mid-game, the engine was throttled,
 and a deadline-less ponder search starved the bot process into a time
 forfeit. Ponder on hardware with a core to spare, not on an e2-micro.
+
+## Verify-on-suspicion landing evidence (2026-08-08)
+
+Reproducible benchmarks recorded outside CI gates (CI enforces the
+semantic tests in tests/test_tt_consistency.py, the mate/stalemate
+floors, and the regression corpus; node percentages are hardware- and
+version-sensitive):
+
+- 36-position depth-6 lockstep vs the pre-landing master: identical
+  bestmove/score on every position.
+- Node delta: +0.27% (the two verifier arms fire at ~120 nodes per
+  935k; each fire short-circuits at the first legal move).
+- The alternative "licensed null" prototype (mobility before any
+  virtual option, structurally equivalent guarantees) measured
+  +3.6% nodes and -27.9 +/- 33.2 Elo over 200 games at 60+1
+  (71W-87L-42D, zero time losses): dominated, not landed.
+- stalemate2 floor moved 15 -> 13: the two lost "successes" were
+  transient exact-0 info lines produced by the crossed bounds this
+  change removes (the engine's settled scores were -266/-246).
