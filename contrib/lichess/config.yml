@@ -8,7 +8,7 @@ engine:
   name: "sunfish.py"
   working_dir: "/opt/sunfish"
   protocol: "uci"
-  ponder: true
+  ponder: false
   uci_options:
     # ~100MB of transposition tables: sized for a 1GB free-tier VM.
     # Raise to 1000000 (~1GB) on a machine with 4GB+.
