@@ -496,7 +496,7 @@ class Searcher:
         # Table choice is fixed for the whole search (and tp_score is
         # cleared above), so every bound targets one value function.
         pos = history[-1]
-        bare = sum(c.isupper() for c in board) == 1 or sum(c.islower() for c in pos.board) == 1
+        bare = sum(c.isupper() for c in pos.board) == 1 or sum(c.islower() for c in pos.board) == 1
         pst["K"] = K_END if bare else K_MID
 
         gamma = 0
