@@ -475,6 +475,16 @@ class Searcher:
                 elif depth and (score >= MATE_LOWER or 0 < score and not king and all(
                         pos.move(m).king_capture() for m in pos.gen_moves())):
                     score = -MATE_UPPER
+                # Band-edge verification: a sub-band pass report can
+                # straddle the mate band (true pass value >= MATE_LOWER
+                # under a loose child bound). One probe at the band
+                # boundary is decisive both ways: a fail-low says the
+                # pass is really a mate-band claim - vacuous without a
+                # capture (fold identity) - a fail-high says the cutoff
+                # is sound as reported.
+                elif depth > 2 and self.bound(pos.rotate(nullmove=True),
+                        1 - MATE_LOWER, depth - 3) < 1 - MATE_LOWER:
+                    score = -MATE_UPPER
             best = max(best, score)
             live = live or move is not None and score > -MATE_UPPER
             if best >= gamma:
