@@ -473,8 +473,7 @@ class Searcher:
                 if king and pos.value(king) >= MATE_LOWER:
                     move, score = king, MATE_UPPER
                 elif depth and (score >= MATE_LOWER or 0 < score and not king and all(
-                        self.bound(pos.move(m), MATE_UPPER, 0) == MATE_UPPER
-                        for m in pos.gen_moves())):
+                        pos.move(m).king_capture() for m in pos.gen_moves())):
                     score = -MATE_UPPER
             best = max(best, score)
             live = live or move is not None and score > -MATE_UPPER
@@ -488,29 +487,29 @@ class Searcher:
 
         # Mate/stalemate correction, verify-on-suspicion: if we failed low
         # and no searched move was proven legal, the node is SUSPECT -
-        # either no legal move exists, or the only legal moves were never
-        # searched. 'not live' already certifies every SEARCHED move
-        # illegal (two-way evidence above), and a fail-low loop ran to
-        # exhaustion, so above depth 1 the searched moves are exactly
-        # those the QS threshold admits: only the filtered remainder
-        # still needs the legality oracle, and from depth 3 up the
-        # threshold admits everything and the scan is probe-free. At
-        # depth 1 futility also skips admitted moves, so every move is
-        # probed. probe == MATE_UPPER iff the move leaves our king
-        # capturable, because a king capture always tops the child's move
-        # order and outranks every QS threshold (and warm entries cannot
-        # lie: see the oracle note above). If the scan holds, no legal
-        # move exists: an exact draw, or mated if the pass leaves our
-        # king en prise. Depth 0 is excluded: QS evaluates the fold
-        # (stand-pat included) and never claims an exact terminal value -
-        # mates are found from depth 1 up. Mated scores as -MATE_LOWER,
-        # not -MATE_UPPER: the latter stays a reserved sentinel meaning
-        # "the king is literally capturable", and a parent whose child is
-        # merely mated must not look king-capturable itself.
+        # either no legal move exists, or a virtual option outbid every
+        # legal move. Only then pay for the direct proof: probe EVERY
+        # generated move with the legality oracle - searched ones too.
+        # (Trusting the sentinel for admitted moves is unsound: a child
+        # whose only legal moves hide below its own QS threshold returns
+        # exactly -MATE_UPPER as its filtered value while being perfectly
+        # legal - the reducedScan_needs_premise countermodel - so the
+        # scan re-derives legality instead of reading scores.)
+        # king_capture() on the child asks directly whether the reply
+        # can take our king - a pure board predicate, no search, no
+        # table. It never sees a kingless board here: a node with a king
+        # capture of its own always fails high in-band, so this fail-low
+        # correction is unreachable there.
+        # If the scan holds, no legal move exists: an exact draw,
+        # or mated if the pass leaves our king en prise. Depth 0 is
+        # excluded: QS evaluates the fold (stand-pat included) and never
+        # claims an exact terminal value - mates are found from depth 1
+        # up. Mated scores as -MATE_LOWER, not -MATE_UPPER: the latter
+        # stays a reserved sentinel meaning "the king is literally
+        # capturable", and a parent whose child is merely mated must not
+        # look king-capturable itself.
         if depth and best < gamma and not live and all(
-                depth > 1 and pos.value(m) >= val_lower
-                or self.bound(pos.move(m), MATE_UPPER, 0) == MATE_UPPER
-                for m in pos.gen_moves()):
+                pos.move(m).king_capture() for m in pos.gen_moves()):
             best = -MATE_LOWER if pos.rotate(nullmove=True).king_capture() else 0
 
         # Table part 2. Every search decision is gamma-independent, so all
