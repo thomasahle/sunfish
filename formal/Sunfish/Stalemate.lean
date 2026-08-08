@@ -4061,8 +4061,8 @@ def scanNewB (G : QSGame) (d : Nat) (p : G.Pos) : Bool :=
 /-- The golfed correction: fail-low, `not live` (the sticky evidence
 bit: NO searched real yield ever exceeded the sentinel -- exactly
 `S = LOSS`), and the reduced scan. -/
-def golfFix (G : QSGame) (d : Nat) (gamma best S : Int) (p : G.Pos) : Int :=
-  if best < gamma ∧ S = LOSS ∧ scanNewB G d p = true then
+def golfFix (G : QSGame) (_d : Nat) (gamma best S : Int) (p : G.Pos) : Int :=
+  if best < gamma ∧ S = LOSS ∧ allIllegalB G p = true then
     (if inCheckB G.toNullGame p = true then -MATE_LOWER else 0)
   else best
 
@@ -4556,20 +4556,16 @@ theorem sentinel_two_way_D2 (G : QSGame) (guard kill : G.Pos → Bool)
       · intro hc
         exact (core _ rfl hc).1
 
-/-- **The reduced scan equals the oracle scan where it fires** -- the
-golfed gate and the reference gate compute the same correction, given
-the two-way sentinel's premises.  (⇐) an oracle-confirmed terminal
-passes the reduced scan move-by-move and pins the fold to the identity;
-(⇒) an identity fold certifies the admitted moves illegal through the
-two-way sentinel, and `ValFloor` (depth ≥ 2) or `NoMaskedMobility`
-(depth 1) extends that to every move -- so the reduced-scan gate can
-only fire where the oracle gate does. -/
+/-- The golfed gate equals the oracle gate: with full scan coverage
+restored (`8843bb0` -- the `reducedScan_needs_premise` countermodel was
+accepted as disqualifying the reduced form), the two gates share the
+oracle conjunct, and at an oracle-confirmed terminal the fold sits at
+the identity (children report the exact sentinel), collapsing
+`S = LOSS` and `S ≤ n` into the same test.  Premise-free beyond the
+fold shape and `LOSS ≤ n`. -/
 theorem golfFix_eq_d2Fix (G : QSGame) (guard kill : G.Pos → Bool)
-    (hB : Bounded G.toNullGame.toGame) (hQ : EvalQuiet G.toNullGame.toGame)
-    {B : Int} (hF : ValFloor G B) (h240 : B ≤ 240) (hNM : NoMaskedMobility G)
     (d : Nat) (p : G.Pos) (gamma : Int)
-    (hg1 : -MATE_LOWER < gamma) (hg2 : gamma ≤ MATE_LOWER)
-    (_hkg : ¬ (G.eval p ≤ -MATE_LOWER))
+    (hg1 : -MATE_LOWER < gamma)
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
     (n : Int) (hnge : LOSS ≤ n) :
     golfFix G (d + 1) gamma
@@ -4585,38 +4581,6 @@ theorem golfFix_eq_d2Fix (G : QSGame) (guard kill : G.Pos → Bool)
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
-  have hadm : searchMoves gamma (fun m => -(boundD2 G guard kill d m (1 - gamma)))
-      (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS →
-      ∀ m ∈ movesAbove G (val_lower (d + 1)) p,
-        hasKingCapture G.toNullGame.toGame m = true := by
-    intro hS m hm
-    have hle : -(boundD2 G guard kill d m (1 - gamma)) ≤ LOSS :=
-      searchMoves_eq_init_all gamma
-        (fun m => -(boundD2 G guard kill d m (1 - gamma)))
-        (movesAbove G (val_lower (d + 1)) p) LOSS (by omega) hS m hm
-    have hmkg : ¬ (G.eval m ≤ -MATE_LOWER) := fun hh =>
-      hcap ((hasKingCapture_iff G.toNullGame.toGame p).mpr
-        ⟨m, movesAbove_subset G (val_lower (d + 1)) p m hm, hh⟩)
-    have hub := boundD2_bounded G guard kill hB d m (1 - gamma)
-      (by omega) (by omega)
-    exact (sentinel_two_way_D2 G guard kill hB hQ hF h240 hNM
-      d m (1 - gamma) (by omega) (by omega) hmkg).1 (by omega)
-  have hAI : searchMoves gamma (fun m => -(boundD2 G guard kill d m (1 - gamma)))
-      (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS →
-      allIllegalB G p = true := by
-    intro hS
-    rw [allIllegalB_true_iff]
-    by_cases hd1 : d = 0
-    · subst hd1
-      exact hNM p (hadm hS)
-    · have hall : allAboveB G (d + 1) p = true :=
-        allAboveB_of_floor G hF (d + 1) p (by
-          unfold val_lower QS QS_A
-          omega)
-      intro m hm
-      refine hadm hS m ?_
-      rw [movesAbove_all G (d + 1) p hall]
-      exact hm
   by_cases hai : allIllegalB G p = true
   · have hSL : searchMoves gamma (fun m => -(boundD2 G guard kill d m (1 - gamma)))
         (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS := by
@@ -4628,10 +4592,6 @@ theorem golfFix_eq_d2Fix (G : QSGame) (guard kill : G.Pos → Bool)
         hcap ((hasKingCapture_iff G.toNullGame.toGame p).mpr ⟨m, hmm, hh⟩)
       rw [boundD2_of_capture G guard kill d m (1 - gamma) hmkg hcm]
       omega
-    have hscan : scanNewB G (d + 1) p = true := by
-      refine List.all_eq_true.mpr fun m hm => ?_
-      rw [Bool.or_eq_true]
-      exact Or.inr (allIllegalB_true_iff.mp hai m hm)
     simp only [golfFix, d2Fix]
     by_cases hb : max n (searchMoves gamma
         (fun m => -(boundD2 G guard kill d m (1 - gamma)))
@@ -4641,7 +4601,7 @@ theorem golfFix_eq_d2Fix (G : QSGame) (guard kill : G.Pos → Bool)
           (movesAbove G (val_lower (d + 1)) p) LOSS) < gamma ∧
           searchMoves gamma (fun m => -(boundD2 G guard kill d m (1 - gamma)))
             (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS ∧
-          scanNewB G (d + 1) p = true := ⟨hb, hSL, hscan⟩
+          allIllegalB G p = true := ⟨hb, hSL, hai⟩
       have hfd : max n (searchMoves gamma
           (fun m => -(boundD2 G guard kill d m (1 - gamma)))
           (movesAbove G (val_lower (d + 1)) p) LOSS) < gamma ∧
@@ -4651,8 +4611,7 @@ theorem golfFix_eq_d2Fix (G : QSGame) (guard kill : G.Pos → Bool)
       rw [if_pos hfg, if_pos hfd]
     · rw [if_neg (fun h => hb h.1), if_neg (fun h => hb h.1)]
   · simp only [golfFix, d2Fix]
-    rw [if_neg (fun h => hai (hAI h.2.1)),
-      if_neg (fun h => hai h.2.2)]
+    rw [if_neg (fun h => hai h.2.2), if_neg (fun h => hai h.2.2)]
 
 /-! ### The top statement: reference ≡ production -/
 
@@ -4670,8 +4629,7 @@ pass three levels down.  Machine-checked twin of the build battery's
 `reference == production` over 9,600 probes. -/
 theorem production_eq_reference (G : QSGame)
     (guard kill : G.Pos → Bool)
-    (hB : Bounded G.toNullGame.toGame) (hQ : EvalQuiet G.toNullGame.toGame)
-    {B : Int} (hF : ValFloor G B) (h240 : B ≤ 240) (hNM : NoMaskedMobility G)
+    (hB : Bounded G.toNullGame.toGame)
     (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
     (hK : KillerLegal G kill) :
     ∀ (d : Nat) (p : G.Pos) (gamma : Int),
@@ -4765,8 +4723,7 @@ theorem production_eq_reference (G : QSGame)
                   gamma p) :=
               fun h => hnc (hiff.mpr h)
             rw [if_neg hnc, if_neg hcap, if_neg hcut, hSeq, hfold hnc]
-            exact golfFix_eq_d2Fix G guard kill hB hQ hF h240 hNM d p gamma
-              hg1 hg2 hkg hcap _
+            exact golfFix_eq_d2Fix G guard kill d p gamma hg1 hcap _
               (nullPartD2_ge_LOSS G guard kill hB d p gamma hg1 hg2)
 
 /-! ### The restored invariant, and the transfers -/
@@ -4780,15 +4737,14 @@ reference.  This is the invariant the whole pre-kcx ledger orbited;
 `CexR` remains as the record of why the repair was needed. -/
 theorem kingCapturableReportsExact_restored (G : QSGame)
     (guard kill : G.Pos → Bool)
-    (hB : Bounded G.toNullGame.toGame) (hQ : EvalQuiet G.toNullGame.toGame)
-    {B : Int} (hF : ValFloor G B) (h240 : B ≤ 240) (hNM : NoMaskedMobility G)
+    (hB : Bounded G.toNullGame.toGame)
     (hV : KingCaptureValHigh G) (hCF : CaptureFirst G) (hK : KillerLegal G kill)
     (d : Nat) (p : G.Pos) (gamma : Int)
     (hg1 : -MATE_LOWER < gamma) (hg2 : gamma ≤ MATE_LOWER)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : hasKingCapture G.toNullGame.toGame p = true) :
     boundKCX G guard d p gamma = MATE_UPPER := by
-  rw [production_eq_reference G guard kill hB hQ hF h240 hNM hV hCF hK d p gamma hg1 hg2]
+  rw [production_eq_reference G guard kill hB hV hCF hK d p gamma hg1 hg2]
   exact boundD2_of_capture G guard kill d p gamma hkg hcap
 
 /-- The layered spec, transferred to production: the shipped consumer
@@ -4796,8 +4752,7 @@ brackets the null-inclusive declared value function -- no null bet, one
 band premise (see `bound_null_spec`). -/
 theorem boundKCX_null_spec (G : QSGame)
     (guard kill : G.Pos → Bool)
-    (hB : Bounded G.toNullGame.toGame) (hQ : EvalQuiet G.toNullGame.toGame)
-    {B : Int} (hF : ValFloor G B) (h240 : B ≤ 240) (hNM : NoMaskedMobility G)
+    (hB : Bounded G.toNullGame.toGame)
     (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
     (hK : KillerLegal G kill)
     (hR : NoZugzwangInMateBand G guard) :
@@ -4808,7 +4763,7 @@ theorem boundKCX_null_spec (G : QSGame)
       (boundKCX G guard d p gamma < gamma →
         nullValueD2 G guard d p ≤ boundKCX G guard d p gamma) := by
   intro d p gamma h1 h2
-  rw [production_eq_reference G guard kill hB hQ hF h240 hNM hV hCF hK d p gamma h1 h2]
+  rw [production_eq_reference G guard kill hB hV hCF hK d p gamma h1 h2]
   exact bound_null_spec G guard kill hB hK hR d p gamma h1 h2
 
 /-- **VerifiedSearchNoCrossing**, production form: two driver-range
@@ -4818,8 +4773,7 @@ repetition are the CanNull layer; `HistoryLegal` below closes the one
 path that precedes the consumer.) -/
 theorem kcx_no_crossing (G : QSGame)
     (guard kill : G.Pos → Bool)
-    (hB : Bounded G.toNullGame.toGame) (hQ : EvalQuiet G.toNullGame.toGame)
-    {B : Int} (hF : ValFloor G B) (h240 : B ≤ 240) (hNM : NoMaskedMobility G)
+    (hB : Bounded G.toNullGame.toGame)
     (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
     (hK : KillerLegal G kill)
     (hR : NoZugzwangInMateBand G guard)
@@ -4829,9 +4783,9 @@ theorem kcx_no_crossing (G : QSGame)
     (hhi : g1 ≤ boundKCX G guard d p g1)
     (hlo : boundKCX G guard d p g2 < g2) :
     boundKCX G guard d p g1 ≤ boundKCX G guard d p g2 := by
-  have h1 := (boundKCX_null_spec G guard kill hB hQ hF h240 hNM hV hCF hK hR
+  have h1 := (boundKCX_null_spec G guard kill hB hV hCF hK hR
     d p g1 hg1a hg1b).1 hhi
-  have h2 := (boundKCX_null_spec G guard kill hB hQ hF h240 hNM hV hCF hK hR
+  have h2 := (boundKCX_null_spec G guard kill hB hV hCF hK hR
     d p g2 hg2a hg2b).2 hlo
   omega
 
@@ -4839,8 +4793,7 @@ theorem kcx_no_crossing (G : QSGame)
 brackets the real-move value. -/
 theorem boundKCX_spec (G : QSGame)
     (guard kill : G.Pos → Bool)
-    (hB : Bounded G.toNullGame.toGame) (hQ : EvalQuiet G.toNullGame.toGame)
-    {B : Int} (hF : ValFloor G B) (h240 : B ≤ 240) (hNM : NoMaskedMobility G)
+    (hB : Bounded G.toNullGame.toGame)
     (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
     (hK : KillerLegal G kill)
     (hZ : NoZugzwang G guard) :
@@ -4848,7 +4801,7 @@ theorem boundKCX_spec (G : QSGame)
       -MATE_LOWER < gamma → gamma ≤ MATE_LOWER →
       BoundSpecD2 G d p gamma (boundKCX G guard d p gamma) := by
   intro d p gamma h1 h2
-  rw [production_eq_reference G guard kill hB hQ hF h240 hNM hV hCF hK d p gamma h1 h2]
+  rw [production_eq_reference G guard kill hB hV hCF hK d p gamma h1 h2]
   exact boundD2_spec G guard kill hB hK hZ d p gamma h1 h2
 
 /-- The verified loop on the countermodel that broke the pre-kcx
@@ -4916,75 +4869,24 @@ def CexM : QSGame where
     | Q, F => -150
     | _, _ => 0
 
-/-- The golfed gate fires a false terminal at `P` where the oracle gate
-correctly declines; `NoMaskedMobility` is violated.  The reduced scan
-is NOT premise-free -- recorded next to the golf agent's own two
-countermodels (the raw null fail-low outscoring a legal yield, and
-depth-1 futility skipping admitted moves). -/
+/-- **The accepted disqualifier** (`8843bb0` reverted the reduced scan
+on this countermodel): the depth-2 value of the LEGAL move `R` is the
+exact reserved sentinel -- corrupted evidence, born at the depth-1
+filter-starved `Q` -- so the rejected reduced scan (`scanNewB`, kept
+above as the record) trusts it and passes at `P`, where the oracle
+scan correctly fails.  Both the naive reduction (trust `not live`
+alone) and the threshold-reduced scan die on this; full coverage with
+the board predicate is what shipped. -/
 theorem reducedScan_needs_premise :
-    boundKCX CexM (fun _ => false) 3 MPos.P 5 = 0 ∧
-    boundD2 CexM (fun _ => false) (fun _ => false) 3 MPos.P 5 = -MATE_UPPER ∧
+    boundD2 CexM (fun _ => false) (fun _ => false) 2 MPos.R (-4) = MATE_UPPER ∧
+    hasKingCapture CexM.toNullGame.toGame MPos.R = false ∧
+    scanNewB CexM 3 MPos.P = true ∧
+    allIllegalB CexM MPos.P = false ∧
     ¬ NoMaskedMobility CexM := by
-  refine ⟨by decide, by decide, fun h => ?_⟩
+  refine ⟨by decide, by decide, by decide, by decide, fun h => ?_⟩
   have := h MPos.Q (by decide) MPos.F
     (show MPos.F ∈ [MPos.A, MPos.F] from List.mem_cons_of_mem _ (List.mem_cons_self _ _))
   exact absurd this (by decide)
-
-/-- **The warm oracle** (both probe sites store since `c72cf6d`): the
-probe key is always `(child, 0)`, and at depth 0 the declared value IS
-capturability -- `MATE_UPPER` exactly at capturable children, a
-sub-band static value otherwise.  So any sound table bracket of the
-depth-0 value decides the probe: a stored `lower = MATE_UPPER` proves
-capturable (the converse invariant), and a stored `upper < MATE_UPPER`
-proves legal (write-exactness: capturable children never store one,
-because every depth-0 return there is the exact sentinel).  The warm
-probe therefore answers exactly like the cold one, by the same point-
-spec table induction that carries `kcx_no_crossing`. -/
-theorem nullValueD2_zero_MU_iff (G : QSGame) (guard : G.Pos → Bool)
-    (hQ : EvalQuiet G.toNullGame.toGame) (c : G.Pos)
-    (hkg : ¬ (G.eval c ≤ -MATE_LOWER)) :
-    nullValueD2 G guard 0 c = MATE_UPPER
-      ↔ hasKingCapture G.toNullGame.toGame c = true := by
-  have hMU : MATE_UPPER = 69290 := rfl
-  have hML : MATE_LOWER = 47923 := rfl
-  have hq := hQ c hkg
-  simp only [nullValueD2]
-  rw [if_neg hkg]
-  constructor
-  · intro h
-    cases hc : hasKingCapture G.toNullGame.toGame c with
-    | true => rfl
-    | false =>
-      rw [if_neg (by simp [hc])] at h
-      omega
-  · intro hc
-    rw [if_pos hc]
-
-theorem warm_probe_decides (G : QSGame) (guard : G.Pos → Bool)
-    (hQ : EvalQuiet G.toNullGame.toGame)
-    (c : G.Pos) (hkg : ¬ (G.eval c ≤ -MATE_LOWER)) (lo hi : Int)
-    (hlo : lo ≤ nullValueD2 G guard 0 c) (hhi : nullValueD2 G guard 0 c ≤ hi) :
-    (MATE_UPPER ≤ lo → hasKingCapture G.toNullGame.toGame c = true) ∧
-    (hi < MATE_UPPER → hasKingCapture G.toNullGame.toGame c = false) := by
-  have hMU : MATE_UPPER = 69290 := rfl
-  have hML : MATE_LOWER = 47923 := rfl
-  have hq := hQ c hkg
-  constructor
-  · intro h
-    refine (nullValueD2_zero_MU_iff G guard hQ c hkg).mp ?_
-    simp only [nullValueD2] at hlo hhi ⊢
-    rw [if_neg hkg] at hlo hhi ⊢
-    by_cases hc : hasKingCapture G.toNullGame.toGame c = true
-    · rw [if_pos hc]
-    · rw [if_neg hc] at hlo ⊢
-      omega
-  · intro h
-    cases hc : hasKingCapture G.toNullGame.toGame c with
-    | false => rfl
-    | true =>
-      exfalso
-      have := (nullValueD2_zero_MU_iff G guard hQ c hkg).mpr hc
-      omega
 
 /-- **The killer fast path** (`king = self.tp_move.get(pos) or
 pos.king_capture(); if king and pos.value(king) >= MATE_LOWER`): with
@@ -5031,5 +4933,26 @@ theorem fastPath_skip_sound (G : QSGame) (killM : G.Pos → Option G.Pos)
   cases hor with
   | inl hcapk => exact absurd (hV p k hm hcapk) (by omega)
   | inr hleg => exact allIllegalB_false_of_legal hm hleg
+
+/-- **The scan sites never see a kingless board** (`8843bb0` replaces
+the search probes at both scan sites with the board predicate
+`pos.move(m).king_capture()`, definitionally this file's
+`allIllegalB`/`inCheckB` scans): the correction runs only on a
+FAIL-LOW, and the interception's terminal arm only when no own king
+capture exists -- but a node that can capture the opponent king fails
+high at every driver window (the clamp keeps windows in-band), so
+neither site ever evaluates the predicate where the opponent king is
+already off the board.  Search probes remain only where a SEARCH VALUE
+is genuinely needed (the band-edge arm's boundary probe, PR #162). -/
+theorem scan_sites_unreachable_at_capturable (G : QSGame)
+    (guard kill : G.Pos → Bool) (d : Nat) (p : G.Pos) (gamma : Int)
+    (hg2 : gamma ≤ MATE_LOWER)
+    (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
+    (hcap : hasKingCapture G.toNullGame.toGame p = true) :
+    gamma ≤ boundD2 G guard kill d p gamma := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  rw [boundD2_of_capture G guard kill d p gamma hkg hcap]
+  omega
 
 end Sunfish
