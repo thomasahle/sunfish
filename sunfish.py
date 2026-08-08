@@ -359,36 +359,35 @@ class Searcher:
         val_lower = QS - depth * QS_A
 
         def moves():
-            # Look for the strongest move from last time, the hash-move. It
-            # doubles as a mobility certificate below: tp_move stores only
-            # real fail-high moves, and a fail-high at an in-band gamma has
-            # score > -MATE_UPPER, so a stored move is a legal move.
-            killer = self.tp_move.get(pos)
-
-            # First try not moving at all, i.e. the null move. Zugzwang -
-            # passing may be an un-chess-like free tempo - remains a measured,
-            # accepted approximation (formal/README.md); the score guard
-            # limits exposure. What is NOT accepted is a pass outscoring a
-            # stalemate: a positive pass at a terminal node would fail high
-            # above the exact draw the correction later stores - a crossed
-            # table entry. So an uncertified positive pass is verified with
-            # the legality oracle before it is trusted (a killer already
-            # certifies mobility, and a mate-band pass is redundant: if
-            # passing wins the king, capturing it is a real move too, so it
-            # yields the fold identity instead).
+            # First try not moving at all, i.e. the null move. Two caveats,
+            # both now measured and consciously accepted (formal/README.md):
+            # - Zugzwang: passing may be an un-chess-like free tempo; the
+            #   score guard below limits exposure. Re-adding the classic
+            #   majors-only guard measured -5 +/- 30 ELO: a wash, declined.
+            # - King-capturable nodes: a null cutoff can mask the MATE_UPPER
+            #   sentinel that mate/stalemate detection consumes. The killer
+            #   path is provably safe (formal/Sunfish/Killer.lean); the null
+            #   path is the one remaining exception. Closing it measured
+            #   -28 ELO (move-scan check) and -12 with no benchmark gain
+            #   (killer-only check): declined, exception tolerated.
+            # Null move in QS (a search-verified stand-pat) measured
+            # -13 +/- 34 ELO: declined.
             if depth > 2 and not root and abs(pos.score) < 500 and any(
                     c in pos.board for c in "RBNQ"):
+                # A pass claiming a mate-band value is redundant (if passing
+                # wins the king, capturing it is a real move too) and can be a
+                # false mate that poisons tp_move - suppress it. (A1;
+                # Stalemate.lean: a1_unfixed_not_sound / a1_fix_repairs.)
                 score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
-                if 0 < score and gamma <= score < MATE_LOWER and not killer and all(
-                        self.bound(pos.move(m), MATE_UPPER, 0, root=True) == MATE_UPPER
-                        for m in pos.gen_moves()):
-                    score = -MATE_UPPER
                 yield None, score if score < MATE_LOWER else -MATE_UPPER
 
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else.
             if depth == 0:
                 yield None, pos.score
+
+            # Look for the strongest move from last time, the hash-move.
+            killer = self.tp_move.get(pos)
 
             # If there isn't one, try to find one with a more shallow search.
             # This is known as Internal Iterative Deepening (IID). The probe
@@ -425,18 +424,13 @@ class Searcher:
 
                 yield move, -self.bound(pos.move(move), 1 - gamma, depth - 1)
 
-        # Run through the moves, shortcutting when possible. The fold also
-        # carries a certificate about its winner: live means the current
-        # maximum was set by a real-move yield, so the node has a move and
-        # cannot be mate or stalemate. A fail-soft score alone is evidence
-        # about value, never about legality (a child may soundly cut off on
-        # a partial bound at a king-capturable node), which is why the
-        # correction below re-derives terminality with the legality oracle
-        # instead of trusting any score-shaped sentinel.
-        best, live = -MATE_UPPER, False
+        # Run through the moves, shortcutting when possible
+        # best_real sees only real-move yields: the mate/stalemate sentinel
+        # below must not be masked by the null option (a pass yielding a
+        # normal material score hid genuine stalemates in pawn endings - A1).
+        best = best_real = -MATE_UPPER
         for move, score in moves():
-            if score > best:
-                best, live = score, move is not None
+            best, best_real = max(best, score), max(best_real, score) if move else best_real
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
                 if move is not None:
@@ -445,30 +439,57 @@ class Searcher:
                         del self.tp_move[next(iter(self.tp_move))]
                 break
 
-        # Mate/stalemate correction, verify-on-suspicion: if we failed low
-        # and no real move set the maximum, the node is SUSPECT - either a
-        # virtual option strictly beat every legal move, or no legal move
-        # exists. Only then pay for the direct proof: probe every generated
-        # move (searched or QS-filtered alike - filtering is irrelevant to
-        # terminality) with the legality oracle. probe == MATE_UPPER iff the
-        # move leaves our king capturable, because a king capture always
-        # tops the child's move order and outranks every QS threshold; the
-        # probes run as unstored driver probes (root=True) so no table entry
-        # can enter the definition of legality. The scan short-circuits at
-        # the first legal move, so false suspicions cost ~one QS probe.
-        # Depth 0 is excluded: QS evaluates the fold (stand-pat included)
-        # and never claims an exact terminal value - mates are found from
-        # depth 1 up. At depths 1-2 no virtual yields exist, so 'not live'
-        # degenerates to the classic untouched-sentinel test.
-        if depth and best < gamma and not live and all(
-                self.bound(pos.move(m), MATE_UPPER, 0, root=True) == MATE_UPPER
-                for m in pos.gen_moves()):
+        # Stalemate checking is a bit tricky: Say we failed low, because
+        # we can't (legally) move and so the (real) score is -infty.
+        # At the next depth we are allowed to just return r, -infty <= r < gamma,
+        # which is normally fine.
+        # However, what if gamma = -10 and we don't have any legal moves?
+        # Then the score is actually a draw and we should fail high!
+        # Thus, if best < gamma and best < 0 we need to double check what we are doing.
+
+        # We fix this problem another way: the sorted move loop above always
+        # yields a king capture first when one exists (it has the highest
+        # value), so barring the exceptions below, bound returns MATE_UPPER
+        # whenever the king is capturable. If we see best == -MATE_UPPER here,
+        # every reply lost the king (or there were no replies): we are either
+        # mated or stalemated, and it suffices to check whether we're in check.
+
+        # Exceptions and non-exceptions (formal/Sunfish/Stalemate.lean and
+        # Killer.lean make these precise):
+        # - The killer path is provably safe: a killer stored at a king-
+        #   capturable position is always itself a king capture (Killer.lean,
+        #   boundKill_spec), so a killer cutoff still returns the sentinel.
+        #   This relies on tp_move being keyed by exact position and on king
+        #   captures sorting first; change either and the proof breaks.
+        # - The null-move yield is the one remaining path that can end the
+        #   loop below MATE_UPPER at a king-capturable node (it yields
+        #   move=None, so nothing corrects it). Only the abs(pos.score) < 500
+        #   zugzwang guard limits this; deeper search corrects the rare
+        #   cases that slip through.
+        # - At low depths we may have pruned all legal moves, so sunfish may
+        #   report "mate" and retract it after more search. That's fair.
+
+        # If the quiescent val-limit never skipped a move (no legal move falls below val_lower), then
+        # exhausting the generator means every legal move was searched and lost the
+        # king, so the mate/stalemate test is sound at ANY depth:
+        # - best == -MATE_UPPER implies the generator was exhausted, since the
+        #   consumption break needs best >= gamma and gamma > -MATE_UPPER here
+        #   (a call with gamma <= -MATE_UPPER is answered by the entry cutoff).
+        # - the futility break always yields a value > -MATE_UPPER first, so it
+        #   cannot leave best == -MATE_UPPER with moves unseen.
+        # - at depth == 0 stand-pat yields pos.score > -MATE_LOWER, so the
+        #   correction still never fires in plain QS nodes.
+        # Without this, a depth <= 2 node above a stalemate returns +MATE_UPPER for
+        # the stalemating move, poisoning tp_move at the root (Qc4?? on lichess).
+        if best < gamma and best_real == -MATE_UPPER and all(
+                pos.value(m) >= val_lower for m in pos.gen_moves()):
             flipped = pos.rotate(nullmove=True)
+            # Hopefully this is already in the TT because of null-move
             in_check = self.bound(flipped, MATE_UPPER, 0) == MATE_UPPER
-            # Mated scores as -MATE_LOWER, not -MATE_UPPER: the latter stays
-            # a reserved sentinel meaning "the king is literally capturable".
-            # A parent whose child is merely mated must not look king-
-            # capturable itself.
+            # Mated scores as -MATE_LOWER, not -MATE_UPPER: the latter stays a
+            # reserved sentinel meaning "the king is literally capturable",
+            # which the best == -MATE_UPPER test above depends on. A parent
+            # whose child is merely mated must not look king-capturable itself.
             best = -MATE_LOWER if in_check else 0
 
         # Table part 2. Every search decision is gamma-independent, so all
