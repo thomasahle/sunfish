@@ -210,30 +210,79 @@ tactic only, so a full build takes seconds.
       king capturable": the easy direction is `KingCaptureValHigh` (+
       `val_lower_lt_ML`: captures top the order and outrank every QS
       threshold; in the engine also the futility bypass `else
-      MATE_UPPER` of line 421), the hard direction is closed by the
+      MATE_UPPER` of the mate-case futility yield), the hard direction is closed by the
       depth-0 pin (static sentinel origins — the model-level residue of
       the `MateValuesAreKingCapturesQS` machinery, cf.
       `killer_probe_sound`'s depth pinning).  `legalScan_iff_
       allIllegal` lifts it to the engine's `all(...)` scan;
       `qsProbe_failLow_legal` is the fail-low half that certifies
       stored moves.
-    - **The verified search (d2)** — `boundD2` models the SHIPPED loop
-      (lines 436–472): the fold's `live` bit is the comparison `S ≤ n`
-      (real fold vs null contribution), the null verifier `nullVerify`
-      withdraws a positive uncertified pass to the fold identity at an
-      oracle-confirmed terminal (lines 382–385), and the correction
+    - **The reference search** — `boundD2` models `reference.py` of
+      the kcx landing, the executable spec: the EAGER ENTRY SCAN
+      (return the exact `MATE_UPPER` at any king-capturable node
+      before table, repetition or loop) is the model's by-construction
+      king-capture branch, the fold's `live` bit is the comparison
+      `S ≤ n` (real fold vs null contribution), the null verifier
+      `nullVerify` withdraws a positive uncertified pass to the fold
+      identity at an oracle-confirmed terminal, and the correction
       `d2Fix` fires only on fail-low + `not live` + the oracle scan
-      `allIllegalB` (lines 463–472).  Proven sorry-free:
-      **`boundD2_spec`** — the docstring against `negamaxD2`, the
-      `(pos, depth)`-determined value with the exact terminal override
-      at oracle-terminal nodes — under `Bounded`, `CheckProbeOK`,
-      `KillerLegal`, `NullIsPassSearchD2` (fidelity) and `NullBetD2`
-      (the bet AWAY from verified terminals only).  No
-      `TerminalPseudoSafe`-style obligation, no
+      `allIllegalB`.  No `TerminalPseudoSafe`-style obligation, no
       `MateValuesAreKingCapturesQS`, no exhaustion-gate arithmetic:
       the correction's firing condition and the value's terminal
       branch are the SAME position-intrinsic predicate, so the old
-      `hexh`/`hmask` alignment machinery vanishes.  Companions:
+      `hexh`/`hmask` alignment machinery vanishes.
+    - **The two-layer spec** (decision: Thomas) — *the fold defines
+      the semantics*.  Layer 1, **`bound_null_spec`**: the search
+      brackets its OWN null-inclusive declared value function
+      `nullValueD2` (the pass term is the fold's initial accumulator,
+      admitted below the mate band, declined inside it — the
+      fold-rule reading of the suppression; oracle-terminal nodes are
+      the verified exact values; `(pos, depth)`-determined, killer-
+      and window-free) — with NO null bet: premises are `Bounded`,
+      `CheckProbeOK`, `KillerLegal`, `NullIsPassSearchD2` (fidelity),
+      the driver window range, and the single chess-position statement
+      `NoZugzwangInMateBand`, which provably cannot leave layer 1
+      while the suppression is report-keyed (the -900 vs -MATE_LOWER
+      straddle scenario, documented in the file).  Layer 2,
+      **`nullValue_eq_realValue_of_noZugzwang`**: under `NoZugzwang`
+      ("pass-value ≤ best real move", stated once, the validity
+      region of the approximation) the declared function collapses
+      onto the real-move value `negamaxD2`.  The chess-facing
+      **`boundD2_spec`** is the corollary of the two layers; table
+      consistency (**`d2_no_crossing`**, `d2_terminal_stores`) needs
+      layer 1 only — zugzwang can never cross the table.  Everything
+      about the algorithm is unconditional; what remains assumed is
+      chess (zugzwang), attached to the accuracy lemma — plus its
+      mate-band fragment in layer 1, with the documented reason.
+    - **Reference ≡ production (kcx)** — the production consumer
+      (`kcx-verify` at `560799c`, lines 450–460) restores
+      `KingCapturableReportsExact` WITHOUT the eager scan: a virtual
+      (`None`) fail-high is validated before it may cut — a real king
+      capture is SUBSTITUTED (the node reports `MATE_UPPER` through a
+      real cutoff and `tp_move` stores the true capture: active
+      preservation of `KillerAtKingCapturable`), a mate-band claim
+      without a capture is the fold identity, and a positive claim at
+      a verified terminal is folded to the identity (depth-gated: at
+      depth 0 QS must not RETURN the reserved sentinel — the
+      96-mismatch lesson).  Sub-mate futility yields are VIRTUAL (line
+      417): the old yield-species caution was a live bug (crossed
+      entry `Entry(lower=0, upper=-1054)`), now resolved in code.
+      **`production_eq_reference`** proves the two consumers compute
+      the SAME function at every driver-range window, under
+      `CaptureFirst` (king captures head the sorted list) and
+      `KillerLegal` — the machine twin of the build battery's
+      reference == production over 9,600 probes.  Transfers:
+      **`kingCapturableReportsExact_restored`** (the invariant, now a
+      theorem — `CexR` stays as the pre-kcx countermodel),
+      `boundKCX_null_spec` / `boundKCX_spec` / **`kcx_no_crossing`**,
+      `virtualCutoffValidated` (production never stores a positive
+      lower bound at a verified terminal, killer-free),
+      `nullIsPassSearch_of_production` (fidelity transfers through
+      the equivalence), `kcx_repairs_cexT`, and **`HistoryLegal`** /
+      `repetition_never_masks` — the input-validity hypothesis
+      (fidelity-class, like `Bounded`) closing the one path that
+      precedes the consumer: legal game histories never contain
+      king-capturable positions.  Companions:
       **`storedMoveLegal`** (+ `storedMoveLegal_qs`, idealization-free
       at depth 0) — a real fail-high at an in-band gamma certifies its
       move legal, and legality is position-intrinsic so the
@@ -241,17 +290,13 @@ tactic only, so a full build takes seconds.
       **`negativeFailLowVerified`** / `d2Fix_unverified_passthrough` —
       the fail-low arm converts to a terminal value ONLY under the
       oracle's confirmation, and then exactly;
-      **`positiveNullCutoffVerified`** — a verified-terminal node never
-      stores a positive lower bound; **`nullAtMateD2`** — the mate side
-      stays a theorem (an enabled pass at an in-check node is exactly
-      the fold identity; simpler than the pre-d2 `nullAtMate`, since
-      `boundD2`'s depth 0 carries the sentinel branch);
-      **`d2_terminal_stores`** — both stores bracket the exact terminal
-      value; **`d2_no_crossing`** — table non-crossing with NO
-      pseudo-option hypothesis, replacing the retired
-      `boundA1_no_crossing`-under-`TerminalPseudoSafe`;
-      **`d2_repairs_cexT`** — the verified loop returns the exact 0 at
-      both windows on the countermodel that crossed the old one.
+      **`positiveNullCutoffVerified`** / `virtualCutoffValidated` — a
+      verified-terminal node never stores a positive lower bound, in
+      either consumer; **`nullAtMateD2`** — the mate side stays a
+      theorem (an enabled pass at an in-check node is exactly the fold
+      identity); **`d2_repairs_cexT`** / `kcx_repairs_cexT` — both
+      loops return the exact 0 at both windows on the countermodel
+      that crossed the pre-verification design.
     - Loop infrastructure: `searchMoves_eq_init_all` (loop exhaustion,
       the converse of `searchMoves_eq_init`) and `searchMoves_init_max`
       (the `max rn best_real` restructuring equals the code's single
@@ -520,18 +565,46 @@ statement* — the honest form — not a deferred proof:
   guard-passing, `depth > 2`, fail-HIGH null yield BELOW the mate band
   lower-bounds the position's `negamaxQS` value.  Fail-low yields need
   no hypothesis, and the A1 suppression makes mate-band yields dead
-  code.  **Superseded for the shipped loop by `NullBetD2`** — the same
-  bet restricted to nodes the oracle scan does NOT prove terminal.  The
-  restriction is the honest one: away from terminals a legal move
-  exists, so the bet's justification ("some real move matches the
-  pass") is at least possible; AT a terminal it is impossible in
-  principle, which is why the +175 witness refuted every design that
-  assumed anything there — d2 verifies instead
-  (`positiveNullCutoffVerified`, `nullAtMateD2`).  The recursive
-  (non-oracle) form of the bet is `NullBetOK` in `Sunfish/CanNull.lean`;
-  zugzwang is precisely the failure of either, and under d2 it
-  threatens only value accuracy at non-terminal nodes, never the
-  table's self-consistency at terminals.
+  code.  **Superseded for the shipped loop by the two-layer split**:
+  no bet appears in any spec premise any more.  Layer 1 brackets the
+  null-INCLUSIVE declared function (the option is definition, not
+  assumption); zugzwang moved whole into layer 2's `NoZugzwang` — the
+  validity region of the null-move approximation, stated once,
+  attached to the accuracy lemma — and its only trace in layer 1 is
+  the mate-band fragment `NoZugzwangInMateBand` (implied by
+  `NoZugzwang`), which the report-keyed suppression provably requires.
+  AT verified terminals nothing is assumed in any layer
+  (`positiveNullCutoffVerified` / `virtualCutoffValidated`,
+  `nullAtMateD2`).  The recursive (non-oracle) form of the bet is
+  `NullBetOK` in `Sunfish/CanNull.lean`; zugzwang is precisely the
+  failure of either form, and it threatens only value accuracy at
+  non-terminal nodes, never the table's self-consistency.
+
+- **`NoZugzwang` / `NoZugzwangInMateBand`** (`Sunfish/Stalemate.lean`,
+  two-layer section) — layer 2's validity region ("pass-value ≤ best
+  real move") and its mate-band fragment ("if passing wins in the mate
+  band, some real move does too" — you cannot be in zugzwang while
+  delivering forced mate).  The fragment is the ONE chess statement in
+  layer 1, and the file documents both why it cannot be removed (the
+  suppression tests the pass REPORT for band membership; reports
+  straddle the band across windows) and how far kcx discharges it
+  (pass depths ≤ 2).
+
+- **`CaptureFirst`** (`Sunfish/Stalemate.lean`, kcx section) — king
+  captures head the sorted move list; with `KingCaptureValHigh` this
+  is what lets the production loop reproduce the reference's eager
+  `MATE_UPPER` through an ordinary first-yield cutoff.  Engine backing:
+  the value sort plus the `EvalBounds` margins.  A PR reordering the
+  move sort must re-check it or `production_eq_reference` dies.
+
+- **`HistoryLegal`** (`Sunfish/Stalemate.lean`, kcx section) — input
+  validity, fidelity-class like `Bounded`: positions in the game
+  history never have a capturable king (every reached position came
+  from a legal move).  Closes the one path that precedes the
+  production consumer: a king-capturable position inside `history`
+  would answer with the repetition 0 and evade the restored invariant
+  (`repetition_never_masks`); the reference dodges it via the eager
+  entry scan.
 
 - **`ExtKeyIndependent`** — *not* `sorry`d, but stated as the false claim a
   `(pos, depth)`-keyed table makes once search extensions depend on history
@@ -569,20 +642,25 @@ statement* — the honest form — not a deferred proof:
 | `nullGuard` | `abs(pos.score) < 500` (line 364), gamma-free |
 | `QS`, `QS_A`, `val_lower` | the QS constants and threshold (lines 149–150, 359 on `29c7887`) |
 | `movesAbove`, `QSGame.val` | the QS break `if val < val_lower: break` (lines 412–413) and `pos.value(move)`; the killer val-gate (line 406) keeps the killer inside the same set |
-| `allAboveB`, `qsGateB` | RETIRED — the exhaustion gate is gone from the code; the verify-on-suspicion correction scans the FULL move list with the legality oracle instead (`allIllegalB`, lines 463–465), so no "did the filter skip anything" arithmetic guards the correction.  Kept for the historical models |
+| `allAboveB`, `qsGateB` | RETIRED — the exhaustion gate is gone from the code; the verify-on-suspicion correction scans the FULL move list with the legality oracle instead (`allIllegalB`, lines 490–492 on `560799c`), so no "did the filter skip anything" arithmetic guards the correction.  Kept for the historical models |
 | `negamaxQS`, `qsDrawFix` | the filtered draw-aware value the HISTORICAL gated search bracketed |
 | `boundA1` (`best_real` = `S`, `nullMax`, `a1Fix`) | HISTORICAL: the A1-fixed loop as shipped `0998739..29c7887^`; `boundA1Un` is the pre-fix loop shape, `a1_unfixed_not_sound` its machine-checked hole; `cexT_crossing` the fail-high hole that retired it |
-| `allIllegalB` | the legality scan `all(self.bound(pos.move(m), MATE_UPPER, 0, root=True) == MATE_UPPER for m in pos.gen_moves())` (correction, lines 463–465; the null verifier's copy, lines 382–385) — over the FULL `gen_moves()` list |
+| `allIllegalB` | the legality scan `all(self.bound(pos.move(m), MATE_UPPER, 0, root=True) == MATE_UPPER for m in pos.gen_moves())` (correction, lines 490–492 on `560799c`; the interception's copy, lines 457–459) — over the FULL `gen_moves()` list |
 | `qsProbe`, `legalityProbeCorrect` | the dedicated legality probe `bound(child, MATE_UPPER, 0, root=True)` (lines 383, 464): unstored driver semantics (`rootProbe`), stand-pat + filtered depth-0 loop; exact at `MATE_UPPER` only — `kingCapturableReportsExact_refuted` is the general-window countermodel |
-| `nullVerify`, `useD2`, `nullPartD2` | the null verifier `if 0 < score and gamma <= score < MATE_LOWER and not killer and all(...)` (lines 382–385) and the fold-identity mate-band suppression on the yield (line 386) |
-| `boundD2` (`d2Fix`; `not live` = `S ≤ n`) | the SHIPPED consumption fold `best, live` (lines 436–439) and verify-on-suspicion correction `if depth and best < gamma and not live and all(...)` (lines 463–472) |
+| `nullVerify`, `useD2`, `nullPartD2` | the reference null verifier `if 0 < score and gamma <= score < MATE_LOWER and not killer and all(...)` and its fold-identity mate-band suppression (reference.py; production's consumer interception makes the same decisions — `nullArm_match`) |
+| `boundD2` (`d2Fix`; `not live` = `S ≤ n`) | REFERENCE.PY (the kcx executable spec): eager entry scan = the by-construction capture branch, consumption fold `best, live`, verify-on-suspicion correction `if depth and best < gamma and not live and all(...)` (lines 490–499 on `560799c`) |
+| `boundKCX` (`NCut`, `nFoldKCX`) | PRODUCTION (sunfish.py on `560799c`): no eager scan; the consumer interception `if move is None and score >= gamma: ...` (lines 452–460) — substitution / mate-band identity / verified-terminal identity (depth-gated) — plus the same correction; `production_eq_reference` is the bridge |
+| `nullValueD2`, `nullTermD2` | the null-inclusive declared value function (layer 1's subject): the pass term as the fold's initial accumulator, band claims declined (the fold rule); terminal branch = the verified exact value |
+| `NoZugzwang`, `NoZugzwangInMateBand` | layer 2's validity region and its band fragment (the one chess statement in layer 1) |
+| `CaptureFirst` | king captures head the sorted move list (the sort of line 410, `EvalBounds` margins) |
+| `HistoryLegal` | input validity: game-history positions are never king-capturable (repetition check, lines 352–353, precedes the consumer) |
+| virtual futility yield | `yield (move, MATE_UPPER) if val >= MATE_LOWER else (None, pos.score + val)` (line 417) — sub-mate futility estimates are VIRTUAL; the mate case is a real king capture |
 | `negamaxD2`, `terminalValue` | the `(pos, depth)`-determined value the shipped search brackets: exact terminal value at oracle-terminal nodes (line 472), plain filtered fold elsewhere |
 | `KillerLegal`, `storedMoveLegal` | `tp_move` as a mobility certificate: exact-position key, store on real fail-high only (lines 362–366, 440–445) |
 | `NullIsPassSearchD2` | the null yield IS the pass search `-self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)` (line 381) |
-| `NullBetD2` | the null bet away from verified terminals (the zugzwang exposure the comment at lines 368–378 accepts) |
 | `CorrectionTerminal`, `TerminalPseudoSafe`, `NullAtStalemateNonpositive`, `StandPatAtTerminal`, `KingCapturableReportsExact` | the refuted-assumptions ledger — countermodels only, consumed by nothing |
 | `ValFloor`, `EvalBounds.quietDropMax` | the `pos.value` floor read off the tables — RETIRED from the correction argument with the gate; still documents the table facts |
-| `KingCaptureValHigh` | king captures valued ≥ `MATE_LOWER` (the sort of line 410; the futility bypass of line 421) — now spent in `legalityProbeCorrect` |
+| `KingCaptureValHigh` | king captures valued ≥ `MATE_LOWER` (the sort of line 410; the mate-case futility yield of line 417) — spent in `legalityProbeCorrect` and `CaptureFirst`'s backing |
 | `EvalQuiet` | static evals stay below the mate band outside the king-gone zone (`EvalBounds.evalBound_lt_MATE_LOWER`) |
 
 The historical rows — `boundLmr`/`red` (re-search LMR), `boundLmrDet`/
@@ -644,54 +722,68 @@ abstractions, each with its justification:
   `boundA1Un` with its machine-checked stalemate-masking hole
   (`a1_unfixed_not_sound`), and `cexT_crossing` is the fail-high hole
   that retired the A1 design itself.
-- **d2 status**: `boundD2` models SHIPPED code, audited against
-  `29c7887` (2026-08-08).  Point by point: the consumption fold's
-  `best, live` (lines 436–439, `if score > best: best, live = score,
+- **kcx status**: audited against `kcx-verify` at `560799c`
+  (2026-08-08); `reference.py` of the kcx build is the executable spec
+  and `boundD2` models it exactly (its eager entry scan is the model's
+  king-capture branch; the invariant-restoring interception of
+  production, lines 452–460, is modeled by `boundKCX`'s `NCut` /
+  `nFoldKCX` on the null yield, with `production_eq_reference` the
+  machine bridge — the engine-side twin was checked bound-for-bound
+  over 9,600 probes).  Production's stand-pat interception at QS (the
+  substitution arm is NOT depth-gated) is what backs the model's
+  by-construction depth-0 capture branch — with kcx this is
+  construction, not idealization.  Point by point: the consumption fold's
+  `best, live` (lines 450 and 461–462, `if score > best: best, live = score,
   move is not None`) is modeled without an extra bit — the null
   contribution `n` folds first, so `live` is exactly `n < S` (a real
   yield strictly improved) and the code's `not live` is `d2Fix`'s
   `S ≤ n`; ties go to the earlier (virtual) yield in both.  The
   correction `if depth and best < gamma and not live and all(...)`
-  (lines 463–465) is `d2Fix` gated on `allIllegalB`; the `if depth`
+  (lines 490–492) is `d2Fix` gated on `allIllegalB`; the `if depth`
   exclusion is structural (`d2Fix` exists only at depth ≥ 1, and the
-  model's depth 0 is the eval).  The null verifier (lines 382–385) is
-  `nullVerify`; the mate-band suppression ships in FOLD-IDENTITY form
-  (line 386) where the model disables the option (`useD2`) — equivalent
-  by the fold rule.  The scan runs over `pos.gen_moves()`, the FULL
+  model's depth 0 is the eval).  The reference null verifier is
+  `nullVerify` (in production the same three decisions live in the
+  consumer interception — `nullArm_match` proves them identical); the
+  mate-band handling is fold-identity normalization, which the model
+  represents as option disabling (`useD2`) — equivalent by the fold
+  rule.  The scan runs over `pos.gen_moves()`, the FULL
   list, modeled as `G.moves p` — NOT `movesAbove` — which is what lets
   the exhaustion gate retire.  The legality probes and the IID probe
   are `root=True`: unstored in both directions (`rootProbe`,
   CanNull.lean), so the `(pos, depth)` key stays complete and no table
   entry enters the definition of legality.
-- **The depth-0 sentinel-exactness idealization (d2)**: `boundD2`'s and
-  `negamaxD2`'s depth 0 return the king-capture-aware QS value — i.e.
-  the model's depth-0 CHILD reports are sentinel-exact at every window.
-  The engine's are not: that is the REFUTED `KingCapturableReportsExact`
-  (machine-checked gap: `cexR_two_windows`), and the difference is the
-  one channel d2 leaves open — "sentinel masking", a king-capturable
-  child soundly cutting off on its stand-pat or a partial table lower,
-  setting `live` at a terminal node and suppressing the correction.
-  The dedicated probe does not need the idealization
-  (`legalityProbeCorrect` is proven at the probe's window from
-  `KingCaptureValHigh`/`EvalQuiet` alone), so the correction itself is
-  certified; the residual exposure is confined to the `live`/fold path.
-  Next arc's target.
-- **Yield species (formal typing caution)**: the engine's `moves()`
-  yields three species — searched real results (`move,
-  -bound(child, ...)`), virtual options (the null yield and the depth-0
-  stand-pat, `move=None`), and SYNTHETIC SUFFIX ESTIMATES (the futility
-  yield of line 421: a truthy `Move` whose child was never searched).
-  The `live` bit treats any truthy-move yield as a real winner, so a
-  futility yield acts as a mobility certificate the search never
-  actually earned.  The model keeps the three species distinct: the
-  fold contains searched real results only, virtual options enter as
-  `n`, and futility is not re-modeled in this loop (`boundFut` covers
-  its bound-correctness; its yield cannot leave the fold at the
-  sentinel — the old exhaustion note — but it CAN set `live`).  The
-  formal object deliberately does not claim that every truthy yield
-  certifies mobility, and a PR moving the futility yield or adding a
-  new truthy yield species must say what certifies the mobility its
-  `live` bit will claim.
+- **Sentinel exactness is now construction, not idealization**: the
+  model's king-capture branch (exact `MATE_UPPER` at every window and
+  depth) is the reference's eager entry scan verbatim, and production
+  earns it through the consumer interception
+  (`kingCapturableReportsExact_restored`).  The pre-kcx gap — a
+  king-capturable child soundly cutting off on its stand-pat or a
+  partial table lower — is preserved as the REFUTED-for-the-old-loop
+  `KingCapturableReportsExact` countermodel (`CexR`,
+  `cexR_two_windows`): the sentinel-masking channel's root cause, now
+  closed in code.  The killer yield at king-capturable nodes rests on
+  `KillerAtKingCapturable` (Killer.lean), which the substitution arm
+  now ACTIVELY preserves by storing the true capture; the table's
+  entries at such nodes are exact for the same reason
+  (KingCapturableTableExact — every return is the sentinel, so every
+  stored bound is; the CanNull layer's invariant carries it).
+- **Yield species (resolved in code)**: the engine's `moves()` yields
+  are now two species by construction — searched real results and the
+  mate-case futility yield (a real king capture, which can cut) carry
+  a truthy `Move`; the null yield, the stand-pat and SUB-MATE FUTILITY
+  ESTIMATES (line 417) are virtual (`None`).  The earlier revision of
+  this section recorded the sub-mate futility `Move` as a formal
+  typing caution — a synthetic suffix estimate the `live` bit would
+  treat as a mobility certificate; the kcx build agent traced the
+  three standing bench witnesses to exactly that (crossed entry
+  `Entry(lower=0, upper=-1054)` at a stalemated depth-1 child) and
+  fixed it by making the yield virtual: a sub-mate futility yield can
+  never cut (its score is below `gamma` by construction), so its move
+  field existed only to lie to the `live` bit.  The model keeps
+  futility out of the loop as always (`boundFut` covers its bound
+  correctness), and the invariant "every truthy yield certifies a
+  searched real result (or an immediate king capture)" is now a code
+  fact, not a modeling caution.
 - **Ungated gate arms** (historical, `boundA1`): for in-band windows the
   model's `best < gamma ∧ best_real = LOSS` gate coincides with the
   code's bare `best == -MATE_UPPER` test (a `LOSS` loop result is
@@ -772,21 +864,35 @@ The later files add further named conditions to check against:
   the MOVE ORDER must keep king captures first with mate-band values
   (`KingCaptureValHigh`, the futility `else MATE_UPPER` bypass
   included), or the probe's easy direction dies;
-  `tp_move` must keep its exact-position key and store only real
-  fail-high moves at in-band windows, or `storedMoveLegal` no longer
-  backs the verifier's `not killer` short-circuit (`KillerLegal`);
-  the NULL VERIFIER must keep verifying every positive uncertified
-  cutoff below the mate band (`positiveNullCutoffVerified`) and keep
-  the fold-identity mate-band suppression on the yield (`score if
-  score < MATE_LOWER else -MATE_UPPER` IS the suppression;
-  `nullAtMateD2` is what it buys);
+  `tp_move` must keep its exact-position key and store only proven
+  moves — real fail-high winners (`storedMoveLegal`), the verified
+  scan's find, or the substituted king capture — or `KillerLegal` and
+  `KillerAtKingCapturable` die together;
+  the CONSUMER INTERCEPTION must validate every virtual fail-high
+  before it may cut, keep all three arms (substitution / mate-band
+  identity / verified-terminal identity), keep the SUBSTITUTION arm
+  depth-UNGATED (it is the channel-3 fix at QS) and the terminal-fold
+  arm depth-GATED (folding a terminal stand-pat at depth 0 makes the
+  node RETURN the reserved sentinel — 96 measured mismatches), and
+  keep sub-mate futility yields VIRTUAL (`virtualCutoffValidated`,
+  `production_eq_reference`, and the crossed-entry witness are what
+  these buy);
   the CORRECTION must keep the oracle scan over the FULL
   `pos.gen_moves()` list and keep depth 0 excluded (`if depth and ...`
   — the `StandPatAtTerminal` refutation is what depth-0 exactness
   claims cost);
-  and NOTHING may reintroduce a score-shaped sentinel test —
-  `kingCapturableReportsExact_refuted` is the countermodel for trusting
-  any fail-soft report as a legality fact.
+  the MOVE SORT must keep king captures first (`CaptureFirst`) or the
+  production loop no longer reproduces the reference's eager sentinel;
+  and NOTHING may reintroduce a score-shaped sentinel test on
+  UNVALIDATED reports — `kingCapturableReportsExact_refuted` is the
+  countermodel for trusting a fail-soft report as a legality fact;
+  under kcx the report IS trustworthy again, exactly because the
+  consumer validates it first (`kingCapturableReportsExact_restored`).
+  A PR changing the spec layering must keep zugzwang OUT of the
+  correctness layer: layer 1 (`bound_null_spec`) owns the algorithm
+  unconditionally (one mate-band chess fragment, with its documented
+  necessity), layer 2 (`NoZugzwang`) owns the approximation's
+  accuracy, and the table can never depend on layer 2.
 - **Adding a new flag/parameter to `bound()`** — the doctrine test it
   must pass, distilled from `can_null`'s life and death (in the key
   for years; removed at `eda66ee` once its only users stopped needing
