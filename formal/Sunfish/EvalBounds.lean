@@ -117,5 +117,67 @@ the leak - every kingless position scores at or below -MATE_LOWER,
 while static evals keep their margin (`evalBound_lt_MATE_LOWER`). -/
 theorem margin_covers : MATE_LOWER <= tmin sqK - armyMax := by decide
 
+
+/-! ### The move-value floor (backing for `ValFloor`, Sunfish/Stalemate.lean)
+
+`pos.value(move)` (sunfish.py lines 269-290) is the mover's own table
+delta `pst[p][j] - pst[p][i]` plus additive terms that are all
+NONNEGATIVE given the shipped tables:
+
+* capture: `+ pst[q][119-j]` -- every table is nonnegative
+  (`capture_terms_nonneg`, extending `nk_nonneg` with the king);
+* the kp "castling check detection" bonus: `+ pst[K][119-j]` ≥ 59901;
+* promotion: `+ pst[prom][j] - pst[P][j]` -- on every promotion square
+  each of N, B, R, Q beats the pawn (`promotion_terms_nonneg`);
+* en passant: `+ pst[P][...]` ≥ 63;
+* castling rook relocation: corner → D1 gains 35, corner → F1 gains 14
+  (`castle_rook_deltas`; the rotation means only the rank-1 corners of
+  the white-view table are ever used).
+
+So the floor of `pos.value` is the worst table delta, `-quietDropMax =
+-192` (attained by the queen, 825 - 1017).  This is the concrete number
+behind the abstract `ValFloor` hypothesis: the link from the board
+string to these tables is not modeled (same caveat as `Bounded` above),
+but every numeric fact is machine-checked here. -/
+
+/-- Largest-minus-smallest square value of a table: the worst delta a
+quiet move of that piece can score. -/
+def spread (t : List Int) : Int := tmax t - tmin t
+
+/-- The move-value floor is `-quietDropMax`: no quiet move drops more
+than the queen's worst-case 192. -/
+def quietDropMax : Int :=
+  max (spread sqP) (max (spread sqN) (max (spread sqB)
+    (max (spread sqR) (max (spread sqQ) (spread sqK)))))
+
+theorem quietDropMax_eq : quietDropMax = 192 := by decide
+
+/-- Every table (king included) is nonnegative, so capture and kp-bonus
+terms of `pos.value` only add. -/
+theorem capture_terms_nonneg :
+    (0 <= tmin sqP && 0 <= tmin sqN && 0 <= tmin sqB &&
+     0 <= tmin sqR && 0 <= tmin sqQ && 0 <= tmin sqK) = true := by decide
+
+/-- On each of the eight promotion squares, promoting to any of N, B, R,
+Q gains over the pawn value there (`pst[prom][j] - pst[P][j] ≥ 0`). -/
+theorem promotion_terms_nonneg :
+    (((List.zipWith (· - ·) (sqN.take 8) (sqP.take 8)).all (fun x => decide (0 ≤ x))) &&
+     ((List.zipWith (· - ·) (sqB.take 8) (sqP.take 8)).all (fun x => decide (0 ≤ x))) &&
+     ((List.zipWith (· - ·) (sqR.take 8) (sqP.take 8)).all (fun x => decide (0 ≤ x))) &&
+     ((List.zipWith (· - ·) (sqQ.take 8) (sqP.take 8)).all (fun x => decide (0 ≤ x)))) = true := by
+  decide
+
+/-- The two castling rook relocations gain value: a1 → d1 is +35,
+h1 → f1 is +14 (64-square indices 56/59 and 63/61). -/
+theorem castle_rook_deltas :
+    sqR.getD 59 0 - sqR.getD 56 0 = 35 ∧ sqR.getD 61 0 - sqR.getD 63 0 = 14 := by
+  decide
+
+/-- A king capture's value is dominated by the captured king's square
+value (≥ tmin sqK = 59901), which clears `MATE_LOWER` even after the
+worst mover drop -- the concrete backing for `KingCaptureValHigh`
+(Sunfish/Stalemate.lean): king captures always pass the QS val-filter. -/
+theorem kingCapture_val_above : MATE_LOWER + quietDropMax < tmin sqK := by decide
+
 end EvalBounds
 end Sunfish

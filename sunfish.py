@@ -366,8 +366,14 @@ class Searcher:
             #   (killer-only check): declined, exception tolerated.
             # Null move in QS (a search-verified stand-pat) measured
             # -13 +/- 34 ELO: declined.
-            if depth > 2 and can_null and abs(pos.score) < 500:
-                yield None, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
+            if depth > 2 and can_null and abs(pos.score) < 500 and any(
+                    c in pos.board for c in "RBNQ"):
+                # A pass claiming a mate-band value is redundant (if passing
+                # wins the king, capturing it is a real move too) and can be a
+                # false mate that poisons tp_move - suppress it. (A1;
+                # Stalemate.lean: a1_unfixed_not_sound / a1_fix_repairs.)
+                score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
+                yield None, score if score < MATE_LOWER else -MATE_UPPER
 
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else.
@@ -413,9 +419,12 @@ class Searcher:
                 yield move, -self.bound(pos.move(move), 1 - gamma, depth - 1)
 
         # Run through the moves, shortcutting when possible
-        best = -MATE_UPPER
+        # best_real sees only real-move yields: the mate/stalemate sentinel
+        # below must not be masked by the null option (a pass yielding a
+        # normal material score hid genuine stalemates in pawn endings - A1).
+        best = best_real = -MATE_UPPER
         for move, score in moves():
-            best = max(best, score)
+            best, best_real = max(best, score), max(best_real, score) if move else best_real
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
                 if move is not None:
@@ -466,8 +475,8 @@ class Searcher:
         #   correction still never fires in plain QS nodes.
         # Without this, a depth <= 2 node above a stalemate returns +MATE_UPPER for
         # the stalemating move, poisoning tp_move at the root (Qc4?? on lichess).
-        if best == -MATE_UPPER and (depth > 2 or
-                all(pos.value(m) >= val_lower for m in pos.gen_moves())):
+        if best < gamma and best_real == -MATE_UPPER and all(
+                pos.value(m) >= val_lower for m in pos.gen_moves()):
             flipped = pos.rotate(nullmove=True)
             # Hopefully this is already in the TT because of null-move
             in_check = self.bound(flipped, MATE_UPPER, 0) == MATE_UPPER
