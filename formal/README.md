@@ -238,12 +238,22 @@ tactic only, so a full build takes seconds.
       admitted below the mate band, declined inside it — the
       fold-rule reading of the suppression; oracle-terminal nodes are
       the verified exact values; `(pos, depth)`-determined, killer-
-      and window-free) — with NO null bet: premises are `Bounded`,
-      `CheckProbeOK`, `KillerLegal`, `NullIsPassSearchD2` (fidelity),
-      the driver window range, and the single chess-position statement
-      `NoZugzwangInMateBand`, which provably cannot leave layer 1
-      while the suppression is report-keyed (the -900 vs -MATE_LOWER
-      straddle scenario, documented in the file).  Layer 2,
+      and window-free) — with NO null bet and NO pass-search
+      hypothesis (the pass term is the model's own recursion, the
+      dissolved `NullIsPassSearchD2`): premises are `Bounded`,
+      `CheckProbeQuiet` (DISCHARGED for the shipped probe:
+      `checkProbe_discharged`, via `legalityProbeCorrect` aimed at the
+      rotated position plus the structural `RotateNegatesScore`),
+      `KillerLegal` (itself a THEOREM given the store trace:
+      `killerLegal_lifecycle`), the driver window range (what the
+      bisection actually guarantees is proven in `Sunfish/Driver.lean`
+      — including the carried-gamma finding), and the single
+      chess-position statement `NoZugzwangInMateBand`, which provably
+      cannot leave layer 1 while the suppression is report-keyed (the
+      -900 vs -MATE_LOWER straddle is a definition-independent ENGINE
+      crossing at mate-band-zugzwang positions; the file records why
+      the mate-band-capped alternative definition only moves the
+      obstruction to the fail-low side).  Layer 2,
       **`nullValue_eq_realValue_of_noZugzwang`**: under `NoZugzwang`
       ("pass-value ≤ best real move", stated once, the validity
       region of the approximation) the declared function collapses
@@ -269,9 +279,15 @@ tactic only, so a full build takes seconds.
       entry `Entry(lower=0, upper=-1054)`), now resolved in code.
       **`production_eq_reference`** proves the two consumers compute
       the SAME function at every driver-range window, under
-      `CaptureFirst` (king captures head the sorted list) and
-      `KillerLegal` — the machine twin of the build battery's
-      reference == production over 9,600 probes.  Transfers:
+      `CaptureFirst` — itself DISCHARGED from the sort spec
+      (`captureFirst_of_sorted`: `MovesSortedByVal`, the one trusted
+      primitive "Python's `sorted` sorts", plus `KingCaptureValHigh`
+      and its converse `HighValIsKingCapture`) — and `KillerLegal` —
+      itself a THEOREM over the `tp_move` lifecycle
+      (`killerLegal_lifecycle`: all three store species, eviction,
+      and cross-search persistence, machine-checked) — the machine
+      twin of the build battery's reference == production over 9,600
+      probes.  Transfers:
       **`kingCapturableReportsExact_restored`** (the invariant, now a
       theorem — `CexR` stays as the pre-kcx countermodel),
       `boundKCX_null_spec` / `boundKCX_spec` / **`kcx_no_crossing`**,
@@ -532,22 +548,36 @@ statement* — the honest form — not a deferred proof:
   `MATE_UPPER` classification).  Concrete backing:
   `EvalBounds.evalBound_lt_MATE_LOWER`.
 
-- **`KillerLegal`** (`Sunfish/Stalemate.lean`, d2 section) — any
-  position `tp_move` holds an entry for has a legal move.  This is the
-  invariant `storedMoveLegal` proves the store maintains (exact-position
-  key + store-on-real-fail-high-only + in-band windows: the yield
-  `-(child) ≥ gamma > -MATE_UPPER` while a king-capturable child reports
-  the exact sentinel), consumed by the null verifier's `not killer`
-  short-circuit.  A PR that stores moves outside the fail-high cutoff,
-  ply-shares the killer table, or widens the probe range must say how
-  the certificate survives.
+- **`KillerLegal`** (`Sunfish/Stalemate.lean`) — away from
+  king-capturable nodes, a `tp_move` entry is a legal move.  **Now a
+  THEOREM** (`killerLegal_lifecycle`): the full lifecycle induction
+  over the event trace — the fail-high store of a searched real winner
+  (`storedMoveLegal`), the two king-capture stores (the kcx
+  substitution, and the mate-case futility arm via
+  `HighValIsKingCapture`), and FIFO eviction — preserves the
+  position-intrinsic invariant `KillerInv` from the empty table, and
+  the invariant mentions no search state, which is why it persists
+  across searches and why exact-position keying is load-bearing.  A PR
+  adding a store site must name its event species; one that ply-shares
+  the table loses the induction.
 
-- **`NullIsPassSearchD2`** (`Sunfish/Stalemate.lean`, d2 section) — a
-  fidelity statement, not a bet: the raw null yield IS the negated
-  search of the passed position at `depth - 3` (line 381), stated the
-  way `CheckProbeOK` states probe fidelity.  Feeds `nullAtMateD2` (the
-  mate side of the null is a theorem) and the boundedness of the null
-  contribution.
+- **`RotateNegatesScore`** (`Sunfish/Stalemate.lean`) — structural,
+  like `ValGame.score_identity`: passing negates the static score,
+  literal in `Position.rotate`.  Consumed by `checkProbe_discharged`.
+
+- **`HighValIsKingCapture` / `MovesSortedByVal`**
+  (`Sunfish/Stalemate.lean`) — the converse value fact (a mate-band
+  `pos.value` IS a king capture; `EvalBounds` margins) and the one
+  trusted primitive "Python's `sorted` sorts, descending by value".
+  Together with `KingCaptureValHigh` they DISCHARGE `CaptureFirst`
+  (`captureFirst_of_sorted`) and bind the futility store to its event
+  species.
+
+- *(dissolved)* `NullIsPassSearchD2` — the null yield is now the
+  model's own pass recursion, part of `boundD2`/`boundKCX`'s
+  DEFINITIONS; the fidelity residue is the mapping-table row for
+  `-self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)` and
+  the drift guard covers the line.
 
 - **`ValFloor G B`** (`Sunfish/Stalemate.lean`) — every legal move's
   value is ≥ −B.  `B = 192` is backed by the tables
@@ -591,11 +621,12 @@ statement* — the honest form — not a deferred proof:
   (pass depths ≤ 2).
 
 - **`CaptureFirst`** (`Sunfish/Stalemate.lean`, kcx section) — king
-  captures head the sorted move list; with `KingCaptureValHigh` this
-  is what lets the production loop reproduce the reference's eager
-  `MATE_UPPER` through an ordinary first-yield cutoff.  Engine backing:
-  the value sort plus the `EvalBounds` margins.  A PR reordering the
-  move sort must re-check it or `production_eq_reference` dies.
+  captures head the sorted move list; what lets the production loop
+  reproduce the reference's eager `MATE_UPPER` through an ordinary
+  first-yield cutoff.  **DISCHARGED** (`captureFirst_of_sorted`) from
+  `MovesSortedByVal` + `KingCaptureValHigh` + `HighValIsKingCapture`.
+  A PR reordering the move sort must re-check the sort spec or
+  `production_eq_reference` dies.
 
 - **`HistoryLegal`** (`Sunfish/Stalemate.lean`, kcx section) — input
   validity, fidelity-class like `Bounded`: positions in the game
@@ -632,7 +663,7 @@ statement* — the honest form — not a deferred proof:
 | `NullGame.pass` | `pos.rotate(nullmove=True)` (line 365) |
 | `Table`, `TableOK`, `tablePart2` | `tp_score`, `Entry`, `(pos, depth)`-keyed lookup + point store (lines 288–289, 324–336, 481–485) |
 | `negamaxDraw`, `boundStale`, `staleFix` | king-capture normalization + stalemate correction (lines 316–322, 422–473) |
-| `inCheckB`, `CheckProbeOK` | the null-position check probe `bound(flipped, MATE_UPPER, 0) == MATE_UPPER` (lines 466–468) |
+| `inCheckB`, `CheckProbeOK` | the null-position check probe `bound(flipped, MATE_UPPER, 0) == MATE_UPPER`; for the kcx layer the probe is DISCHARGED: `checkProbe` + `checkProbe_discharged` prove it correct wherever consumed (`CheckProbeQuiet`), via `legalityProbeCorrect` at the rotated position + `RotateNegatesScore` |
 | `MateValuesAreKingCaptures` | the requirement of lines 429–435 and the caveat of lines 437–450 |
 | `FutGame.val`, `boundFut` | `pos.value(move)` and the futility yield (lines 392–406) |
 | `KTable`, `kstore`, `boundKill` | `tp_move`, killer try + store-on-cutoff (lines 373, 388–389, 415–419) |
@@ -654,10 +685,14 @@ statement* — the honest form — not a deferred proof:
 | `NoZugzwang`, `NoZugzwangInMateBand` | layer 2's validity region and its band fragment (the one chess statement in layer 1) |
 | `CaptureFirst` | king captures head the sorted move list (the sort of line 410, `EvalBounds` margins) |
 | `HistoryLegal` | input validity: game-history positions are never king-capturable (repetition check, lines 352–353, precedes the consumer) |
+| `checkProbe`, `CheckProbeQuiet` | the in-check probe as the code computes it — the legality oracle aimed at `pos.rotate(nullmove=True)`; `checkProbe_discharged` |
+| the pass term in `boundD2`/`boundKCX` | `-self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)` (the null yield) — DEFINITIONAL correspondence, no hypothesis; covered by the drift guard |
+| `KillTable`, `KillStore`, `KillerInv`, `killerLegal_lifecycle` | the `tp_move` lifecycle: fail-high stores, the substitution store, the mate-futility store, FIFO eviction, cross-search persistence |
+| `MovesSortedByVal`, `HighValIsKingCapture`, `captureFirst_of_sorted` | `sorted(((pos.value(m), m) ...), reverse=True)` — the trusted sort primitive and the value-margin converse |
+| `driverGamma`, `dstep`, `depthInit` (`Sunfish/Driver.lean`) | the MTD-bi bisection: `gamma = (lower + upper + 1) // 2`, per-depth bracket reset, CARRIED gamma; `driver_band_invariant`, `driver_wide_invariant`, `carried_gamma_escapes_band` |
 | virtual futility yield | `yield (move, MATE_UPPER) if val >= MATE_LOWER else (None, pos.score + val)` (line 417) — sub-mate futility estimates are VIRTUAL; the mate case is a real king capture |
 | `negamaxD2`, `terminalValue` | the `(pos, depth)`-determined value the shipped search brackets: exact terminal value at oracle-terminal nodes (line 472), plain filtered fold elsewhere |
 | `KillerLegal`, `storedMoveLegal` | `tp_move` as a mobility certificate: exact-position key, store on real fail-high only (lines 362–366, 440–445) |
-| `NullIsPassSearchD2` | the null yield IS the pass search `-self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)` (line 381) |
 | `CorrectionTerminal`, `TerminalPseudoSafe`, `NullAtStalemateNonpositive`, `StandPatAtTerminal`, `KingCapturableReportsExact` | the refuted-assumptions ledger — countermodels only, consumed by nothing |
 | `ValFloor`, `EvalBounds.quietDropMax` | the `pos.value` floor read off the tables — RETIRED from the correction argument with the gate; still documents the table facts |
 | `KingCaptureValHigh` | king captures valued ≥ `MATE_LOWER` (the sort of line 410; the mate-case futility yield of line 417) — spent in `legalityProbeCorrect` and `CaptureFirst`'s backing |
@@ -752,6 +787,36 @@ abstractions, each with its justification:
   are `root=True`: unstored in both directions (`rootProbe`,
   CanNull.lean), so the `(pos, depth)` key stays complete and no table
   entry enters the definition of legality.
+- **The pass-term correspondence is definitional** (the dissolved
+  `NullIsPassSearchD2`): the model's null yield IS its own recursive
+  pass probe, exactly sunfish.py's
+  `-self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)`.
+  Nothing is assumed; what remains checkable is that the code line
+  stays what it is — the drift guard pins it.
+- **Model-code drift guard**: `formal/scripts/model_audit.py` (run by
+  `tests/test_model_audit.py` in CI) hashes every audited region of
+  sunfish.py — `Searcher.bound`, `Searcher.search`, `Position.rotate`/
+  `move`/`value`/`gen_moves`, and the constants — and fails on any
+  change without a same-commit re-audit + hash refresh (`--update`).
+  Silent divergence between code and model is thereby impossible until
+  the leanpy track checks the correspondence itself.
+- **The driver-range finding** (`Sunfish/Driver.lean`): "MTD-bi only
+  probes `(-MATE_LOWER, MATE_LOWER]`" — asserted by this README and
+  the code comment — is TRUE for every window computed at the current
+  depth while scores stay strictly in the band
+  (`driver_band_invariant`) and FALSE for the carried first probe of a
+  depth after a MATE-BAND score (`carried_gamma_escapes_band`,
+  machine-checked: a forced-mate score carries a gamma above the band;
+  a mated root parks it exactly at `-MATE_LOWER`).  What holds
+  unconditionally is the wide invariant `(-MATE_UPPER, MATE_UPPER]`
+  (`driver_wide_invariant`) — the range the pre-kcx wide-window
+  theorems cover.  The kcx layered theorems are stated for the band;
+  carried out-of-band first probes are NOT covered by them, and
+  reference/production genuinely differ there (a mate-band fail-LOW
+  pass report exists only at such windows).  A one-line clamp
+  (`gamma = min(max(gamma, 1 - MATE_LOWER), MATE_LOWER)`) or a
+  per-depth `gamma` reset would close the gap — an engine decision,
+  recorded, not taken.
 - **Sentinel exactness is now construction, not idealization**: the
   model's king-capture branch (exact `MATE_UPPER` at every window and
   depth) is the reference's eager entry scan verbatim, and production
