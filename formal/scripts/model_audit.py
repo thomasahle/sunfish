@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""Model-code drift guard (formal/README.md's mapping table).
+
+The Lean model in formal/ is audited against specific regions of
+sunfish.py.  This script hashes those regions and FAILS when they
+drift, making silent divergence between code and model impossible: any
+change to an audited region must land in the same commit as the
+re-audit (update formal/README.md's fidelity section and refresh the
+hashes here with `--update`).
+
+Mechanical, not a proof: the guard pins WHAT was audited, the README
+records what the audit established, and the Lean files carry the
+theorems.  This stands in until the leanpy/lean-surfaces track makes
+the code-model correspondence itself checked.
+
+Audited regions (one hash per object, whitespace-normalized so pure
+reformatting of surrounding code does not fire):
+  - Searcher.bound       (the search: every mapping-table row)
+  - Searcher.search      (the MTD-bi driver: Driver.lean)
+  - Position.rotate      (RotateNegatesScore)
+  - Position.move        (ValGame.score_identity)
+  - Position.value       (KingCaptureValHigh / HighValIsKingCapture)
+  - Position.gen_moves   (Game.moves, CaptureFirst's list)
+  - constants            (MATE_LOWER, MATE_UPPER, QS, QS_A,
+                          EVAL_ROUGHNESS, TABLE_SIZE)
+
+Run from the repo root:  python formal/scripts/model_audit.py
+Refresh after a re-audit: python formal/scripts/model_audit.py --update
+"""
+import ast
+import hashlib
+import pathlib
+import re
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+SUNFISH = ROOT / "sunfish.py"
+
+CONSTANTS = ["MATE_LOWER", "MATE_UPPER", "QS", "QS_A", "EVAL_ROUGHNESS", "TABLE_SIZE"]
+
+EXPECTED = {
+    "Position.gen_moves": "2f5471b5de1ab8f0",
+    "Position.move": "c95ddc3e690012a8",
+    "Position.rotate": "cb12fe4a160ae663",
+    "Position.value": "339f53cfaa228d42",
+    "Searcher.bound": "8b152a7c3a5d399e",
+    "Searcher.search": "2d0031979f02e1f2",
+    "constants": "02227a9fd04eb181",
+}
+
+
+def normalize(src: str) -> str:
+    return "\n".join(line.rstrip() for line in src.strip().splitlines())
+
+
+def digest(src: str) -> str:
+    return hashlib.sha256(normalize(src).encode()).hexdigest()[:16]
+
+
+def extract_regions():
+    src = SUNFISH.read_text()
+    tree = ast.parse(src)
+    regions = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.ClassDef) and node.name in ("Position", "Searcher"):
+            for item in node.body:
+                if isinstance(item, ast.FunctionDef):
+                    key = f"{node.name}.{item.name}"
+                    if key in ("Searcher.bound", "Searcher.search", "Position.rotate",
+                               "Position.move", "Position.value", "Position.gen_moves"):
+                        regions[key] = ast.get_source_segment(src, item)
+    consts = []
+    for node in tree.body:
+        if isinstance(node, ast.Assign):
+            names = [t.id for t in node.targets if isinstance(t, ast.Name)]
+            if any(n in CONSTANTS for n in names):
+                consts.append(ast.get_source_segment(src, node))
+    regions["constants"] = "\n".join(consts)
+    missing = {"Searcher.bound", "Searcher.search", "Position.rotate", "Position.move",
+               "Position.value", "Position.gen_moves", "constants"} - set(regions)
+    if missing:
+        raise SystemExit(f"model_audit: audited region(s) not found in sunfish.py: {sorted(missing)}")
+    return regions
+
+
+def main():
+    regions = extract_regions()
+    actual = {k: digest(v) for k, v in sorted(regions.items())}
+    if "--update" in sys.argv:
+        me = pathlib.Path(__file__)
+        text = me.read_text()
+        block = "EXPECTED = {\n" + "".join(
+            f'    "{k}": "{v}",\n' for k, v in actual.items()) + "}"
+        text = re.sub(r"EXPECTED = \{.*?\}", block, text, count=1, flags=re.S)
+        me.write_text(text)
+        print("model_audit: EXPECTED hashes refreshed:")
+        for k, v in actual.items():
+            print(f"  {k}: {v}")
+        return 0
+    drifted = {k: v for k, v in actual.items() if EXPECTED.get(k) != v}
+    if not EXPECTED:
+        print("model_audit: no EXPECTED hashes recorded; run with --update first")
+        return 1
+    if drifted:
+        print("model_audit: AUDITED REGION(S) DRIFTED without a same-commit re-audit:")
+        for k, v in sorted(drifted.items()):
+            print(f"  {k}: expected {EXPECTED.get(k, '<none>')}, found {v}")
+        print("The formal model in formal/ was audited against these regions")
+        print("(formal/README.md, 'Model fidelity').  Re-audit the model against")
+        print("the change, update the README in the SAME commit, then refresh:")
+        print("    python formal/scripts/model_audit.py --update")
+        return 1
+    print("model_audit: all audited regions match the recorded audit")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
