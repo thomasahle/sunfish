@@ -63,10 +63,16 @@ def main():
             # 3. packed head == engine head, and ps + nn == score
             assert eng.nn_cp(pos.acc, pos.pf) == net.nn_cp(pos.acc, pos.pf)
             assert pos.score == pos.ps + eng.nn_cp(pos.acc, pos.pf)
-            # antisymmetry
+            # antisymmetry, and it has to hold for the RECOMPUTED evaluation
+            # of the rotated position, not just for rotate()'s negation --
+            # the search reaches positions by both routes and the
+            # transposition table assumes they agree.
             r = pos.rotate(nullmove=True)
             assert r.score == -pos.score
-            assert net.from_board(r.board, r.pf) == r.acc
+            fresh_r = net.from_board(r.board, r.pf)
+            assert fresh_r == r.acc
+            assert net.nn_cp(fresh_r, r.pf) == -net.nn_cp(pos.acc, pos.pf), \
+                "evaluation is not exactly antisymmetric"
 
             moves = list(pos.gen_moves())
             if not moves:

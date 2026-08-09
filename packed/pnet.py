@@ -171,7 +171,11 @@ class PackedNet:
         return y - x if pf else x - y
 
     def nn_cp(self, acc, pf):
-        v = self.raw(acc, pf) >> self.shift
+        v = self.raw(acc, pf)
+        # round towards zero: floor does not commute with negation, and the
+        # search reaches the same position both by negating a score (rotate)
+        # and by recomputing one (move)
+        v = (v >> self.shift) if v >= 0 else -((-v) >> self.shift)
         c = self.clampcp
         return -c if v < -c else (c if v > c else v)
 

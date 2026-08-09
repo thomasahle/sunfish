@@ -88,7 +88,16 @@ def nn_cp(acc, pf):
     y = (y & m) | (MGP & (m ^ MVAL))            # ...capped at G_k
     # 2^16 == 1 (mod 2^16-1), so each block's residue IS its lane sum
     v = (y & MASKLO) % M16 - (y >> HALF) % M16
-    v = (-v if pf else v) >> SHIFT
+    if pf:
+        v = -v
+    # Round TOWARDS ZERO, not with >>. An arithmetic shift floors towards
+    # -infinity, and floor does not commute with negation, so `>>` would make
+    # the evaluation of a position and of its rotation disagree by 1cp -- and
+    # both paths exist in the search (rotate() negates a score, move()
+    # recomputes one). Rounding symmetrically makes eval(p) == -eval(p.rotate())
+    # hold exactly, which is what the transposition table's single-value-function
+    # invariant wants.
+    v = (v >> SHIFT) if v >= 0 else -((-v) >> SHIFT)
     return -CLAMP if v < -CLAMP else (CLAMP if v > CLAMP else v)
 
 ###############################################################################
