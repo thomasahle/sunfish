@@ -133,6 +133,24 @@ fastchess \
    to +34 [−34, +105] by 92. Time-to-depth is the hidden variable. Screen
    with fixed depth if you like, but only a wall-clock match decides.
 
+## Testing the packed artifact
+
+`build/pack.sh` inlines a minimal UCI loop that handles `position startpos
+moves ...` only — **`position fen` is deliberately unsupported**, because the
+tournaments the packed build targets never send it and every byte counts.
+That is fine for the artifact and fatal for a careless harness: fastchess
+delivers an **EPD** book as `position fen ...`, which the packed engine
+silently ignores, so it plays on from the initial board and then emits moves
+that are illegal in the actual game. It looks like a catastrophic engine bug
+(0/10, "makes an illegal move") and is really a book-format mismatch.
+
+So: test packed artifacts with a book fastchess delivers as `position
+startpos moves ...` (a PGN book), or measure the unpacked engine — which
+runs through `tools/uci.py` and does parse FEN — and cover the packed build
+with a separate startpos-only smoke. Either way, confirm which form your
+book actually produces by dumping the UCI trace on a two-game run rather
+than assuming.
+
 ## Why not cutechess-cli?
 
 Same methodology applies, and the flags are nearly identical — but recent
