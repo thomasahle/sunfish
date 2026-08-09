@@ -374,6 +374,20 @@ class Searcher:
             # tp_move stores only real fail-high winners (including the
             # substituted king capture below), so a stored move is always
             # a move gen_moves yields at this position.
+            #
+            # Read HERE, before the two virtual yields, even though
+            # neither consults it and a stand-pat cutoff therefore pays
+            # for a lookup it never uses. Moving the read below them is
+            # NOT behaviour-preserving: tp_move is keyed by position
+            # alone, and QS below the null is not ply-limited, so the
+            # null subtree can transpose back to this very board with
+            # this very side to move and store a killer here - and once
+            # tp_move reaches TABLE_SIZE it can evict this key instead.
+            # Measured over a 4.76M-node battery to depth 10: the two
+            # read sites disagree 10 times in 3,015,876 reads (9 of them
+            # None -> a move, i.e. a store by the null subtree). Same
+            # scores and moves, different node counts on 2 of 25
+            # positions. One dict lookup is not worth that.
             killer = self.tp_move.get(pos)
 
             # First try not moving at all, i.e. the null move. Zugzwang -
@@ -436,15 +450,19 @@ class Searcher:
         # promises about a king-capturable node is STRATIFIED by depth.
         #
         # At depth 0 it only has to FAIL HIGH: CanKill(p) implies
-        # bound(p, gamma, 0) >= gamma. QS gives that for free. A king
-        # capture tops the move order and outranks every QS threshold
-        # (and the mate case of the futility yield hands it out as a real
-        # MATE_UPPER rather than pruning it), so the loop always reaches
-        # it; the only option that can cut ahead of it is stand-pat, and
-        # stand-pat cuts only when pos.score already reaches gamma. A
-        # capturable QS node therefore always fails high, and in
-        # particular never stores an upper bound that a later probe could
-        # believe. Nothing above needs more than that, because a parent
+        # bound(p, gamma, 0) >= gamma. QS gives that for free. When the
+        # move loop runs, a king capture tops the move order and
+        # outranks every QS threshold (and the mate case of the futility
+        # yield hands it out as a real MATE_UPPER rather than pruning
+        # it), so the loop reaches it; the only option that can cut
+        # ahead of it is stand-pat, and stand-pat cuts only when
+        # pos.score already reaches gamma. On a warm table the loop need
+        # not run at all - the table answers first - so the guarantee
+        # rests on what such a node can have STORED: it only ever fails
+        # high, hence only ever writes Entry(best, ...) with best >=
+        # gamma, so the entry.upper < gamma arm stays dead here and a
+        # warm cutoff is a lower-bound hit, which fails high too.
+        # Nothing above needs more than that, because a parent
         # only SEARCHES a child whose stand-pat cannot cut: the futility
         # test pos.score + val < gamma is exactly the child's stand-pat
         # test -(pos.score + val) >= 1 - gamma, so a searched capturable
@@ -452,15 +470,24 @@ class Searcher:
         #
         # At depth >= 1 the node reports the sentinel EXACTLY
         # (KingCapturableReportsExact): there is no stand-pat above QS and
-        # futility yields are virtual and below gamma by construction, so
-        # the only option that can preempt the capture is the null at
-        # depth > 2. Hence a virtual (None) fail-high is validated before
-        # it may cut, and only where a virtual cut is possible at all:
+        # futility yields are virtual and below gamma by construction.
+        # Three returns still precede move generation - the table probe,
+        # the repetition check and the null - and only the null needs
+        # work here: a table hit replays an earlier answer at this exact
+        # key, which by the one-value-function invariant above is the
+        # sentinel again, and the repetition arm cannot fire because a
+        # king-capturable position never enters history (HistoryLegal:
+        # the game only ever plays legal moves). Hence a virtual (None)
+        # fail-high is validated before it may cut, and only where a
+        # virtual cut is possible at all:
         # - the stored killer, when present, decides capturability O(1):
         #   it is legal (KillerLegal), and at a capturable node it IS a
         #   king capture (value tops the mate band iff the move takes the
         #   king) - a quiet killer also certifies a legal move, letting
-        #   the terminal arm skip its scan;
+        #   the terminal arm skip its scan. 'proof' below is that witness
+        #   - the killer if there is one, else a freshly found capture -
+        #   and it is a legality proof, NOT necessarily a king capture:
+        #   whether it is one is exactly the pos.value(proof) test;
         # - if a real king capture exists, substitute it: the node
         #   reports MATE_UPPER and tp_move stores the true capture, so a
         #   null cutoff can never mask the sentinel;
@@ -480,10 +507,10 @@ class Searcher:
         best, live = -MATE_UPPER, False
         for move, score in moves():
             if depth and move is None and score >= gamma:
-                king = self.tp_move.get(pos) or pos.king_capture()
-                if king and pos.value(king) >= MATE_LOWER:
-                    move, score = king, MATE_UPPER
-                elif score >= MATE_LOWER or 0 < score and not king and all(
+                proof = self.tp_move.get(pos) or pos.king_capture()
+                if proof and pos.value(proof) >= MATE_LOWER:
+                    move, score = proof, MATE_UPPER
+                elif score >= MATE_LOWER or 0 < score and not proof and all(
                         pos.move(m).king_capture() for m in pos.gen_moves()):
                     score = -MATE_UPPER
             best = max(best, score)
