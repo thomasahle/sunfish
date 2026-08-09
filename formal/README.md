@@ -519,13 +519,10 @@ path that precedes the consumer).
 
 **Genuinely open**, in priority order:
 
-1. *The band-edge code arm itself* — the model now assumes the engine
-   performs the boundary probe; the one-line `elif` is applied
-   separately, with the value-equivalence battery.  Until it lands, the
-   model is AHEAD of the code here (the only such gap, and it is
-   directional: the model is the stricter of the two).
-2. *`gen_moves` implements chess* — assigned to the leanpy /
-   lean-surfaces track, not this model.
+1. *`gen_moves` implements chess* — assigned to the leanpy /
+   lean-surfaces track, not this model.  (The band-edge code arm has
+   landed, so the model and the code agree again with no gap in either
+   direction.)
 
 **Scoped abstractions** — the complete list of what this model
 deliberately does NOT cover, per the standing rule that the model must
