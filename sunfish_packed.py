@@ -31,7 +31,7 @@ version = "sunfish " + __version__
 import pickle as _pickle
 
 NET_PATH = os.environ.get("SF_NET", os.path.join(os.path.dirname(
-    os.path.abspath(__file__)), "net.pickle"))
+    os.path.abspath(__file__)), "packed", "net.pickle"))
 with open(NET_PATH, "rb") as _f:
     _d = _pickle.load(_f)
 

@@ -378,6 +378,11 @@ def from_fen(board, color, castling, enpas, _hclock, _fclock):
     wc = ("Q" in castling, "K" in castling)
     bc = ("k" in castling, "q" in castling)
     ep = sunfish.parse(enpas) if enpas != "-" else 0
+    if hasattr(sunfish, 'from_board'):
+        # engines carrying an evaluation accumulator build the position, and
+        # the accumulator, themselves
+        pos = sunfish.from_board(board, wc, bc, ep, 0)
+        return pos if color == 'w' else pos.rotate()
     if hasattr(sunfish, 'features'):
         wf, bf = sunfish.features(board)
         pos = sunfish.Position(board, 0, wf, bf, wc, bc, ep, 0)
