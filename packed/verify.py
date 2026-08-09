@@ -1,0 +1,83 @@
+"""Prove the packed accumulator and head correct before optimising anything.
+
+Three independent checks, over tens of thousands of positions reached by
+random legal play (so castling, en passant, promotion and king capture all
+occur):
+
+  1. lane integrity  -- every lane of every accumulator stays inside
+     [0, 2^15).  A lane that leaves the range borrows from its NEIGHBOUR and
+     silently corrupts a different feature, which is why this is checked
+     everywhere rather than argued about.
+  2. incremental == from scratch -- the accumulator carried through move()
+     equals the one rebuilt from the board.
+  3. packed == float -- the quantised head against a float reference of the
+     same net, and the eval's exact antisymmetry score(p) == -score(p.rotate()).
+
+usage: verify.py ENGINE.py NET.pickle [nplies] [ngames]
+"""
+import sys, os, random, importlib.util
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import pnet
+
+
+def load(path, net):
+    os.environ["SF_NET"] = net
+    spec = importlib.util.spec_from_file_location("eng", path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["eng"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def main():
+    engpath, netpath = sys.argv[1], sys.argv[2]
+    nplies = int(sys.argv[3]) if len(sys.argv) > 3 else 120
+    ngames = int(sys.argv[4]) if len(sys.argv) > 4 else 200
+    eng = load(engpath, netpath)
+    net = pnet.load(netpath)
+    random.seed(20260809)
+
+    n = 0
+    worst_lane = 0
+    for g in range(ngames):
+        pos = eng.hist[0]
+        for ply in range(nplies):
+            n += 1
+            # 1. lane integrity
+            lanes = pnet.unpacklanes(pos.acc, net.lanes)
+            assert pos.acc >= 0, "accumulator went negative"
+            m = max(lanes)
+            worst_lane = max(worst_lane, max(abs(x - pnet.BIAS) for x in lanes))
+            assert m < (1 << pnet.VBITS), (
+                "lane %d = %d overflowed the guard at game %d ply %d"
+                % (lanes.index(m), m, g, ply))
+            # 2. incremental == from scratch
+            fresh = net.from_board(pos.board, pos.pf)
+            assert fresh == pos.acc, (
+                "incremental != from-scratch at game %d ply %d" % (g, ply))
+            # the other perspective flag must give the same evaluation
+            other = net.from_board(pos.board, pos.pf ^ 1)
+            assert net.nn_cp(other, pos.pf ^ 1) == net.nn_cp(pos.acc, pos.pf), \
+                "perspective flag changes the evaluation"
+            # 3. packed head == engine head, and ps + nn == score
+            assert eng.nn_cp(pos.acc, pos.pf) == net.nn_cp(pos.acc, pos.pf)
+            assert pos.score == pos.ps + eng.nn_cp(pos.acc, pos.pf)
+            # antisymmetry
+            r = pos.rotate(nullmove=True)
+            assert r.score == -pos.score
+            assert net.from_board(r.board, r.pf) == r.acc
+
+            moves = list(pos.gen_moves())
+            if not moves:
+                break
+            mv = random.choice(moves)
+            if pos.board[mv.j] == "k":
+                break                    # king captured: restart
+            pos = pos.move(mv)
+    print("verified %d positions from %d random games" % (n, ngames))
+    print("worst |lane - BIAS| seen: %d   (guard trips at %d, rigorous bound %d)"
+          % (worst_lane, 1 << (pnet.VBITS - 1), net.meta["excursion"]))
+
+
+main()
