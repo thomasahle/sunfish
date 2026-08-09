@@ -11,10 +11,13 @@ Pipeline:
 
 1. **Strip the development-only code.** Everything between
    `# minifier-hide start` and `# minifier-hide end` markers is deleted
-   with `sed`. That removes the `import tools.uci` bridge (the full UCI
-   implementation used in development and by the lichess bot), leaving
-   the self-contained "tiny" UCI loop at the bottom of `sunfish.py` as
-   the packed engine's interface.
+   with `sed`. That removes the `import sunfish_tools.uci` bridge (the
+   full UCI implementation, used everywhere else — development, the
+   lichess bot, and `pip install sunfish`), leaving the self-contained
+   "tiny" UCI loop at the bottom of `sunfish.py` as the packed engine's
+   interface. The bridge is an unconditional import, not a fallback: the
+   packed build is the only configuration that runs the tiny loop, and
+   it gets there by deleting the import rather than by failing it.
 2. **Minify** with [`pyminify`](https://pypi.org/project/python-minifier/)
    (`--rename-globals --remove-literal-statements`).
 3. **Compress** with `xz`.
