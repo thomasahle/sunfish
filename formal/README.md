@@ -516,15 +516,25 @@ path that precedes the consumer).
 
 **Genuinely open**, in priority order:
 
-1. *Fold `qsStrat` into the recursion* — blocked on modeling futility
-   as a yield species (`stratLeaf_needs_futility` is the machine-checked
-   reason); the last model-vs-code divergence, bounded and
-   sound-weakening.
-2. *Eliminate `NoZugzwangInMateBand`* — the band-edge arm exists and its
-   keystone is proven; what remains is threading the boundary probe
-   through the recursions (PR #162).
-3. *`gen_moves` implements chess* — assigned to the leanpy /
+1. *Eliminate `NoZugzwangInMateBand`* — the band-edge arm exists and its
+   keystone is proven (`boundary_window_decisive`); what remains is
+   threading the boundary probe through the recursions (PR #162).
+2. *`gen_moves` implements chess* — assigned to the leanpy /
    lean-surfaces track, not this model.
+
+**Scoped abstractions** — the complete list of what this model
+deliberately does NOT cover, per the standing rule that the model must
+otherwise always do what the code does.  Each is a layer boundary, not
+a claim about the shipped code that is false:
+
+| Abstraction | Scope |
+|---|---|
+| QS-as-eval at the leaf | depth 0 returns the QS value; the QS interior (its own stand-pat/capture recursion) is the leaf's fixpoint. The recursion only reaches it at non-futile children, where the leaf is exact; the depth-0 contract itself is `qsStrat_failHigh_of_capture` |
+| Deadline / `Stop` | raises at node entry, before any store: an abort can leave a search unfinished, never a table entry unjustified |
+| Eviction (`TABLE_SIZE`) | only forgets entries, which preserves every invariant here (and `KillerInv` is proven stable under it) |
+| Move ordering | modeled through its load-bearing consequences only: `CaptureFirst` (discharged from the sort spec) and the sort-equivalence of the QS break and futility break with filters |
+| Transposition table | `Sunfish/CanNull.lean`'s layer; this file's theorems are about the value function every entry describes |
+| `Position` internals | `gen_moves`/`rotate`/`move`/`value` are axiomatized by their structural properties (`ScoreIdentity`, `EvalBounds` facts); the leanpy track owns "these implement chess" |
 
 Retired premises, kept only as records of rejected designs:
 `TerminalPseudoSafe`, `NullAtStalemateNonpositive`, `StandPatAtTerminal`
@@ -899,32 +909,27 @@ abstractions, each with its justification:
   hence the fold's two-way evidence survives
   (`searched_yield_two_way`).  The one futility-bypassing path, the
   killer yield, is a mobility certificate (`KillerLegal`).
-  **Model-vs-code note, and why the fold is BLOCKED (attempted,
-  reported, not weakened)**: `boundKCX`'s depth-0 leaf in the
-  equivalence chain is still the EXACT-sentinel branch, i.e. stronger
-  than the code, so `production_eq_reference` and
-  `kingCapturableReportsExact_restored` describe the reference chain,
-  not the shipped QS leaf; `qsStrat` is the faithful leaf and
-  `kingCaptureContract_stratified` is what the shipped consumer
-  satisfies.  Substituting `qsStrat` into the recursion is sound in
-  VALUE everywhere the engine goes — the futility yield's value IS the
-  child's stand-pat value — but it breaks the model's ENCODING of the
-  `live` bit as `S = LOSS`, which is faithful only while depth-0
-  reports at capturable children are exactly `-MATE_UPPER`.
-  `stratLeaf_needs_futility` machine-checks the resulting hole: a
-  depth-1 TERMINAL node whose child's stand-pat cuts folds to `-100`
-  where the declared value is the exact draw `0`, because the gate
-  cannot fire.  The engine is unaffected (futility prunes exactly that
-  child, so it is yielded virtually and `live` stays false).  The fix
-  is a model change, not a lemma: the depth-1 layer must route
-  futility-estimated children into the virtual accumulator `n` and fold
-  only the searched ones into `S`.  Worked out for that design: the
-  DECLARED function need not change and stays gamma-free, since a
-  futile child's true value is the sentinel, which is the fold
-  identity.  Until then the divergence is confined to capturable
-  depth-0 nodes whose stand-pat cuts, is sound-weakening, and matches
-  the measured 28 of 197,737 entries with 468/468 identical traces.
-- **The driver-range finding**- **The driver-range finding** (`Sunfish/Driver.lean`): "MTD-bi only
+  **CLOSED (the fold landed).** Futility is now a modeled yield
+  SPECIES, not a documentary caution: `futileAt` is the engine's test
+  read through the identity above, `searchedAt` is the set the loop
+  actually searches, and `futTerm` folds the synthetic suffix estimates
+  into the VIRTUAL accumulator.  Only searched real results reach `S`,
+  so the correction's gate `S = LOSS` is exactly the code's `not live`
+  at every depth — which is what the stratified leaf needed.  Two
+  consequences: `termFix` now serves both models (the gates coincided,
+  so `d2Fix`/`golfFix` merged), and the recursion only ever evaluates a
+  depth-0 child at a NON-futile position, where the exact-sentinel leaf
+  and `qsStrat` agree — so the model's leaf is faithful without
+  weakening it.  `production_eq_reference` and
+  `kingCapturableReportsExact_restored` therefore describe the SHIPPED
+  consumer.  Two fidelity details the fold forced, both now right:
+  a king capture is never futility-pruned (the code's `val >=
+  MATE_LOWER` arm yields a real `MATE_UPPER` that cuts), and a futile
+  child's declared contribution is covered by the virtual accumulator
+  (`futile_contrib_le`), which is why the declared function needs no
+  change and stays gamma-free.  `stratLeaf_needs_futility` is retained
+  as the record of what the split fixes.
+- **The driver-range finding**- **The driver-range finding**- **The driver-range finding** (`Sunfish/Driver.lean`): "MTD-bi only
   probes `(-MATE_LOWER, MATE_LOWER]`" — asserted by this README and
   the code comment — is TRUE for every window computed at the current
   depth while scores stay strictly in the band
@@ -981,23 +986,19 @@ abstractions, each with its justification:
   entries at such nodes are exact for the same reason
   (KingCapturableTableExact — every return is the sentinel, so every
   stored bound is; the CanNull layer's invariant carries it).
-- **Yield species (resolved in code)**: the engine's `moves()` yields
-  are now two species by construction — searched real results and the
-  mate-case futility yield (a real king capture, which can cut) carry
-  a truthy `Move`; the null yield, the stand-pat and SUB-MATE FUTILITY
-  ESTIMATES (line 417) are virtual (`None`).  The earlier revision of
-  this section recorded the sub-mate futility `Move` as a formal
-  typing caution — a synthetic suffix estimate the `live` bit would
-  treat as a mobility certificate; the kcx build agent traced the
-  three standing bench witnesses to exactly that (crossed entry
-  `Entry(lower=0, upper=-1054)` at a stalemated depth-1 child) and
-  fixed it by making the yield virtual: a sub-mate futility yield can
-  never cut (its score is below `gamma` by construction), so its move
-  field existed only to lie to the `live` bit.  The model keeps
-  futility out of the loop as always (`boundFut` covers its bound
-  correctness), and the invariant "every truthy yield certifies a
-  searched real result (or an immediate king capture)" is now a code
-  fact, not a modeling caution.
+- **Yield species (load-bearing in BOTH code and model)**: the engine's
+  `moves()` yields are two truthy species (searched real results, and
+  the mate-case futility yield — itself a real king capture that cuts)
+  and three virtual ones (null, stand-pat, and SUB-MATE futility
+  estimates).  The distinction was once a documentary caution here,
+  then turned out to be a live engine bug (the crossed
+  `Entry(lower=0, upper=-1054)`), fixed by making sub-mate futility
+  yields virtual — and it is now modeled structurally as well:
+  `futileAt` / `searchedAt` / `futTerm` keep the synthetic suffix
+  estimates out of the real accumulator `S`, which is exactly what
+  makes the correction's `S = LOSS` gate equal the code's `not live`.
+  A PR adding a yield species must say which accumulator it feeds and
+  what certifies any mobility it claims.
 - **Ungated gate arms** (historical, `boundA1`): for in-band windows the
   model's `best < gamma ∧ best_real = LOSS` gate coincides with the
   code's bare `best == -MATE_UPPER` test (a `LOSS` loop result is
