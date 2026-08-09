@@ -84,9 +84,17 @@ def dstep (st : DState) (score : Int) : DState :=
   let u := if st.gamma ≤ score then st.upper else score
   { lower := l, upper := u, gamma := driverGamma l u }
 
-/-- The per-depth reset: the bracket re-initializes, THE CARRIED GAMMA
-DOES NOT (`gamma = 0` sits outside the depth loop). -/
+/-- The per-depth reset, as the driver runs it since `c79b39b`: the
+bracket re-initializes to the FULL proven band `[1 - MATE_UPPER,
+MATE_UPPER]`, and the carried gamma is inherited unchanged (`gamma = 0`
+sits outside the depth loop; the clamp `c72cf6d` had added was removed
+with the widening -- see `driver_wide_is_now_the_range`). -/
 def depthInit (carried : Int) : DState :=
+  { lower := 1 - MATE_UPPER, upper := MATE_UPPER, gamma := carried }
+
+/-- The pre-`c79b39b` narrow bracket, kept for the historical lemmas
+below. -/
+def depthInitNarrow (carried : Int) : DState :=
   { lower := -MATE_LOWER, upper := MATE_LOWER, gamma := carried }
 
 /-- The wide window invariant. -/
@@ -152,9 +160,39 @@ theorem depthInit_wide (carried : Int)
     (h : -MATE_UPPER < carried ∧ carried ≤ MATE_UPPER) :
     WideOK (depthInit carried) := by
   have hMU : MATE_UPPER = 69290 := rfl
-  have hML : MATE_LOWER = 47923 := rfl
   simp only [depthInit, WideOK]
   omega
+
+/-- **The widened bracket IS the window range** (`c79b39b`): with the
+bracket initialized to the full band, both endpoints stay inside it
+without any clamp -- `lower` only ever rises to a score that met the
+window, `upper` only ever falls to one that missed it -- so every probe
+window the driver computes lies in `(1 - MATE_UPPER, MATE_UPPER]`, and
+a carried gamma inherited from the previous depth is already in range.
+This replaces the clamp: `carried_gamma_escapes_band`,
+`clampGamma_in_band` and `driver_probe_in_band` are HISTORICAL, and
+describe the narrow-bracket driver of `c72cf6d`. -/
+theorem driver_wide_is_now_the_range (st : DState)
+    (hl : 1 - MATE_UPPER ≤ st.lower) (hu : st.upper ≤ MATE_UPPER)
+    (hloop : st.lower < st.upper) :
+    -MATE_UPPER < driverGamma st.lower st.upper ∧
+      driverGamma st.lower st.upper ≤ MATE_UPPER := by
+  unfold driverGamma
+  omega
+
+/-- The endpoints keep the wide bracket's sides through any probe made
+at a wide-band window -- the invariant `driver_wide_is_now_the_range`
+consumes. -/
+theorem dstep_wide_sides (st : DState) (s : Int)
+    (hl : 1 - MATE_UPPER ≤ st.lower) (hu : st.upper ≤ MATE_UPPER)
+    (hs : -MATE_UPPER < s ∧ s ≤ MATE_UPPER) :
+    1 - MATE_UPPER ≤ (dstep st s).lower ∧ (dstep st s).upper ≤ MATE_UPPER := by
+  unfold dstep
+  by_cases hc : st.gamma ≤ s
+  · simp only [if_pos hc]
+    omega
+  · simp only [if_neg hc]
+    omega
 
 /-- The band fold: strictly-in-band scores keep any band-satisfying
 state in the band. -/
@@ -176,10 +214,10 @@ Premise (b) is exactly the carried-gamma condition;
 theorem driver_band_invariant (scores : List Int)
     (hs : ∀ s ∈ scores, -MATE_LOWER < s ∧ s < MATE_LOWER)
     (carried : Int) (hc : -MATE_LOWER < carried ∧ carried ≤ MATE_LOWER) :
-    BandOK (scores.foldl dstep (depthInit carried)) := by
+    BandOK (scores.foldl dstep (depthInitNarrow carried)) := by
   have hML : MATE_LOWER = 47923 := rfl
-  refine driver_band_fold scores hs (depthInit carried) ?_
-  simp only [depthInit, BandOK]
+  refine driver_band_fold scores hs (depthInitNarrow carried) ?_
+  simp only [depthInitNarrow, BandOK]
   omega
 
 /-- **The finding, machine-checked**: the carried gamma escapes the
@@ -206,8 +244,8 @@ theorem clampGamma_in_band (g : Int) :
   unfold clampGamma
   omega
 
-/-- **The in-band premise, discharged for every driver probe**: with
-the clamp, a depth's first window is in-band unconditionally, and every
+/-- HISTORICAL (the narrow bracket of `c72cf6d`).  **The in-band
+premise, discharged for every driver probe**: with the clamp, a depth's first window is in-band unconditionally, and every
 LATER probe happens only while the loop condition holds -- which forces
 the bracket back inside the band (a mate-band score always breaks the
 loop: `lower` only moves up from `-MATE_LOWER` and `upper` only moves

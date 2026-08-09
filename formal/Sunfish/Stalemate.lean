@@ -4955,4 +4955,186 @@ theorem scan_sites_unreachable_at_capturable (G : QSGame)
   rw [boundD2_of_capture G guard kill d p gamma hkg hcap]
   omega
 
+/-! # The stratified king-capture contract (`6ecb4af`)
+
+The depth-0 arm of the virtual-cutoff interception is GONE; the whole
+interception is gated on `depth`.  What `bound()` promises about a
+king-capturable node is now STRATIFIED:
+
+* **depth 0 — fail high only**: `CanKill p → gamma ≤ bound p gamma 0`.
+  The unmodified QS loop gives this for free: a king capture tops the
+  move order and outranks every QS threshold, so the loop always
+  reaches it; the only option that can cut ahead of it is the stand-pat,
+  and the stand-pat cuts only when `pos.score` already meets `gamma`.
+  Either way the node fails high, so it never stores an upper bound a
+  later probe could believe.
+* **depth ≥ 1 — exactness, as before**: no stand-pat exists above QS
+  and futility yields are virtual and below `gamma` by construction, so
+  the only option that can preempt the capture is the null at
+  `depth > 2` -- which the interception still validates.
+
+**Why the weakened layer costs nothing above it — the load-bearing
+identity**: *the parent's futility test IS the child's stand-pat test.*
+`pos.score + val < gamma` is literally `-(pos.score + val) ≥ 1 - gamma`
+(`futility_iff_child_standpat`), and by the score identity the left
+side of the child's window test is the child's own static score.  So a
+parent only SEARCHES a child whose stand-pat cannot cut, and at such a
+child the QS loop runs past the stand-pat into the king capture and
+reports the exact sentinel (`qsStrat_exact_of_searched`).  The fold's
+two-way score evidence therefore survives at every depth even though
+depth-0 exactness is gone -- the one path that bypasses futility is the
+killer yield, and a stored killer is a mobility certificate
+(`KillerLegal`), so it cannot mask a terminal node either.
+
+Measured (another agent's battery): 468/468 identical driver traces,
+identical node counts, 28 of 197,737 table entries differing -- exactly
+QS entries at capturable nodes now holding a stand-pat lower bound
+instead of the sentinel; a 91,952-probe contract sweep with every
+depth-0 return ≥ gamma and every depth ≥ 1 return exactly MATE_UPPER;
+zero crossings; 148/148 bench; 0 violations of "any real move that sets
+live is legal" over 1.24M nodes. -/
+
+/-- The depth-0 layer as the code runs it since `6ecb4af`: the stand-pat
+is yielded before the sorted moves (no interception at depth 0 any
+more), so it cuts first when it meets the window; otherwise the king
+capture -- which heads the order (`CaptureFirst`) -- reports the
+sentinel. -/
+def qsStrat (G : QSGame) (gamma : Int) (p : G.Pos) : Int :=
+  if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+  else if gamma ≤ G.eval p then G.eval p
+  else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
+  else G.eval p
+
+/-- **The depth-0 half of the contract: fail-high, for free.**  Either
+the stand-pat already meets the window, or the capture does with room
+to spare.  This is all the layers above need, and it is exactly what
+keeps a capturable QS node from ever storing an upper bound. -/
+theorem qsStrat_failHigh_of_capture (G : QSGame) (gamma : Int) (p : G.Pos)
+    (hg2 : gamma ≤ MATE_UPPER)
+    (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
+    (hcap : hasKingCapture G.toNullGame.toGame p = true) :
+    gamma ≤ qsStrat G gamma p := by
+  simp only [qsStrat]
+  rw [if_neg hkg]
+  by_cases hsp : gamma ≤ G.eval p
+  · rw [if_pos hsp]; exact hsp
+  · rw [if_neg hsp, if_pos hcap]; exact hg2
+
+/-- **The futility test IS the child's stand-pat test** -- the identity
+the whole stratification rests on, and it is pure arithmetic: the
+parent prunes exactly the children whose own stand-pat would cut
+against the flipped window. -/
+theorem futility_iff_child_standpat (pscore val gamma : Int) :
+    pscore + val < gamma ↔ 1 - gamma ≤ -(pscore + val) := by
+  omega
+
+/-- **ScoreIdentity** (structural, as in `ValGame.score_identity`):
+`pos.move(m)` builds the child with `score = -(pos.score + pos.value(m))`
+-- literal in the code, and what turns the arithmetic identity above
+into a statement about the child's stand-pat. -/
+def ScoreIdentity (G : QSGame) : Prop :=
+  ∀ (p : G.Pos), ∀ m ∈ G.moves p, G.eval m = -(G.eval p + G.val p m)
+
+/-- **A SEARCHED king-capturable child still reports the sentinel.**
+The parent searched `m`, i.e. futility did not fire
+(`¬ (pos.score + val < gamma)`); by the identity that is exactly "the
+child's stand-pat does not meet the child's window", so the child's QS
+loop runs past its stand-pat and into the king capture, which heads the
+order and thus fixes the report at exactly `MATE_UPPER`.  This is what
+carries the fold's two-way legality evidence across the weakened
+depth-0 layer. -/
+theorem qsStrat_exact_of_searched (G : QSGame)
+    (hSI : ScoreIdentity G)
+    (p m : G.Pos) (gamma : Int) (hm : m ∈ G.moves p)
+    (hnofut : ¬ (G.eval p + G.val p m < gamma))
+    (hmkg : ¬ (G.eval m ≤ -MATE_LOWER))
+    (hcap : hasKingCapture G.toNullGame.toGame m = true) :
+    qsStrat G (1 - gamma) m = MATE_UPPER := by
+  have hid := hSI p m hm
+  have hnsp : ¬ (1 - gamma ≤ G.eval m) := by
+    rw [hid]
+    exact fun h => hnofut ((futility_iff_child_standpat (G.eval p) (G.val p m) gamma).mpr h)
+  simp only [qsStrat]
+  rw [if_neg hmkg, if_neg hnsp, if_pos hcap]
+
+/-- The contrapositive reading used by the fold: at a SEARCHED child the
+parent's yield `-(child report)` is exactly `-MATE_UPPER` when the move
+was illegal, so "score above the sentinel" still proves the move legal
+-- the two-way evidence `live` records, now justified layer by layer. -/
+theorem searched_yield_two_way (G : QSGame)
+    (hSI : ScoreIdentity G)
+    (p m : G.Pos) (gamma : Int) (hm : m ∈ G.moves p)
+    (hnofut : ¬ (G.eval p + G.val p m < gamma))
+    (hmkg : ¬ (G.eval m ≤ -MATE_LOWER))
+    (hlive : -(qsStrat G (1 - gamma) m) > -MATE_UPPER) :
+    hasKingCapture G.toNullGame.toGame m = false := by
+  cases hc : hasKingCapture G.toNullGame.toGame m with
+  | false => rfl
+  | true =>
+    exfalso
+    rw [qsStrat_exact_of_searched G hSI p m gamma hm hnofut hmkg hc] at hlive
+    omega
+
+/-- **The depth ≥ 1 half of the contract: exactness, unchanged.**  At a
+king-capturable node every interior return is the exact sentinel --
+either the interception substitutes the capture on a virtual cutoff, or
+the capture heads the searched list and cuts as the first real yield.
+(The `d + 1` layer of `boundKCX` is untouched by `6ecb4af`; only its
+depth-0 leaf weakened.) -/
+theorem boundKCX_capture_exact (G : QSGame) (guard : G.Pos → Bool)
+    (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
+    (d : Nat) (p : G.Pos) (gamma : Int)
+    (hg1 : -MATE_LOWER < gamma) (hg2 : gamma ≤ MATE_LOWER)
+    (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
+    (hcap : hasKingCapture G.toNullGame.toGame p = true) :
+    boundKCX G guard (d + 1) p gamma = MATE_UPPER := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  rw [boundKCX_succ, if_neg hkg]
+  by_cases hnc : NCut G guard
+      (-(boundKCX G guard (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma
+  · rw [if_pos hnc, if_pos hcap]
+  · rw [if_neg hnc]
+    obtain ⟨k, rest, hmoves, hkev⟩ := hCF p hcap
+    obtain ⟨rest', hma⟩ := movesAbove_cons_of_captureFirst G hV hmoves hkev (d + 1)
+    have hfk : -(boundKCX G guard d k (1 - gamma)) = MATE_UPPER := by
+      rw [boundKCX_kingGone G guard d k (1 - gamma) hkev]
+      omega
+    have hS : searchMoves gamma
+        (fun m => -(boundKCX G guard d m (1 - gamma)))
+        (movesAbove G (val_lower (d + 1)) p) LOSS = MATE_UPPER := by
+      rw [hma]
+      simp only [searchMoves]
+      rw [hfk, if_pos (by omega)]
+      omega
+    have hnF : nFoldKCX G guard
+        (-(boundKCX G guard (d + 1 - 3) (G.pass p) (1 - gamma))) (d + 1) p gamma < gamma := by
+      simp only [nFoldKCX]
+      by_cases hen : guard p = true ∧ 2 < d + 1
+      · rw [if_pos hen]
+        by_cases hge : gamma ≤ -(boundKCX G guard (d + 1 - 3) (G.pass p) (1 - gamma))
+        · exact absurd ⟨hen, hge, Or.inl hcap⟩ hnc
+        · rw [if_neg hge]; omega
+      · rw [if_neg hen]; omega
+    simp only [golfFix]
+    rw [hS, if_neg (fun h => absurd h.1 (by omega))]
+    omega
+
+/-- **The stratified contract, assembled** -- the shipped promise, in
+the two strengths the code now keeps: fail-high at the QS leaf, exact
+sentinel above it. -/
+theorem kingCaptureContract_stratified (G : QSGame) (guard : G.Pos → Bool)
+    (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
+    (p : G.Pos) (gamma : Int)
+    (hg1 : -MATE_LOWER < gamma) (hg2 : gamma ≤ MATE_LOWER)
+    (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
+    (hcap : hasKingCapture G.toNullGame.toGame p = true) :
+    gamma ≤ qsStrat G gamma p ∧
+    ∀ d : Nat, boundKCX G guard (d + 1) p gamma = MATE_UPPER := by
+  have hML : MATE_LOWER = 47923 := rfl
+  have hMU : MATE_UPPER = 69290 := rfl
+  exact ⟨qsStrat_failHigh_of_capture G gamma p (by omega) hkg hcap,
+    fun d => boundKCX_capture_exact G guard hV hCF d p gamma hg1 hg2 hkg hcap⟩
+
 end Sunfish

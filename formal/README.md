@@ -805,28 +805,48 @@ abstractions, each with its justification:
   change without a same-commit re-audit + hash refresh (`--update`).
   Silent divergence between code and model is thereby impossible until
   the leanpy track checks the correspondence itself.
-- **The golfed consumer status** (audited at `8843bb0`): `live` is the
+- **The golfed consumer status** (audited at `6ecb4af`): `live` is the
   STICKY two-way-evidence bit, modeled as the untouched-fold test
-  `S = LOSS`; the two-way sentinel `sentinel_two_way_D2` remains as
-  the formal record behind the evidence reading.  The correction scan
-  is FULL COVERAGE again and both scan sites use the BOARD PREDICATE
-  `pos.move(m).king_capture()` — definitionally the model's
-  `allIllegalB` (and the in-check test is `rotate().king_capture()` =
-  `inCheckB`), so the scan-site legality oracle is no longer a `bound`
-  call and no warm-oracle lemma is load-bearing for it; search probes
-  remain only where a search VALUE is needed (the band-edge boundary
-  probe, PR #162).  `scan_sites_unreachable_at_capturable`: neither
-  scan site ever sees a board whose opponent king is capturable — such
-  nodes fail high at every (clamped, in-band) window.  The REJECTED
-  designs stay on record: `reducedScan_needs_premise` is the accepted
-  disqualifier (a depth-1 filter-starved node hands a depth-2 legal
-  move the exact reserved sentinel; the threshold-reduced scan trusts
-  it, the oracle scan does not), `scanNewB` is kept as the rejected
-  gate, and `NoMaskedMobility` is the premise the reduced form would
-  have needed — consumed by nothing shipped.  The killer fast path
-  stands (`fastPath_decides`/`fastPath_skip_sound`, `KillerInv` +
-  `KillerAtKingCapturable` as load-bearing inputs, real-table caveat).
-- **The driver-range finding** (`Sunfish/Driver.lean`): "MTD-bi only
+  `S = LOSS`.  The correction scan is FULL COVERAGE and both scan sites
+  use the BOARD PREDICATE `pos.move(m).king_capture()` — definitionally
+  the model's `allIllegalB` (and the in-check test is
+  `rotate().king_capture()` = `inCheckB`); search probes remain only
+  where a search VALUE is needed (the band-edge boundary probe, PR
+  #162).  `scan_sites_unreachable_at_capturable`: neither scan site
+  ever sees a capturable-opponent-king board.  REJECTED designs stay on
+  record: `reducedScan_needs_premise` (the accepted disqualifier),
+  `scanNewB`, `NoMaskedMobility` — consumed by nothing shipped.  The
+  killer fast path stands (`fastPath_decides`/`fastPath_skip_sound`).
+- **The king-capture contract is STRATIFIED by depth** (`6ecb4af`
+  deleted the depth-0 arm of the interception):
+  **depth 0 — fail-high only** (`qsStrat_failHigh_of_capture`: the QS
+  loop gives it for free, since either the stand-pat already meets the
+  window or the capture does), **depth ≥ 1 — exact sentinel**
+  (`boundKCX_capture_exact`), assembled as
+  `kingCaptureContract_stratified`.  The weakened leaf costs the layers
+  above nothing because of one arithmetic identity —
+  **`futility_iff_child_standpat`: the parent's futility test IS the
+  child's stand-pat test** (`pos.score + val < gamma` ⟺
+  `-(pos.score + val) ≥ 1 - gamma`) — so a parent only SEARCHES
+  children whose stand-pat cannot cut, and at those the QS loop runs
+  past the stand-pat into the capture and reports the sentinel exactly
+  (`qsStrat_exact_of_searched`, under the structural `ScoreIdentity`);
+  hence the fold's two-way evidence survives
+  (`searched_yield_two_way`).  The one futility-bypassing path, the
+  killer yield, is a mobility certificate (`KillerLegal`).
+  **Model-vs-code note, stated honestly**: `boundKCX`'s depth-0 leaf in
+  the equivalence chain is still the EXACT-sentinel branch, i.e. now
+  STRONGER than the code, so `production_eq_reference` and
+  `kingCapturableReportsExact_restored` describe the reference chain,
+  not the shipped QS leaf; `qsStrat` is the faithful leaf and the
+  stratified contract above is what the shipped consumer satisfies.
+  The divergence is confined to capturable depth-0 nodes whose
+  stand-pat cuts, is sound-weakening (a looser lower bound, never a
+  wrong upper), and was measured at 28 of 197,737 table entries with
+  468/468 identical driver traces.  Folding `qsStrat` into the
+  recursion (and re-running the equivalence against it) is the next
+  step.
+- **The driver-range finding**- **The driver-range finding** (`Sunfish/Driver.lean`): "MTD-bi only
   probes `(-MATE_LOWER, MATE_LOWER]`" — asserted by this README and
   the code comment — is TRUE for every window computed at the current
   depth while scores stay strictly in the band
@@ -841,11 +861,24 @@ abstractions, each with its justification:
   reference/production genuinely differ there (a mate-band fail-LOW
   pass report exists only at such windows).  A one-line clamp
   (`gamma = min(max(gamma, 1 - MATE_LOWER), MATE_LOWER)`) or a
-  per-depth `gamma` reset would close the gap — CLOSED in `c72cf6d`:
-  the clamp shipped, `clampGamma_in_band` + `driver_probe_in_band` +
-  `dstep_bracket_sides` discharge the in-band window hypothesis for
-  EVERY driver probe with no assumption on scores, and
-  `carried_gamma_escapes_band` is historical (the clamp's reason).
+  per-depth `gamma` reset would close the gap — CLOSED in `c72cf6d` by
+  the clamp, then SUPERSEDED in `c79b39b`, which widened the bracket to
+  the full band `[1 - MATE_UPPER, MATE_UPPER]` and dropped the clamp.
+  Current state: `driver_wide_is_now_the_range` + `dstep_wide_sides` —
+  both endpoints stay inside the wide band without any clamp, so every
+  probe window (carried ones included) lies in
+  `(1 - MATE_UPPER, MATE_UPPER]`, unconditionally.  The clamp lemmas
+  and `carried_gamma_escapes_band` are historical.
+  **Consequence to fix next**: the layered theorems' hypothesis is the
+  NARROW band `(-MATE_LOWER, MATE_LOWER]`, which the driver no longer
+  guarantees.  The shipped code is fine — its interception is gated on
+  `score >= gamma`, so a fail-LOW mate-band pass report is folded raw
+  and never suppressed — but the REFERENCE model's `useD2` still
+  suppresses band-valued yields regardless of direction, which only
+  coincides with the code inside the narrow band.  The fix is to gate
+  the reference model's suppression on fail-high too (matching the
+  code), after which the layered specs should restate at the wide band
+  and the in-band premise becomes driver-discharged again.
 - **Sentinel exactness is now construction, not idealization**: the
   model's king-capture branch (exact `MATE_UPPER` at every window and
   depth) is the reference's eager entry scan verbatim, and production
