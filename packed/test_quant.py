@@ -11,6 +11,8 @@ import pnet
 
 N = int(sys.argv[1]) if len(sys.argv) > 1 else 64
 NPOS = int(sys.argv[2]) if len(sys.argv) > 2 else 400
+NSEG = int(sys.argv[3]) if len(sys.argv) > 3 else 1
+SEGS = tuple(i / NSEG for i in range(NSEG))
 random.seed(99)
 
 W = [{p: [0.0] * 120 for p in pnet.PIECES} for _ in range(N)]
@@ -21,11 +23,11 @@ for k in range(N):
 bias = [random.gauss(0.2, 0.1) for _ in range(N)]
 v = [random.gauss(0, 12.0) for _ in range(N)]
 
-shift, worst, sabs = pnet.pick_shift(W, bias, v)
-d = pnet.build(W, bias, v, shift, clampcp=10 ** 6)
+shift, worst, sabs = pnet.pick_shift(W, bias, v, segs=SEGS)
+d = pnet.build(W, bias, v, shift, clampcp=10 ** 6, segs=SEGS)
 net = pnet.PackedNet(d)
 C = 1 << shift
-print("N=%d shift=%d C=%d rigorous excursion bound=%d" % (N, shift, C, d["excursion"]))
+print("N=%d segs=%s shift=%d C=%d rigorous excursion bound=%d" % (N, SEGS, shift, C, d["excursion"]))
 
 
 def random_board(rng):
@@ -58,7 +60,7 @@ for _ in range(NPOS):
         acc = net.from_board(board, pf)
         assert net.check_lanes(acc), "lane overflow on a random position"
         got = net.raw(acc, pf) / C
-        want = pnet.float_nn(W, bias, v, board, pf)
+        want = pnet.float_nn(W, bias, v, board, pf, segs=SEGS)
         errs.append(got - want)
         # antisymmetry of the packed head
         assert net.raw(acc, pf) == -net.raw(acc, pf ^ 1)

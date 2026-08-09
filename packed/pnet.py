@@ -98,6 +98,25 @@ class PackedNet:
     reference the engine is verified against, and the loader both use.
     """
 
+    ACT_DOC = """
+    Activation.  A sum of shifted clamps is an arbitrary CONVEX piecewise
+    linear function, and every term is the SWAR clamp we already have:
+
+        phi(a) = min( sum_i relu(a - t_i), A ) / A,      A = sum_i (1 - t_i)
+
+    with breakpoints 0 = t_0 < t_1 < ... < t_{k-1} < 1.  k=1 is exactly
+    clipped ReLU; k=3 with t = 0, 1/3, 2/3 tracks squared clipped ReLU, the
+    activation current Stockfish nets use.  Writing it as ONE min over the
+    summed relus rather than k individually capped clamps is what keeps it
+    cheap: k relus (6 ops each) plus one min (8 ops), so k=3 costs 30 big-int
+    operations against 14 for plain clipped ReLU, not 3x14+.
+
+    The gain bookkeeping is arranged so the output range does not change:
+    lane k holds M_k*a_k with M_k = C|v_k|/A, and the final min caps it at
+    G_k = C|v_k| exactly as before -- so `sum(G) <= 65534`, the precondition
+    of the modular horizontal sum, is untouched by the choice of k.
+    """
+
     def __init__(self, d):
         self.N = N = d["N"]                 # hidden units per perspective
         self.P = d["P"]                     # units with positive output weight
@@ -123,20 +142,24 @@ class PackedNet:
         self.GH = self.gp | self.H          # per-lane ceiling with guard set
         self.MASKLO = (1 << self.half) - 1
         self.M16 = (1 << L) - 1
+        self.ts = tuple(d.get("ts", ()))    # packed M_k*t_i, one per extra segment
+        self.segs = tuple(d.get("segs", (0.0,)))
         self.meta = {k: v for k, v in d.items() if k not in ("rows", "base", "gp", "G")}
 
     # ------------------------------------------------------------------ head
     def clamp(self, acc):
-        """Per-lane clip to [0, G_k], returned as unsigned lanes."""
+        """The activation: min(sum_i relu(lane - M_k*t_i), G_k), per lane."""
         LO, VAL = self.LO, self.VAL
-        # relu: lane >= BIAS <=> bit 14 set (lanes are < 2^15).  ORing MLO
+        # relu: lane >= BIAS <=> bit 14 set (lanes are < 2^15).  ORing LO
         # back in is free -- a surviving lane already has bit 14 set.
         m = ((acc & LO) >> (VBITS - 1)) * ONES
         y = ((acc & m) | LO) - LO
-        if self.crelu:
-            m = (((self.GH - y) & self.H) >> VBITS) * ONES     # y <= G_k ?
-            y = (y & m) | (self.gp & (m ^ VAL))
-        return y
+        for T in self.ts:
+            x = acc - T
+            m = ((x & LO) >> (VBITS - 1)) * ONES
+            y += ((x & m) | LO) - LO
+        m = (((self.GH - y) & self.H) >> VBITS) * ONES         # y <= G_k ?
+        return (y & m) | (self.gp & (m ^ VAL))
 
     def hsum2(self, y):
         """(sum of block0 lanes, sum of block1 lanes) by modular reduction."""
@@ -221,28 +244,41 @@ def excursion_bound(Wq, biasq, N):
     return out
 
 
-def pick_shift(W, bias, v, limit=16000, sumlimit=65534, squares=SQUARES):
-    """Largest gain C = 2**shift that satisfies BOTH packing constraints.
+def pick_shift(W, bias, v, segs=(0.0,), limit=16000, sumlimit=65534,
+               sumrelu=30000, squares=SQUARES):
+    """Largest gain C = 2**shift that satisfies ALL THREE packing constraints.
 
-    guard  C * max_j(|v_j| * excursion_j) <= limit    (no lane leaves [0,2^15))
-    hsum   C * sum_j |v_j|                <= sumlimit (the mod reduction is exact)
+    hsum   C * sum_j |v_j|                     <= sumlimit
+           -- a block's lane sum must stay under the modulus 2^16-1.
+    guard  C/A * max_j(|v_j|*(exc_j + t_max))  <= limit
+           -- no lane of `acc - T_i` may leave [0, 2^15) or it borrows from
+              its neighbour.
+    relu   C/A * max_j(k*|v_j|*exc_j)          <= sumrelu
+           -- and neither may the SUM of the k relu terms, before the final
+              min caps it.
 
     Returns (shift, worst_guard_product, sum_abs_v).
     """
     N = len(v)
     sq = set(squares)
-    Wf = [{p: [W[k][p][s] if s in sq else 0.0 for s in range(120)]
-           for p in PIECES} for k in range(N)]
+    A = sum(1.0 - t for t in segs)
+    k = len(segs)
+    tmax = max(segs)
+    Wf = [{p: [W[j][p][s] if s in sq else 0.0 for s in range(120)]
+           for p in PIECES} for j in range(N)]
     exc = excursion_bound(Wf, list(bias), N)
-    worst = max(abs(v[k]) * exc[k] for k in range(N)) or 1e-9
+    guard = max(abs(v[j]) * (exc[j] + tmax) for j in range(N)) / A or 1e-9
+    relu = max(k * abs(v[j]) * exc[j] for j in range(N)) / A or 1e-9
     sabs = sum(abs(x) for x in v) or 1e-9
     shift = 0
-    while (1 << (shift + 1)) * worst <= limit and (1 << (shift + 1)) * sabs <= sumlimit:
+    while ((1 << (shift + 1)) * guard <= limit
+           and (1 << (shift + 1)) * relu <= sumrelu
+           and (1 << (shift + 1)) * sabs <= sumlimit):
         shift += 1
-    return shift, worst, sabs
+    return shift, guard, sabs
 
 
-def build(W, bias, v, shift, clampcp=600, squares=SQUARES):
+def build(W, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES):
     """Quantise a float net into the packed representation.
 
     W[k][piece][sq120]  float input weights (activation units, clip at 1.0)
@@ -255,21 +291,26 @@ def build(W, bias, v, shift, clampcp=600, squares=SQUARES):
     N = len(v)
     squares = set(squares)
     C = 1 << shift
+    A = sum(1.0 - t for t in segs)
     order = sorted(range(N), key=lambda k: (v[k] <= 0, -abs(v[k])))
     P = sum(1 for x in v if x > 0)
+    # G_k caps the WHOLE activation, so it is still C*|v_k| whatever k is;
+    # the lane gain M_k = G_k/A is what the input weights carry, so that the
+    # k relu terms sum to G_k exactly at a = 1.
     G = [max(1, round(C * abs(v[k]))) for k in order]
+    M = [g / A for g in G]
 
     # quantised weights, indexed by the NEW unit order
     Wq = [{p: [0] * 120 for p in PIECES} for _ in range(N)]
     biasq = [0] * N
     for j, k in enumerate(order):
-        g = G[j]
-        biasq[j] = round(g * bias[k])
+        m = M[j]
+        biasq[j] = round(m * bias[k])
         for p in PIECES:
             col = W[k][p]
             wq = Wq[j][p]
             for s in squares:
-                wq[s] = round(g * col[s])
+                wq[s] = round(m * col[s])
 
     # lane index of unit j for each perspective and block
     #   block0 = [ W-pos (P) ; B-neg (N-P) ]
@@ -310,17 +351,31 @@ def build(W, bias, v, shift, clampcp=600, squares=SQUARES):
             col.append(packlanes(lv))
         rows[p] = col
 
+    # one packed constant of M_k*t_i per extra segment
+    ts = []
+    for t in segs[1:]:
+        lv = [0] * (2 * N)
+        for j in range(N):
+            lv[laneW[j]] = lv[laneB[j]] = round(M[j] * t)
+        ts.append(packlanes(lv))
+
     exc = excursion_bound(Wq, biasq, N)
     return {
         "kind": "packed-nnue-v1", "N": N, "P": P, "shift": shift,
-        "clampcp": clampcp, "base": base, "gp": gp,
+        "clampcp": clampcp, "base": base, "gp": gp, "ts": ts, "segs": segs,
         "G": lanesG, "rows": rows,
         "excursion": max(exc), "excursion_per_unit": exc,
         "sum_G": sum(G),
     }
 
 
-def float_nn(W, bias, v, board, pf, crelu=True):
+def act(x, segs=(0.0,)):
+    """The float activation the packed head implements, normalised to [0,1]."""
+    A = sum(1.0 - t for t in segs)
+    return min(sum(max(0.0, x - t) for t in segs), A) / A
+
+
+def float_nn(W, bias, v, board, pf, segs=(0.0,)):
     """Reference evaluation of the float net, mover's point of view.
 
     This is what the packed head approximates; the only differences are the
@@ -335,7 +390,5 @@ def float_nn(W, bias, v, board, pf, crelu=True):
             for k in range(N):
                 aw[k] += W[k][q][t]
                 ab[k] += W[k][SWAP[q]][119 - t]
-    f = (lambda x: 0.0 if x < 0 else (1.0 if x > 1 else x)) if crelu \
-        else (lambda x: max(0.0, x))
-    out = sum(v[k] * (f(aw[k]) - f(ab[k])) for k in range(N))
+    out = sum(v[k] * (act(aw[k], segs) - act(ab[k], segs)) for k in range(N))
     return out if pf == 0 else -out

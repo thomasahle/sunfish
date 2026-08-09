@@ -56,10 +56,13 @@ def _rep(v, n):
 MH = _rep(1 << VBITS, NLANE)      # guard bits
 MVAL = _rep(ONES, NLANE)          # value bits
 MLO = _rep(BIAS, NLANE)           # offset-binary zero, and the bit-14 probe
-MGP = _d["gp"]                    # per-lane clip ceilings G_k
+MGP = _d["gp"]                    # per-lane activation ceilings G_k
 MGH = MGP | MH
 MASKLO = (1 << HALF) - 1
 M16 = (1 << LBITS) - 1
+# One packed constant M_k*t_i per extra activation segment.  Empty for plain
+# clipped ReLU; three breakpoints approximate squared clipped ReLU.
+MTS = tuple(_d.get("ts", ()))
 
 _PIECES = "PNBRQKpnbrqk"
 _rows0 = _d["rows"]
@@ -73,11 +76,16 @@ del _d, _rows0, _rows1
 def nn_cp(acc, pf):
     """Clipped centipawn output of the packed net, mover's point of view.
 
-    Nineteen big-int operations, independent of the width of the net."""
+    A fixed number of big-int operations, independent of the width of the
+    net: 19 for clipped ReLU, 7 more per extra activation segment."""
     m = ((acc & MLO) >> 14) * ONES              # lane >= 0 ?
     y = ((acc & m) | MLO) - MLO                 # relu
+    for T in MTS:                               # convex piecewise-linear:
+        x = acc - T                             #   y = sum_i relu(a - t_i)
+        m = ((x & MLO) >> 14) * ONES
+        y += ((x & m) | MLO) - MLO
     m = (((MGH - y) & MH) >> VBITS) * ONES      # lane <= G_k ?
-    y = (y & m) | (MGP & (m ^ MVAL))            # clip
+    y = (y & m) | (MGP & (m ^ MVAL))            # ...capped at G_k
     # 2^16 == 1 (mod 2^16-1), so each block's residue IS its lane sum
     v = (y & MASKLO) % M16 - (y >> HALF) % M16
     v = (-v if pf else v) >> SHIFT
@@ -433,7 +441,12 @@ class Searcher:
         # still have a king. Notice since this is the only termination check,
         # the remaining code has to be comfortable with being mated, stalemated
         # or able to capture the opponent king.
-        if pos.score <= -MATE_LOWER:
+        # This reads `ps`, the piece-square part, NOT the evaluated score: the
+        # sentinel has to mean "the king is literally gone", and a net residual
+        # of up to CLAMP could otherwise lift a kingless position back over the
+        # threshold and hide the capture. On ps the test is bit-for-bit
+        # classic's.
+        if pos.ps <= -MATE_LOWER:
             return -MATE_UPPER
 
         # Look in the table if we have already searched this position before.
@@ -476,7 +489,10 @@ class Searcher:
             #   (killer-only check): declined, exception tolerated.
             # Null move in QS (a search-verified stand-pat) measured
             # -13 +/- 34 ELO: declined.
-            if depth > 2 and not root and abs(pos.score) < 500 and any(
+            # The zugzwang guard also reads ps, so the gate opens on exactly
+            # the positions it opens on in classic rather than on a threshold
+            # jittered by the net residual.
+            if depth > 2 and not root and abs(pos.ps) < 500 and any(
                     c in pos.board for c in "RBNQ"):
                 # A pass claiming a mate-band value is redundant (if passing
                 # wins the king, capturing it is a real move too) and can be a

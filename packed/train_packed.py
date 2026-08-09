@@ -46,6 +46,8 @@ p.add_argument("--sigK", type=float, default=400.0)
 p.add_argument("--cpmax", type=int, default=1000)
 p.add_argument("--clampcp", type=int, default=600)
 p.add_argument("--wclip", type=float, default=1.0)
+p.add_argument("--segs", type=int, default=1,
+               help="activation segments: 1 = clipped ReLU, 3 ~ squared clipped ReLU")
 p.add_argument("--quiet", type=int, default=1)
 p.add_argument("--cache", default="")
 args = p.parse_args()
@@ -146,6 +148,17 @@ mfeats = MIRROR[feats]
 N = args.N
 CLAMP = float(args.clampcp)
 K = args.sigK
+# breakpoints of the convex piecewise-linear activation; A normalises it
+# so phi(0)=0 and phi(1)=1 whatever the number of segments
+SEGS = tuple(i / args.segs for i in range(args.segs))
+AA = sum(1.0 - t for t in SEGS)
+
+
+def act(a):
+    s = torch.relu(a)
+    for t in SEGS[1:]:
+        s = s + torch.relu(a - t)
+    return s.clamp(max=AA) / AA
 
 
 class Net(nn.Module):
@@ -157,8 +170,8 @@ class Net(nn.Module):
         self.v = nn.Parameter(torch.randn(N) * (25.0 / N ** 0.5))
 
     def forward(self, fi, mi, fo, ps):
-        au = (self.emb(fi, fo) + self.bias).clamp(0, 1)
-        at = (self.emb(mi, fo) + self.bias).clamp(0, 1)
+        au = act(self.emb(fi, fo) + self.bias)
+        at = act(self.emb(mi, fo) + self.bias)
         return ps + ((au - at) * self.v).sum(-1).clamp(-CLAMP, CLAMP)
 
 
@@ -199,8 +212,8 @@ def export(path):
                 col = E[feat(c, s)].tolist()
                 for k in range(N):
                     W[k][c][s] = col[k]
-    shift, worst, sabs = pnet.pick_shift(W, b, v)
-    d = pnet.build(W, b, v, shift, clampcp=args.clampcp)
+    shift, worst, sabs = pnet.pick_shift(W, b, v, segs=SEGS)
+    d = pnet.build(W, b, v, shift, clampcp=args.clampcp, segs=SEGS)
     d["train"] = vars(args)
     pnet.save(path, d)
     return shift, worst, sabs, d

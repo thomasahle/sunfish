@@ -10,7 +10,8 @@ import sys, random, pnet
 
 out = sys.argv[1]
 N = int(sys.argv[2]) if len(sys.argv) > 2 and not sys.argv[2].startswith("-") else 64
-crelu = "--relu" not in sys.argv
+NSEG = int(([a.split("=")[1] for a in sys.argv if a.startswith("--segs=")] or ["1"])[0])
+SEGS = tuple(i / NSEG for i in range(NSEG))
 random.seed(1234)
 
 W = [{p: [0.0] * 120 for p in pnet.PIECES} for _ in range(N)]
@@ -22,9 +23,10 @@ for k in range(N):
 bias = [random.gauss(0.2, 0.1) for _ in range(N)]
 v = [random.gauss(0, 12.0) for _ in range(N)]
 
-shift, worst, sabs = pnet.pick_shift(W, bias, v)
-d = pnet.build(W, bias, v, shift, clampcp=600)
+shift, worst, sabs = pnet.pick_shift(W, bias, v, segs=SEGS)
+d = pnet.build(W, bias, v, shift, clampcp=600, segs=SEGS)
 pnet.save(out, d)
+print("segs=%d " % NSEG, end="")
 print("N=%d lanes=%d shift=%d (C=%d) worst |v|*excursion=%.1f sum|v|=%.0f max lane excursion=%d"
       % (N, 2 * N, shift, 1 << shift, worst, sabs, d["excursion"]))
 print("wrote", out)
