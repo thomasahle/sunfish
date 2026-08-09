@@ -34,12 +34,22 @@ python3 -m venv /opt/lichess-bot/venv
 cp /opt/sunfish/contrib/lichess/config.yml /opt/lichess-bot/config.yml
 sed -i "s/YOUR_TOKEN_HERE/$TOKEN/" /opt/lichess-bot/config.yml
 chmod 600 /opt/lichess-bot/config.yml
+
+# The CPU-credit gate. lichess-bot calls is_supported_extra() from this file on
+# every incoming challenge; it declines while /run/sunfish-throttled exists.
+# This replaces the no-op stub that ships with lichess-bot.
+cp /opt/sunfish/contrib/lichess/extra_game_handlers.py /opt/lichess-bot/
+
 chown -R sunfish /opt/lichess-bot /opt/sunfish
 
 cp /opt/sunfish/contrib/lichess/sunfish-lichess.service /etc/systemd/system/
+cp /opt/sunfish/contrib/lichess/sunfish-credit-gate.service /etc/systemd/system/
 systemctl daemon-reload
+systemctl enable --now sunfish-credit-gate
 systemctl enable --now sunfish-lichess
 
 echo
 echo "Done. Check status with:  systemctl status sunfish-lichess"
 echo "Follow the logs with:     journalctl -u sunfish-lichess -f"
+echo "CPU-credit gate:          systemctl status sunfish-credit-gate"
+echo "Gate snapshot:            python3 /opt/sunfish/contrib/lichess/cpu_credit.py --status"

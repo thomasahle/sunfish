@@ -9,10 +9,29 @@ engine:
   working_dir: "/opt/sunfish"
   protocol: "uci"
   ponder: true
+  # Run the engine 10 niceness levels below lichess-bot. The bot's event loop
+  # has to stay responsive enough to read the opponent's move off the socket
+  # while the engine ponders; at equal priority a deep ponder search can
+  # starve it (observed: a 23-second stall that flagged an otherwise won
+  # game). `nice` execs sunfish.py, whose polyglot header then execs pypy3,
+  # so the niceness is inherited and the pypy3/python3 fallback still works.
+  interpreter: "nice"
+  interpreter_options:
+    - "-n"
+    - "10"
   uci_options:
-    # ~100MB of transposition tables: sized for a 1GB free-tier VM.
-    # Raise to 1000000 (~1GB) on a machine with 4GB+.
-    TABLE_SIZE: 100000
+    # Sized from measurement, not guesswork. Under pypy3 each transposition
+    # entry costs ~0.8 kB resident, and TABLE_SIZE bounds tp_score and
+    # tp_move independently, so the tables can reach 2 * TABLE_SIZE entries:
+    #   TABLE_SIZE=50000  -> ~100k entries -> ~80 MB tables + ~36 MB pypy3
+    #                        baseline = ~120 MB peak RSS.
+    # The 1 GB free-tier VM has ~970 MB usable and already runs lichess-bot's
+    # multiprocessing pool (~150 MB across 6 processes); at the previous
+    # TABLE_SIZE=100000 the box sat with ~245 MB paged out *while idle* and
+    # accumulated 467 s of full IO-pressure stall over 3.75 days. An engine
+    # that swaps mid-search is slow in a way no scheduling fix repairs.
+    # On a machine with 4 GB+, raise this to 1000000 (~1 GB).
+    TABLE_SIZE: 50000
 
 challenge:
   concurrency: 1
