@@ -45,6 +45,10 @@ systemctl status sunfish-lichess        # is it running?
 journalctl -u sunfish-lichess -f        # live logs / games
 sudo systemctl restart sunfish-lichess  # after config changes
 cd /opt/sunfish && sudo -u sunfish git pull   # update the engine
+
+systemctl status sunfish-credit-gate    # the CPU-credit gate
+python3 /opt/sunfish/contrib/lichess/cpu_credit.py --status   # gate snapshot
+ls -l /run/sunfish-throttled            # exists => declining new challenges
 ```
 
 Notes:
@@ -52,5 +56,144 @@ Notes:
   available interpreter), with pondering enabled.
 - `config.yml` here is a template; `setup.sh` copies it and fills in the
   token. It accepts casual + rated standard games at bullet/blitz/rapid.
-- On a 1GB VM keep `TABLE_SIZE` at `100000` (~100MB); setup.sh also adds 1GB
-  of swap as a safety margin.
+- On a 1GB VM keep `TABLE_SIZE` at `50000` (~120MB peak RSS); setup.sh also
+  adds 1GB of swap as a safety margin. See "Sizing TABLE_SIZE" below.
+
+## Running on a shared-core VM (e2-micro)
+
+An `e2-micro` shows two vCPUs but is only entitled to **0.25 vCPU sustained**.
+With pondering the engine computes on the opponent's turn too, so a game draws
+far more than that. Three separate mechanisms keep the bot honest on such a
+box; they address genuinely different failure modes, so keep all three.
+
+### 1. Priority separation (the important one)
+
+lichess-bot's event loop must stay responsive enough to read the opponent's
+move off the socket *while the engine is pondering*. At equal priority a deep
+ponder search can starve it — in production this showed up as a 23-second
+stall that flagged an otherwise-won game with 26 seconds on the clock.
+
+- `sunfish-lichess.service` sets `CPUWeight=200` for the bot's cgroup.
+- `config.yml` launches the engine through `nice -n 10` (lichess-bot's
+  `interpreter` option), so the engine sits well below the event loop.
+  `nice` execs `sunfish.py`, whose polyglot header then execs pypy3, so the
+  niceness is inherited and the pypy3/python3 fallback still works.
+
+### 2. Sizing TABLE_SIZE from measured memory
+
+An engine that swaps mid-search is slow in a way no scheduling fix repairs.
+Measured under pypy3, each transposition entry costs **~0.8 kB** resident, and
+`TABLE_SIZE` bounds `tp_score` and `tp_move` *independently* — so the tables
+can hold `2 * TABLE_SIZE` entries:
+
+| TABLE_SIZE | max entries | tables | + pypy3 baseline (~36 MB) |
+|-----------:|------------:|-------:|--------------------------:|
+| 50 000     | 100 000     | ~80 MB | **~120 MB peak RSS**      |
+| 100 000    | 200 000     | ~160 MB| ~196 MB peak RSS          |
+| 1 000 000  | 2 000 000   | ~1.6 GB| needs a 4 GB+ box         |
+
+The 1 GB VM has ~970 MB usable and already runs lichess-bot's multiprocessing
+pool (~150 MB across six processes). At `TABLE_SIZE=100000` it sat with
+**~245 MB paged out while completely idle** and accumulated **467 s of full
+IO-pressure stall** (`/proc/pressure/io`) over 3.75 days. Hence `50000` here.
+
+### 3. The CPU-credit gate
+
+`cpu_credit.py --daemon` (unit: `sunfish-credit-gate.service`) samples
+`/proc/stat`, models a burst-credit deficit, and maintains the flag file
+`/run/sunfish-throttled`. While that file exists, lichess-bot **declines new
+challenges** — it never interrupts a game in progress.
+
+The bot side is `extra_game_handlers.py`, which implements lichess-bot's
+supported `is_supported_extra()` hook. Nothing in `/opt/lichess-bot` is
+patched, so `git pull` there keeps working.
+
+**Read `cpu_credit.py`'s module docstring before tuning it.** GCE exposes no
+credit metric (unlike AWS `CPUCreditBalance`), so the bucket size is
+*modelled*, not measured, and the defaults sit two orders of magnitude above
+anything this instance has ever reached — the gate is a safety net, not a
+duty-cycle limiter. The one *measured* signal is sustained CPU steal, which
+closes the gate on its own regardless of the model.
+
+Both the flag and the hook fail **open**: a missing, unreadable or stale
+(>5 min) flag means "accept". A dead estimator must never strand the bot
+offline.
+
+Declines use lichess's `generic` reason ("Challenge declined"), because
+`lib/model.py` hardcodes that for this hook. If you would rather send `later`
+("This is not a good time for me, please ask again later"), which is closer to
+what the gate means, patch the one line locally — and re-apply it after any
+lichess-bot upgrade:
+
+```bash
+sudo -u sunfish sed -i \
+  's/self.decline_due_to(is_supported_extra(self), "generic")/self.decline_due_to(is_supported_extra(self), "later")/' \
+  /opt/lichess-bot/lib/model.py
+```
+
+## Deploying these changes to a running bot
+
+```bash
+# 1. Pick up the new engine + contrib files
+cd /opt/sunfish && sudo -u sunfish git pull
+
+# 2. Install the gate daemon and the updated bot unit
+sudo cp contrib/lichess/sunfish-credit-gate.service /etc/systemd/system/
+sudo cp contrib/lichess/sunfish-lichess.service     /etc/systemd/system/
+sudo cp contrib/lichess/extra_game_handlers.py      /opt/lichess-bot/
+sudo chown sunfish /opt/lichess-bot/extra_game_handlers.py
+sudo systemctl daemon-reload
+
+# 3. Start the gate first and confirm it is sane BEFORE touching the bot
+sudo systemctl enable --now sunfish-credit-gate
+sleep 30
+python3 /opt/sunfish/contrib/lichess/cpu_credit.py --status
+#   expect: "gate_open": true, small deficit, "throttled_now": false
+ls -l /run/sunfish-throttled     # should NOT exist on a healthy box
+
+# 4. Apply the engine settings (TABLE_SIZE + nice) to the bot's config.
+#    Edit /opt/lichess-bot/config.yml by hand -- do NOT re-copy the template,
+#    it would overwrite your token:
+#      uci_options.TABLE_SIZE: 50000
+#      engine.interpreter: "nice"
+#      engine.interpreter_options: ["-n", "10"]
+
+# 5. Restart the bot when no game is in progress
+systemctl status sunfish-lichess     # check the log for an active game first
+sudo systemctl restart sunfish-lichess
+
+# 6. Verify
+journalctl -u sunfish-lichess -f     # play one game against the bot
+ps -o pid,ni,rss,comm -C pypy3       # engine should show NI=10
+free -m                              # swap in use should fall over time
+```
+
+### Rollback
+
+```bash
+# Gate off, priorities and table size back to the old values
+sudo systemctl disable --now sunfish-credit-gate
+sudo rm -f /run/sunfish-throttled
+sudo rm -f /etc/systemd/system/sunfish-credit-gate.service
+
+# Restore the no-op hook that ships with lichess-bot
+sudo -u sunfish tee /opt/lichess-bot/extra_game_handlers.py >/dev/null <<'EOF'
+def game_specific_options(game):
+    return {}
+
+
+def is_supported_extra(challenge):
+    return True
+EOF
+
+# Revert config.yml: TABLE_SIZE back to 100000, drop interpreter/-options.
+# Revert the unit (drop CPUWeight):
+cd /opt/sunfish && sudo -u sunfish git checkout HEAD~1 -- contrib/lichess/
+sudo cp contrib/lichess/sunfish-lichess.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl restart sunfish-lichess
+```
+
+Removing `/run/sunfish-throttled` is enough to un-gate the bot immediately;
+stopping the daemon alone also works, since the hook expires a flag older than
+five minutes.
