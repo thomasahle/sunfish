@@ -432,19 +432,30 @@ class Searcher:
 
                 yield move, -self.bound(pos.move(move), 1 - gamma, depth - 1)
 
-        # Run through the moves, shortcutting when possible. The fold also
-        # collects a legality certificate: by KingCapturableReportsExact
-        # and its converse (the sentinel is produced ONLY at capturable
-        # children), a searched real move's score is two-way evidence -
-        # exactly -MATE_UPPER proves the move left our king capturable,
-        # anything above proves it legal. live records the second case:
-        # a searched move is proven legal, so the node cannot be mate or
-        # stalemate. Virtual scores (null / stand-pat / sub-mate futility
-        # estimates) are value evidence only and never touch it.
+        # Run through the moves, shortcutting when possible. What bound()
+        # promises about a king-capturable node is STRATIFIED by depth.
         #
-        # A virtual (None) fail-high is validated before it is allowed to
-        # cut, restoring KingCapturableReportsExact - "if we can capture
-        # the opponent king, bound() returns exactly MATE_UPPER":
+        # At depth 0 it only has to FAIL HIGH: CanKill(p) implies
+        # bound(p, gamma, 0) >= gamma. QS gives that for free. A king
+        # capture tops the move order and outranks every QS threshold
+        # (and the mate case of the futility yield hands it out as a real
+        # MATE_UPPER rather than pruning it), so the loop always reaches
+        # it; the only option that can cut ahead of it is stand-pat, and
+        # stand-pat cuts only when pos.score already reaches gamma. A
+        # capturable QS node therefore always fails high, and in
+        # particular never stores an upper bound that a later probe could
+        # believe. Nothing above needs more than that, because a parent
+        # only SEARCHES a child whose stand-pat cannot cut: the futility
+        # test pos.score + val < gamma is exactly the child's stand-pat
+        # test -(pos.score + val) >= 1 - gamma, so a searched capturable
+        # child still reports the sentinel.
+        #
+        # At depth >= 1 the node reports the sentinel EXACTLY
+        # (KingCapturableReportsExact): there is no stand-pat above QS and
+        # futility yields are virtual and below gamma by construction, so
+        # the only option that can preempt the capture is the null at
+        # depth > 2. Hence a virtual (None) fail-high is validated before
+        # it may cut, and only where a virtual cut is possible at all:
         # - the stored killer, when present, decides capturability O(1):
         #   it is legal (KillerLegal), and at a capturable node it IS a
         #   king capture (value tops the mate band iff the move takes the
@@ -452,28 +463,28 @@ class Searcher:
         #   the terminal arm skip its scan;
         # - if a real king capture exists, substitute it: the node
         #   reports MATE_UPPER and tp_move stores the true capture, so a
-        #   stand-pat or null cutoff can never mask the sentinel again;
+        #   null cutoff can never mask the sentinel;
         # - a mate-band claim without a capture is vacuous (if passing wins
         #   the king, capturing it is a real move too): fold identity;
         # - a positive claim at a verified-terminal node (every generated
-        #   move loses the king to the legality oracle - a plain QS probe:
-        #   at window MATE_UPPER an entry is decisive only with a bound the
-        #   invariant reserves for capturable nodes, so the probe stays a
-        #   complete decision procedure warm, and the correction's rare
-        #   re-scan hits the entries it stores) would outscore the exact
-        #   draw the correction stores: fold identity. This arm is
-        #   depth-gated like the correction itself: at depth 0 QS
-        #   evaluates the fold, stand-pat included, and folding a
-        #   terminal stand-pat with no correction to rescue it would make
-        #   the node RETURN the reserved -MATE_UPPER sentinel.
+        #   move loses the king to the board predicate below) would
+        #   outscore the exact draw the correction stores: fold identity.
+        #
+        # The fold also collects a legality certificate: a searched real
+        # move's score is two-way evidence - exactly -MATE_UPPER proves
+        # the move left our king capturable, anything above proves it
+        # legal. live records the second case: a searched move is proven
+        # legal, so the node cannot be mate or stalemate. Virtual scores
+        # (null / stand-pat / sub-mate futility estimates) are value
+        # evidence only and never touch it.
         best, live = -MATE_UPPER, False
         for move, score in moves():
-            if move is None and score >= gamma:
+            if depth and move is None and score >= gamma:
                 king = self.tp_move.get(pos) or pos.king_capture()
                 if king and pos.value(king) >= MATE_LOWER:
                     move, score = king, MATE_UPPER
-                elif depth and (score >= MATE_LOWER or 0 < score and not king and all(
-                        pos.move(m).king_capture() for m in pos.gen_moves())):
+                elif score >= MATE_LOWER or 0 < score and not king and all(
+                        pos.move(m).king_capture() for m in pos.gen_moves()):
                     score = -MATE_UPPER
             best = max(best, score)
             live = live or move is not None and score > -MATE_UPPER
