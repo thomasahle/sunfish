@@ -482,11 +482,14 @@ own null-inclusive declared value function).** Premises:
 | `Bounded` | fidelity (static evals lie in the score band) | `EvalBounds` |
 | `KillerLegal` | invariant | **THEOREM** (`killerLegal_lifecycle`: the whole `tp_move` lifecycle — three store species, eviction, cross-search persistence) |
 | wide-band window `(-MATE_UPPER, MATE_UPPER]` | driver fact | **DISCHARGED** (`driver_wide_is_now_the_range`: every probe, no clamp, no score assumption) |
-| `NoZugzwangInMateBand` | **chess** | the ONE chess statement in layer 1; eliminable at a measured price by PR #162's band-edge arm (`boundary_window_decisive`) |
+| ~~`NoZugzwangInMateBand`~~ | — | **DISCHARGED** by the band-edge arm: a surviving sub-band virtual cutoff re-probes the pass at the boundary window, where both fail directions are decisive (`boundary_window_decisive`), so the search certifies what the premise asserted. **Layer 1 now carries NO chess statement.** Retained only as the record — the premise is FALSE in real chess (witness `8/6p1/6R1/k7/2K5/8/8/8 w`, verified against python-chess: legal, one Black reply, passing mates immediately, no forced White mate within three; three siblings found with it), which is exactly why it had to be verified rather than assumed |
 
 Nothing else: the probe premise is gone entirely (the in-check test is
-the board predicate `rotate().king_capture()` = `inCheckB`), and the
-pass-search premise dissolved into the recursion's definition.
+the board predicate `rotate().king_capture()` = `inCheckB`), the
+pass-search premise dissolved into the recursion's definition, and the
+band premise is now discharged by the band-edge probe.  **Layer 1 —
+everything about the algorithm, including table non-crossing — is
+therefore free of chess assumptions.**
 
 **Layer 2 — the approximation's accuracy.** `NoZugzwang` (chess:
 "pass-value ≤ best real move") is assumed once, only here, and only to
@@ -516,9 +519,11 @@ path that precedes the consumer).
 
 **Genuinely open**, in priority order:
 
-1. *Eliminate `NoZugzwangInMateBand`* — the band-edge arm exists and its
-   keystone is proven (`boundary_window_decisive`); what remains is
-   threading the boundary probe through the recursions (PR #162).
+1. *The band-edge code arm itself* — the model now assumes the engine
+   performs the boundary probe; the one-line `elif` is applied
+   separately, with the value-equivalence battery.  Until it lands, the
+   model is AHEAD of the code here (the only such gap, and it is
+   directional: the model is the stricter of the two).
 2. *`gen_moves` implements chess* — assigned to the leanpy /
    lean-surfaces track, not this model.
 
@@ -867,6 +872,20 @@ abstractions, each with its justification:
   are `root=True`: unstored in both directions (`rootProbe`,
   CanNull.lean), so the `(pos, depth)` key stays complete and no table
   entry enters the definition of legality.
+- **Re-audit at the `kcx-review-fixes` merge** (`Searcher.bound`
+  `f73e3217…` → `e7638485…`): a comment-and-local-name-only change (the
+  interception's `king` → `proof` rename).  No semantics moved, and the
+  strongest available evidence says so mechanically: the MINIFIED
+  output and the `pack.sh` byte count are IDENTICAL before and after.
+  The audit hash was refreshed in the same commit as the code change,
+  per the standing rule; this line is the README half of that refresh.
+  Two edits to the same block were rejected on measurement and are NOT
+  in the model because they are not in the code: moving the killer
+  lookup below the null/stand-pat yields (not behaviour-preserving —
+  `tp_move` is position-keyed and QS below the null is not ply-limited,
+  so the null subtree can transpose back to the same board and store at
+  that key: 10 disagreements in 3.0M reads), and a walrus caching the
+  terminal scan (the fold scan returned true 4 times in 43,006 scans).
 - **The pass-term correspondence is definitional** (the dissolved
   `NullIsPassSearchD2`): the model's null yield IS its own recursive
   pass probe, exactly sunfish.py's
@@ -876,10 +895,19 @@ abstractions, each with its justification:
 - **Model-code drift guard**: `formal/scripts/model_audit.py` (run by
   `tests/test_model_audit.py` in CI) hashes every audited region of
   sunfish.py — `Searcher.bound`, `Searcher.search`, `Position.rotate`/
-  `move`/`value`/`gen_moves`, and the constants — and fails on any
-  change without a same-commit re-audit + hash refresh (`--update`).
-  Silent divergence between code and model is thereby impossible until
-  the leanpy track checks the correspondence itself.
+  `move`/`value`/`gen_moves`/`king_capture`, and the constants — and
+  fails on any change without a same-commit re-audit + hash refresh
+  (`--update`).  **It also guards the citation class the hashes are
+  structurally blind to**: a stale line NUMBER in a Lean comment is not
+  code drift, so hashing cannot see it, and `Killer.lean` had rotted
+  that way (citing 339/356-357/366 for code that had moved to
+  391/422-423, alongside a stale `Bound.lean:20`).  Those citations are
+  fixed, and the guard now (a) checks that every distinctive source
+  ANCHOR the model cites by name still occurs in `sunfish.py`
+  (`ANCHORS`), and (b) ratchets the number of raw line-number citations
+  in `formal/Sunfish/*.lean` so it can fall but never rise.  Prefer
+  anchors — function names and distinctive source text — over line
+  numbers in new comments.
 - **The golfed consumer status** (audited at `6ecb4af`): `live` is the
   STICKY two-way-evidence bit, modeled as the untouched-fold test
   `S = LOSS`.  The correction scan is FULL COVERAGE and both scan sites
