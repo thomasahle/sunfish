@@ -87,6 +87,49 @@ def extract_regions():
     return regions
 
 
+# Distinctive source anchors the Lean model cites BY NAME rather than by line
+# number.  Hashing catches code drift but is blind to a stale line number in a
+# Lean comment, so the model was drifting in a way the guard structurally could
+# not see (Killer.lean cited lines 339/356-357/366 for code that had moved to
+# 391/422-423).  Citing anchors instead makes the class self-maintaining: rename
+# or delete one of these and the check fires.
+ANCHORS = [
+    "def king_capture",
+    "killer = self.tp_move.get(pos)",
+    "if killer and pos.value(killer) >= val_lower:",
+    "yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)",
+    "yield None, pos.score",
+    "yield None, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)",
+    "if depth <= 1 and pos.score + val < gamma:",
+    "yield (move, MATE_UPPER) if val >= MATE_LOWER else (None, pos.score + val)",
+    "best, live = -MATE_UPPER, False",
+    "if depth and best < gamma and not live and all(",
+    "pos.rotate(nullmove=True).king_capture()",
+    "self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)",
+    "lower, upper = 1 - MATE_UPPER, MATE_UPPER",
+    "if not root and depth > 0 and pos in self.history:",
+]
+
+# Raw "line N" citations in the Lean sources are fragile: they rot silently.
+# We ratchet rather than ban outright -- the count may fall, never rise.
+LINE_CITATION_BUDGET = 149
+
+
+def check_anchors(src):
+    missing = [a for a in ANCHORS if a not in src]
+    return missing
+
+
+LINE_CITE_RE = re.compile(r"lines? \d{2,4}(\s*[-–]\s*\d{2,4})?")
+
+
+def count_line_citations():
+    total = 0
+    for f in sorted((ROOT / "formal" / "Sunfish").glob("*.lean")):
+        total += len(LINE_CITE_RE.findall(f.read_text()))
+    return total
+
+
 def main():
     regions = extract_regions()
     actual = {k: digest(v) for k, v in sorted(regions.items())}
@@ -96,11 +139,28 @@ def main():
         block = "EXPECTED = {\n" + "".join(
             f'    "{k}": "{v}",\n' for k, v in actual.items()) + "}"
         text = re.sub(r"EXPECTED = \{.*?\}", block, text, count=1, flags=re.S)
+        text = re.sub(r"LINE_CITATION_BUDGET = .*",
+                      f"LINE_CITATION_BUDGET = {count_line_citations()}", text, count=1)
         me.write_text(text)
         print("model_audit: EXPECTED hashes refreshed:")
         for k, v in actual.items():
             print(f"  {k}: {v}")
         return 0
+    src = SUNFISH.read_text()
+    missing = check_anchors(src)
+    if missing:
+        print("model_audit: cited ANCHOR(S) no longer present in sunfish.py:")
+        for a in missing:
+            print(f"  {a!r}")
+        print("The Lean model cites these by name (formal/Sunfish/*.lean).")
+        print("Update the citation and the model together, then re-run.")
+        return 1
+    cites = count_line_citations()
+    if LINE_CITATION_BUDGET is not None and cites > LINE_CITATION_BUDGET:
+        print(f"model_audit: raw line-number citations rose {LINE_CITATION_BUDGET} -> {cites}.")
+        print("Line numbers rot silently; cite a distinctive source anchor instead")
+        print("(and add it to ANCHORS so the guard checks it).")
+        return 1
     drifted = {k: v for k, v in actual.items() if EXPECTED.get(k) != v}
     if not EXPECTED:
         print("model_audit: no EXPECTED hashes recorded; run with --update first")
