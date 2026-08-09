@@ -24,6 +24,7 @@ colours; the real interface handles a Black-to-move FEN; and a missing or
 broken UCI module is loud rather than a silent downgrade to the tiny loop.
 """
 
+import ast
 import os
 import pathlib
 import queue
@@ -33,12 +34,16 @@ import shutil
 import subprocess
 import sys
 import threading
+import types
 
 import pytest
 
 chess = pytest.importorskip("chess")
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+import sunfish_tools.uci as uci  # noqa: E402
 
 # The FEN from issue #156's reproduction: Black to move, so an engine that
 # ignored the command and searched the initial position answers a White move.
@@ -286,6 +291,91 @@ def test_broken_import_inside_uci_module_is_loud(tmp_path):
     script = make_engine_dir(tmp_path, broken_import=True)
     assert_loud_failure(run_to_completion(script, tmp_path),
                         "sunfish_definitely_absent_module")
+
+
+# --------------------------------------------------------------------------
+# The engine-module contract.
+#
+# uci.py never imports the engine: run(module, startpos) injects it, so the
+# same interface drives classic sunfish, pesto and the NNUE variants. The
+# contract is therefore checked at run() entry rather than declared by an
+# import, and these tests hold that check to being complete and eager.
+# --------------------------------------------------------------------------
+
+
+def load_engine():
+    """Import sunfish.py without running its UCI interface."""
+    module = types.ModuleType("sunfish_under_test")
+    module.__file__ = str(ROOT / "sunfish.py")
+    exec(compile((ROOT / "sunfish.py").read_text(), "sunfish.py", "exec"),
+         module.__dict__)
+    return module
+
+
+def engine_attributes_used_by_uci():
+    """Every `sunfish.<attr>` uci.py reads, via AST so comments don't count."""
+    tree = ast.parse((ROOT / "sunfish_tools" / "uci.py").read_text())
+    return {node.attr for node in ast.walk(tree)
+            if isinstance(node, ast.Attribute)
+            and isinstance(node.value, ast.Name) and node.value.id == "sunfish"}
+
+
+def test_shipped_engine_satisfies_the_contract():
+    uci.check_engine_module(load_engine())
+
+
+def test_contract_covers_every_attribute_the_interface_reads():
+    """No `sunfish.<attr>` may be reached without being required or optional.
+
+    Guards the next person who adds one: an attribute that is neither in
+    ENGINE_API nor explicitly optional is a silent AttributeError waiting for
+    whichever command happens to reach it.
+    """
+    optional = {"TABLE_SIZE", "features", "pst"}  # hasattr-guarded at use
+    unaccounted = engine_attributes_used_by_uci() - set(uci.ENGINE_API) - optional
+    assert not unaccounted, (
+        f"{sorted(unaccounted)} read off the engine module but not declared in "
+        "ENGINE_API (or in this test's optional set, with a hasattr guard)")
+
+
+def test_contract_lists_nothing_stale():
+    assert set(uci.ENGINE_API) <= engine_attributes_used_by_uci()
+
+
+@pytest.mark.parametrize("attr", ["Stop", "Searcher", "MATE_LOWER", "parse"])
+def test_engine_missing_a_required_attribute_is_rejected_at_startup(attr):
+    """run() must refuse a non-conforming engine before it does anything.
+
+    `Stop` is the case that motivated this. It is only ever named in `except`
+    clauses, and an except expression is evaluated when an exception arrives,
+    not when the code is reached -- so an engine without it used to run
+    normally until the first deadline abort, and then raise AttributeError
+    while handling the very abort it was meant to catch. The old
+    `except getattr(sunfish, "Stop", ()): pass` was worse still: it degraded
+    silently, losing deadline aborts with no error at all.
+
+    Note what this test does *not* do: no search runs, no exception is raised
+    in the engine. The rejection has to happen anyway. That is what eager
+    means.
+    """
+    engine = load_engine()
+    delattr(engine, attr)
+    with pytest.raises(TypeError) as excinfo:
+        uci.run(engine, engine.hist[-1])
+    assert attr in str(excinfo.value)
+    assert getattr(uci, "sunfish", None) is not engine, \
+        "run() adopted a non-conforming engine before checking it"
+
+
+def test_engine_without_pst_or_features_is_rejected():
+    """from_fen needs one or the other to score a board. Without either, the
+    engine works until the first `position fen` -- i.e. until someone runs it
+    with an EPD opening book, which is how #156 stayed hidden for so long."""
+    engine = load_engine()
+    delattr(engine, "pst")
+    assert not hasattr(engine, "features")
+    with pytest.raises(TypeError, match="pst"):
+        uci.run(engine, engine.hist[-1])
 
 
 def test_packed_build_still_has_a_working_loop(tmp_path):
