@@ -163,21 +163,34 @@ burst-credit cloud VM: the credits drained mid-game, the engine was throttled,
 and a deadline-less ponder search starved the bot process into a time
 forfeit. Ponder on hardware with a core to spare, not on an e2-micro.
 
-## Verify-on-suspicion landing evidence (2026-08-08)
+## KCX landing evidence (2026-08)
 
-Reproducible benchmarks recorded outside CI gates (CI enforces the
-semantic tests in tests/test_tt_consistency.py, the mate/stalemate
-floors, and the regression corpus; node percentages are hardware- and
-version-sensitive):
+Reproducible benchmarks recorded outside CI gates. CI enforces the semantic
+tests (`tests/test_tt_consistency.py`, `tests/test_terminal_bench.py`), the
+mate/stalemate floors, and the model-audit drift guard; the numbers below are
+hardware- and version-sensitive and are documentation, not gates.
 
-- 36-position depth-6 lockstep vs the pre-landing master: identical
-  bestmove/score on every position.
-- Node delta: +0.27% (the two verifier arms fire at ~120 nodes per
-  935k; each fire short-circuits at the first legal move).
-- The alternative "licensed null" prototype (mobility before any
-  virtual option, structurally equivalent guarantees) measured
-  +3.6% nodes and -27.9 +/- 33.2 Elo over 200 games at 60+1
+- **Behavioral**: bound-level equivalence with the proof-first reference
+  implementation (an eager king-capture guard at node entry) over 9,600 probes
+  — 65 positions x depths 0-4 x an 8-gamma ladder x both probe orders x cold
+  and warm tables: **zero value mismatches**.
+- **Invariant**: 9,600 probes over 200 king-capturable positions, **zero
+  violations** of exact king-capture reporting.
+- **Consistency**: ladder and full-driver crossing scans over 35+ positions,
+  **0 crossed table entries** (master: 28 driver / 35 ladder on the same set).
+- **Suites**: terminal bench 148/148 (master 130); stalemate2 17/130, floor
+  raised 13 -> 17; mate1 8/8, mate2 20/20, mate3 5/5.
+- **Cost**: +5.3% wall on a 32-position depth-5 battery. Note the node count
+  reads 99.6% of master, which is *not* a cost saving: the legality oracle is
+  now a board predicate rather than a depth-0 search, so its work no longer
+  increments the node counter. When a change moves work between counted and
+  uncounted code, wall time is the only honest measure — see rule 12.
+- **Elo**: -10.4 +/- 28.7 over 300 games at 60+1, zero time losses (114W-123L
+  -63D). Measured on the kcx production build *before* the subsequent golf,
+  full-scan revert, board-predicate and driver-bracket commits; those were
+  validated as value-identical by the equivalence battery above rather than by
+  a fresh match.
+- **Rejected alternative**: a "licensed null" prototype (require mobility
+  before admitting any virtual option — structurally equivalent guarantees)
+  measured +3.6% nodes and **-27.9 +/- 33.2 Elo** over 200 games at 60+1
   (71W-87L-42D, zero time losses): dominated, not landed.
-- stalemate2 floor moved 15 -> 13: the two lost "successes" were
-  transient exact-0 info lines produced by the crossed bounds this
-  change removes (the engine's settled scores were -266/-246).
