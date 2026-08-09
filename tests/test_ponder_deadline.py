@@ -1,6 +1,6 @@
 """The ponder search must be bounded, but only as a backstop.
 
-tools/uci.py used to leave ``searcher.deadline`` unset for "go ponder" and
+sunfish_tools/uci.py used to leave ``searcher.deadline`` unset for "go ponder" and
 "go infinite", so such a search ended only on "stop"/"ponderhit". If that
 command is ever lost the search pins a CPU forever -- on a 0.25 vCPU
 shared-core VM that starves everything else on the box, including the event
@@ -24,7 +24,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import tools.uci as uci  # noqa: E402
+import sunfish_tools.uci as uci  # noqa: E402
 
 
 def test_cap_is_finite_and_generous():
