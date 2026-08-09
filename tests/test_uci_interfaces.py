@@ -25,7 +25,6 @@ broken UCI module is loud rather than a silent downgrade to the tiny loop.
 """
 
 import ast
-import os
 import pathlib
 import queue
 import random
@@ -65,17 +64,37 @@ def strip_minifier_hidden(source):
     return stripped
 
 
+def isolated_python(*args):
+    """Argv for a child interpreter that can see only the layout under test.
+
+    The flags carry the whole isolation, and each is load-bearing: ``-E``
+    drops PYTHONPATH (and every other PYTHON* variable), ``-s`` the user site
+    directory, ``-S`` site-packages -- including its ``.pth`` files -- and
+    ``-B`` keeps the scratch layouts free of ``__pycache__`` (``-E`` having
+    made PYTHONDONTWRITEBYTECODE a no-op).
+
+    ``-S`` is the one that matters. A sunfish checkout is normally set up with
+    an editable install, which leaves a meta-path finder in site-packages
+    resolving ``sunfish`` and ``sunfish_tools`` to the checkout from *any*
+    working directory and *any* sys.path. Without it, a layout built here
+    without ``sunfish_tools/`` still imports the checkout's copy: the engine
+    starts, and the loudness tests below pass whatever the bridge does.
+
+    Unlike ``-I``, these flags keep the script's own directory (and, for
+    ``-c``, the working directory) on sys.path -- that is where these tests
+    put the module when they mean it to be found. Nothing is lost by dropping
+    site-packages: sunfish.py and sunfish_tools/uci.py import only the
+    standard library.
+    """
+    return [sys.executable, "-E", "-s", "-S", "-B", *args]
+
+
 class UciEngine:
     """Minimal UCI driver: one subprocess, line-oriented, with timeouts."""
 
     def __init__(self, script, cwd):
-        # A cleared PYTHONPATH plus cwd=the scratch directory means sys.path
-        # holds only the script's own directory, so these tests cannot be
-        # rescued (or sabotaged) by the checkout they run from.
-        env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
-        env["PYTHONDONTWRITEBYTECODE"] = "1"
         self.proc = subprocess.Popen(
-            [sys.executable, str(script)], cwd=str(cwd), env=env,
+            isolated_python(str(script)), cwd=str(cwd),
             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             stderr=subprocess.PIPE, text=True, bufsize=1,
         )
@@ -227,20 +246,17 @@ def test_real_interface_answers_a_black_to_move_fen(tmp_path):
 
 
 def run_to_completion(script, cwd, commands="uci\nisready\nquit\n", timeout=60):
-    return _run([sys.executable, str(script)], cwd, commands, timeout)
+    return _run(isolated_python(str(script)), cwd, commands, timeout)
 
 
 def run_entry_point(cwd, commands="uci\nisready\nquit\n", timeout=60):
     """Invoke main() the way the console script pyproject installs does."""
-    return _run([sys.executable, "-c",
-                 "import sys; from sunfish import main; sys.exit(main())"],
-                cwd, commands, timeout)
+    entry = "import sys; from sunfish import main; sys.exit(main())"
+    return _run(isolated_python("-c", entry), cwd, commands, timeout)
 
 
 def _run(argv, cwd, commands, timeout):
-    env = {k: v for k, v in os.environ.items() if k != "PYTHONPATH"}
-    env["PYTHONDONTWRITEBYTECODE"] = "1"
-    return subprocess.run(argv, cwd=str(cwd), env=env, input=commands,
+    return subprocess.run(argv, cwd=str(cwd), input=commands,
                           capture_output=True, text=True, timeout=timeout)
 
 
