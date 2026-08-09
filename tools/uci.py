@@ -8,6 +8,14 @@ from functools import partial
 
 print = partial(print, flush=True)
 
+# Longest a "go ponder"/"go infinite" search may run without hearing
+# "stop"/"ponderhit". Those commands carry no time budget, so the only thing
+# that ends them is the GUI -- and if that message is ever lost the search
+# would otherwise spin forever, which on a shared-core VM means starving
+# everything else on the box. Ten minutes is longer than any real pondering
+# turn, so this never fires in normal play; it is a liveness backstop.
+UNBOUNDED_MAX_SECONDS = 600
+
 
 def render_move(move, white_pov):
     if move is None:
@@ -339,7 +347,15 @@ def run(sunfish_module, startpos):
                     # Hard wall-clock cap, checked inside the search itself
                     # (sunfish.py Searcher.bound), so budgets hold even when
                     # single iterations run long on slow hardware.
-                    searcher.deadline = time.time() + think if think < 10**5 else None
+                    #
+                    # "go ponder"/"go infinite" set think = 10**6, which used
+                    # to leave the deadline unset entirely. Such a search only
+                    # ends on "stop"/"ponderhit", so a lost stop (wedged GUI,
+                    # dropped connection) pins a CPU forever. Cap them instead:
+                    # UNBOUNDED_MAX_SECONDS is far longer than any real ponder,
+                    # so normal play is unaffected and the cap only fires when
+                    # the command that should have stopped us is already gone.
+                    searcher.deadline = time.time() + min(think, UNBOUNDED_MAX_SECONDS)
                     go_future = executor.submit(
                         loop,
                         searcher,

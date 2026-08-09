@@ -10,5 +10,18 @@ ExecStart=/opt/lichess-bot/venv/bin/python lichess-bot.py
 Restart=always
 RestartSec=10
 
+# The bot's event loop must always outrank the engine. lichess-bot spawns the
+# engine as a child, so without this they share a priority and a deep ponder
+# search can starve the loop that reads the opponent's move off the socket --
+# observed in production as a 23-second stall that flagged a won game.
+#
+# Two mechanisms, because they cover different cases:
+#  * CPUWeight applies to this unit's cgroup as a whole, so it governs how the
+#    bot competes with everything else on the box (including the gate daemon).
+#  * Nice inside the cgroup is what actually separates the bot from the engine:
+#    the engine is launched via `nice -n 10` (see config.yml `interpreter`), so
+#    it sits 10 niceness levels below the loop that must stay responsive.
+CPUWeight=200
+
 [Install]
 WantedBy=multi-user.target
