@@ -24,10 +24,17 @@ pst["K"] is pinned to K_MID per case: search() mutates the global for
 bare-king mop-up, and a polluted table changes pos.score enough to
 defuse the delicately balanced witnesses.
 
-Known failures (strict xfail): three natural positions crossing on
-every current build - organic instances of the open sentinel-masking
-channel (KingCapturableReportsExact; a king-capturable child soundly
-cutting off on a partial bound masks the parent's sentinel).
+There are no known failures: KNOWN_OPEN_CHANNEL is empty and all 148
+positions pass.  The three natural sentinel-masking witnesses that used
+to be listed there (a king-capturable child cutting off on a partial
+bound, masking the parent's sentinel) turned out to be futility
+masking, and were closed by making sub-mate futility yields virtual.
+The set and its strict-xfail wiring are kept so that a future witness
+can be pinned without re-deriving the harness.
+
+Also here: a runtime audit of the killer (tp_move) invariants, which
+are load-bearing for the null fast path in bound() but are otherwise
+only modelled formally.
 """
 import sys
 from pathlib import Path
@@ -42,8 +49,9 @@ from tools.uci import render_move  # noqa: E402
 
 BENCH = ROOT / "tools" / "test_files" / "terminal_bench.epd"
 
-# Historical: three natural witnesses of the futility-masking channel
-# (fixed by the kcx virtual-futility change; kept listed for provenance).
+# Empty: the three natural witnesses of the futility-masking channel
+# were fixed by the kcx virtual-futility change.  Kept as the hook for
+# pinning any future witness (strict xfail, so a fix cannot go unnoticed).
 KNOWN_OPEN_CHANNEL = set()
 
 
@@ -125,3 +133,45 @@ def test_terminal_invariants(parts, cls):
         assert lo >= sf.MATE_LOWER - 2000, f"mate-in-1 scored [{lo},{up}]"
     elif cls == "parent-of-stalemate":
         assert up >= -30, f"draw-in-hand scored [{lo},{up}]"
+
+
+def test_killer_invariants_over_corpus():
+    """Runtime audit of the tp_move invariants over the whole corpus.
+
+    bound()'s null fast path reads tp_move as a legality certificate:
+    it decides capturability in O(1) and lets the terminal arm skip its
+    scan.  Three properties carry that, all of them consequences of
+    "tp_move stores only real fail-high winners" - a claim the source
+    comments and the formal event inventory make about the STORE SITE,
+    which is exactly the kind of claim a future second store path would
+    silently break.  So check them on the table an actual run leaves:
+
+      1. KillerLegal-pseudo: the stored move is one gen_moves yields.
+      2. At a king-capturable node the stored move IS the capture
+         (pos.value tops the mate band).
+      3. Otherwise the stored move is legal - playing it does not leave
+         our own king capturable.
+
+    Probes only, no search(): search() repoints the pst["K"] global for
+    bare-king mop-up, which would change pos.score and the mate band
+    under the audit.
+    """
+    sf = load_sunfish()
+    sf.pst["K"] = sf.K_MID
+    s = sf.Searcher()
+    for parts, cls in [(p.values[0], p.values[1]) for p in cases()]:
+        pos = uci.from_fen(parts[0], parts[1], parts[2], parts[3], "0", "1")
+        s.history = set()
+        for d in (0, 2, 4):
+            for g in (pos.score, pos.score + 1, 0, 1):
+                s.bound(pos, g, d)
+
+    audited = 0
+    for pos, move in s.tp_move.items():
+        assert move in set(pos.gen_moves()), (pos.board, move, "not generated")
+        if pos.king_capture() is not None:
+            assert pos.value(move) >= sf.MATE_LOWER, (pos.board, move, "not the capture")
+        else:
+            assert pos.move(move).king_capture() is None, (pos.board, move, "illegal")
+        audited += 1
+    assert audited > 500, audited
