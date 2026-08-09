@@ -513,6 +513,21 @@ class Searcher:
                 elif score >= MATE_LOWER or 0 < score and not proof and all(
                         pos.move(m).king_capture() for m in pos.gen_moves()):
                     score = -MATE_UPPER
+                # Band-edge verification. A sub-band pass REPORT can be a
+                # loose bound on a mate-band pass value, and folding the
+                # declared value's band-excluded term would let this cutoff
+                # outrun it. One probe at the band boundary is decisive both
+                # ways (formal/Sunfish/Stalemate.lean,
+                # boundary_window_decisive): a fail-low says the pass really
+                # wins in the band - vacuous without a capture, so fold
+                # identity - and a fail-high certifies the value sub-band,
+                # which is what lets the cutoff stand with no chess
+                # assumption. This is the last premise the correctness layer
+                # used to carry; assuming it was not open to us, since it is
+                # false in real chess (8/6p1/6R1/k7/2K5/8/8/8 w).
+                elif depth > 2 and self.bound(pos.rotate(nullmove=True),
+                        1 - MATE_LOWER, depth - 3) < 1 - MATE_LOWER:
+                    score = -MATE_UPPER
             best = max(best, score)
             live = live or move is not None and score > -MATE_UPPER
             if best >= gamma:
