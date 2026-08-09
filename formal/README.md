@@ -468,6 +468,71 @@ tactic only, so a full build takes seconds.
   `kingCapture_val_above` (a king capture's value clears `MATE_LOWER`
   even after the worst mover drop), backing `KingCaptureValHigh`.
 
+## The premise inventory (current, one place)
+
+What the shipped search's correctness rests on today, sorted by kind.
+Everything here is either proven, structural, a trusted primitive, or
+explicitly open — there is nothing else.
+
+**Layer 1 — the algorithm (`bound_null_spec`: the search brackets its
+own null-inclusive declared value function).** Premises:
+
+| Premise | Kind | Status |
+|---|---|---|
+| `Bounded` | fidelity (static evals lie in the score band) | `EvalBounds` |
+| `KillerLegal` | invariant | **THEOREM** (`killerLegal_lifecycle`: the whole `tp_move` lifecycle — three store species, eviction, cross-search persistence) |
+| wide-band window `(-MATE_UPPER, MATE_UPPER]` | driver fact | **DISCHARGED** (`driver_wide_is_now_the_range`: every probe, no clamp, no score assumption) |
+| `NoZugzwangInMateBand` | **chess** | the ONE chess statement in layer 1; eliminable at a measured price by PR #162's band-edge arm (`boundary_window_decisive`) |
+
+Nothing else: the probe premise is gone entirely (the in-check test is
+the board predicate `rotate().king_capture()` = `inCheckB`), and the
+pass-search premise dissolved into the recursion's definition.
+
+**Layer 2 — the approximation's accuracy.** `NoZugzwang` (chess:
+"pass-value ≤ best real move") is assumed once, only here, and only to
+equate the null-inclusive value with the real-move value.  The table
+can never depend on it: `d2_no_crossing` / `kcx_no_crossing` are layer-1
+results.
+
+**The production ≡ reference transfer** additionally uses
+`KingCaptureValHigh` (`EvalBounds`) and `CaptureFirst` — itself
+**DISCHARGED** (`captureFirst_of_sorted`) from `MovesSortedByVal` +
+`KingCaptureValHigh` + `HighValIsKingCapture`.
+
+**Fidelity / structural facts** (true of the code by construction; the
+drift guard pins the code regions they describe): `ScoreIdentity`
+(`pos.move` builds the child with the negated summed score — what turns
+`futility_iff_child_standpat` into a statement about stand-pats),
+`MovesSortedByVal` (the one trusted primitive: Python's `sorted`
+sorts), `HighValIsKingCapture` and `KingCaptureValHigh` (`EvalBounds`
+margins), `EvalQuiet` (static evals stay below the mate band outside
+the king-gone zone), `ValFloor` (table floor, used by the sentinel
+argument), `KillerAtKingCapturable` (input to the killer fast path —
+real-table caveat: entries written by other engine versions void it).
+
+**Input validity**: `HistoryLegal` — legal game histories never contain
+king-capturable positions (accepted per Thomas; closes the repetition
+path that precedes the consumer).
+
+**Genuinely open**, in priority order:
+
+1. *Fold `qsStrat` into the recursion* — blocked on modeling futility
+   as a yield species (`stratLeaf_needs_futility` is the machine-checked
+   reason); the last model-vs-code divergence, bounded and
+   sound-weakening.
+2. *Eliminate `NoZugzwangInMateBand`* — the band-edge arm exists and its
+   keystone is proven; what remains is threading the boundary probe
+   through the recursions (PR #162).
+3. *`gen_moves` implements chess* — assigned to the leanpy /
+   lean-surfaces track, not this model.
+
+Retired premises, kept only as records of rejected designs:
+`TerminalPseudoSafe`, `NullAtStalemateNonpositive`, `StandPatAtTerminal`
+(all refuted), `KingCapturableReportsExact` (refuted for the pre-kcx
+loop, restored by construction after it), `NoMaskedMobility` and
+`scanNewB` (the rejected reduced scan), `NullBetQS` / `NullBetD2` (the
+null bet, superseded by the two-layer split), `CheckProbeOK` (deleted).
+
 ## Zero sorries: named hypotheses instead
 
 **`grep -rn sorry formal/Sunfish/*.lean` finds nothing outside prose.**
@@ -834,18 +899,31 @@ abstractions, each with its justification:
   hence the fold's two-way evidence survives
   (`searched_yield_two_way`).  The one futility-bypassing path, the
   killer yield, is a mobility certificate (`KillerLegal`).
-  **Model-vs-code note, stated honestly**: `boundKCX`'s depth-0 leaf in
-  the equivalence chain is still the EXACT-sentinel branch, i.e. now
-  STRONGER than the code, so `production_eq_reference` and
+  **Model-vs-code note, and why the fold is BLOCKED (attempted,
+  reported, not weakened)**: `boundKCX`'s depth-0 leaf in the
+  equivalence chain is still the EXACT-sentinel branch, i.e. stronger
+  than the code, so `production_eq_reference` and
   `kingCapturableReportsExact_restored` describe the reference chain,
-  not the shipped QS leaf; `qsStrat` is the faithful leaf and the
-  stratified contract above is what the shipped consumer satisfies.
-  The divergence is confined to capturable depth-0 nodes whose
-  stand-pat cuts, is sound-weakening (a looser lower bound, never a
-  wrong upper), and was measured at 28 of 197,737 table entries with
-  468/468 identical driver traces.  Folding `qsStrat` into the
-  recursion (and re-running the equivalence against it) is the next
-  step.
+  not the shipped QS leaf; `qsStrat` is the faithful leaf and
+  `kingCaptureContract_stratified` is what the shipped consumer
+  satisfies.  Substituting `qsStrat` into the recursion is sound in
+  VALUE everywhere the engine goes — the futility yield's value IS the
+  child's stand-pat value — but it breaks the model's ENCODING of the
+  `live` bit as `S = LOSS`, which is faithful only while depth-0
+  reports at capturable children are exactly `-MATE_UPPER`.
+  `stratLeaf_needs_futility` machine-checks the resulting hole: a
+  depth-1 TERMINAL node whose child's stand-pat cuts folds to `-100`
+  where the declared value is the exact draw `0`, because the gate
+  cannot fire.  The engine is unaffected (futility prunes exactly that
+  child, so it is yielded virtually and `live` stays false).  The fix
+  is a model change, not a lemma: the depth-1 layer must route
+  futility-estimated children into the virtual accumulator `n` and fold
+  only the searched ones into `S`.  Worked out for that design: the
+  DECLARED function need not change and stays gamma-free, since a
+  futile child's true value is the sentinel, which is the fold
+  identity.  Until then the divergence is confined to capturable
+  depth-0 nodes whose stand-pat cuts, is sound-weakening, and matches
+  the measured 28 of 197,737 entries with 468/468 identical traces.
 - **The driver-range finding**- **The driver-range finding** (`Sunfish/Driver.lean`): "MTD-bi only
   probes `(-MATE_LOWER, MATE_LOWER]`" — asserted by this README and
   the code comment — is TRUE for every window computed at the current
@@ -869,16 +947,25 @@ abstractions, each with its justification:
   probe window (carried ones included) lies in
   `(1 - MATE_UPPER, MATE_UPPER]`, unconditionally.  The clamp lemmas
   and `carried_gamma_escapes_band` are historical.
-  **Consequence to fix next**: the layered theorems' hypothesis is the
-  NARROW band `(-MATE_LOWER, MATE_LOWER]`, which the driver no longer
-  guarantees.  The shipped code is fine — its interception is gated on
-  `score >= gamma`, so a fail-LOW mate-band pass report is folded raw
-  and never suppressed — but the REFERENCE model's `useD2` still
-  suppresses band-valued yields regardless of direction, which only
-  coincides with the code inside the narrow band.  The fix is to gate
-  the reference model's suppression on fail-high too (matching the
-  code), after which the layered specs should restate at the wide band
-  and the in-band premise becomes driver-discharged again.
+  **Now closed — and note which side moved: the MODEL, not the code.**
+  The shipped interception was already gated on `score >= gamma`, so a
+  fail-LOW mate-band pass report has always been folded raw; it was the
+  reference model's `useD2` that suppressed band-valued yields in both
+  directions, which only coincided with the code inside the narrow
+  band.  `useD2` is now gated on fail-high too (`gamma ≤ nv → nv <
+  MATE_LOWER`), matching the code, and the layered specs
+  (`bound_null_spec`, `boundD2_spec`, `d2_no_crossing`,
+  `production_eq_reference`, `boundKCX_*`, `kcx_no_crossing`) are
+  restated at the WIDE band `(-MATE_UPPER, MATE_UPPER]`.  Since
+  `driver_wide_is_now_the_range` puts every driver window in
+  `(1 - MATE_UPPER, MATE_UPPER]`, the in-band hypothesis is once again
+  discharged for every probe, with no clamp and no assumption on
+  scores.  Two proof steps had to learn the wide band: the disabled-
+  option case now extracts BOTH facts from the re-gated `useD2` (a
+  false gate means a fail-HIGH band report, and the integer flip pins
+  the pass call as a fail-low at its own window), and the null part is
+  bounded strictly below the sentinel by suppression on a fail-high and
+  by the window on a fail-low.
 - **Sentinel exactness is now construction, not idealization**: the
   model's king-capture branch (exact `MATE_UPPER` at every window and
   depth) is the reference's eager entry scan verbatim, and production
