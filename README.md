@@ -6,6 +6,8 @@ Yet [it plays at ratings above 2000 at Lichess](https://lichess.org/@/sunfish-en
 
 Because Sunfish is small and strives to be simple, the code provides a great platform for experimenting. People have used it for testing parallel search algorithms, experimenting with evaluation functions, and developing deep learning chess programs. Fork it today and see what you can do!
 
+The name Sunfish refers to the [Pygmy Sunfish](http://en.wikipedia.org/wiki/Pygmy_sunfish), which is among the very few fish to start with the letters 'Py'. The use of a fish is in the spirit of great engines such as Stockfish, Zappa and Rybka. In terms of Heritage, Sunfish borrows much more from [Micro-Max by Geert Muller](http://home.hccnet.nl/h.g.muller/max-src2.html) and [PyChess](http://pychess.org).
+
 # Play against sunfish!
 
 The simplest way to run sunfish is through the "fancy" terminal interface:
@@ -138,12 +140,6 @@ An easy way to get a strong Sunfish is to run with the [PyPy Just-In-Time interp
        3 python3.7               -97      36     300   36.3%   20.7%
        4 python2.7              -109      35     300   34.8%   24.3%
 
-
-# Why Sunfish?
-
-The name Sunfish actually refers to the [Pygmy Sunfish](http://en.wikipedia.org/wiki/Pygmy_sunfish), which is among the very few fish to start with the letters 'Py'. The use of a fish is in the spirit of great engines such as Stockfish, Zappa and Rybka.
-
-In terms of Heritage, Sunfish borrows much more from [Micro-Max by Geert Muller](http://home.hccnet.nl/h.g.muller/max-src2.html) and [PyChess](http://pychess.org).
 
 # Family
 
