@@ -73,6 +73,12 @@ p.add_argument("--tailw", type=int, default=0,
                help="width of the odd-symmetrized narrow tail over "
                     "[d, h, f] (0 = plain linear read-out d + u.h).  "
                     "Never a second wide layer")
+p.add_argument("--phase", type=int, default=0,
+               help="material-phase output buckets: the net residual is "
+                    "scaled by a learned per-bucket scalar s_b, bucket = "
+                    "(piece_count-1)*phase//32.  Piece count is swap-"
+                    "invariant so antisymmetry is untouched; engine cost "
+                    "is one small multiply in nn_cp.  0 = off")
 p.add_argument("--factor", type=int, default=1,
                help="train with virtual per-piece-type features (folded into "
                     "the real table at export; helps generalisation, free at "
@@ -284,7 +290,7 @@ class Net(nn.Module):
     its OWN king's bucket).
     """
 
-    def __init__(self, N, factor, B, nb=0, m=4, tailw=0):
+    def __init__(self, N, factor, B, nb=0, m=4, tailw=0, phase=0):
         super().__init__()
         self.B = B
         self.raw = nn.Parameter(torch.randn(B * 768, N) * 0.05)
@@ -295,7 +301,9 @@ class Net(nn.Module):
         # ---- dedicated bilinear lanes (packed: extra 2*nb lanes, group =
         # lane index mod m; one cropped square per perspective block reads
         # out conv(A,A) and conv(B,B) via the mod 2^(16m)-1 fold)
-        self.nb, self.m, self.tailw = nb, m, tailw
+        self.nb, self.m, self.tailw, self.phase = nb, m, tailw, phase
+        if phase:
+            self.s = nn.Parameter(torch.ones(phase))  # per-bucket residual scale
         if nb:
             assert B == 1, "bilinear prototype is bucket-free; combine only " \
                            "after both pass their val gates"
@@ -360,10 +368,14 @@ class Net(nn.Module):
                 zn = torch.cat([-d.unsqueeze(-1) / 300.0, -h / 100.0, f / 100.0], -1)
                 t = self.t2(torch.tanh(self.t1(zp))) - self.t2(torch.tanh(self.t1(zn)))
                 d = d + 150.0 * t.squeeze(-1)   # odd-symmetrized: exact antisymmetry
+        if self.phase:
+            cnt = torch.diff(fo, append=fi.new_tensor([fi.shape[0]]))
+            pb = ((cnt - 1) * self.phase // 32).clamp(0, self.phase - 1)
+            d = d * self.s[pb]                  # piece count is swap-invariant
         return ps + d.clamp(-CLAMP, CLAMP)
 
 
-model = Net(N, args.factor, args.kb, args.nb, args.bm, args.tailw)
+model = Net(N, args.factor, args.kb, args.nb, args.bm, args.tailw, args.phase)
 opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-5)
 sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
 
@@ -399,13 +411,15 @@ def export(path):
         E = model.weight().detach()                        # (B*768, N)
         b = model.bias.detach().tolist()
         v = model.v.detach().tolist()
+        phs = ({"phase": args.phase, "phase_s": model.s.detach().tolist()}
+               if args.phase else {})
         if args.kb > 1:
             # float-only export: the packed kb build is engine-side work
             # that the val loss has to earn first
             pnet.save(path, {"kind": "float-kb", "B": args.kb, "N": N,
                              "E": E.tolist(), "bias": b, "v": v,
                              "clampcp": args.clampcp, "segs": SEGS,
-                             "train": vars(args)})
+                             "train": vars(args), **phs})
             return 0, 0.0, sum(abs(x) for x in v), {"excursion": 0}
         if args.nb:
             # float-only export, same rule: the packed bilinear build (extra
@@ -422,7 +436,15 @@ def export(path):
                 d["tail"] = {n_: q.detach().tolist() for n_, q in
                              (("t1w", model.t1.weight), ("t1b", model.t1.bias),
                               ("t2w", model.t2.weight), ("t2b", model.t2.bias))}
+            d.update(phs)
             pnet.save(path, d)
+            return 0, 0.0, sum(abs(x) for x in v), {"excursion": 0}
+        if args.phase:
+            # float-only too: nn_cp gains a per-bucket multiply the engine
+            # does not implement yet
+            pnet.save(path, {"kind": "float-phase", "N": N, "E": E.tolist(),
+                             "bias": b, "v": v, "clampcp": args.clampcp,
+                             "segs": SEGS, "train": vars(args), **phs})
             return 0, 0.0, sum(abs(x) for x in v), {"excursion": 0}
         W = [{c: [0.0] * 120 for c in PIECES} for _ in range(N)]
         for c in PIECES:
