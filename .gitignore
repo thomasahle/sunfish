@@ -58,3 +58,6 @@ profile.pstats
 # Vim
 *.swp
 .claude/
+tests/_sunfish_probe.py
+config.json
+polyglot.log

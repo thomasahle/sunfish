@@ -84,8 +84,18 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
     # elapsed and the nps division crashed the search thread (found by the
     # Windows CI smoke job).
     start = time.perf_counter()
-    best_move = None
+    # best_move is COMMITTED only when a depth completes (its MTD bracket
+    # converged): a mid-depth fail-high can come from a deep fail-low
+    # probe at an absurd gamma and is only a candidate. Before in-search
+    # deadlines existed every stop fell between depths, so the last
+    # fail-high was always from a completed depth and this distinction
+    # was invisible; the deadline made mid-depth stops - and the Qxc6
+    # class of giveaways - possible.
+    best_move = cand = None
+    last_depth = 1
     for depth, gamma, score, move in stop_softly(searcher, searcher.search(hist)):
+        if depth > last_depth:
+            best_move, last_depth = cand or best_move, depth
         # Our max_depth implementation is a bit wasteful.
         # We never know when we've seen the last at a certain depth
         # before we get to the next one
@@ -100,7 +110,7 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
         }
         if score >= gamma:
             fields["score cp"] = f"{score} lowerbound"
-            best_move = render_move(move, white_pov=len(hist) % 2 == 1)
+            cand = render_move(move, white_pov=len(hist) % 2 == 1)
             fields["pv"] = " ".join(pv(searcher, hist[-1], include_scores=False))
         else:
             fields["score cp"] = f"{score} upperbound"
@@ -117,15 +127,17 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
     # go-loop before we got stop_event. Unfortunately we currently don't know if
     # we are in "go infinite" since it's simply translated to "go depth 100".
 
+    # Play the committed move (last completed depth); fall back to the
+    # current depth's candidate only if no depth ever completed. The pv
+    # walk is used for the ponder hint only when it agrees with what we
+    # actually play - tp_move[root] can hold a mid-dive artifact.
+    played = best_move or cand
     my_pv = pv(searcher, hist[-1], include_scores=False)
-    if len(my_pv) > 1:
+    if played and len(my_pv) > 1 and my_pv[0] == played:
         # Suggest the expected reply for the GUI to let us ponder on
-        print("bestmove", my_pv[0], "ponder", my_pv[1])
+        print("bestmove", played, "ponder", my_pv[1])
     else:
-        # The root's tp_move entry may have been evicted by the table cap
-        # during a long search; best_move remembers the last fail-high, and
-        # answering (none) would forfeit the game.
-        print("bestmove", my_pv[0] if my_pv else (best_move or "(none)"))
+        print("bestmove", played or (my_pv[0] if my_pv else "(none)"))
 
 
 def mate_loop(

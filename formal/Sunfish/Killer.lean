@@ -3,7 +3,8 @@ KillerIsKingCapture: the killer-cutoff exception is provably impossible.
 
 `Sunfish/Stalemate.lean` (module comment, point 2) records a potential gap
 in sunfish: the killer move is yielded before the sorted moves (sunfish.py
-lines 356-357), so a non-capture killer that fails high would let `bound`
+the killer yield, sunfish.py lines 422-423), so a non-capture killer that
+fails high would let `bound`
 return a value `< MATE_UPPER` at a king-capturable position, breaking the
 sentinel requirement of lines 398-401.  This file upgrades that exception
 from "empirically absent" to impossible:
@@ -29,7 +30,8 @@ search (`boundKill`).  The load-bearing hypotheses:
     `pos.value ≥ MATE_LOWER`, strictly above every other move, so they
     sort first.  We model the consequence directly: the loop runs over
     `orderedMoves`, king captures first;
-(c) the killer is POSITION-KEYED (`tp_move.get(pos)`, line 339).  This is
+(c) the killer is POSITION-KEYED (`tp_move.get(pos)`, the killer read at
+sunfish.py line 391).  This is
     what makes the induction go through: every store into `tp_move[p]`
     happens inside a call at `p` itself.  A ply-indexed killer table
     shared across positions of the same depth would break the invariant --
@@ -52,7 +54,8 @@ the proof architecture); the null-move residual exception is stated as its
 own named condition `NullGuardBlocksAtCaptures` below.
 
 Audit note (exactness): sunfish gates the killer yield by
-`pos.value(killer) >= val_lower` (line 366).  The gate is not modeled
+`pos.value(killer) >= val_lower` (the killer val-gate, sunfish.py line
+422).  The gate is not modeled
 here; it CANNOT affect `boundKill_spec`, because the load-bearing killer
 is a king capture with `val ≥ MATE_LOWER = 47923`, far above every
 `val_lower = QS - depth * QS_A ≤ 40` -- a king-capture killer always
@@ -162,7 +165,8 @@ def killLoop (G : Game) [DecidableEq G.Pos] (gamma : Int)
 /-- `bound` with the killer heuristic, threading `tp_move`:
 
 * line 302-303: king gone -> `-MATE_UPPER`, no store;
-* line 339 + 356-357: try the position-keyed killer first; on a fail-high
+* the killer read (line 391) + the killer yield (lines 422-423): try the
+  position-keyed killer first; on a fail-high
   cutoff store it back (lines 382-387) -- on a fail low, continue into the
   sorted loop with `best` updated by the killer's score;
 * line 360 + 376-387: the ordered loop with store-on-cutoff.

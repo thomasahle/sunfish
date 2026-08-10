@@ -50,6 +50,12 @@ fastchess \
    Sunfish is deterministic: without varied openings, every game pair is the
    same two games repeated N times, and the error bars fastchess prints become
    fiction. Random order + paired colors gives valid pentanomial statistics.
+   **The book must have at least as many positions as the match has rounds**
+   (rounds = games/2), or fastchess cycles it and repeated openings quietly
+   shrink the effective sample. The 99-position fastchess test book is too
+   small for 150+ round matches; use a 2000+ position book (e.g. sampled
+   from the lichess eval dump: early-middlegame, both queens on, ≥26 men,
+   |eval| ≤ 80cp, deduplicated by the first four FEN fields).
 
 4. **Size the match to the effect you are hunting.**
    ~300 games at fast TC gives roughly ±30 ELO (95%). That detects blunders,
@@ -67,11 +73,14 @@ fastchess \
    directly at a long TC (drive the engine over a scripted game and assert
    the budget is actually reached mid-game).
 
-6. **Time control: short but with an increment.**
-   Sunfish is slow; sudden-death blitz makes every game a timeout lottery.
-   `tc=4+0.04` works well for regression tests; use longer (e.g. `tc=10+0.1`)
-   when the change affects time management or pondering. A handful of time
-   losses over hundreds of games is normal; dozens mean the TC is too fast.
+6. **Time control: 30+1 minimum for anything decision-grade.**
+   Sunfish is slow; sudden-death blitz makes every game a timeout lottery,
+   and very fast TCs measure interpreter overhead as much as chess (two
+   changes on record flipped sign between fast TC and 60+1). `tc=4+0.04`
+   is for regression tests and lockstep sanity only. Any match whose
+   result feeds a merge/decline decision runs at `tc=30+1` or slower;
+   final confirmation of a winner stays at 60+1. A handful of time losses
+   over hundreds of games is normal; dozens mean the TC is too fast.
 
 7. **Adjudicate finished games** (`-draw`/`-resign` flags above) — sunfish has
    no resign logic and weak endgames, so unadjudicated games drag on and waste
@@ -180,3 +189,80 @@ doubles CPU demand per game, which is why it was a net *loss* on a
 burst-credit cloud VM: the credits drained mid-game, the engine was throttled,
 and a deadline-less ponder search starved the bot process into a time
 forfeit. Ponder on hardware with a core to spare, not on an e2-micro.
+
+## KCX landing evidence (2026-08)
+
+Reproducible benchmarks recorded outside CI gates. CI enforces the semantic
+tests (`tests/test_tt_consistency.py`, `tests/test_terminal_bench.py`), the
+mate/stalemate floors, and the model-audit drift guard; the numbers below are
+hardware- and version-sensitive and are documentation, not gates.
+
+- **Behavioral**: bound-level equivalence with the proof-first reference
+  implementation (an eager king-capture guard at node entry) over 9,600 probes
+  — 65 positions x depths 0-4 x an 8-gamma ladder x both probe orders x cold
+  and warm tables: **zero value mismatches**.
+- **Invariant**: the king-capture contract is **stratified by depth** — at
+  depth 0 a capturable node must FAIL HIGH, at depth >= 1 it must report
+  MATE_UPPER exactly. Contract sweep over 250 generated king-capturable
+  positions x 23 gammas x depths 0-3, cold and warm — 91,952 probes, **zero
+  violations**: every depth-0 return >= gamma, every depth >= 1 return exactly
+  MATE_UPPER. (The earlier 9,600-probe sweep over 200 positions asserted
+  exactness at every depth; that is the pre-stratification claim and no longer
+  describes the shipped depth-0 code.) A compact both-halves version of this
+  runs in ordinary CI: `test_qs_stratified_contract`.
+- **Legality oracle**: `Position.king_capture()` agrees with python-chess on
+  500/500 generated positions. In CI, `test_legality_oracle_vs_python_chess`
+  asserts the board predicate directly (the search probe is kept as a
+  secondary assertion), and `test_king_capture_special_rules` pins 19
+  deterministic special-rule cases — castling through / into / out of check
+  (the `kp` rule), en passant uncovering a rook or a bishop, pins,
+  king-next-to-king, promotion captures. The castling cases matter: python-
+  chess does not consider an illegal castling even *pseudo*-legal, so the
+  playout-based differential test skips them and can never reach `kp`.
+- **Killer invariants**: `test_killer_invariants_over_corpus` audits the
+  8,653 `tp_move` entries a probe sweep over the 148-position bench leaves
+  (5,086 of them at king-capturable nodes) for the three properties the null
+  fast path reads them as: the stored move is generated, at a capturable node
+  it IS the capture, and otherwise it is legal.
+- **Consistency**: ladder and full-driver crossing scans over 35+ positions,
+  **0 crossed table entries** (master: 28 driver / 35 ladder on the same set).
+- **Suites**: terminal bench 148/148 (master 130); stalemate2 17/130, floor
+  raised 13 -> 17; mate1 8/8, mate2 20/20, mate3 5/5.
+- **Cost**: +5.3% wall on a 32-position depth-5 battery. Note the node count
+  reads 99.6% of master, which is *not* a cost saving: the legality oracle is
+  now a board predicate rather than a depth-0 search, so its work no longer
+  increments the node counter. When a change moves work between counted and
+  uncounted code, wall time is the only honest measure — see rule 12.
+- **Elo**: -10.4 +/- 28.7 over 300 games at 60+1, zero time losses (114W-123L
+  -63D). Measured on the kcx production build *before* the subsequent golf,
+  full-scan revert, board-predicate and driver-bracket commits; those were
+  validated as value-identical by the equivalence battery above rather than by
+  a fresh match.
+- **Rejected alternative**: a "licensed null" prototype (require mobility
+  before admitting any virtual option — structurally equivalent guarantees)
+  measured +3.6% nodes and **-27.9 +/- 33.2 Elo** over 200 games at 60+1
+  (71W-87L-42D, zero time losses): dominated, not landed.
+- **Rejected micro-optimisation**: moving `killer = self.tp_move.get(pos)`
+  below the null and stand-pat yields in `moves()`, so a stand-pat cutoff pays
+  for no hash lookup. Looks free — neither virtual yield reads it — but it is
+  **not behaviour-preserving**. `tp_move` is keyed by position alone (not by
+  `(pos, depth)`), and QS below the null is not ply-limited, so the null
+  subtree can transpose back to the same board with the same side to move and
+  store a killer at this key; and once `tp_move` reaches `TABLE_SIZE` it can
+  evict the key instead. Instrumented discriminator reading at both sites over
+  a 4.76M-node battery to depth 10: **10 disagreements in 3,015,876 reads**
+  (9 of them `None` -> a move, i.e. a store, not an eviction). Deep driver
+  equivalence on the same battery: every depth/gamma/score/move line
+  identical, node counts differ on **2 of 25** positions. One dict lookup on a
+  stand-pat cutoff does not buy a behaviour change: not landed. The reasoning
+  is recorded in a comment at the read site so it is not re-proposed.
+- **Rejected micro-optimisation**: caching the terminal scan with a walrus
+  (`dead := all(pos.move(m).king_capture() ...)`) so a positive null fail-high
+  does not rescan in the correction. Instrumented census: on a 48-position
+  depth-5 battery (614,499 nodes) the fold scan ran **13** times, returned
+  true **0** times, and the walrus would have saved **0** of 8,786 correction
+  scans; on the whole terminal bench under ladders + drivers (727,717 nodes)
+  it would have saved **4** of **43,006** (0.009%). Wall time on the latter,
+  best of two interleaved runs: 14.81s plain vs 14.88s walrus — noise. A
+  variable in the densest part of the patch for a saving that does not exist:
+  not landed.
