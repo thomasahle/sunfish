@@ -50,6 +50,12 @@ fastchess \
    Sunfish is deterministic: without varied openings, every game pair is the
    same two games repeated N times, and the error bars fastchess prints become
    fiction. Random order + paired colors gives valid pentanomial statistics.
+   **The book must have at least as many positions as the match has rounds**
+   (rounds = games/2), or fastchess cycles it and repeated openings quietly
+   shrink the effective sample. The 99-position fastchess test book is too
+   small for 150+ round matches; use a 2000+ position book (e.g. sampled
+   from the lichess eval dump: early-middlegame, both queens on, ≥26 men,
+   |eval| ≤ 80cp, deduplicated by the first four FEN fields).
 
 4. **Size the match to the effect you are hunting.**
    ~300 games at fast TC gives roughly ±30 ELO (95%). That detects blunders,
