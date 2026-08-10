@@ -318,6 +318,45 @@ tactic only, so a full build takes seconds.
       (the `max rn best_real` restructuring equals the code's single
       running `best`).
 
+- **`Sunfish/Liveness.lean`** — the development's first LIVENESS
+  theorem: **mate-in-k completeness**.  Everything above is safety
+  (the search never over-claims); this file proves the engine also
+  FINDS what is there.  `ForcedMate G k p` is the spec ("forced mate
+  in ≤ k plies", king-capture vocabulary: a legal move reaching an
+  oracle-terminal in-check position — `allIllegalB` ∧ `inCheckB`,
+  exactly `terminalValue`'s mate arm — or a legal move, to a
+  non-terminal position, all of whose LEGAL defender replies hand back
+  a forced mate two plies shorter; an ILLEGAL reply is refuted by the
+  sentinel branch, so the spec deliberately does not quantify over it,
+  and "legal" on both sides is "does not leave the mover's own king
+  capturable").  Proven sorry-free:
+  - **`forcedMate_negamaxD2`** (the spine, real-move layer):
+    `ForcedMate G k p` puts `negamaxD2` in the mate band
+    (`MATE_LOWER ≤`) at EVERY depth `D ≥ k + 1` — one ply better than
+    the `k + 2` first planned, because the checkmated leaf needs only
+    remaining depth 1 for its terminal branch.  Premise: `ValFloor G
+    192` alone (fidelity, tables) — the QS filter provably keeps every
+    attacker move at remaining depth ≥ 2 (`mem_movesAbove_of_floor`,
+    the liveness respend of `tables_kill_filter_at_depth2`'s
+    arithmetic); the defender side needs no floor at all, since
+    filtering a defender reply only shrinks the defender's fold.
+  - **`forcedlyMated_negamaxD2`** — the mated-side dual
+    (value ≤ `-MATE_LOWER` at `D ≥ k + 2`, at any node reached by a
+    legal attacker move): a corollary of the spine, not a second
+    induction.
+  - **`forcedMate_complete`** — the transfer through
+    `nullValue_eq_realValue_of_noZugzwang`: under `NoZugzwang` the
+    DECLARED value `nullValueD2` — the function `bound_null_spec`
+    brackets with no chess premise — is in the band too.
+  - **`forcedMate_probe_failsHigh`** (+ `_kcx`, the production
+    consumer) — the driver corollary: with a mate in reach of the
+    depth, NO driver-range window at or below `MATE_LOWER` can fail
+    low, so every bisection probe below the band fails high and the
+    MTD-bi bracket is forced into the band: the engine REPORTS the
+    mate.  (These two compose with `bound_null_spec` /
+    `boundKCX_null_spec` and inherit their `Classical.choice`; the
+    spine, dual and transfer are `propext`/`Quot.sound` only.)
+
 - **`Sunfish/Killer.lean`** — **KillerIsKingCapture**, proven sorry-free
   (`boundKill_spec`): threading `tp_move` through the search as state
   (position-keyed, store-on-fail-high-only, sunfish.py lines 373, 388–389,
@@ -491,11 +530,29 @@ band premise is now discharged by the band-edge probe.  **Layer 1 —
 everything about the algorithm, including table non-crossing — is
 therefore free of chess assumptions.**
 
-**Layer 2 — the approximation's accuracy.** `NoZugzwang` (chess:
-"pass-value ≤ best real move") is assumed once, only here, and only to
-equate the null-inclusive value with the real-move value.  The table
-can never depend on it: `d2_no_crossing` / `kcx_no_crossing` are layer-1
-results.
+**Layer 2 — the approximation's accuracy and completeness.**
+`NoZugzwang` (chess: "pass-value ≤ best real move") is stated once and
+assumed only in layer 2, where it now has TWO consumers: accuracy
+(`nullValue_eq_realValue_of_noZugzwang` — the null-inclusive value
+equals the real-move value) and completeness (the liveness subsection
+below).  The table can never depend on it: `d2_no_crossing` /
+`kcx_no_crossing` are layer-1 results.
+
+**Liveness (mate-in-k completeness, `Sunfish/Liveness.lean`).**
+`forcedMate_complete`: a forced mate in ≤ k plies (`ForcedMate`, the
+spec in king-capture vocabulary) puts the declared value `nullValueD2`
+in the mate band at every depth `D ≥ k + 1`, and hence no driver-range
+probe at a window ≤ `MATE_LOWER` can fail low
+(`forcedMate_probe_failsHigh` / `_kcx`).  Premises: the real-move
+spine (`forcedMate_negamaxD2`) consumes only the fidelity-class
+`ValFloor G 192`; the transfer consumes `NoZugzwang` — its second
+consumer, both layer 2.  Layer 1 and table consistency still consume
+no chess statement.  Recorded design option, NOT implemented: a
+depth-decaying null guard (`abs(score) < 500 - 10*depth`) would switch
+the pass off at large remaining depth and make completeness
+unconditional (no `NoZugzwang`) at `D ≥ k + 52` — a code change,
+deliberately not made; Thomas's decision was to give the existing
+layer-2 assumption the extra exercise instead.
 
 **The production ≡ reference transfer** additionally uses
 `KingCaptureValHigh` (`EvalBounds`) and `CaptureFirst` — itself
