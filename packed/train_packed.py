@@ -305,8 +305,9 @@ class Net(nn.Module):
         if phase:
             self.s = nn.Parameter(torch.ones(phase))  # per-bucket residual scale
         if nb:
-            assert B == 1, "bilinear prototype is bucket-free; combine only " \
-                           "after both pass their val gates"
+            # bilinear lanes are bucket-FREE even when B > 1: their rows are
+            # identical across bucket tables, so king-bucket rebuilds cost
+            # nothing extra and the feature stays a pure second-order add-on
             self.rawb = nn.Parameter(torch.randn(768, nb) * 0.05)
             self.biasb = nn.Parameter(torch.zeros(nb) + 0.1)
             self.gb = nn.Parameter(torch.ones(nb))    # lane gains, |.| at use
@@ -353,8 +354,10 @@ class Net(nn.Module):
         at = act(nn.functional.embedding_bag(mi, E, fo, mode="sum") + self.bias)
         d = ((au - at) * self.v).sum(-1)
         if self.nb:
-            bu = act(nn.functional.embedding_bag(fi, self.rawb, fo, mode="sum") + self.biasb)
-            bt = act(nn.functional.embedding_bag(mi, self.rawb, fo, mode="sum") + self.biasb)
+            # strip king-bucket offsets: bilinear rows are bucket-free
+            fib, mib = (fi % 768, mi % 768) if self.B > 1 else (fi, mi)
+            bu = act(nn.functional.embedding_bag(fib, self.rawb, fo, mode="sum") + self.biasb)
+            bt = act(nn.functional.embedding_bag(mib, self.rawb, fo, mode="sum") + self.biasb)
             g = self.gb.abs()
             A = torch.zeros(bu.shape[0], self.m).index_add_(1, self.gidx, bu * g)
             B = torch.zeros(bu.shape[0], self.m).index_add_(1, self.gidx, bt * g)
@@ -413,38 +416,26 @@ def export(path):
         v = model.v.detach().tolist()
         phs = ({"phase": args.phase, "phase_s": model.s.detach().tolist()}
                if args.phase else {})
-        if args.kb > 1:
-            # float-only export: the packed kb build is engine-side work
-            # that the val loss has to earn first
-            pnet.save(path, {"kind": "float-kb", "B": args.kb, "N": N,
+        bil = {}
+        if args.nb:
+            bil = {"nb": args.nb, "m": args.bm,
+                   "Eb": model.rawb.detach().tolist(),
+                   "biasb": model.biasb.detach().tolist(),
+                   "gb": model.gb.detach().abs().tolist(),
+                   "u": model.u.detach().tolist()}
+            if args.tailw:
+                bil["tail"] = {n_: q.detach().tolist() for n_, q in
+                               (("t1w", model.t1.weight), ("t1b", model.t1.bias),
+                                ("t2w", model.t2.weight), ("t2b", model.t2.bias))}
+        if args.kb > 1 or args.nb or args.phase:
+            # float-only export, one rule for every extension: the packed
+            # build is engine-side work that the val loss has to earn first
+            kind = "float-kb" if args.kb > 1 else (
+                "float-bil" if args.nb else "float-phase")
+            pnet.save(path, {"kind": kind, "B": args.kb, "N": N,
                              "E": E.tolist(), "bias": b, "v": v,
                              "clampcp": args.clampcp, "segs": SEGS,
-                             "train": vars(args), **phs})
-            return 0, 0.0, sum(abs(x) for x in v), {"excursion": 0}
-        if args.nb:
-            # float-only export, same rule: the packed bilinear build (extra
-            # lanes + cropped squares + mod 2^(16m)-1 fold) is engine-side
-            # work that the val loss has to earn first
-            d = {"kind": "float-bil", "N": N, "nb": args.nb, "m": args.bm,
-                 "E": E.tolist(), "bias": b, "v": v,
-                 "Eb": model.rawb.detach().tolist(),
-                 "biasb": model.biasb.detach().tolist(),
-                 "gb": model.gb.detach().abs().tolist(),
-                 "u": model.u.detach().tolist(),
-                 "clampcp": args.clampcp, "segs": SEGS, "train": vars(args)}
-            if args.tailw:
-                d["tail"] = {n_: q.detach().tolist() for n_, q in
-                             (("t1w", model.t1.weight), ("t1b", model.t1.bias),
-                              ("t2w", model.t2.weight), ("t2b", model.t2.bias))}
-            d.update(phs)
-            pnet.save(path, d)
-            return 0, 0.0, sum(abs(x) for x in v), {"excursion": 0}
-        if args.phase:
-            # float-only too: nn_cp gains a per-bucket multiply the engine
-            # does not implement yet
-            pnet.save(path, {"kind": "float-phase", "N": N, "E": E.tolist(),
-                             "bias": b, "v": v, "clampcp": args.clampcp,
-                             "segs": SEGS, "train": vars(args), **phs})
+                             "train": vars(args), **bil, **phs})
             return 0, 0.0, sum(abs(x) for x in v), {"excursion": 0}
         W = [{c: [0.0] * 120 for c in PIECES} for _ in range(N)]
         for c in PIECES:
