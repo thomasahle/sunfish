@@ -49,6 +49,13 @@ p.add_argument("--wclip", type=float, default=1.0)
 p.add_argument("--segs", type=int, default=1,
                help="activation segments: 1 = clipped ReLU, 3 ~ squared clipped ReLU")
 p.add_argument("--quiet", type=int, default=1)
+p.add_argument("--kb", type=int, default=1,
+               help="own-king buckets per perspective (HalfKP-lite).  1 = "
+                    "plain 768 features and packed export; >1 trains "
+                    "bucket-conditioned first-layer rows and exports FLOAT "
+                    "weights only (packed export for kb nets is a separate, "
+                    "engine-side step -- do not build it before the val loss "
+                    "has earned it)")
 p.add_argument("--factor", type=int, default=1,
                help="train with virtual per-piece-type features (folded into "
                     "the real table at export; helps generalisation, free at "
@@ -93,8 +100,13 @@ def fen_to_board120(fen_board):
 
 
 def parse_lines(lines):
-    """One worker's share: JSON lines -> (feats, lens, pstc, y) arrays."""
+    """One worker's share: JSON lines -> (feats, lens, pstc, y, kb) arrays.
+
+    kb packs both king buckets as 4*kb(white) + kb(black), each side's
+    bucket taken from its OWN frame (the board here is already normalised
+    to white-to-move)."""
     FEATS, LENS, PSTC, Y = array("i"), array("i"), array("i"), array("i")
+    KB = array("b")
     for line in lines:
         d = json.loads(line)
         fen = d["fen"].split()
@@ -122,13 +134,16 @@ def parse_lines(lines):
         LENS.append(n)
         PSTC.append(ps)
         Y.append(cp)
-    return FEATS, LENS, PSTC, Y
+        KB.append(4 * pnet.kbucket(board.index("K"))
+                  + pnet.kbucket(119 - board.index("k")))
+    return FEATS, LENS, PSTC, Y, KB
 
 
 def parse(path, limit, workers=0):
     proc = subprocess.Popen(["zstd", "-d", "-c", path], stdout=subprocess.PIPE,
                             stderr=subprocess.DEVNULL, text=True)
     FEATS, OFFS, PSTC, Y = array("i"), array("i"), array("i"), array("i")
+    KB = array("b")
     off = 0
 
     def chunks():
@@ -140,13 +155,14 @@ def parse(path, limit, workers=0):
 
     def gather(parts):
         nonlocal off
-        for f, l, ps, y in parts:
+        for f, l, ps, y, kb in parts:
             FEATS.extend(f)
             for n in l:
                 OFFS.append(off)
                 off += n
             PSTC.extend(ps)
             Y.extend(y)
+            KB.extend(kb)
             if len(Y) % 1_000_000 < len(y):
                 print("  ...%dM positions" % (len(Y) // 1_000_000), flush=True)
             if len(Y) >= limit:
@@ -163,28 +179,37 @@ def parse(path, limit, workers=0):
             if gather(pool.imap(parse_lines, chunks())):
                 pool.terminate()
     proc.kill()
-    return FEATS, OFFS, PSTC, Y
+    return FEATS, OFFS, PSTC, Y, KB
 
 
 t0 = time.time()
 if args.cache and os.path.exists(args.cache):
     with open(args.cache, "rb") as f:
-        FEATS, OFFS, PSTC, Y = pickle.load(f)
+        loaded = pickle.load(f)
+    if len(loaded) == 5:
+        FEATS, OFFS, PSTC, Y, KB = loaded
+    elif args.kb == 1:               # pre-king-bucket cache: buckets unused
+        (FEATS, OFFS, PSTC, Y), KB = loaded, array("b", bytes(len(loaded[3])))
+    else:
+        raise ValueError("%s is a pre-king-bucket cache; re-parse the dump "
+                         "(delete the cache) to train with --kb > 1" % args.cache)
     print("loaded %d cached positions in %.0fs" % (len(Y), time.time() - t0), flush=True)
 else:
     print("parsing data...", flush=True)
-    FEATS, OFFS, PSTC, Y = parse(args.data, args.limit, args.workers)
+    FEATS, OFFS, PSTC, Y, KB = parse(args.data, args.limit, args.workers)
     print("%d positions in %.0fs" % (len(Y), time.time() - t0), flush=True)
     if args.cache:
         with open(args.cache, "wb") as f:
-            pickle.dump((FEATS, OFFS, PSTC, Y), f, protocol=4)
+            pickle.dump((FEATS, OFFS, PSTC, Y, KB), f, protocol=4)
 
 feats = torch.tensor(FEATS, dtype=torch.long)
 offs = torch.tensor(OFFS, dtype=torch.long)
 pstc = torch.tensor(PSTC, dtype=torch.float32)
 ys = torch.tensor(Y, dtype=torch.float32)
+kbw = torch.tensor(KB, dtype=torch.long) >> 2      # white's own-frame bucket
+kbb = torch.tensor(KB, dtype=torch.long) & 3       # black's
 lens = torch.diff(offs, append=torch.tensor([len(FEATS)]))
-del FEATS, OFFS, PSTC, Y
+del FEATS, OFFS, PSTC, Y, KB
 
 # the mirrored feature of index f: swap colour, flip the square
 IDX = torch.arange(768)
@@ -208,35 +233,56 @@ def act(a):
 
 
 class Net(nn.Module):
-    """768 -> N -> 1 with optional virtual piece-type features.
+    """768 -> N -> 1 with optional virtual features and king buckets.
 
-    The effective first-layer weight is  W[f] = raw[f] + typ[f // 64]:  the
-    virtual row is shared by all 64 squares of a piece type, so the sparse
-    per-square rows only learn the DEVIATION from the type's average.  This
-    is nnue-pytorch's feature factorizer at our scale; it costs nothing at
-    run time because `weight()` is what gets exported.
+    The effective first-layer weight of bucket b is
+
+        W_b[f] = raw[b*768 + f] + shared[f] + typ[f // 64]
+
+    `typ` is shared by all 64 squares of a piece type, `shared` by all
+    buckets of a feature: the sparse per-square (and per-bucket) rows only
+    learn DEVIATIONS from the coarser averages.  This is nnue-pytorch's
+    feature factorizer at our scale; it costs nothing at run time because
+    `weight()` -- the folded (B*768, N) table -- is what gets exported.
+    The caller offsets feature indices by 768*bucket (each perspective by
+    its OWN king's bucket).
     """
 
-    def __init__(self, N, factor):
+    def __init__(self, N, factor, B):
         super().__init__()
-        self.raw = nn.Parameter(torch.randn(768, N) * 0.05)
+        self.B = B
+        self.raw = nn.Parameter(torch.randn(B * 768, N) * 0.05)
+        self.shared = nn.Parameter(torch.zeros(768, N)) if B > 1 else None
         self.typ = nn.Parameter(torch.zeros(12, N)) if factor else None
         self.bias = nn.Parameter(torch.zeros(N) + 0.1)
         self.v = nn.Parameter(torch.randn(N) * (25.0 / N ** 0.5))
 
+    def virt(self):
+        """The bucket-independent part of the effective weight, (768, N)."""
+        v = 0
+        if self.typ is not None:
+            v = self.typ.repeat_interleave(64, 0)
+        if self.shared is not None:
+            v = v + self.shared
+        return v
+
     def weight(self):
-        if self.typ is None:
+        v = self.virt()
+        if isinstance(v, int):
             return self.raw
-        return self.raw + self.typ.repeat_interleave(64, 0)
+        N = self.raw.shape[1]
+        return (self.raw.view(self.B, 768, N) + v).view(self.B * 768, N)
 
     def clamp_weights(self, w):
         # enforce the clip on the EFFECTIVE weight, which is what is exported
         with torch.no_grad():
-            if self.typ is None:
+            v = self.virt()
+            if isinstance(v, int):
                 self.raw.clamp_(-w, w)
             else:
-                t = self.typ.repeat_interleave(64, 0)
-                self.raw.copy_((self.raw + t).clamp(-w, w) - t)
+                N = self.raw.shape[1]
+                r = self.raw.view(self.B, 768, N)
+                r.copy_((r + v).clamp(-w, w) - v)
 
     def forward(self, fi, mi, fo, ps):
         E = self.weight()
@@ -245,7 +291,7 @@ class Net(nn.Module):
         return ps + ((au - at) * self.v).sum(-1).clamp(-CLAMP, CLAMP)
 
 
-model = Net(N, args.factor)
+model = Net(N, args.factor, args.kb)
 opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-5)
 sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
 
@@ -268,14 +314,27 @@ def batches(ids, bs, shuffle=True):
         # gather this batch's variable-length feature lists
         base = offs[c]
         gidx = torch.repeat_interleave(base - o, l) + torch.arange(int(l.sum()))
-        yield feats[gidx], mfeats[gidx], o, pstc[c], ys[c]
+        fi, mi = feats[gidx], mfeats[gidx]
+        if args.kb > 1:
+            # each perspective's rows come from its OWN king's bucket
+            fi = fi + 768 * torch.repeat_interleave(kbw[c], l)
+            mi = mi + 768 * torch.repeat_interleave(kbb[c], l)
+        yield fi, mi, o, pstc[c], ys[c]
 
 
 def export(path):
     with torch.no_grad():
-        E = model.weight().detach()                        # (768, N)
+        E = model.weight().detach()                        # (B*768, N)
         b = model.bias.detach().tolist()
         v = model.v.detach().tolist()
+        if args.kb > 1:
+            # float-only export: the packed kb build is engine-side work
+            # that the val loss has to earn first
+            pnet.save(path, {"kind": "float-kb", "B": args.kb, "N": N,
+                             "E": E.tolist(), "bias": b, "v": v,
+                             "clampcp": args.clampcp, "segs": SEGS,
+                             "train": vars(args)})
+            return 0, 0.0, sum(abs(x) for x in v), {"excursion": 0}
         W = [{c: [0.0] * 120 for c in PIECES} for _ in range(N)]
         for c in PIECES:
             for s in pnet.SQUARES:

@@ -70,6 +70,21 @@ SWAP = {c: c.swapcase() for c in PIECES}
 SQUARES = tuple(r * 10 + f for r in range(2, 10) for f in range(1, 9))
 
 
+def kbucket(s):
+    """King bucket of a perspective's OWN king on its OWN-frame 120-square.
+
+    4 buckets: back two ranks vs advanced, times queenside (a-d) vs
+    kingside (e-h).  Own first rank is rows 8-9 of the frame (A1 = 91), so
+    e1/g1 (uncastled and short-castled) share a bucket, c1 sits in the
+    queenside one, and any king past its second rank counts as advanced --
+    the endgame-activity signal.  Coarse on purpose: 4 buckets multiply the
+    first-layer table by 4, not 64, and every bucket still sees plenty of
+    training data.
+    """
+    r, f = divmod(s, 10)
+    return (r <= 7) * 2 + (f >= 5)
+
+
 def rep(val, n):
     """`val` replicated into n lanes."""
     r = 0
