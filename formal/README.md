@@ -591,6 +591,28 @@ unconditional (no `NoZugzwang`) at `D ≥ k + 52` — a code change,
 deliberately not made; Thomas's decision was to give the existing
 layer-2 assumption the extra exercise instead.
 
+**Liveness milestone 2 — the `search()` package** (same file unless
+noted).  *(A) Driver termination + convergence*: the MTD-bi inner loop
+is modeled fuel-indexed (`driverLoop` over `Driver.lean`'s
+`dstep`/`depthInit`) and termination is a theorem, not an assumption.
+A fail-high raises `lower` to a score `≥ gamma`, and every midpoint
+window is strictly inside its bracket, so the width shrinks by ≥ 1 per
+probe (`dstep_strictly_narrows`); better, a midpoint probe at least
+HALVES the bracket with no score hypothesis at all (`dstep_halves` —
+fail-soft overshoot only overshrinks), so the budget is logarithmic:
+one carried-window probe plus 14 halvings of the width-138579 reset
+band — **15 probes per depth**, after which the loop is provably a
+fixed point (`driver_probe_budget`).  On exit the bracket has
+`upper - lower ≤ EVAL_ROUGHNESS` and contains the declared value
+(`driver_depth_converges`, instantiated for both consumers as
+`search_inner_loop_converges` / `_kcx` via `bound_null_spec` /
+`boundKCX_null_spec` + `nullValueD2_bounded`).  One honest wrinkle,
+recorded in the statement: the per-depth reset floor `1 - MATE_UPPER`
+sits one above the value band's floor, so a root whose declared value
+is the exact kingless sentinel `-MATE_UPPER` ends with `lower` one
+above it — the conclusion's `max V (1 - MATE_UPPER)` says exactly
+this; for every other root `lower ≤ V`.
+
 **The production ≡ reference transfer** additionally uses
 `KingCaptureValHigh` (`EvalBounds`) and `CaptureFirst` — itself
 **DISCHARGED** (`captureFirst_of_sorted`) from `MovesSortedByVal` +

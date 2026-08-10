@@ -54,6 +54,7 @@ unconditional -- at the cost of `D ≥ k + 52` and a code change.
 -/
 
 import Sunfish.Stalemate
+import Sunfish.Driver
 
 namespace Sunfish
 
@@ -336,5 +337,361 @@ theorem forcedMate_probe_failsHigh_kcx (G : QSGame)
       (by omega)).2 hfl
     omega
   · omega
+
+/-! # Milestone 2: the `search()` package
+
+Milestone 1 above proved the engine FINDS mates.  What follows
+completes the story of `Searcher.search` around `bound`:
+
+* **A. Driver termination and convergence** -- the MTD-bi inner loop
+  (`while lower < upper - EVAL_ROUGHNESS`) provably terminates, on a
+  concrete budget, and exits with a bracket of width `≤ EVAL_ROUGHNESS`
+  that contains the declared value.
+* **B. Best-move soundness** -- the docstring's `tp_move` clause as a
+  theorem: the stored move is legal (`storedMoveLegal`, cited, not
+  reproven) AND attains the returned score against the declared value
+  function.
+* **C. No false mates** -- the converse of milestone 1: a mate-band
+  declared value implies a real `ForcedMate`, with the one genuinely
+  required chess premise (`NoMaskedMobility`) characterized by a
+  countermodel (`CexF`).
+* **D. pst-swap soundness** -- `Sunfish/TableSwap.lean`. -/
+
+/-! ## A. Driver termination and convergence
+
+`Driver.lean` proved what windows the bisection probes with (`dstep`,
+`depthInit`, the wide invariant).  Here we close the loop itself: the
+inner `while` of `search`, modeled fuel-indexed so that termination is
+a THEOREM about the fuel bound rather than an assumption.
+
+Three facts compose:
+
+* **strictness** (`dstep_raises_lower` / `dstep_lowers_upper`): a
+  fail-high sets `lower := score ≥ gamma`, and every midpoint window is
+  STRICTLY inside its bracket (`driverGamma_in_bracket`), so the raised
+  `lower` strictly exceeds the old one; dually for fail-low.
+* **halving** (`dstep_halves`): with the window at the midpoint, ONE
+  probe at least halves the bracket -- fail-soft overshoot only
+  overshrinks, so no score hypothesis is needed at all.  The
+  logarithmic bound is clean, so it is the one stated
+  (`driverLoop_halving`); the linear ≥-1-per-probe bound
+  (`dstep_strictly_narrows`) is kept as the strictness record.
+* **bracket soundness** (`dstep_bracket`): fail-soft-sound scores keep
+  the declared value inside `[lower, upper]`, which ALSO keeps every
+  computed window in the wide range with no clamp -- the
+  `driver_wide_is_now_the_range` argument, re-run through the loop.
+
+The one honest wrinkle: the bracket resets to
+`lower, upper = 1 - MATE_UPPER, MATE_UPPER`, whose lower end sits ONE
+above the value band's floor.  A root whose declared value is the exact
+kingless sentinel `-MATE_UPPER` therefore ends with
+`lower = 1 - MATE_UPPER` one above its value -- the `max` in the
+conclusion records exactly this and nothing else; everywhere else
+`final.lower ≤ V`.  (A kingless root never reaches `search` from a
+legal game -- `HistoryLegal`'s territory -- but the theorem does not
+need to assume it.)
+
+The budget: the full band has width `2 * MATE_UPPER - 1 = 138579`, and
+`138579 ≤ EVAL_ROUGHNESS * 2^14`, so ONE carried-window probe (the
+first probe of a depth inherits `gamma` from the previous depth --
+`Driver.lean`'s finding) plus 14 midpoint probes always suffice:
+**15 probes per depth**, after which the loop is provably idle
+(`driver_probe_budget`). -/
+
+/-- The inner MTD-bi loop of `search`, fuel-indexed: while
+`lower < upper - EVAL_ROUGHNESS`, probe at the current window and
+fail-soft-update (`dstep`, which also computes the next midpoint).
+Runs `probe` at most `fuel` times; the convergence theorems below show
+fuel 15 is enough from any per-depth reset. -/
+def driverLoop (probe : Int → Int) : Nat → DState → DState
+  | 0, st => st
+  | n + 1, st =>
+    if st.lower < st.upper - EVAL_ROUGHNESS
+    then driverLoop probe n (dstep st (probe st.gamma))
+    else st
+
+/-- **Strictness, fail-high side**: a window strictly above `lower`
+that fails high raises `lower` strictly -- `lower := score ≥ gamma >
+lower`.  Every midpoint window qualifies (`driverGamma_in_bracket`). -/
+theorem dstep_raises_lower (st : DState) (s : Int)
+    (hg : st.lower < st.gamma) (hs : st.gamma ≤ s) :
+    st.lower < (dstep st s).lower := by
+  unfold dstep
+  simp only [if_pos hs]
+  omega
+
+/-- **Strictness, fail-low side**: a window at or below `upper` that
+fails low lowers `upper` strictly -- `upper := score < gamma ≤ upper`. -/
+theorem dstep_lowers_upper (st : DState) (s : Int)
+    (hg : st.gamma ≤ st.upper) (hs : ¬ (st.gamma ≤ s)) :
+    (dstep st s).upper < st.upper := by
+  unfold dstep
+  simp only [if_neg hs]
+  omega
+
+/-- The two strictness facts combined: a probe at a window strictly
+inside the bracket shrinks the width by at least 1, whichever way it
+fails -- the linear termination argument, kept explicit. -/
+theorem dstep_strictly_narrows (st : DState) (s : Int)
+    (hg1 : st.lower < st.gamma) (hg2 : st.gamma ≤ st.upper) :
+    (dstep st s).upper - (dstep st s).lower ≤ st.upper - st.lower - 1 := by
+  unfold dstep
+  by_cases hc : st.gamma ≤ s
+  · simp only [if_pos hc]; omega
+  · simp only [if_neg hc]; omega
+
+/-- **Halving**: with the window at the midpoint, one probe at least
+halves the bracket width.  No hypothesis at all beyond the midpoint
+shape: fail-soft overshoot lands the endpoint even further inside
+(possibly crossing the bracket, which only exits the loop sooner), and
+the inequality holds vacuously-harder for degenerate brackets. -/
+theorem dstep_halves (st : DState) (s : Int)
+    (hmid : st.gamma = driverGamma st.lower st.upper) :
+    (dstep st s).upper - (dstep st s).lower ≤ (st.upper - st.lower) / 2 := by
+  unfold dstep
+  rw [hmid]
+  unfold driverGamma
+  by_cases hc : (st.lower + st.upper + 1) / 2 ≤ s
+  · simp only [if_pos hc]; omega
+  · simp only [if_neg hc]; omega
+
+/-- After any probe the window IS the midpoint of the new bracket, by
+construction of `dstep` -- only a depth's FIRST window can be carried. -/
+theorem dstep_gamma_mid (st : DState) (s : Int) :
+    (dstep st s).gamma = driverGamma (dstep st s).lower (dstep st s).upper := rfl
+
+/-- A converged state is a fixed point of the loop: once
+`upper - lower ≤ EVAL_ROUGHNESS`, no fuel makes another probe. -/
+theorem driverLoop_stopped (probe : Int → Int) (n : Nat) (st : DState)
+    (h : ¬ (st.lower < st.upper - EVAL_ROUGHNESS)) :
+    driverLoop probe n st = st := by
+  cases n with
+  | zero => rfl
+  | succ n => simp only [driverLoop]; rw [if_neg h]
+
+/-- Fuel composes: running `m + n` steps is running `m`, then `n`. -/
+theorem driverLoop_add (probe : Int → Int) (m n : Nat) :
+    ∀ st : DState,
+      driverLoop probe (m + n) st
+        = driverLoop probe n (driverLoop probe m st) := by
+  induction m with
+  | zero =>
+    intro st
+    rw [Nat.zero_add]
+    rfl
+  | succ m ih =>
+    intro st
+    rw [Nat.succ_add]
+    by_cases hc : st.lower < st.upper - EVAL_ROUGHNESS
+    · simp only [driverLoop]
+      rw [if_pos hc, if_pos hc, ih]
+    · simp only [driverLoop]
+      rw [if_neg hc, if_neg hc, driverLoop_stopped probe n st hc]
+
+/-- **Termination, logarithmic**: from any midpoint-windowed state,
+`n` probes converge a bracket of width up to `EVAL_ROUGHNESS * 2^n` --
+each probe halves (`dstep_halves`) and re-establishes the midpoint
+invariant (`dstep_gamma_mid`), and the loop guard is exactly the
+convergence condition. -/
+theorem driverLoop_halving (probe : Int → Int) :
+    ∀ (n : Nat) (st : DState),
+      st.gamma = driverGamma st.lower st.upper →
+      st.upper - st.lower ≤ EVAL_ROUGHNESS * ((2 ^ n : Nat) : Int) →
+      (driverLoop probe n st).upper - (driverLoop probe n st).lower
+        ≤ EVAL_ROUGHNESS := by
+  have hE : EVAL_ROUGHNESS = 15 := rfl
+  intro n
+  induction n with
+  | zero =>
+    intro st _ hw
+    have h1 : ((2 ^ 0 : Nat) : Int) = 1 := rfl
+    rw [hE, h1] at hw
+    simp only [driverLoop]
+    omega
+  | succ n ih =>
+    intro st hmid hw
+    rw [hE, Nat.pow_succ] at hw
+    simp only [driverLoop]
+    by_cases hc : st.lower < st.upper - EVAL_ROUGHNESS
+    · rw [if_pos hc]
+      refine ih (dstep st (probe st.gamma)) (dstep_gamma_mid st _) ?_
+      have hh := dstep_halves st (probe st.gamma) hmid
+      rw [hE]
+      omega
+    · rw [if_neg hc]
+      omega
+
+/-- The loop invariant for convergence-to-the-value: the bracket
+endpoints keep their reset-side bounds (which keeps every computed
+window in the wide range, `driver_wide_is_now_the_range`'s argument),
+the declared value stays inside the bracket -- up to the one-off
+`1 - MATE_UPPER` reset floor recorded by the `max` -- and the current
+window is a wide-range window. -/
+def BracketOK (V : Int) (st : DState) : Prop :=
+  1 - MATE_UPPER ≤ st.lower ∧ st.upper ≤ MATE_UPPER ∧
+    st.lower ≤ max V (1 - MATE_UPPER) ∧ V ≤ st.upper ∧
+    -MATE_UPPER < st.gamma ∧ st.gamma ≤ MATE_UPPER
+
+/-- One fail-soft-sound probe preserves `BracketOK`: a fail-high score
+is a valid lower bound of `V` (so raising `lower` to it is sound), a
+fail-low score a valid upper bound; and the next midpoint stays in the
+wide range because the value in the bracket pins the endpoints. -/
+theorem dstep_bracket (V : Int) (hV1 : -MATE_UPPER ≤ V) (hV2 : V ≤ MATE_UPPER)
+    (st : DState) (hst : BracketOK V st) (s : Int)
+    (hs1 : st.gamma ≤ s → s ≤ V) (hs2 : s < st.gamma → V ≤ s) :
+    BracketOK V (dstep st s) := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  obtain ⟨h1, h2, h3, h4, h5, h6⟩ := hst
+  unfold dstep driverGamma BracketOK
+  by_cases hc : st.gamma ≤ s
+  · have := hs1 hc
+    simp only [if_pos hc]
+    omega
+  · have := hs2 (by omega)
+    simp only [if_neg hc]
+    omega
+
+/-- The invariant holds through any run of the loop, given a probe that
+is fail-soft-sound for `V` at every wide-range window (`bound`'s layer-1
+spec shape). -/
+theorem driverLoop_bracket (probe : Int → Int) (V : Int)
+    (hV1 : -MATE_UPPER ≤ V) (hV2 : V ≤ MATE_UPPER)
+    (hspec : ∀ g, -MATE_UPPER < g → g ≤ MATE_UPPER →
+      (g ≤ probe g → probe g ≤ V) ∧ (probe g < g → V ≤ probe g)) :
+    ∀ (n : Nat) (st : DState), BracketOK V st →
+      BracketOK V (driverLoop probe n st) := by
+  intro n
+  induction n with
+  | zero => intro st hst; exact hst
+  | succ n ih =>
+    intro st hst
+    simp only [driverLoop]
+    by_cases hc : st.lower < st.upper - EVAL_ROUGHNESS
+    · rw [if_pos hc]
+      have hg := hspec st.gamma hst.2.2.2.2.1 hst.2.2.2.2.2
+      exact ih (dstep st (probe st.gamma))
+        (dstep_bracket V hV1 hV2 st hst (probe st.gamma) hg.1 hg.2)
+    · rw [if_neg hc]
+      exact hst
+
+/-- **The package, abstract form**: for any band-bounded value `V` and
+any probe fail-soft-sound for `V` at wide-range windows, 15 probes from
+the per-depth reset (`lower, upper = 1 - MATE_UPPER, MATE_UPPER`, the
+carried window inherited) provably exit the inner loop with
+
+* a converged bracket: `upper - lower ≤ EVAL_ROUGHNESS`, and
+* the declared value inside it: `lower ≤ max V (1 - MATE_UPPER)` and
+  `V ≤ upper` (the `max` is the reset-floor wrinkle documented above).
+
+One carried probe (which cannot widen anything the invariant tracks)
+plus 14 halvings of the width-138579 band. -/
+theorem driver_depth_converges (probe : Int → Int) (V : Int)
+    (hV1 : -MATE_UPPER ≤ V) (hV2 : V ≤ MATE_UPPER)
+    (hspec : ∀ g, -MATE_UPPER < g → g ≤ MATE_UPPER →
+      (g ≤ probe g → probe g ≤ V) ∧ (probe g < g → V ≤ probe g))
+    (carried : Int)
+    (hc1 : -MATE_UPPER < carried) (hc2 : carried ≤ MATE_UPPER) :
+    (driverLoop probe 15 (depthInit carried)).upper
+        - (driverLoop probe 15 (depthInit carried)).lower ≤ EVAL_ROUGHNESS ∧
+      (driverLoop probe 15 (depthInit carried)).lower
+          ≤ max V (1 - MATE_UPPER) ∧
+        V ≤ (driverLoop probe 15 (depthInit carried)).upper := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hE : EVAL_ROUGHNESS = 15 := rfl
+  have h0 : BracketOK V (depthInit carried) := by
+    simp only [BracketOK, depthInit]
+    omega
+  have hcond : (depthInit carried).lower
+      < (depthInit carried).upper - EVAL_ROUGHNESS := by
+    show 1 - MATE_UPPER < MATE_UPPER - EVAL_ROUGHNESS
+    omega
+  have hone : driverLoop probe 1 (depthInit carried)
+      = dstep (depthInit carried) (probe carried) := by
+    show driverLoop probe (0 + 1) (depthInit carried) = _
+    simp only [driverLoop]
+    rw [if_pos hcond]
+    rfl
+  have hstep : driverLoop probe 15 (depthInit carried)
+      = driverLoop probe 14 (dstep (depthInit carried) (probe carried)) := by
+    rw [show (15 : Nat) = 1 + 14 from rfl, driverLoop_add, hone]
+  have hg := hspec carried hc1 hc2
+  have hb1 : BracketOK V (dstep (depthInit carried) (probe carried)) :=
+    dstep_bracket V hV1 hV2 (depthInit carried) h0 (probe carried) hg.1 hg.2
+  have hw1 : (dstep (depthInit carried) (probe carried)).upper
+      - (dstep (depthInit carried) (probe carried)).lower
+        ≤ EVAL_ROUGHNESS * ((2 ^ 14 : Nat) : Int) := by
+    obtain ⟨a1, a2, _, _, _, _⟩ := hb1
+    have h14 : ((2 ^ 14 : Nat) : Int) = 16384 := rfl
+    rw [hE, h14]
+    omega
+  have hconv := driverLoop_halving probe 14
+    (dstep (depthInit carried) (probe carried))
+    (dstep_gamma_mid (depthInit carried) (probe carried)) hw1
+  have hbr := driverLoop_bracket probe V hV1 hV2 hspec 14
+    (dstep (depthInit carried) (probe carried)) hb1
+  rw [hstep]
+  exact ⟨hconv, hbr.2.2.1, hbr.2.2.2.1⟩
+
+/-- **Termination as a fixed point**: any fuel beyond the 15-probe
+budget changes nothing -- the loop is provably idle after 15 probes, so
+`while lower < upper - EVAL_ROUGHNESS` makes at most 15 probes per
+depth. -/
+theorem driver_probe_budget (probe : Int → Int) (V : Int)
+    (hV1 : -MATE_UPPER ≤ V) (hV2 : V ≤ MATE_UPPER)
+    (hspec : ∀ g, -MATE_UPPER < g → g ≤ MATE_UPPER →
+      (g ≤ probe g → probe g ≤ V) ∧ (probe g < g → V ≤ probe g))
+    (carried : Int)
+    (hc1 : -MATE_UPPER < carried) (hc2 : carried ≤ MATE_UPPER) :
+    ∀ k : Nat, driverLoop probe (15 + k) (depthInit carried)
+      = driverLoop probe 15 (depthInit carried) := by
+  intro k
+  rw [driverLoop_add]
+  refine driverLoop_stopped probe k _ ?_
+  have h := (driver_depth_converges probe V hV1 hV2 hspec carried hc1 hc2).1
+  omega
+
+/-- **A, instantiated for the reference consumer**: probing the root
+with `boundD2` at depth `D`, from any wide-range carried window, the
+inner loop converges in 15 probes to a bracket of width
+`≤ EVAL_ROUGHNESS` containing the declared value `nullValueD2` -- the
+composition of the loop package with `bound_null_spec` (layer 1: no
+chess premise) and `nullValueD2_bounded`. -/
+theorem search_inner_loop_converges (G : QSGame) (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (hK : KillerLegal G kill)
+    (D : Nat) (p : G.Pos) (carried : Int)
+    (hc1 : -MATE_UPPER < carried) (hc2 : carried ≤ MATE_UPPER) :
+    (driverLoop (fun g => boundD2 G guard kill D p g) 15 (depthInit carried)).upper
+        - (driverLoop (fun g => boundD2 G guard kill D p g) 15 (depthInit carried)).lower
+          ≤ EVAL_ROUGHNESS ∧
+      (driverLoop (fun g => boundD2 G guard kill D p g) 15 (depthInit carried)).lower
+          ≤ max (nullValueD2 G guard D p) (1 - MATE_UPPER) ∧
+        nullValueD2 G guard D p
+          ≤ (driverLoop (fun g => boundD2 G guard kill D p g) 15 (depthInit carried)).upper := by
+  have hV := nullValueD2_bounded G guard hB D p
+  exact driver_depth_converges (fun g => boundD2 G guard kill D p g)
+    (nullValueD2 G guard D p) hV.1 hV.2
+    (fun g hg1 hg2 => bound_null_spec G guard kill hB hK D p g hg1 hg2)
+    carried hc1 hc2
+
+/-- **A, instantiated for the production consumer** (`boundKCX`),
+through `boundKCX_null_spec`'s premises. -/
+theorem search_inner_loop_converges_kcx (G : QSGame) (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame)
+    (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
+    (hK : KillerLegal G kill)
+    (D : Nat) (p : G.Pos) (carried : Int)
+    (hc1 : -MATE_UPPER < carried) (hc2 : carried ≤ MATE_UPPER) :
+    (driverLoop (fun g => boundKCX G guard D p g) 15 (depthInit carried)).upper
+        - (driverLoop (fun g => boundKCX G guard D p g) 15 (depthInit carried)).lower
+          ≤ EVAL_ROUGHNESS ∧
+      (driverLoop (fun g => boundKCX G guard D p g) 15 (depthInit carried)).lower
+          ≤ max (nullValueD2 G guard D p) (1 - MATE_UPPER) ∧
+        nullValueD2 G guard D p
+          ≤ (driverLoop (fun g => boundKCX G guard D p g) 15 (depthInit carried)).upper := by
+  have hVb := nullValueD2_bounded G guard hB D p
+  exact driver_depth_converges (fun g => boundKCX G guard D p g)
+    (nullValueD2 G guard D p) hVb.1 hVb.2
+    (fun g hg1 hg2 => boundKCX_null_spec G guard kill hB hV hCF hK D p g hg1 hg2)
+    carried hc1 hc2
 
 end Sunfish
