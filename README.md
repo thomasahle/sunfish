@@ -145,6 +145,32 @@ The name Sunfish actually refers to the [Pygmy Sunfish](http://en.wikipedia.org/
 
 In terms of Heritage, Sunfish borrows much more from [Micro-Max by Geert Muller](http://home.hccnet.nl/h.g.muller/max-src2.html) and [PyChess](http://pychess.org).
 
+# Family
+
+The sunfish family keeps growing.
+Here is a (very incomplete) list of interesting derivatives:
+
+* [μSunfish](https://github.com/fizban99/micropython-usunfish) - A heavily reworked MicroPython Sunfish derivative for ESP32-class microcontrollers, with bounded memory, stronger search, configurable skill levels, and UCI support.
+* [Numbfish](https://github.com/dimdano/numbfish) - A compact Sunfish-based Python engine that adds an incrementally updated NumPy NNUE evaluation.
+* [sunfish_rs](https://github.com/Recursing/sunfish_rs) - A Rust port of Sunfish that preserves much of its search architecture while using more native Rust representations.
+* [Carnatus](https://github.com/zserge/carnatus) - A small Go port of Sunfish intended to keep the engine minimal but readable.
+* [Sunfish.js](https://github.com/foo123/sunfish.js) - A JavaScript port of Sunfish designed to run under Node.js or directly in a browser via a web worker.
+* [Chess.Mojo](https://github.com/vietanhdev/chess.mojo) - A Sunfish-based UCI chess engine used as a proof of concept for the Mojo programming language.
+* [sunfish.lua](https://github.com/soumith/sunfish.lua) - A direct human translation of the classic Sunfish implementation from Python into Lua.
+* [Solefish](https://github.com/asandwhich/solefish) - A C++ port that deliberately follows the original Sunfish program structure closely as a learning exercise.
+* [sunfishNNUE](https://github.com/kennyfrc/sunfishNNUE) - A Sunfish derivative that replaces its classical evaluation with NNUE evaluation using Stockfish-style neural networks.
+* [Moonfish](https://github.com/walker8088/moonfish) - A Sunfish-derived engine adapted from Western chess to Chinese chess/Xiangqi with UCCI support.
+* [ParallelChessAI](https://github.com/HarshithBolar/ParallelChessAI) - A Sunfish-derived experiment investigating parallelization of chess-engine search.
+* [numworks_usunfish](https://github.com/fizban99/numworks_usunfish) - A μSunfish adaptation designed to run as a playable chess engine on NumWorks calculators.
+* [chess-badger2040](https://github.com/niutech/chess-badger2040) - A standalone offline chess game that embeds a MicroPython Sunfish port on the RP2040-based Badger 2040 e-ink device.
+* [micropython-sunfish](https://github.com/jacklinquan/micropython-sunfish) - An early port of Sunfish to MicroPython for running the engine on constrained embedded hardware.
+* [peterhinch/micropython-sunfish](https://github.com/peterhinch/micropython-sunfish) - Another independent MicroPython adaptation that makes Sunfish usable as an embedded chess-engine component.
+* [Vector-Anki-Sunfish](https://github.com/mth75/Vector-Anki-Sunfish) - A project integrating Sunfish with the Anki Vector robot to let the robot participate in chess.
+* [chess-genetic-algorithm-sunfish](https://github.com/Daspy11/chess-genetic-algorithm-sunfish) - An experimental Sunfish derivative using genetic algorithms to evolve or tune chess-engine parameters.
+* [sunfishDDA](https://github.com/zqigolden/sunfishDDA) - A Sunfish experiment exploring dynamic difficulty adjustment rather than simply maximizing engine strength.
+* [Blindfold-Sunfish](https://github.com/sjqtentacles/Blindfold-Sunfish) - A Sunfish modification aimed at blindfold chess and alternative ways of interacting with the engine.
+* [Moonfish](https://moonfish.cc/) - A tiny C chess engine originally inspired by Sunfish that subsequently developed its own substantially different implementation and search approach.
+
 # License
 
 [GNU GPL v3](https://www.gnu.org/licenses/gpl-3.0.en.html)
