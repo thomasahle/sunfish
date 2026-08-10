@@ -152,7 +152,19 @@ class PackedNet:
         # The clip ceiling is not optional: it is the precondition that makes
         # the modular horizontal sum exact.
         self.crelu = True
-        self.lanes = lanes = 2 * N
+        # ---- extensions (bilinear lanes / narrow tail / phase scale).
+        # Their read-out runs in floats; exact antisymmetry survives because
+        # every float input is exactly negated or exactly invariant under
+        # perspective swap, IEEE arithmetic is sign-symmetric, and the final
+        # truncation rounds toward zero.
+        self.nb = nb = d.get("nb", 0)       # bilinear lanes per perspective
+        self.m = m = d.get("m", 4)
+        self.bshift = d.get("bshift", 0)    # bilinear lane gain Cb = 2**bshift
+        self.u = d.get("u")                 # read-out of h, float, length m
+        self.tail = d.get("tail")           # odd-symmetrized narrow tail
+        self.phase_s = d.get("phase_s")     # per-material-bucket output scale
+        self.ext = bool(nb or self.phase_s)
+        self.lanes = lanes = 2 * N + 2 * nb
         self.nbytes = lanes * (L // 8)
         self.half = N * L                   # bit offset of block1
         self.base = d["base"]               # packed BIAS + G_k*bias_k
@@ -191,7 +203,65 @@ class PackedNet:
         self.M16 = (1 << L) - 1
         self.ts = tuple(d.get("ts", ()))    # packed M_k*t_i, one per extra segment
         self.segs = tuple(d.get("segs", (0.0,)))
+        if nb:
+            # bilinear groups are CONTIGUOUS lane runs (nbg lanes each), so a
+            # group sum is one shift+mask+mod with the machinery the head
+            # already trusts -- no product-fold field budget to pay.
+            self.nbg = nbg = nb // m
+            self.BGMASK = (1 << (nbg * L)) - 1
+            self.boffX = [(2 * N + s * nbg) * L for s in range(m)]
+            self.boffY = [(2 * N + nb + s * nbg) * L for s in range(m)]
+            self.Cb2 = float(1 << (2 * self.bshift))
         self.meta = {k: v for k, v in d.items() if k not in ("rows", "base", "gp", "G")}
+
+    # ------------------------------------------------- extended read-out
+    def _mlp(self, z):
+        import math
+        t = self.tail
+        acc = 0.0
+        for o, (row, b1) in enumerate(zip(t["t1w"], t["t1b"])):
+            s = b1
+            for w, x in zip(row, z):
+                s += w * x
+            acc += t["t2w"][0][o] * math.tanh(s)
+        return acc + t["t2b"][0]
+
+    def ext_cp(self, acc, pf, cnt=None):
+        """Extended evaluation: linear head + bilinear + tail + phase, in
+        floats.  Exactly antisymmetric (see __init__ note)."""
+        y = self.clamp(acc)
+        x0 = (y & self.MASKLO) % self.M16
+        x1 = ((y >> self.half) & self.MASKLO) % self.M16
+        d = float(x1 - x0 if pf else x0 - x1) / (1 << self.shift)
+        if self.nb:
+            m, GM, M16 = self.m, self.BGMASK, self.M16
+            A = [((y >> o) & GM) % M16 for o in self.boffX]
+            Bv = [((y >> o) & GM) % M16 for o in self.boffY]
+            if pf:
+                A, Bv = Bv, A
+            h = [0] * m
+            f = [0] * m
+            for s in range(m):
+                a, b = A[s], Bv[s]
+                for t in range(m):
+                    g = (s + t) % m
+                    h[g] += A[t] * a - Bv[t] * b
+                    f[g] += a * Bv[t]
+            hf = [v / self.Cb2 for v in h]
+            ff = [v / self.Cb2 for v in f]
+            for ug, hg in zip(self.u, hf):
+                d += ug * hg
+            if self.tail:
+                zp = [d / 300.0] + [v / 100.0 for v in hf] + [v / 100.0 for v in ff]
+                zn = [-d / 300.0] + [-v / 100.0 for v in hf] + [v / 100.0 for v in ff]
+                d += 150.0 * (self._mlp(zp) - self._mlp(zn))
+        if self.phase_s:
+            P = len(self.phase_s)
+            b = (cnt - 1) * P // 32
+            d *= self.phase_s[0 if b < 0 else (P - 1 if b >= P else b)]
+        c = self.clampcp
+        d = -c if d < -c else (c if d > c else d)
+        return int(d)                       # trunc toward zero: symmetric
 
     # ------------------------------------------------------------------ head
     def clamp(self, acc):
@@ -209,15 +279,19 @@ class PackedNet:
         return (y & m) | (self.gp & (m ^ VAL))
 
     def hsum2(self, y):
-        """(sum of block0 lanes, sum of block1 lanes) by modular reduction."""
-        return (y & self.MASKLO) % self.M16, (y >> self.half) % self.M16
+        """(sum of block0 lanes, sum of block1 lanes) by modular reduction.
+        Block1 is masked so any bilinear lanes above it stay out."""
+        return (y & self.MASKLO) % self.M16, \
+            ((y >> self.half) & self.MASKLO) % self.M16
 
     def raw(self, acc, pf):
         """C * nn, from the perspective selected by pf (0 = white to move)."""
         x, y = self.hsum2(self.clamp(acc))
         return y - x if pf else x - y
 
-    def nn_cp(self, acc, pf):
+    def nn_cp(self, acc, pf, cnt=None):
+        if self.ext:
+            return self.ext_cp(acc, pf, cnt)
         v = self.raw(acc, pf)
         # round towards zero: floor does not commute with negation, and the
         # search reaches the same position both by negating a score (rotate)
@@ -339,8 +413,30 @@ def pick_shift(W, bias, v, segs=(0.0,), limit=16000, sumlimit=65534,
     return shift, guard, sabs
 
 
+def pick_bshift(bil, squares=SQUARES, limit=16000, sumlimit=65534):
+    """Largest bilinear lane gain Cb = 2**bshift satisfying both packing
+    constraints: per-GROUP cap sum <= 65534 (each group is horizontally
+    summed on its own) and lane excursion within the borrow guard."""
+    nb, m = bil["nb"], bil["m"]
+    nbg = nb // m
+    border = sorted(range(nb), key=lambda k: (k % m, k))
+    sq = set(squares)
+    Wf = [{p: [bil["Wb"][k][p][s] if s in sq else 0.0 for s in range(120)]
+           for p in PIECES} for k in border]
+    excf = excursion_bound(Wf, [bil["biasb"][k] for k in border], nb)
+    for bshift in range(14, -1, -1):
+        Cb = 1 << bshift
+        gq = [max(1, round(Cb * bil["gb"][k])) for k in border]
+        if max(g * e for g, e in zip(gq, excf)) > limit:
+            continue
+        if max(sum(gq[s * nbg:(s + 1) * nbg]) for s in range(m)) > sumlimit:
+            continue
+        return bshift
+    raise ValueError("no feasible bshift for the bilinear lanes")
+
+
 def build(W, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES,
-          keep=None):
+          keep=None, bil=None, phase_s=None):
     """Quantise a float net into the packed representation.
 
     W[k][piece][sq120]  float input weights (activation units, clip at 1.0)
@@ -349,6 +445,13 @@ def build(W, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES,
     shift               nn_cp = raw >> shift, so the gain is C = 2**shift
     keep                None packs both perspectives' lanes; "W"/"B" packs
                         only that perspective's unit lanes (for build_kb)
+    bil                 optional bilinear block: {"nb", "m", "bshift",
+                        "Wb"[k][piece][sq120], "biasb", "gb", "u", "tail"}.
+                        Adds 2*nb lanes after the head blocks: bilX (white
+                        perspective) then bilY (black), each with its m
+                        groups CONTIGUOUS so a group sum is one
+                        shift+mask+mod.
+    phase_s             optional per-material-bucket output scales (floats)
 
     Returns the dict accepted by PackedNet.
     """
@@ -358,6 +461,30 @@ def build(W, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES,
     A = sum(1.0 - t for t in segs)
     order = sorted(range(N), key=lambda k: (v[k] <= 0, -abs(v[k])))
     P = sum(1 for x in v if x > 0)
+    nb = bil["nb"] if bil else 0
+    if bil:
+        if segs != (0.0,):
+            raise ValueError("bilinear lanes assume plain crelu (segs=(0.0,))")
+        m_ = bil["m"]
+        if nb % m_:
+            raise ValueError("nb must be divisible by m")
+        nbg = nb // m_
+        border = sorted(range(nb), key=lambda k: (k % m_, k))
+        Cb = 1 << bil["bshift"]
+        gq = [max(1, round(Cb * bil["gb"][k])) for k in border]
+        biasbq = [round(gq[j] * bil["biasb"][k]) for j, k in enumerate(border)]
+        Wbq = [{p: [round(gq[j] * bil["Wb"][k][p][s]) if s in squares else 0
+                    for s in range(120)] for p in PIECES}
+               for j, k in enumerate(border)]
+        for s0 in range(m_):
+            gs = sum(gq[s0 * nbg:(s0 + 1) * nbg])
+            if gs > 65534:
+                raise ValueError("bilinear group %d cap sum %d > 65534: "
+                                 "lower bshift" % (s0, gs))
+        excb = excursion_bound(Wbq, biasbq, nb)
+        if max(excb) > 16000:
+            raise ValueError("bilinear excursion %d > 16000: lower bshift"
+                             % max(excb))
     # G_k caps the WHOLE activation, so it is still C*|v_k| whatever k is;
     # the lane gain M_k = G_k/A is what the input weights carry, so that the
     # k relu terms sum to G_k exactly at a = 1.
@@ -389,11 +516,15 @@ def build(W, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES,
             laneW[j] = N + j
             laneB[j] = j
 
-    lanesG = [0] * (2 * N)
-    lanebias = [0] * (2 * N)
+    lanes_total = 2 * N + 2 * nb
+    lanesG = [0] * lanes_total
+    lanebias = [0] * lanes_total
     for j in range(N):
         lanesG[laneW[j]] = lanesG[laneB[j]] = G[j]
         lanebias[laneW[j]] = lanebias[laneB[j]] = biasq[j]
+    for j in range(nb):
+        lanesG[2 * N + j] = lanesG[2 * N + nb + j] = gq[j]
+        lanebias[2 * N + j] = lanebias[2 * N + nb + j] = biasbq[j]
 
     if sum(G) > 65534:
         raise ValueError(
@@ -407,13 +538,18 @@ def build(W, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES,
         pr = SWAP[p]
         col = []
         for s in range(120):
-            lv = [0] * (2 * N)
+            lv = [0] * lanes_total
             if s in squares:
                 for j in range(N):
                     if keep != "B":
                         lv[laneW[j]] = Wq[j][p][s]
                     if keep != "W":
                         lv[laneB[j]] = Wq[j][pr][119 - s]
+                for j in range(nb):
+                    if keep != "B":
+                        lv[2 * N + j] = Wbq[j][p][s]
+                    if keep != "W":
+                        lv[2 * N + nb + j] = Wbq[j][pr][119 - s]
             col.append(packlanes(lv))
         rows[p] = col
 
@@ -426,16 +562,24 @@ def build(W, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES,
         ts.append(packlanes(lv))
 
     exc = excursion_bound(Wq, biasq, N)
-    return {
+    out = {
         "kind": "packed-nnue-v1", "N": N, "P": P, "shift": shift,
         "clampcp": clampcp, "base": base, "gp": gp, "ts": ts, "segs": segs,
         "G": lanesG, "rows": rows,
         "excursion": max(exc), "excursion_per_unit": exc,
         "sum_G": sum(G),
     }
+    if bil:
+        out.update({"nb": nb, "m": m_, "bshift": bil["bshift"],
+                    "u": list(bil["u"]), "tail": bil.get("tail"),
+                    "gq": gq, "excursion_bil": max(excb)})
+    if phase_s:
+        out["phase_s"] = list(phase_s)
+    return out
 
 
-def build_kb(Ws, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES):
+def build_kb(Ws, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES,
+             bil=None, phase_s=None):
     """Quantise a king-bucketed float net into the packed representation.
 
     Ws[b][k][piece][sq120] is bucket b's input weights; bias/v/shift are
@@ -449,14 +593,16 @@ def build_kb(Ws, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES):
     split happens at packing time via build(keep=...).
 
     `shift` must satisfy pick_shift for EVERY bucket (take the min).
+    Bilinear lanes (`bil`) are bucket-FREE: every bucket's rows carry the
+    same bilinear lane values, so a king-bucket rebuild costs nothing extra.
     """
     B = len(Ws)
     full = [build(W, bias, v, shift, clampcp=clampcp, segs=segs,
-                  squares=squares) for W in Ws]
+                  squares=squares, bil=bil, phase_s=phase_s) for W in Ws]
     rowsW = [build(W, bias, v, shift, clampcp=clampcp, segs=segs,
-                   squares=squares, keep="W")["rows"] for W in Ws]
+                   squares=squares, keep="W", bil=bil)["rows"] for W in Ws]
     rowsB = [build(W, bias, v, shift, clampcp=clampcp, segs=segs,
-                   squares=squares, keep="B")["rows"] for W in Ws]
+                   squares=squares, keep="B", bil=bil)["rows"] for W in Ws]
     N = full[0]["N"]
     # The split is only correct if the two halves recompose exactly: for
     # equal buckets, rowsW[b] + rowsB[b] must BE the full build's row.
@@ -499,3 +645,65 @@ def float_nn(W, bias, v, board, pf, segs=(0.0,)):
                 ab[k] += W[k][SWAP[q]][119 - t]
     out = sum(v[k] * (act(aw[k], segs) - act(ab[k], segs)) for k in range(N))
     return out if pf == 0 else -out
+
+
+def float_ext(W, bias, v, board, pf, bil=None, phase_s=None, segs=(0.0,)):
+    """Float reference of the EXTENDED evaluation (linear + bilinear lanes +
+    odd tail + phase scale), mover's point of view -- mirrors
+    train_packed.Net.forward.  The packed ext_cp approximates this up to
+    per-lane rounding."""
+    import math
+    N = len(v)
+    aw, ab = list(bias), list(bias)
+    nb = bil["nb"] if bil else 0
+    bu = list(bil["biasb"]) if bil else []
+    bt = list(bil["biasb"]) if bil else []
+    cnt = 0
+    for s, p in enumerate(board):
+        if p in PIECES:
+            cnt += 1
+            q, t = (p, s) if pf == 0 else (SWAP[p], 119 - s)
+            for k in range(N):
+                aw[k] += W[k][q][t]
+                ab[k] += W[k][SWAP[q]][119 - t]
+            for k in range(nb):
+                bu[k] += bil["Wb"][k][q][t]
+                bt[k] += bil["Wb"][k][SWAP[q]][119 - t]
+    # white view first
+    d = sum(v[k] * (act(aw[k], segs) - act(ab[k], segs)) for k in range(N))
+    h = f = None
+    if bil:
+        m = bil["m"]
+        A, Bv = [0.0] * m, [0.0] * m
+        for k in range(nb):
+            A[k % m] += bil["gb"][k] * act(bu[k], segs)
+            Bv[k % m] += bil["gb"][k] * act(bt[k], segs)
+        h, f = [0.0] * m, [0.0] * m
+        for s in range(m):
+            for t in range(m):
+                g = (s + t) % m
+                h[g] += A[s] * A[t] - Bv[s] * Bv[t]
+                f[g] += A[s] * Bv[t]
+        d += sum(ug * hg for ug, hg in zip(bil["u"], h))
+    if pf:                              # mover view: odd parts negate
+        d = -d
+        h = [-x for x in h] if h else h
+    if bil and bil.get("tail"):
+        t_ = bil["tail"]
+
+        def mlp(z):
+            accv = 0.0
+            for o, (row, b1) in enumerate(zip(t_["t1w"], t_["t1b"])):
+                sv = b1
+                for wgt, x in zip(row, z):
+                    sv += wgt * x
+                accv += t_["t2w"][0][o] * math.tanh(sv)
+            return accv + t_["t2b"][0]
+        zp = [d / 300.0] + [x / 100.0 for x in h] + [x / 100.0 for x in f]
+        zn = [-d / 300.0] + [-x / 100.0 for x in h] + [x / 100.0 for x in f]
+        d += 150.0 * (mlp(zp) - mlp(zn))
+    if phase_s:
+        P_ = len(phase_s)
+        b = min(max((cnt - 1) * P_ // 32, 0), P_ - 1)
+        d *= phase_s[b]
+    return d
