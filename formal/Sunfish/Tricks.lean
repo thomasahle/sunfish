@@ -47,7 +47,7 @@ sunfish.py lines 364-365 (since `eda66ee` the gate is position-determined
 plus the driver flag `root`, which never reaches the table):
 
     if depth > 2 and not root and abs(pos.score) < 500:
-        yield None, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
+        score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
 
 Null-move pruning bets that *doing nothing is never your best option*: if
 even passing the turn fails high, some real move surely does too.  That bet

@@ -40,13 +40,13 @@ SUNFISH = ROOT / "sunfish.py"
 CONSTANTS = ["MATE_LOWER", "MATE_UPPER", "QS", "QS_A", "EVAL_ROUGHNESS", "TABLE_SIZE"]
 
 EXPECTED = {
-    "Position.gen_moves": "2f5471b5de1ab8f0",
+    "Position.gen_moves": "14d69d763fe2185d",
     "Position.king_capture": "077e364f886a1826",
     "Position.move": "c95ddc3e690012a8",
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "339f53cfaa228d42",
-    "Searcher.bound": "4b6d33ca66ae6b29",
-    "Searcher.search": "c0c3488301ea0a81",
+    "Searcher.bound": "cae8ee304652daca",
+    "Searcher.search": "f9aa8c81b84ff44b",
     "constants": "02227a9fd04eb181",
 }
 
@@ -99,15 +99,15 @@ ANCHORS = [
     "if killer and pos.value(killer) >= val_lower:",
     "yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)",
     "yield None, pos.score",
-    "yield None, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)",
+    "score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)",
     "if depth <= 1 and pos.score + val < gamma:",
     "yield (move, MATE_UPPER) if val >= MATE_LOWER else (None, pos.score + val)",
     "best, live = -MATE_UPPER, False",
-    "if depth and best < gamma and not live and all(",
+    "if depth and not live and all(",
     "pos.rotate(nullmove=True).king_capture()",
     "self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)",
     "lower, upper = 1 - MATE_UPPER, MATE_UPPER",
-    "if not root and depth > 0 and pos in self.history:",
+    "if depth > 0 and pos in self.history:",
 ]
 
 # Raw "line N" citations in the Lean sources are fragile: they rot silently.
