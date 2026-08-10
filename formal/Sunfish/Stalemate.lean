@@ -3538,14 +3538,28 @@ theorem futile_contrib_le (G : QSGame) (guard : G.Pos → Bool)
 /-- **bound_null_spec** (layer 1): the search brackets its OWN declared
 value function -- the null-inclusive `nullValueD2` -- with no null bet
 anywhere, and no pass-search hypothesis anywhere (the pass term is the
-search's own recursion).  Premises: `Bounded` (fidelity),
-`CheckProbeQuiet` (discharged for the shipped probe by
-`checkProbe_discharged`), `KillerLegal` (a theorem given the store
-trace, `killerLegal_lifecycle`), driver windows (`Driver.lean`), and
-the single chess-position statement `NoZugzwangInMateBand` (see the
-section comment for the machine-level scenario showing it cannot be
-dropped while the suppression is report-keyed).  Sorry-free, by strong
-induction (the pass recursion sits at `depth - 3`). -/
+search's own recursion).
+
+Premises, exactly as the signature carries them: `KillerLegal` (itself
+a THEOREM given the store trace, `killerLegal_lifecycle`) and the
+driver window range (`Driver.lean`, `driver_wide_is_now_the_range`).
+`Bounded` is carried as `_hB` for uniformity with the sibling specs and
+is not consumed by this proof.
+
+**Layer 1 carries NO chess statement.**  Two premises that earlier
+versions of this theorem did carry have since left it:
+`CheckProbeQuiet` is DISCHARGED for the shipped probe
+(`checkProbe_discharged`; the in-check test is now the board predicate
+`rotate().king_capture()`), and `NoZugzwangInMateBand` is DISCHARGED by
+the band-edge arm -- a surviving sub-band virtual cutoff re-probes the
+pass at the boundary window, where both fail directions are decisive
+(`boundary_window_decisive`), so the search CERTIFIES what the premise
+asserted.  That premise had to be discharged rather than assumed: it is
+FALSE in real chess (witness `8/6p1/6R1/k7/2K5/8/8/8 w`, verified
+against python-chess).
+
+Sorry-free, by strong induction (the pass recursion sits at
+`depth - 3`). -/
 theorem bound_null_spec (G : QSGame)
     (guard kill : G.Pos → Bool)
     (_hB : Bounded G.toNullGame.toGame)
