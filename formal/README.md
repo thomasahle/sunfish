@@ -1362,6 +1362,26 @@ abstractions, each with its justification:
   them), which is why the spec carries the in-band hypothesis — as does
   `boundD2_spec`, for the same reason.
 
+### Landing note (the #158 review, 2026-08-11)
+
+The SHIPPED consumer is now the DOUBLE-PRIMED design: the terminal-veto
+arm is deleted and the correction gate widened to `not live` in both
+fail directions (`boundD2''`/`boundKCX''`, `bound_null_spec''`,
+`production''_eq_reference''` — a verified SPEC CHANGE, tighter at
+terminals: `vetoArm_spec_change_witness`), and the band fast-path
+disjunct is deleted (`bandReport_probe_failsLow`).  The null validation
+now lives IN THE GENERATOR at the yield site (veto by omission — the
+fold rule made literal); this is a refactoring of the same function
+(node-identical, 457,039 nodes at depth 9 from startpos) and the
+mapping rows reading "consumer interception" should be read as the
+generator's validated null yield.  Additions landed with the review:
+the root-eviction guard on `tp_move` (the Qxc6 race — eviction skips
+`self.root`; killerLegal_lifecycle covers it as a deletion choice) and
+the commit-on-completed-depth rule in both driver loops (a mid-depth
+fail-high is a candidate, promoted only when its depth's bracket
+converges — closes the consumer-protocol gap that `storedMove_attains`
+was too window-relative to exclude).
+
 ## Guideline for search-changing PRs
 
 **A search-changing PR should identify which lemma it preserves or

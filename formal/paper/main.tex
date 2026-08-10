@@ -9,7 +9,7 @@
 %
 % Alternative titles (pick one, or keep the current):
 %   * "The Docstring Was a Theorem: Verifying and Pricing Selective
-%      Search in a 146-Line Chess Engine"
+%      Search in a 142-Line Chess Engine"
 %   * "Gamma May Shape Termination: A Soundness Taxonomy for Selective
 %      Search, Machine-Checked and ELO-Priced"
 %   * "A Score Is Not a Legality Proof: Verify-on-Suspicion in a
@@ -79,7 +79,7 @@
 \maketitle
 
 \begin{abstract}
-Sunfish is a chess engine whose whole logic fits in 146 lines of Python,
+Sunfish is a chess engine whose whole logic fits in 142 lines of Python,
 and whose docstrings state, in unusually precise English, the contracts
 its search is supposed to satisfy.  We report on a campaign that
 treated those docstrings as latent formal specifications: we transcribed
@@ -137,7 +137,7 @@ neither loop is enough --- the engine has to be changed.
 
 Sunfish\footnote{\url{https://github.com/thomasahle/sunfish}} is a
 minimalist chess engine: with comments and whitespace removed, the
-engine proper is 146 lines of Python, yet it plays at ratings above 2000
+engine proper is 142 lines of Python, yet it plays at ratings above 2000
 on Lichess, where it runs in production as the bot
 \texttt{sunfish-engine}.  What makes it an unusual verification target
 is not its size but its \emph{documentation}: the docstring of its
@@ -1918,7 +1918,7 @@ The design above is easier to specify than to implement.  The
 \emph{specification} wants an eager entry scan: at any king-capturable
 node, return $\MU$ immediately, before the table, before the repetition
 check, before anything.  The \emph{implementation} cannot afford that
---- a full legality scan at every node is not a price a 146-line Python
+--- a full legality scan at every node is not a price a 142-line Python
 engine can pay --- so it earns the same guarantee lazily, through the
 interception, the move order, and the killer table.
 
@@ -2771,7 +2771,7 @@ The verified prior work above shares a convenient property that sunfish
 does not have: it specifies searches over \emph{legal} move
 generators, where ``no moves'' is directly observable and terminal
 values need no reconstruction.  Pseudo-legal, king-capture search ---
-the idiom that makes a 146-line engine possible at all --- moves
+the idiom that makes a 142-line engine possible at all --- moves
 terminality from an observation to an inference, and
 Section~\ref{sec:refuted} is an account of that inference going wrong
 in three ways.  We are not aware of prior formal work on it, and we
