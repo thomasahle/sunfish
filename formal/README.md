@@ -350,6 +350,52 @@ tactic only, so a full build takes seconds.
       doctrine (both calls soundly bracket the one
       `(pos, depth)`-determined function, which is all must-fail-low
       consumes).
+    - **The double-primed consumer (`boundKCX''`), modeled AHEAD of
+      the code** (final section of the file) — the pending
+      restructuring that deletes the ENTIRE remaining veto arm (the
+      anchor `0 < score and not proof and all(`) and widens the
+      post-loop correction gate from `best < gamma and not live` to
+      `not live`, so the terminal override fires after the loop in
+      BOTH fail directions.  **This is a SPEC CHANGE, not an
+      implementation change**: `vetoArm_spec_change_witness` is the
+      machine-checked separation — at an oracle-terminal node probed
+      with `gamma = -5`, a `-3` pass claim returns loose from the
+      shipped-shape consumer but the exact draw `0` from the
+      restructured one (both sound; different functions).  The
+      reference therefore moves in LOCKSTEP: `boundD2''` deletes the
+      terminal-veto disjunct from the verifier (`nullVerify''` is
+      band-edge-only) and normalizes the cut path at verified
+      terminals; the eager scan and the mate-band decline stay; the
+      DECLARED `nullValueD2` needs NO change (its terminal branch is
+      already the exact value) and layer 2 is untouched.  Re-proven
+      from scratch for the new pair: **`bound_null_spec''`** (layer 1)
+      and **`production''_eq_reference''`** — and the premise list
+      SHRINKS: the deleted arm's `not proof` was the only killer
+      consultation in either consumer's verification, so `kill` leaves
+      the reference's definition and **`KillerLegal` leaves every
+      double-primed theorem** (it stays load-bearing for the killer
+      YIELD, `storedMoveLegal`/Killer.lean).  The model never consumed
+      the proof-skip semantically; the engine-side residue is cost
+      (the widened scan runs at every surviving null cutoff,
+      short-circuited by the first legal move).
+      `positiveNullCutoffVerified` is SUBSUMED by the strictly
+      stronger **`boundD2''_terminal_exact`**: an oracle-terminal
+      non-capturable node returns EXACTLY the terminal value at every
+      depth ≥ 1 and driver window, cut or no cut, killer-free
+      (corollary `terminal_never_positive''`); the mate side stays
+      free (`nullAtMateD2''` — an in-check pass reports the exact
+      sentinel and can never fail high), and the in-check-terminal
+      cut case of layer 1 no longer needs it at all.  The 96-mismatch
+      lesson holds structurally: interception and correction live only
+      in the `d + 1` equations, the depth-0 leaf is unchanged
+      (`boundKCX''_qs_leaf` is `rfl`).  Transfers:
+      `boundKCX''_null_spec`, `kcx''_no_crossing`,
+      `kingCapturableReportsExact_restored''`, `boundD2''_spec` /
+      `boundKCX''_spec` (via the unchanged layer 2),
+      `kcx''_repairs_cexT`, `termFix2_spec_core` (the widened-gate
+      core: at a verified terminal the override covers both directions
+      by exactness; in the no-cut fold the old `best < gamma` conjunct
+      was implied anyway).
     - Loop infrastructure: `searchMoves_eq_init_all` (loop exhaustion,
       the converse of `searchMoves_eq_init`) and `searchMoves_init_max`
       (the `max rn best_real` restructuring equals the code's single
