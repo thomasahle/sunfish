@@ -1,0 +1,51 @@
+# lichess-bot configuration for the packed-NNUE sunfish.
+# Copied to /opt/lichess-bot/config.yml by setup.sh, which fills in the token.
+token: "YOUR_TOKEN_HERE"
+url: "https://lichess.org/"
+
+engine:
+  dir: "/opt/sunfish-packed"
+  name: "sunfish_packed.py"
+  working_dir: "/opt/sunfish-packed"
+  protocol: "uci"
+  ponder: true
+  # Engine 10 niceness levels below the bot's event loop (classic's
+  # production lesson: at equal priority a deep ponder search starved the
+  # loop reading the opponent's move -- a 23 s stall flagged a won game).
+  # The polyglot header execs pypy3, inheriting the niceness.
+  interpreter: "nice"
+  interpreter_options:
+    - "-n"
+    - "10"
+  uci_options:
+    # Sized for 12 GB. A packed Position carries the accumulator big int
+    # (~1.2 kB at N=256 + bilinear lanes), and tp_score keys hold one per
+    # entry: ~2-3 kB resident per entry under pypy, tables bounded at
+    # 2 * TABLE_SIZE entries -> roughly 5-6 GB peak at 10^6.  That fits
+    # with room for pypy baseline + lichess-bot's pool; it also removes
+    # the eviction-pressure regime entirely (the root guard stays as
+    # belt-and-braces).  On a 1 GB box this must come DOWN to ~50000.
+    TABLE_SIZE: 1000000
+
+# SF_NET is inherited from the systemd unit's Environment= -- the engine
+# child gets it through lichess-bot.
+
+challenge:
+  concurrency: 1
+  # No bullet: the deep-iteration overrun class lives there (see the
+  # armed-deadline fix in the go loops; TCEC forfeit data).  Rapid and
+  # classical are where the eval shows.
+  accept_bot: false
+  variants:
+    - standard
+  time_controls:
+    - blitz
+    - rapid
+    - classical
+  min_increment: 1
+  modes:
+    - casual
+    - rated
+
+matchmaking:
+  allow_matchmaking: false

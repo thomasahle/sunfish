@@ -66,6 +66,11 @@ from mock_lichess import MockLichess, TERMINAL_STATUSES  # noqa: E402
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ENGINE_DIR = Path(os.environ.get("SUNFISH_ENGINE_DIR", REPO_ROOT))
+# On this branch the deployed engine is the packed one; SF_NET must point at
+# a net the engine can load (the child inherits it through lichess-bot).
+ENGINE_FILE = os.environ.get("SUNFISH_ENGINE_FILE", "sunfish_packed.py")
+if ENGINE_FILE == "sunfish_packed.py":
+    os.environ.setdefault("SF_NET", str(REPO_ROOT / "packed" / "net128.pickle"))
 CACHE_DIR = Path(os.environ.get("LICHESS_BOT_CACHE",
                                 Path.home() / ".cache" / "sunfish-bot-ci"))
 LICHESS_BOT_URL = "https://github.com/lichess-bot-devs/lichess-bot"
@@ -122,7 +127,7 @@ def _ensure_venv(checkout: Path) -> Path:
 @pytest.fixture(scope="session")
 def lichess_bot():
     """(checkout dir, venv python) for the pinned lichess-bot release."""
-    assert (ENGINE_DIR / "sunfish.py").exists(), f"no engine in {ENGINE_DIR}"
+    assert (ENGINE_DIR / ENGINE_FILE).exists(), f"no engine in {ENGINE_DIR}"
     assert (ENGINE_DIR / "tools" / "uci.py").exists(), f"no tools/ in {ENGINE_DIR}"
     checkout = _ensure_checkout()
     return checkout, _ensure_venv(checkout)
@@ -135,7 +140,7 @@ url: "{base_url}"
 
 engine:
   dir: "{ENGINE_DIR}"
-  name: "sunfish.py"
+  name: "{ENGINE_FILE}"
   working_dir: "{ENGINE_DIR}"
   protocol: "uci"
   ponder: true

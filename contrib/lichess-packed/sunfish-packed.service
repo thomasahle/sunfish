@@ -1,0 +1,26 @@
+[Unit]
+Description=Sunfish packed-NNUE lichess bot
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=sunfish
+WorkingDirectory=/opt/lichess-bot
+# The engine reads its net from SF_NET; lichess-bot passes its environment
+# through to the engine child it spawns.
+Environment=SF_NET=/opt/sunfish-packed/net.pickle
+ExecStart=/opt/lichess-bot/venv/bin/python lichess-bot.py
+Restart=always
+RestartSec=10
+
+# The bot's event loop must always outrank the engine (classic production
+# lesson).  CPUWeight governs the unit against the rest of the box; the
+# engine itself is additionally launched via `nice -n 10` (config.yml
+# interpreter), separating it from the loop inside the cgroup.
+CPUWeight=200
+# 12 GB instance: leave headroom for the kernel and sshd; the TABLE_SIZE
+# arithmetic in config.yml keeps the engine well inside this.
+MemoryMax=10G
+
+[Install]
+WantedBy=multi-user.target
