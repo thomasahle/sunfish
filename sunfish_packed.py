@@ -686,8 +686,14 @@ class Searcher:
                 # Save the move for pv construction and killer heuristic
                 if move is not None:
                     self.tp_move[pos] = move
+                    # Never evict the current search root: its killer is the
+                    # answer the go loop plays, and once the table churns
+                    # more than TABLE_SIZE stores in one deep probe, FIFO
+                    # would age it out MID-SEARCH -- a later deep fail-low
+                    # probe then stores whatever capture sorts first and a
+                    # timeout plays it (classic's Qxc6 giveaway class).
                     if len(self.tp_move) > TABLE_SIZE:
-                        del self.tp_move[next(iter(self.tp_move))]
+                        del self.tp_move[next(k for k in self.tp_move if k != self.root)]
                 break
 
         # Stalemate checking is a bit tricky: Say we failed low, because
@@ -762,7 +768,7 @@ class Searcher:
         self.tp_score.clear()
         # Table choice is fixed for the whole search (and tp_score is
         # cleared above), so every bound targets one value function.
-        pos = history[-1]
+        pos = self.root = history[-1]
         bare = sum(c.isupper() for c in pos.board) == 1 or sum(c.islower() for c in pos.board) == 1
         pst["K"] = K_END if bare else K_MID
 
@@ -864,20 +870,32 @@ def main():
             think = times.get("movetime", think) / 1000
 
             start = time.time()
-            move_str = None
-            for depth, gamma, score, move in searcher.search(hist):
-                # The only way we can be sure to have the real move in tp_move,
-                # is if we have just failed high.
-                if score >= gamma:
-                    i, j = move.i, move.j
-                    if len(hist) % 2 == 0:
-                        i, j = 119 - i, 119 - j
-                    move_str = render(i) + render(j) + move.prom.lower()
-                    print("info depth", depth, "score cp", score, "pv", move_str)
-                if move_str and time.time() - start > think * 0.8:
-                    break
+            # Hard in-search deadline: iteration boundaries can be seconds
+            # apart at deep depths, so the soft 0.8*think break alone can
+            # overrun arbitrarily and forfeit on time.  max(.05) keeps a
+            # degenerate clock from stopping before any move exists.
+            searcher.deadline = start + max(think, .05)
+            # best is COMMITTED only when a depth completes (its bracket
+            # converged): a mid-depth fail-high can come from a deep
+            # fail-low dive probe at an absurd gamma and is only a
+            # candidate (classic's Qxc6 giveaway class).
+            best, cand, d0 = None, None, 1
+            try:
+                for depth, gamma, score, move in searcher.search(hist):
+                    if depth > d0:
+                        best, d0 = cand or best, depth
+                    if score >= gamma:
+                        i, j = move.i, move.j
+                        if len(hist) % 2 == 0:
+                            i, j = 119 - i, 119 - j
+                        cand = render(i) + render(j) + move.prom.lower()
+                        print("info depth", depth, "score cp", score, "pv", cand)
+                    if (best or cand) and time.time() - start > think * 0.8:
+                        break
+            except Stop:
+                pass
 
-            print("bestmove", move_str or '(none)')
+            print("bestmove", best or cand or '(none)')
 
 
 if __name__ == "__main__":
