@@ -990,8 +990,11 @@ theorem forcedMate_of_nullValueD2 (G : QSGame) (guard : G.Pos → Bool)
     have hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true) := by
       simp [hcapf]
     by_cases hkg : G.eval p ≤ -MATE_LOWER
-    · rw [nullValueD2_kingGone G guard D p hkg] at hband
-      omega
+    · -- (`absurd`, not a bare `omega`: an omega closing a
+      -- non-arithmetic goal routes through `Classical.byContradiction`,
+      -- and this theorem is choice-free without it.)
+      rw [nullValueD2_kingGone G guard D p hkg] at hband
+      exact absurd hband (by omega)
     cases D with
     | zero =>
       exfalso
