@@ -628,6 +628,32 @@ strictly below the window there), and that move is admitted, legal
 futility stores attain through the kingless sentinel
 (`substitution_attains`); eviction stores nothing.
 
+*(C) No false mates* — the converse of milestone 1, and the prize: a
+mate-band declared value at a legally-reached root IS a forced mate
+within the probed depth (`forcedMate_of_nullValueD2`), so the driver's
+certified `MATE_LOWER ≤ lower` is never a lie (`mate_report_honest` /
+`_kcx`, plus the mated-side dual `forcedlyMated_of_nullValueD2` /
+`mated_report_honest`).  Two findings.  First, **`NoZugzwang` is not
+needed**: the A1 suppression is baked into the declared function
+(`nullTermD2_lt_ML`), so a band-value fold can never originate in the
+pass term — no-false-mates holds for `nullValueD2` itself, not just
+its zugzwang-free validity region.  Second, the **defender-side QS
+filter is a genuine obstruction exactly at frontier depth**: the
+value's defender fold ranges over `movesAbove`, real chess doesn't; at
+defender remaining depth ≥ 2 the tables' floor admits everything
+(`ValFloor G 192` vs `val_lower 2 = -240`), but at depth exactly 1 a
+legal reply valued in `[-192, -100)` is invisible, and `CexF`
+machine-checks the resulting falsity — all fidelity premises hold, the
+depth-2 declared value is the full `MATE_UPPER`, NO forced mate exists
+(the defender's ≥100cp escape to stalemate is filtered), and one more
+ply computes the honest 0 (`cexF_false_mate_at_frontier`).  The
+premise that closes the frontier is `NoMaskedMobility` — retired with
+the rejected reduced scan, resurrected as a live layer-2 premise with
+its first real consumer, and proven REQUIRED by the countermodel
+(`cexF_masked_mobility`).  Spine premises: `ValFloor G 192` +
+`EvalQuiet` (fidelity), `NoMaskedMobility` (chess, layer 2), root
+legality (`hasKingCapture = false`, the `HistoryLegal` shape).
+
 **The production ≡ reference transfer** additionally uses
 `KingCaptureValHigh` (`EvalBounds`) and `CaptureFirst` — itself
 **DISCHARGED** (`captureFirst_of_sorted`) from `MovesSortedByVal` +
