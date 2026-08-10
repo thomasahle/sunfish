@@ -440,6 +440,32 @@ tactic only, so a full build takes seconds.
     `boundKCX_null_spec` and inherit their `Classical.choice`; the
     spine, dual and transfer are `propext`/`Quot.sound` only.)
 
+- **`Sunfish/Classification.lean`** — milestone 3: **eventual
+  classification**.  `eventual_classification` composes the whole
+  liveness arc into ONE trichotomy for the game sunfish plays (chess
+  without draw rules), at a legally-reached position: a forced mate
+  puts the declared value in the band at every `D ≥ k + 1` (win), the
+  mated dual at `D ≥ k + 2` (loss), and with no forced mate for either
+  side at any horizon the value stays STRICTLY inside the band at
+  every depth (neither) — the contrapositives of no-false-mates and
+  its dual, floor-free.  Companions: `classification_exclusive` (the
+  arms cannot coexist; spine-only, `propext`/`Quot.sound`),
+  `eventual_mate_iff` / `eventual_mated_iff` (a forced mate exists at
+  SOME horizon iff the value reaches the band at SOME depth), and
+  `classification_visible` (+ `_kcx`): after the driver's 15-probe
+  budget the converged bracket reports the classification — the
+  certified end lands within `EVAL_ROUGHNESS` of the band edge in the
+  win/loss arms, and in the neither arm BOTH ends stay strictly off
+  the band edges (the slop-free direction, no-false-mates through the
+  bracket invariant).  The premise ledger is the module comment: each
+  fidelity/chess premise is named with the arm it pays for, alongside
+  the two recorded (not implemented) discharge options — the
+  depth-decaying guard for `NoZugzwang`, and the frontier-tail
+  t-variant for `NoMaskedMobility` (Part B of the file, below).  The
+  file also carries an honesty note: "draw" here means no-forced-mate
+  in the ruleless game; FIDE draws are NOT detected as 0 (K+B vs K
+  converges to the sub-band arm, not to 0).
+
 - **`Sunfish/Killer.lean`** — **KillerIsKingCapture**, proven sorry-free
   (`boundKill_spec`): threading `tp_move` through the search as state
   (position-keyed, store-on-fail-high-only, sunfish.py lines 373, 388–389,
@@ -717,6 +743,24 @@ whole lifecycle transfers (`killerInv_withEval`,
 `killerLegal_lifecycle_pstSwap` — cross-search consumption of
 old-eval `tp_move` entries is exactly this theorem).
 
+**Liveness milestone 3 — eventual classification**
+(`Sunfish/Classification.lean`).  The arc composed into one theorem:
+`eventual_classification`, the trichotomy for the ruleless game at a
+legally-reached position — win (band value at `D ≥ k + 1`,
+`forcedMate_complete`), loss (the mated dual at `D ≥ k + 2`), neither
+(strictly sub-band at EVERY depth — the inversions' contrapositives;
+no `NoZugzwang` on this arm).  Premise ledger per arm in the module
+comment; `classification_exclusive`, `eventual_mate_iff` /
+`eventual_mated_iff`, and the driver corollaries
+`classification_visible` (+`_kcx`) — the converged bracket reports the
+classification, with `EVAL_ROUGHNESS` slop only on the certified side
+and none on the no-false-mates side.  FIDE draws are out of scope by
+construction ("neither" = no forced mate, not "score 0").
+`NoMaskedMobility` is hereby a LIVE layer-2 premise with three
+consumers (no-false-mates, its dual, and the trichotomy's honesty
+arm); its recorded discharge option is the frontier-tail t-variant
+(Part B of the same file, below).
+
 **The production ≡ reference transfer** additionally uses
 `KingCaptureValHigh` (`EvalBounds`) and `CaptureFirst` — itself
 **DISCHARGED** (`captureFirst_of_sorted`) from `MovesSortedByVal` +
@@ -761,9 +805,14 @@ a claim about the shipped code that is false:
 Retired premises, kept only as records of rejected designs:
 `TerminalPseudoSafe`, `NullAtStalemateNonpositive`, `StandPatAtTerminal`
 (all refuted), `KingCapturableReportsExact` (refuted for the pre-kcx
-loop, restored by construction after it), `NoMaskedMobility` and
-`scanNewB` (the rejected reduced scan), `NullBetQS` / `NullBetD2` (the
-null bet, superseded by the two-layer split), `CheckProbeOK` (deleted).
+loop, restored by construction after it), `scanNewB` (the rejected
+reduced scan), `NullBetQS` / `NullBetD2` (the null bet, superseded by
+the two-layer split), `CheckProbeOK` (deleted).  `NoMaskedMobility` is
+NOT on this list any more: retired with the reduced scan, it was
+RESURRECTED by liveness milestone 2C as a live layer-2 premise — its
+consumers are no-false-mates, the mated dual, and the trichotomy's
+honesty arm (`Sunfish/Classification.lean`), and `CexF` proves it
+required for the shipped value function.
 
 ## Zero sorries: named hypotheses instead
 
@@ -907,10 +956,22 @@ statement* — the honest form — not a deferred proof:
   failure of either form, and it threatens only value accuracy at
   non-terminal nodes, never the table's self-consistency.
 
-- **`NoMaskedMobility`** (`Sunfish/Stalemate.lean`, kcx section) — the
-  premise the REJECTED threshold-reduced scan would have needed;
-  consumed by nothing shipped (`8843bb0` restored full coverage on the
-  `reducedScan_needs_premise` countermodel).  Kept as the record.
+- **`NoMaskedMobility`** (`Sunfish/Stalemate.lean`, kcx section) — "a
+  position whose every depth-1-admitted move is illegal has no legal
+  move at all."  Born as the premise the REJECTED threshold-reduced
+  scan would have needed (`8843bb0` restored full coverage on the
+  `reducedScan_needs_premise` countermodel), then RESURRECTED as a
+  live layer-2 premise by liveness milestone 2C: it is what closes the
+  defender-side QS filter at frontier depth, `CexF` machine-checks
+  that no-false-mates is FALSE without it, and its consumers are
+  `forcedMate_of_nullValueD2`, `forcedlyMated_of_nullValueD2`, the
+  report-honesty corollaries and the trichotomy's honesty arm
+  (`Sunfish/Classification.lean`).  Failure shape: all high-valued
+  moves illegal while some legal move drops > 100cp of table value; no
+  natural chess position is known, but table arithmetic does not
+  exclude it.  Recorded discharge option, proof-first: the
+  frontier-tail t-variant (Part B of `Classification.lean`), for which
+  the premise's role is a theorem.
 
 - **`NoZugzwang` / `NoZugzwangInMateBand`** (`Sunfish/Stalemate.lean`,
   two-layer section) — layer 2's validity region ("pass-value ≤ best
@@ -1134,8 +1195,10 @@ abstractions, each with its justification:
   where a search VALUE is needed (the band-edge boundary probe, PR
   #162).  `scan_sites_unreachable_at_capturable`: neither scan site
   ever sees a capturable-opponent-king board.  REJECTED designs stay on
-  record: `reducedScan_needs_premise` (the accepted disqualifier),
-  `scanNewB`, `NoMaskedMobility` — consumed by nothing shipped.  The
+  record: `reducedScan_needs_premise` (the accepted disqualifier) and
+  `scanNewB` — consumed by nothing shipped.  (`NoMaskedMobility`, once
+  on that list, has since been resurrected as a live layer-2 premise —
+  see its inventory entry.)  The
   killer fast path stands (`fastPath_decides`/`fastPath_skip_sound`).
 - **The king-capture contract is STRATIFIED by depth** (`6ecb4af`
   deleted the depth-0 arm of the interception):
