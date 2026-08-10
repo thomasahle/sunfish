@@ -76,11 +76,17 @@ _PIECES = "PNBRQKpnbrqk"
 B = _d.get("B", 1)
 
 
+assert B in (1, 4, 8), "unknown king-bucket scheme B=%r" % B
+
+
 def kbucket(s):
-    """Bucket of a perspective's OWN king on its OWN-frame square: back two
-    ranks vs advanced, times queenside vs kingside (must match
-    packed/pnet.py kbucket -- verify.py checks the composition)."""
+    """Bucket of a perspective's OWN king on its OWN-frame square.  The
+    scheme is selected by B and must match packed/pnet.py (verify.py checks
+    the composition): B == 4 is back-two-ranks vs advanced times queenside
+    vs kingside; B == 8 refines the file split to pairs (ab/cd/ef/gh)."""
     r, f = divmod(s, 10)
+    if B == 8:
+        return (r <= 7) * 4 + (f - 1) // 2
     return (r <= 7) * 2 + (f >= 5)
 
 

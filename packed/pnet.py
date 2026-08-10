@@ -159,6 +159,9 @@ class PackedNet:
         self.gp = d["gp"]                   # packed G_k (clamp ceiling)
         self.G = d["G"]                     # per-lane gains, block order
         self.B = B = d.get("B", 1)          # own-king buckets per perspective
+        if B not in (1, 4, 8):
+            raise ValueError("unknown king-bucket scheme B=%r" % B)
+        self.kbf = kbucket8 if B == 8 else kbucket
         if B == 1:
             # rows[pf][piece][sq120] -- pf==1 entries are the SAME int objects
             rows0 = d["rows"]
@@ -229,7 +232,8 @@ class PackedNet:
         frame buckets) of a mover-oriented board.  B == 1 nets have one."""
         if self.B == 1:
             return 0
-        own, opp = kbucket(board.index("K")), kbucket(119 - board.index("k"))
+        kbf = self.kbf
+        own, opp = kbf(board.index("K")), kbf(119 - board.index("k"))
         return (own * self.B + opp) if pf == 0 else (opp * self.B + own)
 
     def from_board(self, board, pf):
