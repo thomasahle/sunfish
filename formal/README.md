@@ -313,6 +313,43 @@ tactic only, so a full build takes seconds.
       identity); **`d2_repairs_cexT`** / `kcx_repairs_cexT` — both
       loops return the exact 0 at both windows on the countermodel
       that crossed the pre-verification design.
+    - **The primed consumer (`boundKCX'`), modeled AHEAD of the code**
+      (final section of the file) — the pending deletion of the veto
+      arm's first disjunct (the anchor `score >= MATE_LOWER or`),
+      which leaves the band-edge probe as the SOLE implementer of the
+      mate-band decline at non-capturable nodes.  In the model the
+      deletion is exactly one conjunct — `NCut`'s `rn < MATE_LOWER`
+      guard; `NCut'` drops it — and
+      **`production_prime_eq_production`** proves the primed consumer
+      computes the SAME function as the shipped one at every position,
+      depth and driver-range window: the deletion is
+      semantics-preserving, and the declared `nullValueD2`, the
+      reference `boundD2` and its `useD2` decline stay UNCHANGED (the
+      decline remains the declared semantics; only its implementation
+      moves into the probe).  Engine: **`bandReport_probe_failsLow`**
+      (must-fail-low) — a mate-band virtual claim means the pass
+      search failed low at its own window, so layer 1 pins the pass
+      VALUE at or below `-MATE_LOWER` and the boundary probe cannot
+      fail high; the band-edge arm then re-derives the very
+      `-MATE_UPPER` the deleted disjunct hardcoded.  Depth coverage is
+      structural (`nCut'_needs_depth`: the interception exists only
+      above the null gate; futility yields are sub-gamma by
+      construction, the stand-pat is depth 0).  Transfers, one rewrite
+      each: `production_prime_eq_reference`, `boundKCX'_null_spec`,
+      `kcx'_no_crossing`, `kingCapturableReportsExact_restored'`,
+      `boundKCX'_spec`, `kcx'_repairs_cexT`; the terminal side is
+      `virtualCutoffValidated'` (one case shorter), and the mate side
+      (`nullAtMateD2`, `positiveNullCutoffVerified`) is
+      reference-machinery, untouched.  Axiom note: the primed
+      equivalence inherits `Classical.choice` (it consumes layer-1
+      soundness itself, not just loop congruence) — the same set as
+      `boundKCX_null_spec`.  Fidelity note, stated in the file: the
+      model identifies the pass search and the boundary probe with one
+      definitional recursion; in the engine the two calls may see
+      different table states, and the gap is closed by the point-spec
+      doctrine (both calls soundly bracket the one
+      `(pos, depth)`-determined function, which is all must-fail-low
+      consumes).
     - Loop infrastructure: `searchMoves_eq_init_all` (loop exhaustion,
       the converse of `searchMoves_eq_init`) and `searchMoves_init_max`
       (the `max rn best_real` restructuring equals the code's single

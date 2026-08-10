@@ -5326,4 +5326,423 @@ theorem stratLeaf_needs_futility :
     (-100 : Int) < 0 := by
   refine ⟨by decide, by decide, by decide, by decide, by decide⟩
 
+/-! # The primed consumer: the mate-band decline carried by the
+band-edge probe alone (the `score >= MATE_LOWER or` deletion, modeled
+ahead of the code)
+
+Proposed code change (Thomas): delete the FIRST disjunct of the
+interception's veto arm -- the anchor `score >= MATE_LOWER or` -- so
+the band-edge verification (the next arm: probe the pass at the
+boundary window `1 - MATE_LOWER`, withdraw on a fail-low) becomes the
+SOLE implementer of the mate-band decline at non-capturable nodes.
+The DECLARED value function `nullValueD2` KEEPS the decline in its
+definition, and the reference search `boundD2` (whose `useD2`
+suppression is that decline in option-disabling form) stays the
+executable spec, UNCHANGED; only the production consumer moves.  In
+the model the deletion is exactly ONE conjunct: `NCut`'s
+`rn < MATE_LOWER` guard on the surviving cutoff.  `NCut'` drops it,
+`boundKCX'` is `boundKCX` over `NCut'`, and
+**`production_prime_eq_production`** proves the primed consumer
+computes the SAME function as the shipped one at every position, depth
+and driver-range window -- so every kcx theorem transfers by one
+rewrite and the deletion is semantics-preserving.
+
+**Why it works -- must-fail-low (`bandReport_probe_failsLow`)**: a
+virtual fail-high whose report sits in the mate band (`gamma ≤ rn`,
+`MATE_LOWER ≤ rn`) says the pass search FAILED LOW at its own window
+(`rn = -(pass report)`, and `gamma ≤ rn` puts the pass report at or
+below `-gamma < 1 - gamma`), so layer 1's fail-low soundness
+(`bound_null_spec`) pins the pass VALUE at or below `-MATE_LOWER`.
+The boundary probe then cannot fail high: a fail-high report at
+`1 - MATE_LOWER` would lower-bound the SAME declared value, and
+`1 - MATE_LOWER ≤ bp ≤ nullValueD2(pass) ≤ -MATE_LOWER` is arithmetic
+nonsense.  So the probe fails low, the band-edge arm fires, and it
+assigns the very `-MATE_UPPER` the deleted disjunct assigned: the
+decline is RE-DERIVED where it used to be hardcoded.  (This is
+`boundary_window_decisive`'s fail-low half doing for the DECLINE what
+its fail-high half already did for the premise discharge.)
+
+**Depth coverage** is definitional in the model and structural in the
+code: the null option and its interception exist only under the
+`2 < depth` gate (`useD2` and `NCut'` both carry `2 < d`), at depths
+1-2 the only virtual yields are sub-mate futility estimates -- below
+gamma by construction (`futTerm_lt_gamma`), so they never reach the
+interception's fail-high test -- and the QS stand-pat lives at depth
+0, excluded by the interception's `if depth` gate.  So the band-edge
+arm (gated `depth > 2` in the code) is available at EVERY node where
+the deleted disjunct could have fired; `nCut'_needs_depth` records
+the model half.
+
+**What does not consume the deleted conjunct**, checked: the terminal
+side (`virtualCutoffValidated'` below -- a surviving cutoff at a
+verified terminal is still non-positive, same one-line proof), the
+mate side (`nullAtMateD2` and `positiveNullCutoffVerified` are
+REFERENCE-side theorems about `useD2`/`nullVerify`, untouched), and
+the substitution arm (the `hasKingCapture` disjunct of `NCut'`,
+kept verbatim).
+
+**Fidelity note**, the same stance the band-edge landing itself took:
+the model identifies the pass search and the boundary probe with the
+SAME definitional recursion, while the engine's two `bound()` calls
+may see different table states in between.  That gap is the CanNull
+layer's to close, and it does: under the point-spec doctrine both
+calls return sound brackets of the one `(pos, depth)`-determined
+value function, which is ALL must-fail-low consumes -- a sound
+fail-low at one window and a sound fail-high at the other, of the
+same function, cross. -/
+
+/-- **Must-fail-low** (reference form): a mate-band virtual claim
+forces the boundary probe to fail low.  `gamma ≤ rn` makes the pass
+search a fail-low at its own window, layer 1 pins the pass value at or
+below `-MATE_LOWER`, and a fail-high boundary report would cross it. -/
+theorem bandReport_probe_failsLow (G : QSGame) (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (hK : KillerLegal G kill)
+    (dp : Nat) (q : G.Pos) (gamma : Int)
+    (hg1 : -MATE_UPPER < gamma) (hg2 : gamma ≤ MATE_UPPER)
+    (hge : gamma ≤ -(boundD2 G guard kill dp q (1 - gamma)))
+    (hband : MATE_LOWER ≤ -(boundD2 G guard kill dp q (1 - gamma))) :
+    boundD2 G guard kill dp q (1 - MATE_LOWER) < 1 - MATE_LOWER := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  have hlow : boundD2 G guard kill dp q (1 - gamma) < 1 - gamma := by omega
+  have h1 := (bound_null_spec G guard kill hB hK dp q (1 - gamma)
+    (by omega) (by omega)).2 hlow
+  by_cases hbp : 1 - MATE_LOWER ≤ boundD2 G guard kill dp q (1 - MATE_LOWER)
+  · have h2 := (bound_null_spec G guard kill hB hK dp q (1 - MATE_LOWER)
+      (by omega) (by omega)).1 hbp
+    omega
+  · omega
+
+/-- Must-fail-low, production form (through the equivalence). -/
+theorem bandReport_probe_failsLow_kcx (G : QSGame)
+    (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame)
+    (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
+    (hK : KillerLegal G kill)
+    (dp : Nat) (q : G.Pos) (gamma : Int)
+    (hg1 : -MATE_UPPER < gamma) (hg2 : gamma ≤ MATE_UPPER)
+    (hge : gamma ≤ -(boundKCX G guard dp q (1 - gamma)))
+    (hband : MATE_LOWER ≤ -(boundKCX G guard dp q (1 - gamma))) :
+    boundKCX G guard dp q (1 - MATE_LOWER) < 1 - MATE_LOWER := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  rw [production_eq_reference G guard kill hB hV hCF hK dp q (1 - gamma)
+    (by omega) (by omega)] at hge hband
+  rw [production_eq_reference G guard kill hB hV hCF hK dp q (1 - MATE_LOWER)
+    (by omega) (by omega)]
+  exact bandReport_probe_failsLow G guard kill hB hK dp q gamma hg1 hg2 hge hband
+
+/-- The primed cut condition: `NCut` with the report-keyed mate-band
+guard `rn < MATE_LOWER` DELETED -- the model image of removing the
+`score >= MATE_LOWER or` disjunct.  A virtual fail-high now survives
+to cut whenever it is not a positive claim at a verified terminal AND
+the boundary probe failed high; the mate-band decline is whatever the
+boundary probe makes of the claim. -/
+def NCut' (G : QSGame) (guard : G.Pos → Bool) (rn bp : Int)
+    (d : Nat) (p : G.Pos) (gamma : Int) : Prop :=
+  (guard p = true ∧ 2 < d) ∧ gamma ≤ rn ∧
+    (hasKingCapture G.toNullGame.toGame p = true ∨
+      ((rn ≤ 0 ∨ allIllegalB G p = false) ∧ 1 - MATE_LOWER ≤ bp))
+
+instance (G : QSGame) (guard : G.Pos → Bool) (rn bp : Int)
+    (d : Nat) (p : G.Pos) (gamma : Int) : Decidable (NCut' G guard rn bp d p gamma) := by
+  unfold NCut'; infer_instance
+
+/-- Depth coverage, model half: below the null gate no primed cut
+exists and the fold contribution is the identity -- the deleted
+disjunct had nothing to do at depths the band-edge arm cannot reach.
+(The code half is structural: at depths 1-2 the only virtual yields
+are futility estimates, sub-gamma by construction --
+`futTerm_lt_gamma` -- and the depth-0 stand-pat is excluded by the
+interception's `if depth` gate.) -/
+theorem nCut'_needs_depth (G : QSGame) (guard : G.Pos → Bool) (rn bp : Int)
+    (d : Nat) (p : G.Pos) (gamma : Int) (hd : d ≤ 2) :
+    ¬ NCut' G guard rn bp d p gamma ∧
+      nFoldKCX G guard rn bp d p gamma = LOSS := by
+  constructor
+  · exact fun h => absurd h.1.2 (by omega)
+  · simp only [nFoldKCX]
+    rw [if_neg (fun h => absurd h.2 (by omega))]
+    rfl
+
+/-- The terminal side never consumed the deleted conjunct: a primed
+cutoff surviving at a non-capturable, oracle-terminal node is still
+non-positive -- same destructuring as `virtualCutoffValidated`, one
+case shorter. -/
+theorem virtualCutoffValidated' (G : QSGame)
+    (guard : G.Pos → Bool) (rn bp : Int) (d : Nat) (p : G.Pos) (gamma : Int)
+    (hcapf : hasKingCapture G.toNullGame.toGame p = false)
+    (hai : allIllegalB G p = true)
+    (hnc : NCut' G guard rn bp d p gamma) :
+    rn ≤ 0 := by
+  obtain ⟨_, _, hor⟩ := hnc
+  rcases hor with h | ⟨h2, _⟩
+  · rw [hcapf] at h; exact Bool.noConfusion h
+  · rcases h2 with h0 | hA
+    · exact h0
+    · rw [hai] at hA; exact Bool.noConfusion hA
+
+/-- **The primed production search**: `boundKCX` verbatim with `NCut'`
+for `NCut`.  Same fold species, same `termFix`, same substitution arm
+-- the one difference is that a mate-band virtual claim is referred to
+the boundary probe instead of being declined by inspection of its own
+report. -/
+def boundKCX' (G : QSGame) (guard : G.Pos → Bool) :
+    Nat → G.Pos → Int → Int
+  | 0, p, _gamma =>
+    if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+    else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
+    else G.eval p
+  | 1, p, gamma =>
+    if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+    else if NCut' G guard (-(boundKCX' G guard 0 (G.pass p) (1 - gamma))) (boundKCX' G guard 0 (G.pass p) (1 - MATE_LOWER)) 1 p gamma then
+      (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
+       else (-(boundKCX' G guard 0 (G.pass p) (1 - gamma))))
+    else
+      termFix G gamma
+        (max (max (nFoldKCX G guard (-(boundKCX' G guard 0 (G.pass p) (1 - gamma))) (boundKCX' G guard 0 (G.pass p) (1 - MATE_LOWER)) 1 p gamma) (futTerm G 1 gamma p))
+          (searchMoves gamma
+            (fun m => -(boundKCX' G guard 0 m (1 - gamma)))
+            (searchedAt G 1 gamma p) LOSS))
+        (searchMoves gamma
+            (fun m => -(boundKCX' G guard 0 m (1 - gamma)))
+            (searchedAt G 1 gamma p) LOSS)
+        p
+  | 2, p, gamma =>
+    if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+    else if NCut' G guard (-(boundKCX' G guard 0 (G.pass p) (1 - gamma))) (boundKCX' G guard 0 (G.pass p) (1 - MATE_LOWER)) 2 p gamma then
+      (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
+       else (-(boundKCX' G guard 0 (G.pass p) (1 - gamma))))
+    else
+      termFix G gamma
+        (max (max (nFoldKCX G guard (-(boundKCX' G guard 0 (G.pass p) (1 - gamma))) (boundKCX' G guard 0 (G.pass p) (1 - MATE_LOWER)) 2 p gamma) (futTerm G 2 gamma p))
+          (searchMoves gamma
+            (fun m => -(boundKCX' G guard 1 m (1 - gamma)))
+            (searchedAt G 2 gamma p) LOSS))
+        (searchMoves gamma
+            (fun m => -(boundKCX' G guard 1 m (1 - gamma)))
+            (searchedAt G 2 gamma p) LOSS)
+        p
+  | (d + 3), p, gamma =>
+    if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+    else if NCut' G guard (-(boundKCX' G guard d (G.pass p) (1 - gamma))) (boundKCX' G guard d (G.pass p) (1 - MATE_LOWER)) (d + 3) p gamma then
+      (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
+       else (-(boundKCX' G guard d (G.pass p) (1 - gamma))))
+    else
+      termFix G gamma
+        (max (max (nFoldKCX G guard (-(boundKCX' G guard d (G.pass p) (1 - gamma))) (boundKCX' G guard d (G.pass p) (1 - MATE_LOWER)) (d + 3) p gamma) (futTerm G (d + 3) gamma p))
+          (searchMoves gamma
+            (fun m => -(boundKCX' G guard (d + 2) m (1 - gamma)))
+            (searchedAt G (d + 3) gamma p) LOSS))
+        (searchMoves gamma
+            (fun m => -(boundKCX' G guard (d + 2) m (1 - gamma)))
+            (searchedAt G (d + 3) gamma p) LOSS)
+        p
+
+/-- The uniform successor equation for the primed search. -/
+theorem boundKCX'_succ (G : QSGame) (guard : G.Pos → Bool) (d : Nat) (p : G.Pos) (gamma : Int) :
+    boundKCX' G guard (d + 1) p gamma
+      = if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
+        else if NCut' G guard (-(boundKCX' G guard (d + 1 - 3) (G.pass p) (1 - gamma))) (boundKCX' G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) (d + 1) p gamma then
+          (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
+           else (-(boundKCX' G guard (d + 1 - 3) (G.pass p) (1 - gamma))))
+        else
+          termFix G gamma
+            (max (max (nFoldKCX G guard (-(boundKCX' G guard (d + 1 - 3) (G.pass p) (1 - gamma))) (boundKCX' G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) (d + 1) p gamma)
+                (futTerm G (d + 1) gamma p))
+              (searchMoves gamma
+                (fun m => -(boundKCX' G guard d m (1 - gamma)))
+                (searchedAt G (d + 1) gamma p) LOSS))
+            (searchMoves gamma
+                (fun m => -(boundKCX' G guard d m (1 - gamma)))
+                (searchedAt G (d + 1) gamma p) LOSS)
+            p := by
+  match d with
+  | 0 => rfl
+  | 1 => rfl
+  | d + 2 => rfl
+
+theorem boundKCX'_kingGone (G : QSGame) (guard : G.Pos → Bool)
+    (d : Nat) (p : G.Pos) (gamma : Int) (h : G.eval p ≤ -MATE_LOWER) :
+    boundKCX' G guard d p gamma = -MATE_UPPER := by
+  cases d with
+  | zero => simp only [boundKCX']; rw [if_pos h]
+  | succ d => rw [boundKCX'_succ, if_pos h]
+
+/-- **The deletion is semantics-preserving**: the primed consumer
+computes EXACTLY the shipped production function at every position,
+depth and driver-range window.  `NCut` implies `NCut'` by dropping a
+conjunct; conversely a primed cut is either a substitution (same
+disjunct) or sub-band -- because a mate-band claim forces the boundary
+probe to fail low (`bandReport_probe_failsLow_kcx`), contradicting the
+probe fail-high the primed cut carries -- and a sub-band survivor is a
+shipped cut verbatim.  Everything else in the two loops is shared
+syntax.  By strong induction, pass probes rewritten at `depth - 3`.
+
+Axiom note: unlike `production_eq_reference` (`propext`/`Quot.sound`
+only), this equivalence inherits `Classical.choice` -- it consumes
+layer-1 soundness itself (`bound_null_spec`, through must-fail-low),
+not just loop-shape congruence.  Same axiom set as
+`boundKCX_null_spec` and every other layer-1 consumer. -/
+theorem production_prime_eq_production (G : QSGame)
+    (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame)
+    (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
+    (hK : KillerLegal G kill) :
+    ∀ (d : Nat) (p : G.Pos) (gamma : Int),
+      -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
+      boundKCX' G guard d p gamma = boundKCX G guard d p gamma := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  intro d
+  induction d using Nat.strongRecOn with
+  | _ d ih =>
+    intro p gamma hg1 hg2
+    cases d with
+    | zero =>
+      simp only [boundKCX', boundKCX]
+    | succ d =>
+      by_cases hkg : G.eval p ≤ -MATE_LOWER
+      · rw [boundKCX'_kingGone G guard (d + 1) p gamma hkg,
+          boundKCX_kingGone G guard (d + 1) p gamma hkg]
+      · have hpasseq : -(boundKCX' G guard (d + 1 - 3) (G.pass p) (1 - gamma))
+            = -(boundKCX G guard (d + 1 - 3) (G.pass p) (1 - gamma)) := by
+          rw [ih (d + 1 - 3) (by omega) (G.pass p) (1 - gamma) (by omega) (by omega)]
+        have hbpeq : boundKCX' G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)
+            = boundKCX G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER) := by
+          rw [ih (d + 1 - 3) (by omega) (G.pass p) (1 - MATE_LOWER) (by omega) (by omega)]
+        rw [boundKCX'_succ, if_neg hkg, hpasseq, hbpeq, boundKCX_succ, if_neg hkg]
+        have hiff : NCut' G guard
+            (-(boundKCX G guard (d + 1 - 3) (G.pass p) (1 - gamma)))
+            (boundKCX G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER))
+            (d + 1) p gamma
+            ↔ NCut G guard
+            (-(boundKCX G guard (d + 1 - 3) (G.pass p) (1 - gamma)))
+            (boundKCX G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER))
+            (d + 1) p gamma := by
+          constructor
+          · intro h
+            obtain ⟨hen, hge, hor⟩ := h
+            refine ⟨hen, hge, ?_⟩
+            rcases hor with h' | ⟨hor2, hbe⟩
+            · exact Or.inl h'
+            · by_cases hml : (-(boundKCX G guard (d + 1 - 3) (G.pass p) (1 - gamma))) < MATE_LOWER
+              · exact Or.inr ⟨hml, hor2, hbe⟩
+              · exfalso
+                have hb := bandReport_probe_failsLow_kcx G guard kill hB hV hCF hK
+                  (d + 1 - 3) (G.pass p) gamma hg1 hg2 hge (by omega)
+                omega
+          · intro h
+            obtain ⟨hen, hge, hor⟩ := h
+            refine ⟨hen, hge, ?_⟩
+            rcases hor with h' | ⟨_, hor2, hbe⟩
+            · exact Or.inl h'
+            · exact Or.inr ⟨hor2, hbe⟩
+        have hSeq : searchMoves gamma
+            (fun m => -(boundKCX' G guard d m (1 - gamma)))
+            (searchedAt G (d + 1) gamma p) LOSS
+            = searchMoves gamma
+                (fun m => -(boundKCX G guard d m (1 - gamma)))
+                (searchedAt G (d + 1) gamma p) LOSS := by
+          refine searchMoves_congr gamma _ _ _ LOSS (fun m _ => ?_)
+          show -(boundKCX' G guard d m (1 - gamma))
+              = -(boundKCX G guard d m (1 - gamma))
+          rw [ih d (by omega) m (1 - gamma) (by omega) (by omega)]
+        by_cases hnc : NCut G guard
+            (-(boundKCX G guard (d + 1 - 3) (G.pass p) (1 - gamma)))
+            (boundKCX G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER))
+            (d + 1) p gamma
+        · rw [if_pos (hiff.mpr hnc), if_pos hnc]
+        · rw [if_neg (fun h => hnc (hiff.mp h)), if_neg hnc, hSeq]
+
+/-! ### Transfers to the primed consumer
+
+One rewrite each, against the UNCHANGED reference and declared value.
+Anything else proven about `boundKCX` (e.g. the liveness corollary
+`forcedMate_probe_failsHigh_kcx`) transfers the same way through
+`production_prime_eq_production`. -/
+
+/-- The primed consumer computes the reference function. -/
+theorem production_prime_eq_reference (G : QSGame)
+    (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame)
+    (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
+    (hK : KillerLegal G kill) :
+    ∀ (d : Nat) (p : G.Pos) (gamma : Int),
+      -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
+      boundKCX' G guard d p gamma = boundD2 G guard kill d p gamma := by
+  intro d p gamma h1 h2
+  rw [production_prime_eq_production G guard kill hB hV hCF hK d p gamma h1 h2]
+  exact production_eq_reference G guard kill hB hV hCF hK d p gamma h1 h2
+
+/-- Layer 1 for the primed consumer: brackets the (unchanged,
+decline-keeping) declared value function `nullValueD2`. -/
+theorem boundKCX'_null_spec (G : QSGame)
+    (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame)
+    (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
+    (hK : KillerLegal G kill) :
+    ∀ (d : Nat) (p : G.Pos) (gamma : Int),
+      -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
+      (gamma ≤ boundKCX' G guard d p gamma →
+        boundKCX' G guard d p gamma ≤ nullValueD2 G guard d p) ∧
+      (boundKCX' G guard d p gamma < gamma →
+        nullValueD2 G guard d p ≤ boundKCX' G guard d p gamma) := by
+  intro d p gamma h1 h2
+  rw [production_prime_eq_reference G guard kill hB hV hCF hK d p gamma h1 h2]
+  exact bound_null_spec G guard kill hB hK d p gamma h1 h2
+
+/-- Table consistency for the primed consumer: no crossed entries. -/
+theorem kcx'_no_crossing (G : QSGame)
+    (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame)
+    (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
+    (hK : KillerLegal G kill)
+    (d : Nat) (p : G.Pos) (g1 g2 : Int)
+    (hg1a : -MATE_UPPER < g1) (hg1b : g1 ≤ MATE_UPPER)
+    (hg2a : -MATE_UPPER < g2) (hg2b : g2 ≤ MATE_UPPER)
+    (hhi : g1 ≤ boundKCX' G guard d p g1)
+    (hlo : boundKCX' G guard d p g2 < g2) :
+    boundKCX' G guard d p g1 ≤ boundKCX' G guard d p g2 := by
+  have h1 := (boundKCX'_null_spec G guard kill hB hV hCF hK
+    d p g1 hg1a hg1b).1 hhi
+  have h2 := (boundKCX'_null_spec G guard kill hB hV hCF hK
+    d p g2 hg2a hg2b).2 hlo
+  omega
+
+/-- The restored invariant survives the deletion. -/
+theorem kingCapturableReportsExact_restored' (G : QSGame)
+    (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame)
+    (hV : KingCaptureValHigh G) (hCF : CaptureFirst G) (hK : KillerLegal G kill)
+    (d : Nat) (p : G.Pos) (gamma : Int)
+    (hg1 : -MATE_UPPER < gamma) (hg2 : gamma ≤ MATE_UPPER)
+    (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
+    (hcap : hasKingCapture G.toNullGame.toGame p = true) :
+    boundKCX' G guard d p gamma = MATE_UPPER := by
+  rw [production_prime_eq_reference G guard kill hB hV hCF hK d p gamma hg1 hg2]
+  exact boundD2_of_capture G guard kill d p gamma hkg hcap
+
+/-- The chess-facing spec: under `NoZugzwang` the primed consumer
+brackets the real-move value. -/
+theorem boundKCX'_spec (G : QSGame)
+    (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame)
+    (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
+    (hK : KillerLegal G kill)
+    (hZ : NoZugzwang G guard) :
+    ∀ (d : Nat) (p : G.Pos) (gamma : Int),
+      -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
+      BoundSpecD2 G d p gamma (boundKCX' G guard d p gamma) := by
+  intro d p gamma h1 h2
+  rw [production_prime_eq_reference G guard kill hB hV hCF hK d p gamma h1 h2]
+  exact boundD2_spec G guard kill hB hK hZ d p gamma h1 h2
+
+/-- The primed loop on the countermodel that broke the
+pre-verification design: still the exact 0 at both windows. -/
+theorem kcx'_repairs_cexT :
+    boundKCX' CexT (fun _ => true) 4 () 10 = 0 ∧
+    boundKCX' CexT (fun _ => true) 4 () 100 = 0 :=
+  ⟨by decide, by decide⟩
+
 end Sunfish
