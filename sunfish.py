@@ -13,8 +13,7 @@ import time
 from itertools import count
 from collections import namedtuple
 
-__version__ = "2026"
-version = "sunfish " + __version__
+version = "sunfish 2026"
 
 ###############################################################################
 # Piece-Square tables. Tune these to change sunfish's behaviour
