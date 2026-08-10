@@ -88,11 +88,11 @@ for k, table in pst.items():
 # swap simultaneously rewards driving the bare king to the edge and
 # marching our own king up - the two halves of classical mop-up.
 K_MID = pst["K"]
-K_END = (0,) * 20 + sum(
-    ((0,) + tuple(
-        piece["K"] + 70 - 10 * (abs(2 * rank - 7) + abs(2 * file - 7))
-        for file in range(8)) + (0,)
-     for rank in range(8)), ()) + (0,) * 20
+# Padding squares get (unused) values too, which saves spelling out the
+# 10x12 board frame: rank = i//10 - 2 and file = i%10 - 1 fold into the
+# constants 11 and 9.
+K_END = tuple(piece["K"] + 70 - 10 * (abs(2 * (i // 10) - 11) + abs(2 * (i % 10) - 9))
+              for i in range(120))
 
 ###############################################################################
 # Global constants
