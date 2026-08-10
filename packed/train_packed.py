@@ -55,7 +55,24 @@ p.add_argument("--kb", type=int, default=1,
                     "bucket-conditioned first-layer rows and exports FLOAT "
                     "weights only (packed export for kb nets is a separate, "
                     "engine-side step -- do not build it before the val loss "
-                    "has earned it)")
+                    "has earned it).  4 = pnet.kbucket, 8 = pnet.kbucket8")
+p.add_argument("--nb", type=int, default=0,
+               help="dedicated bilinear lanes per perspective (0 = off).  "
+                    "Each lane is a crelu unit allocated to group "
+                    "lane%%m; the packed engine folds the lane product "
+                    "modulo 2^(16m)-1, which reads out the circular "
+                    "convolution of the m grouped lane sums (ledger "
+                    "8c4eda5).  The antisymmetric read-out is "
+                    "h = conv(A,A)-conv(B,B); the cross features "
+                    "f = conv(A,B) are swap-invariant and only enter "
+                    "through the (even-in-f) tail.  Exports FLOAT only")
+p.add_argument("--bm", type=int, default=4,
+               help="bilinear groups m; m=4 folds mod 2^64-1, the overflow-"
+                    "safe cheap choice")
+p.add_argument("--tailw", type=int, default=0,
+               help="width of the odd-symmetrized narrow tail over "
+                    "[d, h, f] (0 = plain linear read-out d + u.h).  "
+                    "Never a second wide layer")
 p.add_argument("--factor", type=int, default=1,
                help="train with virtual per-piece-type features (folded into "
                     "the real table at export; helps generalisation, free at "
@@ -74,6 +91,9 @@ if args.threads:
 
 PIECES = pnet.PIECES
 PIDX = {c: i for i, c in enumerate(PIECES)}
+# king-bucket scheme; the multiplier packs (own, opp) into one byte
+KBF = pnet.kbucket8 if args.kb == 8 else pnet.kbucket
+KBMUL = args.kb if args.kb > 1 else 4
 
 # classic sunfish's piece-square tables, verbatim
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -134,8 +154,8 @@ def parse_lines(lines):
         LENS.append(n)
         PSTC.append(ps)
         Y.append(cp)
-        KB.append(4 * pnet.kbucket(board.index("K"))
-                  + pnet.kbucket(119 - board.index("k")))
+        KB.append(KBMUL * KBF(board.index("K"))
+                  + KBF(119 - board.index("k")))
     return FEATS, LENS, PSTC, Y, KB
 
 
@@ -186,13 +206,21 @@ t0 = time.time()
 if args.cache and os.path.exists(args.cache):
     with open(args.cache, "rb") as f:
         loaded = pickle.load(f)
-    if len(loaded) == 5:
+    if len(loaded) == 6:             # scheme-tagged cache
+        FEATS, OFFS, PSTC, Y, KB, scheme = loaded
+        if args.kb > 1 and scheme != args.kb:
+            raise ValueError("%s was parsed with kb scheme %d, not %d; use a "
+                             "different --cache file" % (args.cache, scheme, args.kb))
+    elif len(loaded) == 5:           # kb4-era cache, untagged
         FEATS, OFFS, PSTC, Y, KB = loaded
+        if args.kb not in (1, 4):
+            raise ValueError("%s is a kb4-era cache; use a different --cache "
+                             "file to train with --kb %d" % (args.cache, args.kb))
     elif args.kb == 1:               # pre-king-bucket cache: buckets unused
         (FEATS, OFFS, PSTC, Y), KB = loaded, array("b", bytes(len(loaded[3])))
     else:
         raise ValueError("%s is a pre-king-bucket cache; re-parse the dump "
-                         "(delete the cache) to train with --kb > 1" % args.cache)
+                         "(use a fresh --cache file) to train with --kb > 1" % args.cache)
     print("loaded %d cached positions in %.0fs" % (len(Y), time.time() - t0), flush=True)
 else:
     print("parsing data...", flush=True)
@@ -200,14 +228,15 @@ else:
     print("%d positions in %.0fs" % (len(Y), time.time() - t0), flush=True)
     if args.cache:
         with open(args.cache, "wb") as f:
-            pickle.dump((FEATS, OFFS, PSTC, Y, KB), f, protocol=4)
+            pickle.dump((FEATS, OFFS, PSTC, Y, KB, args.kb), f, protocol=4)
 
 feats = torch.tensor(FEATS, dtype=torch.long)
 offs = torch.tensor(OFFS, dtype=torch.long)
 pstc = torch.tensor(PSTC, dtype=torch.float32)
 ys = torch.tensor(Y, dtype=torch.float32)
-kbw = torch.tensor(KB, dtype=torch.long) >> 2      # white's own-frame bucket
-kbb = torch.tensor(KB, dtype=torch.long) & 3       # black's
+_kbt = torch.tensor(KB, dtype=torch.long)
+kbw = _kbt // KBMUL                                # white's own-frame bucket
+kbb = _kbt % KBMUL                                 # black's
 lens = torch.diff(offs, append=torch.tensor([len(FEATS)]))
 del FEATS, OFFS, PSTC, Y, KB
 
@@ -232,6 +261,13 @@ def act(a):
     return s.clamp(max=AA) / AA
 
 
+def circ(x, y, m):
+    """Circular convolution of (batch, m) group sums -- exactly what the
+    packed fold modulo 2^(16m)-1 reads out of a lane product."""
+    return torch.stack([sum(x[:, s] * y[:, (g - s) % m] for s in range(m))
+                        for g in range(m)], -1)
+
+
 class Net(nn.Module):
     """768 -> N -> 1 with optional virtual features and king buckets.
 
@@ -248,7 +284,7 @@ class Net(nn.Module):
     its OWN king's bucket).
     """
 
-    def __init__(self, N, factor, B):
+    def __init__(self, N, factor, B, nb=0, m=4, tailw=0):
         super().__init__()
         self.B = B
         self.raw = nn.Parameter(torch.randn(B * 768, N) * 0.05)
@@ -256,6 +292,23 @@ class Net(nn.Module):
         self.typ = nn.Parameter(torch.zeros(12, N)) if factor else None
         self.bias = nn.Parameter(torch.zeros(N) + 0.1)
         self.v = nn.Parameter(torch.randn(N) * (25.0 / N ** 0.5))
+        # ---- dedicated bilinear lanes (packed: extra 2*nb lanes, group =
+        # lane index mod m; one cropped square per perspective block reads
+        # out conv(A,A) and conv(B,B) via the mod 2^(16m)-1 fold)
+        self.nb, self.m, self.tailw = nb, m, tailw
+        if nb:
+            assert B == 1, "bilinear prototype is bucket-free; combine only " \
+                           "after both pass their val gates"
+            self.rawb = nn.Parameter(torch.randn(768, nb) * 0.05)
+            self.biasb = nn.Parameter(torch.zeros(nb) + 0.1)
+            self.gb = nn.Parameter(torch.ones(nb))    # lane gains, |.| at use
+            self.u = nn.Parameter(torch.zeros(m))     # read-out of h, starts silent
+            self.register_buffer("gidx", torch.arange(nb) % m)
+            if tailw:
+                self.t1 = nn.Linear(1 + 2 * m, tailw)
+                self.t2 = nn.Linear(tailw, 1)
+                nn.init.zeros_(self.t2.weight)
+                nn.init.zeros_(self.t2.bias)
 
     def virt(self):
         """The bucket-independent part of the effective weight, (768, N)."""
@@ -283,15 +336,34 @@ class Net(nn.Module):
                 N = self.raw.shape[1]
                 r = self.raw.view(self.B, 768, N)
                 r.copy_((r + v).clamp(-w, w) - v)
+            if self.nb:
+                self.rawb.clamp_(-w, w)
 
     def forward(self, fi, mi, fo, ps):
         E = self.weight()
         au = act(nn.functional.embedding_bag(fi, E, fo, mode="sum") + self.bias)
         at = act(nn.functional.embedding_bag(mi, E, fo, mode="sum") + self.bias)
-        return ps + ((au - at) * self.v).sum(-1).clamp(-CLAMP, CLAMP)
+        d = ((au - at) * self.v).sum(-1)
+        if self.nb:
+            bu = act(nn.functional.embedding_bag(fi, self.rawb, fo, mode="sum") + self.biasb)
+            bt = act(nn.functional.embedding_bag(mi, self.rawb, fo, mode="sum") + self.biasb)
+            g = self.gb.abs()
+            A = torch.zeros(bu.shape[0], self.m).index_add_(1, self.gidx, bu * g)
+            B = torch.zeros(bu.shape[0], self.m).index_add_(1, self.gidx, bt * g)
+            # h flips sign under perspective swap (A <-> B); f is invariant,
+            # so it may only enter through the even-in-(d,h) part of the tail
+            h = circ(A, A, self.m) - circ(B, B, self.m)
+            d = d + (h * self.u).sum(-1)
+            if self.tailw:
+                f = circ(A, B, self.m)
+                zp = torch.cat([d.unsqueeze(-1) / 300.0, h / 100.0, f / 100.0], -1)
+                zn = torch.cat([-d.unsqueeze(-1) / 300.0, -h / 100.0, f / 100.0], -1)
+                t = self.t2(torch.tanh(self.t1(zp))) - self.t2(torch.tanh(self.t1(zn)))
+                d = d + 150.0 * t.squeeze(-1)   # odd-symmetrized: exact antisymmetry
+        return ps + d.clamp(-CLAMP, CLAMP)
 
 
-model = Net(N, args.factor, args.kb)
+model = Net(N, args.factor, args.kb, args.nb, args.bm, args.tailw)
 opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-5)
 sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
 
@@ -334,6 +406,23 @@ def export(path):
                              "E": E.tolist(), "bias": b, "v": v,
                              "clampcp": args.clampcp, "segs": SEGS,
                              "train": vars(args)})
+            return 0, 0.0, sum(abs(x) for x in v), {"excursion": 0}
+        if args.nb:
+            # float-only export, same rule: the packed bilinear build (extra
+            # lanes + cropped squares + mod 2^(16m)-1 fold) is engine-side
+            # work that the val loss has to earn first
+            d = {"kind": "float-bil", "N": N, "nb": args.nb, "m": args.bm,
+                 "E": E.tolist(), "bias": b, "v": v,
+                 "Eb": model.rawb.detach().tolist(),
+                 "biasb": model.biasb.detach().tolist(),
+                 "gb": model.gb.detach().abs().tolist(),
+                 "u": model.u.detach().tolist(),
+                 "clampcp": args.clampcp, "segs": SEGS, "train": vars(args)}
+            if args.tailw:
+                d["tail"] = {n_: q.detach().tolist() for n_, q in
+                             (("t1w", model.t1.weight), ("t1b", model.t1.bias),
+                              ("t2w", model.t2.weight), ("t2b", model.t2.bias))}
+            pnet.save(path, d)
             return 0, 0.0, sum(abs(x) for x in v), {"excursion": 0}
         W = [{c: [0.0] * 120 for c in PIECES} for _ in range(N)]
         for c in PIECES:

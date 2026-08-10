@@ -85,6 +85,18 @@ def kbucket(s):
     return (r <= 7) * 2 + (f >= 5)
 
 
+def kbucket8(s):
+    """8 buckets: 4 file pairs (ab/cd/ef/gh) x back-two-ranks vs advanced.
+
+    A strict refinement of `kbucket`: the queenside/kingside split becomes
+    file pairs, so castled-short (g1), uncastled (e1) and castled-long (c1)
+    kings each get their own bucket, and an advanced king keeps the same
+    file resolution for the endgame-activity signal.
+    """
+    r, f = divmod(s, 10)
+    return (r <= 7) * 4 + (f - 1) // 2
+
+
 def rep(val, n):
     """`val` replicated into n lanes."""
     r = 0
