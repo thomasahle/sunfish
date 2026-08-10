@@ -40,7 +40,11 @@ chmod 600 /opt/lichess-bot/config.yml
 # This replaces the no-op stub that ships with lichess-bot.
 cp /opt/sunfish/contrib/lichess/extra_game_handlers.py /opt/lichess-bot/
 
-chown -R sunfish /opt/lichess-bot /opt/sunfish
+# User *and* group: a later `git pull` runs as sunfish and must be able to
+# write .git/objects, .git/index and .git/HEAD. Running git as root inside
+# /opt/sunfish leaves root-owned objects that break the next unprivileged
+# pull; repair with `chown -R sunfish:sunfish /opt/sunfish`.
+chown -R sunfish:sunfish /opt/lichess-bot /opt/sunfish
 
 cp /opt/sunfish/contrib/lichess/sunfish-lichess.service /etc/systemd/system/
 cp /opt/sunfish/contrib/lichess/sunfish-credit-gate.service /etc/systemd/system/

@@ -86,16 +86,30 @@ Measured under pypy3, each transposition entry costs **~0.8 kB** resident, and
 `TABLE_SIZE` bounds `tp_score` and `tp_move` *independently* — so the tables
 can hold `2 * TABLE_SIZE` entries:
 
-| TABLE_SIZE | max entries | tables | + pypy3 baseline (~36 MB) |
-|-----------:|------------:|-------:|--------------------------:|
-| 50 000     | 100 000     | ~80 MB | **~120 MB peak RSS**      |
-| 100 000    | 200 000     | ~160 MB| ~196 MB peak RSS          |
-| 1 000 000  | 2 000 000   | ~1.6 GB| needs a 4 GB+ box         |
+| TABLE_SIZE | max entries | tables  | + pypy3 baseline (~36 MB) |
+|-----------:|------------:|--------:|--------------------------:|
+| 50 000     | 100 000     | ~80 MB  | **~120 MB peak RSS**      |
+| 100 000    | 200 000     | ~160 MB | ~196 MB peak RSS          |
+| 300 000    | 600 000     | ~480 MB | ~516 MB peak RSS          |
+| 1 000 000  | 2 000 000   | ~1.6 GB | needs a 4 GB+ box         |
 
 The 1 GB VM has ~970 MB usable and already runs lichess-bot's multiprocessing
-pool (~150 MB across six processes). At `TABLE_SIZE=100000` it sat with
-**~245 MB paged out while completely idle** and accumulated **467 s of full
-IO-pressure stall** (`/proc/pressure/io`) over 3.75 days. Hence `50000` here.
+pool (~150 MB across six processes). The production box was found running
+**`TABLE_SIZE: 300000`** — roughly **516 MB peak engine RSS**, which simply
+does not fit alongside the bot in 969 MB. It sat with **~245 MB paged out
+while completely idle** and accumulated **467 s of full IO-pressure stall**
+(`/proc/pressure/io`) over 3.75 days. Hence `50000` here.
+
+> **Keep this template and the live `config.yml` in sync.** `setup.sh` only
+> copies the template on a *fresh* install, so later hand-edits on the VM
+> silently diverge. The 300000 above was discovered only when deploying; the
+> template still claimed 100000, and the live box had also flipped
+> `accept_bot` to `true`. Before sizing anything from this file, check the
+> real value:
+>
+> ```bash
+> sudo grep -nE "TABLE_SIZE|accept_bot|ponder:" /opt/lichess-bot/config.yml
+> ```
 
 ### 3. The CPU-credit gate
 
@@ -134,7 +148,10 @@ sudo -u sunfish sed -i \
 ## Deploying these changes to a running bot
 
 ```bash
-# 1. Pick up the new engine + contrib files
+# 1. Pick up the new engine + contrib files.
+#    If this fails with "insufficient permission for adding an object", a
+#    previous update was run as root and left root-owned objects behind:
+#      sudo chown -R sunfish:sunfish /opt/sunfish
 cd /opt/sunfish && sudo -u sunfish git pull
 
 # 2. Install the gate daemon and the updated bot unit
@@ -186,7 +203,9 @@ def is_supported_extra(challenge):
     return True
 EOF
 
-# Revert config.yml: TABLE_SIZE back to 100000, drop interpreter/-options.
+# Revert config.yml: restore the previous TABLE_SIZE (the production box was
+# on 300000, not the template's 100000 -- check your backup), drop
+# interpreter/interpreter_options.
 # Revert the unit (drop CPUWeight):
 cd /opt/sunfish && sudo -u sunfish git checkout HEAD~1 -- contrib/lichess/
 sudo cp contrib/lichess/sunfish-lichess.service /etc/systemd/system/
