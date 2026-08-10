@@ -132,88 +132,71 @@ else:
 del _d
 
 
-if not EXT:
-    def nn_cp(acc, pf, cnt=0):
-        """Clipped centipawn output of the packed net, mover's point of view.
+from math import tanh as _tanh
 
-        A fixed number of big-int operations, independent of the width of the
-        net: 19 for clipped ReLU, 7 more per extra activation segment."""
-        m = ((acc & MLO) >> 14) * ONES              # lane >= 0 ?
-        y = ((acc & m) | MLO) - MLO                 # relu
-        for T in MTS:                               # convex piecewise-linear:
-            x = acc - T                             #   y = sum_i relu(a - t_i)
-            m = ((x & MLO) >> 14) * ONES
-            y += ((x & m) | MLO) - MLO
-        m = (((MGH - y) & MH) >> VBITS) * ONES      # lane <= G_k ?
-        y = (y & m) | (MGP & (m ^ MVAL))            # ...capped at G_k
-        # 2^16 == 1 (mod 2^16-1), so each block's residue IS its lane sum
-        v = (y & MASKLO) % M16 - (y >> HALF) % M16
-        if pf:
-            v = -v
-        # Round TOWARDS ZERO, not with >>. An arithmetic shift floors towards
-        # -infinity, and floor does not commute with negation, so `>>` would make
-        # the evaluation of a position and of its rotation disagree by 1cp -- and
-        # both paths exist in the search (rotate() negates a score, move()
-        # recomputes one). Rounding symmetrically makes eval(p) == -eval(p.rotate())
-        # hold exactly, which is what the transposition table's single-value-function
-        # invariant wants.
+
+def _mlp(z):
+    # term order matches pnet._mlp exactly: float addition is not
+    # associative and engine == pnet must hold to the last bit
+    acc = 0.0
+    for b1, row, w2 in zip(T1B, T1W, T2W):
+        for wk, zk in zip(row, z):
+            b1 += wk * zk
+        acc += w2 * _tanh(b1)
+    return acc + T2B
+
+
+def nn_cp(acc, pf, cnt=0):
+    """Clipped centipawn output of the packed net, mover's point of view:
+    SWAR clamp, two modular horizontal sums, and -- for extended nets only --
+    bilinear group convolutions, the odd tail and the phase scale, in floats
+    (pnet is the verified reference; antisymmetry is exact on both paths:
+    integers by symmetric shift-rounding, floats by IEEE sign-symmetry and
+    truncation toward zero)."""
+    m = ((acc & MLO) >> 14) * ONES              # lane >= 0 ?
+    y = ((acc & m) | MLO) - MLO                 # relu
+    for T in MTS:                               # convex piecewise-linear:
+        x = acc - T                             #   y = sum_i relu(a - t_i)
+        m = ((x & MLO) >> 14) * ONES
+        y += ((x & m) | MLO) - MLO
+    m = (((MGH - y) & MH) >> VBITS) * ONES      # lane <= G_k ?
+    y = (y & m) | (MGP & (m ^ MVAL))            # ...capped at G_k
+    # 2^16 == 1 (mod 2^16-1), so each block's residue IS its lane sum
+    v = (y & MASKLO) % M16 - ((y >> HALF) & MASKLO) % M16
+    if pf:
+        v = -v
+    if not EXT:
+        # round TOWARDS ZERO: floor does not commute with negation, and the
+        # search reaches a position both by rotate() (negates) and move()
+        # (recomputes) -- symmetric rounding keeps them in exact agreement
         v = (v >> SHIFT) if v >= 0 else -((-v) >> SHIFT)
         return -CLAMP if v < -CLAMP else (CLAMP if v > CLAMP else v)
-else:
-    from math import tanh as _tanh
-
-    def _mlp(z):
-        acc = 0.0
-        for o in range(len(T1B)):
-            s = T1B[o]
-            row = T1W[o]
-            for k in range(len(z)):
-                s += row[k] * z[k]
-            acc += T2W[o] * _tanh(s)
-        return acc + T2B
-
-    def nn_cp(acc, pf, cnt=0):
-        """Extended evaluation: linear head + bilinear group convolutions +
-        odd tail + phase scale.  Exactly antisymmetric (see the constants
-        comment above; pnet.ext_cp is the verified reference)."""
-        m = ((acc & MLO) >> 14) * ONES
-        y = ((acc & m) | MLO) - MLO
-        for T in MTS:
-            x = acc - T
-            m = ((x & MLO) >> 14) * ONES
-            y += ((x & m) | MLO) - MLO
-        m = (((MGH - y) & MH) >> VBITS) * ONES
-        y = (y & m) | (MGP & (m ^ MVAL))
-        x0 = (y & MASKLO) % M16
-        x1 = ((y >> HALF) & MASKLO) % M16
-        d = float(x1 - x0 if pf else x0 - x1) / (1 << SHIFT)
-        if NB:
-            A = [((y >> o) & BGMASK) % M16 for o in BOFFX]
-            Bv = [((y >> o) & BGMASK) % M16 for o in BOFFY]
-            if pf:
-                A, Bv = Bv, A
-            h = [0] * BM
-            f = [0] * BM
-            for s in range(BM):
-                a, b = A[s], Bv[s]
-                for t in range(BM):
-                    g = (s + t) % BM
-                    h[g] += A[t] * a - Bv[t] * b
-                    f[g] += a * Bv[t]
-            hf = [v / CB2 for v in h]
-            for g in range(BM):
-                d += BU[g] * hf[g]
-            if BTAIL:
-                ff = [v / CB2 for v in f]
-                zp = [d / 300.0] + [v / 100.0 for v in hf] + [v / 100.0 for v in ff]
-                zn = [-d / 300.0] + [-v / 100.0 for v in hf] + [v / 100.0 for v in ff]
-                d += 150.0 * (_mlp(zp) - _mlp(zn))
-        if PHASE_S:
-            P_ = len(PHASE_S)
-            b = (cnt - 1) * P_ // 32
-            d *= PHASE_S[0 if b < 0 else (P_ - 1 if b >= P_ else b)]
-        d = -CLAMP if d < -CLAMP else (CLAMP if d > CLAMP else d)
-        return int(d)                       # trunc toward zero: symmetric
+    d = float(v) / (1 << SHIFT)
+    if NB:
+        A = [((y >> o) & BGMASK) % M16 for o in BOFFX]
+        Bv = [((y >> o) & BGMASK) % M16 for o in BOFFY]
+        if pf:
+            A, Bv = Bv, A
+        h = [0] * BM
+        f = [0] * BM
+        for s in range(BM):
+            a, b = A[s], Bv[s]
+            for t in range(BM):
+                g = (s + t) % BM
+                h[g] += A[t] * a - Bv[t] * b
+                f[g] += a * Bv[t]
+        for g in range(BM):
+            h[g] /= CB2
+            d += BU[g] * h[g]
+        if BTAIL:
+            z = [d / 300.0] + [v / 100.0 for v in h] + [v / 100.0 / CB2 for v in f]
+            zn = [-x for x in z[:1 + BM]] + z[1 + BM:]
+            d += 150.0 * (_mlp(z) - _mlp(zn))
+    if PHASE_S:
+        b = (cnt - 1) * len(PHASE_S) // 32
+        d *= PHASE_S[min(max(b, 0), len(PHASE_S) - 1)]
+    d = -CLAMP if d < -CLAMP else (CLAMP if d > CLAMP else d)
+    return int(d)                       # trunc toward zero: symmetric
 
 ###############################################################################
 # Piece-Square tables. Tune these to change sunfish's behaviour
