@@ -654,6 +654,23 @@ its first real consumer, and proven REQUIRED by the countermodel
 `EvalQuiet` (fidelity), `NoMaskedMobility` (chess, layer 2), root
 legality (`hasKingCapture = false`, the `HistoryLegal` shape).
 
+*(D) pst-swap soundness* (`Sunfish/TableSwap.lean`): why `search` may
+retarget the evaluation between searches (the K_MID/K_END assignment,
+run in BOTH directions every search per Thomas's review edit, so the
+eval in force is a function of the current position alone, never of
+module history).  `tp_score` bounds are EVAL-RELATIVE — the keyed
+invariant `CTableOK` is game-indexed, and `tableEntries_eval_relative`
+machine-checks that an exact entry for one evaluation violates the
+invariant for the other — so the swap without the clear would be
+unsound, and the per-search clear restores the invariant for the new
+evaluation unconditionally (`ctableOK_empty`, any game, cited).
+`tp_move` survives instead: `KillerInv` is position-intrinsic up to
+the king-gone classification `eval ≤ -MATE_LOWER`, a material fact the
+placement-only swap never moves (`SameKingClass`), under which the
+whole lifecycle transfers (`killerInv_withEval`,
+`killerLegal_lifecycle_pstSwap` — cross-search consumption of
+old-eval `tp_move` entries is exactly this theorem).
+
 **The production ≡ reference transfer** additionally uses
 `KingCaptureValHigh` (`EvalBounds`) and `CaptureFirst` — itself
 **DISCHARGED** (`captureFirst_of_sorted`) from `MovesSortedByVal` +

@@ -55,6 +55,7 @@ unconditional -- at the cost of `D ≥ k + 52` and a code change.
 
 import Sunfish.Stalemate
 import Sunfish.Driver
+import Sunfish.TableSwap
 
 namespace Sunfish
 
