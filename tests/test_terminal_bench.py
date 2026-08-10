@@ -44,8 +44,8 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import tools.uci as uci  # noqa: E402
-from tools.uci import render_move  # noqa: E402
+import sunfish_tools.uci as uci  # noqa: E402
+from sunfish_tools.uci import render_move  # noqa: E402
 
 BENCH = ROOT / "tools" / "test_files" / "terminal_bench.epd"
 

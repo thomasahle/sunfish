@@ -10,10 +10,10 @@ methodology; it exists because shortcuts here produce confident, wrong numbers.
 ## TL;DR recipe
 
 ```bash
-# 1. Freeze BOTH engines completely (code + tools, no shared files!)
+# 1. Freeze BOTH engines completely (code + interface, no shared files!)
 mkdir -p /tmp/elo/old /tmp/elo/new
-git archive master     sunfish.py tools | tar -x -C /tmp/elo/old
-git archive my-change  sunfish.py tools | tar -x -C /tmp/elo/new
+git archive master     sunfish.py sunfish_tools | tar -x -C /tmp/elo/old
+git archive my-change  sunfish.py sunfish_tools | tar -x -C /tmp/elo/new
 chmod +x /tmp/elo/old/sunfish.py /tmp/elo/new/sunfish.py
 
 # 2. Get fastchess and an opening book
@@ -33,8 +33,8 @@ fastchess \
 
 ## The rules, and why each one exists
 
-1. **Freeze both engines with `git archive`, including `tools/`.**
-   `sunfish.py` imports `tools/uci.py`, so an engine run from the working tree
+1. **Freeze both engines with `git archive`, including `sunfish_tools/`.**
+   `sunfish.py` imports `sunfish_tools/uci.py`, so an engine run from the working tree
    picks up whatever is in the tree *at process start*. If both engines share a
    live checkout — or you edit any imported file mid-match — you are no longer
    testing the diff you think you are testing. This is not hypothetical: a
@@ -141,6 +141,24 @@ fastchess \
    60+1; a passed-pawn term measured +132 [+22, +278] at 33 games and decayed
    to +34 [−34, +105] by 92. Time-to-depth is the hidden variable. Screen
    with fixed depth if you like, but only a wall-clock match decides.
+
+## Testing the packed artifact
+
+`build/pack.sh` inlines a minimal UCI loop that handles `position startpos
+moves ...` only — **`position fen` is deliberately unsupported**, because the
+tournaments the packed build targets never send it and every byte counts.
+That is fine for the artifact and fatal for a careless harness: fastchess
+delivers an **EPD** book as `position fen ...`, which the packed engine
+silently ignores, so it plays on from the initial board and then emits moves
+that are illegal in the actual game. It looks like a catastrophic engine bug
+(0/10, "makes an illegal move") and is really a book-format mismatch.
+
+So: test packed artifacts with a book fastchess delivers as `position
+startpos moves ...` (a PGN book), or measure the unpacked engine — which
+runs through `sunfish_tools/uci.py` and does parse FEN — and cover the packed build
+with a separate startpos-only smoke. Either way, confirm which form your
+book actually produces by dumping the UCI trace on a two-game run rather
+than assuming.
 
 ## Why not cutechess-cli?
 

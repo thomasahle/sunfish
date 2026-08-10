@@ -480,6 +480,7 @@ wheels = [
 
 [[package]]
 name = "sunfish"
+version = "2026"
 source = { editable = "." }
 
 [package.optional-dependencies]

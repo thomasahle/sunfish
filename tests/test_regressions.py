@@ -41,9 +41,9 @@ def load_sunfish():
 
 sf = load_sunfish()
 
-import tools.uci as uci  # noqa: E402
+import sunfish_tools.uci as uci  # noqa: E402
 
-uci.sunfish = sf  # tools.uci resolves the engine module via this global
+uci.sunfish = sf  # the UCI module resolves the engine module via this global
 
 
 def hist_from_fen(fen, moves=()):
