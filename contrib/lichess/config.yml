@@ -26,10 +26,11 @@ engine:
     #   TABLE_SIZE=50000  -> ~100k entries -> ~80 MB tables + ~36 MB pypy3
     #                        baseline = ~120 MB peak RSS.
     # The 1 GB free-tier VM has ~970 MB usable and already runs lichess-bot's
-    # multiprocessing pool (~150 MB across 6 processes); at the previous
-    # TABLE_SIZE=100000 the box sat with ~245 MB paged out *while idle* and
-    # accumulated 467 s of full IO-pressure stall over 3.75 days. An engine
-    # that swaps mid-search is slow in a way no scheduling fix repairs.
+    # multiprocessing pool (~150 MB across 6 processes); the production box was
+    # found running TABLE_SIZE=300000 (~516 MB peak RSS, which does not fit),
+    # sitting with ~245 MB paged out *while idle* and accumulating 467 s of
+    # full IO-pressure stall over 3.75 days. An engine that swaps mid-search
+    # is slow in a way no scheduling fix repairs.
     # On a machine with 4 GB+, raise this to 1000000 (~1 GB).
     TABLE_SIZE: 50000
 
