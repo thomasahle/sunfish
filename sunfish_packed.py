@@ -35,7 +35,7 @@ NET_PATH = os.environ.get("SF_NET", os.path.join(os.path.dirname(
 with open(NET_PATH, "rb") as _f:
     _d = _pickle.load(_f)
 
-NLANE = 2 * _d["N"]
+NLANE = 2 * _d["N"] + 2 * _d.get("nb", 0)
 LBITS = 16
 VBITS = 15
 BIAS = 1 << 14
@@ -63,6 +63,29 @@ M16 = (1 << LBITS) - 1
 # One packed constant M_k*t_i per extra activation segment.  Empty for plain
 # clipped ReLU; three breakpoints approximate squared clipped ReLU.
 MTS = tuple(_d.get("ts", ()))
+
+# ---- extensions: bilinear lanes, narrow odd tail, phase output scale.
+# Their read-out runs in floats; exact antisymmetry survives because every
+# float input is exactly negated or exactly invariant under perspective
+# swap, IEEE arithmetic is sign-symmetric, and the final truncation rounds
+# toward zero (packed/pnet.py ext_cp is the verified reference).
+NB = _d.get("nb", 0)              # bilinear lanes per perspective
+BM = _d.get("m", 4)               # bilinear groups
+PHASE_S = tuple(_d.get("phase_s") or ()) or None
+EXT = bool(NB or PHASE_S)
+if NB:
+    NBG = NB // BM                # lanes per group (contiguous runs)
+    BGMASK = (1 << (NBG * LBITS)) - 1
+    BOFFX = tuple((2 * _d["N"] + s * NBG) * LBITS for s in range(BM))
+    BOFFY = tuple((2 * _d["N"] + NB + s * NBG) * LBITS for s in range(BM))
+    CB2 = float(1 << (2 * _d["bshift"]))
+    BU = tuple(_d["u"])
+    BTAIL = _d.get("tail")
+    if BTAIL:
+        T1W = tuple(tuple(r) for r in BTAIL["t1w"])
+        T1B = tuple(BTAIL["t1b"])
+        T2W = tuple(BTAIL["t2w"][0])
+        T2B = BTAIL["t2b"][0]
 
 _PIECES = "PNBRQKpnbrqk"
 # Own-king buckets per perspective.  B == 1 is the plain net; B > 1 nets
@@ -109,32 +132,88 @@ else:
 del _d
 
 
-def nn_cp(acc, pf):
-    """Clipped centipawn output of the packed net, mover's point of view.
+if not EXT:
+    def nn_cp(acc, pf, cnt=0):
+        """Clipped centipawn output of the packed net, mover's point of view.
 
-    A fixed number of big-int operations, independent of the width of the
-    net: 19 for clipped ReLU, 7 more per extra activation segment."""
-    m = ((acc & MLO) >> 14) * ONES              # lane >= 0 ?
-    y = ((acc & m) | MLO) - MLO                 # relu
-    for T in MTS:                               # convex piecewise-linear:
-        x = acc - T                             #   y = sum_i relu(a - t_i)
-        m = ((x & MLO) >> 14) * ONES
-        y += ((x & m) | MLO) - MLO
-    m = (((MGH - y) & MH) >> VBITS) * ONES      # lane <= G_k ?
-    y = (y & m) | (MGP & (m ^ MVAL))            # ...capped at G_k
-    # 2^16 == 1 (mod 2^16-1), so each block's residue IS its lane sum
-    v = (y & MASKLO) % M16 - (y >> HALF) % M16
-    if pf:
-        v = -v
-    # Round TOWARDS ZERO, not with >>. An arithmetic shift floors towards
-    # -infinity, and floor does not commute with negation, so `>>` would make
-    # the evaluation of a position and of its rotation disagree by 1cp -- and
-    # both paths exist in the search (rotate() negates a score, move()
-    # recomputes one). Rounding symmetrically makes eval(p) == -eval(p.rotate())
-    # hold exactly, which is what the transposition table's single-value-function
-    # invariant wants.
-    v = (v >> SHIFT) if v >= 0 else -((-v) >> SHIFT)
-    return -CLAMP if v < -CLAMP else (CLAMP if v > CLAMP else v)
+        A fixed number of big-int operations, independent of the width of the
+        net: 19 for clipped ReLU, 7 more per extra activation segment."""
+        m = ((acc & MLO) >> 14) * ONES              # lane >= 0 ?
+        y = ((acc & m) | MLO) - MLO                 # relu
+        for T in MTS:                               # convex piecewise-linear:
+            x = acc - T                             #   y = sum_i relu(a - t_i)
+            m = ((x & MLO) >> 14) * ONES
+            y += ((x & m) | MLO) - MLO
+        m = (((MGH - y) & MH) >> VBITS) * ONES      # lane <= G_k ?
+        y = (y & m) | (MGP & (m ^ MVAL))            # ...capped at G_k
+        # 2^16 == 1 (mod 2^16-1), so each block's residue IS its lane sum
+        v = (y & MASKLO) % M16 - (y >> HALF) % M16
+        if pf:
+            v = -v
+        # Round TOWARDS ZERO, not with >>. An arithmetic shift floors towards
+        # -infinity, and floor does not commute with negation, so `>>` would make
+        # the evaluation of a position and of its rotation disagree by 1cp -- and
+        # both paths exist in the search (rotate() negates a score, move()
+        # recomputes one). Rounding symmetrically makes eval(p) == -eval(p.rotate())
+        # hold exactly, which is what the transposition table's single-value-function
+        # invariant wants.
+        v = (v >> SHIFT) if v >= 0 else -((-v) >> SHIFT)
+        return -CLAMP if v < -CLAMP else (CLAMP if v > CLAMP else v)
+else:
+    from math import tanh as _tanh
+
+    def _mlp(z):
+        acc = 0.0
+        for o in range(len(T1B)):
+            s = T1B[o]
+            row = T1W[o]
+            for k in range(len(z)):
+                s += row[k] * z[k]
+            acc += T2W[o] * _tanh(s)
+        return acc + T2B
+
+    def nn_cp(acc, pf, cnt=0):
+        """Extended evaluation: linear head + bilinear group convolutions +
+        odd tail + phase scale.  Exactly antisymmetric (see the constants
+        comment above; pnet.ext_cp is the verified reference)."""
+        m = ((acc & MLO) >> 14) * ONES
+        y = ((acc & m) | MLO) - MLO
+        for T in MTS:
+            x = acc - T
+            m = ((x & MLO) >> 14) * ONES
+            y += ((x & m) | MLO) - MLO
+        m = (((MGH - y) & MH) >> VBITS) * ONES
+        y = (y & m) | (MGP & (m ^ MVAL))
+        x0 = (y & MASKLO) % M16
+        x1 = ((y >> HALF) & MASKLO) % M16
+        d = float(x1 - x0 if pf else x0 - x1) / (1 << SHIFT)
+        if NB:
+            A = [((y >> o) & BGMASK) % M16 for o in BOFFX]
+            Bv = [((y >> o) & BGMASK) % M16 for o in BOFFY]
+            if pf:
+                A, Bv = Bv, A
+            h = [0] * BM
+            f = [0] * BM
+            for s in range(BM):
+                a, b = A[s], Bv[s]
+                for t in range(BM):
+                    g = (s + t) % BM
+                    h[g] += A[t] * a - Bv[t] * b
+                    f[g] += a * Bv[t]
+            hf = [v / CB2 for v in h]
+            for g in range(BM):
+                d += BU[g] * hf[g]
+            if BTAIL:
+                ff = [v / CB2 for v in f]
+                zp = [d / 300.0] + [v / 100.0 for v in hf] + [v / 100.0 for v in ff]
+                zn = [-d / 300.0] + [-v / 100.0 for v in hf] + [v / 100.0 for v in ff]
+                d += 150.0 * (_mlp(zp) - _mlp(zn))
+        if PHASE_S:
+            P_ = len(PHASE_S)
+            b = (cnt - 1) * P_ // 32
+            d *= PHASE_S[0 if b < 0 else (P_ - 1 if b >= P_ else b)]
+        d = -CLAMP if d < -CLAMP else (CLAMP if d > CLAMP else d)
+        return int(d)                       # trunc toward zero: symmetric
 
 ###############################################################################
 # Piece-Square tables. Tune these to change sunfish's behaviour
@@ -292,7 +371,7 @@ opt_ranges = dict(
 Move = namedtuple("Move", "i j prom")
 
 
-class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb")):
+class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb cnt")):
     """A state of a chess game
     board -- a 120 char representation of the board
     score -- the board evaluation: ps + the clipped net residual
@@ -302,16 +381,18 @@ class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb")):
     bc -- the opponent castling rights, [west/king side, east/queen side]
     ep - the en passant square
     kp - the king passant square
-    acc -- the packed NNUE accumulator (one big int, 2N lanes)
+    acc -- the packed NNUE accumulator (one big int, 2N + 2*nb lanes)
     pf -- perspective flag: which of the two lane blocks is the mover's
     kb -- combined king-bucket index B*bucket(white) + bucket(black), in
           ABSOLUTE colours (0 for plain B == 1 nets)
+    cnt -- number of men on the board, kept incrementally (captures and en
+           passant decrement it); feeds the phase output scale
 
-    score/ps/acc/pf/kb are all functions of the other fields, so identity --
-    what the transposition table, the killer table and the repetition set
-    key on -- deliberately ignores them.  Keeping the accumulator out of
-    __hash__ also keeps hashing off the big int, which would otherwise cost
-    more than the evaluation it feeds.
+    score/ps/acc/pf/kb/cnt are all functions of the other fields, so
+    identity -- what the transposition table, the killer table and the
+    repetition set key on -- deliberately ignores them.  Keeping the
+    accumulator out of __hash__ also keeps hashing off the big int, which
+    would otherwise cost more than the evaluation it feeds.
     """
 
     def __hash__(self):
@@ -375,7 +456,7 @@ class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb")):
             self.board[::-1].swapcase(), -self.score, -self.ps, self.bc, self.wc,
             119 - self.ep if self.ep and not nullmove else 0,
             119 - self.kp if self.kp and not nullmove else 0,
-            self.acc, self.pf ^ 1, self.kb,
+            self.acc, self.pf ^ 1, self.kb, self.cnt,
         )
 
     def move(self, move):
@@ -385,6 +466,7 @@ class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb")):
         # Copy variables and reset ep and kp
         board = self.board
         wc, bc, ep, kp = self.wc, self.bc, 0, 0
+        cnt = self.cnt - (q != ".")
         ps = self.ps + self.value(move)
         # Every board mutation below is mirrored by a packed row delta. The
         # rows are exact per-lane integers, so the order does not matter:
@@ -429,6 +511,7 @@ class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb")):
             if j == self.ep:
                 board = put(board, j + S, ".")
                 acc -= row["p"][j + S]
+                cnt -= 1
         # A king move across a bucket boundary invalidates every one of our
         # own-perspective lanes at once: rebuild from the (still mover-
         # oriented) final board with the new bucket's table.  Rare, ~32 adds.
@@ -440,9 +523,9 @@ class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb")):
                     acc += row[c][s]
         # We rotate the returned position, so it's ready for the next player
         pf = self.pf ^ 1
-        return Position(board[::-1].swapcase(), -ps + nn_cp(acc, pf), -ps,
+        return Position(board[::-1].swapcase(), -ps + nn_cp(acc, pf, cnt), -ps,
                         bc, wc, 119 - ep if ep else 0, 119 - kp if kp else 0,
-                        acc, pf, kb)
+                        acc, pf, kb, cnt)
 
     def value(self, move):
         i, j, prom = move
@@ -743,10 +826,13 @@ def from_board(board, wc=(True, True), bc=(True, True), ep=0, kp=0, pf=0):
         kb = own * B + opp if pf == 0 else opp * B + own
     acc = ACC_BASE
     row = ROWS[pf][kb]
+    cnt = 0
     for i, p in enumerate(board):
         if p in _PIECES:
             acc += row[p][i]
-    return Position(board, ps + nn_cp(acc, pf), ps, wc, bc, ep, kp, acc, pf, kb)
+            cnt += 1
+    return Position(board, ps + nn_cp(acc, pf, cnt), ps, wc, bc, ep, kp,
+                    acc, pf, kb, cnt)
 
 
 hist = [from_board(initial)]
