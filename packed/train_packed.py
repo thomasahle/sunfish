@@ -69,6 +69,17 @@ p.add_argument("--nb", type=int, default=0,
 p.add_argument("--bm", type=int, default=4,
                help="bilinear groups m; m=4 folds mod 2^64-1, the overflow-"
                     "safe cheap choice")
+p.add_argument("--baff", type=int, default=0,
+               help="affine bilinear: h += conv(A-B, w) with a trained "
+                    "per-group offset w shared across perspectives (the "
+                    "sharing keeps the read-out structurally odd).  In "
+                    "single-block mode only w1+w2 is identifiable, so one "
+                    "vector is trained; with --nb2 both offsets are")
+p.add_argument("--nb2", type=int, default=0,
+               help="two-block bilinear: conv(A1+w1, A2+w2) with two "
+                    "DIFFERENT lane blocks per perspective instead of "
+                    "squaring one -- non-symmetric quadratic forms.  "
+                    "Doubles the bilinear lane count (2*nb units)")
 p.add_argument("--tailw", type=int, default=0,
                help="width of the odd-symmetrized narrow tail over "
                     "[d, h, f] (0 = plain linear read-out d + u.h).  "
@@ -297,7 +308,8 @@ class Net(nn.Module):
     its OWN king's bucket).
     """
 
-    def __init__(self, N, factor, B, nb=0, m=4, tailw=0, phase=0):
+    def __init__(self, N, factor, B, nb=0, m=4, tailw=0, phase=0,
+                 baff=0, nb2=0):
         super().__init__()
         self.B = B
         self.raw = nn.Parameter(torch.randn(B * 768, N) * 0.05)
@@ -309,17 +321,25 @@ class Net(nn.Module):
         # lane index mod m; one cropped square per perspective block reads
         # out conv(A,A) and conv(B,B) via the mod 2^(16m)-1 fold)
         self.nb, self.m, self.tailw, self.phase = nb, m, tailw, phase
+        self.baff, self.nb2 = baff, nb2
         if phase:
             self.s = nn.Parameter(torch.ones(phase))  # per-bucket residual scale
         if nb:
             # bilinear lanes are bucket-FREE even when B > 1: their rows are
             # identical across bucket tables, so king-bucket rebuilds cost
             # nothing extra and the feature stays a pure second-order add-on
-            self.rawb = nn.Parameter(torch.randn(768, nb) * 0.05)
-            self.biasb = nn.Parameter(torch.zeros(nb) + 0.1)
-            self.gb = nn.Parameter(torch.ones(nb))    # lane gains, |.| at use
+            nu = nb * (2 if nb2 else 1)   # two-block mode doubles the lanes
+            self.rawb = nn.Parameter(torch.randn(768, nu) * 0.05)
+            self.biasb = nn.Parameter(torch.zeros(nu) + 0.1)
+            self.gb = nn.Parameter(torch.ones(nu))    # lane gains, |.| at use
             self.u = nn.Parameter(torch.zeros(m))     # read-out of h, starts silent
             self.register_buffer("gidx", torch.arange(nb) % m)
+            if baff:
+                # affine offsets, SHARED across perspectives (that sharing is
+                # what keeps h structurally odd).  Single-block: only w1+w2
+                # is identifiable, so one vector; two-block: both.
+                self.w1 = nn.Parameter(torch.zeros(m))
+                self.w2 = nn.Parameter(torch.zeros(m)) if nb2 else None
             if tailw:
                 self.t1 = nn.Linear(1 + 2 * m, tailw)
                 self.t2 = nn.Linear(tailw, 1)
@@ -366,14 +386,36 @@ class Net(nn.Module):
             bu = act(nn.functional.embedding_bag(fib, self.rawb, fo, mode="sum") + self.biasb)
             bt = act(nn.functional.embedding_bag(mib, self.rawb, fo, mode="sum") + self.biasb)
             g = self.gb.abs()
-            A = torch.zeros(bu.shape[0], self.m).index_add_(1, self.gidx, bu * g)
-            B = torch.zeros(bu.shape[0], self.m).index_add_(1, self.gidx, bt * g)
-            # h flips sign under perspective swap (A <-> B); f is invariant,
-            # so it may only enter through the even-in-(d,h) part of the tail
-            h = circ(A, A, self.m) - circ(B, B, self.m)
+            su, st = bu * g, bt * g
+            nb, m = self.nb, self.m
+            if self.nb2:
+                # two different lane blocks: non-symmetric quadratic forms
+                A1 = torch.zeros(su.shape[0], m).index_add_(1, self.gidx, su[:, :nb])
+                A2 = torch.zeros(su.shape[0], m).index_add_(1, self.gidx, su[:, nb:])
+                B1 = torch.zeros(su.shape[0], m).index_add_(1, self.gidx, st[:, :nb])
+                B2 = torch.zeros(su.shape[0], m).index_add_(1, self.gidx, st[:, nb:])
+                if self.baff:
+                    w1 = self.w1.unsqueeze(0).expand_as(A1)
+                    w2 = self.w2.unsqueeze(0).expand_as(A2)
+                    h = circ(A1 + w1, A2 + w2, m) - circ(B1 + w1, B2 + w2, m)
+                else:
+                    h = circ(A1, A2, m) - circ(B1, B2, m)
+                # symmetrized cross features stay swap-invariant
+                f_ab = (circ(A1, B2, m) + circ(B1, A2, m)) if self.tailw else None
+            else:
+                A = torch.zeros(su.shape[0], m).index_add_(1, self.gidx, su)
+                B = torch.zeros(su.shape[0], m).index_add_(1, self.gidx, st)
+                # h flips sign under perspective swap (A <-> B); f is
+                # invariant, so it may only enter the tail's even slot
+                h = circ(A, A, m) - circ(B, B, m)
+                if self.baff:
+                    # expansion identity: only w1+w2 is identifiable, and the
+                    # constant conv(w1,w2) cancels in the A/B difference
+                    h = h + circ(A - B, self.w1.unsqueeze(0).expand_as(A), m)
+                f_ab = circ(A, B, m) if self.tailw else None
             d = d + (h * self.u).sum(-1)
             if self.tailw:
-                f = circ(A, B, self.m)
+                f = f_ab
                 zp = torch.cat([d.unsqueeze(-1) / 300.0, h / 100.0, f / 100.0], -1)
                 zn = torch.cat([-d.unsqueeze(-1) / 300.0, -h / 100.0, f / 100.0], -1)
                 t = self.t2(torch.tanh(self.t1(zp))) - self.t2(torch.tanh(self.t1(zn)))
@@ -385,7 +427,8 @@ class Net(nn.Module):
         return ps + d.clamp(-CLAMP, CLAMP)
 
 
-model = Net(N, args.factor, args.kb, args.nb, args.bm, args.tailw, args.phase)
+model = Net(N, args.factor, args.kb, args.nb, args.bm, args.tailw, args.phase,
+            args.baff, args.nb2)
 opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-5)
 sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
 
@@ -434,11 +477,14 @@ def export(path):
                if args.phase else {})
         bil = {}
         if args.nb:
-            bil = {"nb": args.nb, "m": args.bm,
+            bil = {"nb": args.nb, "m": args.bm, "nb2": args.nb2,
                    "Eb": model.rawb.detach().tolist(),
                    "biasb": model.biasb.detach().tolist(),
                    "gb": model.gb.detach().abs().tolist(),
                    "u": model.u.detach().tolist()}
+            if args.baff:
+                bil["waff"] = [model.w1.detach().tolist()] + \
+                    ([model.w2.detach().tolist()] if args.nb2 else [])
             if args.tailw:
                 bil["tail"] = {n_: q.detach().tolist() for n_, q in
                                (("t1w", model.t1.weight), ("t1b", model.t1.bias),
