@@ -694,4 +694,146 @@ theorem search_inner_loop_converges_kcx (G : QSGame) (guard kill : G.Pos → Boo
     (fun g hg1 hg2 => boundKCX_null_spec G guard kill hB hV hCF hK D p g hg1 hg2)
     carried hc1 hc2
 
+/-! ## B. Best-move soundness: the stored move attains the report
+
+The docstring of `bound` promises, for a root fail-high, that
+`self.tp_move[pos]` holds a LEGAL move that ACHIEVES the returned score
+`r ≥ gamma`.  Legality is `storedMoveLegal` (cited below, not
+reproven).  This section adds ATTAINMENT, against the declared value
+function `nullValueD2` -- the strong form, not just the fold the search
+evaluated: a fail-high yield `-(bound child) ≥ gamma` is a fail-LOW of
+the child probe at the flipped window, and `bound_null_spec` at the
+child certifies `nullValueD2 child ≤ bound child`, so the negated
+DECLARED child value is at least the yield.
+
+The three store species (`KillStore`) are covered:
+
+* the searched real winner (the `best >= gamma` break with a truthy
+  move): `storedMove_attains` at the store site,
+  `boundD2_failHigh_attained` at the node -- the loop's cutting yield
+  IS the returned report (`searchMoves_failHigh_exact`), so the stored
+  move attains exactly `r`;
+* the kcx SUBSTITUTION store and the mate-case futility store: both
+  store a move whose child has lost its king, and the sentinel is the
+  attainment (`substitution_attains` -- `-(nullValueD2 child)` is the
+  full `MATE_UPPER`);
+* eviction stores nothing.
+
+The killer's own yield (`yield killer, -self.bound(pos.move(killer), 1
+- gamma, depth - 1)`) is a searched real yield of an admitted move --
+move ordering, which the model does not order, so it is one of the fold
+members covered by the first bullet. -/
+
+/-- A fail-high loop from a below-window seed returns the CUTTING
+yield exactly: fail-soft `best` on the break is `max best (score m)`
+with the running `best` still below the window, i.e. the breaking
+move's own score.  (Strengthens `searchMoves_failHigh_witness` with the
+equality, which is what "achieves the returned score" needs.) -/
+theorem searchMoves_failHigh_exact {α : Type _} (gamma : Int) (f : α → Int) :
+    ∀ (ms : List α) (b : Int), b < gamma → gamma ≤ searchMoves gamma f ms b →
+      ∃ m ∈ ms, searchMoves gamma f ms b = f m ∧ gamma ≤ f m := by
+  intro ms
+  induction ms with
+  | nil =>
+    intro b hb hge
+    simp only [searchMoves] at hge
+    omega
+  | cons a ms ih =>
+    intro b hb hge
+    simp only [searchMoves] at hge ⊢
+    by_cases hcut : gamma ≤ max b (f a)
+    · rw [if_pos hcut] at hge ⊢
+      exact ⟨a, List.mem_cons_self a ms, by omega, by omega⟩
+    · rw [if_neg hcut] at hge ⊢
+      obtain ⟨m, hm, heq, hf⟩ := ih (max b (f a)) (by omega) hge
+      exact ⟨m, List.mem_cons_of_mem a hm, heq, hf⟩
+
+/-- **Attainment at the store site** (companion of `storedMoveLegal`,
+same hypothesis shape): a move stored on a real fail-high at a
+wide-range window attains the window against the child's DECLARED
+value -- the parent's fail-high yield is the child probe's fail-low,
+and layer 1 at the child does the rest.  No chess premise. -/
+theorem storedMove_attains (G : QSGame) (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (hK : KillerLegal G kill)
+    (d : Nat) (m : G.Pos) (gamma : Int)
+    (hg1 : -MATE_UPPER < gamma) (hg2 : gamma ≤ MATE_UPPER)
+    (hhi : gamma ≤ -(boundD2 G guard kill d m (1 - gamma))) :
+    gamma ≤ -(nullValueD2 G guard d m) := by
+  have h := (bound_null_spec G guard kill hB hK d m (1 - gamma)
+    (by omega) (by omega)).2 (by omega)
+  omega
+
+/-- The substitution / mate-case-futility stores' attainment: the
+stored move wins the king outright, so the child is the kingless
+sentinel and its negation is the full `MATE_UPPER` -- above any
+wide-range window.  (This is why `KillerAtKingCapturable` entries are
+sound for the pv too.) -/
+theorem substitution_attains (G : QSGame) (guard : G.Pos → Bool)
+    (d : Nat) (m : G.Pos) (hkev : G.eval m ≤ -MATE_LOWER)
+    (gamma : Int) (hg2 : gamma ≤ MATE_UPPER) :
+    gamma ≤ -(nullValueD2 G guard d m) := by
+  rw [nullValueD2_kingGone G guard d m hkev]
+  omega
+
+/-- **The docstring's `tp_move` clause, as a theorem**: at a
+non-capturable interior node where the null option did not cut and the
+real-move loop failed high, the search's report IS the yield of one
+searched move `m`, and that move is
+
+* generated and admitted (`searchedAt`, hence in `G.moves p`),
+* LEGAL (`storedMoveLegal`, cited), and
+* ATTAINING: the negated declared value of its child is at least the
+  returned report (hence at least `gamma`).
+
+Exactly the state in which the loop stores `m` in `tp_move` -- the
+break with a truthy move.  The two virtual accumulators cannot own the
+report here: the futility term is below the window by construction
+(`futTerm_lt_gamma`) and a surviving null yield in this branch failed
+the cut test, so both sit strictly below `gamma ≤ S`. -/
+theorem boundD2_failHigh_attained (G : QSGame) (guard kill : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (hK : KillerLegal G kill)
+    (d : Nat) (p : G.Pos) (gamma : Int)
+    (hg1 : -MATE_UPPER < gamma) (hg2 : gamma ≤ MATE_UPPER)
+    (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
+    (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
+    (hnc : ¬ (useD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) (d + 1) p gamma = true ∧
+        gamma ≤ nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma (boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) p))
+    (hS : gamma ≤ searchMoves gamma
+        (fun m => -(boundD2 G guard kill d m (1 - gamma)))
+        (searchedAt G (d + 1) gamma p) LOSS) :
+    ∃ m ∈ searchedAt G (d + 1) gamma p,
+      hasKingCapture G.toNullGame.toGame m = false ∧
+      boundD2 G guard kill (d + 1) p gamma
+        = -(boundD2 G guard kill d m (1 - gamma)) ∧
+      boundD2 G guard kill (d + 1) p gamma ≤ -(nullValueD2 G guard d m) := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  obtain ⟨m, hmem, heq, hf⟩ := searchMoves_failHigh_exact gamma
+    (fun x => -(boundD2 G guard kill d x (1 - gamma)))
+    (searchedAt G (d + 1) gamma p) LOSS (by omega) hS
+  have hret : boundD2 G guard kill (d + 1) p gamma
+      = -(boundD2 G guard kill d m (1 - gamma)) := by
+    rw [boundD2_succ, if_neg hkg, if_neg hcap, if_neg hnc]
+    have hfut := futTerm_lt_gamma G (d + 1) gamma p hg1
+    have hnp : nullPartD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) (d + 1) p gamma < gamma := by
+      simp only [nullPartD2]
+      by_cases hu : useD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) (d + 1) p gamma = true
+      · rw [if_pos hu]
+        by_cases hv : gamma ≤ nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma (boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) p
+        · exact absurd ⟨hu, hv⟩ hnc
+        · omega
+      · rw [if_neg hu]
+        omega
+    simp only [termFix]
+    rw [if_neg (fun h => absurd h.1 (by omega))]
+    omega
+  have hmm : m ∈ G.moves p :=
+    movesAbove_subset G _ p m (searchedAt_subset G (d + 1) gamma p m hmem)
+  have hkgm : ¬ (G.eval m ≤ -MATE_LOWER) := fun hh =>
+    hcap ((hasKingCapture_iff G.toNullGame.toGame p).mpr ⟨m, hmm, hh⟩)
+  have hleg := storedMoveLegal G guard kill d m gamma hg1 hkgm hf
+  have hatt := (bound_null_spec G guard kill hB hK d m (1 - gamma)
+    (by omega) (by omega)).2 (by omega)
+  exact ⟨m, hmem, hleg, hret, by omega⟩
+
 end Sunfish
