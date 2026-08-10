@@ -464,7 +464,15 @@ tactic only, so a full build takes seconds.
   t-variant for `NoMaskedMobility` (Part B of the file, below).  The
   file also carries an honesty note: "draw" here means no-forced-mate
   in the ruleless game; FIDE draws are NOT detected as 0 (K+B vs K
-  converges to the sub-band arm, not to 0).
+  converges to the sub-band arm, not to 0).  Part B of the file is the
+  frontier-tail t-variant (`negamaxD2t` / `nullValueD2t`) — the
+  proven-but-not-shipped discharge of `NoMaskedMobility`; see the
+  recorded-design-option block in the Liveness section below.  Axioms
+  note: the entire value level of the file — both parts — is
+  `propext`/`Quot.sound` only; en route, milestone 2C's no-false-mates
+  theorems were freed of an accidental `Classical.choice` (an `omega`
+  closing a non-arithmetic goal routes through
+  `Classical.byContradiction`; replaced by `absurd`).
 
 - **`Sunfish/Killer.lean`** — **KillerIsKingCapture**, proven sorry-free
   (`boundKill_spec`): threading `tp_move` through the search as state
@@ -760,6 +768,45 @@ construction ("neither" = no forced mate, not "score 0").
 consumers (no-false-mates, its dual, and the trichotomy's honesty
 arm); its recorded discharge option is the frontier-tail t-variant
 (Part B of the same file, below).
+
+**Recorded design option, now PROVEN (not shipped): the frontier-tail
+variant** (`negamaxD2t` / `nullValueD2t`, Part B of
+`Classification.lean`) — verify-on-suspicion applied to the QS filter,
+the "other way" that avoids retuning `QS_A`.  Trigger (adjusted from
+the first-draft "fold ≤ −MATE_LOWER" and RECORDED, with the reason):
+**every ADMITTED move is illegal** — `NoMaskedMobility`'s own
+antecedent as a computable, `(pos, depth)`-determined, gamma-free
+scan; the fold-value trigger is NOT search-observable (the futility
+species prices an illegal admitted move at its child stand-pat, which
+can hold `best` above the band while every true admitted contribution
+is sub-band), while the admitted-legality scan is species-blind, and
+`trigger_shapes_agree_frontier` proves the two shapes equivalent at
+the frontier under `EvalQuiet` (at depth ≥ 2 under `ValFloor` both are
+inert).  When the trigger fires at a non-terminal node, the fold runs
+over the FULL move list — the tail only ADDS defender options.
+Proven, all sorry-free and `propext`/`Quot.sound` only:
+**no-false-mates for the t-variant carries NO chess premise**
+(`forcedMate_of_nullValueD2t` + dual: `ValFloor` + `EvalQuiet` +
+root legality — `NoMaskedMobility` is discharged by construction, the
+CexF channel closes); the completeness spine SURVIVES with the same
+`ValFloor` premise and the same `k + 1` / `k + 2` bounds
+(`forcedMate_negamaxD2t` — the attacker's witness is admitted so the
+trigger provably never fires at attacker nodes); the two-layer
+transfer survives (`nullValueD2t_eq_realValue_of_noZugzwangT`,
+`forcedMate_completeT`); `eventual_classification_t` restates the
+trichotomy with the honesty arm paid by fidelity alone; and **`CexF`
+becomes a positive test** (`cexF_t_positive`: the honest 0 at depths 2
+and 3 where the shipped value fabricated `MATE_UPPER`).  The engine
+change this models (NOT made): at the correction gate, where the
+`not live` scan already runs, when the scan finds legal moves but all
+of them sit below `val_lower`, search those moves at `depth - 1` and
+fold the yields into `best`/`live` — real yields, `storedMoveLegal`
+applies, the `termFix` interaction is unchanged.  Cost: only at
+not-live fail-low nodes.  The t-model sits alongside the shipped model
+exactly as `boundKCX''` does, so the decision can be made with
+theorems (and later an Elo screen) in hand; the search-side consumer
+(`boundD2t`/`boundKCXt`) is future work on top of the double-primed
+pair.
 
 **The production ≡ reference transfer** additionally uses
 `KingCaptureValHigh` (`EvalBounds`) and `CaptureFirst` — itself
