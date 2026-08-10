@@ -613,6 +613,21 @@ is the exact kingless sentinel `-MATE_UPPER` ends with `lower` one
 above it — the conclusion's `max V (1 - MATE_UPPER)` says exactly
 this; for every other root `lower ≤ V`.
 
+*(B) Best-move soundness*: the docstring's `tp_move` clause is now a
+theorem, in the STRONG form — attainment against the declared function
+`nullValueD2`, not merely against the fold the search evaluated.  A
+fail-high yield is the child probe's fail-low, so layer 1 at the child
+certifies the negated declared child value at or above the yield:
+`storedMove_attains` (store-site companion of `storedMoveLegal`, same
+hypothesis shape, no chess premise).  At the node,
+`boundD2_failHigh_attained`: when the real-move loop fails high (and
+the null cut didn't fire), the returned report IS the cutting move's
+own yield (`searchMoves_failHigh_exact` — the virtual accumulators sit
+strictly below the window there), and that move is admitted, legal
+(cited), and attains the report.  The substitution and mate-case
+futility stores attain through the kingless sentinel
+(`substitution_attains`); eviction stores nothing.
+
 **The production ≡ reference transfer** additionally uses
 `KingCaptureValHigh` (`EvalBounds`) and `CaptureFirst` — itself
 **DISCHARGED** (`captureFirst_of_sorted`) from `MovesSortedByVal` +
