@@ -146,10 +146,27 @@ class PackedNet:
         self.base = d["base"]               # packed BIAS + G_k*bias_k
         self.gp = d["gp"]                   # packed G_k (clamp ceiling)
         self.G = d["G"]                     # per-lane gains, block order
-        # rows[pf][piece][square120] -- pf==1 entries are the SAME int objects
-        rows0 = d["rows"]
-        rows1 = {p: [rows0[SWAP[p]][119 - s] for s in range(120)] for p in PIECES}
-        self.rows = (rows0, rows1)
+        self.B = B = d.get("B", 1)          # own-king buckets per perspective
+        if B == 1:
+            # rows[pf][piece][sq120] -- pf==1 entries are the SAME int objects
+            rows0 = d["rows"]
+            rows1 = {p: [rows0[SWAP[p]][119 - s] for s in range(120)]
+                     for p in PIECES}
+            self.rows = (rows0, rows1)
+        else:
+            # rowsW[bw] carries only the white-perspective unit lanes, rowsB
+            # [bb] only the black ones, so the ABSOLUTE-frame table for king
+            # buckets (bw, bb) is their per-entry sum.  Combine all B*B pairs
+            # once; the pf==1 view relabels the same int objects.
+            self.rows_kb = ([], [])
+            for bw in range(B):
+                for bb in range(B):
+                    c0 = {p: [d["rowsW"][bw][p][s] + d["rowsB"][bb][p][s]
+                              for s in range(120)] for p in PIECES}
+                    c1 = {p: [c0[SWAP[p]][119 - s] for s in range(120)]
+                          for p in PIECES}
+                    self.rows_kb[0].append(c0)
+                    self.rows_kb[1].append(c1)
         # SWAR constants
         self.H = rep(1 << VBITS, lanes)             # guard bits
         self.VAL = rep(ONES, lanes)
@@ -195,10 +212,19 @@ class PackedNet:
         return -c if v < -c else (c if v > c else v)
 
     # ------------------------------------------------------- accumulator
+    def kb_of(self, board, pf):
+        """Combined bucket index 4*bw+bb (ABSOLUTE white's and black's own-
+        frame buckets) of a mover-oriented board.  B == 1 nets have one."""
+        if self.B == 1:
+            return 0
+        own, opp = kbucket(board.index("K")), kbucket(119 - board.index("k"))
+        return (own * self.B + opp) if pf == 0 else (opp * self.B + own)
+
     def from_board(self, board, pf):
         """Build the accumulator from scratch. `board` is mover-oriented."""
         acc = self.base
-        rows = self.rows[pf]
+        rows = self.rows[pf] if self.B == 1 else \
+            self.rows_kb[pf][self.kb_of(board, pf)]
         for i, p in enumerate(board):
             if p in PIECES:
                 acc += rows[p][i]
@@ -297,13 +323,16 @@ def pick_shift(W, bias, v, segs=(0.0,), limit=16000, sumlimit=65534,
     return shift, guard, sabs
 
 
-def build(W, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES):
+def build(W, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES,
+          keep=None):
     """Quantise a float net into the packed representation.
 
     W[k][piece][sq120]  float input weights (activation units, clip at 1.0)
     bias[k]             float bias
     v[k]                float output weight, in centipawns per activation unit
     shift               nn_cp = raw >> shift, so the gain is C = 2**shift
+    keep                None packs both perspectives' lanes; "W"/"B" packs
+                        only that perspective's unit lanes (for build_kb)
 
     Returns the dict accepted by PackedNet.
     """
@@ -365,8 +394,10 @@ def build(W, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES):
             lv = [0] * (2 * N)
             if s in squares:
                 for j in range(N):
-                    lv[laneW[j]] = Wq[j][p][s]
-                    lv[laneB[j]] = Wq[j][pr][119 - s]
+                    if keep != "B":
+                        lv[laneW[j]] = Wq[j][p][s]
+                    if keep != "W":
+                        lv[laneB[j]] = Wq[j][pr][119 - s]
             col.append(packlanes(lv))
         rows[p] = col
 
@@ -386,6 +417,47 @@ def build(W, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES):
         "excursion": max(exc), "excursion_per_unit": exc,
         "sum_G": sum(G),
     }
+
+
+def build_kb(Ws, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES):
+    """Quantise a king-bucketed float net into the packed representation.
+
+    Ws[b][k][piece][sq120] is bucket b's input weights; bias/v/shift are
+    bucket-independent, so the lane layout, base, gp and G of every bucket
+    are IDENTICAL to a plain build of the same head -- only the rows differ.
+    The store keeps the two perspectives' lanes apart (rowsW[bw] fills only
+    white-perspective unit lanes, rowsB[bb] only black ones): the absolute-
+    frame table for a king configuration is rowsW[bw][p][s]+rowsB[bb][p][s],
+    combined once at load time for all B*B pairs.  A packed row is NOT
+    lane-separable after the fact (negative lanes borrow), which is why the
+    split happens at packing time via build(keep=...).
+
+    `shift` must satisfy pick_shift for EVERY bucket (take the min).
+    """
+    B = len(Ws)
+    full = [build(W, bias, v, shift, clampcp=clampcp, segs=segs,
+                  squares=squares) for W in Ws]
+    rowsW = [build(W, bias, v, shift, clampcp=clampcp, segs=segs,
+                   squares=squares, keep="W")["rows"] for W in Ws]
+    rowsB = [build(W, bias, v, shift, clampcp=clampcp, segs=segs,
+                   squares=squares, keep="B")["rows"] for W in Ws]
+    N = full[0]["N"]
+    # The split is only correct if the two halves recompose exactly: for
+    # equal buckets, rowsW[b] + rowsB[b] must BE the full build's row.
+    for b in range(B):
+        for p in PIECES:
+            for s in range(120):
+                assert rowsW[b][p][s] + rowsB[b][p][s] == full[b]["rows"][p][s], \
+                    "perspective split does not recompose at b=%d %s %d" % (b, p, s)
+    out = dict(full[0])
+    del out["rows"]
+    out.update({
+        "kind": "packed-nnue-kb1", "B": B, "rowsW": rowsW, "rowsB": rowsB,
+        "excursion": max(d["excursion"] for d in full),
+        "excursion_per_unit": [max(d["excursion_per_unit"][j] for d in full)
+                               for j in range(N)],
+    })
+    return out
 
 
 def act(x, segs=(0.0,)):

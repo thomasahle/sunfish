@@ -65,12 +65,42 @@ M16 = (1 << LBITS) - 1
 MTS = tuple(_d.get("ts", ()))
 
 _PIECES = "PNBRQKpnbrqk"
-_rows0 = _d["rows"]
-_rows1 = {p: [_rows0[p.swapcase()][119 - s] for s in range(120)] for p in _PIECES}
-# ROWS[pf][piece][square]: the packed contribution of one man on one square,
-# in the frame of the side to move.  pf==1 shares the very same int objects.
-ROWS = (_rows0, _rows1)
-del _d, _rows0, _rows1
+# Own-king buckets per perspective.  B == 1 is the plain net; B > 1 nets
+# condition the first-layer rows on each side's own king bucket, and a king
+# move that crosses a bucket boundary rebuilds the accumulator from scratch
+# (rare, ~32 adds).  ROWS[pf][kb][piece][square] is the packed contribution
+# of one man on one square, in the frame of the side to move, for the
+# ABSOLUTE king-bucket pair kb = B*bucket(white) + bucket(black); pf==1
+# shares the very same int objects.  For B == 1 there is a single table and
+# kb is always 0, so the hot path is unchanged.
+B = _d.get("B", 1)
+
+
+def kbucket(s):
+    """Bucket of a perspective's OWN king on its OWN-frame square: back two
+    ranks vs advanced, times queenside vs kingside (must match
+    packed/pnet.py kbucket -- verify.py checks the composition)."""
+    r, f = divmod(s, 10)
+    return (r <= 7) * 2 + (f >= 5)
+
+
+if B == 1:
+    _rows0 = _d["rows"]
+    _rows1 = {p: [_rows0[p.swapcase()][119 - s] for s in range(120)]
+              for p in _PIECES}
+    ROWS = ([_rows0], [_rows1])
+else:
+    _r0, _r1 = [], []
+    for _bw in range(B):
+        for _bb in range(B):
+            _c0 = {p: [_d["rowsW"][_bw][p][s] + _d["rowsB"][_bb][p][s]
+                       for s in range(120)] for p in _PIECES}
+            _c1 = {p: [_c0[p.swapcase()][119 - s] for s in range(120)]
+                   for p in _PIECES}
+            _r0.append(_c0)
+            _r1.append(_c1)
+    ROWS = (_r0, _r1)
+del _d
 
 
 def nn_cp(acc, pf):
@@ -256,7 +286,7 @@ opt_ranges = dict(
 Move = namedtuple("Move", "i j prom")
 
 
-class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf")):
+class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb")):
     """A state of a chess game
     board -- a 120 char representation of the board
     score -- the board evaluation: ps + the clipped net residual
@@ -268,8 +298,10 @@ class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf")):
     kp - the king passant square
     acc -- the packed NNUE accumulator (one big int, 2N lanes)
     pf -- perspective flag: which of the two lane blocks is the mover's
+    kb -- combined king-bucket index B*bucket(white) + bucket(black), in
+          ABSOLUTE colours (0 for plain B == 1 nets)
 
-    score/ps/acc/pf are all functions of the other fields, so identity --
+    score/ps/acc/pf/kb are all functions of the other fields, so identity --
     what the transposition table, the killer table and the repetition set
     key on -- deliberately ignores them.  Keeping the accumulator out of
     __hash__ also keeps hashing off the big int, which would otherwise cost
@@ -337,7 +369,7 @@ class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf")):
             self.board[::-1].swapcase(), -self.score, -self.ps, self.bc, self.wc,
             119 - self.ep if self.ep and not nullmove else 0,
             119 - self.kp if self.kp and not nullmove else 0,
-            self.acc, self.pf ^ 1,
+            self.acc, self.pf ^ 1, self.kb,
         )
 
     def move(self, move):
@@ -351,7 +383,8 @@ class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf")):
         # Every board mutation below is mirrored by a packed row delta. The
         # rows are exact per-lane integers, so the order does not matter:
         # only the final accumulator has to sit inside the lane range.
-        row = ROWS[self.pf]
+        kb = self.kb
+        row = ROWS[self.pf][kb]
         acc = self.acc + row[p][j] - row[p][i]
         if q != ".":
             acc -= row[q][j]
@@ -372,6 +405,14 @@ class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf")):
                 board = put(board, r, ".")
                 board = put(board, kp, "R")
                 acc += row["R"][kp] - row["R"][r]
+            if B > 1:
+                # Mover's own bucket may change; the frame is the mover's
+                # own, so kbucket(j) IS the own-frame bucket.  The mover is
+                # absolute white iff pf == 0.
+                nb = kbucket(j)
+                ob = kb // B if self.pf == 0 else kb % B
+                if nb != ob:
+                    kb = nb * B + kb % B if self.pf == 0 else kb - ob + nb
         # Pawn promotion, double move and en passant capture
         if p == "P":
             if A8 <= j <= H8:
@@ -382,11 +423,20 @@ class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf")):
             if j == self.ep:
                 board = put(board, j + S, ".")
                 acc -= row["p"][j + S]
+        # A king move across a bucket boundary invalidates every one of our
+        # own-perspective lanes at once: rebuild from the (still mover-
+        # oriented) final board with the new bucket's table.  Rare, ~32 adds.
+        if kb != self.kb:
+            row = ROWS[self.pf][kb]
+            acc = ACC_BASE
+            for s, c in enumerate(board):
+                if c in _PIECES:
+                    acc += row[c][s]
         # We rotate the returned position, so it's ready for the next player
         pf = self.pf ^ 1
         return Position(board[::-1].swapcase(), -ps + nn_cp(acc, pf), -ps,
                         bc, wc, 119 - ep if ep else 0, 119 - kp if kp else 0,
-                        acc, pf)
+                        acc, pf, kb)
 
     def value(self, move):
         i, j, prom = move
@@ -681,12 +731,16 @@ def from_board(board, wc=(True, True), bc=(True, True), ep=0, kp=0, pf=0):
     already in the side-to-move's orientation."""
     ps = sum(pst[p][i] if p.isupper() else -pst[p.upper()][119 - i]
              for i, p in enumerate(board) if p.isalpha())
+    kb = 0
+    if B > 1:
+        own, opp = kbucket(board.index("K")), kbucket(119 - board.index("k"))
+        kb = own * B + opp if pf == 0 else opp * B + own
     acc = ACC_BASE
-    row = ROWS[pf]
+    row = ROWS[pf][kb]
     for i, p in enumerate(board):
         if p in _PIECES:
             acc += row[p][i]
-    return Position(board, ps + nn_cp(acc, pf), ps, wc, bc, ep, kp, acc, pf)
+    return Position(board, ps + nn_cp(acc, pf), ps, wc, bc, ep, kp, acc, pf, kb)
 
 
 hist = [from_board(initial)]
