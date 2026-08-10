@@ -49,8 +49,21 @@ p.add_argument("--wclip", type=float, default=1.0)
 p.add_argument("--segs", type=int, default=1,
                help="activation segments: 1 = clipped ReLU, 3 ~ squared clipped ReLU")
 p.add_argument("--quiet", type=int, default=1)
+p.add_argument("--factor", type=int, default=1,
+               help="train with virtual per-piece-type features (folded into "
+                    "the real table at export; helps generalisation, free at "
+                    "run time)")
+p.add_argument("--losspow", type=float, default=2.0,
+               help="loss exponent p in |sig(pred)-sig(y)|^p; nnue-pytorch "
+                    "found ~2.6 better than plain MSE")
 p.add_argument("--cache", default="")
+p.add_argument("--workers", type=int, default=0,
+               help="parse the dump with this many processes (0 = in-process)")
+p.add_argument("--threads", type=int, default=0,
+               help="torch CPU threads (0 = torch default)")
 args = p.parse_args()
+if args.threads:
+    torch.set_num_threads(args.threads)
 
 PIECES = pnet.PIECES
 PIDX = {c: i for i, c in enumerate(PIECES)}
@@ -79,19 +92,11 @@ def fen_to_board120(fen_board):
     return "".join(board + [" "] * 20)
 
 
-def parse(path, limit):
-    proc = subprocess.Popen(["zstd", "-d", "-c", path], stdout=subprocess.PIPE,
-                            stderr=subprocess.DEVNULL, text=True)
-    FEATS, OFFS, PSTC, Y = array("i"), array("i"), array("i"), array("i")
-    off = 0
-    for line in proc.stdout:
-        if len(Y) >= limit:
-            proc.kill()
-            break
-        try:
-            d = json.loads(line)
-        except json.JSONDecodeError:
-            break
+def parse_lines(lines):
+    """One worker's share: JSON lines -> (feats, lens, pstc, y) arrays."""
+    FEATS, LENS, PSTC, Y = array("i"), array("i"), array("i"), array("i")
+    for line in lines:
+        d = json.loads(line)
         fen = d["fen"].split()
         ev = max(d["evals"], key=lambda e: e["depth"])
         pv = ev["pvs"][0]
@@ -108,15 +113,56 @@ def parse(path, limit):
                 continue
         if fen[1] == "b":
             board, cp = board[::-1].swapcase(), -cp
-        ps = 0
-        OFFS.append(off)
+        ps = n = 0
         for i, c in enumerate(board):
             if c.isalpha():
                 FEATS.append(feat(c, i))
-                off += 1
+                n += 1
                 ps += PST[c][i] if c.isupper() else -PST[c.upper()][119 - i]
+        LENS.append(n)
         PSTC.append(ps)
         Y.append(cp)
+    return FEATS, LENS, PSTC, Y
+
+
+def parse(path, limit, workers=0):
+    proc = subprocess.Popen(["zstd", "-d", "-c", path], stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL, text=True)
+    FEATS, OFFS, PSTC, Y = array("i"), array("i"), array("i"), array("i")
+    off = 0
+
+    def chunks():
+        while True:
+            lines = proc.stdout.readlines(1 << 23)      # ~8 MB of lines
+            if not lines:
+                return
+            yield lines
+
+    def gather(parts):
+        nonlocal off
+        for f, l, ps, y in parts:
+            FEATS.extend(f)
+            for n in l:
+                OFFS.append(off)
+                off += n
+            PSTC.extend(ps)
+            Y.extend(y)
+            if len(Y) % 1_000_000 < len(y):
+                print("  ...%dM positions" % (len(Y) // 1_000_000), flush=True)
+            if len(Y) >= limit:
+                return True
+        return False
+
+    if workers <= 1:
+        gather(parse_lines(ls) for ls in chunks())
+    else:
+        # fork, explicitly: spawn would re-execute this script in every
+        # worker (there is deliberately no __main__ guard)
+        import multiprocessing
+        with multiprocessing.get_context("fork").Pool(workers) as pool:
+            if gather(pool.imap(parse_lines, chunks())):
+                pool.terminate()
+    proc.kill()
     return FEATS, OFFS, PSTC, Y
 
 
@@ -127,7 +173,7 @@ if args.cache and os.path.exists(args.cache):
     print("loaded %d cached positions in %.0fs" % (len(Y), time.time() - t0), flush=True)
 else:
     print("parsing data...", flush=True)
-    FEATS, OFFS, PSTC, Y = parse(args.data, args.limit)
+    FEATS, OFFS, PSTC, Y = parse(args.data, args.limit, args.workers)
     print("%d positions in %.0fs" % (len(Y), time.time() - t0), flush=True)
     if args.cache:
         with open(args.cache, "wb") as f:
@@ -162,20 +208,44 @@ def act(a):
 
 
 class Net(nn.Module):
-    def __init__(self, N):
+    """768 -> N -> 1 with optional virtual piece-type features.
+
+    The effective first-layer weight is  W[f] = raw[f] + typ[f // 64]:  the
+    virtual row is shared by all 64 squares of a piece type, so the sparse
+    per-square rows only learn the DEVIATION from the type's average.  This
+    is nnue-pytorch's feature factorizer at our scale; it costs nothing at
+    run time because `weight()` is what gets exported.
+    """
+
+    def __init__(self, N, factor):
         super().__init__()
-        self.emb = nn.EmbeddingBag(768, N, mode="sum")
-        nn.init.normal_(self.emb.weight, std=0.05)
+        self.raw = nn.Parameter(torch.randn(768, N) * 0.05)
+        self.typ = nn.Parameter(torch.zeros(12, N)) if factor else None
         self.bias = nn.Parameter(torch.zeros(N) + 0.1)
         self.v = nn.Parameter(torch.randn(N) * (25.0 / N ** 0.5))
 
+    def weight(self):
+        if self.typ is None:
+            return self.raw
+        return self.raw + self.typ.repeat_interleave(64, 0)
+
+    def clamp_weights(self, w):
+        # enforce the clip on the EFFECTIVE weight, which is what is exported
+        with torch.no_grad():
+            if self.typ is None:
+                self.raw.clamp_(-w, w)
+            else:
+                t = self.typ.repeat_interleave(64, 0)
+                self.raw.copy_((self.raw + t).clamp(-w, w) - t)
+
     def forward(self, fi, mi, fo, ps):
-        au = act(self.emb(fi, fo) + self.bias)
-        at = act(self.emb(mi, fo) + self.bias)
+        E = self.weight()
+        au = act(nn.functional.embedding_bag(fi, E, fo, mode="sum") + self.bias)
+        at = act(nn.functional.embedding_bag(mi, E, fo, mode="sum") + self.bias)
         return ps + ((au - at) * self.v).sum(-1).clamp(-CLAMP, CLAMP)
 
 
-model = Net(N)
+model = Net(N, args.factor)
 opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-5)
 sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
 
@@ -183,7 +253,7 @@ n = len(ys)
 perm = list(range(n))
 random.seed(0)
 random.shuffle(perm)
-nval = min(50_000, n // 20)
+nval = min(200_000, n // 20)
 val_ids, train_ids = perm[:nval], perm[nval:]
 
 
@@ -203,7 +273,7 @@ def batches(ids, bs, shuffle=True):
 
 def export(path):
     with torch.no_grad():
-        E = model.emb.weight.detach()                       # (768, N)
+        E = model.weight().detach()                        # (768, N)
         b = model.bias.detach().tolist()
         v = model.v.detach().tolist()
         W = [{c: [0.0] * 120 for c in PIECES} for _ in range(N)]
@@ -219,17 +289,26 @@ def export(path):
     return shift, worst, sabs, d
 
 
+# anchor rows: what the val split costs with no net at all
+with torch.no_grad():
+    vy, vp = ys[torch.tensor(val_ids)], pstc[torch.tensor(val_ids)]
+    sy = torch.sigmoid(vy / K)
+    print("val anchors: zero %.5f  pst %.5f  (val %d positions)"
+          % (((torch.sigmoid(vy * 0) - sy) ** 2).mean(),
+             ((torch.sigmoid(vp / K) - sy) ** 2).mean(), len(val_ids)), flush=True)
+
+best = float("inf")
 for epoch in range(args.epochs):
     model.train()
     tl = tn = 0
     for fi, mi, fo, ps, y in batches(train_ids, args.batch):
         pred = model(fi, mi, fo, ps)
-        loss = ((torch.sigmoid(pred / K) - torch.sigmoid(y / K)) ** 2).mean()
+        loss = ((torch.sigmoid(pred / K) - torch.sigmoid(y / K)).abs()
+                ** args.losspow).mean()
         opt.zero_grad()
         loss.backward()
         opt.step()
-        with torch.no_grad():
-            model.emb.weight.clamp_(-args.wclip, args.wclip)
+        model.clamp_weights(args.wclip)
         tl += loss.item() * len(y)
         tn += len(y)
     sched.step()
@@ -242,10 +321,13 @@ for epoch in range(args.epochs):
             mae += (pred - y).abs().clamp(max=1000).mean().item() * len(y)
             sat += ((pred - ps).abs() >= CLAMP - 0.5).sum().item()
             vn += len(y)
-    shift, worst, sabs, d = export(args.out)
-    print("epoch %d: train %.5f  val %.5f  val-MAE %.0f cp  clip-saturated %.2f%%"
-          "  shift %d sum|v| %.0f excursion %d"
-          % (epoch, tl / tn, vl / vn, mae / vn, 100.0 * sat / vn,
-             shift, sabs, d["excursion"]), flush=True)
+    tag = ""
+    if vl / vn < best:
+        best = vl / vn
+        shift, worst, sabs, d = export(args.out)
+        tag = "  -> wrote %s (shift %d sum|v| %.0f excursion %d)" % (
+            args.out, shift, sabs, d["excursion"])
+    print("epoch %d: train %.5f  val %.5f  val-MAE %.0f cp  clip-saturated %.2f%%%s"
+          % (epoch, tl / tn, vl / vn, mae / vn, 100.0 * sat / vn, tag), flush=True)
 
-print("wrote", args.out)
+print("best val %.5f -> %s" % (best, args.out))
