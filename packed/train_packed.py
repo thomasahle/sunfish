@@ -86,6 +86,13 @@ p.add_argument("--factor", type=int, default=1,
 p.add_argument("--losspow", type=float, default=2.0,
                help="loss exponent p in |sig(pred)-sig(y)|^p; nnue-pytorch "
                     "found ~2.6 better than plain MSE")
+p.add_argument("--valn", type=int, default=0,
+               help="draw the val split from a permutation of the FIRST N0 "
+                    "positions (parse order is deterministic, so with the "
+                    "same seed the val set is IDENTICAL to a run whose "
+                    "dataset was those N0 positions -- val numbers stay "
+                    "directly comparable when scaling the data).  Positions "
+                    "beyond N0 all become training data.  0 = permute all")
 p.add_argument("--cache", default="")
 p.add_argument("--workers", type=int, default=0,
                help="parse the dump with this many processes (0 = in-process)")
@@ -383,11 +390,20 @@ opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-5)
 sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
 
 n = len(ys)
-perm = list(range(n))
 random.seed(0)
-random.shuffle(perm)
-nval = min(200_000, n // 20)
-val_ids, train_ids = perm[:nval], perm[nval:]
+if args.valn and args.valn < n:
+    # comparable-val mode: the permutation (and so the val set) is exactly
+    # the one a run over the first valn positions would draw; the tail is
+    # pure extra training data
+    perm = list(range(args.valn))
+    random.shuffle(perm)
+    nval = min(200_000, args.valn // 20)
+    val_ids, train_ids = perm[:nval], perm[nval:] + list(range(args.valn, n))
+else:
+    perm = list(range(n))
+    random.shuffle(perm)
+    nval = min(200_000, n // 20)
+    val_ids, train_ids = perm[:nval], perm[nval:]
 
 
 def batches(ids, bs, shuffle=True):
