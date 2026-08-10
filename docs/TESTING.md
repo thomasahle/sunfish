@@ -67,11 +67,14 @@ fastchess \
    directly at a long TC (drive the engine over a scripted game and assert
    the budget is actually reached mid-game).
 
-6. **Time control: short but with an increment.**
-   Sunfish is slow; sudden-death blitz makes every game a timeout lottery.
-   `tc=4+0.04` works well for regression tests; use longer (e.g. `tc=10+0.1`)
-   when the change affects time management or pondering. A handful of time
-   losses over hundreds of games is normal; dozens mean the TC is too fast.
+6. **Time control: 30+1 minimum for anything decision-grade.**
+   Sunfish is slow; sudden-death blitz makes every game a timeout lottery,
+   and very fast TCs measure interpreter overhead as much as chess (two
+   changes on record flipped sign between fast TC and 60+1). `tc=4+0.04`
+   is for regression tests and lockstep sanity only. Any match whose
+   result feeds a merge/decline decision runs at `tc=30+1` or slower;
+   final confirmation of a winner stays at 60+1. A handful of time losses
+   over hundreds of games is normal; dozens mean the TC is too fast.
 
 7. **Adjudicate finished games** (`-draw`/`-resign` flags above) — sunfish has
    no resign logic and weak endgames, so unadjudicated games drag on and waste
