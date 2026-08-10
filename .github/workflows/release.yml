@@ -24,6 +24,16 @@ jobs:
         pip install dist/*.whl
         printf 'uci\nisready\nposition startpos\ngo movetime 300\nquit\n' \
           | timeout 60 sunfish | tee /dev/stderr | grep -q bestmove
+        # The wheel must ship sunfish_tools/, i.e. the real UCI interface.
+        # Run from an empty directory so only the installed copy can satisfy
+        # the import, and use a Black-to-move FEN: a wheel that shipped
+        # sunfish.py alone cannot start at all, and one that answered from
+        # the untouched initial board would reply from rank 1 or 2 (#156).
+        cd "$(mktemp -d)"
+        printf 'uci\nisready\nposition fen rnbqkbnr/ppp1p1pp/8/3pPp2/8/8/PPPP1PPP/RNBQKBNR b KQkq - 1 4\ngo movetime 300\nquit\n' \
+          | timeout 60 sunfish | tee /dev/stderr | grep '^bestmove' > bm.txt
+        grep -q '^bestmove' bm.txt
+        ! grep -q '^bestmove [a-h][12]' bm.txt
     - name: Build the packed 4K engine
       run: |
         pip install python-minifier

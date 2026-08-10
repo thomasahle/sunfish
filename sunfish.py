@@ -1,7 +1,7 @@
 #!/bin/sh
 """:"
 # Polyglot header: run with pypy3 when available, else python3 (issue #102).
-# No -u needed: all UCI output is flushed explicitly (tools/uci.py).
+# No -u needed: all UCI output is flushed explicitly (sunfish_tools/uci.py).
 for cmd in pypy3 python3; do
    command -v "$cmd" > /dev/null && exec "$cmd" "$0" "$@"
 done
@@ -527,7 +527,7 @@ class Searcher:
 # UCI User interface
 ###############################################################################
 
-# parse/render/hist live at module level: tools/uci.py (and the tests)
+# parse/render/hist live at module level: sunfish_tools/uci.py (and the tests)
 # reach them as engine-module attributes, and main() uses hist before its
 # own body would define it.
 def parse(c): return A1 + ord(c[0]) - ord("a") - 10 * (int(c[1]) - 1)
@@ -538,8 +538,17 @@ hist = [Position(initial, 0, (True, True), (True, True), 0, 0)]
 
 def main():
     # minifier-hide start
-    import sys, tools.uci
-    return tools.uci.run(sys.modules[__name__], hist[-1])
+    # The real UCI interface: pondering, Hash option, spec-complete go
+    # parsing, and FEN positions. It ships in the wheel, so a checkout and
+    # an installed sunfish both reach it, and the import is deliberately
+    # unconditional - an engine that cannot find its interface must say so
+    # and stop, not play on with the reduced one (issue #156).
+    #
+    # Only the packed build runs the loop below, and it never reaches this
+    # line: pack.sh deletes everything between the minifier-hide markers,
+    # taking the import and this return with it.
+    import sys, sunfish_tools.uci
+    return sunfish_tools.uci.run(sys.modules[__name__], hist[-1])
     # minifier-hide end
 
     searcher = Searcher()

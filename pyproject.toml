@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sunfish"
-dynamic = ["version"]
+version = "2026"
 description = "Sunfish: a minimalist chess engine written in Python"
 readme = "README.md"
 license = { file = "LICENSE.md" }
@@ -35,7 +35,10 @@ dev = [
 ]
 
 [tool.setuptools]
+# The engine, plus the UCI interface it drives -- sunfish.py imports it
+# unconditionally, so it has to be installed alongside. `tools/` is not
+# shipped: those are development scripts, and `tools` is far too generic
+# a name for a distribution to claim in site-packages.
 py-modules = ["sunfish"]
+packages = ["sunfish_tools"]
 
-[tool.setuptools.dynamic]
-version = { attr = "sunfish.__version__" }
