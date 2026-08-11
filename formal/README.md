@@ -624,6 +624,17 @@ tactic only, so a full build takes seconds.
   `kingCapture_val_above` (a king capture's value clears `MATE_LOWER`
   even after the worst mover drop), backing `KingCaptureValHigh`.
 
+- **`Sunfish/Pruning.lean`** — PROPOSED prunings, proof-first: the
+  soundness envelope for candidate engine changes that do NOT exist in
+  code yet.  Razoring with runtime verification: REJECTED — unsound as
+  proposed (`razorVerified_not_sound`, `razor_tt_crossing`, a
+  parameterized countermodel covering every margin that can fire below
+  the mate band), sound only in a modified form (`boundRm`,
+  `bound_null_spec_Rm`) under a margin premise proven false for every
+  useful margin (`razorMargin_required`) and vacuous beyond them
+  (`razorMargin_trigger_vacuous`).  See "Proposed prunings: proven
+  envelopes" below for the full verdicts and engine guidance.
+
 ## The premise inventory (current, one place)
 
 What the shipped search's correctness rests on today, sorted by kind.
@@ -1552,6 +1563,97 @@ corner mates), `KingCapturableReportsExact` (false — the -368/-69290
 double report).  Each was an implicit "score implies legality" step;
 each produced a real crossed table entry; each is now either verified
 by the oracle or removed from the code path.
+
+## Proposed prunings: proven envelopes (`Sunfish/Pruning.lean`)
+
+Proof-first candidates: the soundness envelope is worked out in the
+model BEFORE any engine code exists, so the implement/reject decision
+is made with theorems in hand.  Per candidate: the verdict, the
+theorems as landed, what an engine change may and may not do, and the
+premises consumed.
+
+### Candidate 1 — razoring with runtime verification: REJECTED (unsound as proposed; no useful sound margin exists)
+
+**The proposal** (from the NNUE lane, proven on the shared search
+model): at depth `d ∈ {2, 3}`, when `pos.score + R(d) < gamma`, answer
+from the depth-0 (QS) value instead of the full-width search; if the
+razored answer would fail high (`>= gamma`), discard it and run the
+full search — so razoring only ever produces fail-low answers.
+
+**Verdict: UNSOUND AS PROPOSED, and provably not repairable into
+anything useful.**  The theorems, in the order of the argument:
+
+- **`razorVerified_not_sound`** — for EVERY margin
+  `R < 2·MATE_LOWER − 1`, a machine-checked countermodel
+  (`CexRz (razorV R)`: a mate-in-1 whose delivering move is QUIET, so
+  depth 0 stands pat while the depth-2 declared value is the full
+  `MATE_LOWER`) on which every fidelity premise of the double-primed
+  theorems holds (`cexRz_fidelity`: `Bounded`, `EvalQuiet`,
+  `ValFloor 192`, `KingCaptureValHigh`, `HighValIsKingCapture`,
+  legally-reached root): the trigger fires at the in-band window
+  `MATE_LOWER`, the runtime verification PASSES (the razored answer
+  fails low, so the fail-high re-check never runs), and the served
+  fail-low claim about `nullValueD2` at the `(pos, 2)` key is false.
+  `cexRz_real` repeats the value computation for the real-move
+  `negamaxD2` — the crossing is not a null artifact.
+- **Root cause, for the guideline: the verification inspects the
+  wrong direction.**  A razored fail-low stored at `(pos, d)` claims a
+  bound on the depth-`d` declared value; the QS answer certifies a
+  bound on the DEPTH-0 declared value; the two are incomparable in
+  general.  The failure mode is a FALSE FAIL-LOW, which the fail-high
+  re-check by construction never inspects — and detecting a false
+  fail-low IS the full-width search the razor was built to skip.
+  Contrast with the band-edge arm: there the suspicious claim had a
+  boundary window at which BOTH fail directions are decisive
+  (`boundary_window_decisive`); razoring has no analogous cheap
+  decisive probe.
+- **`razor_tt_crossing`** — the doctrinal upgrade: at the same key and
+  the same window, the honest search fails high at `MATE_LOWER` (the
+  mate is real) while the razored probe serves an upper bound below
+  it: `Entry(lower, upper)` with `upper < lower`, the exact
+  crossed-entry shape of `lmr_tt_crossing` (the theorem that ended
+  re-search LMR).
+- **The sound modified form exists — and abandons the QS answer.**
+  Under **`RazorMargin`** (`nullValueD2 d p ≤ pos.score + R(d)` at
+  razor depths, quiet non-capturable nodes), `pos.score + R(d)` ITSELF
+  is a sound fail-low answer; the QS call contributes nothing to
+  soundness and `boundRm` never consults it.  **`bound_null_spec_Rm`**
+  is layer 1 for the margin razor — it brackets the SAME `nullValueD2`
+  at every key and driver window, so razored and full answers may mix
+  at a key — and **`razorMargin_no_crossing`** is the table-consistency
+  corollary.  (An engine wanting the QS refinement may serve
+  `max(qs, pos.score + R(d))` with the fail-high re-search; the margin
+  premise still carries all the soundness.)
+- **But no useful margin exists.**  **`razorMargin_required`**:
+  `RazorMargin` is FALSE on the countermodel for every
+  `R < 2·MATE_LOWER − 1` — the margin premise prices unbounded deep
+  tactics, not `pos.value` deltas, so it is NOT an `EvalBounds` table
+  fact, and a quiet mate-in-1 outruns every candidate margin.
+  **`razorMargin_trigger_vacuous`** (unconditional arithmetic): with
+  `R ≥ 2·MATE_LOWER − 1`, the trigger can only fire at windows
+  STRICTLY ABOVE the mate band — windows the mate machinery already
+  decides.  Two jaws, no gap between them.
+- **Layering**: `RazorMargin` would be a chess premise in LAYER 1
+  (razored answers are stored), the layer the band-edge landing just
+  freed of chess premises — and a FALSE one.  Re-admitting it is
+  exactly what the two-layer doctrine forbids.
+
+**What an engine change may and may not do**: do not implement the
+proposal.  A PR attempting any razoring variant must state which jaw
+it escapes: either exhibit a margin premise that is both true of chess
+and able to fire below the mate band (`razorMargin_required` says
+these conflict for every `R`), or exhibit a cheap decisive
+verification for the fail-LOW direction (the band-edge shape) — which
+for razoring is the full search itself.  Serving the QS value as the
+answer at the `(pos, d)` key is never admissible
+(`razor_tt_crossing`); serving it at the `(pos, 0)` key is admissible
+and useless (it does not answer the depth-`d` probe).
+
+Premises consumed: the countermodel theorems consume NONE (every
+fidelity premise is proven on the countermodel; axioms
+`propext, Quot.sound` only — the fidelity bundle included).
+`bound_null_spec_Rm` / `razorMargin_no_crossing` consume `Bounded` +
+`RazorMargin` and inherit layer 1''`s `Classical.choice`.
 
 ## Prior art
 
