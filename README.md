@@ -1,7 +1,7 @@
 ![Sunfish logo](https://raw.github.com/thomasahle/sunfish/master/docs/logo/sunfish_large.png)
 
 ## Introduction
-Sunfish is a simple, but strong chess engine, written in Python. With its simple [UCI](http://wbec-ridderkerk.nl/html/UCIProtocol.html) interface, and removing comments and whitespace, it takes up just 138 lines of code! (`tools/build/clean.sh sunfish.py | wc -l`).
+Sunfish is a simple, but strong chess engine, written in Python. With its simple [UCI](http://wbec-ridderkerk.nl/html/UCIProtocol.html) interface, and removing comments and whitespace, it takes up just 135 lines of code! (`tools/build/clean.sh sunfish.py | wc -l`).
 Yet [it plays at ratings above 2000 at Lichess](https://lichess.org/@/sunfish-engine).
 
 There is also a (somewhat) stronger NNUE based sunfish, which you can also [play against on Lichess](https://lichess.org/@/sunfish-nnue-engine).
@@ -62,12 +62,34 @@ If the engine fails to start, run `sunfish_ui/fancy.py` with `-debug` to see the
 and make sure `python3` is on your PATH. On Windows, `.py` engines are launched
 through your current Python interpreter automatically.
 
-### Playing with a graphical interface
+### Using sunfish with GUIs and tournament tools
 
-It is also possible to run Sunfish with a graphical interface, such as [PyChess](http://pychess.org) or [Arena](http://www.playwitharena.de).
+The engine speaks UCI: point any tool at `sunfish-uci` (after
+`pip install sunfish`) or `./sunfish.py` (from a checkout).
 
-Finally you can [play sunfish now on Lichess](https://lichess.org/@/sunfish-engine) or play against [Recursing's Rust port](https://github.com/Recursing/sunfish_rs),
-also [on Lichess](https://lichess.org/@/sunfish_rs), which is about 100 ELO stronger.
+* **UCI GUIs** ([Arena](http://www.playwitharena.de),
+  [Cute Chess](https://cutechess.com), [PyChess](http://pychess.org),
+  BanksiaGUI): add an engine, protocol UCI, command `sunfish-uci`.
+* **WinBoard / XBoard**: use the
+  [PolyGlot](https://github.com/ddugovic/polyglot) adapter with the
+  shipped config [`tools/polyglot.ini`](tools/polyglot.ini)
+  (tested with PolyGlot 2.0.4; CI drives a real adapter session).
+* **Command-line matches** with
+  [fastchess](https://github.com/Disservin/fastchess) or
+  [cutechess-cli](https://github.com/cutechess/cutechess):
+
+      fastchess -engine cmd=sunfish-uci name=sunfish \
+                -engine cmd=<other> name=other \
+                -each proto=uci tc=30+1 -rounds 10 -games 2
+
+  (see [`docs/TESTING.md`](docs/TESTING.md) for the full methodology).
+* **Lichess**: play [sunfish-engine](https://lichess.org/@/sunfish-engine)
+  or its NNUE sibling
+  [sunfish-nnue-engine](https://lichess.org/@/sunfish-nnue-engine) —
+  both run as bots around the clock.
+
+You can also play against [Recursing's Rust port](https://github.com/Recursing/sunfish_rs)
+[on Lichess](https://lichess.org/@/sunfish_rs).
 
 ### NNUE version
 

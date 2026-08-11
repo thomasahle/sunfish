@@ -73,3 +73,29 @@ def test_winboard_session_plays_moves(tmp_path):
     for m in moves:
         assert len(m) in (4, 5) and m[0] in "abcdefgh" and m[2] in "abcdefgh", \
             f"malformed move {m!r}"
+
+
+def test_python_chess_xboard_api(tmp_path):
+    """python-chess's XBoard driver is a second, independent consumer of
+    the adapter stack - it negotiates protover 2 features itself."""
+    chess = pytest.importorskip("chess")
+    import chess.engine
+    ini = tmp_path / "polyglot.ini"
+    ini.write_text(
+        "[Polyglot]\n"
+        "EngineName=Sunfish\n"
+        f"EngineCommand={sys.executable} {ROOT / 'sunfish.py'}\n"
+        f"EngineDirectory={ROOT}\n"
+        "[Engine]\n")
+    engine = chess.engine.SimpleEngine.popen_xboard(
+        ["polyglot", str(ini)], timeout=30)
+    try:
+        board = chess.Board()
+        for _ in range(4):  # two engine moves with legality checking
+            result = engine.play(board, chess.engine.Limit(time=2))
+            assert result.move in board.legal_moves
+            board.push(result.move)
+            if board.is_game_over():
+                break
+    finally:
+        engine.quit()
