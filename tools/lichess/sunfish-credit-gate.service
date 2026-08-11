@@ -7,7 +7,7 @@ Type=simple
 # Plain CPython: the estimator reads /proc/stat every few seconds and does a
 # handful of floating-point operations. It must never be the thing competing
 # for CPU, so it runs at the lowest useful priority.
-ExecStart=/usr/bin/python3 /opt/sunfish/contrib/lichess/cpu_credit.py \
+ExecStart=/usr/bin/python3 /opt/sunfish/tools/lichess/cpu_credit.py \
     --daemon --flag /run/sunfish-throttled \
     --state /var/lib/sunfish/credit-state.json
 Nice=19
