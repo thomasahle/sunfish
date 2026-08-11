@@ -45,7 +45,7 @@ _row = lambda: {p: [next(_it) for _ in range(120)] for p in _PIECES}
 ACC_BASE, MGP = next(_it), next(_it)
 MTS = tuple(next(_it) for _ in range(_d.pop("nts", 0)))
 B = _d.get("B", 1)
-assert B in (1, 4, 8), "unknown king-bucket scheme B=%r" % B
+assert B in (1, 4, 8, 16), "unknown king-bucket scheme B=%r" % B
 # All B*B absolute bucket pairs combined once (a single entry for B == 1);
 # the pf==1 view relabels the very same int objects.
 if B == 1:
@@ -114,6 +114,8 @@ def kbucket(s):
     the composition): B == 4 is back-two-ranks vs advanced times queenside
     vs kingside; B == 8 refines the file split to pairs (ab/cd/ef/gh)."""
     r, f = divmod(s, 10)
+    if B == 16:
+        return (9 - r) // 2 * 4 + (f - 1) // 2
     return (r <= 7) * (B >> 1) + ((f - 1) // 2 if B == 8 else (f >= 5))
 
 

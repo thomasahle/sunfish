@@ -55,7 +55,7 @@ p.add_argument("--kb", type=int, default=1,
                     "bucket-conditioned first-layer rows and exports FLOAT "
                     "weights only (packed export for kb nets is a separate, "
                     "engine-side step -- do not build it before the val loss "
-                    "has earned it).  4 = pnet.kbucket, 8 = pnet.kbucket8")
+                    "has earned it).  4/8/16 = pnet.kbucket/kbucket8/kbucket16")
 p.add_argument("--nb", type=int, default=0,
                help="dedicated bilinear lanes per perspective (0 = off).  "
                     "Each lane is a crelu unit allocated to group "
@@ -141,7 +141,7 @@ if args.threads:
 PIECES = pnet.PIECES
 PIDX = {c: i for i, c in enumerate(PIECES)}
 # king-bucket scheme; the multiplier packs (own, opp) into one byte
-KBF = pnet.kbucket8 if args.kb == 8 else pnet.kbucket
+KBF = {16: pnet.kbucket16, 8: pnet.kbucket8}.get(args.kb, pnet.kbucket)
 KBMUL = args.kb if args.kb > 1 else 4
 
 # classic sunfish's piece-square tables, verbatim.  In the repo, classic
@@ -179,7 +179,7 @@ def parse_lines(lines):
     bucket taken from its OWN frame (the board here is already normalised
     to white-to-move)."""
     FEATS, LENS, PSTC, Y = array("i"), array("i"), array("i"), array("i")
-    KB = array("b")
+    KB = array("h")   # 16*own+opp reaches 255: needs >8 signed bits
     for line in lines:
         d = json.loads(line)
         fen = d["fen"].split()
@@ -218,7 +218,7 @@ def parse(path, limit, workers=0):
     # OFFS is 64-bit: cumulative feature offsets pass 2^31 just beyond 100M
     # positions (~21 features each) -- array("i") overflowed there
     FEATS, OFFS, PSTC, Y = array("i"), array("q"), array("i"), array("i")
-    KB = array("b")
+    KB = array("h")   # 16*own+opp reaches 255: needs >8 signed bits
     off = 0
 
     def chunks():

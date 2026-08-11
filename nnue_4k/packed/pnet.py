@@ -97,6 +97,16 @@ def kbucket8(s):
     return (r <= 7) * 4 + (f - 1) // 2
 
 
+def kbucket16(s):
+    """16 buckets: 4 file pairs x 4 rank BANDS (own rows 1-2 / 3-4 / 5-6 /
+    7-8).  A strict refinement of kbucket8: the single "advanced" band
+    splits into three, giving the net depth-of-advance conditioning --
+    king-safety knowledge is conjunctive in exactly this variable
+    (owner-backed capacity direction, 2026-08-11)."""
+    r, f = divmod(s, 10)
+    return (9 - r) // 2 * 4 + (f - 1) // 2
+
+
 def rep(val, n):
     """`val` replicated into n lanes."""
     r = 0
@@ -171,9 +181,9 @@ class PackedNet:
         self.gp = d["gp"]                   # packed G_k (clamp ceiling)
         self.G = d["G"]                     # per-lane gains, block order
         self.B = B = d.get("B", 1)          # own-king buckets per perspective
-        if B not in (1, 4, 8):
+        if B not in (1, 4, 8, 16):
             raise ValueError("unknown king-bucket scheme B=%r" % B)
-        self.kbf = kbucket8 if B == 8 else kbucket
+        self.kbf = {16: kbucket16, 8: kbucket8}.get(B, kbucket)
         if B == 1:
             # rows[pf][piece][sq120] -- pf==1 entries are the SAME int objects
             rows0 = d["rows"]
