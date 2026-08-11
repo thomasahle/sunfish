@@ -75,6 +75,40 @@ def test_winboard_session_plays_moves(tmp_path):
             f"malformed move {m!r}"
 
 
+def test_shipped_ini_plays_from_repo_root():
+    """The artifact users actually download: tools/polyglot.ini, launched
+    from the repo root exactly as the README documents. PolyGlot 2.0.4
+    resolves EngineDir against the invoking directory (and silently
+    ignores the "EngineDirectory" spelling), so the shipped file only
+    provably works when exercised from the documented cwd - this test."""
+    proc = subprocess.Popen(
+        ["polyglot", "tools/polyglot.ini"], stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+        text=True, bufsize=1, cwd=ROOT)
+    try:
+        proc.stdin.write("xboard\nprotover 2\nnew\nlevel 40 5 0\n"
+                         "time 30000\notim 30000\ne2e4\n")
+        proc.stdin.flush()
+        deadline = time.time() + 60
+        while time.time() < deadline:
+            line = proc.stdout.readline()
+            if not line:
+                break
+            if line.startswith("move "):
+                move = line.split()[1]
+                assert len(move) in (4, 5) and move[0] in "abcdefgh", \
+                    f"malformed move {move!r}"
+                return
+        raise AssertionError("shipped tools/polyglot.ini produced no move")
+    finally:
+        try:
+            proc.stdin.write("quit\n")
+            proc.stdin.flush()
+            proc.wait(timeout=10)
+        except Exception:
+            proc.kill()
+
+
 def test_python_chess_xboard_api(tmp_path):
     """python-chess's XBoard driver is a second, independent consumer of
     the adapter stack - it negotiates protover 2 features itself."""
