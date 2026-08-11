@@ -74,10 +74,10 @@ from mock_lichess import MockLichess, TERMINAL_STATUSES  # noqa: E402
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ENGINE_DIR = Path(os.environ.get("SUNFISH_ENGINE_DIR", REPO_ROOT))
 # The engine under test is parameterized: default classic; the packed
-# engine runs as SUNFISH_ENGINE_FILE=nnue_4k/sunfish_packed.py (SF_NET
+# engine runs as SUNFISH_ENGINE_FILE=nnue_4k/sunfish_nnue.py (SF_NET
 # reaches the engine child through lichess-bot's environment).
 ENGINE_FILE = os.environ.get("SUNFISH_ENGINE_FILE", "sunfish.py")
-if ENGINE_FILE.endswith("sunfish_packed.py"):
+if ENGINE_FILE.endswith("sunfish_nnue.py"):
     os.environ.setdefault(
         "SF_NET", str(REPO_ROOT / "nnue_4k" / "net128.sfnn"))
 CACHE_DIR = Path(os.environ.get("LICHESS_BOT_CACHE",

@@ -48,8 +48,8 @@ jobs:
         CB=$(wc -c < sunfish-classic-4k.sh)
         echo "classic packed: $CB bytes"
         test "$CB" -le 4096
-        if [ -f nnue_4k/sunfish_packed.py ]; then
-          (cd nnue_4k && bash ../tools/build/pack.sh sunfish_packed.py ../sunfish-nnue-4k.sh)
+        if [ -f nnue_4k/sunfish_nnue.py ]; then
+          (cd nnue_4k && bash ../tools/build/pack.sh sunfish_nnue.py ../sunfish-nnue-4k.sh)
           NB=$(wc -c < sunfish-nnue-4k.sh)
           echo "nnue packed: $NB bytes"
           test "$NB" -le 4096
