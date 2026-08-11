@@ -198,10 +198,8 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                     # Stop crawlers from sliding, and sliding after captures
                     if p in "PNK" or q in "pnbrqk": break
                     # Castling, by sliding the rook next to the king
-                    if i == A1 and self.board[j + E] == "K" and self.wc[0]:
-                        yield Move(j + E, j + W, "")
-                    if i == H1 and self.board[j + W] == "K" and self.wc[1]:
-                        yield Move(j + W, j + E, "")
+                    if i == A1 and self.board[j + E] == "K" and self.wc[0]: yield Move(j + E, j + W, "")
+                    if i == H1 and self.board[j + W] == "K" and self.wc[1]: yield Move(j + W, j + E, "")
 
     def rotate(self, nullmove=False):
         """Rotates the board, preserving enpassant, unless nullmove"""
@@ -234,12 +232,9 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                 board = put(board, kp, "R")
         # Pawn promotion, double move and en passant capture
         if p == "P":
-            if A8 <= j <= H8:
-                board = put(board, j, prom)
-            if j - i == 2 * N:
-                ep = i + N
-            if j == self.ep:
-                board = put(board, j + S, ".")
+            if A8 <= j <= H8:  board = put(board, j, prom)
+            if j - i == 2 * N: ep = i + N
+            if j == self.ep:   board = put(board, j + S, ".")
         # We rotate the returned position, so it's ready for the next player
         return Position(board, score, wc, bc, ep, kp).rotate()
 
@@ -249,21 +244,17 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         # Actual move
         score = pst[p][j] - pst[p][i]
         # Capture
-        if q in "pnbrqk":
-            score += pst[q.upper()][119 - j]
+        if q in "pnbrqk": score += pst[q.upper()][119 - j]
         # Castling check detection
-        if abs(j - self.kp) < 2:
-            score += pst["K"][119 - j]
+        if abs(j - self.kp) < 2: score += pst["K"][119 - j]
         # Castling
         if p == "K" and abs(i - j) == 2:
             score += pst["R"][(i + j) // 2]
             score -= pst["R"][A1 if j < i else H1]
         # Special pawn stuff
         if p == "P":
-            if A8 <= j <= H8:
-                score += pst[prom][j] - pst["P"][j]
-            if j == self.ep:
-                score += pst["P"][119 - (j + S)]
+            if A8 <= j <= H8: score += pst[prom][j] - pst["P"][j]
+            if j == self.ep: score += pst["P"][119 - (j + S)]
         return score
 
     def king_capture(self):
@@ -355,8 +346,7 @@ class Searcher:
             # Let's not repeat positions. We don't chat
             # - at the root (a driver probe) since it is in history, but not a draw.
             # - at depth=0, since it would be expensive and break "futility pruning".
-            if depth > 0 and pos in self.history:
-                return 0
+            if depth > 0 and pos in self.history: return 0
 
         # Generator of moves to search in order.
         # This allows us to define the moves, but only calculate them if needed.
@@ -374,8 +364,7 @@ class Searcher:
             # where passing is better than any move. Hence we only use it in
             # balanced positions. We also don't use it at root, so we can always
             # return a move.
-            if not root and depth > 2 \
-                    and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
+            if not root and depth > 2 and any(c in pos.board for c in "RBNQ"):
                 score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
                 # A fail high is a virtual claim, and needs verification
                 # before it may cut: if the king is capturable the capture is
@@ -428,8 +417,8 @@ class Searcher:
             # filtering BEFORE the sort skips sorting the sub-threshold tail
             # (most of the list at QS nodes), and is literally the model's
             # movesAbove form (formal/Sunfish/Stalemate.lean).
-            for val, move in sorted(((v, m) for m in pos.gen_moves()
-                                     if (v := pos.value(m)) >= val_lower), reverse=True):
+            filtered = ((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= val_lower)
+            for val, move in sorted(filtered, reverse=True):
                 # If the new score is less than gamma, the opponent will for sure just
                 # stand pat, since ""pos.score + val < gamma === -(pos.score + val) >= 1-gamma""
                 # This is known as futility pruning.
