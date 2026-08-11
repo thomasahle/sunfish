@@ -1393,6 +1393,17 @@ cap after a 900-game guard tournament measured every sane variant
 within noise (the model's `guard : Pos → Bool` abstracts the predicate;
 `nullGuard`'s mapping row updates to the piece test alone).
 
+### Killer depth gate (post-release, 2026-08-11)
+
+The `tp_move` store gained `and depth`: depth-0 (QS) killers are no
+longer stored.  Measured +41.9 +/- 28.6 at LOS 99.8% (300 games, 30+1)
+- the table stops churning through QS-frontier noise, so deep killers
+survive to order deep nodes.  Model status: a strict SUBSET of the
+proven store trace (killerLegal_lifecycle quantifies over arbitrary
+store sequences, so fewer stores stay covered); the tp_move mapping
+rows now read store-at-depth>=1.  All mate/WAC floors re-verified
+before landing (the score-cap lesson).
+
 ### Landing note (the #158 review, 2026-08-11)
 
 The SHIPPED consumer is now the DOUBLE-PRIMED design: the terminal-veto

@@ -448,7 +448,7 @@ class Searcher:
             live |= move is not None and score > -MATE_UPPER
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
-                if move is not None:
+                if move is not None and depth:
                     self.tp_move[pos] = move
                     # Never evict the current search root: its killer is the
                     # answer go_loop plays, and once the table churns more
