@@ -14,10 +14,22 @@ Oracle always-free ARM instance (A1, 2 OCPU / 12 GB, aarch64, Ubuntu).
 2. `scp` the `.sfnn` net file to the instance.
 3. As root: `setup.sh <LICHESS_BOT_TOKEN> <net.pickle>`.
 
-`setup.sh` installs pypy3 + the pinned lichess-bot bridge, then runs the
+`setup.sh` installs pypy3 + the pinned lichess-bot bridge **plus
+`lichess-bot.patch`** (three fixes from the 2026-08-11 production incident:
+games past `challenge.concurrency` are aborted promptly instead of silently
+starved, a dead event stream restarts the bot instead of leaving it
+deaf-but-online, and a failed chat POST can no longer cancel the engine's
+move). The bot-integration CI job applies the same patch, so the tested tree
+is the deployed tree; `tests/test_lichess_config.py` keeps the pin, the
+patch, and the greeting lengths (lichess drops chat over 140 chars) honest.
+`watchdog.sh` + `sunfish-watchdog.timer` are the belt-and-braces layer: if
+lichess says a move is pending for us and the journal has been silent for
+90 s, the service is restarted (startup resumes live games, so this is safe).
+
+`setup.sh` then runs the
 `packed/verify.py` battery ON THE INSTANCE as a hard gate (lane integrity,
 incremental == from-scratch, engine == reference, exact antisymmetry) before
-enabling the systemd unit. What is running is recorded in
+enabling the systemd units. What is running is recorded in
 `/opt/sunfish/nnue_4k/DEPLOYED.txt`.
 
 ## aarch64 status

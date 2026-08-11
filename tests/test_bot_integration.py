@@ -8,23 +8,25 @@ lichess-bot's own test suite (test_bot/, a Python-class-level fake with no
 pondering coverage) does not catch.  Testing over real HTTP also covers
 lib/lichess.py, the ndjson streams, and config parsing.
 
-Three bullet games (60+0) are played against a random mover:
+The checkout is pinned and then patched with the bundle's lichess-bot.patch --
+the exact tree production runs (see nnue_4k/lichess/setup.sh).  The patch
+exists because of three production incidents, and each has a regression test
+here:
 
-1. with instant (0 ms) opponent replies -- the tightest command timing, where
-   the opponent's move arrives while the previous search is still winding down;
-2. with 50-200 ms jittered replies -- fast realistic replies;
-3. with 2-5 s opponent think times -- which let the engine's ponder search run
-   deep before the miss/hit arrives.  This is the game that reproduces the
-   production forfeit: an engine that only honors "stop"/"ponderhit" between
-   search iterations stalls for many seconds once the ponder search is deep,
-   burning its own clock until it flags.
-
-Asserted per game: the game reaches a proper terminal status, the engine never
-forfeits on time, every sunfish move arrives within 10 seconds of its turn
-starting (wall clock, measured server-side), and every move after the first
-arrives within 4 seconds (the first move of each game is special: lichess-bot
-hardcodes a 10-second search for it; after that, sunfish budgets roughly
-wtime/40 ~ 1.5 s, so 4 s only trips on multi-second engine stalls).
+* ``test_bot_plays_three_games``: three bullet games against a random mover
+  (instant, jittered, and slow replies) -- move timing, pondering races and
+  time-forfeit coverage.
+* ``test_overflow_games_are_aborted_not_starved``: a game that lichess starts
+  beyond ``challenge.concurrency`` (e.g. an outgoing matchmaking challenge
+  accepted at the same time as an incoming one) must be aborted promptly, not
+  queued behind the busy game process where it would sit until lichess
+  abandons it (production: game ZbT4vfAs, 2026-08-11).
+* ``test_event_stream_death_is_loud``: if the process reading the event
+  stream dies, the bot must notice the silence, say so in the log, and
+  restart -- never idle deaf-but-online for an hour (production: 2026-08-11
+  post-restart deafness).
+* ``test_restart_resumes_live_game``: killing the bot mid-game and starting
+  it again must resume and finish the game (the mid-game-deploy case).
 
 Setup choice: lichess-bot is not pip-installable, so a pinned checkout is
 cached under ~/.cache/sunfish-bot-ci (override with LICHESS_BOT_CACHE), with a
@@ -40,8 +42,12 @@ network-free.  Environment overrides:
                         (default: this repository)
 - LICHESS_BOT_CACHE     cache directory for the lichess-bot checkout + venv
 - LICHESS_BOT_COMMIT    lichess-bot commit to pin (default below)
+- LICHESS_BOT_PATCH     patch file applied on top of the pin (default: the
+                        deployed bundle's lichess-bot.patch; set to the empty
+                        string to test the unpatched upstream commit)
 """
 
+import contextlib
 import os
 import shutil
 import signal
@@ -79,6 +85,11 @@ LICHESS_BOT_URL = "https://github.com/lichess-bot-devs/lichess-bot"
 # lichess-bot master as of 2026-08-05 (version 2026.8.2.1).
 LICHESS_BOT_COMMIT = os.environ.get(
     "LICHESS_BOT_COMMIT", "bedd1d9e86a8c4c96319490533e4e20fe63d1ac8")
+# The production patch: this repository's lichess bundle carries it and
+# setup.sh applies it on deployment, so the tested tree is the deployed tree.
+BUNDLE_DIR = REPO_ROOT / "nnue_4k" / "lichess"
+PATCH_FILE = os.environ.get("LICHESS_BOT_PATCH",
+                            str(BUNDLE_DIR / "lichess-bot.patch"))
 
 STARTUP_TIMEOUT = 120  # engine config check + connect to the event stream
 ACCEPT_TIMEOUT = 60  # challenge event -> accepted -> gameStart
@@ -86,6 +97,8 @@ GAME_TIMEOUT = 240  # both clocks are 60s; a finished 60+0 game fits easily
 MAX_MOVE_SECONDS = 12.0  # any move: lichess-bot searches a full 10 s for the
 # first, and the engine is entitled to all of it; allow IO/runner overhead
 MAX_LATER_MOVE_SECONDS = 4.0  # moves after the first (sunfish thinks ~1.5 s)
+ABORT_WINDOW = 30.0  # a game the bot cannot play must be aborted this fast
+# (lichess abandons an unserved game after 1-2 minutes; production T ~ 15 s)
 
 
 def _run(cmd, **kwargs):
@@ -94,18 +107,22 @@ def _run(cmd, **kwargs):
 
 
 def _ensure_checkout() -> Path:
-    """Clone (or update) the pinned lichess-bot commit into the cache."""
+    """Clone the pinned lichess-bot commit and apply the production patch."""
     checkout = CACHE_DIR / "lichess-bot"
     if not (checkout / "lichess-bot.py").exists():
         checkout.mkdir(parents=True, exist_ok=True)
         _run(["git", "init", "-q"], cwd=checkout)
         _run(["git", "remote", "add", "origin", LICHESS_BOT_URL], cwd=checkout)
-    head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=checkout,
-                          capture_output=True, text=True).stdout.strip()
-    if head != LICHESS_BOT_COMMIT:
+    have = subprocess.run(["git", "cat-file", "-e", LICHESS_BOT_COMMIT],
+                          cwd=checkout, capture_output=True)
+    if have.returncode != 0:
         _run(["git", "fetch", "-q", "--depth", "1", "origin", LICHESS_BOT_COMMIT],
              cwd=checkout)
-        _run(["git", "checkout", "-q", "-f", LICHESS_BOT_COMMIT], cwd=checkout)
+    # Always force the pin and re-apply the patch: the tree must be exactly
+    # pin + bundle patch, the tree production deploys.
+    _run(["git", "checkout", "-q", "-f", LICHESS_BOT_COMMIT], cwd=checkout)
+    if PATCH_FILE:
+        _run(["git", "apply", PATCH_FILE], cwd=checkout)
     return checkout
 
 
@@ -128,7 +145,7 @@ def _ensure_venv(checkout: Path) -> Path:
 
 @pytest.fixture(scope="session")
 def lichess_bot():
-    """(checkout dir, venv python) for the pinned lichess-bot release."""
+    """(checkout dir, venv python) for the pinned+patched lichess-bot."""
     assert (ENGINE_DIR / ENGINE_FILE).exists(), f"no engine in {ENGINE_DIR}"
     assert (ENGINE_DIR / "sunfish_ui" / "uci.py").exists(), \
         f"no sunfish_ui/ in {ENGINE_DIR}"
@@ -165,6 +182,10 @@ challenge:
     - casual
     - rated
 
+greeting:
+  hello: "Hi {{opponent}}! I'm {{me}}. Good luck!"
+  goodbye: "Good game!"
+
 matchmaking:
   allow_matchmaking: false
 """)
@@ -179,6 +200,60 @@ def _wait_for(condition, timeout: float, message: str, proc=None) -> None:
         if time.monotonic() > deadline:
             pytest.fail(f"timed out after {timeout}s: {message}")
         time.sleep(0.2)
+
+
+def _stop_bot(proc) -> None:
+    try:
+        os.killpg(proc.pid, signal.SIGINT)
+        proc.wait(timeout=15)
+    except (subprocess.TimeoutExpired, ProcessLookupError, PermissionError):
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(timeout=15)
+
+
+def _launch_bot(checkout: Path, python: Path, config_path: Path, log_path: Path):
+    """Start a lichess-bot process appending to log_path; returns the Popen."""
+    log_file = open(log_path, "ab")
+    try:
+        return subprocess.Popen(
+            [str(python), "lichess-bot.py", "--config", str(config_path),
+             "-v", "--disable_auto_logging"],
+            cwd=checkout, stdout=log_file, stderr=subprocess.STDOUT,
+            start_new_session=True)
+    finally:
+        log_file.close()  # the child holds its own descriptor
+
+
+@contextlib.contextmanager
+def _running_bot(lichess_bot, tmp_path, mock, wait_for_stream=True):
+    """A lichess-bot process against `mock`; yields (proc holder, log path).
+
+    The holder is a one-element list so tests that kill and relaunch the bot
+    can swap in the new process and still get cleaned up.
+    """
+    checkout, python = lichess_bot
+    config_path = tmp_path / "config.yml"
+    _write_config(config_path, mock.base_url, mock.token)
+    log_path = tmp_path / "lichess-bot.log"
+    proc = _launch_bot(checkout, python, config_path, log_path)
+    holder = [proc]
+    try:
+        if wait_for_stream:
+            _wait_for(lambda: mock.event_stream_connections > 0, STARTUP_TIMEOUT,
+                      "lichess-bot never connected to the event stream", proc)
+        yield holder, log_path
+    except Exception:
+        tail = log_path.read_text(errors="replace").splitlines()[-80:]
+        print(f"\n----- tail of {log_path} -----")
+        print("\n".join(tail))
+        raise
+    finally:
+        _stop_bot(holder[-1])
+        mock.stop()
 
 
 def _play_game(mock: MockLichess, proc, **challenge_kwargs):
@@ -219,24 +294,11 @@ def _check_game(game, label: str) -> None:
             f"move (limit {MAX_LATER_MOVE_SECONDS}s); the engine stalled"
 
 
-def test_bot_plays_two_games(lichess_bot, tmp_path):
-    checkout, python = lichess_bot
+def test_bot_plays_three_games(lichess_bot, tmp_path):
     mock = MockLichess()
     mock.start()
-
-    config_path = tmp_path / "config.yml"
-    _write_config(config_path, mock.base_url, mock.token)
-    log_path = tmp_path / "lichess-bot.log"
-    log_file = open(log_path, "wb")
-
-    proc = subprocess.Popen(
-        [str(python), "lichess-bot.py", "--config", str(config_path),
-         "-v", "--disable_auto_logging"],
-        cwd=checkout, stdout=log_file, stderr=subprocess.STDOUT,
-        start_new_session=True)
-    try:
-        _wait_for(lambda: mock.event_stream_connections > 0, STARTUP_TIMEOUT,
-                  "lichess-bot never connected to the event stream", proc)
+    with _running_bot(lichess_bot, tmp_path, mock) as (holder, log_path):
+        proc = holder[0]
 
         # Game 1: instant opponent replies (the pondering race), bot is white.
         game1 = _play_game(mock, proc, bot_plays_white=True,
@@ -257,26 +319,165 @@ def test_bot_plays_two_games(lichess_bot, tmp_path):
         _check_game(game1, "game 1 (instant replies)")
         _check_game(game2, "game 2 (jittered replies)")
         _check_game(game3, "game 3 (slow opponent)")
-    except Exception:
-        log_file.flush()
-        tail = log_path.read_text(errors="replace").splitlines()[-60:]
-        print(f"\n----- tail of {log_path} -----")
-        print("\n".join(tail))
-        raise
-    finally:
-        try:
-            os.killpg(proc.pid, signal.SIGINT)
-            proc.wait(timeout=15)
-        except (subprocess.TimeoutExpired, ProcessLookupError, PermissionError):
-            try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except (ProcessLookupError, PermissionError):
-                pass
-            proc.wait(timeout=15)
-        log_file.close()
-        mock.stop()
+        # The greeting must actually arrive (production 2026-08-11: a >140
+        # char greeting was silently dropped -- and, unpatched, its failed
+        # POST cancelled the first move).
+        assert any(line["text"].startswith("Hi ") for line in game1.chat_lines), \
+            "greeting never reached the chat"
 
     for label, game in (("game 1", game1), ("game 2", game2), ("game 3", game3)):
         print(f"{label}: {game.status} winner={game.winner} "
               f"plies={len(game.board.move_stack)} "
               f"slowest bot move {max(game.bot_move_latencies):.2f}s")
+
+
+def test_overflow_games_are_aborted_not_starved(lichess_bot, tmp_path):
+    """K games at challenge.concurrency=1: one served, the rest aborted fast.
+
+    Reproduces the 2026-08-11 production race: while one accepted game is
+    being played, lichess starts more games via bare gameStart events (an
+    opponent accepting the bot's outgoing matchmaking challenge does exactly
+    this; so does reconnecting with several games live).  Unpatched
+    lichess-bot gives one such game the pool's reserve process and quietly
+    queues the rest forever -- game ZbT4vfAs never saw a move until lichess
+    abandoned it.  The invariant: every started game is either played at
+    full strength or promptly, explicitly aborted.
+    """
+    mock = MockLichess()
+    mock.start()
+    with _running_bot(lichess_bot, tmp_path, mock) as (holder, log_path):
+        proc = holder[0]
+
+        # The served game: a normal incoming challenge, accepted by the bot.
+        challenge_id = mock.send_challenge(bot_plays_white=True, clock_limit=60,
+                                           clock_increment=0,
+                                           opponent_delay=(0.05, 0.15),
+                                           move_cap=20, seed=4)
+        _wait_for(lambda: challenge_id in mock.games, ACCEPT_TIMEOUT,
+                  f"challenge {challenge_id} was not accepted", proc)
+
+        # Two more games start while the first is busy.  Their opponent never
+        # moves, so any engine service the bot (wrongly) gives them is visible
+        # as a bot move, and they stay abortable throughout.
+        overflow = [mock.start_direct_game(bot_plays_white=True, clock_limit=60,
+                                           opponent_delay=999.0, seed=5 + i)
+                    for i in range(2)]
+
+        deadline = time.monotonic() + ABORT_WINDOW
+        for game_id in overflow:
+            game = mock.games[game_id]
+            _wait_for(lambda g=game: g.status != "started",
+                      max(0.1, deadline - time.monotonic()),
+                      f"overflow game {game_id} was never aborted: it would "
+                      "sit unserved until lichess abandoned it", proc)
+            assert game.status == "aborted", \
+                f"overflow game {game_id} ended {game.status}, expected a " \
+                "prompt abort"
+            assert not game.bot_move_latencies, \
+                f"overflow game {game_id} received engine moves: the one " \
+                "game slot must keep full strength (concurrency stays 1)"
+
+        # The served game is unaffected and finishes cleanly.
+        game1 = mock.games[challenge_id]
+        _wait_for(game1.finished.is_set, GAME_TIMEOUT,
+                  f"game {challenge_id} did not finish", proc)
+        _check_game(game1, "served game")
+
+
+@pytest.mark.skipif(shutil.which("lsof") is None, reason="needs lsof")
+def test_event_stream_death_is_loud(lichess_bot, tmp_path):
+    """A dead event stream must be noticed, logged, and recovered from.
+
+    Reproduces the 2026-08-11 production deafness: the bot sat connected but
+    received no events for an hour while lichess started games against it.
+    lichess-bot reads the event stream in a child process; if that process
+    dies, the unpatched main loop blocks forever on the control queue --
+    online, silent, deaf.  Patched, the silence (a healthy stream pings every
+    few seconds) is detected within a minute, logged as an error, and the bot
+    restarts itself and plays on.
+    """
+    mock = MockLichess()
+    mock.start()
+    with _running_bot(lichess_bot, tmp_path, mock) as (holder, log_path):
+        proc = holder[0]
+        _wait_for(lambda: mock.event_stream_clients, STARTUP_TIMEOUT,
+                  "no event stream connection", proc)
+        connections_before = mock.event_stream_connections
+        client_port = mock.event_stream_clients[-1][1]
+
+        # Kill the process that owns the event-stream socket (the
+        # watch_control_stream child), simulating its silent death.
+        out = subprocess.run(["lsof", "-t", "-n", "-i", f"tcp:{client_port}"],
+                             capture_output=True, text=True)
+        pids = {int(p) for p in out.stdout.split()} - {os.getpid()}
+        assert pids, f"could not find the event stream reader (port {client_port})"
+        for pid in pids:
+            os.kill(pid, signal.SIGKILL)
+
+        # The bot must notice the silence and reconnect (via its restart
+        # machinery). 60 s silence limit + 10 s restart pause + startup.
+        _wait_for(lambda: mock.event_stream_connections > connections_before,
+                  150, "the bot never noticed its event stream was dead: "
+                  "it is deaf but looks online", proc)
+        # Collapse whitespace: the bot's console handler wraps long lines.
+        log_flat = " ".join(log_path.read_text(errors="replace").split())
+        assert "event stream is assumed dead" in log_flat, \
+            "stream death was not logged loudly"
+
+        # Full recovery: a new challenge is accepted and played to the end.
+        game = _play_game(mock, proc, bot_plays_white=True, clock_limit=60,
+                          clock_increment=0, opponent_delay=(0.05, 0.15),
+                          move_cap=12, seed=7)
+        _check_game(game, "post-recovery game")
+
+
+def test_restart_resumes_live_game(lichess_bot, tmp_path):
+    """Kill the bot mid-game; a fresh start must resume and finish the game.
+
+    This is the mid-game-deploy case: systemd restarts the service while a
+    game is live.  On reconnect the event stream replays gameStart for
+    ongoing games (as lichess does) and the bot must pick the game back up
+    rather than let it be abandoned -- and the concurrency guard must treat a
+    resumed game as the served game, not overflow.
+    """
+    checkout, python = lichess_bot
+    mock = MockLichess()
+    mock.start()
+    with _running_bot(lichess_bot, tmp_path, mock) as (holder, log_path):
+        proc = holder[0]
+        # A blitz clock: the bot must survive ~15-25 s of downtime mid-game.
+        challenge_id = mock.send_challenge(bot_plays_white=True,
+                                           clock_limit=180, clock_increment=0,
+                                           opponent_delay=(0.5, 1.5),
+                                           move_cap=40, seed=8)
+        _wait_for(lambda: challenge_id in mock.games, ACCEPT_TIMEOUT,
+                  f"challenge {challenge_id} was not accepted", proc)
+        game = mock.games[challenge_id]
+        _wait_for(lambda: len(game.board.move_stack) >= 4, 90,
+                  "the game never got going", proc)
+
+        # Hard-kill the whole process group mid-game (crash / deploy).
+        moves_before = len(game.bot_move_latencies)
+        os.killpg(proc.pid, signal.SIGKILL)
+        proc.wait(timeout=15)
+
+        holder.append(_launch_bot(checkout, python,
+                                  tmp_path / "config.yml", log_path))
+        proc2 = holder[-1]
+        _wait_for(game.finished.is_set, GAME_TIMEOUT,
+                  "the restarted bot never resumed the live game", proc2)
+
+        assert game.status in {"mate", "stalemate", "draw", "outoftime"}, \
+            f"resumed game ended {game.status} (winner={game.winner})"
+        bot_color = "white" if game.bot_color == chess.WHITE else "black"
+        if game.status == "outoftime":
+            assert game.winner == bot_color, \
+                f"the bot lost on time across the restart (winner={game.winner})"
+        assert len(game.bot_move_latencies) > moves_before, \
+            "the restarted bot never moved in the resumed game"
+        # Moves after the resume settle back to normal speed (the first one
+        # may include the whole restart in its latency).
+        settled = game.bot_move_latencies[moves_before + 1:]
+        if settled:
+            assert max(settled) < MAX_MOVE_SECONDS, \
+                f"post-restart engine moves too slow: {max(settled):.1f}s"

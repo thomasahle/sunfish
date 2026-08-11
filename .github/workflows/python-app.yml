@@ -114,9 +114,12 @@ jobs:
   bot-integration:
     # The lichess-bot bridge needs Python >= 3.11, so this runs as its own
     # job on CPython (the engine's polyglot shebang falls back to python3).
-    # Real lichess-bot process against tests/mock_lichess.py with pondering
-    # on and realistic opponent pacing; catches UCI protocol races and
-    # time-forfeit regressions (~2 min).
+    # Real lichess-bot process (pinned commit + the bundle's production
+    # patch) against tests/mock_lichess.py with pondering on and realistic
+    # opponent pacing; catches UCI protocol races, time-forfeit regressions,
+    # the concurrency-overflow starvation, event-stream deafness, and the
+    # mid-game-restart resume (~6 min). The static bundle checks (greeting
+    # lengths, pins, patch presence) run first -- they fail in seconds.
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -124,10 +127,12 @@ jobs:
       with:
         python-version: '3.12'
     - name: Install dependencies
-      run: pip install chess pytest
+      run: pip install chess pytest pyyaml
+    - name: Lichess bundle static checks
+      run: python -m pytest tests/test_lichess_config.py -q
     - name: Lichess bot integration test (mock server)
       run: BOT_CI=1 python -m pytest tests/test_bot_integration.py -q
-      timeout-minutes: 10
+      timeout-minutes: 15
 
   windows-smoke:
     runs-on: windows-latest

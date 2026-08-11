@@ -31,7 +31,11 @@ engine:
 # child gets it through lichess-bot.
 
 greeting:
-  hello: "Hi {opponent}! I'm sunfish-nnue, a tiny Python chess engine by Thomas D. Ahle - the whole neural network lives in one big integer. Good luck and have fun!"
+  # Lichess caps chat messages at 140 characters; every field must fit with a
+  # 20-character opponent name (tests/test_lichess_config.py enforces this).
+  # The 2026-08-11 incident: a 156+ char greeting was not just dropped -- its
+  # rejected POST cancelled the bot's first move in every game.
+  hello: "Hi {opponent}! I'm sunfish-nnue by Thomas D. Ahle - my whole neural net lives in one big integer. Good luck!"
   goodbye: "Good game! Play me again any time, or read my source at github.com/thomasahle/sunfish"
   hello_spectators: "Hi! I'm {me}, a tiny open-source Python NNUE engine (github.com/thomasahle/sunfish)"
   goodbye_spectators: "Thanks for watching!"

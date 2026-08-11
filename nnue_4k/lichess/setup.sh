@@ -72,11 +72,16 @@ SF_NET=/opt/sunfish/nnue_4k/net.sfnn \
     pypy3 /opt/sunfish/nnue_4k/packed/verify.py \
     /opt/sunfish/nnue_4k/sunfish_packed.py /opt/sunfish/nnue_4k/net.sfnn 120 40
 
-# The bridge, pinned to the commit the integration test runs against.
+# The bridge, pinned to the commit the integration test runs against, plus
+# the production patch (lichess-bot.patch) the same test applies: overflow
+# games are aborted instead of silently starved, a dead event stream
+# restarts the bot instead of leaving it deaf, and a failed chat message can
+# no longer cancel the engine's move.  Pin + patch = the tested tree.
 LICHESS_BOT_COMMIT=bedd1d9e86a8c4c96319490533e4e20fe63d1ac8
 [ -d /opt/lichess-bot ] || git clone https://github.com/lichess-bot-devs/lichess-bot /opt/lichess-bot
 git -C /opt/lichess-bot fetch -q origin "$LICHESS_BOT_COMMIT"
 git -C /opt/lichess-bot checkout -q -f "$LICHESS_BOT_COMMIT"
+git -C /opt/lichess-bot apply /opt/sunfish/nnue_4k/lichess/lichess-bot.patch
 
 python3 -m venv /opt/lichess-bot/venv
 /opt/lichess-bot/venv/bin/pip install -q -r /opt/lichess-bot/requirements.txt
@@ -100,11 +105,15 @@ chmod 600 /opt/lichess-bot/config.yml
 
 chown -R sunfish:sunfish /opt/lichess-bot /opt/sunfish
 
+chmod +x /opt/sunfish/nnue_4k/lichess/watchdog.sh
 cp /opt/sunfish/nnue_4k/lichess/sunfish-packed.service /etc/systemd/system/
 cp /opt/sunfish/nnue_4k/lichess/sunfish-cost-gate.service /etc/systemd/system/
+cp /opt/sunfish/nnue_4k/lichess/sunfish-watchdog.service /etc/systemd/system/
+cp /opt/sunfish/nnue_4k/lichess/sunfish-watchdog.timer /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now sunfish-cost-gate
 systemctl enable --now sunfish-packed
+systemctl enable --now sunfish-watchdog.timer
 
 echo
 echo "Done. Status:   systemctl status sunfish-packed"
