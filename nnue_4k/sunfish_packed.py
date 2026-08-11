@@ -41,20 +41,18 @@ _f = open(NET_PATH)
 _d = _json.loads(_f.readline())
 _it = (int.from_bytes(_b64(t), "little", signed=True)
        for _line in _f for t in _line.split())
+_row = lambda: {p: [next(_it) for _ in range(120)] for p in "PNBRQKpnbrqk"}
 _d["base"], _d["gp"] = next(_it), next(_it)
 _d["ts"] = [next(_it) for _ in range(_d.pop("nts", 0))]
 if _d.get("B", 1) == 1:
-    _d["rows"] = {p: [next(_it) for _ in range(120)] for p in "PNBRQKpnbrqk"}
+    _d["rows"] = _row()
 else:
-    for _key in ("rowsW", "rowsB"):
-        _d[_key] = [{p: [next(_it) for _ in range(120)] for p in "PNBRQKpnbrqk"}
-                    for _ in range(_d["B"])]
+    _d["rowsW"], _d["rowsB"] = [[_row() for _ in range(_d["B"])] for _ in "WB"]
 _f.close()
 
 NLANE = 2 * _d["N"] + 2 * _d.get("nb", 0)
 LBITS = 16
 VBITS = 15
-BIAS = 1 << 14
 ONES = (1 << VBITS) - 1
 HALF = _d["N"] * LBITS            # bit offset of the second lane block
 SHIFT = _d["shift"]
@@ -62,16 +60,9 @@ CLAMP = _d["clampcp"]
 ACC_BASE = _d["base"]
 
 
-def _rep(v, n):
-    r = 0
-    for _ in range(n):
-        r = (r << LBITS) | v
-    return r
-
-
-MH = _rep(1 << VBITS, NLANE)      # guard bits
-MVAL = _rep(ONES, NLANE)          # value bits
-MLO = _rep(BIAS, NLANE)           # offset-binary zero, and the bit-14 probe
+MH = sum(1 << (VBITS + LBITS * i) for i in range(NLANE))   # guard bits
+MLO = MH >> 1                     # offset-binary zero, the bit-14 probe
+MVAL = MH - (MH >> VBITS)         # value bits (each lane 2^15 - 1)
 MGP = _d["gp"]                    # per-lane activation ceilings G_k
 MGH = MGP | MH
 MASKLO = (1 << HALF) - 1
@@ -93,15 +84,13 @@ if NB:
     NBG = NB // BM                # lanes per group (contiguous runs)
     BGMASK = (1 << (NBG * LBITS)) - 1
     BOFFX = tuple((2 * _d["N"] + s * NBG) * LBITS for s in range(BM))
-    BOFFY = tuple((2 * _d["N"] + NB + s * NBG) * LBITS for s in range(BM))
+    BOFFY = tuple(o + NB * LBITS for o in BOFFX)
     CB2 = float(1 << (2 * _d["bshift"]))
-    BU = tuple(_d["u"])
+    BU = _d["u"]
     BTAIL = _d.get("tail")
     if BTAIL:
-        T1W = tuple(tuple(r) for r in BTAIL["t1w"])
-        T1B = tuple(BTAIL["t1b"])
-        T2W = tuple(BTAIL["t2w"][0])
-        T2B = BTAIL["t2b"][0]
+        T1W, T1B = BTAIL["t1w"], BTAIL["t1b"]
+        T2W, T2B = BTAIL["t2w"][0], BTAIL["t2b"][0]
 
 _PIECES = "PNBRQKpnbrqk"
 # Own-king buckets per perspective.  B == 1 is the plain net; B > 1 nets
@@ -124,27 +113,17 @@ def kbucket(s):
     the composition): B == 4 is back-two-ranks vs advanced times queenside
     vs kingside; B == 8 refines the file split to pairs (ab/cd/ef/gh)."""
     r, f = divmod(s, 10)
-    if B == 8:
-        return (r <= 7) * 4 + (f - 1) // 2
-    return (r <= 7) * 2 + (f >= 5)
+    return (r <= 7) * (B >> 1) + ((f - 1) // 2 if B == 8 else (f >= 5))
 
 
-if B == 1:
-    _rows0 = _d["rows"]
-    _rows1 = {p: [_rows0[p.swapcase()][119 - s] for s in range(120)]
-              for p in _PIECES}
-    ROWS = ([_rows0], [_rows1])
-else:
-    _r0, _r1 = [], []
-    for _bw in range(B):
-        for _bb in range(B):
-            _c0 = {p: [_d["rowsW"][_bw][p][s] + _d["rowsB"][_bb][p][s]
-                       for s in range(120)] for p in _PIECES}
-            _c1 = {p: [_c0[p.swapcase()][119 - s] for s in range(120)]
-                   for p in _PIECES}
-            _r0.append(_c0)
-            _r1.append(_c1)
-    ROWS = (_r0, _r1)
+# All B*B absolute bucket pairs combined once (a single entry for B == 1);
+# the pf==1 view relabels the very same int objects.
+_r0 = [_d["rows"]] if B == 1 else \
+    [{p: [_d["rowsW"][_bw][p][s] + _d["rowsB"][_bb][p][s]
+          for s in range(120)] for p in _PIECES}
+     for _bw in range(B) for _bb in range(B)]
+ROWS = (_r0, [{p: [c[p.swapcase()][119 - s] for s in range(120)]
+               for p in _PIECES} for c in _r0])
 del _d
 
 
