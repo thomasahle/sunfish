@@ -107,26 +107,30 @@ def get_user_color():
 
 
 def print_unicode_board(board, perspective=chess.WHITE):
-    """Prints the position from a given perspective."""
-    sc, ec = "\x1b[0;30;107m", "\x1b[0m"
+    """Prints the position from a given perspective.
+
+    Both sides use the FILLED glyphs, told apart by foreground color -
+    the outline white glyphs read as black pieces on most terminal
+    fonts, which made the sides nearly indistinguishable."""
+    light, dark, hilite = 223, 137, 185          # tan / brown / khaki
+    label, reset = "\x1b[38;5;245m", "\x1b[0m"
+    last = board.move_stack[-1] if board.move_stack else None
     for r in range(8) if perspective == chess.BLACK else range(7, -1, -1):
-        line = [f"{sc} {r+1}"]
+        line = [f"{label}{r + 1}{reset} "]
         for c in range(8) if perspective == chess.WHITE else range(7, -1, -1):
-            color = "\x1b[48;5;255m" if (r + c) % 2 == 1 else "\x1b[48;5;253m"
-            if board.move_stack:
-                if board.move_stack[-1].to_square == 8 * r + c:
-                    color = "\x1b[48;5;153m"
-                elif board.move_stack[-1].from_square == 8 * r + c:
-                    color = "\x1b[48;5;153m"
-            piece = board.piece_at(8 * r + c)
-            line.append(
-                color + (chess.UNICODE_PIECE_SYMBOLS[piece.symbol()] if piece else " ")
-            )
-        print(" " + " ".join(line) + f" {sc} {ec}")
-    if perspective == chess.WHITE:
-        print(f" {sc}   a b c d e f g h  {ec}\n")
-    else:
-        print(f" {sc}   h g f e d c b a  {ec}\n")
+            sq = 8 * r + c
+            bg = hilite if last and sq in (last.to_square, last.from_square) \
+                else light if (r + c) % 2 == 1 else dark
+            piece = board.piece_at(sq)
+            if piece:
+                fg = 231 if piece.color == chess.WHITE else 16
+                glyph = f"\x1b[38;5;{fg};48;5;{bg};1m {chess.UNICODE_PIECE_SYMBOLS[piece.symbol().lower()]} "
+            else:
+                glyph = f"\x1b[48;5;{bg}m   "
+            line.append(glyph)
+        print(" " + "".join(line) + reset)
+    files = "abcdefgh" if perspective == chess.WHITE else "hgfedcba"
+    print(f"   {label}" + " ".join(f" {f}" for f in files) + f"{reset}\n")
 
 
 async def get_engine_move(engine, board, limit, game_id, multipv, debug=False):
