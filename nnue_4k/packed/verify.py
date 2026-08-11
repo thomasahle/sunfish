@@ -56,16 +56,14 @@ def main():
             fresh = net.from_board(pos.board, pos.pf)
             assert fresh == pos.acc, (
                 "incremental != from-scratch at game %d ply %d" % (g, ply))
-            # the piece count carried by the position must be the truth
             cnt = sum(1 for c in pos.board if c in pnet.PIECES)
-            assert pos.cnt == cnt, "incremental piece count drifted"
             # the other perspective flag must give the same evaluation
             other = net.from_board(pos.board, pos.pf ^ 1)
             assert net.nn_cp(other, pos.pf ^ 1, cnt) == net.nn_cp(pos.acc, pos.pf, cnt), \
                 "perspective flag changes the evaluation"
             # 3. packed head == engine head, and ps + nn == score
-            assert eng.nn_cp(pos.acc, pos.pf, cnt) == net.nn_cp(pos.acc, pos.pf, cnt)
-            assert pos.score == pos.ps + eng.nn_cp(pos.acc, pos.pf, cnt)
+            assert eng.nn_cp(pos.acc, pos.pf, pos.board) == net.nn_cp(pos.acc, pos.pf, cnt)
+            assert pos.score == pos.ps + eng.nn_cp(pos.acc, pos.pf, pos.board)
             # antisymmetry, and it has to hold for the RECOMPUTED evaluation
             # of the rotated position, not just for rotate()'s negation --
             # the search reaches positions by both routes and the

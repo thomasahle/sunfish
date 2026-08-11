@@ -78,7 +78,7 @@ def test_fen_round_trip_full_game():
         fen = to_fen(mod, uci, pos)
         got = uci.from_fen(*fen.split())
         assert got.board == pos.board, f"board mismatch at ply {ply}: {fen}"
-        for field in ("score", "ps", "wc", "bc", "ep", "acc", "pf", "kb", "cnt"):
+        for field in ("score", "ps", "wc", "bc", "ep", "acc", "pf", "kb"):
             assert getattr(got, field) == getattr(pos, field), (
                 f"{field} mismatch at ply {ply}: {fen}\n"
                 f"  replay: {getattr(pos, field)!r}\n"
@@ -100,9 +100,8 @@ def test_fen_en_passant_capture_available():
                 if m.j == pos.ep and pos.board[m.i] == "P"]
     assert ep_moves, "en passant capture missing after FEN load"
     after = pos.move(ep_moves[0])
-    # the captured pawn is gone: piece count dropped by one, and the
-    # incremental accumulator matches a from-scratch build
-    assert after.cnt == pos.cnt - 1
+    # the captured pawn is gone: the incremental accumulator matches a
+    # from-scratch build
     assert after.acc == mod.from_board(after.board, pf=after.pf).acc
 
 

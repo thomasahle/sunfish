@@ -120,7 +120,7 @@ def kbucket(s):
 del _d
 
 
-def nn_cp(acc, pf, cnt=0):
+def nn_cp(acc, pf, bd=""):
     """Clipped centipawn output of the packed net, mover's point of view:
     SWAR clamp, two modular horizontal sums, and -- for extended nets only,
     dev builds only -- the float tail via _ext (pnet is the verified
@@ -142,7 +142,7 @@ def nn_cp(acc, pf, cnt=0):
         v = -v
     # minifier-hide start
     if EXT:
-        return _ext(y, v, pf, cnt)
+        return _ext(y, v, pf, bd)
     # minifier-hide end
     # round TOWARDS ZERO: floor does not commute with negation, and the
     # search reaches a position both by rotate() (negates) and move()
@@ -166,10 +166,12 @@ def _mlp(z):
     return acc + T2B
 
 
-def _ext(y, v, pf, cnt):
+def _ext(y, v, pf, bd):
     """Extended evaluation tail (dev builds; the 4k artifact refuses ext
-    nets at load).  v is already mover-signed."""
+    nets at load).  v is already mover-signed; the phase piece count is
+    derived from the board -- dev-only cost, no state to drift."""
     d = float(v) / (1 << SHIFT)
+    cnt = sum(c in _PIECES for c in bd)
     if NB:
         A = [((y >> o) & BGMASK) % M16 for o in BOFFX]
         Bv = [((y >> o) & BGMASK) % M16 for o in BOFFY]
@@ -362,7 +364,7 @@ opt_ranges = dict(
 Move = namedtuple("Move", "i j prom")
 
 
-class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb cnt")):
+class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb")):
     """A state of a chess game
     board -- a 120 char representation of the board
     score -- the board evaluation: ps + the clipped net residual
@@ -376,10 +378,8 @@ class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb cnt"
     pf -- perspective flag: which of the two lane blocks is the mover's
     kb -- combined king-bucket index B*bucket(white) + bucket(black), in
           ABSOLUTE colours (0 for plain B == 1 nets)
-    cnt -- number of men on the board, kept incrementally (captures and en
-           passant decrement it); feeds the phase output scale
 
-    score/ps/acc/pf/kb/cnt are all functions of the other fields, so
+    score/ps/acc/pf/kb are all functions of the other fields, so
     identity -- what the transposition table, the killer table and the
     repetition set key on -- deliberately ignores them.  Keeping the
     accumulator out of __hash__ also keeps hashing off the big int, which
@@ -447,7 +447,7 @@ class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb cnt"
             self.board[::-1].swapcase(), -self.score, -self.ps, self.bc, self.wc,
             119 - self.ep if self.ep and not nullmove else 0,
             119 - self.kp if self.kp and not nullmove else 0,
-            self.acc, self.pf ^ 1, self.kb, self.cnt,
+            self.acc, self.pf ^ 1, self.kb,
         )
 
     def move(self, move):
@@ -457,7 +457,6 @@ class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb cnt"
         # Copy variables and reset ep and kp
         board = self.board
         wc, bc, ep, kp = self.wc, self.bc, 0, 0
-        cnt = self.cnt - (q != ".")
         ps = self.ps + self.value(move)
         # Every board mutation below is mirrored by a packed row delta. The
         # rows are exact per-lane integers, so the order does not matter:
@@ -500,7 +499,6 @@ class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb cnt"
             if j == self.ep:
                 board = put(board, j + S, ".")
                 acc -= row["p"][j + S]
-                cnt -= 1
         # A king move across a bucket boundary invalidates every one of our
         # own-perspective lanes at once: rebuild from the (still mover-
         # oriented) final board with the new bucket's table.  Rare, ~32 adds.
@@ -512,9 +510,9 @@ class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb cnt"
                     acc += row[c][s]
         # We rotate the returned position, so it's ready for the next player
         pf = self.pf ^ 1
-        return Position(board[::-1].swapcase(), -ps + nn_cp(acc, pf, cnt), -ps,
+        return Position(board[::-1].swapcase(), -ps + nn_cp(acc, pf, board), -ps,
                         bc, wc, 119 - ep if ep else 0, 119 - kp if kp else 0,
-                        acc, pf, kb, cnt)
+                        acc, pf, kb)
 
     def value(self, move):
         i, j, prom = move
@@ -823,13 +821,11 @@ def from_board(board, wc=(True, True), bc=(True, True), ep=0, kp=0, pf=0):
         kb = own * B + opp if pf == 0 else opp * B + own
     acc = ACC_BASE
     row = ROWS[pf][kb]
-    cnt = 0
     for i, p in enumerate(board):
         if p in _PIECES:
             acc += row[p][i]
-            cnt += 1
-    return Position(board, ps + nn_cp(acc, pf, cnt), ps, wc, bc, ep, kp,
-                    acc, pf, kb, cnt)
+    return Position(board, ps + nn_cp(acc, pf, board), ps, wc, bc, ep, kp,
+                    acc, pf, kb)
 
 
 hist = [from_board(initial)]
