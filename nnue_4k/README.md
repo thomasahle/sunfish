@@ -74,7 +74,7 @@ net in this directory is `net128kb8.sfnn` (val 0.00800, the strongest
 ## The 4k build
 
 ```
-build/pack.sh nnue_4k/sunfish_packed.py out.packed
+tools/build/pack.sh nnue_4k/sunfish_packed.py out.packed
 ```
 
 pyminify + xz + a 116-byte self-extracting header. Current state: the
@@ -113,5 +113,5 @@ everything distributed is `.sfnn`.
 
 `lichess/` holds the full bundle (setup.sh with frozen-tag + net-sha256
 pins, config.yml, systemd unit): the bot runs this engine through
-`sunfish_tools/uci.py` (pondering, FEN, Hash) on an ARM instance, with
+`sunfish_ui/uci.py` (pondering, FEN, Hash) on an ARM instance, with
 the verify battery as a hard install-time gate. See `lichess/README.md`.

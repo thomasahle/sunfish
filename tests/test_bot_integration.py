@@ -1,9 +1,9 @@
 """End-to-end test: the real lichess-bot bridge + sunfish vs a mock lichess server.
 
 This launches the official `lichess-bot <https://github.com/lichess-bot-devs/lichess-bot>`_
-process (the same bridge contrib/lichess deploys to a VM), pointed at the
+process (the same bridge tools/lichess deploys to a VM), pointed at the
 in-process HTTP mock in tests/mock_lichess.py, with ``ponder: true`` -- the
-configuration that exposed a real ponder race in sunfish_tools/uci.py which
+configuration that exposed a real ponder race in sunfish_ui/uci.py which
 lichess-bot's own test suite (test_bot/, a Python-class-level fake with no
 pondering coverage) does not catch.  Testing over real HTTP also covers
 lib/lichess.py, the ndjson streams, and config parsing.
@@ -36,7 +36,7 @@ The test only runs when BOT_CI=1 is set, so plain `pytest` stays fast and
 network-free.  Environment overrides:
 
 - BOT_CI=1              enable this test
-- SUNFISH_ENGINE_DIR    directory containing sunfish.py + sunfish_tools/ to test
+- SUNFISH_ENGINE_DIR    directory containing sunfish.py + sunfish_ui/ to test
                         (default: this repository)
 - LICHESS_BOT_CACHE     cache directory for the lichess-bot checkout + venv
 - LICHESS_BOT_COMMIT    lichess-bot commit to pin (default below)
@@ -130,8 +130,8 @@ def _ensure_venv(checkout: Path) -> Path:
 def lichess_bot():
     """(checkout dir, venv python) for the pinned lichess-bot release."""
     assert (ENGINE_DIR / ENGINE_FILE).exists(), f"no engine in {ENGINE_DIR}"
-    assert (ENGINE_DIR / "sunfish_tools" / "uci.py").exists(), \
-        f"no sunfish_tools/ in {ENGINE_DIR}"
+    assert (ENGINE_DIR / "sunfish_ui" / "uci.py").exists(), \
+        f"no sunfish_ui/ in {ENGINE_DIR}"
     checkout = _ensure_checkout()
     return checkout, _ensure_venv(checkout)
 

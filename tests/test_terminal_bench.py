@@ -14,7 +14,7 @@ around terminal positions, checkable at shallow depth:
   parent-of-mate at least the mate band (a mating move exists),
   parent-of-stalemate at least a draw.
 
-Position classes (tools/test_files/terminal_bench.epd): natural
+Position classes (tests/files/terminal_bench.epd): natural
 playout terminals and their parents, gate-eligible corner mates (every
 pseudo-move valuable-but-illegal), the named historical witnesses, an
 ahead-stalemate parametric family, and the classic zugzwang suite
@@ -44,10 +44,10 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import sunfish_tools.uci as uci  # noqa: E402
-from sunfish_tools.uci import render_move  # noqa: E402
+import sunfish_ui.uci as uci  # noqa: E402
+from sunfish_ui.uci import render_move  # noqa: E402
 
-BENCH = ROOT / "tools" / "test_files" / "terminal_bench.epd"
+BENCH = ROOT / "tests" / "files" / "terminal_bench.epd"
 
 # Empty: the three natural witnesses of the futility-masking channel
 # were fixed by the kcx virtual-futility change.  Kept as the hook for

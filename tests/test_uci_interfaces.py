@@ -3,12 +3,12 @@ boundary between them.
 
 There are two, and after #156 the boundary between them is sharp:
 
-* ``sunfish_tools/uci.py`` -- the real interface (FEN, ponder, spec-complete
+* ``sunfish_ui/uci.py`` -- the real interface (FEN, ponder, spec-complete
   ``go``). ``sunfish.py`` imports it unconditionally, and it ships in the
   wheel, so every configuration that runs the *source* file uses it;
 * the loop inlined in ``sunfish.main()`` -- ``startpos``-only, written for the
   packed 4K artifact, and reachable only by deleting the minifier-hide block
-  the way ``build/pack.sh`` does.
+  the way ``tools/build/pack.sh`` does.
 
 Issue #156 came from those two being confusable at runtime. The wheel shipped
 ``sunfish.py`` alone, ``import tools.uci`` failed, a bare ``except ImportError:
@@ -42,7 +42,7 @@ chess = pytest.importorskip("chess")
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import sunfish_tools.uci as uci  # noqa: E402
+import sunfish_ui.uci as uci  # noqa: E402
 
 # The FEN from issue #156's reproduction: Black to move, so an engine that
 # ignored the command and searched the initial position answers a White move.
@@ -58,7 +58,7 @@ HIDDEN = re.compile(
 
 
 def strip_minifier_hidden(source):
-    """What build/pack.sh's `sed '/start/,/end/d'` leaves behind."""
+    """What tools/build/pack.sh's `sed '/start/,/end/d'` leaves behind."""
     stripped = HIDDEN.sub("", source)
     assert "minifier-hide" not in stripped
     return stripped
@@ -75,15 +75,15 @@ def isolated_python(*args):
 
     ``-S`` is the one that matters. A sunfish checkout is normally set up with
     an editable install, which leaves a meta-path finder in site-packages
-    resolving ``sunfish`` and ``sunfish_tools`` to the checkout from *any*
+    resolving ``sunfish`` and ``sunfish_ui`` to the checkout from *any*
     working directory and *any* sys.path. Without it, a layout built here
-    without ``sunfish_tools/`` still imports the checkout's copy: the engine
+    without ``sunfish_ui/`` still imports the checkout's copy: the engine
     starts, and the loudness tests below pass whatever the bridge does.
 
     Unlike ``-I``, these flags keep the script's own directory (and, for
     ``-c``, the working directory) on sys.path -- that is where these tests
     put the module when they mean it to be found. Nothing is lost by dropping
-    site-packages: sunfish.py and sunfish_tools/uci.py import only the
+    site-packages: sunfish.py and sunfish_ui/uci.py import only the
     standard library.
     """
     return [sys.executable, "-E", "-s", "-S", "-B", *args]
@@ -156,7 +156,7 @@ def make_engine_dir(tmp_path, *, tiny=False, uci_module=True, broken_import=Fals
 
     tiny          -- strip the minifier-hide blocks, i.e. build the packed
                      artifact's source, whose interface is the inlined loop.
-    uci_module    -- copy sunfish_tools/ next to it (the wheel's layout).
+    uci_module    -- copy sunfish_ui/ next to it (the wheel's layout).
     broken_import -- copy it, but with an unsatisfiable import at the top,
                      standing in for a dependency slip inside the module.
     """
@@ -165,15 +165,15 @@ def make_engine_dir(tmp_path, *, tiny=False, uci_module=True, broken_import=Fals
     script.write_text(strip_minifier_hidden(source) if tiny else source)
 
     if uci_module:
-        pkg = tmp_path / "sunfish_tools"
-        shutil.copytree(ROOT / "sunfish_tools", pkg,
+        pkg = tmp_path / "sunfish_ui"
+        shutil.copytree(ROOT / "sunfish_ui", pkg,
                         ignore=shutil.ignore_patterns("__pycache__"))
         if broken_import:
             uci = pkg / "uci.py"
             uci.write_text("import sunfish_definitely_absent_module\n" + uci.read_text())
     else:
         assert not broken_import
-        assert not (tmp_path / "sunfish_tools").exists()
+        assert not (tmp_path / "sunfish_ui").exists()
     return script
 
 
@@ -227,7 +227,7 @@ def test_real_interface_answers_a_black_to_move_fen(tmp_path):
     """The regression #156 actually reported, against the wheel's layout.
 
     An engine laid out the way `pip install sunfish` lays it out -- sunfish.py
-    plus sunfish_tools/ and nothing else -- must handle `position fen` and
+    plus sunfish_ui/ and nothing else -- must handle `position fen` and
     answer with a move that is legal *for that FEN*.
     """
     script = make_engine_dir(tmp_path)
@@ -272,7 +272,7 @@ def assert_loud_failure(result, needle):
 
 
 def test_missing_uci_module_is_loud(tmp_path):
-    """sunfish.py without sunfish_tools/ must refuse to start.
+    """sunfish.py without sunfish_ui/ must refuse to start.
 
     This is the deployment mistake behind #156: an engine shipped without its
     interface used to keep running as the packed loop, so nothing looked wrong
@@ -280,7 +280,7 @@ def test_missing_uci_module_is_loud(tmp_path):
     played and had to be voided.
     """
     script = make_engine_dir(tmp_path, uci_module=False)
-    assert_loud_failure(run_to_completion(script, tmp_path), "sunfish_tools")
+    assert_loud_failure(run_to_completion(script, tmp_path), "sunfish_ui")
 
 
 def test_entry_point_raises_when_tooling_is_missing(tmp_path):
@@ -292,7 +292,7 @@ def test_entry_point_raises_when_tooling_is_missing(tmp_path):
     """
     make_engine_dir(tmp_path, uci_module=False)
     result = run_entry_point(tmp_path)
-    assert_loud_failure(result, "sunfish_tools")
+    assert_loud_failure(result, "sunfish_ui")
     assert "ModuleNotFoundError" in result.stderr, result.stderr
 
 
@@ -330,7 +330,7 @@ def load_engine():
 
 def engine_attributes_used_by_uci():
     """Every `sunfish.<attr>` uci.py reads, via AST so comments don't count."""
-    tree = ast.parse((ROOT / "sunfish_tools" / "uci.py").read_text())
+    tree = ast.parse((ROOT / "sunfish_ui" / "uci.py").read_text())
     return {node.attr for node in ast.walk(tree)
             if isinstance(node, ast.Attribute)
             and isinstance(node.value, ast.Name) and node.value.id == "sunfish"}
@@ -397,9 +397,9 @@ def test_engine_without_pst_or_features_is_rejected():
 def test_packed_build_still_has_a_working_loop(tmp_path):
     """The corollary of making the import unconditional: the tiny loop is now
     reachable only through the strip, so the strip must still produce a
-    self-contained engine with no import of sunfish_tools left in it."""
+    self-contained engine with no import of sunfish_ui left in it."""
     script = make_engine_dir(tmp_path, tiny=True, uci_module=False)
-    assert "import sunfish_tools" not in script.read_text()
+    assert "import sunfish_ui" not in script.read_text()
     result = run_to_completion(
         script, tmp_path,
         commands="uci\nisready\nposition startpos moves e2e4\ngo movetime 100\nquit\n")

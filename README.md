@@ -1,7 +1,7 @@
 ![Sunfish logo](https://raw.github.com/thomasahle/sunfish/master/docs/logo/sunfish_large.png)
 
 ## Introduction
-Sunfish is a simple, but strong chess engine, written in Python. With its simple [UCI](http://wbec-ridderkerk.nl/html/UCIProtocol.html) interface, and removing comments and whitespace, it takes up just 142 lines of code! (`build/clean.sh sunfish.py | wc -l`).
+Sunfish is a simple, but strong chess engine, written in Python. With its simple [UCI](http://wbec-ridderkerk.nl/html/UCIProtocol.html) interface, and removing comments and whitespace, it takes up just 142 lines of code! (`tools/build/clean.sh sunfish.py | wc -l`).
 Yet [it plays at ratings above 2000 at Lichess](https://lichess.org/@/sunfish-engine).
 
 Because Sunfish is small and strives to be simple, the code provides a great platform for experimenting. People have used it for testing parallel search algorithms, experimenting with evaluation functions, and developing deep learning chess programs. Fork it today and see what you can do!
@@ -12,7 +12,7 @@ The name Sunfish refers to the [Pygmy Sunfish](http://en.wikipedia.org/wiki/Pygm
 
 The simplest way to run sunfish is through the "fancy" terminal interface:
 <pre>
-$ <b>tools/fancy.py -cmd ./sunfish.py</b>
+$ <b>sunfish_ui/fancy.py -cmd ./sunfish.py</b>
 Playing against sunfish 2023.
 Do you want to be white or black? <b>black</b>
   1 ♖ ♘ ♗ ♔ ♕ ♗ ♘ ♖
@@ -62,7 +62,7 @@ The terminal interface also supports explicit notation. This is where the source
 Note this requires the [python-chess](https://github.com/niklasf/python-chess/) package.
 For a true minimalist experience, first we can "pack" sunfish into a compressed executable (less than 3KB!) and run it directly:
 <pre>
-$ <b>build/pack.sh sunfish.py packed.sh</b>
+$ <b>tools/build/pack.sh sunfish.py packed.sh</b>
 Total length: 2953
 $ <b>./packed.sh</b>
 <b>go wtime 1000 btime 1000 winc 1000 binc 1000</b>
@@ -74,7 +74,7 @@ bestmove d2d4
 ### Troubleshooting
 
 `./sunfish.py` automatically runs with `pypy3` if installed (recommended, much stronger), otherwise `python3`.
-If the engine fails to start, run `tools/fancy.py` with `-debug` to see the underlying error,
+If the engine fails to start, run `sunfish_ui/fancy.py` with `-debug` to see the underlying error,
 and make sure `python3` is on your PATH. On Windows, `.py` engines are launched
 through your current Python interpreter automatically.
 

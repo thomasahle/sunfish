@@ -1,7 +1,7 @@
 #!/bin/sh
 """:"
 # Polyglot header: run with pypy3 when available, else python3 (issue #102).
-# No -u needed: all UCI output is flushed explicitly (sunfish_tools/uci.py).
+# No -u needed: all UCI output is flushed explicitly (sunfish_ui/uci.py).
 for cmd in pypy3 python3; do
    command -v "$cmd" > /dev/null && exec "$cmd" "$0" "$@"
 done
@@ -527,7 +527,7 @@ class Searcher:
 # UCI User interface
 ###############################################################################
 
-# parse/render/hist live at module level: sunfish_tools/uci.py (and the tests)
+# parse/render/hist live at module level: sunfish_ui/uci.py (and the tests)
 # reach them as engine-module attributes, and main() uses hist before its
 # own body would define it.
 def parse(c): return A1 + ord(c[0]) - ord("a") - 10 * (int(c[1]) - 1)
@@ -547,8 +547,8 @@ def main():
     # Only the packed build runs the loop below, and it never reaches this
     # line: pack.sh deletes everything between the minifier-hide markers,
     # taking the import and this return with it.
-    import sys, sunfish_tools.uci
-    return sunfish_tools.uci.run(sys.modules[__name__], hist[-1])
+    import sys, sunfish_ui.uci
+    return sunfish_ui.uci.run(sys.modules[__name__], hist[-1])
     # minifier-hide end
 
     searcher = Searcher()

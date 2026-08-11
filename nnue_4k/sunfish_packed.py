@@ -852,8 +852,8 @@ def main():
     try:
         import sys
         sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        import sunfish_tools.uci
-        return sunfish_tools.uci.run(sys.modules[__name__], hist[-1])
+        import sunfish_ui.uci
+        return sunfish_ui.uci.run(sys.modules[__name__], hist[-1])
     except ImportError:
         pass
     # minifier-hide end

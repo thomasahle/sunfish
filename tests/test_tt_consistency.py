@@ -39,7 +39,7 @@ import pytest
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-import sunfish_tools.uci as uci  # noqa: E402
+import sunfish_ui.uci as uci  # noqa: E402
 
 MATED_QS_FEN = ("6Rk/6QP/8/8/8/8/8/K7", "b", "-", "-", "0", "1")
 AHEAD_STALEMATE_FEN = ("8/8/8/5k1p/3b1P1P/1p1P1P1P/pN1P1P2/K7", "w", "-", "-", "0", "1")
@@ -155,7 +155,7 @@ def test_legality_oracle_vs_python_chess():
     chess = pytest.importorskip("chess")
     import random
 
-    from sunfish_tools.uci import render_move
+    from sunfish_ui.uci import render_move
 
     sf = load_sunfish()
     random.seed(7)

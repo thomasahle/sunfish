@@ -4,6 +4,8 @@
 import chess.engine
 import json
 import argparse
+import importlib.util
+import sys
 import os
 import random
 import time
@@ -241,6 +243,10 @@ async def main():
     if not args.conf:
         if args.cmd:
             engine = await load_engine_from_cmd(args.cmd, debug=args.debug)
+        elif importlib.util.find_spec("sunfish"):
+            # Installed wheel (sunfish-play): run the bundled engine.
+            engine = await load_engine_from_cmd(
+                f"{sys.executable} -m sunfish", debug=args.debug)
         else:
             path = pathlib.Path(__file__).parent / "engines.json"
             if not path.is_file():
@@ -288,8 +294,14 @@ async def main():
         await engine.quit()
 
 
-asyncio.set_event_loop_policy(chess.engine.EventLoopPolicy())
-try:
-    asyncio.run(main())
-except KeyboardInterrupt:
-    pass
+def run():
+    # Console entry point (pip install 'sunfish[play]' && sunfish-play).
+    asyncio.set_event_loop_policy(chess.engine.EventLoopPolicy())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
+
+
+if __name__ == "__main__":
+    run()

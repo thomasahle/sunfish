@@ -12,8 +12,8 @@ methodology; it exists because shortcuts here produce confident, wrong numbers.
 ```bash
 # 1. Freeze BOTH engines completely (code + interface, no shared files!)
 mkdir -p /tmp/elo/old /tmp/elo/new
-git archive master     sunfish.py sunfish_tools | tar -x -C /tmp/elo/old
-git archive my-change  sunfish.py sunfish_tools | tar -x -C /tmp/elo/new
+git archive master     sunfish.py sunfish_ui | tar -x -C /tmp/elo/old
+git archive my-change  sunfish.py sunfish_ui | tar -x -C /tmp/elo/new
 chmod +x /tmp/elo/old/sunfish.py /tmp/elo/new/sunfish.py
 
 # 2. Get fastchess and an opening book
@@ -33,8 +33,8 @@ fastchess \
 
 ## The rules, and why each one exists
 
-1. **Freeze both engines with `git archive`, including `sunfish_tools/`.**
-   `sunfish.py` imports `sunfish_tools/uci.py`, so an engine run from the working tree
+1. **Freeze both engines with `git archive`, including `sunfish_ui/`.**
+   `sunfish.py` imports `sunfish_ui/uci.py`, so an engine run from the working tree
    picks up whatever is in the tree *at process start*. If both engines share a
    live checkout — or you edit any imported file mid-match — you are no longer
    testing the diff you think you are testing. This is not hypothetical: a
@@ -144,7 +144,7 @@ fastchess \
 
 ## Testing the packed artifact
 
-`build/pack.sh` inlines a minimal UCI loop that handles `position startpos
+`tools/build/pack.sh` inlines a minimal UCI loop that handles `position startpos
 moves ...` only — **`position fen` is deliberately unsupported**, because the
 tournaments the packed build targets never send it and every byte counts.
 That is fine for the artifact and fatal for a careless harness: fastchess
@@ -155,7 +155,7 @@ that are illegal in the actual game. It looks like a catastrophic engine bug
 
 So: test packed artifacts with a book fastchess delivers as `position
 startpos moves ...` (a PGN book), or measure the unpacked engine — which
-runs through `sunfish_tools/uci.py` and does parse FEN — and cover the packed build
+runs through `sunfish_ui/uci.py` and does parse FEN — and cover the packed build
 with a separate startpos-only smoke. Either way, confirm which form your
 book actually produces by dumping the UCI trace on a two-game run rather
 than assuming.
