@@ -97,8 +97,10 @@ PATCH_FILE = os.environ.get("LICHESS_BOT_PATCH",
 STARTUP_TIMEOUT = 120  # engine config check + connect to the event stream
 ACCEPT_TIMEOUT = 60  # challenge event -> accepted -> gameStart
 GAME_TIMEOUT = 240  # both clocks are 60s; a finished 60+0 game fits easily
-MAX_MOVE_SECONDS = 12.0  # any move: lichess-bot searches a full 10 s for the
-# first, and the engine is entitled to all of it; allow IO/runner overhead
+MAX_MOVE_SECONDS = 15.0  # any move: lichess-bot searches a full 10 s for the
+# first, and the engine is entitled to all of it; CI runners measure up to
+# 12.6 s with IO/runner overhead, and a hung engine shows as 30 s+, so 15
+# keeps real margin on both sides
 MAX_LATER_MOVE_SECONDS = 7.0  # stall detector, not a budget: the think
 # formula is wtime/12 + 0.9*inc (~5s on the mock's 60s clock); a hung
 # engine shows as 30s+, so 7s separates the regimes cleanly
