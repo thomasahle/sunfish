@@ -173,7 +173,16 @@ class PackedNet:
         self.u = d.get("u")                 # read-out of h, float, length m
         self.tail = d.get("tail")           # odd-symmetrized narrow tail
         self.phase_s = d.get("phase_s")     # per-material-bucket output scale
-        self.ext = bool(nb or self.phase_s)
+        self.R = R = d.get("rff", 0)        # phase-sketch lanes per perspective
+        self.rw = d.get("rw")               # rff read-out weights, float
+        self.ext = bool(nb or self.phase_s or R)
+        # rff angle fields are 32-BIT, above the 16-bit lane grid: sums of
+        # up to 33 present-piece quanta (< 2^21) never overflow a field,
+        # removals subtract exactly what was added so fields never go
+        # negative -- plain integer adds, no wrap ops, and the mod-2^15
+        # circle falls out of the read-out mask.  `lanes` stays the 16-bit
+        # grid (head + bilinear); the SWAR constants stop there, which
+        # auto-zeroes the rff region of the clamped y.
         self.lanes = lanes = 2 * N + 2 * nb
         self.nbytes = lanes * (L // 8)
         self.half = N * L                   # bit offset of block1
@@ -222,6 +231,9 @@ class PackedNet:
             self.boffX = [(2 * N + s * nbg) * L for s in range(m)]
             self.boffY = [(2 * N + nb + s * nbg) * L for s in range(m)]
             self.Cb2 = float(1 << (2 * self.bshift))
+        FB = (2 * N + 2 * nb) * L           # rff fields start here
+        self.roffX = [FB + 32 * k for k in range(R)]
+        self.roffY = [FB + 32 * (R + k) for k in range(R)]
         self.meta = {k: v for k, v in d.items() if k not in ("rows", "base", "gp", "G")}
 
     # ------------------------------------------------- extended read-out
@@ -235,6 +247,15 @@ class PackedNet:
                 s += w * x
             acc += t["t2w"][0][o] * math.tanh(s)
         return acc + t["t2b"][0]
+
+    def rff_term(self, acc, pf):
+        """Sum of rw_k (cos us_k - cos them_k), angles in 2^15 units."""
+        import math
+        TAU = 2.0 * math.pi / 32768.0
+        offA, offB = (self.roffX, self.roffY) if pf == 0 else (self.roffY, self.roffX)
+        return sum(w * (math.cos(TAU * ((acc >> oa) & 32767))
+                        - math.cos(TAU * ((acc >> ob) & 32767)))
+                   for w, oa, ob in zip(self.rw, offA, offB))
 
     def ext_cp(self, acc, pf, cnt=None):
         """Extended evaluation: linear head + bilinear + tail + phase, in
@@ -265,6 +286,8 @@ class PackedNet:
                 zp = [d / 300.0] + [v / 100.0 for v in hf] + [v / 100.0 for v in ff]
                 zn = [-d / 300.0] + [-v / 100.0 for v in hf] + [v / 100.0 for v in ff]
                 d += 150.0 * (self._mlp(zp) - self._mlp(zn))
+        if self.R:
+            d += self.rff_term(acc, pf)
         if self.phase_s:
             P = len(self.phase_s)
             b = (cnt - 1) * P // 32
@@ -321,7 +344,8 @@ class PackedNet:
         return (own * self.B + opp) if pf == 0 else (opp * self.B + own)
 
     def from_board(self, board, pf):
-        """Build the accumulator from scratch. `board` is mover-oriented."""
+        """Build the accumulator from scratch. `board` is mover-oriented.
+        Every add clears the rff wrap-guards (identity when R == 0)."""
         acc = self.base
         rows = self.rows[pf] if self.B == 1 else \
             self.rows_kb[pf][self.kb_of(board, pf)]
@@ -524,7 +548,7 @@ def pick_bshift(bil, squares=SQUARES, limit=16000, sumlimit=65534):
 
 
 def build(W, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES,
-          keep=None, bil=None, phase_s=None):
+          keep=None, bil=None, phase_s=None, rff=None):
     """Quantise a float net into the packed representation.
 
     W[k][piece][sq120]  float input weights (activation units, clip at 1.0)
@@ -550,6 +574,16 @@ def build(W, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES,
     order = sorted(range(N), key=lambda k: (v[k] <= 0, -abs(v[k])))
     P = sum(1 for x in v if x > 0)
     nb = bil["nb"] if bil else 0
+    R = rff["R"] if rff else 0
+    if rff:
+        # angles quantize to 2^15 units per turn; rows carry the quanta,
+        # the base carries the phase bias.  Weights stay float (read-out
+        # is float in the dev build).
+        import math
+        TOQ = 32768.0 / (2.0 * math.pi)
+        rq = [[int(round(rff["theta"][f][k] * TOQ)) % 32768
+               for k in range(R)] for f in range(768)]
+        phq = [int(round(rff["phb"][k] * TOQ)) % 32768 for k in range(R)]
     if bil:
         if segs != (0.0,):
             raise ValueError("bilinear lanes assume plain crelu (segs=(0.0,))")
@@ -607,6 +641,7 @@ def build(W, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES,
     lanes_total = 2 * N + 2 * nb
     lanesG = [0] * lanes_total
     lanebias = [0] * lanes_total
+    FB = lanes_total * L                    # rff 32-bit fields start here
     for j in range(N):
         lanesG[laneW[j]] = lanesG[laneB[j]] = G[j]
         lanebias[laneW[j]] = lanebias[laneB[j]] = biasq[j]
@@ -614,11 +649,14 @@ def build(W, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES,
         lanesG[2 * N + j] = lanesG[2 * N + nb + j] = gq[j]
         lanebias[2 * N + j] = lanebias[2 * N + nb + j] = biasbq[j]
 
+
     if sum(G) > 65534:
         raise ValueError(
             "sum(G) = %d > 65534: a block's lane sum could reach the modulus "
             "and the horizontal sum would wrap. Lower `shift`." % sum(G))
     base = packlanes([BIAS + b for b in lanebias])
+    for k in range(R):
+        base += (phq[k] << (FB + 32 * k)) + (phq[k] << (FB + 32 * (R + k)))
     gp = packlanes(lanesG)
 
     rows = {}
@@ -638,7 +676,16 @@ def build(W, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES,
                         lv[2 * N + j] = Wbq[j][p][s]
                     if keep != "W":
                         lv[2 * N + nb + j] = Wbq[j][pr][119 - s]
-            col.append(packlanes(lv))
+            pl = packlanes(lv)
+            if R and s in squares:
+                fW = PIECES.index(p) * 64 + (s // 10 - 2) * 8 + (s % 10 - 1)
+                fB = PIECES.index(pr) * 64 + ((119 - s) // 10 - 2) * 8 + ((119 - s) % 10 - 1)
+                for k in range(R):
+                    if keep != "B":
+                        pl += rq[fW][k] << (FB + 32 * k)
+                    if keep != "W":
+                        pl += rq[fB][k] << (FB + 32 * (R + k))
+            col.append(pl)
         rows[p] = col
 
     # one packed constant of M_k*t_i per extra segment
@@ -661,13 +708,15 @@ def build(W, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES,
         out.update({"nb": nb, "m": m_, "bshift": bil["bshift"],
                     "u": list(bil["u"]), "tail": bil.get("tail"),
                     "gq": gq, "excursion_bil": max(excb)})
+    if rff:
+        out.update({"rff": R, "rw": list(rff["rw"])})
     if phase_s:
         out["phase_s"] = list(phase_s)
     return out
 
 
 def build_kb(Ws, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES,
-             bil=None, phase_s=None):
+             bil=None, phase_s=None, rff=None):
     """Quantise a king-bucketed float net into the packed representation.
 
     Ws[b][k][piece][sq120] is bucket b's input weights; bias/v/shift are
@@ -686,11 +735,11 @@ def build_kb(Ws, bias, v, shift, clampcp=600, segs=(0.0,), squares=SQUARES,
     """
     B = len(Ws)
     full = [build(W, bias, v, shift, clampcp=clampcp, segs=segs,
-                  squares=squares, bil=bil, phase_s=phase_s) for W in Ws]
+                  squares=squares, bil=bil, phase_s=phase_s, rff=rff) for W in Ws]
     rowsW = [build(W, bias, v, shift, clampcp=clampcp, segs=segs,
-                   squares=squares, keep="W", bil=bil)["rows"] for W in Ws]
+                   squares=squares, keep="W", bil=bil, rff=rff)["rows"] for W in Ws]
     rowsB = [build(W, bias, v, shift, clampcp=clampcp, segs=segs,
-                   squares=squares, keep="B", bil=bil)["rows"] for W in Ws]
+                   squares=squares, keep="B", bil=bil, rff=rff)["rows"] for W in Ws]
     N = full[0]["N"]
     # The split is only correct if the two halves recompose exactly: for
     # equal buckets, rowsW[b] + rowsB[b] must BE the full build's row.

@@ -83,7 +83,12 @@ M16 = (1 << LBITS) - 1
 NB = _d.get("nb", 0)              # bilinear lanes per perspective
 BM = _d.get("m", 4)               # bilinear groups
 PHASE_S = tuple(_d.get("phase_s") or ()) or None
-EXT = bool(NB or PHASE_S)
+RFF = _d.get("rff", 0)            # phase-sketch (angle) lanes per perspective
+# rff angle fields are 32-BIT, above the 16-bit lane grid: present-piece
+# quanta sums stay < 2^21 (no overflow), removals subtract exactly what
+# was added (never negative) -- plain adds, no wrap machinery, and the
+# mod-2^15 circle is the read-out mask.
+EXT = bool(NB or PHASE_S or RFF)
 # minifier-hide start
 # The extension machinery is DEV-BUILD ONLY: the 4k artifact ships the
 # pure-int family (its net is pure-int too) and refuses ext nets loudly
@@ -96,6 +101,11 @@ if NB:
     BOFFY = tuple(o + NB * LBITS for o in BOFFX)
     CB2 = float(1 << (2 * _d["bshift"]))
     BU = _d["u"]
+if RFF:
+    _FB = (2 * _d["N"] + 2 * NB) * LBITS
+    ROFFX = tuple(_FB + 32 * k for k in range(RFF))
+    ROFFY = tuple(_FB + 32 * (RFF + k) for k in range(RFF))
+    RW = tuple(_d["rw"])
     BTAIL = _d.get("tail")
     if BTAIL:
         T1W, T1B = BTAIL["t1w"], BTAIL["t1b"]
@@ -150,7 +160,7 @@ def nn_cp(acc, pf, bd=""):
         v = -v
     # minifier-hide start
     if EXT:
-        return _ext(y, v, pf, bd)
+        return _ext(y, v, pf, bd, acc)
     # minifier-hide end
     # round TOWARDS ZERO: floor does not commute with negation, and the
     # search reaches a position both by rotate() (negates) and move()
@@ -174,7 +184,16 @@ def _mlp(z):
     return acc + T2B
 
 
-def _ext(y, v, pf, bd):
+def _rff_term(acc, pf):
+    from math import cos
+    TAU = 6.283185307179586 / 32768.0
+    offA, offB = (ROFFX, ROFFY) if pf == 0 else (ROFFY, ROFFX)
+    return sum(w * (cos(TAU * ((acc >> oa) & 32767))
+                    - cos(TAU * ((acc >> ob) & 32767)))
+               for w, oa, ob in zip(RW, offA, offB))
+
+
+def _ext(y, v, pf, bd, acc):
     """Extended evaluation tail (dev builds; the 4k artifact refuses ext
     nets at load).  v is already mover-signed; the phase piece count is
     derived from the board -- dev-only cost, no state to drift."""
@@ -200,6 +219,8 @@ def _ext(y, v, pf, bd):
             z = [d / 300.0] + [x / 100.0 for x in h] + [x / 100.0 / CB2 for x in f]
             zn = [-x for x in z[:1 + BM]] + z[1 + BM:]
             d += 150.0 * (_mlp(z) - _mlp(zn))
+    if RFF:
+        d += _rff_term(acc, pf)
     if PHASE_S:
         b = (cnt - 1) * len(PHASE_S) // 32
         d *= PHASE_S[min(max(b, 0), len(PHASE_S) - 1)]

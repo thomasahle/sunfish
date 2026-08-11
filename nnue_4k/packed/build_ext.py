@@ -45,6 +45,11 @@ def main():
     B = d.get("B", 1) or 1
     bias, v, segs = d["bias"], d["v"], tuple(d["segs"])
 
+    rff = None
+    if d.get("rff"):
+        r = d["rff"]
+        rff = {"R": len(r["rw"]), "theta": r["theta"], "phb": r["phb"],
+               "rw": r["rw"]}
     bil = None
     if d.get("nb"):
         bil = {"nb": d["nb"], "m": d["m"],
@@ -59,20 +64,20 @@ def main():
         picks = [pnet.pick_shift(W, bias, v, segs=segs) for W in Ws]
         shift = min(p[0] for p in picks)
         out = pnet.build_kb(Ws, bias, v, shift, clampcp=d["clampcp"],
-                            segs=segs, bil=bil, phase_s=phase_s)
+                            segs=segs, bil=bil, phase_s=phase_s, rff=rff)
     else:
         W = to_W(d["E"], N)
         shift = pnet.pick_shift(W, bias, v, segs=segs)[0]
         out = pnet.build(W, bias, v, shift, clampcp=d["clampcp"],
-                         segs=segs, bil=bil, phase_s=phase_s)
+                         segs=segs, bil=bil, phase_s=phase_s, rff=rff)
     out["train"] = d.get("train")
     out["base_kind"] = d.get("base_kind", "pst")
     pnet.save(dst, out)
     print("built %s: B=%d N=%d shift=%d sum_G=%d excursion=%d nb=%d "
-          "bshift=%s phase=%s"
+          "bshift=%s phase=%s rff=%d"
           % (dst, B, N, shift, out["sum_G"], out["excursion"],
              d.get("nb", 0), out.get("bshift", "-"),
-             len(phase_s) if phase_s else 0))
+             len(phase_s) if phase_s else 0, out.get("rff", 0)))
 
 
 main()
