@@ -58,6 +58,7 @@ HALF = _d["N"] * LBITS            # bit offset of the second lane block
 SHIFT = _d["shift"]
 CLAMP = _d["clampcp"]
 ACC_BASE = _d["base"]
+BASE = _d.get("base_kind", "pst")   # score base: pst | mat
 
 
 MH = sum(1 << (VBITS + LBITS * i) for i in range(NLANE))   # guard bits
@@ -271,6 +272,15 @@ K_END = (0,) * 20 + sum(
         piece["K"] + 70 - 10 * (abs(2 * rank - 7) + abs(2 * file - 7))
         for file in range(8)) + (0,)
      for rank in range(8)), ()) + (0,) * 20
+
+# Material-base nets (net header "base": "mat") own ALL positional
+# knowledge themselves, including the K_MID/K_END phase swap above: the
+# score base becomes pure material, value(move) becomes capture/promotion
+# deltas (quiets 0), and the K tables both collapse to the flat value so
+# the swap in search() is a no-op.
+if BASE == "mat":
+    pst = {p: (piece[p],) * 120 for p in piece}
+    K_MID = K_END = pst["K"]
 
 ###############################################################################
 # Global constants

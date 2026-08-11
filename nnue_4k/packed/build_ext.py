@@ -66,6 +66,7 @@ def main():
         out = pnet.build(W, bias, v, shift, clampcp=d["clampcp"],
                          segs=segs, bil=bil, phase_s=phase_s)
     out["train"] = d.get("train")
+    out["base_kind"] = d.get("base_kind", "pst")
     pnet.save(dst, out)
     print("built %s: B=%d N=%d shift=%d sum_G=%d excursion=%d nb=%d "
           "bshift=%s phase=%s"

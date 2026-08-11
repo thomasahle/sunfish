@@ -84,6 +84,16 @@ p.add_argument("--tailw", type=int, default=0,
                help="width of the odd-symmetrized narrow tail over "
                     "[d, h, f] (0 = plain linear read-out d + u.h).  "
                     "Never a second wide layer")
+p.add_argument("--base", choices=("pst", "mat"), default="pst",
+               help="the fixed base under the net residual.  pst = classic "
+                    "piece-square tables (positional prior baked in); mat = "
+                    "MATERIAL only (piece values incl. the 60000cp kings) -- "
+                    "the net owns all positional knowledge, including what "
+                    "the hand-coded K_MID/K_END phase swap encoded.  The "
+                    "material base is recomputed from the cached features, "
+                    "so every existing cache works unchanged.  Val stays "
+                    "comparable across bases: the prediction target is the "
+                    "same total eval")
 p.add_argument("--satpen", type=float, default=0.0,
                help="saturation penalty weight: training loss adds "
                     "satpen * mean(relu(|pre-clip residual| - satthresh)/100)^2. "
@@ -279,6 +289,14 @@ feats = torch.tensor(FEATS, dtype=torch.long)
 offs = torch.tensor(OFFS, dtype=torch.long)
 pstc = torch.tensor(PSTC, dtype=torch.float32)
 ys = torch.tensor(Y, dtype=torch.float32)
+if args.base == "mat":
+    # material-only base, recomputed from the cached features: feature
+    # f is piece PIECES[f//64] (white 0-5 positive, black 6-11 negative)
+    _mv = torch.tensor([classic.piece[PIECES[i].upper()] * (1 if i < 6 else -1)
+                        for i in range(12) for _ in range(64)],
+                       dtype=torch.float32)
+    pstc = nn.functional.embedding_bag(
+        feats, _mv.unsqueeze(1), offs, mode="sum").squeeze(1)
 _kbt = torch.tensor(KB, dtype=torch.long)
 kbw = _kbt // KBMUL                                # white's own-frame bucket
 kbb = _kbt % KBMUL                                 # black's
@@ -519,6 +537,7 @@ def export(path):
             pnet.save(path, {"kind": kind, "B": args.kb, "N": N,
                              "E": E.tolist(), "bias": b, "v": v,
                              "clampcp": args.clampcp, "segs": SEGS,
+                             "base_kind": args.base,
                              "train": vars(args), **bil, **phs})
             return 0, 0.0, sum(abs(x) for x in v), {"excursion": 0}
         W = [{c: [0.0] * 120 for c in PIECES} for _ in range(N)]
@@ -529,6 +548,7 @@ def export(path):
                     W[k][c][s] = col[k]
     shift, worst, sabs = pnet.pick_shift(W, b, v, segs=SEGS)
     d = pnet.build(W, b, v, shift, clampcp=args.clampcp, segs=SEGS)
+    d["base_kind"] = args.base
     d["train"] = vars(args)
     pnet.save(path, d)
     return shift, worst, sabs, d
