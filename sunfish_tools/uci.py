@@ -100,6 +100,16 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
         # We never know when we've seen the last at a certain depth
         # before we get to the next one
         if depth - 1 >= max_depth:
+            # This yield is the first probe of depth max_depth+1, and it ran
+            # to completion at the sanest window of the whole search: gamma
+            # sits inside the previous depth's converged bracket. A fail-high
+            # here is finished, paid-for information, not a mid-dive artifact
+            # (those arise on LATER probes of a depth, after the bracket
+            # reset) - so play its move. This is exactly what the pv-walk
+            # driver played at "go depth N" for years; dropping it cost 42
+            # points of the WAC depth-3 floor.
+            if score >= gamma and move is not None:
+                best_move = render_move(move, white_pov=len(hist) % 2 == 1)
             break
         elapsed = time.perf_counter() - start
         fields = {
