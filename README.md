@@ -1,7 +1,7 @@
 ![Sunfish logo](https://raw.github.com/thomasahle/sunfish/master/docs/logo/sunfish_large.png)
 
 ## Introduction
-Sunfish is a simple, but strong chess engine, written in Python. With its simple [UCI](http://wbec-ridderkerk.nl/html/UCIProtocol.html) interface, and removing comments and whitespace, it takes up just 138 lines of code! (`tools/build/clean.sh sunfish.py | wc -l`).
+Sunfish is a simple, but strong chess engine, written in Python. With its simple [UCI](http://wbec-ridderkerk.nl/html/UCIProtocol.html) interface, and removing comments and whitespace, it takes up just 136 lines of code! (`tools/build/clean.sh sunfish.py | wc -l`).
 Yet [it plays at ratings above 2000 at Lichess](https://lichess.org/@/sunfish-engine).
 
 There is also a (somewhat) stronger NNUE based sunfish, which you can also [play against on Lichess](https://lichess.org/@/sunfish-nnue-engine).

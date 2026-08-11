@@ -96,6 +96,16 @@ def test_timed_stop_never_plays_mid_dive_artifact(capsys):
     assert bestmove_of(capsys, tape, max_movetime=0, max_depth=100) == "e2e4"
 
 
+def test_terminal_fail_high_reports_exact_score_before_none(capsys):
+    """A terminal root has an exact score but deliberately has no move."""
+    hist = [sunfish.Position(sunfish.initial, 0, (True, True), (True, True), 0, 0)]
+    uci.go_loop(ScriptedSearcher([(1, 0, 0, None)]), hist,
+                threading.Event(), max_movetime=10**6, max_depth=3)
+    lines = capsys.readouterr().out.splitlines()
+    assert any("score cp 0" in line and "lowerbound" not in line for line in lines)
+    assert "bestmove (none)" in lines
+
+
 def test_wac004_go_depth_3_finds_qxh7(capsys):
     """End-to-end on the real engine and the real go_loop: the CI
     battery's WAC.004. Depth 3 converges on h6f4; the depth-4 first probe
