@@ -280,6 +280,16 @@ async def main():
             white_clock=30, black_clock=30, white_inc=1, black_inc=1
         )
 
+    # Ctrl+C tears the engine down mid-search: the SIGTERM'd process leaves
+    # an EngineTerminatedError on a future nobody will ever await, and the
+    # loop's default handler prints it as scary noise after "Goodbye!".
+    # Only the UNRETRIEVED copy is filtered - an engine dying mid-game still
+    # raises loudly out of the awaited play() call.
+    def quiet_teardown(loop, context):
+        if not isinstance(context.get("exception"), chess.engine.EngineTerminatedError):
+            loop.default_exception_handler(context)
+    asyncio.get_running_loop().set_exception_handler(quiet_teardown)
+
     try:
         await play(
             engine,
@@ -291,12 +301,14 @@ async def main():
         )
     finally:
         print("\nGoodbye!")
-        await engine.quit()
+        try:
+            await engine.quit()
+        except chess.engine.EngineError:
+            pass  # already dead (Ctrl+C killed the process group)
 
 
 def run():
     # Console entry point (pip install 'sunfish[play]' && sunfish-play).
-    asyncio.set_event_loop_policy(chess.engine.EventLoopPolicy())
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
