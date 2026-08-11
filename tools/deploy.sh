@@ -64,7 +64,7 @@ playing() { curl -sf "https://lichess.org/api/users/status?ids=$ACCOUNT" \
     | python3 -c 'import json,sys; d=json.load(sys.stdin)[0]; print("yes" if d.get("playing") else "no")'; }
 
 # Phase 1 on the box: update, verify, sync, smoke - everything except the restart.
-ssh "$HOST" "ACTION=$ACTION SYNC_CONFIG=$SYNC_CONFIG BUNDLE=$BUNDLE ENGINE=$ENGINE PIN=$PIN bash -s" <<'REMOTE'
+ssh "$HOST" "ACTION=$ACTION SYNC_CONFIG=$SYNC_CONFIG BUNDLE=$BUNDLE ENGINE=$ENGINE PIN=$PIN UNIT=$UNIT bash -s" <<'REMOTE'
 set -euo pipefail
 die() { echo "deploy[remote]: $*" >&2; exit 1; }
 G() { sudo -u sunfish git -C /opt/sunfish "$@"; }
