@@ -37,18 +37,26 @@ from base64 import b64decode as _b64
 # store rowsW buckets then rowsB buckets).
 NET_PATH = os.environ.get("SF_NET", os.path.join(os.path.dirname(
     os.path.abspath(__file__)), "net128kb8.sfnn"))
-_f = open(NET_PATH)
-_d = _json.loads(_f.readline())
-_it = (int.from_bytes(_b64(t), "little", signed=True)
-       for _line in _f for t in _line.split())
-_row = lambda: {p: [next(_it) for _ in range(120)] for p in "PNBRQKpnbrqk"}
-_d["base"], _d["gp"] = next(_it), next(_it)
-_d["ts"] = [next(_it) for _ in range(_d.pop("nts", 0))]
-if _d.get("B", 1) == 1:
-    _d["rows"] = _row()
+_h, _r = open(NET_PATH).read().split("\n", 1)
+_d = _json.loads(_h)
+_it = (int.from_bytes(_b64(t), "little", signed=True) for t in _r.split())
+_PIECES = "PNBRQKpnbrqk"
+_row = lambda: {p: [next(_it) for _ in range(120)] for p in _PIECES}
+ACC_BASE, MGP = next(_it), next(_it)
+MTS = tuple(next(_it) for _ in range(_d.pop("nts", 0)))
+B = _d.get("B", 1)
+assert B in (1, 4, 8), "unknown king-bucket scheme B=%r" % B
+# All B*B absolute bucket pairs combined once (a single entry for B == 1);
+# the pf==1 view relabels the very same int objects.
+if B == 1:
+    _r0 = [_row()]
 else:
-    _d["rowsW"], _d["rowsB"] = [[_row() for _ in range(_d["B"])] for _ in "WB"]
-_f.close()
+    _w = [_row() for _ in range(B)]
+    _b = [_row() for _ in range(B)]
+    _r0 = [{p: [_w[bw][p][s] + _b[bb][p][s] for s in range(120)]
+            for p in _PIECES} for bw in range(B) for bb in range(B)]
+ROWS = (_r0, [{p: [c[p.swapcase()][119 - s] for s in range(120)]
+               for p in _PIECES} for c in _r0])
 
 NLANE = 2 * _d["N"] + 2 * _d.get("nb", 0)
 LBITS = 16
@@ -57,20 +65,15 @@ ONES = (1 << VBITS) - 1
 HALF = _d["N"] * LBITS            # bit offset of the second lane block
 SHIFT = _d["shift"]
 CLAMP = _d["clampcp"]
-ACC_BASE = _d["base"]
 BASE = _d.get("base_kind", "pst")   # score base: pst | mat (mat = dev only)
 
 
 MH = sum(1 << (VBITS + LBITS * i) for i in range(NLANE))   # guard bits
 MLO = MH >> 1                     # offset-binary zero, the bit-14 probe
 MVAL = MH - (MH >> VBITS)         # value bits (each lane 2^15 - 1)
-MGP = _d["gp"]                    # per-lane activation ceilings G_k
-MGH = MGP | MH
+MGH = MGP | MH                    # per-lane activation ceilings, guard set
 MASKLO = (1 << HALF) - 1
 M16 = (1 << LBITS) - 1
-# One packed constant M_k*t_i per extra activation segment.  Empty for plain
-# clipped ReLU; three breakpoints approximate squared clipped ReLU.
-MTS = tuple(_d.get("ts", ()))
 
 # ---- extensions: bilinear lanes, narrow odd tail, phase output scale.
 # Their read-out runs in floats; exact antisymmetry survives because every
@@ -98,24 +101,13 @@ if NB:
         T1W, T1B = BTAIL["t1w"], BTAIL["t1b"]
         T2W, T2B = BTAIL["t2w"][0], BTAIL["t2b"][0]
 # minifier-hide end
-if (EXT or BASE == "mat") and "_FULL" not in dir():
-    raise SystemExit("extended or material-base net: use the repo engine")
+if (EXT or BASE == "mat" or MTS) and "_FULL" not in dir():
+    raise SystemExit("extended/material-base/segmented net: use the repo engine")
 
-_PIECES = "PNBRQKpnbrqk"
 # Own-king buckets per perspective.  B == 1 is the plain net; B > 1 nets
 # condition the first-layer rows on each side's own king bucket, and a king
 # move that crosses a bucket boundary rebuilds the accumulator from scratch
-# (rare, ~32 adds).  ROWS[pf][kb][piece][square] is the packed contribution
-# of one man on one square, in the frame of the side to move, for the
-# ABSOLUTE king-bucket pair kb = B*bucket(white) + bucket(black); pf==1
-# shares the very same int objects.  For B == 1 there is a single table and
-# kb is always 0, so the hot path is unchanged.
-B = _d.get("B", 1)
-
-
-assert B in (1, 4, 8), "unknown king-bucket scheme B=%r" % B
-
-
+# (rare, ~32 adds).  ROWS[pf][kb][piece][square] is combined at load above.
 def kbucket(s):
     """Bucket of a perspective's OWN king on its OWN-frame square.  The
     scheme is selected by B and must match packed/pnet.py (verify.py checks
@@ -125,14 +117,6 @@ def kbucket(s):
     return (r <= 7) * (B >> 1) + ((f - 1) // 2 if B == 8 else (f >= 5))
 
 
-# All B*B absolute bucket pairs combined once (a single entry for B == 1);
-# the pf==1 view relabels the very same int objects.
-_r0 = [_d["rows"]] if B == 1 else \
-    [{p: [_d["rowsW"][_bw][p][s] + _d["rowsB"][_bb][p][s]
-          for s in range(120)] for p in _PIECES}
-     for _bw in range(B) for _bb in range(B)]
-ROWS = (_r0, [{p: [c[p.swapcase()][119 - s] for s in range(120)]
-               for p in _PIECES} for c in _r0])
 del _d
 
 
@@ -144,10 +128,12 @@ def nn_cp(acc, pf, cnt=0):
     shift-rounding, floats by IEEE sign-symmetry and truncation)."""
     m = ((acc & MLO) >> 14) * ONES              # lane >= 0 ?
     y = ((acc & m) | MLO) - MLO                 # relu
+    # minifier-hide start
     for T in MTS:                               # convex piecewise-linear:
         x = acc - T                             #   y = sum_i relu(a - t_i)
         m = ((x & MLO) >> 14) * ONES
         y += ((x & m) | MLO) - MLO
+    # minifier-hide end
     m = (((MGH - y) & MH) >> VBITS) * ONES      # lane <= G_k ?
     y = (y & m) | (MGP & (m ^ MVAL))            # ...capped at G_k
     # 2^16 == 1 (mod 2^16-1), so each block's residue IS its lane sum
