@@ -119,9 +119,15 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
             "nps": round(searcher.nodes / max(elapsed, 1e-6)),
         }
         if score >= gamma:
-            fields["score cp"] = f"{score} lowerbound"
             if move is None:
+                # A root fail-high without a move is a verified terminal
+                # (bound()'s contract), so the score is exact, not a lower
+                # bound. Report it - GUIs and testers deserve the draw/mate
+                # score - and stop: there is nothing to search or play.
+                fields["score cp"] = score
+                print("info", " ".join(f"{k} {v}" for k, v in fields.items()))
                 break
+            fields["score cp"] = f"{score} lowerbound"
             cand = render_move(move, white_pov=len(hist) % 2 == 1)
             fields["pv"] = " ".join(pv(searcher, hist[-1], include_scores=False))
         else:

@@ -568,7 +568,7 @@ def main():
                 if depth > d0:
                     best, d0 = cand or best, depth
                 if score >= gamma:
-                    if move is None: break
+                    if move is None: print("info depth", depth, "score cp", score); break
                     i, j = move.i, move.j
                     if len(hist) % 2 == 0:
                         i, j = 119 - i, 119 - j
