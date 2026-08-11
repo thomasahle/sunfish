@@ -10,10 +10,9 @@ readme = "README.md"
 license = { file = "LICENSE.md" }
 requires-python = ">=3.8"
 # The engine module itself has no dependencies; the default `sunfish`
-# entry point is the play interface, which needs these.
+# entry point is the play interface, which needs python-chess.
 dependencies = [
     "chess==1.9.4",
-    "tqdm==4.67.1",
 ]
 
 [project.urls]
@@ -24,11 +23,13 @@ sunfish = "sunfish_ui.fancy:run"
 sunfish-uci = "sunfish:main"
 
 [dependency-groups]
+# chess: mock server + regression tests; tqdm: tools/tester.py progress
+# bars; flake8: the CI lint job. No async tests exist - pytest-asyncio
+# was never consumed.
 dev = [
     "chess==1.9.4",
     "tqdm==4.67.1",
     "pytest>=7.0.0",
-    "pytest-asyncio>=0.20.0",
     "flake8",
 ]
 
