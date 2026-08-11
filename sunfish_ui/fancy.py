@@ -82,7 +82,7 @@ def get_user_move(board):
     while move is None:
         san_option = random.choice([board.san(m) for m in board.legal_moves])
         uci_option = random.choice([m.uci() for m in board.legal_moves])
-        uci = input(f"Your move (e.g. {san_option} or {uci_option}): ")
+        uci = input(f"   Your move (e.g. {san_option} or {uci_option}): ")
         if uci in ("quit", "exit"):
             return None
 
@@ -94,7 +94,7 @@ def get_user_move(board):
 
     # Check legality
     if move not in board.legal_moves:
-        print("Illegal move.")
+        print("   Illegal move.")
         return get_user_move(board)
 
     return move
