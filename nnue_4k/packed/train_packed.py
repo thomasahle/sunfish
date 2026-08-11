@@ -80,6 +80,12 @@ p.add_argument("--nb2", type=int, default=0,
                     "DIFFERENT lane blocks per perspective instead of "
                     "squaring one -- non-symmetric quadratic forms.  "
                     "Doubles the bilinear lane count (2*nb units)")
+p.add_argument("--compboost", type=int, default=0,
+               help="oversample the COMPENSATION class (base and SF eval "
+                    "in material disagreement) by this factor in the "
+                    "training ids; val ids untouched, per-class val metric "
+                    "prints alongside the overall (see the dataset-paper "
+                    "measurement record)")
 p.add_argument("--rff", type=int, default=0,
                help="phase-sketch lanes (Thomas's multiplicative-features "
                     "idea, unitary reduction): each feature contributes a "
