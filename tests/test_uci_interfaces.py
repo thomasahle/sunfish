@@ -261,11 +261,16 @@ def test_real_interface_returns_none_for_terminal_fen(tmp_path, fen):
     assert reply == "(none)"
 
 
-def test_tiny_loop_returns_none_after_checkmate(tmp_path):
+@pytest.mark.parametrize("moves", [
+    "f2f3 e7e5 g2g4 d8h4",  # checkmate
+    ("e2e3 a7a5 d1h5 a8a6 h5a5 h7h5 a5c7 a6h6 h2h4 f7f6 "
+     "c7d7 e8f7 d7b7 d8d3 b7b8 d3h7 b8c8 f7g6 c8e6"),  # stalemate
+], ids=["checkmate", "stalemate"])
+def test_tiny_loop_returns_none_after_terminal_position(tmp_path, moves):
     script = make_engine_dir(tmp_path, tiny=True, uci_module=False)
     engine = UciEngine(script, tmp_path).handshake()
     try:
-        engine.send("position startpos moves f2f3 e7e5 g2g4 d8h4")
+        engine.send("position startpos moves " + moves)
         reply = engine.bestmove(movetime=10)
     finally:
         engine.close()
