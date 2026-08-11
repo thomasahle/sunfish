@@ -185,13 +185,15 @@ async def get_engine_move(engine, board, limit, game_id, multipv, debug=False):
 
                 dim, bold, reset = "\x1b[38;5;245m", "\x1b[1m", "\x1b[0m"
                 parts = [f"{bold}{shown}{reset}"]
-                if "depth" in info:
-                    parts.append(f'depth {info["depth"]}')
                 if "nodes" in info:
                     parts.append(f'{human(info["nodes"])} nodes')
                 if "nps" in info:
                     parts.append(f'{human(info["nps"])}/s')
                 parts.append(f'{float(info.get("time", 0)):.1f}s')
+                # PV last: it is the one field whose length jumps around,
+                # so anywhere else it makes the whole line flicker.
+                if "pv" in info:
+                    parts.append(f'{dim}{board.variation_san(info["pv"][:10])}{reset}')
                 print("   " + f"{dim} · {reset}".join(parts))
 
                 for info in infos:
