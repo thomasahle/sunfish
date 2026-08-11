@@ -116,11 +116,13 @@ def print_unicode_board(board, perspective=chess.WHITE):
     # Mid-tone squares so BOTH piece colors clear them: pale squares wash
     # out the white pieces, near-black squares swallow the black ones.
     print()
-    light, dark = 180, 95                        # tan / walnut
-    hl_light, hl_dark = 186, 143                 # two-tone last-move khaki
+    light, dark = 137, 94                        # deep tan / dark walnut
+    hl_light, hl_dark = 143, 101                 # two-tone last-move olive
     label, reset = "\x1b[38;5;245m", "\x1b[0m"
     last = board.move_stack[-1] if board.move_stack else None
-    for r in range(8) if perspective == chess.BLACK else range(7, -1, -1):
+    ours, theirs = captured_pieces(board, perspective)
+    ranks = list(range(8) if perspective == chess.BLACK else range(7, -1, -1))
+    for i, r in enumerate(ranks):
         line = [f"{label}{r + 1}{reset} "]
         for c in range(8) if perspective == chess.WHITE else range(7, -1, -1):
             sq = 8 * r + c
@@ -136,29 +138,27 @@ def print_unicode_board(board, perspective=chess.WHITE):
             else:
                 glyph = f"\x1b[48;5;{bg}m   "
             line.append(glyph)
-        print("  " + "".join(line) + reset)
+        # Captured material flanks the board: what the top player has
+        # won beside the top rank, the bottom player's beside the bottom.
+        tray = theirs if i == 0 else ours if i == 7 else ""
+        print("  " + "".join(line) + reset
+              + (f"  {label}{tray}{reset}" if tray else ""))
     files = "abcdefgh" if perspective == chess.WHITE else "hgfedcba"
-    print(f"    {label}" + " ".join(f" {f}" for f in files) + f"{reset}")
-    imbalance = material_imbalance(board, perspective)
-    print(f"    {label}{imbalance}{reset}\n" if imbalance else "")
+    print(f"    {label}" + " ".join(f" {f}" for f in files) + f"{reset}\n")
 
 
-def material_imbalance(board, perspective):
-    """Lichess-style net imbalance, e.g. "♜ vs ♞♟ · +1" - each side's
-    surplus after pairwise cancellation, points from the perspective
-    player's side. Empty string when material is even."""
-    values = {chess.QUEEN: 9, chess.ROOK: 5, chess.BISHOP: 3,
-              chess.KNIGHT: 3, chess.PAWN: 1}
-    mine, theirs, points = [], [], 0
-    for pt in values:
+def captured_pieces(board, perspective):
+    """Each player's net captures after pairwise cancellation, as glyph
+    strings: (bottom player's tray, top player's tray). A surplus of a
+    type for one side means the OTHER side lost those pieces - they sit
+    in the first side's tray."""
+    order = (chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT, chess.PAWN)
+    ours, theirs = [], []
+    for pt in order:
         net = len(board.pieces(pt, perspective)) - len(board.pieces(pt, not perspective))
         glyph = chess.UNICODE_PIECE_SYMBOLS[chess.piece_symbol(pt)]
-        (mine if net > 0 else theirs).extend(glyph * abs(net))
-        points += values[pt] * net
-    if not mine and not theirs:
-        return ""
-    sides = f'{"".join(mine) or "-"} vs {"".join(theirs) or "-"}'
-    return f"{sides} · {points:+d}" if points else sides
+        (ours if net > 0 else theirs).extend(glyph * abs(net))
+    return "".join(ours), "".join(theirs)
 
 
 async def get_engine_move(engine, board, limit, game_id, multipv, debug=False):
