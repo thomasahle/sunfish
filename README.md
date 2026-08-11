@@ -1,8 +1,7 @@
 ![Sunfish logo](https://raw.github.com/thomasahle/sunfish/master/docs/logo/sunfish_large.png)
 
-## Introduction
 Sunfish is a simple, but strong chess engine, written in Python. With its simple [UCI](http://wbec-ridderkerk.nl/html/UCIProtocol.html) interface, and removing comments and whitespace, it takes up just 136 lines of code! (`tools/build/clean.sh sunfish.py | wc -l`).
-Yet [it plays at ratings above 2000 at Lichess](https://lichess.org/@/sunfish-engine).
+
 
 There is also a (somewhat) stronger NNUE based sunfish, which you can also [play against on Lichess](https://lichess.org/@/sunfish-nnue-engine).
 It's only 4096 bytes for the whole engine, so the neuron network is very small.
@@ -11,11 +10,15 @@ Because Sunfish is small and strives to be simple, the code provides a great pla
 
 The name Sunfish refers to the [Pygmy Sunfish](http://en.wikipedia.org/wiki/Pygmy_sunfish), which is among the very few fish to start with the letters 'Py'. The use of a fish is in the spirit of great engines such as Stockfish, Zappa and Rybka. In terms of Heritage, Sunfish borrows much more from [Micro-Max by Geert Muller](http://home.hccnet.nl/h.g.muller/max-src2.html) and [PyChess](http://pychess.org).
 
-# Play against sunfish!
+## Play against sunfish!
 
-The simplest way to play against sunfish is:
+The easiest way to play against sunfish is [@sunfish-engine on Lichess](https://lichess.org/@/sunfish-engine), where you can also play against the stronger [@sunfish-nnue-engine](https://lichess.org/@/sunfish-nnue-engine) (see more below.)
+
+The second easiest way is to play in your terminal:
 <pre>
-$ <b>pip install sunfish && sunfish</b>
+$ <b>pip install sunfish</b>
+$ <b>sunfish</b>
+
 Playing against sunfish 2023.
 Do you want to be white or black? <b>black</b>
   1 ♖ ♘ ♗ ♔ ♕ ♗ ♘ ♖
@@ -43,14 +46,7 @@ Score: 23, nodes: 11752, nps: 13812, time: 0.9
 Your move (e.g. c6 or g8h6): <b>Nf6</b>
 </pre>
 
-(From a repo checkout: `sunfish_ui/fancy.py -cmd ./sunfish.py`. GUIs and tournament managers should use the raw UCI engine: `sunfish-uci`, or `./sunfish.py` from a checkout.)
-
-### Troubleshooting
-
-`./sunfish.py` automatically runs with `pypy3` if installed (recommended, much stronger), otherwise `python3`.
-If the engine fails to start, run `sunfish_ui/fancy.py` with `-debug` to see the underlying error,
-and make sure `python3` is on your PATH. On Windows, `.py` engines are launched
-through your current Python interpreter automatically.
+Or, from a repo checkout, just run `sunfish_ui/fancy.py -cmd ./sunfish.py`.
 
 ### Using sunfish with GUIs and tournament tools
 
@@ -75,6 +71,13 @@ The engine speaks UCI: point any tool at `sunfish-uci` (after
   (see [`docs/TESTING.md`](docs/TESTING.md) for the full methodology).
 
 
+### Troubleshooting
+
+`./sunfish.py` automatically runs with `pypy3` if installed (recommended, much stronger), otherwise `python3`.
+If the engine fails to start, run `sunfish_ui/fancy.py` with `-debug` to see the underlying error,
+and make sure `python3` is on your PATH. On Windows, `.py` engines are launched
+through your current Python interpreter automatically.
+
 ### Packing
 
 For a true minimalist experience, sunfish can be packed as a single executable of less than 3kb:
@@ -86,6 +89,8 @@ $ <b>./packed.sh</b>
 info depth 1 score cp 0 pv d2d4
 bestmove d2d4
 </pre>
+
+This version uses a [simplified UCI protocol by the TCEC 4k rules](https://wiki.chessdom.org/TCEC_4k_Rules#:~:text=A%204K%20UCI%20protocol%20is%20used).
 
 ### NNUE version
 
