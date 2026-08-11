@@ -517,6 +517,7 @@ class Searcher:
     def __init__(self):
         self.tp_score, self.tp_move, self.history = {}, {}, set()
         self.nodes, self.deadline = 0, 1 << 63
+        self.hh = {}                        # (piece,to) -> cutoff credit
 
     def bound(self, pos, gamma, depth, root=False):
         """ Let s* be the score of the sub-tree from pos at this depth, as
@@ -658,7 +659,14 @@ class Searcher:
             # filtering BEFORE the sort skips sorting the sub-threshold tail
             # (most of the list at QS nodes), and is literally the model's
             # movesAbove form (formal/Sunfish/Stalemate.lean).
-            for val, move in sorted(((v, m) for m in pos.gen_moves() if (v:=pos.value(m)) >= val_lower), reverse=True):
+            # Order key = static value + history credit; the ADMISSION test
+            # and the futility val stay the static pos.value (the sort may
+            # reorder, never re-admit -- the killer/tp_move ordering
+            # precedent covers this invariance class).
+            hh = self.hh
+            for _, val, move in sorted(((v + hh.get((pos.board[m.i], m.j), 0), v, m)
+                                        for m in pos.gen_moves()
+                                        if (v:=pos.value(m)) >= val_lower), reverse=True):
                 # If the new score is less than gamma, the opponent will for sure just
                 # stand pat, since ""pos.score + val < gamma === -(pos.score + val) >= 1-gamma""
                 # This is known as futility pruning.
@@ -686,6 +694,8 @@ class Searcher:
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
                 if move is not None and depth:
+                    k = (pos.board[move.i], move.j)
+                    self.hh[k] = self.hh.get(k, 0) + depth * depth
                     self.tp_move[pos] = move
                     # Never evict the current search root: its killer is the
                     # answer go_loop plays, and once the table churns more
@@ -724,6 +734,7 @@ class Searcher:
         """Iterative deepening MTD-bi search"""
         self.nodes, self.history = 0, set(history)
         self.tp_score.clear()
+        self.hh.clear()
         # Table choice is fixed for the whole search (and tp_score is
         # cleared above), so every bound targets one value function.
         pos = self.root = history[-1]
