@@ -18,9 +18,12 @@ usage: embed_tables.py NET_IN NET_OUT     (either .sfnn or .pickle in,
 import os
 import sys
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))))
+_here = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, _here)
+# classic lives at the repo root (two above nnue_4k/packed) or, on the
+# bench box's flat training dir, one above -- put both on the path
+sys.path.insert(0, os.path.dirname(_here))
+sys.path.insert(0, os.path.dirname(os.path.dirname(_here)))
 import pnet
 import sunfish as classic
 
