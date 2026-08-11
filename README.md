@@ -44,16 +44,6 @@ Your move (e.g. c6 or g8h6): <b>Nf6</b>
 </pre>
 
 (From a repo checkout: `sunfish_ui/fancy.py -cmd ./sunfish.py`. GUIs and tournament managers should use the raw UCI engine: `sunfish-uci`, or `./sunfish.py` from a checkout.)
-For a true minimalist experience, first we can "pack" sunfish into a compressed executable (less than 3KB!) and run it directly:
-<pre>
-$ <b>tools/build/pack.sh sunfish.py packed.sh</b>
-Total length: 2953
-$ <b>./packed.sh</b>
-<b>go wtime 1000 btime 1000 winc 1000 binc 1000</b>
-info depth 1 score cp 0 pv d2d4
-bestmove d2d4
-</pre>
-(See the [UCI specification](http://wbec-ridderkerk.nl/html/UCIProtocol.html) for the full set of commands.)
 
 ### Troubleshooting
 
@@ -83,13 +73,19 @@ The engine speaks UCI: point any tool at `sunfish-uci` (after
                 -each proto=uci tc=30+1 -rounds 10 -games 2
 
   (see [`docs/TESTING.md`](docs/TESTING.md) for the full methodology).
-* **Lichess**: play [sunfish-engine](https://lichess.org/@/sunfish-engine)
-  or its NNUE sibling
-  [sunfish-nnue-engine](https://lichess.org/@/sunfish-nnue-engine) —
-  both run as bots around the clock.
 
-You can also play against [Recursing's Rust port](https://github.com/Recursing/sunfish_rs)
-[on Lichess](https://lichess.org/@/sunfish_rs).
+
+### Packing
+
+For a true minimalist experience, sunfish can be packed as a single executable of less than 3kb:
+<pre>
+$ <b>tools/build/pack.sh sunfish.py packed.sh</b>
+Total length: 2953
+$ <b>./packed.sh</b>
+<b>go wtime 1000 btime 1000 winc 1000 binc 1000</b>
+info depth 1 score cp 0 pv d2d4
+bestmove d2d4
+</pre>
 
 ### NNUE version
 
@@ -164,7 +160,7 @@ Here is a (very incomplete) list of interesting derivatives:
 
 * [μSunfish](https://github.com/fizban99/micropython-usunfish) - A heavily reworked MicroPython Sunfish derivative for ESP32-class microcontrollers, with bounded memory, stronger search, configurable skill levels, and UCI support.
 * [Numbfish](https://github.com/dimdano/numbfish) - A compact Sunfish-based Python engine that adds an incrementally updated NumPy NNUE evaluation.
-* [sunfish_rs](https://github.com/Recursing/sunfish_rs) - A Rust port of Sunfish that preserves much of its search architecture while using more native Rust representations.
+* [sunfish_rs](https://github.com/Recursing/sunfish_rs) - A Rust port of Sunfish that preserves much of its search architecture while using more native Rust representations. ([Lichess bot](https://github.com/Recursing/sunfish_rs)).
 * [Carnatus](https://github.com/zserge/carnatus) - A small Go port of Sunfish intended to keep the engine minimal but readable.
 * [Sunfish.js](https://github.com/foo123/sunfish.js) - A JavaScript port of Sunfish designed to run under Node.js or directly in a browser via a web worker.
 * [Chess.Mojo](https://github.com/vietanhdev/chess.mojo) - A Sunfish-based UCI chess engine used as a proof of concept for the Mojo programming language.
