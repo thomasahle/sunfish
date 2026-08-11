@@ -380,10 +380,25 @@ def run(sunfish_module, startpos):
                         # we always consider ourselves white, but uci doesn't
                         if len(hist) % 2 == 0:
                             wtime, winc = btime, binc
-                        # Without movestogo, assume the game lasts another
-                        # 40 moves.
-                        movestogo = opts.get("movestogo", 40)
-                        think = min(wtime / movestogo + winc, wtime / 2 - 1)
+                        movestogo = opts.get("movestogo")
+                        if movestogo:
+                            # an explicit movestogo is a real constraint
+                            think = min(wtime / movestogo + winc, wtime / 2 - 1)
+                        else:
+                            # Increment-aware budget (11-game production
+                            # audit): t/40+inc structurally underspent the
+                            # clock -- 2.9s of a 35s clock at +2s, median
+                            # depth 7 at EVERY TC from 60+1 to 300+5, zero
+                            # time-pressure blunders, and 57% of rating
+                            # bleed was sub-150cp depth-ceiling drift.
+                            # /12 + 0.9*inc front-loads the middlegame
+                            # where depth buys Elo; worst-case spend sims
+                            # keep >=4s of clock at all tested TCs, the
+                            # wtime/2 cap floors tiny clocks, and the
+                            # armed in-search deadline guards the hard
+                            # edge.  Validated per TESTING.md rule 5
+                            # (multi-TC + per-move curves).
+                            think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1)
                         # Play the opening quickly: early moves benefit
                         # least from deep search, and banked time is worth
                         # more in the middlegame. Opening ONLY (an unscoped

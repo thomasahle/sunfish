@@ -872,7 +872,9 @@ def main():
             times = dict(zip(args[1::2], map(int, args[2::2])))
             side = "wb"[len(hist) % 2 == 0]
             wtime, winc = times.get(side + "time", 60000), times.get(side + "inc", 0)
-            think = min(wtime / 40 + winc, wtime / 2 - 1000)
+            # increment-aware budget; see sunfish_ui/uci.py for the audit
+            # numbers and the safety argument
+            think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1000)
             think = times.get("movetime", think) / 1000
 
             start = time.time()
