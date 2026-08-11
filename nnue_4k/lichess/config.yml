@@ -38,7 +38,7 @@ greeting:
   hello: "Hi {opponent}! I'm sunfish-nnue by Thomas D. Ahle - my whole neural net lives in one big integer. Good luck!"
   goodbye: "Good game! Play me again any time, or read my source at github.com/thomasahle/sunfish"
   hello_spectators: "Hi! I'm {me}, a tiny open-source Python NNUE engine (github.com/thomasahle/sunfish)"
-  goodbye_spectators: "Thanks for watching!"
+  goodbye_spectators: "Good game! Thanks for watching!"
 
 challenge:
   concurrency: 1

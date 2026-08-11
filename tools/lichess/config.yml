@@ -53,7 +53,7 @@ greeting:
   hello: "Hi {opponent}! I'm sunfish, a tiny python chess engine by Thomas D. Ahle. Good luck and have fun!"
   goodbye: "Good game! Play me again any time, or read my source at github.com/thomasahle/sunfish"
   hello_spectators: "Hi! I'm {me}, a tiny open-source Python chess engine (github.com/thomasahle/sunfish)"
-  goodbye_spectators: "Thanks for watching!"
+  goodbye_spectators: "Good game! Thanks for watching!"
 
 matchmaking:
   allow_matchmaking: false
