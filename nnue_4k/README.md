@@ -42,40 +42,6 @@ The packed representation (`packed/pnet.py` documents every invariant):
   tail, a material-phase output scale) are implemented end-to-end and
   verified, but currently *not* deployed: see the lesson below.
 
-## The lesson the ledger paid for
-
-Quiet-position validation loss does **not** measure search-friendliness.
-The best-val net ever trained here (`kbbil`, val 0.00750) lost −99 field
-Elo in a round-robin against nets it dominated on val: its eval shape
-pegged the ±600 clip 3× as often as every good net on real game
-positions and inflated the search tree. Every candidate now passes
-`packed/shapecheck.py` — clip-pegging rate over a frozen set of 1500
-real-game positions, calibrated against four nets with known play — 
-before any packed build or match. The tool's docstring records the
-proxies that *failed* validation so they don't get re-invented.
-
-## Results (bench box, fastchess, paired openings, ±95% CIs)
-
-| measurement | TC | result |
-|---|---|---|
-| packed128 v1 vs classic | 60+1, 480g | **+96 ± 55** |
-| packed256 v1 vs classic | 60+1, 480g | +100 ± 54 |
-| packed128 v2 vs classic (pairwise) | 30+1, 200g | +193 |
-| packed128 kb4 vs classic (pairwise) | 30+1, 200g | +205 |
-| packed128 kb8 vs kb4 (pairwise) | 30+1, 126g | +96 |
-| vs molly (TCEC 4k field) | 30+1, 100g | 21.5% (classic: 10.5%) |
-| vs 4k.c / STRO4K | 30+1, 100g each | shutouts (depth class gap) |
-
-Validation-loss ladder (fixed 200k val split): v2 0.00875 → kb4 0.00825
-→ kb8 0.00800 → 256kb8@100M **0.00731** (best deployable). The frozen
-net in this directory is `net128kb8.sfnn` (val 0.00800, the strongest
-*play-confirmed* artifact at freeze time).
-
-> Renamed 2026-08-11: this engine file was `sunfish_packed.py` through
-> the development branch's history — the commit ledger refers to it by
-> that name. "Packed" belongs to the big-int lane representation and
-> the ≤4096-byte artifact; the file is the NNUE engine.
-
 ## The 4k build
 
 ```
