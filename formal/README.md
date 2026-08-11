@@ -1362,6 +1362,17 @@ abstractions, each with its justification:
   them), which is why the spec carries the in-band hypothesis — as does
   `boundD2_spec`, for the same reason.
 
+### Re-audit (post-release polish, 2026-08-11)
+
+Formatting pass (120-char lines, inlined single-statement bodies) plus
+two semantic changes, both covered by existing abstractions: the QS
+threshold moved from a break to a filter (which IS the model's
+`movesAbove` form — the sort-order-equivalence bridge is now a direct
+correspondence), and the null-move gate dropped its `abs(score) < 500`
+cap after a 900-game guard tournament measured every sane variant
+within noise (the model's `guard : Pos → Bool` abstracts the predicate;
+`nullGuard`'s mapping row updates to the piece test alone).
+
 ### Landing note (the #158 review, 2026-08-11)
 
 The SHIPPED consumer is now the DOUBLE-PRIMED design: the terminal-veto
