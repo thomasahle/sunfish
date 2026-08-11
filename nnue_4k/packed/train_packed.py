@@ -134,9 +134,12 @@ PIDX = {c: i for i, c in enumerate(PIECES)}
 KBF = pnet.kbucket8 if args.kb == 8 else pnet.kbucket
 KBMUL = args.kb if args.kb > 1 else 4
 
-# classic sunfish's piece-square tables, verbatim (repo root, two levels up)
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(
-    os.path.abspath(__file__)))))
+# classic sunfish's piece-square tables, verbatim.  In the repo, classic
+# lives at the root (nnue_4k/packed/ is two below); on the bench box the
+# training dir is flat (packed/ one below) -- put both parents on the path.
+_here = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, os.path.dirname(_here))
+sys.path.insert(0, os.path.dirname(os.path.dirname(_here)))
 import sunfish as classic
 PST = classic.pst
 
