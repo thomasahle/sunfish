@@ -244,7 +244,7 @@ async def play(engine, board, selfplay, pvs, time_limit, debug=False):
             move = await get_engine_move(
                 engine, board, time_limit, game_id, pvs, debug=debug
             )
-            print(f" My move: {board.san(move)}")
+            print(f"\n My move: {board.san(move)}")
         board.push(move)
 
     # Print status
