@@ -691,8 +691,11 @@ class Searcher:
         for move, score in moves():
             best, best_real = max(best, score), max(best_real, score) if move else best_real
             if best >= gamma:
-                # Save the move for pv construction and killer heuristic
-                if move is not None:
+                # Save the move for pv construction and killer heuristic.
+                # The depth gate (classic 07912ac, +42 Elo): the depth-0
+                # frontier no longer churns the killer table, so deep
+                # killers survive to order deep nodes.
+                if move is not None and depth:
                     self.tp_move[pos] = move
                     # Never evict the current search root: its killer is the
                     # answer the go loop plays, and once the table churns
