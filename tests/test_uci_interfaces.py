@@ -47,6 +47,10 @@ import sunfish_ui.uci as uci  # noqa: E402
 # The FEN from issue #156's reproduction: Black to move, so an engine that
 # ignored the command and searched the initial position answers a White move.
 BLACK_TO_MOVE_FEN = "rnbqkbnr/ppp1p1pp/8/3pPp2/8/8/PPPP1PPP/RNBQKBNR b KQkq - 1 4"
+TERMINAL_FENS = [
+    "7k/6Q1/6K1/8/8/8/8/8 b - - 0 1",  # checkmate
+    "7k/5Q2/6K1/8/8/8/8/8 b - - 0 1",  # stalemate
+]
 
 # Mirrors `sed '/# minifier-hide start/,/# minifier-hide end/d'`: whole lines,
 # from marker to marker, at any indentation (the bridge's markers are indented
@@ -243,6 +247,34 @@ def test_real_interface_answers_a_black_to_move_fen(tmp_path):
     assert move in board.legal_moves, (
         f"{reply} is not legal for {BLACK_TO_MOVE_FEN}; an engine that ignored "
         "the command and searched the initial position answers a White move")
+
+
+@pytest.mark.parametrize("fen", TERMINAL_FENS)
+def test_real_interface_returns_none_for_terminal_fen(tmp_path, fen):
+    script = make_engine_dir(tmp_path)
+    engine = UciEngine(script, tmp_path).handshake()
+    try:
+        engine.send("position fen " + fen)
+        reply = engine.bestmove(movetime=10)
+    finally:
+        engine.close()
+    assert reply == "(none)"
+
+
+@pytest.mark.parametrize("moves", [
+    "f2f3 e7e5 g2g4 d8h4",  # checkmate
+    ("e2e3 a7a5 d1h5 a8a6 h5a5 h7h5 a5c7 a6h6 h2h4 f7f6 "
+     "c7d7 e8f7 d7b7 d8d3 b7b8 d3h7 b8c8 f7g6 c8e6"),  # stalemate
+], ids=["checkmate", "stalemate"])
+def test_tiny_loop_returns_none_after_terminal_position(tmp_path, moves):
+    script = make_engine_dir(tmp_path, tiny=True, uci_module=False)
+    engine = UciEngine(script, tmp_path).handshake()
+    try:
+        engine.send("position startpos moves " + moves)
+        reply = engine.bestmove(movetime=10)
+    finally:
+        engine.close()
+    assert reply == "(none)"
 
 
 def run_to_completion(script, cwd, commands="uci\nisready\nquit\n", timeout=60):

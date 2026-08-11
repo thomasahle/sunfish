@@ -7,22 +7,21 @@ stories: the search was formally verified and got *simpler* for it, two
 families of production bugs were found and fixed, the engine became a
 proper package, and a strong NNUE sibling grew up next to it.
 
-### The engine (142 clean lines, ~3.3KB packed)
+### The engine (136 clean lines, ~3.3KB packed)
 
 - **The search's promises are now theorems.** The `bound()` docstring
   states the full contract — the fail-soft bracket, the exact promises
   (king-gone, capturable-node sentinel, verified mate/stalemate values,
-  the fail-high `tp_move` witness) — and every clause maps to a
-  machine-checked theorem in `formal/` (Lean 4, zero sorries, no
-  Mathlib). The correctness layer carries **no chess assumptions**;
+  and the narrower real-cutoff `tp_move` witness) — and every clause maps to
+  a machine-checked theorem in `formal/` (Lean 4, zero sorries, no Mathlib).
+  The correctness layer carries **no chess assumptions**;
   zugzwang can cost accuracy, never table consistency.
-- **Null-move fail-highs are verified before they may cut**: a real
-  king capture is substituted when one exists, and a mate-band claim is
-  settled by one probe at the band boundary — where a fail-soft report
-  is decisive in both directions. The chess assumption this replaced
-  ("you cannot be in zugzwang while delivering forced mate") is *false*
-  (witness: `8/6p1/6R1/k7/2K5/8/8/8 w`), which is why it had to be
-  computed rather than assumed.
+- **Null moves are capped at static evaluation plus one score bucket**:
+  `min(E + 15, pass)` is monotone, so one child probe preserves the
+  fail-soft contract and the old mate-boundary verification probe
+  disappears. The existing material and evaluation guards remain the
+  zugzwang defenses; the cap is a deliberate, regression-tested search-value
+  change, with its report transformer and score-band invariant proved in Lean.
 - **Mate/stalemate detection is verify-on-suspicion**: when no searched
   move proves legal, every generated move is checked with a board
   predicate, and verified terminals return their exact values
@@ -60,6 +59,9 @@ proper package, and a strong NNUE sibling grew up next to it.
   silently playing on with a reduced one.
 - **Long-TC time overruns**: deadlines are enforced inside the search
   (checked every 2048 nodes), not just between iterations.
+- **Finished-position UCI handling**: checkmate and stalemate roots return
+  `bestmove (none)` cleanly in both interfaces instead of dereferencing the
+  deliberately absent root move.
 
 ### Packaging and interfaces
 
