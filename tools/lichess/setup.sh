@@ -26,7 +26,17 @@ fi
 id -u sunfish &>/dev/null || useradd -r -m sunfish
 
 [ -d /opt/sunfish ] || git clone --depth 1 https://github.com/thomasahle/sunfish /opt/sunfish
-[ -d /opt/lichess-bot ] || git clone --depth 1 https://github.com/lichess-bot-devs/lichess-bot /opt/lichess-bot
+
+# The bridge, pinned to the commit the integration test runs against, plus
+# the production patch (lichess-bot.patch) the same test applies: overflow
+# games are aborted instead of silently starved, a dead event stream
+# restarts the bot instead of leaving it deaf, and a failed chat message can
+# no longer cancel the engine's move.  Pin + patch = the tested tree.
+LICHESS_BOT_COMMIT=bedd1d9e86a8c4c96319490533e4e20fe63d1ac8
+[ -d /opt/lichess-bot ] || git clone https://github.com/lichess-bot-devs/lichess-bot /opt/lichess-bot
+git -C /opt/lichess-bot fetch -q origin "$LICHESS_BOT_COMMIT"
+git -C /opt/lichess-bot checkout -q -f "$LICHESS_BOT_COMMIT"
+git -C /opt/lichess-bot apply /opt/sunfish/tools/lichess/lichess-bot.patch
 
 python3 -m venv /opt/lichess-bot/venv
 /opt/lichess-bot/venv/bin/pip install -q -r /opt/lichess-bot/requirements.txt
@@ -46,11 +56,15 @@ cp /opt/sunfish/tools/lichess/extra_game_handlers.py /opt/lichess-bot/
 # pull; repair with `chown -R sunfish:sunfish /opt/sunfish`.
 chown -R sunfish:sunfish /opt/lichess-bot /opt/sunfish
 
+chmod +x /opt/sunfish/tools/lichess/watchdog.sh
 cp /opt/sunfish/tools/lichess/sunfish-lichess.service /etc/systemd/system/
 cp /opt/sunfish/tools/lichess/sunfish-credit-gate.service /etc/systemd/system/
+cp /opt/sunfish/tools/lichess/sunfish-watchdog.service /etc/systemd/system/
+cp /opt/sunfish/tools/lichess/sunfish-watchdog.timer /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now sunfish-credit-gate
 systemctl enable --now sunfish-lichess
+systemctl enable --now sunfish-watchdog.timer
 
 echo
 echo "Done. Check status with:  systemctl status sunfish-lichess"

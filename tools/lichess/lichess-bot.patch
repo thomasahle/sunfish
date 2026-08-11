@@ -1,0 +1,245 @@
+diff --git a/lib/lichess.py b/lib/lichess.py
+index 891a771..bcf5c2f 100644
+--- a/lib/lichess.py
++++ b/lib/lichess.py
+@@ -169,7 +169,7 @@ class Lichess:
+                           giveup=is_final,
+                           on_backoff=backoff_handler,
+                           backoff_log_level=logging.DEBUG,
+-                          giveup_log_level=logging.DEBUG)
++                          giveup_log_level=logging.WARNING)
+     def api_get(self, endpoint_name: str, *template_args: str,
+                 params: dict[str, str] | None = None,
+                 stream: bool = False, timeout: int = 2) -> requests.Response:
+@@ -245,7 +245,7 @@ class Lichess:
+                           giveup=is_final,
+                           on_backoff=backoff_handler,
+                           backoff_log_level=logging.DEBUG,
+-                          giveup_log_level=logging.DEBUG)
++                          giveup_log_level=logging.WARNING)
+     def api_post(self,
+                  endpoint_name: str,
+                  *template_args: str,
+@@ -390,9 +390,17 @@ class Lichess:
+             logger.warning(f"This chat message is {len(text)} characters, which is longer "
+                            f"than the maximum of {MAX_CHAT_MESSAGE_LEN}. It will not be sent.")
+             logger.warning(f"Message: {text}")
++            return
+ 
+         data = {"room": room, "text": text}
+-        self.api_post("chat", game_id, data=data)
++        try:
++            self.api_post("chat", game_id, data=data)
++        except (HTTPError, ReadTimeout, RemoteDisconnected, RequestsConnectionError) as e:
++            # Chat is cosmetic. A failed chat message must never propagate an
++            # exception into the game loop, where it would cancel the move the
++            # engine owes (the state that prompted the move has already been
++            # consumed from the game stream, so the move would never be made).
++            logger.warning(f"Could not send chat message to the {room} room of game {game_id}: {e}")
+ 
+     def abort(self, game_id: str) -> None:
+         """Aborts a game."""
+diff --git a/lib/lichess_bot.py b/lib/lichess_bot.py
+index 63ab211..a9260c3 100644
+--- a/lib/lichess_bot.py
++++ b/lib/lichess_bot.py
+@@ -344,6 +344,7 @@ def lichess_bot_main(li: lichess.Lichess,
+     max_games = config.challenge.concurrency
+     reserved_for_humans = min(config.challenge.games_reserved_for_humans, max_games)
+     max_bot_games = max_games - reserved_for_humans
++    games_in_progress.clear()  # A restart abandons the old pool and its games.
+ 
+     one_game_completed = False
+ 
+@@ -387,6 +388,7 @@ def lichess_bot_main(li: lichess.Lichess,
+ 
+             if event["type"] == "local_game_done":
+                 active_games.pop(event["game"]["id"], None)
++                games_in_progress.discard(event["game"]["id"])
+                 matchmaker.game_done()
+                 log_proc_count("Freed", active_games)
+                 one_game_completed = True
+@@ -422,7 +424,8 @@ def lichess_bot_main(li: lichess.Lichess,
+                                              play_game_args,
+                                              active_games,
+                                              max_games)
+-            accept_challenges(li, challenge_queue, active_games, max_games, max_bot_games)
++            accept_challenges(li, challenge_queue, active_games, max_games, max_bot_games,
++                              int(bool(matchmaker.challenge_id)))
+             matchmaker.challenge(active_games, challenge_queue, max_bot_games)
+             check_online_status(li, user_profile, last_check_online_time)
+ 
+@@ -440,12 +443,26 @@ def close_pool(pool: POOL_TYPE, active_games: dict[str, str], config: Configurat
+         pool.join()
+ 
+ 
++# A healthy lichess event stream sends a keepalive line every few seconds,
++# which arrives here as a "ping" event. If nothing arrives for this long, the
++# event stream (or the process reading it) is dead, even though the connection
++# may look fine, and the bot would otherwise wait forever while appearing
++# online. Restarting re-creates the stream process and its connection.
++EVENT_STREAM_SILENCE_LIMIT = seconds(60)
++
++
+ def next_event(control_queue: CONTROL_QUEUE_TYPE) -> EventType:
+     """Get the next event from the control queue."""
+     try:
+-        event = control_queue.get()
++        event = control_queue.get(timeout=to_seconds(EVENT_STREAM_SILENCE_LIMIT))
+         if event is None:
+             return {}
++    except Empty:
++        logger.error(f"No events or pings from the lichess event stream in the last "
++                     f"{to_seconds(EVENT_STREAM_SILENCE_LIMIT):.0f} seconds even though the stream "
++                     "pings every few seconds. The event stream is assumed dead. Restarting lichess-bot.")
++        stop.restart = True
++        return {}
+     except InterruptedError:
+         return {}
+ 
+@@ -487,7 +504,7 @@ def check_in_on_correspondence_games(pool: POOL_TYPE,
+         correspondence_games_to_start -= 1
+         correspondence_queue.task_done()
+         opponent_name = event["game"].get("opponent", {}).get("username", "")
+-        start_game_thread(active_games, game_id, opponent_name, play_game_args, pool)
++        start_game_thread(active_games, game_id, opponent_name, play_game_args, pool, max_games)
+ 
+ 
+ def start_low_time_games(low_time_games: list[GameType], active_games: dict[str, str], max_games: int,
+@@ -498,13 +515,19 @@ def start_low_time_games(low_time_games: list[GameType], active_games: dict[str,
+         low_time_game = low_time_games.pop(0)
+         game_id = low_time_game["id"]
+         opponent_name = low_time_game.get("opponent", {}).get("username", "")
+-        start_game_thread(active_games, game_id, opponent_name, play_game_args, pool)
++        start_game_thread(active_games, game_id, opponent_name, play_game_args, pool, max_games)
+ 
+ 
+ def accept_challenges(li: lichess.Lichess, challenge_queue: MULTIPROCESSING_LIST_TYPE, active_games: dict[str, str],
+-                      max_games: int, max_bot_games: int) -> None:
+-    """Accept a challenge."""
+-    while len(active_games) < max_games and challenge_queue:
++                      max_games: int, max_bot_games: int, pending_outgoing_challenges: int = 0) -> None:
++    """
++    Accept a challenge.
++
++    :param pending_outgoing_challenges: The number of not-yet-answered challenges this bot has sent (matchmaking).
++        Each one reserves a game slot: if the opponent accepts it while we also accept an incoming challenge,
++        more games than `challenge.concurrency` start at once.
++    """
++    while len(active_games) + pending_outgoing_challenges < max_games and challenge_queue:
+         chlng = challenge_queue[0]
+         if chlng.from_self:
+             challenge_queue.pop(0)
+@@ -562,9 +585,37 @@ def game_is_active(li: lichess.Lichess, game_id: str) -> bool:
+     return game_id in (ongoing_game["gameId"] for ongoing_game in active_games)
+ 
+ 
++# Games that currently hold a process in the pool. This differs from
++# `active_games`, which also counts accepted challenges whose game has not
++# started yet.
++games_in_progress: set[str] = set()
++
++
+ def start_game_thread(active_games: dict[str, str], game_id: str, opponent_name: str,
+-                      play_game_args: PlayGameArgsType, pool: POOL_TYPE) -> None:
+-    """Start a game thread."""
++                      play_game_args: PlayGameArgsType, pool: POOL_TYPE, max_games: int) -> None:
++    """Start a game thread, or abort the game if no process would be free to play it."""
++    li = play_game_args["li"]
++    if len(games_in_progress) >= max_games and game_id not in games_in_progress:
++        # Races when starting games (e.g. an opponent accepting an outgoing
++        # matchmaking challenge just as an incoming challenge is accepted) can
++        # start more games than `challenge.concurrency`. A game past that
++        # limit must not be quietly queued behind the games already using the
++        # pool's processes -- it would sit unplayed until lichess abandons it.
++        # Abort it promptly instead: an aborted game is unrated and harmless.
++        logger.warning(f"Aborting game {game_id}: already playing {len(games_in_progress)} game(s) "
++                       f"with challenge.concurrency={max_games}. A game that cannot get a free "
++                       "process is aborted immediately rather than silently abandoned.")
++        try:
++            li.abort(game_id)
++            active_games.pop(game_id, None)
++            log_proc_count("Freed", active_games)
++            return
++        except (HTTPError, ReadTimeout) as e:
++            # Aborting fails once a game has two or more moves (e.g. a game
++            # rediscovered after a restart). Playing it with the pool's
++            # reserve process is better than abandoning it.
++            logger.warning(f"Could not abort game {game_id} ({e}). Playing it with the reserve process instead.")
++    games_in_progress.add(game_id)
+     active_games[game_id] = opponent_name
+     log_proc_count("Used", active_games)
+     play_game_args["game_id"] = game_id
+@@ -615,7 +666,7 @@ def start_game(event: EventType,
+         startup_correspondence_games.remove(game_id)
+     else:
+         opponent_name = event["game"].get("opponent", {}).get("username", "")
+-        start_game_thread(active_games, game_id, opponent_name, play_game_args, pool)
++        start_game_thread(active_games, game_id, opponent_name, play_game_args, pool, config.challenge.concurrency)
+ 
+ 
+ def enough_time_to_queue(event: EventType, config: Configuration) -> bool:
+@@ -724,6 +775,14 @@ def play_game(li: lichess.Lichess,
+             game_stream = itertools.chain([json.dumps(game.state).encode("utf-8")], lines)
+             quit_after_all_games_finish = config.quit_after_all_games_finish
+             stay_in_game = True
++            # True from when a game state says the engine must move until the
++            # move is made. If making the move raises (a failed chat message
++            # or move POST), the game state that prompted it has already been
++            # consumed from the stream, so nothing would ever trigger the move
++            # again: the game would sit until aborted for lack of activity.
++            # Instead, the move is retried when the next keepalive arrives.
++            move_due = False
++            move_retries = 0
+             while stay_in_game and (not stop.terminated or quit_after_all_games_finish) and not stop.force_quit:
+                 move_attempted = False
+                 try:
+@@ -737,6 +796,7 @@ def play_game(li: lichess.Lichess,
+                         takeback_field = game.state.get("btakeback") if game.is_white else game.state.get("wtakeback")
+ 
+                         if not is_game_over(game) and is_engine_move(game, prior_game, board):
++                            move_due = True
+                             disconnect_time = correspondence_disconnect_time
+                             say_hello(conversation, hello, hello_spectators, board)
+                             setup_timer = Timer()
+@@ -752,6 +812,8 @@ def play_game(li: lichess.Lichess,
+                                              correspondence_move_time,
+                                              engine_cfg,
+                                              fake_think_time(config, board, game))
++                            move_due = False
++                            move_retries = 0
+                             time.sleep(to_seconds(delay))
+                         elif is_game_over(game):
+                             tell_user_game_result(game, board)
+@@ -770,8 +832,29 @@ def play_game(li: lichess.Lichess,
+                         terminate_time = msec(wbtime) + msec(wbinc) + seconds(60)
+                         game.ping(abort_time, terminate_time, disconnect_time)
+                         prior_game = copy.deepcopy(game)
+-                    elif u_type == "ping" and should_exit_game(board, game, prior_game, li, is_correspondence):
+-                        stay_in_game = False
++                    elif u_type == "ping":
++                        if move_due and not is_game_over(game) and move_retries < 5:
++                            move_retries += 1
++                            logger.warning(f"An engine move is due in {game.url()} but an earlier attempt to make "
++                                           f"it was interrupted. Retrying (attempt {move_retries}).")
++                            setup_timer = Timer()
++                            print_move_number(board)
++                            move_attempted = True
++                            engine.play_move(board,
++                                             game,
++                                             li,
++                                             setup_timer,
++                                             move_overhead,
++                                             can_ponder,
++                                             is_correspondence,
++                                             correspondence_move_time,
++                                             engine_cfg,
++                                             fake_think_time(config, board, game))
++                            move_due = False
++                            move_retries = 0
++                            time.sleep(to_seconds(delay))
++                        elif should_exit_game(board, game, prior_game, li, is_correspondence):
++                            stay_in_game = False
+                 except (HTTPError, ReadTimeout, RemoteDisconnected, ChunkedEncodingError, RequestsConnectionError,
+                         StopIteration) as e:
+                     stopped = isinstance(e, StopIteration)

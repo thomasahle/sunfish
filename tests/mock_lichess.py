@@ -399,6 +399,11 @@ class MockLichess:
         self.challenges: dict[str, dict] = {}  # id -> {"json": ..., "params": ...}
         self.declined: dict[str, str] = {}  # challenge id -> decline reason
         self.event_stream_connections = 0
+        # (host, port) of every client that connected to /api/stream/event,
+        # in connection order. The last entry is the live connection; its
+        # port identifies which OS process holds the stream (lichess-bot
+        # reads it from a child process).
+        self.event_stream_clients: list[tuple] = []
         self._game_counter = 0
         self._closing = threading.Event()
 
@@ -476,6 +481,29 @@ class MockLichess:
         self.push_event({"type": "challenge", "challenge": challenge_json,
                          "compat": {"bot": True, "board": False}})
         return challenge_id
+
+    def start_direct_game(self, bot_plays_white: bool = True, clock_limit: int = 60,
+                          clock_increment: int = 0, opponent_delay=0.0,
+                          move_cap: int = 200, rated: bool = False, seed=None) -> str:
+        """Start a game without any challenge/accept exchange; returns the game id.
+
+        This is legitimate wire behavior: lichess emits a bare gameStart when
+        an *outgoing* challenge (matchmaking) is accepted by the opponent, and
+        replays gameStart for ongoing games whenever the event stream
+        (re)connects.  The bot never gets to accept or reserve these games --
+        exactly the race that overflows challenge.concurrency.
+        """
+        self._game_counter += 1
+        game_id = f"dirGam{self._game_counter:02d}"
+        game = Game(self, game_id,
+                    bot_color=chess.WHITE if bot_plays_white else chess.BLACK,
+                    clock_limit=clock_limit, clock_increment=clock_increment,
+                    opponent_delay=opponent_delay, move_cap=move_cap,
+                    rated=rated, seed=seed)
+        self.games[game_id] = game
+        game.start()
+        self.push_event({"type": "gameStart", "game": game.event_info_json()})
+        return game_id
 
     # -- internal ----------------------------------------------------------
 
@@ -592,8 +620,16 @@ def _make_handler(server: MockLichess):
 
         def _serve_event_stream(self) -> None:
             server.event_stream_connections += 1
+            server.event_stream_clients.append(self.client_address)
             self._start_ndjson()
             try:
+                # Like lila: a (re)connecting event stream first receives the
+                # current state -- a gameStart for every ongoing game.  This
+                # is what lets a restarted bot resume its live games.
+                for game in list(server.games.values()):
+                    if game.status == "started":
+                        self._write_line({"type": "gameStart",
+                                          "game": game.event_info_json()})
                 while not server._closing.is_set():
                     try:
                         event = server.events.get(timeout=KEEPALIVE_SECONDS)

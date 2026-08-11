@@ -56,6 +56,14 @@ Notes:
   available interpreter), with pondering enabled.
 - `config.yml` here is a template; `setup.sh` copies it and fills in the
   token. It accepts casual + rated standard games at bullet/blitz/rapid.
+- lichess-bot is pinned and patched: `setup.sh` checks out the same commit
+  the bot-integration CI tests, then applies `lichess-bot.patch` (2026-08-11
+  production fixes: overflow games beyond `challenge.concurrency` are
+  aborted promptly instead of silently starved; a dead event stream
+  restarts the bot instead of leaving it deaf-but-online; a failed chat
+  POST can no longer cancel the engine's move). `watchdog.sh` +
+  `sunfish-watchdog.timer` restart the service if lichess says a move is
+  pending for us while the journal sits silent for 90 s.
 - On a 1GB VM keep `TABLE_SIZE` at `50000` (~120MB peak RSS); setup.sh also
   adds 1GB of swap as a safety margin. See "Sizing TABLE_SIZE" below.
 
