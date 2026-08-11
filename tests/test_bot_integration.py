@@ -99,7 +99,9 @@ ACCEPT_TIMEOUT = 60  # challenge event -> accepted -> gameStart
 GAME_TIMEOUT = 240  # both clocks are 60s; a finished 60+0 game fits easily
 MAX_MOVE_SECONDS = 12.0  # any move: lichess-bot searches a full 10 s for the
 # first, and the engine is entitled to all of it; allow IO/runner overhead
-MAX_LATER_MOVE_SECONDS = 4.0  # moves after the first (sunfish thinks ~1.5 s)
+MAX_LATER_MOVE_SECONDS = 7.0  # stall detector, not a budget: the think
+# formula is wtime/12 + 0.9*inc (~5s on the mock's 60s clock); a hung
+# engine shows as 30s+, so 7s separates the regimes cleanly
 ABORT_WINDOW = 30.0  # a game the bot cannot play must be aborted this fast
 # (lichess abandons an unserved game after 1-2 minutes; production T ~ 15 s)
 
