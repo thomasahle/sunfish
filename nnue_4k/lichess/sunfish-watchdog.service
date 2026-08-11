@@ -1,0 +1,6 @@
+[Unit]
+Description=sunfish lichess bot liveness watchdog
+
+[Service]
+Type=oneshot
+ExecStart=/opt/sunfish/nnue_4k/lichess/watchdog.sh sunfish-packed

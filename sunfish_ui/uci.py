@@ -141,6 +141,18 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
     # current depth's candidate only if no depth ever completed. The pv
     # walk is used for the ponder hint only when it agrees with what we
     # actually play - tp_move[root] can hold a mid-dive artifact.
+    # Diagnostic tripline for the unexplained early-return reports (~3/28
+    # local once, 0.1-0.2s against a >1s budget; NOT reproduced in 260
+    # scripted go/ponderhit/stop cycles).  A timed search that ends far
+    # under budget without a stop announces itself -- "info string" is
+    # spec-legal, GUIs and lichess-bot log it, so a live occurrence
+    # self-documents instead of vanishing.
+    elapsed = time.perf_counter() - start
+    if (elapsed < max_movetime / 3 and max_movetime < 10**5
+            and not stop_event.is_set() and last_depth < 5):
+        print(f"info string EARLY-RETURN-DIAG elapsed={elapsed:.3f} "
+              f"budget={max_movetime:.2f} depth={last_depth} "
+              f"deadline_in={(searcher.deadline or 0) - time.time():.3f}")
     played = best_move or cand
     my_pv = pv(searcher, hist[-1], include_scores=False)
     if played and len(my_pv) > 1 and my_pv[0] == played:
@@ -368,10 +380,25 @@ def run(sunfish_module, startpos):
                         # we always consider ourselves white, but uci doesn't
                         if len(hist) % 2 == 0:
                             wtime, winc = btime, binc
-                        # Without movestogo, assume the game lasts another
-                        # 40 moves.
-                        movestogo = opts.get("movestogo", 40)
-                        think = min(wtime / movestogo + winc, wtime / 2 - 1)
+                        movestogo = opts.get("movestogo")
+                        if movestogo:
+                            # an explicit movestogo is a real constraint
+                            think = min(wtime / movestogo + winc, wtime / 2 - 1)
+                        else:
+                            # Increment-aware budget (11-game production
+                            # audit): t/40+inc structurally underspent the
+                            # clock -- 2.9s of a 35s clock at +2s, median
+                            # depth 7 at EVERY TC from 60+1 to 300+5, zero
+                            # time-pressure blunders, and 57% of rating
+                            # bleed was sub-150cp depth-ceiling drift.
+                            # /12 + 0.9*inc front-loads the middlegame
+                            # where depth buys Elo; worst-case spend sims
+                            # keep >=4s of clock at all tested TCs, the
+                            # wtime/2 cap floors tiny clocks, and the
+                            # armed in-search deadline guards the hard
+                            # edge.  Validated per TESTING.md rule 5
+                            # (multi-TC + per-move curves).
+                            think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1)
                         # Play the opening quickly: early moves benefit
                         # least from deep search, and banked time is worth
                         # more in the middlegame. Opening ONLY (an unscoped
@@ -449,6 +476,11 @@ def from_fen(board, color, castling, enpas, _hclock, _fclock):
     wc = ("Q" in castling, "K" in castling)
     bc = ("k" in castling, "q" in castling)
     ep = sunfish.parse(enpas) if enpas != "-" else 0
+    if hasattr(sunfish, 'from_board'):
+        # engines carrying an evaluation accumulator (nnue_4k) build the
+        # position, and the accumulator, themselves
+        pos = sunfish.from_board(board, wc, bc, ep, 0)
+        return pos if color == 'w' else pos.rotate()
     if hasattr(sunfish, 'features'):
         wf, bf = sunfish.features(board)
         pos = sunfish.Position(board, 0, wf, bf, wc, bc, ep, 0)

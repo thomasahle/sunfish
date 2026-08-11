@@ -347,7 +347,7 @@ def test_contract_covers_every_attribute_the_interface_reads():
     ENGINE_API nor explicitly optional is a silent AttributeError waiting for
     whichever command happens to reach it.
     """
-    optional = {"TABLE_SIZE", "features", "pst"}  # hasattr-guarded at use
+    optional = {"TABLE_SIZE", "features", "from_board", "pst"}  # hasattr-guarded at use
     unaccounted = engine_attributes_used_by_uci() - set(uci.ENGINE_API) - optional
     assert not unaccounted, (
         f"{sorted(unaccounted)} read off the engine module but not declared in "

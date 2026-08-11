@@ -1,0 +1,64 @@
+# lichess-bot configuration for the packed-NNUE sunfish.
+# Copied to /opt/lichess-bot/config.yml by setup.sh, which fills in the token.
+token: "YOUR_TOKEN_HERE"
+url: "https://lichess.org/"
+
+engine:
+  dir: "/opt/sunfish"
+  name: "nnue_4k/sunfish_packed.py"
+  working_dir: "/opt/sunfish"
+  protocol: "uci"
+  ponder: true
+  # Engine 10 niceness levels below the bot's event loop (classic's
+  # production lesson: at equal priority a deep ponder search starved the
+  # loop reading the opponent's move -- a 23 s stall flagged a won game).
+  # The polyglot header execs pypy3, inheriting the niceness.
+  interpreter: "nice"
+  interpreter_options:
+    - "-n"
+    - "10"
+  uci_options:
+    # Sized for 12 GB. A packed Position carries the accumulator big int
+    # (~1.2 kB at N=256 + bilinear lanes), and tp_score keys hold one per
+    # entry: ~2-3 kB resident per entry under pypy, tables bounded at
+    # 2 * TABLE_SIZE entries -> roughly 5-6 GB peak at 10^6.  That fits
+    # with room for pypy baseline + lichess-bot's pool; it also removes
+    # the eviction-pressure regime entirely (the root guard stays as
+    # belt-and-braces).  On a 1 GB box this must come DOWN to ~50000.
+    TABLE_SIZE: 1000000
+
+# SF_NET is inherited from the systemd unit's Environment= -- the engine
+# child gets it through lichess-bot.
+
+greeting:
+  # Lichess caps chat messages at 140 characters; every field must fit with a
+  # 20-character opponent name (tests/test_lichess_config.py enforces this).
+  # The 2026-08-11 incident: a 156+ char greeting was not just dropped -- its
+  # rejected POST cancelled the bot's first move in every game.
+  hello: "Hi {opponent}! I'm sunfish-nnue by Thomas D. Ahle - my whole neural net lives in one big integer. Good luck!"
+  goodbye: "Good game! Play me again any time, or read my source at github.com/thomasahle/sunfish"
+  hello_spectators: "Hi! I'm {me}, a tiny open-source Python NNUE engine (github.com/thomasahle/sunfish)"
+  goodbye_spectators: "Thanks for watching!"
+
+challenge:
+  concurrency: 1
+  # Bullet included: the A1 cores are dedicated (no credit throttle), the
+  # armed in-search deadline covers the deep-iteration overrun class, and
+  # the mock-lichess integration test plays 60+0 with pondering as its
+  # tightest case.  Live-config decision, mirrored here so redeploys
+  # keep it.
+  accept_bot: true
+  variants:
+    - standard
+  time_controls:
+    - bullet
+    - blitz
+    - rapid
+    - classical
+  min_increment: 1
+  modes:
+    - casual
+    - rated
+
+matchmaking:
+  allow_matchmaking: false

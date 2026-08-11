@@ -1,0 +1,34 @@
+[Unit]
+Description=Sunfish Oracle cost tripwire (maintains /run/sunfish-costgate)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# The lichess-bot venv holds the oci sdk (setup.sh installs it there); the
+# daemon is a slow poller and must never compete for CPU with the engine.
+ExecStart=/opt/lichess-bot/venv/bin/python /opt/sunfish/nnue_4k/lichess/cost_gate.py \
+    --daemon --flag /run/sunfish-costgate \
+    --state /var/lib/sunfish/cost-gate.json
+Nice=19
+CPUWeight=1
+Restart=always
+RestartSec=60
+
+StateDirectory=sunfish
+# NO RuntimeDirectory here: systemd would create /run/sunfish-costgate as a
+# DIRECTORY and collide with the flag FILE of the same path -- the daemon
+# then crashloops on IsADirectoryError (found live at first deploy).
+# ReadWritePaths=/run below is what actually grants the flag write.
+ProtectSystem=strict
+ReadWritePaths=/run /var/lib/sunfish
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+
+# A dead daemon must not strand a stale lockout: the handler already ignores
+# stale flags, and we also remove it on stop -- belt and braces both ways.
+ExecStopPost=/bin/rm -f /run/sunfish-costgate
+
+[Install]
+WantedBy=multi-user.target
