@@ -202,7 +202,9 @@ def parse_lines(lines):
 def parse(path, limit, workers=0):
     proc = subprocess.Popen(["zstd", "-d", "-c", path], stdout=subprocess.PIPE,
                             stderr=subprocess.DEVNULL, text=True)
-    FEATS, OFFS, PSTC, Y = array("i"), array("i"), array("i"), array("i")
+    # OFFS is 64-bit: cumulative feature offsets pass 2^31 just beyond 100M
+    # positions (~21 features each) -- array("i") overflowed there
+    FEATS, OFFS, PSTC, Y = array("i"), array("q"), array("i"), array("i")
     KB = array("b")
     off = 0
 
