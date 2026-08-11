@@ -489,6 +489,16 @@ else:
     val_ids, train_ids = perm[:nval], perm[nval:]
 
 
+COMP = None
+if args.compboost:
+    COMP = ((pstc <= -200) & (ys >= 50)) | ((pstc >= 200) & (ys <= -50))
+    boost = [i for i in train_ids if COMP[i]]
+    train_ids = train_ids + boost * (args.compboost - 1)
+    print("compboost: %d compensation positions x%d -> effective share %.1f%%"
+          % (len(boost), args.compboost,
+             100.0 * len(boost) * args.compboost / len(train_ids)), flush=True)
+
+
 def batches(ids, bs, shuffle=True):
     ids = ids[:]
     if shuffle:
@@ -585,20 +595,27 @@ for epoch in range(args.epochs):
     sched.step()
     model.eval()
     vl = vn = mae = sat = 0
+    cvl = cvn = 0.0
     with torch.no_grad():
         for fi, mi, fo, ps, y in batches(val_ids, args.batch, shuffle=False):
             pred = model(fi, mi, fo, ps)
-            vl += ((torch.sigmoid(pred / K) - torch.sigmoid(y / K)) ** 2).mean().item() * len(y)
+            se = (torch.sigmoid(pred / K) - torch.sigmoid(y / K)) ** 2
+            vl += se.mean().item() * len(y)
             mae += (pred - y).abs().clamp(max=1000).mean().item() * len(y)
             sat += ((pred - ps).abs() >= CLAMP - 0.5).sum().item()
             vn += len(y)
+            if COMP is not None:
+                cm = ((ps <= -200) & (y >= 50)) | ((ps >= 200) & (y <= -50))
+                cvl += se[cm].sum().item()
+                cvn += cm.sum().item()
     tag = ""
     if vl / vn < best:
         best = vl / vn
         shift, worst, sabs, d = export(args.out)
         tag = "  -> wrote %s (shift %d sum|v| %.0f excursion %d)" % (
             args.out, shift, sabs, d["excursion"])
-    print("epoch %d: train %.5f  val %.5f  val-MAE %.0f cp  clip-saturated %.2f%%%s"
-          % (epoch, tl / tn, vl / vn, mae / vn, 100.0 * sat / vn, tag), flush=True)
+    comptag = "  comp-val %.5f (n=%d)" % (cvl / cvn, cvn) if cvn else ""
+    print("epoch %d: train %.5f  val %.5f  val-MAE %.0f cp  clip-saturated %.2f%%%s%s"
+          % (epoch, tl / tn, vl / vn, mae / vn, 100.0 * sat / vn, comptag, tag), flush=True)
 
 print("best val %.5f -> %s" % (best, args.out))
