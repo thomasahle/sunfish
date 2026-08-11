@@ -8,17 +8,17 @@ Oracle always-free ARM instance (A1, 2 OCPU / 12 GB, aarch64, Ubuntu).
 
 1. Freeze the build: pick the crowned net and the engine commit, tag it
    (`git tag lichess-packed-vN <commit>`), fill `ENGINE_TAG` and
-   `NET_SHA256` into `setup.sh`, commit that too. Deployments run tagged
+   `NET_SHA256` (of the `.sfnn` file) into `setup.sh`, commit that too. Deployments run tagged
    builds only -- `setup.sh` refuses placeholders and verifies the net
    hash.
-2. `scp` the net pickle to the instance.
+2. `scp` the `.sfnn` net file to the instance.
 3. As root: `setup.sh <LICHESS_BOT_TOKEN> <net.pickle>`.
 
 `setup.sh` installs pypy3 + the pinned lichess-bot bridge, then runs the
 `packed/verify.py` battery ON THE INSTANCE as a hard gate (lane integrity,
 incremental == from-scratch, engine == reference, exact antisymmetry) before
 enabling the systemd unit. What is running is recorded in
-`/opt/sunfish-packed/DEPLOYED.txt`.
+`/opt/sunfish/nnue_4k/DEPLOYED.txt`.
 
 ## aarch64 status
 

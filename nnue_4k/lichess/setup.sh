@@ -14,12 +14,12 @@ set -euo pipefail
 # ---- FROZEN BUILD PIN (fill at freeze time; deployment refuses to run
 # ---- with placeholders left in)
 ENGINE_TAG="FILL_ME_TAG"          # git tag in thomasahle/sunfish, packed-nnue lane
-NET_SHA256="FILL_ME_SHA256"       # sha256 of the packed net pickle
+NET_SHA256="FILL_ME_SHA256"       # sha256 of the .sfnn net file
 
 TOKEN="${1:-${LICHESS_TOKEN:-}}"
 NET="${2:-}"
 if [ -z "$TOKEN" ] || [ -z "$NET" ]; then
-    echo "Usage: setup.sh <LICHESS_BOT_TOKEN> <NET_FILE>" >&2
+    echo "Usage: setup.sh <LICHESS_BOT_TOKEN> <NET_FILE.sfnn>" >&2
     echo "Token: https://lichess.org/account/oauth/token/create?scopes[]=bot:play" >&2
     exit 1
 fi
@@ -37,20 +37,20 @@ apt-get install -y -qq git pypy3 python3-venv python3-pip
 id -u sunfish &>/dev/null || useradd -r -m sunfish
 
 # The engine, at the frozen tag exactly.
-[ -d /opt/sunfish-packed ] || git clone https://github.com/thomasahle/sunfish /opt/sunfish-packed
-git -C /opt/sunfish-packed fetch -q --tags origin
-git -C /opt/sunfish-packed checkout -q -f "$ENGINE_TAG"
+[ -d /opt/sunfish ] || git clone https://github.com/thomasahle/sunfish /opt/sunfish
+git -C /opt/sunfish fetch -q --tags origin
+git -C /opt/sunfish checkout -q -f "$ENGINE_TAG"
 
-install -m 644 "$NET" /opt/sunfish-packed/net.pickle
+install -m 644 "$NET" /opt/sunfish/nnue_4k/net.sfnn
 
 # ---- aarch64 correctness gate: the packed big-int arithmetic is pure
 # Python and the verify battery proves lane integrity, incremental ==
 # from-scratch, engine == reference and exact antisymmetry ON THIS
 # MACHINE before the bot is allowed to exist.  (Already green on
 # pypy3/arm64 macOS at prep time; this re-proves it on the deploy image.)
-SF_NET=/opt/sunfish-packed/net.pickle \
-    pypy3 /opt/sunfish-packed/packed/verify.py \
-    /opt/sunfish-packed/sunfish_packed.py /opt/sunfish-packed/net.pickle 120 40
+SF_NET=/opt/sunfish/nnue_4k/net.sfnn \
+    pypy3 /opt/sunfish/nnue_4k/packed/verify.py \
+    /opt/sunfish/nnue_4k/sunfish_packed.py /opt/sunfish/nnue_4k/net.sfnn 120 40
 
 # The bridge, pinned to the commit the integration test runs against.
 LICHESS_BOT_COMMIT=bedd1d9e86a8c4c96319490533e4e20fe63d1ac8
@@ -61,24 +61,24 @@ git -C /opt/lichess-bot checkout -q -f "$LICHESS_BOT_COMMIT"
 python3 -m venv /opt/lichess-bot/venv
 /opt/lichess-bot/venv/bin/pip install -q -r /opt/lichess-bot/requirements.txt
 
-cp /opt/sunfish-packed/contrib/lichess-packed/config.yml /opt/lichess-bot/config.yml
+cp /opt/sunfish/nnue_4k/lichess/config.yml /opt/lichess-bot/config.yml
 sed -i "s/YOUR_TOKEN_HERE/$TOKEN/" /opt/lichess-bot/config.yml
 chmod 600 /opt/lichess-bot/config.yml
 
 # Record exactly what is deployed (never hide what runs).
-{ echo "engine tag:  $ENGINE_TAG ($(git -C /opt/sunfish-packed rev-parse HEAD))"
+{ echo "engine tag:  $ENGINE_TAG ($(git -C /opt/sunfish rev-parse HEAD))"
   echo "net sha256:  $NET_SHA256"
   echo "bridge:      $LICHESS_BOT_COMMIT"
   echo "deployed:    $(date -u)"
-} > /opt/sunfish-packed/DEPLOYED.txt
+} > /opt/sunfish/nnue_4k/DEPLOYED.txt
 
-chown -R sunfish:sunfish /opt/lichess-bot /opt/sunfish-packed
+chown -R sunfish:sunfish /opt/lichess-bot /opt/sunfish
 
-cp /opt/sunfish-packed/contrib/lichess-packed/sunfish-packed.service /etc/systemd/system/
+cp /opt/sunfish/nnue_4k/lichess/sunfish-packed.service /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now sunfish-packed
 
 echo
 echo "Done. Status:   systemctl status sunfish-packed"
 echo "Logs:           journalctl -u sunfish-packed -f"
-echo "Deployed build: cat /opt/sunfish-packed/DEPLOYED.txt"
+echo "Deployed build: cat /opt/sunfish/nnue_4k/DEPLOYED.txt"

@@ -8,7 +8,7 @@ User=sunfish
 WorkingDirectory=/opt/lichess-bot
 # The engine reads its net from SF_NET; lichess-bot passes its environment
 # through to the engine child it spawns.
-Environment=SF_NET=/opt/sunfish-packed/net.pickle
+Environment=SF_NET=/opt/sunfish/nnue_4k/net.sfnn
 ExecStart=/opt/lichess-bot/venv/bin/python lichess-bot.py
 Restart=always
 RestartSec=10

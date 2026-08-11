@@ -104,6 +104,12 @@ jobs:
       run: |
         # exit code 5 = nothing collected (all gated tests skipped): fine
         if [ -d tests ]; then python -m pytest tests -q || [ $? -eq 5 ]; else echo "no tests/ directory on this branch"; fi
+    - name: Packed NNUE suite (nnue_4k)
+      run: |
+        if [ -d nnue_4k/tests ]; then python -m pytest nnue_4k/tests -q || [ $? -eq 5 ]; fi
+    - name: Packed NNUE verify battery
+      run: |
+        if [ -d nnue_4k ]; then python nnue_4k/packed/verify.py nnue_4k/sunfish_packed.py nnue_4k/packed/net128.sfnn 60 10; fi
 
   bot-integration:
     # The lichess-bot bridge needs Python >= 3.11, so this runs as its own

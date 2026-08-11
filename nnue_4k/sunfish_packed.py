@@ -28,12 +28,28 @@ version = "sunfish " + __version__
 # ONE Python int.  See packed/pnet.py for the lane layout and why the head
 # needs no per-lane multiply.
 
-import pickle as _pickle
+import json as _json
+from base64 import b64decode as _b64
 
+# The .sfnn net format: one JSON header line (no code execution -- pickles
+# never ship), then base64 tokens, one per big int, in canonical order:
+# base, gp, ts, then the piece rows ("PNBRQKpnbrqk" x 120 squares; kb nets
+# store rowsW buckets then rowsB buckets).
 NET_PATH = os.environ.get("SF_NET", os.path.join(os.path.dirname(
-    os.path.abspath(__file__)), "packed", "net.pickle"))
-with open(NET_PATH, "rb") as _f:
-    _d = _pickle.load(_f)
+    os.path.abspath(__file__)), "net128kb8.sfnn"))
+_f = open(NET_PATH)
+_d = _json.loads(_f.readline())
+_it = (int.from_bytes(_b64(t), "little", signed=True)
+       for _line in _f for t in _line.split())
+_d["base"], _d["gp"] = next(_it), next(_it)
+_d["ts"] = [next(_it) for _ in range(_d.pop("nts", 0))]
+if _d.get("B", 1) == 1:
+    _d["rows"] = {p: [next(_it) for _ in range(120)] for p in "PNBRQKpnbrqk"}
+else:
+    for _key in ("rowsW", "rowsB"):
+        _d[_key] = [{p: [next(_it) for _ in range(120)] for p in "PNBRQKpnbrqk"}
+                    for _ in range(_d["B"])]
+_f.close()
 
 NLANE = 2 * _d["N"] + 2 * _d.get("nb", 0)
 LBITS = 16
@@ -834,8 +850,10 @@ def main():
     # installed or packed sunfish has no tools/ and falls through to
     # the built-in loop below, which is all a GUI needs.
     try:
-        import sys, tools.uci
-        return tools.uci.run(sys.modules[__name__], hist[-1])
+        import sys
+        sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        import sunfish_tools.uci
+        return sunfish_tools.uci.run(sys.modules[__name__], hist[-1])
     except ImportError:
         pass
     # minifier-hide end

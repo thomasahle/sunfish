@@ -332,12 +332,90 @@ class PackedNet:
         return all(v < (1 << VBITS) for v in unpacklanes(acc, self.lanes))
 
 
+# --------------------------------------------------------------------------
+# Serialization.  Two formats:
+#   .sfnn -- the DISTRIBUTED format: a JSON header line (every non-bigint
+#            field) followed by base64 tokens, one per big int (minimal
+#            two's-complement little-endian bytes), in canonical order:
+#            base, gp, ts[nts], then rows (PIECES order, 120 squares each;
+#            kb nets store rowsW buckets then rowsB buckets).  Plain text,
+#            no code execution on load -- pickles never ship.
+#   .pickle -- internal only (trainer float exports, scratch nets).
+# `save` dispatches on the extension; `load` sniffs the first byte.
+# --------------------------------------------------------------------------
+_INT_KEYS = ("base", "gp", "ts", "rows", "rowsW", "rowsB")
+
+
+def _enc(x):
+    import base64
+    return base64.b64encode(
+        x.to_bytes((x.bit_length() + 16) // 8, "little", signed=True)).decode()
+
+
+def _iter_ints(d):
+    yield d["base"]
+    yield d["gp"]
+    for t in d.get("ts", ()):
+        yield t
+    if d.get("B", 1) == 1:
+        for p in PIECES:
+            for s in range(120):
+                yield d["rows"][p][s]
+    else:
+        for key in ("rowsW", "rowsB"):
+            for b in range(d["B"]):
+                for p in PIECES:
+                    for s in range(120):
+                        yield d[key][b][p][s]
+
+
+def save_sfnn(path, d):
+    import json
+    head = {k: v for k, v in d.items() if k not in _INT_KEYS}
+    head["fmt"] = 1
+    head["nts"] = len(d.get("ts", ()))
+    with open(path, "w") as f:
+        f.write(json.dumps(head) + "\n")
+        line = []
+        for x in _iter_ints(d):
+            line.append(_enc(x))
+            if len(line) == 32:
+                f.write(" ".join(line) + "\n")
+                line = []
+        if line:
+            f.write(" ".join(line) + "\n")
+
+
+def load_sfnn_dict(path):
+    import base64, json
+    with open(path) as f:
+        d = json.loads(f.readline())
+        it = (int.from_bytes(base64.b64decode(t), "little", signed=True)
+              for line in f for t in line.split())
+        d["base"], d["gp"] = next(it), next(it)
+        d["ts"] = [next(it) for _ in range(d.pop("nts", 0))]
+        if d.get("B", 1) == 1:
+            d["rows"] = {p: [next(it) for _ in range(120)] for p in PIECES}
+        else:
+            for key in ("rowsW", "rowsB"):
+                d[key] = [{p: [next(it) for _ in range(120)] for p in PIECES}
+                          for _ in range(d["B"])]
+    return d
+
+
 def load(path):
+    with open(path, "rb") as f:
+        magic = f.read(1)
+    if magic == b"{":
+        return PackedNet(load_sfnn_dict(path))
     with open(path, "rb") as f:
         return PackedNet(pickle.load(f))
 
 
 def save(path, d):
+    if str(path).endswith(".sfnn"):
+        save_sfnn(path, d)
+        return
     with open(path, "wb") as f:
         pickle.dump(d, f, protocol=4)
 

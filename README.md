@@ -87,9 +87,15 @@ also [on Lichess](https://lichess.org/@/sunfish_rs), which is about 100 ELO stro
 
 ### NNUE version
 
-There is an experimental version using an [Efficiently updatable neural network](https://en.wikipedia.org/wiki/Efficiently_updatable_neural_network).
-It is not yet fast enough to be stronger than classic sunfish, so it lives on the
-[nnue branch](https://github.com/thomasahle/sunfish/tree/nnue-mutable-board) until it works well.
+[nnue_4k/](nnue_4k/) is a sunfish whose evaluation is classic's exact
+piece-square score plus a trained neural residual — with the whole
+accumulator and evaluation head packed into **one Python integer**, so a
+wide net costs a handful of big-int operations per node. It is measured
+about +200 Elo over classic at tournament time controls, the engine
+still packs to a few kilobytes, and every quantized net is *certified*
+(lane-exactness, incremental == from-scratch, exact antisymmetry) before
+it plays a game. See [nnue_4k/README.md](nnue_4k/README.md) for the
+architecture, the training pipeline, and the measured results.
 
 # Features
 

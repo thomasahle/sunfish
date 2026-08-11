@@ -21,14 +21,14 @@ import os
 import pathlib
 import sys
 
-ROOT = pathlib.Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "tools"))
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "sunfish_tools"))
 
 
 def load():
-    os.environ["SF_NET"] = str(ROOT / "packed" / "net128.pickle")
+    os.environ["SF_NET"] = str(ROOT / "nnue_4k" / "packed" / "net128.sfnn")
     spec = importlib.util.spec_from_file_location(
-        "sunfish", ROOT / "sunfish_packed.py")
+        "sunfish", ROOT / "nnue_4k" / "sunfish_packed.py")
     mod = importlib.util.module_from_spec(spec)
     sys.modules["sunfish_packed_fen"] = mod
     spec.loader.exec_module(mod)

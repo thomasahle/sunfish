@@ -4,9 +4,9 @@ token: "YOUR_TOKEN_HERE"
 url: "https://lichess.org/"
 
 engine:
-  dir: "/opt/sunfish-packed"
-  name: "sunfish_packed.py"
-  working_dir: "/opt/sunfish-packed"
+  dir: "/opt/sunfish"
+  name: "nnue_4k/sunfish_packed.py"
+  working_dir: "/opt/sunfish"
   protocol: "uci"
   ponder: true
   # Engine 10 niceness levels below the bot's event loop (classic's
