@@ -14,6 +14,7 @@ import asyncio
 import pathlib
 import logging
 import math
+import textwrap
 
 
 parser = argparse.ArgumentParser()
@@ -114,6 +115,7 @@ def print_unicode_board(board, perspective=chess.WHITE):
     fonts, which made the sides nearly indistinguishable."""
     # Mid-tone squares so BOTH piece colors clear them: pale squares wash
     # out the white pieces, near-black squares swallow the black ones.
+    print()
     light, dark = 180, 95                        # tan / walnut
     hl_light, hl_dark = 186, 143                 # two-tone last-move khaki
     label, reset = "\x1b[38;5;245m", "\x1b[0m"
@@ -134,11 +136,11 @@ def print_unicode_board(board, perspective=chess.WHITE):
             else:
                 glyph = f"\x1b[48;5;{bg}m   "
             line.append(glyph)
-        print(" " + "".join(line) + reset)
+        print("  " + "".join(line) + reset)
     files = "abcdefgh" if perspective == chess.WHITE else "hgfedcba"
-    print(f"   {label}" + " ".join(f" {f}" for f in files) + f"{reset}")
+    print(f"    {label}" + " ".join(f" {f}" for f in files) + f"{reset}")
     imbalance = material_imbalance(board, perspective)
-    print(f"   {label}{imbalance}{reset}\n" if imbalance else "")
+    print(f"    {label}{imbalance}{reset}\n" if imbalance else "")
 
 
 def material_imbalance(board, perspective):
@@ -172,7 +174,7 @@ async def get_engine_move(engine, board, limit, game_id, multipv, debug=False):
     ) as analysis:
 
         infos = [None for _ in range(multipv)]
-        first = True
+        printed = 0
         async for new_info in analysis:
             # If multipv = 0 it means we don't want them at all,
             # but uci requires MultiPV to be at least 1.
@@ -184,11 +186,10 @@ async def get_engine_move(engine, board, limit, game_id, multipv, debug=False):
                 print(new_info["string"])
 
             if not debug and all(infos) and "score" in analysis.info:
-                if not first:
-                    # print('\n'*(multipv+1), end='')
-                    print(f"\u001b[1A\u001b[K" * (multipv + 1), end="")
-                else:
-                    first = False
+                # The PV wraps to a varying number of rows, so the in-place
+                # rewrite erases exactly what the previous update printed.
+                print("\u001b[1A\u001b[K" * printed, end="")
+                printed = 0
 
                 info = analysis.info
                 score = info["score"].relative
@@ -210,11 +211,14 @@ async def get_engine_move(engine, board, limit, game_id, multipv, debug=False):
                 if "nps" in info:
                     parts.append(f'{human(info["nps"])}/s')
                 parts.append(f'{float(info.get("time", 0)):.1f}s')
-                # PV last: it is the one field whose length jumps around,
-                # so anywhere else it makes the whole line flicker.
-                if "pv" in info:
-                    parts.append(f'{dim}{board.variation_san(info["pv"][:10])}{reset}')
                 print("   " + f"{dim} · {reset}".join(parts))
+                printed += 1
+                # PV below the stats, wrapped to keep the block's width
+                # roughly even (a single long line flickers on rewrite).
+                if "pv" in info:
+                    for row in textwrap.wrap(board.variation_san(info["pv"]), 40):
+                        print(f"   {dim}{row}{reset}")
+                        printed += 1
 
                 for info in infos:
                     if "pv" in info:
@@ -241,6 +245,7 @@ async def get_engine_move(engine, board, limit, game_id, multipv, debug=False):
 
                     # Something about N
                     print(f'{info["multipv"]}: {score_rel} {variation}')
+                    printed += 1
 
         return analysis.info["pv"][0]
 
@@ -266,7 +271,7 @@ async def play(engine, board, selfplay, pvs, time_limit, debug=False):
             move = await get_engine_move(
                 engine, board, time_limit, game_id, pvs, debug=debug
             )
-            print(f"\n My move: {board.san(move)}")
+            print(f"\n   My move: {board.san(move)}")
         board.push(move)
 
     # Print status
