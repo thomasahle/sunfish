@@ -119,6 +119,20 @@ class CostGate:
 
 
 # ---------------------------------------------------------------- OCI shell
+def _usage_window(now):
+    """(start, end) for the month-to-date usage query.
+
+    The Usage API 400s on SUB-DAY timestamps (found live at first deploy:
+    passing `now` directly meant the daemon never got a reading, and the
+    48h fail-safe would have silently gated challenges two days later).
+    Both bounds must be day-granular: start is the first of the month,
+    end is the NEXT midnight (rounded UP so today's accruals count)."""
+    start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    end = now.replace(hour=0, minute=0, second=0,
+                      microsecond=0) + _dt.timedelta(days=1)
+    return start, end
+
+
 def fetch_month_cost():
     """Month-to-date COST total for the tenancy, via instance principals.
 
@@ -128,12 +142,11 @@ def fetch_month_cost():
     signer = oci.auth.signers.InstancePrincipalsSecurityTokenSigner()
     tenancy = signer.tenancy_id
     client = oci.usage_api.UsageapiClient({}, signer=signer)
-    now = _dt.datetime.now(_dt.timezone.utc)
-    start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    start, end = _usage_window(_dt.datetime.now(_dt.timezone.utc))
     detail = oci.usage_api.models.RequestSummarizedUsagesDetails(
         tenant_id=tenancy,
         time_usage_started=start,
-        time_usage_ended=now,
+        time_usage_ended=end,
         granularity="MONTHLY",
         query_type="COST")
     items = client.request_summarized_usages(detail).data.items
