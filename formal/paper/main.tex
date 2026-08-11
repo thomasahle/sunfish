@@ -5,7 +5,10 @@
 % Draft capturing the 2026-08-05 -- 2026-08-09 formalization +
 % measurement campaign on sunfish (github.com/thomasahle/sunfish,
 % formal/).  The main narrative captures the band-edge landing; the
-% postscript after the abstract records its monotone-cap successor.
+% postscript after the abstract records its monotone-cap successor
+% (Section \ref{sec:cappednull}).  Sections \ref{sec:liveness} and
+% \ref{sec:pruning} cover the post-band-edge arms (liveness milestones
+% 1--3, proof-first pruning verdicts), landed 2026-08-09 -- 2026-08-11.
 %
 % Alternative titles (pick one, or keep the current):
 %   * "The Docstring Was a Theorem: Verifying and Pricing Selective
@@ -73,13 +76,13 @@
 \title{Proofs and Prices: Machine-Checked Soundness and Measured
   Trade-offs in a Minimalist Chess Engine}
 \author{\AuthorOne{} \and \AuthorTwo}% TODO: settle the author list
-\date{Draft of August 9, 2026}
+\date{Draft of August 11, 2026}
 
 \begin{document}
 \maketitle
 
 \begin{abstract}
-Sunfish is a chess engine whose whole logic fits in 142 lines of Python,
+Sunfish is a chess engine whose whole logic fits in 136 lines of Python,
 and whose docstrings state, in unusually precise English, the contracts
 its search is supposed to satisfy.  We report on a campaign that
 treated those docstrings as latent formal specifications: we transcribed
@@ -126,7 +129,21 @@ non-contradiction --- that carries \emph{no chess assumption at all};
 zugzwang survives only in a second layer that governs accuracy and that
 the table can never depend on.  Each remaining assumption is a named
 hypothesis in a ledger of bets and, where possible, measured on the
-production engine, which plays publicly on Lichess.  Proofs identify
+production engine, which plays publicly on Lichess.
+The campaign's later arms extend the guarantees from safety to
+\emph{liveness} --- a forced mate in $k$ is provably visible at depth
+$k+1$ under a single fidelity premise and provably reported by the
+converging driver within a fifteen-probe budget, the stored best move
+attains its reported bound, mate reports are never lies (a frontier
+countermodel prices the one premise that claim needs), and the arc
+composes into a machine-checked win/loss/no-mate trichotomy --- and
+then turn the
+apparatus offensive: two proposed prunings were priced by proof before
+any engine code existed.  One was refuted outright (razoring: a
+quiet-mate countermodel for every affordable margin, with the false
+fail-low structurally undetectable), one reshaped (the recursive check
+extension has \emph{no value function at all} on perpetual-check
+cycles; only its key-determined forms survive).  Proofs identify
 the trade; tournaments price it; and when the trade is a false premise,
 neither loop is enough --- the engine has to be changed.
 \end{abstract}
@@ -145,7 +162,9 @@ corollary \texttt{guardedCappedNull\_below\_positiveMate}, in
 \texttt{CappedNull.lean}.  References below to the ``shipped''
 band-edge consumer describe the campaign snapshot retained as the
 historical full model; \texttt{formal/README.md} records the current
-model--code correspondence.
+model--code correspondence.  Section~\ref{sec:cappednull} gives the
+design and its proof surface; the change is regression-tested, and its
+tournament price is pending (Section~\ref{sec:empirical}).
 
 % =========================================================================
 \section{Introduction}
@@ -153,7 +172,7 @@ model--code correspondence.
 
 Sunfish\footnote{\url{https://github.com/thomasahle/sunfish}} is a
 minimalist chess engine: with comments and whitespace removed, the
-engine proper is 142 lines of Python, yet it plays at ratings above 2000
+engine proper is 136 lines of Python, yet it plays at ratings above 2000
 on Lichess, where it runs in production as the bot
 \texttt{sunfish-engine}.  What makes it an unusual verification target
 is not its size but its \emph{documentation}: the docstring of its
@@ -167,7 +186,7 @@ dischargeable lemma, and the exact failure mode of a hypothesis that a
 machine-checked counterexample shows to be necessary.  The docstrings
 were latent formal specs.
 
-This paper reports a campaign, conducted over five days on the live
+This paper reports a campaign, conducted over a week on the live
 repository, that ran two loops in parallel:
 
 \begin{itemize}
@@ -246,7 +265,22 @@ top-level statement, with human-readable proof sketches
 (7) The ledger-of-bets discipline (Section~\ref{sec:ledger}), the
 model--code drift guard (Section~\ref{sec:drift}), and the empirical
 methodology with honest numbers, including artifacts we initially
-believed (Section~\ref{sec:empirical}).
+believed (Section~\ref{sec:empirical}) --- validated in deployment by
+an audit of 145 production bot games that found and fixed two
+race-class bugs (Section~\ref{sec:deployment}).
+(8) A liveness layer on top of the safety results
+(Section~\ref{sec:liveness}): mate-in-$k$ completeness at depth $k+1$
+under a single fidelity premise, machine-checked driver convergence
+within a fifteen-probe budget, best-move attainment, no-false-mates
+with its own frontier countermodel, evaluation-swap soundness, and the
+composed win/loss/no-mate classification theorem --- each arm with its
+premise ledger.
+(9) \emph{Proof-first pruning} (Section~\ref{sec:pruning}): two
+candidate prunings priced in the model before any engine code existed
+--- razoring rejected as unsound and unrepairable, the check extension
+reduced to its only sound (key-determined) forms.  Publishable
+negatives, and the cheapest kind of engine change: the one never
+written.
 
 \paragraph{Reading guide.}
 Section~\ref{sec:model} defines, once and explicitly, the model in which
@@ -260,7 +294,11 @@ Lean names and files, and Table~\ref{tab:cex} lists the machine-checked
 Sections~\ref{sec:contract}--\ref{sec:taxonomy} tell the story of the
 early results in the order they were found;
 Sections~\ref{sec:refuted}--\ref{sec:bandedge} tell the story of the
-repair.  A reader who wants only the current state of the engine ---
+repair.  Two later arms follow: Section~\ref{sec:liveness} is the
+liveness layer (the search \emph{finds} what the safety layer promises
+it will never misreport), and Section~\ref{sec:pruning} turns the
+apparatus prospective, pricing proposed prunings before they are
+written.  A reader who wants only the current state of the engine ---
 what is guaranteed and why --- can read Section~\ref{sec:invariants}
 alone; it is self-contained and is the paper's answer to ``what,
 exactly, is proved about the code that ships?''
@@ -270,7 +308,7 @@ exactly, is proved about the code that ships?''
 \label{sec:model}
 
 Every result in this paper is a theorem about a small Lean~4 development
-(\texttt{formal/} in the sunfish repository: eight files, no dependencies
+(\texttt{formal/} in the sunfish repository: thirteen files, no dependencies
 beyond core Lean and the \texttt{omega} tactic), not about the Python
 text of \texttt{sunfish.py}.  This section fixes the model once, so that
 each later theorem can be read with its exact scope in mind; how the
@@ -347,7 +385,18 @@ probe (Section~\ref{sec:mtdbi}).  The two consumers of the current
 design --- an executable reference specification ($\mathrm{boundD2}$)
 and the shipped loop ($\mathrm{boundKCX}$) --- are both in
 \texttt{Stalemate.lean}, together with the theorem that they compute
-the same function (Section~\ref{sec:verify}).  Two
+the same function (Section~\ref{sec:verify}).  Five later files extend
+the same discipline without changing it: \texttt{Liveness.lean} and
+\texttt{Classification.lean} carry the liveness arm --- the mate-in-$k$
+spec, the fuel-indexed MTD-bi loop, and the classification trichotomy
+(Section~\ref{sec:liveness}); \texttt{TableSwap.lean} models the
+evaluation retargeting between searches
+(Section~\ref{sec:tableswap}); \texttt{Pruning.lean} contains
+searches that exist \emph{only} in the model --- proposed prunings
+specified and judged before any engine code
+(Section~\ref{sec:pruning}); and \texttt{CappedNull.lean} is the
+report transformer of the monotone null cap
+(Section~\ref{sec:cappednull}).  Two
 further models existed while the mechanisms they specified shipped ---
 deterministic LMR ($\mathrm{boundLmrDet}$, \texttt{LmrDet.lean}) and
 the historical re-search LMR ($\mathrm{boundLmr}$, \texttt{Lmr.lean})
@@ -669,6 +718,90 @@ $(\mathrm{pos}, \mathrm{depth})$ remains a complete key with no flag.\\
 \texttt{nullValue\_plain} & NullBetOK, empty history &
 Layer 2: $\mathrm{nullValue}$ collapses to the null-free value;
 composed with layer 1, this recovers the docstring.\\
+\midrule
+\multicolumn{3}{@{}l}{\texttt{Liveness.lean} --- mate-in-$k$ completeness, driver convergence, attainment, no false mates (Section~\ref{sec:liveness})}\\
+\texttt{forcedMate\_negamaxD2} (Thm~\ref{thm:matek}) & ValFloor &
+The spine: a forced mate in $\le k$ plies puts the real-move value in
+the mate band at \emph{every} depth $D \ge k+1$.\\
+\texttt{forcedlyMated\_negamaxD2} & ValFloor &
+The mated-side dual ($D \ge k+2$) --- a corollary of the spine, not a
+second induction.\\
+\texttt{forcedMate\_complete} & ValFloor, NoZugzwang &
+The transfer: the \emph{declared} value $\mathrm{nullValueD2}$ is in
+the band too --- \emph{NoZugzwang}'s second consumer.\\
+\texttt{forcedMate\_probe\_failsHigh} (+ \texttt{\_kcx}) & + layer-1 premises &
+Driver corollary: no window at or below $\ML$ can fail low, so the
+bisection is forced into the band --- the engine \emph{reports} the
+mate.\\
+\texttt{dstep\_halves}, \texttt{driver\_probe\_budget} & --- &
+A midpoint probe at least halves the bracket, with no score
+hypothesis; hence $\le 15$ probes per depth, after which the loop is a
+fixed point.\\
+\texttt{driver\_depth\_converges} (inst.\ \texttt{search\_inner\_loop\_converges}, \texttt{\_kcx}) & layer-1 premises &
+On exit the bracket is $\le$ \texttt{EVAL\_ROUGHNESS} wide and
+contains the declared value.\\
+\texttt{storedMove\_attains}, \texttt{boundD2\_failHigh\_attained} & layer-1 premises &
+Best-move attainment, in the strong form: a real fail-high report
+\emph{is} the stored move's own yield, and that move attains it
+against the declared function.\\
+\texttt{forcedMate\_of\_nullValueD2}, \texttt{mate\_report\_honest} (+ dual, \texttt{\_kcx}) & ValFloor, EvalQuiet, NoMaskedMobility, root legality &
+No false mates: a mate-band declared value at a legally-reached root
+\emph{is} a forced mate within the probed depth; the driver's
+certified band report is never a lie.  (No \emph{NoZugzwang}: the A1
+suppression is baked into the declared function,
+\texttt{nullTermD2\_lt\_ML}.)\\
+\midrule
+\multicolumn{3}{@{}l}{\texttt{Classification.lean} --- eventual classification and the frontier-tail variant (Section~\ref{sec:liveness})}\\
+\texttt{eventual\_classification} (Thm~\ref{thm:trichotomy}) & per-arm ledger (Table~\ref{tab:liveledger}) &
+The trichotomy for the ruleless game: win (band value at $D \ge k+1$),
+loss ($D \ge k+2$), or no mate for either side (strictly sub-band at
+\emph{every} depth).\\
+\texttt{classification\_exclusive}, \texttt{eventual\_mate\_iff} (+ dual) & spine premises &
+The arms cannot coexist; a forced mate exists at some horizon iff the
+value reaches the band at some depth.\\
+\texttt{classification\_visible} (+ \texttt{\_kcx}) & + layer-1 premises &
+After the 15-probe budget the converged bracket \emph{reports} the
+classification --- \texttt{EVAL\_ROUGHNESS} slop only on the certified
+side, none on the no-false-mates side.\\
+\texttt{forcedMate\_of\_nullValueD2t}, \texttt{eventual\_classification\_t} & ValFloor, EvalQuiet, root legality &
+The frontier-tail t-variant (\emph{proven, not shipped}):
+no-false-mates and the trichotomy's honesty arm with \emph{no chess
+premise}; \texttt{cexF\_t\_positive} turns the countermodel into a
+positive test.\\
+\midrule
+\multicolumn{3}{@{}l}{\texttt{TableSwap.lean} --- evaluation retargeting between searches (Section~\ref{sec:tableswap})}\\
+\texttt{killerLegal\_lifecycle\_pstSwap} & SameKingClass &
+The \texttt{tp\_move} lifecycle survives the between-search
+evaluation swap: $\mathrm{KillerInv}$ is position-intrinsic up to the
+king-gone classification, which the placement-only swap never moves.\\
+\midrule
+\multicolumn{3}{@{}l}{\texttt{Pruning.lean} --- proposed prunings, proof-first (Section~\ref{sec:pruning}); the countermodels are in Table~\ref{tab:cex}}\\
+\texttt{bound\_null\_spec\_Rm}, \texttt{razorMargin\_no\_crossing} & Bounded, RazorMargin &
+The \emph{margin} razor is layer-1 sound at the unchanged key --- but
+\texttt{razorMargin\_required} then refutes the premise for every
+affordable margin (Section~\ref{sec:pruning}).\\
+\texttt{boundE\_null\_spec}, \texttt{extE\_no\_crossing} & double-primed premises &
+The \emph{depth-shift} check extension: layer 1 transfers by
+instantiation and the table stays consistent with \emph{no new key
+field}.\\
+\texttt{forcedMate\_ext} & ValFloor, NoZugzwang &
+The shift's liveness gain: at an in-check root a mate-in-$k$ is
+visible at every $D \ge k$ --- one ply earlier.\\
+\texttt{nullValueEB\_zero}, \texttt{ext\_budget\_value\_bearing}, \texttt{ext\_recursive\_ne\_shift} & --- &
+The budgeted repair: well-defined exactly when the budget joins the
+measure; budget 0 collapses to the shipped value; budgets 0 and 1
+disagree at a fixed key (so the key must grow); and no depth
+relabeling recovers the recursive extension.\\
+\midrule
+\multicolumn{3}{@{}l}{\texttt{CappedNull.lean} --- the monotone null cap (Section~\ref{sec:cappednull})}\\
+\texttt{cappedNull\_report} (via \texttt{WindowReport.cap}) & --- &
+Applying $\min(c, \cdot)$ to a valid fail-soft child report yields a
+valid report of the capped null value: one recursive probe suffices.\\
+\texttt{guardedStaticCap\_in\_scoreBand} \newline \texttt{guardedCappedNull\_below\_}\newline\texttt{positiveMate} & --- &
+Under the $|\mathrm{eval}| < 500$ guard and
+$\texttt{EVAL\_ROUGHNESS} = 15$ the cap sits strictly inside the score
+band, and the capped null value can never claim a \emph{positive}
+mate.\\
 \end{longtable}
 }
 
@@ -785,6 +918,44 @@ $(-\ML, \ML]$. &
 After a mate-band score, the first probe of the next depth carries a
 $\gamma$ above the band.  Fixed by widening the bracket, not by
 weakening the theorems.\\
+\addlinespace
+\texttt{cexF\_false\_mate\_at\_frontier} \newline (\texttt{CexF},
+\texttt{Liveness.lean}; Section~\ref{sec:liveness}) &
+No-false-mates for the shipped declared value \emph{without}
+\texttt{NoMaskedMobility}. &
+5-position game, every fidelity premise proven on it: the depth-2
+declared value is the full $\MU$, yet \emph{no} forced mate exists ---
+the defender's escape (a $\ge 100$cp table drop into stalemate) is
+invisible to the QS filter at frontier depth --- and one more ply
+computes the honest $0$.\\
+\addlinespace
+\texttt{razorVerified\_not\_sound}, \texttt{razor\_tt\_crossing}
+\newline (\texttt{CexRz}, \texttt{Pruning.lean};
+Section~\ref{sec:pruning}) &
+Soundness of verified razoring, for \emph{every} margin
+$R < 2\ML - 1$. &
+6-position parameterized game: a mate-in-1 whose delivering move is
+\emph{quiet}, so depth 0 stands pat; the trigger fires, the fail-high
+re-check never runs, and the served fail-low is false --- at the same
+key the honest search fails high at $\ML$: a crossed entry, the exact
+\texttt{lmr\_tt\_crossing} shape.\\
+\addlinespace
+\texttt{checkExt\_no\_declared\_value} \newline
+(\texttt{checkExt\_any\_value}, \texttt{CexPerp},
+\texttt{Pruning.lean}; Section~\ref{sec:pruning}) &
+That the recursive at-entry check extension has \emph{any} value
+function for its table entries to describe. &
+A two-position mutual-check cycle (perpetual check): the extension's
+defining equations admit \emph{every} band value $x$ at the same
+$(\mathrm{pos},\mathrm{depth})$ key --- two solutions disagree at one
+key, and around the cycle the effective depth never decreases.\\
+\addlinespace
+\texttt{tableEntries\_eval\_relative} \newline
+(\texttt{TableSwap.lean}; Section~\ref{sec:tableswap}) &
+That \texttt{tp\_score} entries may survive an evaluation swap. &
+An exact entry valid for one evaluation violates the keyed table
+invariant for the other --- which is why the per-search clear is
+load-bearing, and \texttt{tp\_move}'s survival needs its own theorem.\\
 \end{longtable}
 }
 
@@ -929,7 +1100,11 @@ formal, and Section~\ref{sec:taxonomy} shows how the since-removed
 re-search Late Move Reductions broke precisely it).  Fail-softness is
 what makes bisection
 converge fast in practice: the report $r$ typically overshoots
-$\gamma$, so the bracket shrinks by more than half.
+$\gamma$, so the bracket shrinks by more than half.  (Convergence is no
+longer only a practical observation: the liveness arm models the inner
+loop fuel-indexed and proves that a midpoint probe at least halves the
+bracket with no assumption on scores, so a depth converges within a
+fifteen-probe budget --- Section~\ref{sec:liveness}.)
 
 Two details of the driver are load-bearing for later sections.  The
 first is that the bracket invariant is exactly what the LMR crossing
@@ -1358,6 +1533,21 @@ idiom --- loses the induction outright.  The upgrade also changes the
 status of \emph{KillerLegal} everywhere downstream: it is no longer a
 premise of the shipped design's specs but a theorem they may cite
 (Table~\ref{tab:theorems}).
+
+\paragraph{The depth gate: a free rider on the lifecycle theorem.}
+The lifecycle theorem quantifies over \emph{arbitrary} finite store
+sequences, and that generality earned its keep in an unplanned way: a
+later engine change added \texttt{and depth} to the store condition,
+so depth-0 (quiescence) killers are no longer stored at all.  Storing
+\emph{fewer} events is a strict subset of the proven trace, so the
+gate shipped with no new proof obligation --- and with a measured
+price that is the largest single gain of the campaign's tail:
+$+41.9 \pm 28.6$ at LOS 99.8\% (300 games at 30+1;
+Table~\ref{tab:elo}).  The mechanism reading: the table stops churning
+through QS-frontier noise, so deep killers survive to order deep
+nodes.  The formal reading: the theorem priced the change's
+\emph{safety} at zero in advance, which left only its strength to
+measure.
 
 % =========================================================================
 \section{A Soundness Taxonomy for Selective Search}
@@ -1934,7 +2124,7 @@ The design above is easier to specify than to implement.  The
 \emph{specification} wants an eager entry scan: at any king-capturable
 node, return $\MU$ immediately, before the table, before the repetition
 check, before anything.  The \emph{implementation} cannot afford that
---- a full legality scan at every node is not a price a 142-line Python
+--- a full legality scan at every node is not a price a 136-line Python
 engine can pay --- so it earns the same guarantee lazily, through the
 interception, the move order, and the killer table.
 
@@ -2120,13 +2310,492 @@ premise is retained in the development as a record, with its witness,
 because ``we assumed this and it was false'' is exactly the kind of
 thing a formal development should be unable to forget.
 
+\subsection{Epilogue: the monotone cap (the postscript's detail)}
+\label{sec:cappednull}
+
+The band-edge arm did not survive the campaign either --- not because
+it was unsound, but because a \emph{value-function change} makes the
+question it answered stop arising.  This subsection is the detail
+behind the postscript on page~1; it describes the successor design,
+which is landed in the engine source with its measurement pending, so
+we state it as \emph{proposed, proven, and priced later}.
+
+The historical null option was discontinuous: admit a sub-band pass
+report, decline a mate-band one.  Deciding band membership of a
+\emph{value} from a \emph{report} is exactly what a general fail-soft
+window cannot do (Section~\ref{sec:bandedge}), which is why the design
+needed the dedicated probe at the boundary window $1 - \ML$.  The
+successor replaces the option's value outright: the null yield is now
+\[
+  \min\bigl(\mathrm{pos.score} + 15,\; P\bigr),
+\]
+where $P$ is the searched pass report and $15$ is
+\texttt{EVAL\_ROUGHNESS} --- one score bucket above static
+evaluation.  The operator $\min(c, \cdot)$ is monotone, and that is
+the entire point: \texttt{cappedNull\_report}
+(\texttt{CappedNull.lean}) proves that applying it to any valid
+fail-soft child report yields a valid fail-soft report \emph{of the
+capped value}, so the single recursive pass probe already bounds the
+declared null term on the correct side.  The second probe --- and the
+boundary-specific proof machinery behind it --- leaves the algorithm.
+The concrete guard facts are
+\texttt{guardedStaticCap\_in\_scoreBand} (from the
+$|\mathrm{pos.score}| < 500$ guard and
+$\texttt{EVAL\_ROUGHNESS} = 15$, the cap sits strictly below $\ML$
+and above $-\MU$) and \texttt{guardedCappedNull\_below\_positiveMate}
+(lifted through the $\min$: the capped null value can never claim a
+\emph{positive} mate).  A catastrophically bad pass may still retain a
+negative mate value; that is harmless and no negative clamp is
+intended.
+
+Three honesty notes.  First, this is a deliberate change of the
+declared value function, not a cheaper implementation of the
+historical rule: layer 1 remains a point spec against the capped-null
+function, and $\gamma$ still changes only which side is reported,
+never which value is bounded.  Second, the zugzwang exposure moves
+with it: the guard keeps its two halves ($|\mathrm{pos.score}| < 500$
+\emph{and} at least one piece from \texttt{RBNQ} remains --- the piece
+test is the main defense, excluding the classic pawn-only zugzwangs),
+and the layer-2 accuracy premise \emph{weakens} from
+\emph{NoZugzwang} to the capped statement
+$\min(\mathrm{pos.score}+15, P^*) \le{}$ best real move --- $P^*$ the
+true pass value --- which $\mathrm{NoZugzwang}$ implies.  Third, the price: the change is
+regression-tested (the fixed-depth mate and Win-at-Chess floors that
+gate every search change), but its decision match has not run at this
+draft, so Table~\ref{tab:elo} carries no row for it yet --- the
+proofs are the part of the trade that is already settled, the ELO is
+the part that is not.  The band-edge development of this section is
+retained as the historical full model; \texttt{boundary\_window\_decisive}
+remains a theorem, and remains the template for ``a cheap decisive
+probe exists'' arguments (Section~\ref{sec:pruning} shows a proposed
+pruning failing precisely that test).
+
+% =========================================================================
+\section{Liveness: What the Search Finds, Not Just What It Never Misreports}
+\label{sec:liveness}
+
+Everything to this point is \emph{safety}: reports never lie about the
+declared value, tables never contradict themselves, terminal claims
+are verified before they are stored.  None of it says the engine ever
+\emph{finds} anything.  A search that returned fail-lows forever would
+satisfy every theorem so far.  The campaign's liveness arm
+(\texttt{Liveness.lean}, \texttt{Classification.lean},
+\texttt{TableSwap.lean}) closes that gap in three milestones, each
+with its premise ledger --- and, in keeping with the rest of the
+paper, it also produced one countermodel that corrected the authors'
+beliefs (Cex.~\ref{cex:frontier}) and resurrected a premise that had
+been retired as unneeded.
+
+\subsection{Milestone 1: mate-in-$k$ completeness}
+
+The spec, $\mathrm{ForcedMate}\ G\ k\ p$, is stated in the engine's
+own king-capture vocabulary: a legal move reaching an oracle-terminal
+in-check position (exactly the mate arm of the verified terminal
+value), or a legal move to a non-terminal position all of whose
+\emph{legal} defender replies hand back a forced mate two plies
+shorter.  Illegal replies are refuted by the sentinel branch, so the
+spec deliberately does not quantify over them.
+
+\begin{theorem}[The spine: a mate in reach is in the band]
+\label{thm:matek}
+Under \emph{ValFloor} alone (every legal move's value is $\ge -192$
+--- a fidelity fact backed by \texttt{EvalBounds}),
+$\mathrm{ForcedMate}\ G\ k\ p$ implies
+$\ML \le \negamax^{\mathrm{D2}}_D(p)$ at \emph{every} depth
+$D \ge k + 1$.
+\leanref{forcedMate\_negamaxD2}{Liveness.lean}
+\end{theorem}
+
+Two details carry the content.  The bound is $k+1$, one ply better
+than the $k+2$ first planned, because the checkmated leaf needs only
+remaining depth 1 for its terminal branch.  And the premise is
+one-sided by design: \emph{ValFloor} is spent only on the attacker ---
+the QS filter provably admits every attacker move at remaining depth
+$\ge 2$ (\texttt{mem\_movesAbove\_of\_floor}, the liveness re-spend of
+the gate-retirement arithmetic) --- while the defender side needs no
+floor at all, since filtering a defender reply only shrinks the
+defender's fold.  The mated-side dual
+(\texttt{forcedlyMated\_negamaxD2}: value $\le -\ML$ at $D \ge k+2$)
+is a corollary of the spine, not a second induction.
+
+The transfer to the \emph{declared} function --- the one
+\texttt{bound\_null\_spec} brackets with no chess premise --- is
+\texttt{forcedMate\_complete}, and it consumes \emph{NoZugzwang}: the
+layer-2 bet acquires a second consumer (accuracy in
+Section~\ref{sec:invariants}, completeness here), which is exactly
+where a bet about the null-move approximation belongs.  The driver
+corollary closes the loop to observable behavior:
+\texttt{forcedMate\_probe\_failsHigh} (and \texttt{\_kcx} for the
+production consumer) --- with a mate in reach of the depth, \emph{no}
+driver-range window at or below $\ML$ can fail low, so every bisection
+probe below the band fails high and the MTD-bi bracket is forced into
+the band.  The engine does not merely admit the mate; it reports it.
+
+A discharge option is on record, deliberately not taken: a
+depth-decaying null guard ($|\mathrm{score}| < 500 - 10 \cdot
+\mathrm{depth}$) would switch the pass off at large remaining depth
+and make completeness unconditional at $D \ge k + 52$.  The
+maintainer's decision was to keep the code and give the existing
+layer-2 assumption the extra exercise instead --- the ledger's way of
+saying a bet already priced need not be paid twice.
+
+\subsection{Milestone 2: the \texttt{search()} package}
+\label{sec:livenessdriver}
+
+Milestone 1 is about \texttt{bound}; the engine's user calls
+\texttt{search}.  Three results turn the per-probe guarantee into a
+guarantee about the driver loop, and a fourth covers the one thing
+\texttt{search} does between depths.
+
+\paragraph{Driver convergence, with a budget.}
+The MTD-bi inner loop is modeled fuel-indexed, so termination is a
+theorem rather than an assumption.  The load-bearing lemma is
+\texttt{dstep\_halves}: a midpoint probe at least \emph{halves} the
+bracket, with no hypothesis on scores at all --- fail-soft overshoot
+only overshrinks.  Hence the budget is logarithmic:
+one carried-window probe plus 14 halvings of the width-138{,}579 reset
+band gives \textbf{15 probes per depth}, after which the loop is
+provably a fixed point (\texttt{driver\_probe\_budget}); on exit the
+bracket is at most \texttt{EVAL\_ROUGHNESS} wide and contains the
+declared value (\texttt{driver\_depth\_converges}, instantiated for
+both consumers).  One honest wrinkle is recorded in the statement
+itself: the per-depth reset floor $1 - \MU$ sits one above the value
+band's floor, so a root whose declared value is the exact kingless
+sentinel $-\MU$ ends with $\mathit{lower}$ one above it --- the
+conclusion's $\max(V, 1-\MU)$ says exactly this.
+
+\paragraph{Best-move attainment.}
+The docstring's \texttt{tp\_move} clause is now a theorem in the
+strong form: attainment against the \emph{declared} function, not
+merely against the fold the search happened to evaluate.  A fail-high
+yield is the child probe's fail-low, so layer 1 \emph{at the child}
+certifies the negated declared child value at or above the yield
+(\texttt{storedMove\_attains} --- the store-site companion of
+\texttt{storedMoveLegal}, same hypothesis shape, no chess premise);
+and when the real-move loop fails high, the returned report \emph{is}
+the cutting move's own yield
+(\texttt{searchMoves\_failHigh\_exact}: the virtual accumulators sit
+strictly below the window there), so the stored move is admitted,
+legal, and attains the report
+(\texttt{boundD2\_failHigh\_attained}).
+
+\paragraph{No false mates --- and the countermodel that priced it.}
+The converse of milestone 1 is the prize: a mate-band declared value
+at a legally-reached root \emph{is} a forced mate within the probed
+depth (\texttt{forcedMate\_of\_nullValueD2}), so the driver's
+certified $\ML \le \mathit{lower}$ is never a lie
+(\texttt{mate\_report\_honest}, \texttt{\_kcx}, plus the mated-side
+dual).  Two findings came out of proving it.  First,
+\emph{NoZugzwang is not needed}: the A1 suppression is baked into the
+declared function (\texttt{nullTermD2\_lt\_ML}), so a band-valued fold
+can never originate in the pass term --- no-false-mates holds for
+$\mathrm{nullValueD2}$ itself, not just for its zugzwang-free validity
+region.  Second, the defender-side QS filter is a \emph{genuine}
+obstruction at exactly one depth:
+
+\begin{counterexample}[A false mate at frontier depth]
+\label{cex:frontier}
+There is a 5-position game on which every fidelity premise holds
+(\emph{Bounded}, \emph{EvalQuiet}, \emph{ValFloor},
+\emph{KingCaptureValHigh}, legally-reached root), the depth-2 declared
+value is the full $\MU$, and \emph{no forced mate exists}: the
+defender's escape --- a legal reply dropping more than 100cp of table
+value, into a stalemate --- sits below the QS threshold at defender
+remaining depth exactly 1 and is invisible to the value's filtered
+fold.  One more ply computes the honest $0$.
+\leanref{cexF\_false\_mate\_at\_frontier, CexF}{Liveness.lean}
+\end{counterexample}
+
+At defender remaining depth $\ge 2$ the tables' floor admits
+everything ($-192 \ge \mathit{val\_lower}(2) = -240$); depth exactly 1
+is the frontier, and the premise that closes it is
+\texttt{NoMaskedMobility} --- ``a position whose every
+depth-1-admitted move is illegal has no legal move at all''.  That
+premise has a history: it was born as the condition the rejected
+reduced correction scan would have needed
+(Section~\ref{sec:verify}), was retired to the countermodel shelf when
+full coverage shipped, and is hereby \emph{resurrected} as a live
+layer-2 premise with its first real consumers ---
+\texttt{cexF\_masked\_mobility} proves it is required, not merely
+convenient.  No natural chess position violating it is known, but
+table arithmetic does not exclude one; it therefore sits in the
+ledger, named and stated, like every other bet
+(Table~\ref{tab:ledger}).
+
+\paragraph{Evaluation retargeting between searches.}
+\label{sec:tableswap}
+Between searches, \texttt{search} retargets the evaluation (the
+\texttt{K\_MID}/\texttt{K\_END} mop-up assignment, run in both
+directions every search, so the evaluation in force is a function of
+the current position alone, never of module history).  Why is that
+sound against tables that survive the swap?  \texttt{TableSwap.lean}
+answers with a split verdict, one half of which is a countermodel:
+\texttt{tp\_score} bounds are \emph{eval-relative} ---
+\texttt{tableEntries\_eval\_relative} machine-checks that an exact
+entry for one evaluation violates the keyed invariant for the other
+--- so the swap without the per-search clear would be unsound, and the
+clear restores the invariant for the new evaluation unconditionally
+(\texttt{ctableOK\_empty}, already proven for \emph{any} game).
+\texttt{tp\_move} survives instead: $\mathrm{KillerInv}$ is
+position-intrinsic up to the king-gone classification
+$\mathrm{eval} \le -\ML$, a material fact the placement-only swap
+never moves (\emph{SameKingClass}), under which the whole lifecycle
+theorem transfers (\texttt{killerLegal\_lifecycle\_pstSwap}) ---
+cross-search consumption of old-eval killer entries is exactly this
+theorem.
+
+\subsection{Milestone 3: eventual classification}
+
+The arc composes into one statement about the game sunfish actually
+plays --- chess \emph{without draw rules}, the ``ruleless game'' of
+the king-capture model:
+
+\begin{theorem}[The trichotomy]
+\label{thm:trichotomy}
+At a legally-reached position, exactly one of: a forced mate in $\le k$
+puts the declared value in the mate band at every $D \ge k+1$
+(\emph{win}); the mated dual holds at every $D \ge k+2$ (\emph{loss});
+or no forced mate exists for either side at any horizon, and the
+declared value stays \emph{strictly} inside the band at every depth
+(\emph{neither}).
+\leanref{eventual\_classification}{Classification.lean}
+\end{theorem}
+
+The companions make the statement consumable:
+\texttt{classification\_exclusive} (the arms cannot coexist),
+\texttt{eventual\_mate\_iff} / \texttt{eventual\_mated\_iff} (a forced
+mate exists at \emph{some} horizon iff the value reaches the band at
+\emph{some} depth), and the driver corollaries
+\texttt{classification\_visible} (+\texttt{\_kcx}): after the 15-probe
+budget the converged bracket \emph{reports} the classification, with
+\texttt{EVAL\_ROUGHNESS} slop only on the certified side --- in the
+neither arm both bracket ends stay strictly off the band edges, the
+slop-free direction, which is no-false-mates read through the bracket
+invariant.
+
+Two honesty notes, both from the module comment.  ``Draw'' here means
+\emph{no forced mate in the ruleless game}; FIDE draws are not
+detected as $0$ --- K+B vs.\ K converges to the sub-band arm, not to a
+draw score.  And the premise ledger is per-arm
+(Table~\ref{tab:liveledger}): the win and loss arms pay
+\emph{NoZugzwang}; the neither arm --- the honesty arm --- pays
+\emph{NoMaskedMobility} and no zugzwang statement at all.  On the
+axiom side, the entire value level of the liveness arc is
+\texttt{propext}/\texttt{Quot.sound} only; the driver corollaries
+inherit layer 1's \texttt{Classical.choice}.
+
+\begin{table}[t]
+\centering
+\footnotesize
+\begin{tabular}{@{}p{4.1cm}p{4.3cm}p{4.6cm}@{}}
+\toprule
+\textbf{Arm / result} & \textbf{Fidelity premises} & \textbf{Chess premises}\\
+\midrule
+Spine: mate-in-$k$ in band at $D \ge k+1$ (\texttt{forcedMate\_negamaxD2}) &
+ValFloor & ---\\
+Transfer to the declared value (\texttt{forcedMate\_complete}); the
+trichotomy's win/loss arms &
+ValFloor & NoZugzwang (layer 2, second consumer)\\
+No false mates; the trichotomy's ``neither'' arm
+(\texttt{forcedMate\_of\_nullValueD2}) &
+ValFloor, EvalQuiet, root legality (\emph{HistoryLegal} shape) &
+NoMaskedMobility (layer 2; required, Cex.~\ref{cex:frontier})\\
+Driver convergence and budget (\texttt{driver\_probe\_budget}) &
+--- & ---\\
+Best-move attainment (\texttt{storedMove\_attains}) &
+layer-1 premises & ---\\
+Frontier-tail t-variant, honesty arm
+(\texttt{forcedMate\_of\_nullValueD2t}; \emph{proven, not shipped}) &
+ValFloor, EvalQuiet, root legality & \textbf{none}\\
+\bottomrule
+\end{tabular}
+\caption{The liveness premise ledger, per arm.  Layer 1 --- and with
+it table consistency --- still consumes no chess statement anywhere in
+this section; the two chess premises are both layer-2, and each is
+either measured (\emph{NoZugzwang}: the $-34.9 \pm 40.3$ null-removal
+row of Table~\ref{tab:elo}) or equipped with a proven discharge
+option (\emph{NoMaskedMobility}: the frontier-tail variant below).}
+\label{tab:liveledger}
+\end{table}
+
+\paragraph{The discharge option, proven but not shipped.}
+\texttt{NoMaskedMobility} comes with its repair worked out to the
+theorem level: the \emph{frontier-tail} variant
+($\mathrm{negamaxD2t}$ / $\mathrm{nullValueD2t}$,
+\texttt{Classification.lean} Part B) applies verify-on-suspicion to
+the QS filter itself.  When every \emph{admitted} move at a node is
+illegal --- a computable, $(\mathrm{pos},\mathrm{depth})$-determined,
+gamma-free trigger; notably the seemingly-equivalent fold-value
+trigger is \emph{not} search-observable, and
+\texttt{trigger\_shapes\_agree\_frontier} pins down where the two
+shapes coincide --- the fold re-runs over the full move list, so the
+tail only adds defender options.  For this variant no-false-mates
+carries \emph{no chess premise} at all
+(\texttt{forcedMate\_of\_nullValueD2t}), the completeness spine
+survives with the same $k+1$/$k+2$ bounds, the trichotomy's honesty
+arm is paid by fidelity alone (\texttt{eventual\_classification\_t}),
+and the countermodel becomes a positive test
+(\texttt{cexF\_t\_positive}: the honest $0$ at the depths where the
+shipped value fabricated $\MU$).  The corresponding engine change ---
+at the correction gate, where the scan already runs, search the
+sub-threshold legal moves at $\mathrm{depth}-1$ and fold them in as
+real yields --- is \emph{not made}: the model sits alongside the
+shipped one exactly as the primed consumers of
+Section~\ref{sec:verify} did, so the decision can eventually be taken
+with theorems and an ELO screen in hand rather than with either alone.
+
+% =========================================================================
+\section{Proof-First Pruning: Pricing Changes Before They Exist}
+\label{sec:pruning}
+
+Every mechanism verified so far existed in the engine before it was
+modeled; the proofs were forensic.  \texttt{Pruning.lean} inverts the
+order: it contains search variants that exist \emph{only} in the
+model --- proposed prunings whose soundness envelope was worked out
+before any engine code was written, so that the implement/reject
+decision is made with theorems in hand.  Two candidates went through
+it, with opposite verdicts, and the pair is a better advertisement for
+the method than either alone: the apparatus that spent the campaign
+repairing shipped mechanisms can also \emph{kill a mechanism that was
+never allowed to ship}, which is the cheapest possible time to kill
+it.
+
+\subsection{Razoring: unsound as proposed, and provably unrepairable}
+\label{sec:razoring}
+
+The proposal (imported from the engine's NNUE sibling, priced on the
+shared search model): at depth $d \in \{2, 3\}$, when
+$\mathrm{pos.score} + R(d) < \gamma$, answer from the depth-0
+(quiescence) value instead of the full-width search --- with runtime
+verification in the campaign's own style: if the razored answer would
+fail high, discard it and search in full, so razoring only ever
+produces fail-low answers.  It looks like verify-on-suspicion.  It is
+not, and the reason generalizes.
+
+The countermodel (\texttt{razorVerified\_not\_sound},
+Table~\ref{tab:cex}) is \emph{parameterized over the margin}: for
+every $R < 2\ML - 1$ there is a 6-position game --- a mate-in-1 whose
+delivering move is \emph{quiet}, so depth 0 stands pat while the
+depth-2 declared value is the full $\ML$ --- on which every fidelity
+premise of the shipped theorems holds, the trigger fires at an in-band
+window, the runtime verification \emph{passes}, and the served
+fail-low claim about the depth-2 value is false.  The stored
+consequence is a crossed entry of exactly the
+\texttt{lmr\_tt\_crossing} shape (\texttt{razor\_tt\_crossing}) ---
+the same pathology that ended re-search LMR, reproduced by a proposal
+that never ran.
+
+The root cause deserves its one-sentence form, because it is a test
+any future ``verified pruning'' proposal can be run against:
+\textbf{the verification inspects the wrong direction}.  A razored
+fail-low stored at $(\mathrm{pos}, d)$ claims a bound on the
+depth-$d$ value; the QS answer certifies a bound on the depth-0
+value; the two are incomparable, and the failure mode is a
+\emph{false fail-low}, which the fail-high re-check by construction
+never inspects --- while detecting a false fail-low \emph{is} the
+full-width search the razor was built to skip.  Contrast the
+band-edge arm (Section~\ref{sec:bandedge}): there the suspicious
+claim had a boundary window at which both fail directions are
+decisive; razoring has no analogous cheap decisive probe.
+
+Could a margin premise repair it?  The sound modified form exists and
+is instructive: under \emph{RazorMargin} ($\mathrm{nullValueD2}_d(p)
+\le \mathrm{pos.score} + R(d)$ at quiet razor nodes),
+$\mathrm{pos.score} + R(d)$ \emph{itself} is a sound fail-low answer,
+the QS call contributes nothing to soundness, and layer 1 holds at
+the unchanged key (\texttt{bound\_null\_spec\_Rm},
+\texttt{razorMargin\_no\_crossing}).  But the premise is then caught
+between two jaws: \texttt{razorMargin\_required} proves it false on
+the countermodel for every $R < 2\ML - 1$ --- the margin prices
+unbounded deep tactics, not \texttt{pos.value} deltas, so it is not a
+table fact, and a quiet mate-in-1 outruns every candidate --- and
+\texttt{razorMargin\_trigger\_vacuous} proves that with
+$R \ge 2\ML - 1$ the trigger can only fire at windows strictly above
+the mate band, which the mate machinery already decides.  Two jaws,
+no gap between them.  The layering argument finishes it:
+\emph{RazorMargin} would be a \emph{chess} premise in layer 1 ---
+razored answers are stored --- which is precisely the layer the
+band-edge landing had just emptied of chess premises, and it would be
+a false one.  Verdict: rejected, with the rejection machine-checked;
+no engine code was ever written.
+
+\subsection{The check extension: sound only where the key determines
+the value}
+\label{sec:checkext}
+
+The folklore change --- \texttt{depth += pos.in\_check()} at the top
+of \texttt{bound()} --- comes in shapes that look interchangeable and
+are not, and the model separates them with a countermodel apiece.
+
+\emph{The key-determined depth-shift form is sound and complete
+as-is.}  Declare $\mathrm{nullValueE}_d(p) =
+\mathrm{nullValueD2}_{d + e(p)}(p)$ with $e$ the in-check board
+predicate --- a function of the key, because $e$ is
+position-derived.  Layer 1 transfers by instantiation
+(\texttt{boundE\_null\_spec}), no-crossing holds at every
+$(\mathrm{pos},\mathrm{depth})$ key with \emph{no new key field}
+(\texttt{extE\_no\_crossing}), and the liveness bound improves:
+\texttt{forcedMate\_ext} --- at an in-check root, a mate-in-$k$ is
+visible at every $D \ge k$, one ply earlier than
+Theorem~\ref{thm:matek}.  The honesty clause: the shift's fold
+consumes \emph{unextended} children, so an implementing engine must
+search children flat --- effective depths telescope, only the probed
+node's own horizon moves, and the form is a depth
+\emph{relabeling}, not a deeper search of checking lines.
+
+\emph{The recursive at-entry form --- each child re-extending at its
+own entry --- has no specification to fail.}  This is the arresting
+verdict: not ``unsound'', but \emph{specification-free}.
+\texttt{ExtValueEqns} states the form's defining equations verbatim
+(on a check-free game they are the shipped function's own equations,
+so the generalization is right; the extension is what breaks it).  On
+a two-position mutual-check cycle --- perpetual check, real chess ---
+the equations admit \emph{every} band value $x$ at the same key
+(\texttt{checkExt\_any\_value}), and
+\texttt{checkExt\_no\_declared\_value} exhibits two solutions
+disagreeing at one $(\mathrm{pos},\mathrm{depth})$.  There is no
+function for a table entry to describe: point spec, table invariant
+and termination fail \emph{together}, before any theorem about the
+search can even be stated.  The engine reading is divergence: around
+the cycle the effective depth never decreases, and sunfish's
+in-search recursion has no repetition stop.
+
+\emph{The budgeted repair is sound exactly when the budget joins the
+key.}  Thread a per-path extension budget: the \emph{definition} of
+$\mathrm{nullValueEB}$ is itself the theorem the naive form lacks ---
+Lean accepts it with measure $b + d$, an extended step trading one
+budget for one depth --- and budget 0 collapses to the shipped value
+(\texttt{nullValueEB\_zero}): the repair extends the spec rather than
+replacing it.  But \texttt{ext\_budget\_value\_bearing} shows budgets
+0 and 1 disagree at a fixed $(\mathrm{pos},\mathrm{depth})$, so a
+table serving the budgeted value must key on
+$(\mathrm{pos},\mathrm{depth},\mathrm{budget})$ and pay the
+partitioned hit rate --- the key-must-grow branch of the flag
+doctrine (Section~\ref{sec:ledger}), now with machine-checked teeth
+--- and \texttt{ext\_recursive\_ne\_shift} shows no depth relabeling
+recovers it: deepening checking \emph{lines} genuinely requires the
+key-bearing budget.
+
+The section's moral mirrors the taxonomy of
+Section~\ref{sec:taxonomy}, applied prospectively instead of
+forensically: one candidate died because its verification faced the
+wrong direction, the other survived only in the forms where a single
+key-determined value function exists.  Both verdicts were delivered
+at the price of zero engine diffs, zero tournaments, and zero
+regressions --- the proof loop running \emph{ahead} of the code for
+the first time in the campaign.
+
 % =========================================================================
 \section{The Invariant Catalogue: What Is Guaranteed, and How}
 \label{sec:invariants}
 
 This section is the paper's answer to the question a maintainer
 actually asks: \emph{what does the shipped engine guarantee, what earns
-each guarantee, and how do they compose?}  It is self-contained.
+each guarantee, and how do they compose?}  It is self-contained.  (It
+is a \emph{safety} catalogue; the liveness guarantees of
+Section~\ref{sec:liveness} --- completeness, convergence, attainment,
+report honesty --- sit on top of I1 and I6 and carry their own premise
+ledger, Table~\ref{tab:liveledger}.)
 
 \subsection{The invariants}
 
@@ -2411,10 +3080,18 @@ You cannot be in zugzwang while delivering forced mate. &
 \multicolumn{3}{@{}l}{\emph{Layer 2 --- accuracy only; no table entry may depend on these}}\\
 \texttt{NoZugzwang} &
 The pass value never exceeds the best real move. &
-\textbf{Named}, stated once, attached to the accuracy lemma\\
+\textbf{Named}, stated once; now \emph{two} consumers: the accuracy
+lemma and the completeness transfer
+(\texttt{forcedMate\_complete}, Sec.~\ref{sec:liveness})\\
 \texttt{NullBetOK} &
 Recursive form of the same bet (\texttt{CanNull.lean}). &
 \textbf{Named}; confined to the bridge \texttt{nullValue\_plain}\\
+\texttt{NoMaskedMobility} &
+A position whose every depth-1-admitted move is illegal has no legal
+move at all. &
+\textbf{Named} (resurrected, Sec.~\ref{sec:liveness}); required for
+no-false-mates (Cex.~\ref{cex:frontier}); proven discharge option on
+record (the frontier-tail variant), not shipped\\
 \midrule
 \multicolumn{3}{@{}l}{\emph{Transfer to the shipped consumer}}\\
 \texttt{KingCaptureValHigh} &
@@ -2453,10 +3130,11 @@ refuted on real boards (Table~\ref{tab:refuted})\\
 A capturable node always reports $\MU$. &
 \textbf{Refuted} for the old loop (Cex.~\ref{cex:kcr});
 \textbf{restored as a theorem} after the repair\\
-\texttt{NoMaskedMobility} &
-The correction's scan may skip filtered moves. &
+\texttt{scanNewB} (the reduced scan) &
+The correction's legality scan may skip QS-filtered moves. &
 \textbf{Refuted} (\texttt{reducedScan\_needs\_premise}); our own
-proposed optimization\\
+proposed optimization.  (Its premise, \texttt{NoMaskedMobility}, has
+since been \emph{resurrected} as a live layer-2 row above)\\
 \texttt{ExtKeyIndependent} &
 Extended-search value is a function of $(\mathrm{pos}, \mathrm{depth})$
 alone. &
@@ -2467,7 +3145,7 @@ the history component\\
 \caption{The premise inventory as it stands.  ``Discharged'' means the
 premise was once carried in a statement and is now derived, so it
 appears in no shipped-design theorem.  The layering is the load-bearing
-structure: only the two layer-2 rows say anything about chess, and
+structure: only the layer-2 rows say anything about chess, and
 Theorem~\ref{thm:kcxnocross} --- the table's consistency --- does not
 depend on them.}
 \label{tab:ledger}
@@ -2596,7 +3274,9 @@ frozen with \texttt{git archive} (code \emph{and} tools --- no shared
 files), playing color-swapped pairs from a random-order opening book
 under fastchess~\cite{fastchess}, typically 300 games at
 \texttt{tc=4+0.04} ($\approx \pm 30$ ELO at 95\%), with adjudication,
-on an otherwise idle machine.  The full methodology, each rule with its
+on an otherwise idle machine.  After the time-regime lessons below,
+\emph{decision-grade} matches run at 30+1 or 60+1 with a book that
+covers the round count.  The full methodology, each rule with its
 origin story, is \texttt{docs/TESTING.md} in the repository.
 
 \subsection{Results}
@@ -2628,6 +3308,9 @@ Honest (min-semantics) LMR vs.\ no-LMR & $0.00 \pm 34$ & the edge was the bug; n
 Verify-on-suspicion vs.\ prior master & $-10.4 \pm 28.7$ & \textbf{merged}; 300 games at 60+1\\
 Stratified contract (deleting the depth-0 arm) & $+5.8 \pm 29.0$ & \textbf{merged}; 300 games at 60+1\\
 Removing the null move entirely & $-34.9 \pm 40.3$ & declined; 200 games at 60+1 --- what the zugzwang bet buys\\
+\midrule
+Killer depth gate (no QS killer stores) & $+41.9 \pm 28.6$ & \textbf{merged}; LOS 99.8\%, 300 games at 30+1 (Section~\ref{sec:killerlife})\\
+Monotone null cap, $\min(E+15, P)$ (Sec.~\ref{sec:cappednull}) & \emph{pending} & proposed and proven; regression floors green, decision match not yet run\\
 \bottomrule
 \end{tabular}
 \caption{Measured prices.  Error bars are 95\% where quoted; all
@@ -2647,10 +3330,15 @@ clamp became a provable no-op and was removed.  The bottom block is
 the final campaign (Section~\ref{sec:removal}): deterministic LMR's
 believed $-16$ was really ${\sim}{-50}$ --- net negative --- and with
 the honest variant worth exactly zero, all reductions were removed at
-\texttt{7fdd741}.  The final block prices the correctness work of
+\texttt{7fdd741}.  The fourth block prices the correctness work of
 Sections~\ref{sec:refuted}--\ref{sec:bandedge}: restoring soundness was
-free within measurement error, and the last row is the standing price
-of the one bet the engine still takes.}
+free within measurement error, and its last row is the standing price
+of the one bet the engine still takes.  The final block is the
+campaign's tail: the killer depth gate rode the lifecycle theorem in
+for free and measured as the tail's largest gain, and the monotone
+null cap's row is deliberately \emph{pending} --- its proofs are
+settled (Section~\ref{sec:cappednull}), its price is not, and this
+table does not print numbers that have not been measured.}
 \label{tab:elo}
 \end{table}
 
@@ -2742,7 +3430,54 @@ checked by depth-limited lockstep (moves \emph{and} node counts), never
 by clock.
 % TODO expand: half a page on the depth-lockstep protocol.
 
-\subsection{The frame}
+\subsection{The deployment loop: auditing the bot's own games}
+\label{sec:deployment}
+
+Tournaments measure strength; they are structurally blind to bugs that
+need a \emph{live} deployment to fire.  The campaign therefore had one
+more data source: an audit of 145 of the production bot's real
+Lichess games, hunting for moves the engine should not have played ---
+and it found two race-class bugs that neither the proofs nor the
+tournaments could have seen, because both live in the layer the model
+deliberately abstracts (Section~\ref{sec:model-not}): eviction timing
+and the driver's consumption protocol.
+
+\emph{The killer-eviction race.}  \texttt{tp\_move}'s FIFO eviction
+could age out \emph{the current search root} mid-search once the table
+churned past capacity; a deep fail-low probe then stored whatever
+capture sorted first at the root's key, and a timeout played it ---
+three outright queen/piece giveaways in the 145 games (the
+\texttt{Qxc6??} class).  The fix is one clause: eviction never removes
+the search root.  The formal status is the pleasant case:
+\texttt{killerLegal\_lifecycle} quantifies over arbitrary interleaved
+evictions, and \emph{which} entry eviction deletes is a free choice
+under the theorem --- the fix is covered as a deletion policy, no new
+proof needed.  Note what the theorem did and did not promise: every
+stored move was \emph{legal} throughout (the invariant never broke);
+``legal'' was never ``good'', and the race was a quality bug the
+safety layer correctly declined to have an opinion on.
+
+\emph{The dive-window family.}  A mid-depth stop could answer from a
+fail-high obtained at an absurd probe window (a ponderhit variant
+included): sound as a \emph{bound}, absurd as a \emph{move choice}.
+The fix is the commit-on-completed-depth rule, now in both driver
+loops: a mid-depth fail-high is a candidate, promoted only when its
+depth's bracket converges --- with the one sound exception proven and
+kept (the first probe of the next depth runs at the converged
+bracket's midpoint).  This one is instructive about the formal
+boundary: \texttt{storedMove\_attains}
+(Section~\ref{sec:livenessdriver}) is deliberately window-relative
+--- the stored move attains its report \emph{at the window that
+stored it} --- and the bug lived precisely in the consumer protocol
+that theorem does not govern: consuming a bound at a window the
+depth's bracket never certified.  The audit found the gap; the fix
+closed it; the theorem's scope note now records why it could not have.
+
+Both fixes carry deterministic regressions in the test suite.  The
+lesson is the loop itself: a 300-game match at test time control
+exercises neither table pressure at production capacities nor the
+stop/ponder protocol paths, so real deployed games are a data source
+the other two loops do not substitute for.
 
 Proofs identify the trade; tournaments price it.  Neither loop alone
 would have handled LMR correctly: without the proof we would not have
@@ -2787,7 +3522,7 @@ The verified prior work above shares a convenient property that sunfish
 does not have: it specifies searches over \emph{legal} move
 generators, where ``no moves'' is directly observable and terminal
 values need no reconstruction.  Pseudo-legal, king-capture search ---
-the idiom that makes a 142-line engine possible at all --- moves
+the idiom that makes a 136-line engine possible at all --- moves
 terminality from an observation to an inference, and
 Section~\ref{sec:refuted} is an account of that inference going wrong
 in three ways.  We are not aware of prior formal work on it, and we
@@ -2856,7 +3591,7 @@ yielded; the sound per-move entry is the \emph{minimum} of the two
 depths.  Both errors would have survived code review; neither survived
 \texttt{lake build}.
 
-\paragraph{Four more, from the second half.}
+\paragraph{Five more, from the second half.}
 The pattern repeated, and the later instances are more embarrassing
 than the earlier ones because by then we knew to look.
 \emph{(3) The reduced correction scan.}  We proposed skipping
@@ -2885,6 +3620,17 @@ it is the case that most clearly justifies the whole exercise: no
 amount of careful reading was going to catch it, and the only reason we
 looked was that the formalization forced the statement to be written
 down precisely enough to be searched for.
+\emph{(7) The honest mate report.}  We believed the declared value's
+mate-band reports were honest wherever the fidelity premises held ---
+no-false-mates seemed to be arithmetic.  \texttt{CexF}
+(Cex.~\ref{cex:frontier}) refutes it at exactly one depth: the
+defender's escape hides below the QS threshold at frontier depth, the
+depth-2 value fabricates a full mate, and the premise that closes the
+hole (\texttt{NoMaskedMobility}) is one we had \emph{retired} weeks
+earlier as belonging to a rejected optimization.  The ledger's rule
+that refuted and retired statements are kept, named, is what made the
+resurrection a one-line status change instead of an archaeology
+project.
 
 \paragraph{Measurement contamination.}
 Every rule in \texttt{docs/TESTING.md} exists because its absence
@@ -2932,8 +3678,17 @@ states, per mechanism, which theorem a change must preserve --- which
 is the practical form the whole campaign takes once the paper is
 closed.  CI builds the proofs and plays real protocol games: fastchess
 tournaments and a mock-Lichess integration test that drives the engine
-over the wire exactly as the production bot is driven.  The engine
-itself plays continuously on Lichess as \texttt{sunfish-engine}.
+over the wire exactly as the production bot is driven.  Since the 2026
+release the engine is also a package: \texttt{pip install sunfish}
+installs the terminal interface and \texttt{sunfish-uci}, the UCI
+engine for GUIs and tournament managers, published to PyPI with
+tag-driven, wheel-smoke-tested releases.  The engine
+itself plays continuously on Lichess as \texttt{sunfish-engine}; its
+NNUE sibling (\texttt{nnue\_4k/} in the same repository --- classic's
+piece-square score plus a trained neural residual, packed into one
+Python integer, over the same search this paper models; the razoring
+proposal of Section~\ref{sec:razoring} came from its lane) plays
+around the clock as \texttt{sunfish-nnue-engine}.
 
 \paragraph{Acknowledgments.}
 % TODO: acknowledgments (lichess-bot maintainers, fastchess, user bug
