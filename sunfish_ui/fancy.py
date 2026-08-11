@@ -140,14 +140,13 @@ def print_unicode_board(board, perspective=chess.WHITE):
             line.append(glyph)
         # Captured material flanks the board: what the top player has
         # won beside the top rank, the bottom player's beside the bottom.
-        # Each tray holds one side's lost pieces, so it wears that side's
-        # board color, on a light-square chip (black on the terminal's
-        # own background can vanish).
+        # Each tray holds one side's lost pieces and wears that side's
+        # piece color, on the terminal's own background.
         tray = theirs if i == 0 else ours if i == 7 else ""
         if tray:
             lost_by = perspective if i == 0 else not perspective
             tray_fg = 231 if lost_by == chess.WHITE else 16
-            tray = f"  \x1b[38;5;{tray_fg};48;5;{light};1m {tray} {reset}"
+            tray = f"  \x1b[38;5;{tray_fg};1m{tray}{reset}"
         print("  " + "".join(line) + reset + tray)
     files = "abcdefgh" if perspective == chess.WHITE else "hgfedcba"
     print(f"    {label}" + " ".join(f" {f}" for f in files) + f"{reset}\n")
