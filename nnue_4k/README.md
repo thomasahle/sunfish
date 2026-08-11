@@ -48,11 +48,13 @@ The packed representation (`packed/pnet.py` documents every invariant):
 tools/build/pack.sh nnue_4k/sunfish_nnue.py out.packed
 ```
 
-pyminify + xz + a 116-byte self-extracting header. Current state: the
-extended engine packs to 4944 bytes against the 4096-byte budget —
-the extension machinery, go-loop hardening and the pickle-free net
-loader are 848 bytes over, tracked as an open golf debt in the ledger. The v1 engine (92c4746) packed to
-3952 bytes; nets are external (`SF_NET`) and not part of the budget.
+pyminify + xz + a 74-byte self-extracting header (bash process
+substitution: the payload decompresses straight into a `/dev/fd` path,
+so there is no temp file, no cleanup subshell, and no chmod). Current
+state: the engine packs to **3851 bytes** against the 4096-byte budget
+— the base eval tables ship inside the net file, where data belongs.
+The v1 engine (92c4746) packed to 3952 bytes; nets are external
+(`SF_NET`) and not part of the budget.
 
 ## Net format (`.sfnn`)
 

@@ -24,16 +24,16 @@ xz --format=lzma --lzma1=preset=9e,pb=0 "$T"
 lt=$(get_file_size "$T.lzma")
 echo "Length of script: $lt"
 
+# Process substitution (hence bash, not sh) makes the payload a /dev/fd
+# path: no temp file, so no mktemp, no cleanup subshell, and no chmod
+# (an interpreter argument never needed the exec bit anyway).
 lh=100
 head=""
 while [ $lh != ${#head} ]
 do
    let lh=${#head}
-   head="""#!/bin/sh
-T=\`mktemp\`
-tail -c +$((lh+1)) "\$0"|xz -d>\$T
-chmod +x \$T
-(sleep 9;rm \$T)&exec \$(command -v pypy3||echo python3) \$T
+   head="""#!/bin/bash
+exec \$(command -v pypy3||echo python3) <(tail -c+$((lh+1)) "\$0"|xz -d)
 """
    echo "Length of head: $lh"
 done
