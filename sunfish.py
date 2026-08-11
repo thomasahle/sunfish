@@ -360,11 +360,15 @@ class Searcher:
             # First try not moving at all, i.e. the null move.
             # See https://chessprogramming.org/Null_Move for details.
             # The idea is that "doing nothing" is a lower bound on the score
-            # of the position, but we have to be be careful with zugzwang positions,
-            # where passing is better than any move. Hence we only use it in
-            # balanced positions. We also don't use it at root, so we can always
-            # return a move.
-            if not root and depth > 2 and any(c in pos.board for c in "RBNQ"):
+            # of the position, but we have to be careful with zugzwang, where
+            # passing is better than any move - the piece test guards that
+            # (K+P endings). The score cap has a different role: in decided
+            # positions every pass fails high, sound but lazy bounds that
+            # crowd out the precision needed to convert (dropping the cap was
+            # Elo-neutral over 900 games yet cost a mate-in-3 at the CI
+            # fixed-depth floor). Both halves stay. No null at root, so we
+            # can always return a move.
+            if not root and depth > 2 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
                 score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
                 # A fail high is a virtual claim, and needs verification
                 # before it may cut: if the king is capturable the capture is
