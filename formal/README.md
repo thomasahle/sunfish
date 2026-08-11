@@ -624,6 +624,26 @@ tactic only, so a full build takes seconds.
   `kingCapture_val_above` (a king capture's value clears `MATE_LOWER`
   even after the worst mover drop), backing `KingCaptureValHigh`.
 
+- **`Sunfish/Pruning.lean`** — PROPOSED prunings, proof-first: the
+  soundness envelope for candidate engine changes that do NOT exist in
+  code yet.  Razoring with runtime verification: REJECTED — unsound as
+  proposed (`razorVerified_not_sound`, `razor_tt_crossing`, a
+  parameterized countermodel covering every margin that can fire below
+  the mate band), sound only in a modified form (`boundRm`,
+  `bound_null_spec_Rm`) under a margin premise proven false for every
+  useful margin (`razorMargin_required`) and vacuous beyond them
+  (`razorMargin_trigger_vacuous`).  The check extension: sound and
+  landed in the key-determined depth-shift form (`boundE_null_spec`,
+  `extE_no_crossing`, `forcedMate_ext` — mates at in-check roots
+  visible one ply earlier), while the recursive at-entry form has NO
+  declared value function (`checkExt_no_declared_value` /
+  `checkExt_any_value`: on the perpetual-check cycle its defining
+  equations admit every band value at the same key) and the budgeted
+  repair is well-defined exactly when the budget joins the table key
+  (`nullValueEB`, `nullValueEB_zero`, `ext_budget_value_bearing`,
+  `ext_recursive_ne_shift`).  See "Proposed prunings: proven
+  envelopes" below for the full verdicts and engine guidance.
+
 ## The premise inventory (current, one place)
 
 What the shipped search's correctness rests on today, sorted by kind.
@@ -1362,6 +1382,28 @@ abstractions, each with its justification:
   them), which is why the spec carries the in-band hypothesis — as does
   `boundD2_spec`, for the same reason.
 
+### Re-audit (post-release polish, 2026-08-11)
+
+Formatting pass (120-char lines, inlined single-statement bodies) plus
+two semantic changes, both covered by existing abstractions: the QS
+threshold moved from a break to a filter (which IS the model's
+`movesAbove` form — the sort-order-equivalence bridge is now a direct
+correspondence), and the null-move gate dropped its `abs(score) < 500`
+cap after a 900-game guard tournament measured every sane variant
+within noise (the model's `guard : Pos → Bool` abstracts the predicate;
+`nullGuard`'s mapping row updates to the piece test alone).
+
+### Killer depth gate (post-release, 2026-08-11)
+
+The `tp_move` store gained `and depth`: depth-0 (QS) killers are no
+longer stored.  Measured +41.9 +/- 28.6 at LOS 99.8% (300 games, 30+1)
+- the table stops churning through QS-frontier noise, so deep killers
+survive to order deep nodes.  Model status: a strict SUBSET of the
+proven store trace (killerLegal_lifecycle quantifies over arbitrary
+store sequences, so fewer stores stay covered); the tp_move mapping
+rows now read store-at-depth>=1.  All mate/WAC floors re-verified
+before landing (the score-cap lesson).
+
 ### Landing note (the #158 review, 2026-08-11)
 
 The SHIPPED consumer is now the DOUBLE-PRIMED design: the terminal-veto
@@ -1541,6 +1583,181 @@ corner mates), `KingCapturableReportsExact` (false — the -368/-69290
 double report).  Each was an implicit "score implies legality" step;
 each produced a real crossed table entry; each is now either verified
 by the oracle or removed from the code path.
+
+## Proposed prunings: proven envelopes (`Sunfish/Pruning.lean`)
+
+Proof-first candidates: the soundness envelope is worked out in the
+model BEFORE any engine code exists, so the implement/reject decision
+is made with theorems in hand.  Per candidate: the verdict, the
+theorems as landed, what an engine change may and may not do, and the
+premises consumed.
+
+### Candidate 1 — razoring with runtime verification: REJECTED (unsound as proposed; no useful sound margin exists)
+
+**The proposal** (from the NNUE lane, proven on the shared search
+model): at depth `d ∈ {2, 3}`, when `pos.score + R(d) < gamma`, answer
+from the depth-0 (QS) value instead of the full-width search; if the
+razored answer would fail high (`>= gamma`), discard it and run the
+full search — so razoring only ever produces fail-low answers.
+
+**Verdict: UNSOUND AS PROPOSED, and provably not repairable into
+anything useful.**  The theorems, in the order of the argument:
+
+- **`razorVerified_not_sound`** — for EVERY margin
+  `R < 2·MATE_LOWER − 1`, a machine-checked countermodel
+  (`CexRz (razorV R)`: a mate-in-1 whose delivering move is QUIET, so
+  depth 0 stands pat while the depth-2 declared value is the full
+  `MATE_LOWER`) on which every fidelity premise of the double-primed
+  theorems holds (`cexRz_fidelity`: `Bounded`, `EvalQuiet`,
+  `ValFloor 192`, `KingCaptureValHigh`, `HighValIsKingCapture`,
+  legally-reached root): the trigger fires at the in-band window
+  `MATE_LOWER`, the runtime verification PASSES (the razored answer
+  fails low, so the fail-high re-check never runs), and the served
+  fail-low claim about `nullValueD2` at the `(pos, 2)` key is false.
+  `cexRz_real` repeats the value computation for the real-move
+  `negamaxD2` — the crossing is not a null artifact.
+- **Root cause, for the guideline: the verification inspects the
+  wrong direction.**  A razored fail-low stored at `(pos, d)` claims a
+  bound on the depth-`d` declared value; the QS answer certifies a
+  bound on the DEPTH-0 declared value; the two are incomparable in
+  general.  The failure mode is a FALSE FAIL-LOW, which the fail-high
+  re-check by construction never inspects — and detecting a false
+  fail-low IS the full-width search the razor was built to skip.
+  Contrast with the band-edge arm: there the suspicious claim had a
+  boundary window at which BOTH fail directions are decisive
+  (`boundary_window_decisive`); razoring has no analogous cheap
+  decisive probe.
+- **`razor_tt_crossing`** — the doctrinal upgrade: at the same key and
+  the same window, the honest search fails high at `MATE_LOWER` (the
+  mate is real) while the razored probe serves an upper bound below
+  it: `Entry(lower, upper)` with `upper < lower`, the exact
+  crossed-entry shape of `lmr_tt_crossing` (the theorem that ended
+  re-search LMR).
+- **The sound modified form exists — and abandons the QS answer.**
+  Under **`RazorMargin`** (`nullValueD2 d p ≤ pos.score + R(d)` at
+  razor depths, quiet non-capturable nodes), `pos.score + R(d)` ITSELF
+  is a sound fail-low answer; the QS call contributes nothing to
+  soundness and `boundRm` never consults it.  **`bound_null_spec_Rm`**
+  is layer 1 for the margin razor — it brackets the SAME `nullValueD2`
+  at every key and driver window, so razored and full answers may mix
+  at a key — and **`razorMargin_no_crossing`** is the table-consistency
+  corollary.  (An engine wanting the QS refinement may serve
+  `max(qs, pos.score + R(d))` with the fail-high re-search; the margin
+  premise still carries all the soundness.)
+- **But no useful margin exists.**  **`razorMargin_required`**:
+  `RazorMargin` is FALSE on the countermodel for every
+  `R < 2·MATE_LOWER − 1` — the margin premise prices unbounded deep
+  tactics, not `pos.value` deltas, so it is NOT an `EvalBounds` table
+  fact, and a quiet mate-in-1 outruns every candidate margin.
+  **`razorMargin_trigger_vacuous`** (unconditional arithmetic): with
+  `R ≥ 2·MATE_LOWER − 1`, the trigger can only fire at windows
+  STRICTLY ABOVE the mate band — windows the mate machinery already
+  decides.  Two jaws, no gap between them.
+- **Layering**: `RazorMargin` would be a chess premise in LAYER 1
+  (razored answers are stored), the layer the band-edge landing just
+  freed of chess premises — and a FALSE one.  Re-admitting it is
+  exactly what the two-layer doctrine forbids.
+
+**What an engine change may and may not do**: do not implement the
+proposal.  A PR attempting any razoring variant must state which jaw
+it escapes: either exhibit a margin premise that is both true of chess
+and able to fire below the mate band (`razorMargin_required` says
+these conflict for every `R`), or exhibit a cheap decisive
+verification for the fail-LOW direction (the band-edge shape) — which
+for razoring is the full search itself.  Serving the QS value as the
+answer at the `(pos, d)` key is never admissible
+(`razor_tt_crossing`); serving it at the `(pos, 0)` key is admissible
+and useless (it does not answer the depth-`d` probe).
+
+Premises consumed: the countermodel theorems consume NONE (every
+fidelity premise is proven on the countermodel; axioms
+`propext, Quot.sound` only — the fidelity bundle included).
+`bound_null_spec_Rm` / `razorMargin_no_crossing` consume `Bounded` +
+`RazorMargin` and inherit layer 1''`s `Classical.choice`.
+
+### Candidate 2 — the check extension: SOUND ONLY IN THE KEY-DETERMINED (DEPTH-SHIFT) FORM; the recursive form has no spec at all
+
+**The proposal**: `e(pos) = 1` if the side to move is in check
+(`inCheckB`, the board predicate already modeled); at node entry the
+effective depth is `d' = d + e(pos)`, children searched at `d' − 1`,
+the entry stored at the `(pos, d)` key.
+
+**Verdict, in three parts** (the `can_ext` doctrine of the guideline
+section, now with machine-checked teeth on both of its branches):
+
+- **The key-determined form is sound and lands whole.**  With declared
+  function `nullValueE d p = nullValueD2 (d + e p) p` — a function of
+  the key, because `e` is position-derived — layer 1 transfers by
+  instantiation (`boundE_null_spec` / `boundKCXE_null_spec`),
+  no-crossing holds at every `(pos, depth)` key with NO new key field
+  (`extE_no_crossing`), and the liveness bound IMPROVES:
+  `forcedMate_ext` — at an in-check root a mate-in-k is visible at
+  every `D ≥ k`, one ply earlier than `forcedMate_complete`'s `k + 1`
+  (premises unchanged: `ValFloor` + `NoZugzwang`, layer 2).  The
+  honesty clause: `nullValueE`'s fold consumes UNEXTENDED children, so
+  the implementing engine must search children FLAT — the effective
+  depths telescope, only the probed node's own horizon moves, and the
+  form is a depth relabeling (deeper root probes at in-check nodes),
+  NOT a deeper search of checking lines.
+- **The recursive at-entry form — what `depth += pos.in_check()` at
+  the top of `bound()` actually computes, each child re-extending at
+  its own entry — has NO declared value function.**  `ExtValueEqns`
+  states its defining equations verbatim (`extValueEqns_of_checkFree`:
+  on a check-free game they are `nullValueD2`'s own equations, and the
+  shipped function satisfies them — the equations are the right
+  generalization, the extension itself is what breaks them).  On the
+  two-position mutual-check cycle `CexPerp` — real chess: perpetual
+  check — **`checkExt_any_value`** solves the equations with an
+  ARBITRARY band value `x` at `pa` (and `−x` at `pb`) at every depth,
+  and **`checkExt_no_declared_value`** exhibits two solutions
+  disagreeing at one `(pos, depth)` key.  There is no function for a
+  table entry to describe: point spec, table invariant and termination
+  fail together, before any theorem about the search can be stated.
+  The engine reading is non-termination: around the cycle the
+  effective depth never decreases — `pa` at depth `d` recurses through
+  `pb` back to `pa` at depth `d` — and sunfish's in-search recursion
+  has no repetition stop (the `history` check guards root-line
+  repetitions only).
+- **The budgeted repair is sound exactly when the budget joins the
+  key.**  `nullValueEB` threads a per-path extension budget `b`
+  (extension consumed from it); the DEFINITION is the theorem the
+  naive form lacks — Lean accepts it with measure `b + d`, an extended
+  step trading one budget for one depth — and `nullValueEB_zero`
+  proves budget 0 collapses to the shipped `nullValueD2` (the repair
+  extends the spec, not replaces it).  But
+  **`ext_budget_value_bearing`**: budgets 0 and 1 disagree at a fixed
+  `(pos, depth)` key, so a table serving it must key on
+  `(pos, depth, budget)` — the `can_ext` doctrine's key-must-grow
+  branch, the `extended_value_not_key_independent` shape with the
+  history-state made explicit.  And **`ext_recursive_ne_shift`**: at a
+  quiet node above a check chain, the budgeted recursive extension
+  (budget ample, cap never binding) sees the mate the extra ply
+  reveals while the shift function does not — no depth relabeling
+  recovers the recursive extension; deepening checking LINES genuinely
+  requires the key-bearing budget.
+
+**What an engine change may and may not do**: the ONLY change the
+landed theorems license as-is is the depth-shift form — `depth`
+effective at the probed node, children flat, store at the incoming
+key — whose value is a relabeling (and whose liveness gain is real but
+confined to in-check roots of stored subtrees).  `depth +=
+pos.in_check()` at the top of `bound()` is FORBIDDEN in any form that
+lets children re-extend: it diverges on perpetual check and its table
+entries describe no function (`checkExt_no_declared_value`).  A PR
+wanting genuinely deeper checking lines must thread an extension
+budget AND widen the `tp_score` key to `(pos, depth, budget)`, paying
+the partitioned hit rate the `can_ext` doctrine prices — with the
+search-side spec for the budgeted consumer as the (stated, unstarted)
+proof obligation: `bound_null_spec''` re-proven against
+`nullValueEB`, budget threaded through the recursion.
+
+Premises consumed: the depth-shift transfers consume exactly the
+double-primed premise lists (`Bounded`; production side adds
+`KingCaptureValHigh` + `CaptureFirst`) and inherit their
+`Classical.choice`; `forcedMate_ext` consumes `ValFloor` +
+`NoZugzwang` (layer 2, unchanged); the impossibility and budget
+theorems consume NOTHING (axioms `propext, Quot.sound` only,
+countermodels and the well-founded definition included).
 
 ## Prior art
 

@@ -1,0 +1,104 @@
+# Changelog
+
+## sunfish 2026
+
+The first PyPI release. Three years of work since sunfish 2023, in four
+stories: the search was formally verified and got *simpler* for it, two
+families of production bugs were found and fixed, the engine became a
+proper package, and a strong NNUE sibling grew up next to it.
+
+### The engine (142 clean lines, ~3.3KB packed)
+
+- **The search's promises are now theorems.** The `bound()` docstring
+  states the full contract — the fail-soft bracket, the exact promises
+  (king-gone, capturable-node sentinel, verified mate/stalemate values,
+  the fail-high `tp_move` witness) — and every clause maps to a
+  machine-checked theorem in `formal/` (Lean 4, zero sorries, no
+  Mathlib). The correctness layer carries **no chess assumptions**;
+  zugzwang can cost accuracy, never table consistency.
+- **Null-move fail-highs are verified before they may cut**: a real
+  king capture is substituted when one exists, and a mate-band claim is
+  settled by one probe at the band boundary — where a fail-soft report
+  is decisive in both directions. The chess assumption this replaced
+  ("you cannot be in zugzwang while delivering forced mate") is *false*
+  (witness: `8/6p1/6R1/k7/2K5/8/8/8 w`), which is why it had to be
+  computed rather than assumed.
+- **Mate/stalemate detection is verify-on-suspicion**: when no searched
+  move proves legal, every generated move is checked with a board
+  predicate, and verified terminals return their exact values
+  (0 / −MATE_LOWER) at every depth ≥ 1 — in both fail directions.
+  Trusting search scores as legality evidence is provably unsound;
+  three historical "score implies legality" assumptions were refuted on
+  real boards and their fixes are regression-tested.
+- **Late Move Reductions were removed** after measurement showed the
+  honest variant is worth exactly 0.00 ± 34 Elo — the historical
+  variant's entire edge was its unsound bound propagation (the
+  transposition-table crossing is machine-checked). The move loop is
+  full-width again, and the docstring is provable as written.
+- **`MATE_LOWER` margin repair**: the king-value margin now covers the
+  largest army a kingless side can field (`K − 13Q`); the old margin
+  provably leaked.
+- The MTD-bi driver brackets the full window band, converges in a
+  proven ≤ 15 probes per depth, and only commits a best move from a
+  completed depth (see bug fixes below).
+
+### Production bug fixes (found by auditing the lichess bot's games)
+
+- **The killer-eviction race**: `tp_move`'s FIFO eviction could age out
+  the *current search root* mid-search once the table churned past
+  capacity; a deep fail-low probe then stored whatever capture sorted
+  first, and a timeout played it. Three queen/piece giveaways in 145
+  production games. Fixed: eviction never removes the search root.
+- **The dive-window family**: a mid-depth stop could answer from a
+  fail-high obtained at an absurd probe window (including a ponderhit
+  variant). Fixed: both UCI loops promote a candidate move only when
+  its depth's bracket converges — with the one sound exception proven
+  and kept (the first probe of the next depth, which runs at the
+  converged bracket's midpoint).
+- **`position fen` handling** (#156): an installed engine that cannot
+  find its real UCI interface now says so and stops, rather than
+  silently playing on with a reduced one.
+- **Long-TC time overruns**: deadlines are enforced inside the search
+  (checked every 2048 nodes), not just between iterations.
+
+### Packaging and interfaces
+
+- **`pip install sunfish && sunfish`** starts the terminal play
+  interface; **`sunfish-uci`** is the engine for GUIs and tournament
+  managers. Published to PyPI via trusted publishing; releases are
+  tag-driven and smoke-test the wheel end-to-end, including on Windows.
+- `sunfish_ui/` ships in the wheel: the full UCI interface (pondering,
+  Hash, spec-complete `go` parsing, FEN positions) and the fancy
+  terminal board.
+- Repository reorganized: `docs/`, `formal/`, `sunfish_ui/`, `tests/`,
+  `tools/` — with build scripts, deploy configs, and test data filed
+  under their owners.
+
+### Verification and testing infrastructure
+
+- `formal/`: the Lean development — the core fail-soft contract, the
+  layered null-move specs, the killer-table lifecycle theorem, liveness
+  results (mate-in-k completeness, driver convergence, no false mates,
+  and the win/loss/no-mate classification theorem) — plus a CI drift
+  guard that hashes every audited code region and ratchets stale
+  citations. A paper draft lives in `formal/paper/`.
+- `docs/TESTING.md`: the tournament methodology, each rule with the
+  confident wrong number that created it. Decision-grade matches run at
+  30+1 minimum with a book that covers the round count.
+- The test suite grew the terminal bench (148 Stockfish-validated
+  mate/stalemate positions), transposition-consistency witnesses, and
+  deterministic regressions for both production bug families.
+
+### The NNUE sibling (in review, `nnue_4k/`)
+
+A packed big-integer NNUE engine — the whole accumulator and evaluation
+head live in one Python int (SWAR lanes, modular horizontal sums, king
+buckets) with training and verification toolchains. Currently measured
+around +200 Elo over classic at 30+1, aimed at the TCEC 4k division and
+a lichess bot of its own. Lands in the next release.
+
+## sunfish 2023
+
+The classic 131-line engine: MTD-bi search, piece-square tables,
+null-move pruning, quiescence via the value filter, futility pruning,
+and the king-capture convention. See git history.

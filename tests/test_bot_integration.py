@@ -9,7 +9,8 @@ pondering coverage) does not catch.  Testing over real HTTP also covers
 lib/lichess.py, the ndjson streams, and config parsing.
 
 The checkout is pinned and then patched with the bundle's lichess-bot.patch --
-the exact tree production runs (see nnue_4k/lichess/setup.sh).  The patch
+the exact tree production runs (both bundles ship the identical patch;
+see tools/lichess/setup.sh and nnue_4k/lichess/setup.sh).  The patch
 exists because of three production incidents, and each has a regression test
 here:
 
@@ -87,6 +88,8 @@ LICHESS_BOT_COMMIT = os.environ.get(
     "LICHESS_BOT_COMMIT", "bedd1d9e86a8c4c96319490533e4e20fe63d1ac8")
 # The production patch: this repository's lichess bundle carries it and
 # setup.sh applies it on deployment, so the tested tree is the deployed tree.
+# The two bundles carry byte-identical patches (asserted in the config
+# tests); the integration run reads the nnue copy.
 BUNDLE_DIR = REPO_ROOT / "nnue_4k" / "lichess"
 PATCH_FILE = os.environ.get("LICHESS_BOT_PATCH",
                             str(BUNDLE_DIR / "lichess-bot.patch"))

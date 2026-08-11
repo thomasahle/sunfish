@@ -36,9 +36,9 @@ engine:
 
 challenge:
   concurrency: 1
-  # Humans only: bot-vs-bot games mostly farm rating off sunfish and burn
-  # the VM's CPU without anyone watching.
-  accept_bot: false
+  # Bot games welcome (Thomas 2026-08-11, both bots). The old humans-only
+  # rationale (rating farming, CPU burn) belonged to the throttled 1 GB VM.
+  accept_bot: true
   variants:
     - standard
   time_controls:

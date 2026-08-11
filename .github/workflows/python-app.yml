@@ -145,7 +145,8 @@ jobs:
       run: |
         python -c "import subprocess,sys; p=subprocess.run([sys.executable,'-u','sunfish.py'],input=b'uci\nisready\nposition startpos\ngo movetime 300\nquit\n',capture_output=True,timeout=120); print(p.stdout.decode()); print('STDERR:', p.stderr.decode(), file=sys.stderr); sys.exit(0 if ('uciok' in p.stdout.decode() and 'bestmove' in p.stdout.decode()) else 1)"
     - name: Installed entry point on Windows
-      # Also checks that the wheel ships sunfish_ui/, the real UCI
+      # The bare 'sunfish' entry is the play interface; the engine is
+      # sunfish-uci. Also checks that the wheel ships sunfish_ui/, the real UCI
       # interface: sunfish.py imports it unconditionally, and from this
       # Black-to-move FEN the packed loop would answer from rank 1 or 2
       # (issue #156). Run from a scratch directory so the checkout cannot

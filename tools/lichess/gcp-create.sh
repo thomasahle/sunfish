@@ -22,7 +22,7 @@ echo "Waiting for the VM to boot..."
 sleep 30
 
 gcloud compute ssh "$NAME" --zone="$ZONE" --command \
-    "curl -sL https://raw.githubusercontent.com/thomasahle/sunfish/master/contrib/lichess/setup.sh | sudo bash -s -- '$TOKEN'"
+    "curl -sL https://raw.githubusercontent.com/thomasahle/sunfish/master/tools/lichess/setup.sh | sudo bash -s -- '$TOKEN'"
 
 echo
 echo "sunfish is live. Watch it: gcloud compute ssh $NAME --zone=$ZONE --command 'journalctl -u sunfish-lichess -f'"

@@ -198,9 +198,8 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                     # Stop crawlers from sliding, and sliding after captures
                     if p in "PNK" or q in "pnbrqk": break
                     # Castling, by sliding the rook next to the king
-                    for (sq, dr, c) in ((A1, E, self.wc[0]), (H1, W, self.wc[1])):
-                        if i == sq and self.board[j + dr] == "K" and c:
-                            yield Move(j + dr, j - dr, "")
+                    if i == A1 and self.board[j + E] == "K" and self.wc[0]: yield Move(j + E, j + W, "")
+                    if i == H1 and self.board[j + W] == "K" and self.wc[1]: yield Move(j + W, j + E, "")
 
     def rotate(self, nullmove=False):
         """Rotates the board, preserving enpassant, unless nullmove"""
@@ -222,10 +221,8 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         board = put(board, j, board[i])
         board = put(board, i, ".")
         # Castling rights, we move the rook or capture the opponent's
-        if i == A1: wc = (False, wc[1])
-        if i == H1: wc = (wc[0], False)
-        if j == A8: bc = (bc[0], False)
-        if j == H8: bc = (False, bc[1])
+        wc = (wc[0] and i != A1, wc[1] and i != H1)
+        bc = (bc[0] and j != H8, bc[1] and j != A8)
         # Castling
         if p == "K":
             wc = (False, False)
@@ -235,12 +232,9 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                 board = put(board, kp, "R")
         # Pawn promotion, double move and en passant capture
         if p == "P":
-            if A8 <= j <= H8:
-                board = put(board, j, prom)
-            if j - i == 2 * N:
-                ep = i + N
-            if j == self.ep:
-                board = put(board, j + S, ".")
+            if A8 <= j <= H8:  board = put(board, j, prom)
+            if j - i == 2 * N: ep = i + N
+            if j == self.ep:   board = put(board, j + S, ".")
         # We rotate the returned position, so it's ready for the next player
         return Position(board, score, wc, bc, ep, kp).rotate()
 
@@ -250,21 +244,17 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         # Actual move
         score = pst[p][j] - pst[p][i]
         # Capture
-        if q.islower():
-            score += pst[q.upper()][119 - j]
+        if q in "pnbrqk": score += pst[q.upper()][119 - j]
         # Castling check detection
-        if abs(j - self.kp) < 2:
-            score += pst["K"][119 - j]
+        if abs(j - self.kp) < 2: score += pst["K"][119 - j]
         # Castling
         if p == "K" and abs(i - j) == 2:
             score += pst["R"][(i + j) // 2]
             score -= pst["R"][A1 if j < i else H1]
         # Special pawn stuff
         if p == "P":
-            if A8 <= j <= H8:
-                score += pst[prom][j] - pst["P"][j]
-            if j == self.ep:
-                score += pst["P"][119 - (j + S)]
+            if A8 <= j <= H8: score += pst[prom][j] - pst["P"][j]
+            if j == self.ep: score += pst["P"][119 - (j + S)]
         return score
 
     def king_capture(self):
@@ -356,8 +346,7 @@ class Searcher:
             # Let's not repeat positions. We don't chat
             # - at the root (a driver probe) since it is in history, but not a draw.
             # - at depth=0, since it would be expensive and break "futility pruning".
-            if depth > 0 and pos in self.history:
-                return 0
+            if depth > 0 and pos in self.history: return 0
 
         # Generator of moves to search in order.
         # This allows us to define the moves, but only calculate them if needed.
@@ -371,12 +360,15 @@ class Searcher:
             # First try not moving at all, i.e. the null move.
             # See https://chessprogramming.org/Null_Move for details.
             # The idea is that "doing nothing" is a lower bound on the score
-            # of the position, but we have to be be careful with zugzwang positions,
-            # where passing is better than any move. Hence we only use it in
-            # balanced positions. We also don't use it at root, so we can always
-            # return a move.
-            if not root and depth > 2 \
-                    and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
+            # of the position, but we have to be careful with zugzwang, where
+            # passing is better than any move - the piece test guards that
+            # (K+P endings). The score cap has a different role: in decided
+            # positions every pass fails high, sound but lazy bounds that
+            # crowd out the precision needed to convert (dropping the cap was
+            # Elo-neutral over 900 games yet cost a mate-in-3 at the CI
+            # fixed-depth floor). Both halves stay. No null at root, so we
+            # can always return a move.
+            if not root and depth > 2 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
                 score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
                 # A fail high is a virtual claim, and needs verification
                 # before it may cut: if the king is capturable the capture is
@@ -425,11 +417,11 @@ class Searcher:
                 yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)
 
             # Then all the other moves
-            for val, move in sorted(((pos.value(m), m) for m in pos.gen_moves()), reverse=True):
-                # Quiescent search
-                if val < val_lower:
-                    break
-
+            # Quiescent search: only moves above the val-limit are admitted -
+            # filtering BEFORE the sort skips sorting the sub-threshold tail
+            # (most of the list at QS nodes), and is literally the model's
+            # movesAbove form (formal/Sunfish/Stalemate.lean).
+            for val, move in sorted(((v, m) for m in pos.gen_moves() if (v:=pos.value(m)) >= val_lower), reverse=True):
                 # If the new score is less than gamma, the opponent will for sure just
                 # stand pat, since ""pos.score + val < gamma === -(pos.score + val) >= 1-gamma""
                 # This is known as futility pruning.
@@ -456,7 +448,7 @@ class Searcher:
             live |= move is not None and score > -MATE_UPPER
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
-                if move is not None:
+                if move is not None and depth:
                     self.tp_move[pos] = move
                     # Never evict the current search root: its killer is the
                     # answer go_loop plays, and once the table churns more
