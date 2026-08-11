@@ -24,6 +24,8 @@ jobs:
       uses: astral-sh/setup-uv@v5
     - name: Install dependencies
       run: uv pip install --system -r pyproject.toml --group dev
+    - name: Install polyglot adapter (XBoard compatibility test)
+      run: sudo apt-get install -y -q polyglot || true
     - name: Lint with flake8
       run: |
         # stop the build if there are Python syntax errors or undefined names
