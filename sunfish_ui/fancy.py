@@ -103,7 +103,7 @@ def get_user_move(board):
 def get_user_color():
     color = ""
     while color not in ("white", "black"):
-        color = input("Do you want to be white or black? ")
+        color = input("   Do you want to be white or black? ")
     return chess.WHITE if color == "white" else chess.BLACK
 
 
@@ -317,9 +317,9 @@ async def main():
         engine = await load_engine_from_conf(conf, args.name, debug=args.debug)
 
     if "author" in engine.id:
-        print(f"Playing against {engine.id['name']} by {engine.id['author']}.")
+        print(f"   Playing against {engine.id['name']} by {engine.id['author']}.")
     else:
-        print(f"Playing against {engine.id['name']}.")
+        print(f"   Playing against {engine.id['name']}.")
 
     board = chess.Board(args.fen)
 
