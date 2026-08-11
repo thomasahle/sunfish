@@ -84,6 +84,21 @@ p.add_argument("--tailw", type=int, default=0,
                help="width of the odd-symmetrized narrow tail over "
                     "[d, h, f] (0 = plain linear read-out d + u.h).  "
                     "Never a second wide layer")
+p.add_argument("--satpen", type=float, default=0.0,
+               help="saturation penalty weight: training loss adds "
+                    "satpen * mean(relu(|pre-clip residual| - satthresh)/100)^2. "
+                    "The clamp passes zero gradient outside the band, so "
+                    "without this, +/-600 saturation is FREE capacity -- the "
+                    "kbbil collapse (ledger b45e48d) showed play pays for it "
+                    "(10x pegged evals, +27%% tree inflation).  Val stays the "
+                    "plain metric for comparability")
+p.add_argument("--satthresh", type=float, default=480.0,
+               help="where the saturation penalty starts, in cp")
+p.add_argument("--phasecap", type=float, default=0.0,
+               help="project the phase scales into [1/cap, cap] after every "
+                    "step (0 = off).  The learned s~7 amplified everything "
+                    "composed before it -- quantization noise, tail output -- "
+                    "by 7x at build time; capping forces v to carry the scale")
 p.add_argument("--phase", type=int, default=0,
                help="material-phase output buckets: the net residual is "
                     "scaled by a learned per-bucket scalar s_b, bucket = "
@@ -424,6 +439,7 @@ class Net(nn.Module):
             cnt = torch.diff(fo, append=fi.new_tensor([fi.shape[0]]))
             pb = ((cnt - 1) * self.phase // 32).clamp(0, self.phase - 1)
             d = d * self.s[pb]                  # piece count is swap-invariant
+        self.pre = d                            # pre-clip residual (satpen)
         return ps + d.clamp(-CLAMP, CLAMP)
 
 
@@ -528,10 +544,16 @@ for epoch in range(args.epochs):
         pred = model(fi, mi, fo, ps)
         loss = ((torch.sigmoid(pred / K) - torch.sigmoid(y / K)).abs()
                 ** args.losspow).mean()
+        if args.satpen:
+            loss = loss + args.satpen * (
+                torch.relu(model.pre.abs() - args.satthresh) / 100).pow(2).mean()
         opt.zero_grad()
         loss.backward()
         opt.step()
         model.clamp_weights(args.wclip)
+        if args.phasecap and args.phase:
+            with torch.no_grad():
+                model.s.clamp_(1.0 / args.phasecap, args.phasecap)
         tl += loss.item() * len(y)
         tn += len(y)
     sched.step()
