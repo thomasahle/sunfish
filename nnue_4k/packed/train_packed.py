@@ -80,6 +80,19 @@ p.add_argument("--nb2", type=int, default=0,
                     "DIFFERENT lane blocks per perspective instead of "
                     "squaring one -- non-symmetric quadratic forms.  "
                     "Doubles the bilinear lane count (2*nb units)")
+p.add_argument("--rff", type=int, default=0,
+               help="phase-sketch lanes (Thomas's multiplicative-features "
+                    "idea, unitary reduction): each feature contributes a "
+                    "learned ANGLE per lane; the accumulator sums angles "
+                    "(= composes unit-modulus rotations = tensor-sketch "
+                    "with unitary factors) and the read-out is "
+                    "w.cos(sum) -- random Fourier features, all-order "
+                    "interactions.  Packed form is additive: wrapping "
+                    "16-bit lanes ARE angles mod 2pi (one extra AND per "
+                    "row-add kills cross-lane carry; cos = clamp-built "
+                    "triangle waves).  Float-gated first, as always")
+p.add_argument("--rffsigma", type=float, default=0.5,
+               help="init scale of the angle table (RFF kernel bandwidth)")
 p.add_argument("--tailw", type=int, default=0,
                help="width of the odd-symmetrized narrow tail over "
                     "[d, h, f] (0 = plain linear read-out d + u.h).  "
@@ -348,7 +361,7 @@ class Net(nn.Module):
     """
 
     def __init__(self, N, factor, B, nb=0, m=4, tailw=0, phase=0,
-                 baff=0, nb2=0):
+                 baff=0, nb2=0, rff=0):
         super().__init__()
         self.B = B
         self.raw = nn.Parameter(torch.randn(B * 768, N) * 0.05)
@@ -363,6 +376,11 @@ class Net(nn.Module):
         self.baff, self.nb2 = baff, nb2
         if phase:
             self.s = nn.Parameter(torch.ones(phase))  # per-bucket residual scale
+        self.rff = rff
+        if rff:
+            self.theta = nn.Parameter(torch.randn(768, rff) * RFF_SIGMA)
+            self.phb = nn.Parameter(torch.zeros(rff))
+            self.rw = nn.Parameter(torch.zeros(rff))   # read-out, starts silent
         if nb:
             # bilinear lanes are bucket-FREE even when B > 1: their rows are
             # identical across bucket tables, so king-bucket rebuilds cost
@@ -419,6 +437,14 @@ class Net(nn.Module):
         au = act(nn.functional.embedding_bag(fi, E, fo, mode="sum") + self.bias)
         at = act(nn.functional.embedding_bag(mi, E, fo, mode="sum") + self.bias)
         d = ((au - at) * self.v).sum(-1)
+        if self.rff:
+            # phase sketch: angles sum over present features; cos read-out.
+            # Antisymmetric the same way as the head: us minus them under
+            # the SAME weights (swap flips the sign exactly)
+            fr, mr = (fi % 768, mi % 768) if self.B > 1 else (fi, mi)
+            pu = torch.cos(nn.functional.embedding_bag(fr, self.theta, fo, mode="sum") + self.phb)
+            pt = torch.cos(nn.functional.embedding_bag(mr, self.theta, fo, mode="sum") + self.phb)
+            d = d + ((pu - pt) * self.rw).sum(-1)
         if self.nb:
             # strip king-bucket offsets: bilinear rows are bucket-free
             fib, mib = (fi % 768, mi % 768) if self.B > 1 else (fi, mi)
@@ -467,8 +493,9 @@ class Net(nn.Module):
         return ps + d.clamp(-CLAMP, CLAMP)
 
 
+RFF_SIGMA = args.rffsigma
 model = Net(N, args.factor, args.kb, args.nb, args.bm, args.tailw, args.phase,
-            args.baff, args.nb2)
+            args.baff, args.nb2, args.rff)
 opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-5)
 sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=args.epochs)
 
@@ -529,11 +556,16 @@ def export(path):
                 bil["tail"] = {n_: q.detach().tolist() for n_, q in
                                (("t1w", model.t1.weight), ("t1b", model.t1.bias),
                                 ("t2w", model.t2.weight), ("t2b", model.t2.bias))}
-        if args.kb > 1 or args.nb or args.phase:
+        if args.rff:
+            phs["rff"] = {"theta": model.theta.detach().tolist(),
+                          "phb": model.phb.detach().tolist(),
+                          "rw": model.rw.detach().tolist()}
+        if args.kb > 1 or args.nb or args.phase or args.rff:
             # float-only export, one rule for every extension: the packed
             # build is engine-side work that the val loss has to earn first
             kind = "float-kb" if args.kb > 1 else (
-                "float-bil" if args.nb else "float-phase")
+                "float-bil" if args.nb else (
+                    "float-phase" if args.phase else "float-rff"))
             pnet.save(path, {"kind": kind, "B": args.kb, "N": N,
                              "E": E.tolist(), "bias": b, "v": v,
                              "clampcp": args.clampcp, "segs": SEGS,
