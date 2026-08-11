@@ -198,9 +198,10 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                     # Stop crawlers from sliding, and sliding after captures
                     if p in "PNK" or q in "pnbrqk": break
                     # Castling, by sliding the rook next to the king
-                    for (sq, dr, c) in ((A1, E, self.wc[0]), (H1, W, self.wc[1])):
-                        if i == sq and self.board[j + dr] == "K" and c:
-                            yield Move(j + dr, j - dr, "")
+                    if i == A1 and self.board[j + E] == "K" and self.wc[0]:
+                        yield Move(j + E, j + W, "")
+                    if i == H1 and self.board[j + W] == "K" and self.wc[1]:
+                        yield Move(j + W, j + E, "")
 
     def rotate(self, nullmove=False):
         """Rotates the board, preserving enpassant, unless nullmove"""
@@ -222,10 +223,8 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         board = put(board, j, board[i])
         board = put(board, i, ".")
         # Castling rights, we move the rook or capture the opponent's
-        if i == A1: wc = (False, wc[1])
-        if i == H1: wc = (wc[0], False)
-        if j == A8: bc = (bc[0], False)
-        if j == H8: bc = (False, bc[1])
+        wc = (wc[0] and i != A1, wc[1] and i != H1)
+        bc = (bc[0] and j != H8, bc[1] and j != A8)
         # Castling
         if p == "K":
             wc = (False, False)
@@ -250,7 +249,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         # Actual move
         score = pst[p][j] - pst[p][i]
         # Capture
-        if q.islower():
+        if q in "pnbrqk":
             score += pst[q.upper()][119 - j]
         # Castling check detection
         if abs(j - self.kp) < 2:
@@ -425,11 +424,12 @@ class Searcher:
                 yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)
 
             # Then all the other moves
-            for val, move in sorted(((pos.value(m), m) for m in pos.gen_moves()), reverse=True):
-                # Quiescent search
-                if val < val_lower:
-                    break
-
+            # Quiescent search: only moves above the val-limit are admitted -
+            # filtering BEFORE the sort skips sorting the sub-threshold tail
+            # (most of the list at QS nodes), and is literally the model's
+            # movesAbove form (formal/Sunfish/Stalemate.lean).
+            for val, move in sorted(((v, m) for m in pos.gen_moves()
+                                     if (v := pos.value(m)) >= val_lower), reverse=True):
                 # If the new score is less than gamma, the opponent will for sure just
                 # stand pat, since ""pos.score + val < gamma === -(pos.score + val) >= 1-gamma""
                 # This is known as futility pruning.
