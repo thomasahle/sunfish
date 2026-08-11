@@ -9,22 +9,19 @@ description = "Sunfish: a minimalist chess engine written in Python"
 readme = "README.md"
 license = { file = "LICENSE.md" }
 requires-python = ">=3.7"
-# The engine itself has no dependencies.
-dependencies = []
+# The engine module itself has no dependencies; the default `sunfish`
+# entry point is the play interface, which needs these.
+dependencies = [
+    "chess==1.9.4",
+    "tqdm==4.67.1",
+]
 
 [project.urls]
 Homepage = "https://github.com/thomasahle/sunfish"
 
 [project.scripts]
-sunfish = "sunfish:main"
-sunfish-play = "sunfish_ui.fancy:run"
-
-[project.optional-dependencies]
-# For the terminal play interface: pip install 'sunfish[play]' && sunfish-play
-play = [
-    "chess==1.9.4",
-    "tqdm==4.67.1",
-]
+sunfish = "sunfish_ui.fancy:run"
+sunfish-uci = "sunfish:main"
 
 [dependency-groups]
 dev = [
