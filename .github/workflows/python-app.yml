@@ -147,4 +147,4 @@ jobs:
       # satisfy the import.
       run: |
         pip install .
-        python -c "import subprocess,sys,tempfile,re; p=subprocess.run(['sunfish'],input=b'uci\nisready\nposition fen rnbqkbnr/ppp1p1pp/8/3pPp2/8/8/PPPP1PPP/RNBQKBNR b KQkq - 1 4\ngo movetime 300\nquit\n',capture_output=True,timeout=120,shell=True,cwd=tempfile.mkdtemp()); out=p.stdout.decode(); print(out); print('STDERR:', p.stderr.decode(), file=sys.stderr); bm=re.findall(r'^bestmove (\S+)', out, re.M); sys.exit(0 if ('uciok' in out and bm and not re.match(r'[a-h][12]', bm[-1])) else 1)"
+        python -c "import subprocess,sys,tempfile,re; p=subprocess.run(['sunfish-uci'],input=b'uci\nisready\nposition fen rnbqkbnr/ppp1p1pp/8/3pPp2/8/8/PPPP1PPP/RNBQKBNR b KQkq - 1 4\ngo movetime 300\nquit\n',capture_output=True,timeout=120,shell=True,cwd=tempfile.mkdtemp()); out=p.stdout.decode(); print(out); print('STDERR:', p.stderr.decode(), file=sys.stderr); bm=re.findall(r'^bestmove (\S+)', out, re.M); sys.exit(0 if ('uciok' in out and bm and not re.match(r'[a-h][12]', bm[-1])) else 1)"
