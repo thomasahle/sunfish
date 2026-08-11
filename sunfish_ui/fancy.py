@@ -112,15 +112,21 @@ def print_unicode_board(board, perspective=chess.WHITE):
     Both sides use the FILLED glyphs, told apart by foreground color -
     the outline white glyphs read as black pieces on most terminal
     fonts, which made the sides nearly indistinguishable."""
-    light, dark, hilite = 223, 137, 185          # tan / brown / khaki
+    # Mid-tone squares so BOTH piece colors clear them: pale squares wash
+    # out the white pieces, near-black squares swallow the black ones.
+    light, dark = 180, 95                        # tan / walnut
+    hl_light, hl_dark = 186, 143                 # two-tone last-move khaki
     label, reset = "\x1b[38;5;245m", "\x1b[0m"
     last = board.move_stack[-1] if board.move_stack else None
     for r in range(8) if perspective == chess.BLACK else range(7, -1, -1):
         line = [f"{label}{r + 1}{reset} "]
         for c in range(8) if perspective == chess.WHITE else range(7, -1, -1):
             sq = 8 * r + c
-            bg = hilite if last and sq in (last.to_square, last.from_square) \
-                else light if (r + c) % 2 == 1 else dark
+            is_light = (r + c) % 2 == 1
+            if last and sq in (last.to_square, last.from_square):
+                bg = hl_light if is_light else hl_dark
+            else:
+                bg = light if is_light else dark
             piece = board.piece_at(sq)
             if piece:
                 fg = 231 if piece.color == chess.WHITE else 16
@@ -166,17 +172,27 @@ async def get_engine_move(engine, board, limit, game_id, multipv, debug=False):
 
                 info = analysis.info
                 score = info["score"].relative
-                score = (
-                    f"Score: {score.score()}"
+                # Pawns with a sign, like every GUI, not raw centipawns.
+                shown = (
+                    f"{score.score() / 100:+.2f}"
                     if score.score() is not None
-                    else f"Mate in {score.mate()}"
+                    else f"mate in {abs(score.mate())}"
+                    + (" (for them)" if score.mate() < 0 else "")
                 )
-                print(
-                    f'{score}, nodes: {info.get("nodes", "N/A")}, nps: {info.get("nps", "N/A")},'
-                    f' time: {float(info.get("time", 0)):.1f}',
-                    end="",
-                )
-                print()
+
+                def human(n):
+                    return f"{n / 1e6:.1f}M" if n >= 1e6 else f"{n / 1e3:.0f}k" if n >= 1e4 else str(n)
+
+                dim, bold, reset = "\x1b[38;5;245m", "\x1b[1m", "\x1b[0m"
+                parts = [f"{bold}{shown}{reset}"]
+                if "depth" in info:
+                    parts.append(f'depth {info["depth"]}')
+                if "nodes" in info:
+                    parts.append(f'{human(info["nodes"])} nodes')
+                if "nps" in info:
+                    parts.append(f'{human(info["nps"])}/s')
+                parts.append(f'{float(info.get("time", 0)):.1f}s')
+                print("   " + f"{dim} · {reset}".join(parts))
 
                 for info in infos:
                     if "pv" in info:
