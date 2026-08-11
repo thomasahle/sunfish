@@ -6,16 +6,13 @@ negated, exactly as in Searcher.bound.  The production null contribution is
 
     min (eval + EVAL_ROUGHNESS) passReport
 
-rather than the historical discontinuous operation "admit the pass below the
-mate band, omit it in the mate band".  This file isolates the new proof
-obligation: negation transfers a child report to the parent window, and `min`
-with a fixed cap preserves a valid fail-soft report.  Consequently one child
-probe suffices; no mate-boundary classification probe is needed.
+Negation transfers a child report to the parent window, and `min` with a fixed
+cap preserves a valid fail-soft report. Consequently one child probe suffices.
 
-The full move fold, king-capture substitution, sticky `live` certificate and
-post-fold mate/stalemate override remain the double-primed consumer proved in
-Stalemate.lean.  The model-code audit records this file as the proof of the
-changed null-report transformer.
+The move fold, king-capture substitution, sticky `live` certificate, and
+post-fold mate/stalemate override are separate from this local transformer.
+The model-code audit records this file as the proof of the null report emitted
+by the current source.
 -/
 
 import Sunfish.Driver
