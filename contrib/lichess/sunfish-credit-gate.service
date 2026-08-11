@@ -1,0 +1,33 @@
+[Unit]
+Description=Sunfish CPU-credit gate (maintains /run/sunfish-throttled)
+After=network-online.target
+
+[Service]
+Type=simple
+# Plain CPython: the estimator reads /proc/stat every few seconds and does a
+# handful of floating-point operations. It must never be the thing competing
+# for CPU, so it runs at the lowest useful priority.
+ExecStart=/usr/bin/python3 /opt/sunfish/contrib/lichess/cpu_credit.py \
+    --daemon --flag /run/sunfish-throttled \
+    --state /var/lib/sunfish/credit-state.json
+Nice=19
+CPUWeight=1
+Restart=always
+RestartSec=10
+
+# The daemon needs to write the flag and its state, and nothing else.
+StateDirectory=sunfish
+RuntimeDirectory=sunfish-gate
+ProtectSystem=strict
+ReadWritePaths=/run /var/lib/sunfish
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+
+# If the gate daemon stops for good, do not leave a stale flag behind that
+# would keep the bot offline. (extra_game_handlers.py also expires the flag by
+# age, so this is belt and braces.)
+ExecStopPost=/bin/rm -f /run/sunfish-throttled
+
+[Install]
+WantedBy=multi-user.target

@@ -8,6 +8,46 @@ from functools import partial
 
 print = partial(print, flush=True)
 
+# Longest a "go ponder"/"go infinite" search may run without hearing
+# "stop"/"ponderhit". Those commands carry no time budget, so the only thing
+# that ends them is the GUI -- and if that message is ever lost the search
+# would otherwise spin forever, which on a shared-core VM means starving
+# everything else on the box. Ten minutes is longer than any real pondering
+# turn, so this never fires in normal play; it is a liveness backstop.
+UNBOUNDED_MAX_SECONDS = 600
+
+# The engine is injected by run(), not imported: one interface drives
+# classic sunfish, pesto and the NNUE variants, which are separate
+# modules. That makes the engine's side of the contract implicit, so
+# run() checks it up front and names whatever is missing.
+#
+# Checking eagerly is not just for the error message. `except X:`
+# evaluates X only when an exception reaches the clause, so a missing
+# Stop would go unseen for as long as no deadline fired, and would then
+# raise AttributeError *while handling* the abort it was meant to catch
+# - masking it. The same applies in weaker form to the rest: an engine
+# without `pst` works until the first FEN arrives, i.e. until an EPD
+# opening book is used, which is exactly how issue #156 stayed hidden.
+#
+# Optional, and so deliberately absent here: TABLE_SIZE (hasattr-guarded
+# at both use sites) and features (its presence selects the NNUE
+# scoring path in from_fen).
+ENGINE_API = ("MATE_LOWER", "Move", "Position", "Searcher", "Stop",
+              "opt_ranges", "parse", "render", "version")
+
+
+def check_engine_module(module):
+    """Fail now, with a name, rather than deep in a search loop."""
+    missing = [attr for attr in ENGINE_API if not hasattr(module, attr)]
+    if not hasattr(module, "features") and not hasattr(module, "pst"):
+        # from_fen scores a board from the piece-square tables unless the
+        # engine brings its own feature extractor.
+        missing.append("pst (or features)")
+    if missing:
+        raise TypeError(
+            f"{getattr(module, '__name__', module)!r} is not a usable sunfish "
+            f"engine module: missing {', '.join(missing)}")
+
 
 def render_move(move, white_pov):
     if move is None:
@@ -31,7 +71,7 @@ def stop_softly(searcher, gen):
     # Yield from the search until the in-search deadline aborts it
     try:
         yield from gen
-    except getattr(sunfish, "Stop", ()):
+    except sunfish.Stop:
         pass
 
 
@@ -65,8 +105,9 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
             # sits inside the previous depth's converged bracket. A fail-high
             # here is finished, paid-for information, not a mid-dive artifact
             # (those arise on LATER probes of a depth, after the bracket
-            # reset) - so play its move. (classic b91738d: dropping it cost
-            # 42 points of the WAC depth-3 floor.)
+            # reset) - so play its move. This is exactly what the pv-walk
+            # driver played at "go depth N" for years; dropping it cost 42
+            # points of the WAC depth-3 floor.
             if score >= gamma and move is not None:
                 best_move = render_move(move, white_pov=len(hist) % 2 == 1)
             break
@@ -149,7 +190,7 @@ def mate_loop(
             break
         if stop_event.is_set():
             break
-    except getattr(sunfish, "Stop", ()):
+    except sunfish.Stop:
         pass
     move = searcher.tp_move.get(hist[-1])
     move_str = render_move(move, white_pov=len(hist) % 2 == 1)
@@ -184,6 +225,7 @@ def perft(pos, depth, debug=False):
 
 def run(sunfish_module, startpos):
     global sunfish
+    check_engine_module(sunfish_module)
     sunfish = sunfish_module
 
     debug = False
@@ -360,7 +402,15 @@ def run(sunfish_module, startpos):
                     # Hard wall-clock cap, checked inside the search itself
                     # (sunfish.py Searcher.bound), so budgets hold even when
                     # single iterations run long on slow hardware.
-                    searcher.deadline = time.time() + think if think < 10**5 else None
+                    #
+                    # "go ponder"/"go infinite" set think = 10**6, which used
+                    # to leave the deadline unset entirely. Such a search only
+                    # ends on "stop"/"ponderhit", so a lost stop (wedged GUI,
+                    # dropped connection) pins a CPU forever. Cap them instead:
+                    # UNBOUNDED_MAX_SECONDS is far longer than any real ponder,
+                    # so normal play is unaffected and the cap only fires when
+                    # the command that should have stopped us is already gone.
+                    searcher.deadline = time.time() + min(think, UNBOUNDED_MAX_SECONDS)
                     go_future = executor.submit(
                         loop,
                         searcher,
@@ -399,11 +449,6 @@ def from_fen(board, color, castling, enpas, _hclock, _fclock):
     wc = ("Q" in castling, "K" in castling)
     bc = ("k" in castling, "q" in castling)
     ep = sunfish.parse(enpas) if enpas != "-" else 0
-    if hasattr(sunfish, 'from_board'):
-        # engines carrying an evaluation accumulator build the position, and
-        # the accumulator, themselves
-        pos = sunfish.from_board(board, wc, bc, ep, 0)
-        return pos if color == 'w' else pos.rotate()
     if hasattr(sunfish, 'features'):
         wf, bf = sunfish.features(board)
         pos = sunfish.Position(board, 0, wf, bf, wc, bc, ep, 0)

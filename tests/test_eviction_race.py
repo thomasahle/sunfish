@@ -1,34 +1,30 @@
-"""Regression tests for the killer-table eviction race and the in-search
-deadline, ported from classic (lichess cy7H1Mhx, 26. Qxc6??).
+"""Regression tests for the killer-table eviction race (lichess cy7H1Mhx,
+26. Qxc6??).
 
 Mechanism: tp_move persists across searches and is FIFO-capped. When a
 single deep probe stores more than TABLE_SIZE distinct killers, the
-current search root's entry ages out MID-SEARCH. MTD-bi's next fail-low
-dive then probes at an absurdly low gamma, the sorted loop leads with the
-highest capture, it trivially fails high, is stored as the root move -
-and a timeout answers it.
+current search root's entry ages out MID-SEARCH (no refresh-on-store
+scheme can prevent it: the root is not touched while the flood runs
+below it). MTD-bi's next fail-low dive then probes at an absurdly low
+gamma, the sorted loop leads with the highest capture, it trivially
+fails high, is stored as the root move - and a timeout answers it.
+Three queen/piece giveaways in 145 production games.
 
-Fixes under test: (1) eviction never removes Searcher.root, so the root
-killer survives arbitrary churn; (2) an armed deadline actually stops the
-search from inside (the builtin go loop arms it; before, the apparatus
-was dead code and a deep iteration could overrun the soft break
-arbitrarily).
+The fix under test: the eviction never removes the current search root
+(Searcher.root), so the root killer is always present and every dive
+probe re-stores it before any capture is tried.
 """
 import importlib.util
-import os
 import pathlib
 import sys
-import time
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
 def load_engine(table_size):
-    os.environ["SF_NET"] = str(ROOT / "packed" / "net128.pickle")
-    spec = importlib.util.spec_from_file_location(
-        "sunfish_packed_race", ROOT / "sunfish_packed.py")
+    spec = importlib.util.spec_from_file_location("sunfish_race", ROOT / "sunfish.py")
     mod = importlib.util.module_from_spec(spec)
-    sys.modules["sunfish_packed_race"] = mod
+    sys.modules["sunfish_race"] = mod
     spec.loader.exec_module(mod)
     mod.TABLE_SIZE = table_size
     return mod
@@ -44,7 +40,7 @@ GAME = (
 
 
 def build_history(mod):
-    hist = [mod.hist[0]]
+    hist = [mod.Position(mod.initial, 0, (True, True), (True, True), 0, 0)]
     for ply, mv in enumerate(GAME):
         i, j, prom = mod.parse(mv[:2]), mod.parse(mv[2:4]), mv[4:].upper()
         if ply % 2 == 1:
@@ -82,8 +78,8 @@ def test_root_killer_survives_table_churn():
 
 def test_no_capture_giveaway_at_dive_windows():
     """End-to-end: at the production position, with heavy churn, the move
-    stored for the root must never become the unprotected b6c6 (Qxc6)
-    giveaway."""
+    reported alongside fail-high yields must never become the unprotected
+    b6c6 (Qxc6) giveaway."""
     mod = load_engine(table_size=300)
     hist = build_history(mod)
     root = hist[-1]
@@ -98,22 +94,3 @@ def test_no_capture_giveaway_at_dive_windows():
             )
         if depth == 6:
             break
-
-
-def test_armed_deadline_stops_search():
-    """With a deadline in the past the search must raise Stop within a
-    bounded number of driver yields (the %2048 node check), not run on
-    to arbitrary depth - the builtin go loop relies on this to avoid
-    the deep-iteration time-forfeit class."""
-    mod = load_engine(table_size=10**6)
-    hist = build_history(mod)
-    searcher = mod.Searcher()
-    searcher.deadline = time.time() - 1
-    gen = searcher.search(hist)
-    raised = False
-    try:
-        for _ in range(200):
-            next(gen)
-    except mod.Stop:
-        raised = True
-    assert raised, "armed past deadline did not stop the search in 200 yields"

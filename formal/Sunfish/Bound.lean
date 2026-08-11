@@ -15,11 +15,14 @@ Here `s*` is `negamax G depth p` and the two clauses are `BoundSpec` below.
 The proven model keeps exactly the skeleton of sunfish's move loop
 (sunfish.py lines 378-388) and the null-window recursion on children
 (line 376: `-self.bound(pos.move(move), 1 - gamma, depth - 1)`).
-Everything else -- transposition table (308-310, 414-420), repetition
-check (315-316), null move (330-331), QS stand pat and futility pruning
-(335-336, 360-376), killer/IID (338-357), stalemate correction (408-412) --
-is deliberately absent here; the interesting ones are stated (with the
-hypotheses they need) in `Sunfish/Tricks.lean`.
+Everything else -- the transposition table (the `tp_score` lookup and
+the table-part-2 store), the repetition check, the null move, the QS
+stand-pat and futility pruning, killer/IID, and the stalemate
+correction -- is deliberately absent here; the interesting ones are
+stated (with the hypotheses they need) in `Sunfish/Tricks.lean` and
+`Sunfish/Stalemate.lean`.  (Anchors, not line numbers: this file's
+model is the bare move loop, and the citations above drifted twice
+before being replaced with names.)
 -/
 
 import Sunfish.GameTree
