@@ -482,9 +482,7 @@ wheels = [
 name = "sunfish"
 version = "2026"
 source = { editable = "." }
-
-[package.optional-dependencies]
-play = [
+dependencies = [
     { name = "chess" },
     { name = "tqdm" },
 ]
@@ -508,10 +506,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "chess", marker = "extra == 'play'", specifier = "==1.9.4" },
-    { name = "tqdm", marker = "extra == 'play'", specifier = "==4.67.1" },
+    { name = "chess", specifier = "==1.9.4" },
+    { name = "tqdm", specifier = "==4.67.1" },
 ]
-provides-extras = ["play"]
 
 [package.metadata.requires-dev]
 dev = [

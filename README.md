@@ -10,9 +10,9 @@ The name Sunfish refers to the [Pygmy Sunfish](http://en.wikipedia.org/wiki/Pygm
 
 # Play against sunfish!
 
-The simplest way to run sunfish is through the "fancy" terminal interface:
+The simplest way to play against sunfish is:
 <pre>
-$ <b>sunfish_ui/fancy.py -cmd ./sunfish.py</b>
+$ <b>pip install sunfish && sunfish</b>
 Playing against sunfish 2023.
 Do you want to be white or black? <b>black</b>
   1 ♖ ♘ ♗ ♔ ♕ ♗ ♘ ♖
@@ -59,7 +59,7 @@ When notating en passant, the destination square should be the square the pawn e
 
 The terminal interface also supports explicit notation. This is where the source square is stated followed by the destination square (eg. e2e4).
 
-Note this requires the [python-chess](https://github.com/niklasf/python-chess/) package.
+(From a repo checkout: `sunfish_ui/fancy.py -cmd ./sunfish.py`. GUIs and tournament managers should use the raw UCI engine: `sunfish-uci`, or `./sunfish.py` from a checkout.)
 For a true minimalist experience, first we can "pack" sunfish into a compressed executable (less than 3KB!) and run it directly:
 <pre>
 $ <b>tools/build/pack.sh sunfish.py packed.sh</b>

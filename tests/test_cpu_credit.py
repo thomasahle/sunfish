@@ -19,7 +19,7 @@ from pathlib import Path
 
 import pytest
 
-CONTRIB = Path(__file__).resolve().parent.parent / "contrib" / "lichess"
+CONTRIB = Path(__file__).resolve().parent.parent / "tools" / "lichess"
 
 
 def _load(name):
