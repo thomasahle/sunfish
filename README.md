@@ -2,7 +2,6 @@
 
 Sunfish is a simple, but strong chess engine, written in Python. With its simple [UCI](http://wbec-ridderkerk.nl/html/UCIProtocol.html) interface, and removing comments and whitespace, it takes up just 136 lines of code! (`tools/build/clean.sh sunfish.py | wc -l`).
 
-
 There is also a (somewhat) stronger NNUE based sunfish, which you can also [play against on Lichess](https://lichess.org/@/sunfish-nnue-engine).
 It's only 4096 bytes for the whole engine, so the neuron network is very small.
 
@@ -19,7 +18,7 @@ The second easiest way is to play in your terminal:
 $ <b>pip install sunfish</b>
 $ <b>sunfish</b>
 
-Playing against sunfish 2023.
+Playing against sunfish 2026.
 Do you want to be white or black? <b>black</b>
   1 ♖ ♘ ♗ ♔ ♕ ♗ ♘ ♖
   2 ♙ ♙ ♙ ♙ ♙ ♙ ♙ ♙
@@ -31,7 +30,7 @@ Do you want to be white or black? <b>black</b>
   8 ♜ ♞ ♝ ♚ ♛ ♝ ♞ ♜
     h g f e d c b a
 
-Score: 23, nodes: 11752, nps: 13812, time: 0.9
+<b>+0.23</b> · depth 7 · 12k nodes · 14k/s · 0.9s
  My move: d4
   1 ♖ ♘ ♗ ♔ ♕ ♗ ♘ ♖
   2 ♙ ♙ ♙ ♙   ♙ ♙ ♙
