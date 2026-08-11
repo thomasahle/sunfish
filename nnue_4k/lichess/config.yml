@@ -30,15 +30,24 @@ engine:
 # SF_NET is inherited from the systemd unit's Environment= -- the engine
 # child gets it through lichess-bot.
 
+greeting:
+  hello: "Hi {opponent}! I'm sunfish-nnue, a tiny Python chess engine by Thomas D. Ahle - the whole neural network lives in one big integer. Good luck and have fun!"
+  goodbye: "Good game! Play me again any time, or read my source at github.com/thomasahle/sunfish"
+  hello_spectators: "Hi! I'm {me}, a tiny open-source Python NNUE engine (github.com/thomasahle/sunfish)"
+  goodbye_spectators: "Thanks for watching!"
+
 challenge:
   concurrency: 1
-  # No bullet: the deep-iteration overrun class lives there (see the
-  # armed-deadline fix in the go loops; TCEC forfeit data).  Rapid and
-  # classical are where the eval shows.
-  accept_bot: false
+  # Bullet included: the A1 cores are dedicated (no credit throttle), the
+  # armed in-search deadline covers the deep-iteration overrun class, and
+  # the mock-lichess integration test plays 60+0 with pondering as its
+  # tightest case.  Live-config decision, mirrored here so redeploys
+  # keep it.
+  accept_bot: true
   variants:
     - standard
   time_controls:
+    - bullet
     - blitz
     - rapid
     - classical
