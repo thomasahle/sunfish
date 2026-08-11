@@ -136,7 +136,27 @@ def print_unicode_board(board, perspective=chess.WHITE):
             line.append(glyph)
         print(" " + "".join(line) + reset)
     files = "abcdefgh" if perspective == chess.WHITE else "hgfedcba"
-    print(f"   {label}" + " ".join(f" {f}" for f in files) + f"{reset}\n")
+    print(f"   {label}" + " ".join(f" {f}" for f in files) + f"{reset}")
+    imbalance = material_imbalance(board, perspective)
+    print(f"   {label}{imbalance}{reset}\n" if imbalance else "")
+
+
+def material_imbalance(board, perspective):
+    """Lichess-style net imbalance, e.g. "♜ vs ♞♟ · +1" - each side's
+    surplus after pairwise cancellation, points from the perspective
+    player's side. Empty string when material is even."""
+    values = {chess.QUEEN: 9, chess.ROOK: 5, chess.BISHOP: 3,
+              chess.KNIGHT: 3, chess.PAWN: 1}
+    mine, theirs, points = [], [], 0
+    for pt in values:
+        net = len(board.pieces(pt, perspective)) - len(board.pieces(pt, not perspective))
+        glyph = chess.UNICODE_PIECE_SYMBOLS[chess.piece_symbol(pt)]
+        (mine if net > 0 else theirs).extend(glyph * abs(net))
+        points += values[pt] * net
+    if not mine and not theirs:
+        return ""
+    sides = f'{"".join(mine) or "-"} vs {"".join(theirs) or "-"}'
+    return f"{sides} · {points:+d}" if points else sides
 
 
 async def get_engine_move(engine, board, limit, game_id, multipv, debug=False):
