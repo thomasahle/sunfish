@@ -4,8 +4,8 @@
 %
 % Draft capturing the 2026-08-05 -- 2026-08-09 formalization +
 % measurement campaign on sunfish (github.com/thomasahle/sunfish,
-% formal/).  Current as of the band-edge landing (formal/README.md
-% premise inventory).
+% formal/).  The main narrative captures the band-edge landing; the
+% postscript after the abstract records its monotone-cap successor.
 %
 % Alternative titles (pick one, or keep the current):
 %   * "The Docstring Was a Theorem: Verifying and Pricing Selective
@@ -130,6 +130,22 @@ production engine, which plays publicly on Lichess.  Proofs identify
 the trade; tournaments price it; and when the trade is a false premise,
 neither loop is enough --- the engine has to be changed.
 \end{abstract}
+
+\paragraph{Postscript (August 11, 2026).}
+After this campaign snapshot, the production engine replaced the
+band-edge null classifier with the monotone value
+$\min(E+15,P)$, where $E$ is static evaluation and $P$ is the searched
+pass value.  This is a deliberate value-function change, not a cheaper
+implementation of the historical rule.  Monotonicity lets one
+fail-soft child report bound the capped value; the second boundary
+probe is gone.  The local proof is
+\texttt{cappedNull\_report}, with the concrete guard-to-score-band fact
+\texttt{guardedStaticCap\_in\_scoreBand} and its positive-mate exclusion
+corollary \texttt{guardedCappedNull\_below\_positiveMate}, in
+\texttt{CappedNull.lean}.  References below to the ``shipped''
+band-edge consumer describe the campaign snapshot retained as the
+historical full model; \texttt{formal/README.md} records the current
+model--code correspondence.
 
 % =========================================================================
 \section{Introduction}

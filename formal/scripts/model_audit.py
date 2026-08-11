@@ -45,7 +45,7 @@ EXPECTED = {
     "Position.move": "69bb2460cd611c9e",
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "11d52eaa8a661352",
-    "Searcher.bound": "a05197ccdc87c854",
+    "Searcher.bound": "4edd8e042e0373c3",
     "Searcher.search": "f9aa8c81b84ff44b",
     "constants": "02227a9fd04eb181",
 }
@@ -99,7 +99,7 @@ ANCHORS = [
     "if killer and pos.value(killer) >= val_lower:",
     "yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)",
     "yield None, pos.score",
-    "score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)",
+    "score = min(pos.score + EVAL_ROUGHNESS,",
     "if depth <= 1 and pos.score + val < gamma:",
     "yield (move, MATE_UPPER) if val >= MATE_LOWER else (None, pos.score + val)",
     "best, live = -MATE_UPPER, False",

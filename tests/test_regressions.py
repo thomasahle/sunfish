@@ -107,6 +107,39 @@ class TestSpiteCheckPoisoning:
         assert seen > 0
 
 
+class TestCappedNullMove:
+    """The old mate-band null semantics needed a second boundary probe.
+
+    This position exercises the rare case where that probe vetoed the pass.
+    The monotone replacement declares the null option to be the smaller of
+    the pass value and static evaluation plus one MTD score bucket, so the
+    first child report is sufficient and the result is the static cap.
+    """
+
+    FEN = "8/6p1/6R1/k7/2K5/8/8/8 w - - 0 1"
+
+    def test_static_cap_replaces_mate_boundary_probe(self):
+        sf.pst["K"] = sf.K_MID
+        old_engine, uci.sunfish = uci.sunfish, sf
+        try:
+            pos = hist_from_fen(self.FEN)[-1]
+        finally:
+            uci.sunfish = old_engine
+        searcher = sf.Searcher()
+        searcher.root, searcher.history = pos, set()
+        calls, bound = [], searcher.bound
+
+        def observed(pos, gamma, depth, root=False):
+            calls.append((gamma, depth, root))
+            return bound(pos, gamma, depth, root)
+
+        searcher.bound = observed
+        score = bound(pos, 0, 6)
+
+        assert score == pos.score + sf.EVAL_ROUGHNESS == 409
+        assert not any(gamma == 1 - sf.MATE_LOWER for gamma, _, _ in calls)
+
+
 class TestNullSentinelMasking:
     """Audit finding A1: in pawn endings the null-move gate
     (abs(score) < 500) admits a "pass" that yields a normal material

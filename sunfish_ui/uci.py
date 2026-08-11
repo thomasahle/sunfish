@@ -120,6 +120,8 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
         }
         if score >= gamma:
             fields["score cp"] = f"{score} lowerbound"
+            if move is None:
+                break
             cand = render_move(move, white_pov=len(hist) % 2 == 1)
             fields["pv"] = " ".join(pv(searcher, hist[-1], include_scores=False))
         else:

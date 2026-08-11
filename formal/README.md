@@ -73,6 +73,21 @@ tactic only, so a full build takes seconds.
     step is the integer fact `b < 1 - gamma ↔ gamma ≤ -b`.
   - `#print axioms bound_spec` reports only `propext, Quot.sound`.
 
+- **`Sunfish/CappedNull.lean`** — the shipped monotone null-move cap.
+  - `WindowReport` is the two-sided fail-soft contract of `bound()`.
+  - `WindowReport.negate` transfers a child report at `1 - gamma` to
+    the negated parent report at `gamma`.
+  - **`WindowReport.cap` / `cappedNull_report`** prove that applying
+    `min(static_cap, ·)` to that report preserves the contract for the
+    declared capped-null value.  This is why one child probe suffices;
+    the historical mate-boundary classification probe is unnecessary.
+  - **`guardedStaticCap_in_scoreBand`** proves from the concrete
+    `abs(eval) < 500` guard and `EVAL_ROUGHNESS = 15` that the cap stays
+    strictly below `MATE_LOWER` (and above `-MATE_UPPER`).
+  - **`cappedNull_below_positiveMate`** proves the precise consequence:
+    the capped null value cannot claim a positive mate.  It may retain a
+    negative mate pass value, which is harmless.
+
 - **`Sunfish/Stalemate.lean`** — the stalemate-correction block
   (sunfish.py lines 422–473), modeled faithfully (king-capture
   normalization of lines 316–322, the `MATE_UPPER` sentinel invariant of
@@ -1108,15 +1123,16 @@ statement* — the honest form — not a deferred proof:
 | `boundA1` (`best_real` = `S`, `nullMax`, `a1Fix`) | HISTORICAL: the A1-fixed loop as shipped `0998739..29c7887^`; `boundA1Un` is the pre-fix loop shape, `a1_unfixed_not_sound` its machine-checked hole; `cexT_crossing` the fail-high hole that retired it |
 | `allIllegalB` | the legality scan `all(self.bound(pos.move(m), MATE_UPPER, 0, root=True) == MATE_UPPER for m in pos.gen_moves())` (correction, lines 490–492 on `560799c`; the interception's copy, lines 457–459) — over the FULL `gen_moves()` list |
 | `qsProbe`, `legalityProbeCorrect` | the dedicated legality probe `bound(child, MATE_UPPER, 0, root=True)` (lines 383, 464): unstored driver semantics (`rootProbe`), stand-pat + filtered depth-0 loop; exact at `MATE_UPPER` only — `kingCapturableReportsExact_refuted` is the general-window countermodel |
-| `nullVerify`, `useD2`, `nullPartD2` | the reference null verifier `if 0 < score and gamma <= score < MATE_LOWER and not killer and all(...)` and its fold-identity mate-band suppression (reference.py; production's consumer interception makes the same decisions — `nullArm_match`) |
+| `nullVerify`, `useD2`, `nullPartD2` | HISTORICAL: the verify-on-suspicion / mate-boundary null semantics retired by the monotone cap; retained with its proofs and counterexamples |
 | `boundD2` (`d2Fix`; `not live` = `S ≤ n`) | REFERENCE.PY (the kcx executable spec): eager entry scan = the by-construction capture branch, consumption fold `best, live`, verify-on-suspicion correction `if depth and best < gamma and not live and all(...)` (lines 490–499 on `560799c`) |
 | `boundKCX` (`NCut`, `nFoldKCX`) | PRODUCTION (sunfish.py on `560799c`): no eager scan; the consumer interception `if move is None and score >= gamma: ...` (lines 452–460) — substitution / mate-band identity / verified-terminal identity (depth-gated) — plus the same correction; `production_eq_reference` is the bridge |
-| `nullValueD2`, `nullTermD2` | the null-inclusive declared value function (layer 1's subject): the pass term as the fold's initial accumulator, band claims declined (the fold rule); terminal branch = the verified exact value |
+| `nullValueD2`, `nullTermD2` | HISTORICAL declared value for the boundary-probe consumer; its fold/correction structure remains the backing for the unchanged portions of the current search |
 | `NoZugzwang`, `NoZugzwangInMateBand` | layer 2's validity region and its band fragment (the one chess statement in layer 1) |
 | `CaptureFirst` | king captures head the sorted move list (the sort of line 410, `EvalBounds` margins) |
 | `HistoryLegal` | input validity: game-history positions are never king-capturable (repetition check, lines 352–353, precedes the consumer) |
 | `checkProbe`, `CheckProbeQuiet` | the in-check probe as the code computes it — the legality oracle aimed at `pos.rotate(nullmove=True)`; `checkProbe_discharged` |
-| the pass term in `boundD2`/`boundKCX` | `-self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)` (the null yield) — DEFINITIONAL correspondence, no hypothesis; covered by the drift guard |
+| `WindowReport.negate`, `WindowReport.cap`, `cappedNull_report` (`CappedNull.lean`) | `min(pos.score + EVAL_ROUGHNESS, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))` — one recursive report bounds the gamma-independent capped-null value |
+| `guardedStaticCap_in_scoreBand` | `abs(pos.score) < 500` plus `EVAL_ROUGHNESS = 15`: the fixed static cap lies strictly inside the ordinary score band |
 | `KillTable`, `KillStore`, `KillerInv`, `killerLegal_lifecycle` | the `tp_move` lifecycle: fail-high stores, the substitution store, the mate-futility store, FIFO eviction, cross-search persistence |
 | `MovesSortedByVal`, `HighValIsKingCapture`, `captureFirst_of_sorted` | `sorted(((pos.value(m), m) ...), reverse=True)` — the trusted sort primitive and the value-margin converse |
 | `driverGamma`, `dstep`, `depthInit` (`Sunfish/Driver.lean`) | the MTD-bi bisection: `gamma = (lower + upper + 1) // 2`, per-depth bracket reset, CARRIED gamma; `driver_band_invariant`, `driver_wide_invariant`, `carried_gamma_escapes_band` |
@@ -1388,10 +1404,11 @@ Formatting pass (120-char lines, inlined single-statement bodies) plus
 two semantic changes, both covered by existing abstractions: the QS
 threshold moved from a break to a filter (which IS the model's
 `movesAbove` form — the sort-order-equivalence bridge is now a direct
-correspondence), and the null-move gate dropped its `abs(score) < 500`
-cap after a 900-game guard tournament measured every sane variant
-within noise (the model's `guard : Pos → Bool` abstracts the predicate;
-`nullGuard`'s mapping row updates to the piece test alone).
+correspondence), and the null-move gate temporarily dropped its
+`abs(score) < 500` cap after a 900-game guard tournament measured every
+sane variant within noise.  Commit `9def93b` restored it when the broad
+guard lost a mate-in-3 at the fixed-depth floor; the current predicate is
+the conjunction of that score guard and the non-pawn-piece test.
 
 ### Killer depth gate (post-release, 2026-08-11)
 
@@ -1404,10 +1421,47 @@ store sequences, so fewer stores stay covered); the tp_move mapping
 rows now read store-at-depth>=1.  All mate/WAC floors re-verified
 before landing (the score-cap lesson).
 
-### Landing note (the #158 review, 2026-08-11)
+### Monotone capped null move (post-release, 2026-08-11)
 
-The SHIPPED consumer is now the DOUBLE-PRIMED design: the terminal-veto
-arm is deleted and the correction gate widened to `not live` in both
+The production null option is now
+`min(pos.score + EVAL_ROUGHNESS, pass_report)`.  This is a deliberate
+value-function change from the previous discontinuous rule "admit a
+sub-mate pass, omit a mate-band pass".  The old rule needed an
+independent search at `1 - MATE_LOWER`: a fail-high at the ordinary
+window says nothing about mate-band membership.  The new operator is
+monotone, and `CappedNull.lean` proves that it transports any valid
+child report to a valid report of the capped value
+(`cappedNull_report`).  Thus the second recursive probe and its
+boundary-specific proof machinery leave the shipped algorithm.
+
+The exact tested guard is retained: `abs(pos.score) < 500` **and** at least
+one `RBNQ` remains.  The latter excludes classic pawn-only zugzwangs; together
+with `EVAL_ROUGHNESS = 15`, the score half lets
+`guardedStaticCap_in_scoreBand` prove the cap is
+strictly below the positive mate band, and
+`guardedCappedNull_below_positiveMate` lifts that fact through `min`.  A
+catastrophically bad pass may still produce a negative mate value; no
+negative clamp is intended.  The piece test remains the main zugzwang guard;
+the accuracy premise is now the weaker chess statement
+`min(static_cap, pass_value) <= best_real_move`.  Layer 1 remains a
+point spec against the declared capped-null function: `gamma` changes
+which side is reported, never which value is being bounded.
+
+Everything after the null yield is unchanged: king-capture
+substitution, virtual-versus-real evidence, the sticky `live` bit, and
+the post-fold mate/stalemate override remain the double-primed
+consumer's structure.  The detailed `boundD2''`/`boundKCX''` development
+is retained as the historical full model of that structure; the new
+machine-checked delta is the report transformer in `CappedNull.lean`.
+The `tp_move` source contract is narrowed accordingly: every stored
+move is legal and real fail-highs store their witness, while an
+interior virtual cutoff need not manufacture a move.
+
+### Landing note (the #158 review, 2026-08-11; historical null semantics)
+
+Before the monotone-cap change above, the shipped consumer was the
+DOUBLE-PRIMED design: the terminal-veto arm is deleted and the correction
+gate widened to `not live` in both
 fail directions (`boundD2''`/`boundKCX''`, `bound_null_spec''`,
 `production''_eq_reference''` — a verified SPEC CHANGE, tighter at
 terminals: `vetoArm_spec_change_witness`), and the band fast-path
