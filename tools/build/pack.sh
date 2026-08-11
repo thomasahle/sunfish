@@ -17,8 +17,11 @@ T=`mktemp`
 pyminify --rename-globals --remove-literal-statements \
    <(sed '/# minifier-hide start/,/# minifier-hide end/d' "$1") \
    > "$T"
-xz "$T"
-lt=$(get_file_size "$T.xz")
+# .lzma format, pb=0: ~70 bytes smaller than the xz container on a ~4.5k
+# python text stream, and `xz -d` auto-detects it -- the unpack head is
+# unchanged.
+xz --format=lzma --lzma1=preset=9e,pb=0 "$T"
+lt=$(get_file_size "$T.lzma")
 echo "Length of script: $lt"
 
 lh=100
@@ -37,8 +40,8 @@ done
 
 printf "$head" > $2
 
-cat $T.xz >> $2
-rm $T.xz
+cat $T.lzma >> $2
+rm $T.lzma
 
 echo "Total length: $(get_file_size "$2")"
 

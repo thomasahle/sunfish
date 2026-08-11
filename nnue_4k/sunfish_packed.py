@@ -58,7 +58,7 @@ HALF = _d["N"] * LBITS            # bit offset of the second lane block
 SHIFT = _d["shift"]
 CLAMP = _d["clampcp"]
 ACC_BASE = _d["base"]
-BASE = _d.get("base_kind", "pst")   # score base: pst | mat
+BASE = _d.get("base_kind", "pst")   # score base: pst | mat (mat = dev only)
 
 
 MH = sum(1 << (VBITS + LBITS * i) for i in range(NLANE))   # guard bits
@@ -81,6 +81,11 @@ NB = _d.get("nb", 0)              # bilinear lanes per perspective
 BM = _d.get("m", 4)               # bilinear groups
 PHASE_S = tuple(_d.get("phase_s") or ()) or None
 EXT = bool(NB or PHASE_S)
+# minifier-hide start
+# The extension machinery is DEV-BUILD ONLY: the 4k artifact ships the
+# pure-int family (its net is pure-int too) and refuses ext nets loudly
+# below.  One source file, two shapes -- the same pattern as tools/.
+_FULL = 1
 if NB:
     NBG = NB // BM                # lanes per group (contiguous runs)
     BGMASK = (1 << (NBG * LBITS)) - 1
@@ -92,6 +97,9 @@ if NB:
     if BTAIL:
         T1W, T1B = BTAIL["t1w"], BTAIL["t1b"]
         T2W, T2B = BTAIL["t2w"][0], BTAIL["t2b"][0]
+# minifier-hide end
+if (EXT or BASE == "mat") and "_FULL" not in dir():
+    raise SystemExit("extended or material-base net: use the repo engine")
 
 _PIECES = "PNBRQKpnbrqk"
 # Own-king buckets per perspective.  B == 1 is the plain net; B > 1 nets
@@ -128,6 +136,36 @@ ROWS = (_r0, [{p: [c[p.swapcase()][119 - s] for s in range(120)]
 del _d
 
 
+def nn_cp(acc, pf, cnt=0):
+    """Clipped centipawn output of the packed net, mover's point of view:
+    SWAR clamp, two modular horizontal sums, and -- for extended nets only,
+    dev builds only -- the float tail via _ext (pnet is the verified
+    reference; antisymmetry is exact on both paths: integers by symmetric
+    shift-rounding, floats by IEEE sign-symmetry and truncation)."""
+    m = ((acc & MLO) >> 14) * ONES              # lane >= 0 ?
+    y = ((acc & m) | MLO) - MLO                 # relu
+    for T in MTS:                               # convex piecewise-linear:
+        x = acc - T                             #   y = sum_i relu(a - t_i)
+        m = ((x & MLO) >> 14) * ONES
+        y += ((x & m) | MLO) - MLO
+    m = (((MGH - y) & MH) >> VBITS) * ONES      # lane <= G_k ?
+    y = (y & m) | (MGP & (m ^ MVAL))            # ...capped at G_k
+    # 2^16 == 1 (mod 2^16-1), so each block's residue IS its lane sum
+    v = (y & MASKLO) % M16 - ((y >> HALF) & MASKLO) % M16
+    if pf:
+        v = -v
+    # minifier-hide start
+    if EXT:
+        return _ext(y, v, pf, cnt)
+    # minifier-hide end
+    # round TOWARDS ZERO: floor does not commute with negation, and the
+    # search reaches a position both by rotate() (negates) and move()
+    # (recomputes) -- symmetric rounding keeps them in exact agreement
+    v = (v >> SHIFT) if v >= 0 else -((-v) >> SHIFT)
+    return -CLAMP if v < -CLAMP else (CLAMP if v > CLAMP else v)
+
+
+# minifier-hide start
 from math import tanh as _tanh
 
 
@@ -142,31 +180,9 @@ def _mlp(z):
     return acc + T2B
 
 
-def nn_cp(acc, pf, cnt=0):
-    """Clipped centipawn output of the packed net, mover's point of view:
-    SWAR clamp, two modular horizontal sums, and -- for extended nets only --
-    bilinear group convolutions, the odd tail and the phase scale, in floats
-    (pnet is the verified reference; antisymmetry is exact on both paths:
-    integers by symmetric shift-rounding, floats by IEEE sign-symmetry and
-    truncation toward zero)."""
-    m = ((acc & MLO) >> 14) * ONES              # lane >= 0 ?
-    y = ((acc & m) | MLO) - MLO                 # relu
-    for T in MTS:                               # convex piecewise-linear:
-        x = acc - T                             #   y = sum_i relu(a - t_i)
-        m = ((x & MLO) >> 14) * ONES
-        y += ((x & m) | MLO) - MLO
-    m = (((MGH - y) & MH) >> VBITS) * ONES      # lane <= G_k ?
-    y = (y & m) | (MGP & (m ^ MVAL))            # ...capped at G_k
-    # 2^16 == 1 (mod 2^16-1), so each block's residue IS its lane sum
-    v = (y & MASKLO) % M16 - ((y >> HALF) & MASKLO) % M16
-    if pf:
-        v = -v
-    if not EXT:
-        # round TOWARDS ZERO: floor does not commute with negation, and the
-        # search reaches a position both by rotate() (negates) and move()
-        # (recomputes) -- symmetric rounding keeps them in exact agreement
-        v = (v >> SHIFT) if v >= 0 else -((-v) >> SHIFT)
-        return -CLAMP if v < -CLAMP else (CLAMP if v > CLAMP else v)
+def _ext(y, v, pf, cnt):
+    """Extended evaluation tail (dev builds; the 4k artifact refuses ext
+    nets at load).  v is already mover-signed."""
     d = float(v) / (1 << SHIFT)
     if NB:
         A = [((y >> o) & BGMASK) % M16 for o in BOFFX]
@@ -185,7 +201,7 @@ def nn_cp(acc, pf, cnt=0):
             h[g] /= CB2
             d += BU[g] * h[g]
         if BTAIL:
-            z = [d / 300.0] + [v / 100.0 for v in h] + [v / 100.0 / CB2 for v in f]
+            z = [d / 300.0] + [x / 100.0 for x in h] + [x / 100.0 / CB2 for x in f]
             zn = [-x for x in z[:1 + BM]] + z[1 + BM:]
             d += 150.0 * (_mlp(z) - _mlp(zn))
     if PHASE_S:
@@ -193,6 +209,7 @@ def nn_cp(acc, pf, cnt=0):
         d *= PHASE_S[min(max(b, 0), len(PHASE_S) - 1)]
     d = -CLAMP if d < -CLAMP else (CLAMP if d > CLAMP else d)
     return int(d)                       # trunc toward zero: symmetric
+# minifier-hide end
 
 ###############################################################################
 # Piece-Square tables. Tune these to change sunfish's behaviour
@@ -273,14 +290,14 @@ K_END = (0,) * 20 + sum(
         for file in range(8)) + (0,)
      for rank in range(8)), ()) + (0,) * 20
 
-# Material-base nets (net header "base": "mat") own ALL positional
-# knowledge themselves, including the K_MID/K_END phase swap above: the
-# score base becomes pure material, value(move) becomes capture/promotion
-# deltas (quiets 0), and the K tables both collapse to the flat value so
-# the swap in search() is a no-op.
+# Material-base nets (net header base_kind "mat") own ALL positional
+# knowledge themselves; a dev-build experiment (failed its val gate at
+# 128/30M) -- the 4k artifact ships pst-base nets and refuses mat ones.
+# minifier-hide start
 if BASE == "mat":
     pst = {p: (piece[p],) * 120 for p in piece}
     K_MID = K_END = pst["K"]
+# minifier-hide end
 
 ###############################################################################
 # Global constants
