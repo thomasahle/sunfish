@@ -31,6 +31,26 @@ esac
 echo "$NET_SHA256  $NET" | sha256sum -c - || {
     echo "ERROR: net file does not match the frozen NET_SHA256." >&2; exit 1; }
 
+
+# ---- always-free shape assertion: this deployment is designed to be
+# incapable of accruing compute cost.  A misprovisioned shape is the one
+# mistake that could bill quietly, so refuse to install onto one.
+MD="curl -sf -H \"Authorization: Bearer Oracle\" http://169.254.169.254/opc/v2/instance/"
+SHAPE=$(eval $MD | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('shape',''))")
+OCPUS=$(eval $MD | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('shapeConfig',{}).get('ocpus',0))")
+MEMGB=$(eval $MD | python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('shapeConfig',{}).get('memoryInGBs',0))")
+BOOTGB=$(($(lsblk -b -dn -o SIZE $(findmnt -n -o SOURCE / | sed 's/p\?[0-9]*$//') 2>/dev/null || echo 0) / 1073741824))
+if [ "$SHAPE" != "VM.Standard.A1.Flex" ] || \
+   ! python3 -c "import sys; sys.exit(0 if float('$OCPUS' or 0) <= 2 and float('$MEMGB' or 0) <= 12 else 1)" || \
+   [ "$BOOTGB" -gt 60 ]; then
+    echo "ABORT: this instance is NOT inside the always-free envelope:" >&2
+    echo "  shape=$SHAPE (need VM.Standard.A1.Flex), ocpus=$OCPUS (<=2)," >&2
+    echo "  memory=${MEMGB}GB (<=12), boot=${BOOTGB}GB (<=60)" >&2
+    echo "Provision an always-free A1 instance and re-run." >&2
+    exit 1
+fi
+echo "shape check: $SHAPE ocpus=$OCPUS mem=${MEMGB}GB boot=${BOOTGB}GB -- always-free envelope OK"
+
 apt-get update -qq
 apt-get install -y -qq git pypy3 python3-venv python3-pip
 
@@ -60,8 +80,14 @@ git -C /opt/lichess-bot checkout -q -f "$LICHESS_BOT_COMMIT"
 
 python3 -m venv /opt/lichess-bot/venv
 /opt/lichess-bot/venv/bin/pip install -q -r /opt/lichess-bot/requirements.txt
+# the cost tripwire's only dependency (instance-principal auth, no keys)
+/opt/lichess-bot/venv/bin/pip install -q oci
 
 cp /opt/sunfish/nnue_4k/lichess/config.yml /opt/lichess-bot/config.yml
+# The cost tripwire hook: lichess-bot calls is_supported_extra() from this
+# file on every incoming challenge; it declines while /run/sunfish-costgate
+# exists.  Replaces the no-op stub that ships with lichess-bot.
+cp /opt/sunfish/nnue_4k/lichess/extra_game_handlers.py /opt/lichess-bot/
 sed -i "s/YOUR_TOKEN_HERE/$TOKEN/" /opt/lichess-bot/config.yml
 chmod 600 /opt/lichess-bot/config.yml
 
@@ -75,10 +101,13 @@ chmod 600 /opt/lichess-bot/config.yml
 chown -R sunfish:sunfish /opt/lichess-bot /opt/sunfish
 
 cp /opt/sunfish/nnue_4k/lichess/sunfish-packed.service /etc/systemd/system/
+cp /opt/sunfish/nnue_4k/lichess/sunfish-cost-gate.service /etc/systemd/system/
 systemctl daemon-reload
+systemctl enable --now sunfish-cost-gate
 systemctl enable --now sunfish-packed
 
 echo
 echo "Done. Status:   systemctl status sunfish-packed"
 echo "Logs:           journalctl -u sunfish-packed -f"
 echo "Deployed build: cat /opt/sunfish/nnue_4k/DEPLOYED.txt"
+echo "Cost tripwire:  systemctl status sunfish-cost-gate; cost_gate.py --status"

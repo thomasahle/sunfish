@@ -46,3 +46,43 @@ matchmaking TCs.
 - FEN glue is proven by `tests/test_packed_fen.py`: full-game round-trip
   of every Position field including the accumulator, perspective flag,
   king-bucket index and piece count; en passant live after FEN load.
+
+## What can and cannot cost money here
+
+The A1 always-free shape has **dedicated OCPUs and no credit mechanism**:
+game load, pondering, CPU saturation -- none of it can bill. The reachable
+paid surfaces are network egress past the free 10 TB/month, storage growth
+past the free allowance, and (the one real foot-gun) provisioning a shape
+outside the always-free envelope. Defenses, in order:
+
+1. `setup.sh` **statically refuses** to install unless instance metadata
+   says `VM.Standard.A1.Flex`, ≤2 OCPUs, ≤12 GB, boot ≤60 GB.
+2. `cost_gate.py --daemon` (`sunfish-cost-gate.service`) polls the OCI
+   Usage API hourly via instance principals. If the tenancy shows **any**
+   month-to-date cost above the threshold (default $0.00), it raises
+   `/run/sunfish-costgate` and the bot **declines new challenges** (games
+   in progress finish; the bot stays online). Once tripped it stays
+   tripped for the month -- a reading that "goes away" is more likely
+   amendment lag than a refund -- and auto-clears on a clean month
+   rollover. An unreachable Usage API does NOT trip the gate (an API
+   outage must not kill the bot) unless it stays dark for 48 h straight.
+3. Manual clear after investigating:
+   `sudo /opt/lichess-bot/venv/bin/python /opt/sunfish/nnue_4k/lichess/cost_gate.py --clear`
+   then `sudo systemctl restart sunfish-cost-gate`.
+
+### Instance-principal prerequisites (run once, at deploy time)
+
+The daemon authenticates as the instance (no keys on disk). Tenancy admin
+runs, substituting the compartment OCID:
+
+```
+oci iam dynamic-group create --name sunfish-bot-instances \
+  --description "sunfish lichess bot instances" \
+  --matching-rule "instance.compartment.id = '<COMPARTMENT_OCID>'"
+oci iam policy create --name sunfish-bot-usage-read \
+  --compartment-id <TENANCY_OCID> \
+  --statements '["define tenancy usage-report as ocid1.tenancy.oc1..aaaaaaaaned4fkpkisbwjlr56u7cj63lf3wffbilvqknstgtvzub7vhqkggq", "endorse dynamic-group sunfish-bot-instances to read objects in tenancy usage-report", "allow dynamic-group sunfish-bot-instances to read usage-reports in tenancy"]'
+```
+
+(The `define/endorse` pair is Oracle's documented boilerplate for usage
+access; the last statement is what `RequestSummarizedUsages` checks.)
