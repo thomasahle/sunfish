@@ -70,7 +70,7 @@ install -m 644 "$NET" /opt/sunfish/nnue_4k/net.sfnn
 # pypy3/arm64 macOS at prep time; this re-proves it on the deploy image.)
 SF_NET=/opt/sunfish/nnue_4k/net.sfnn \
     pypy3 /opt/sunfish/nnue_4k/packed/verify.py \
-    /opt/sunfish/nnue_4k/sunfish_packed.py /opt/sunfish/nnue_4k/net.sfnn 120 40
+    /opt/sunfish/nnue_4k/sunfish_nnue.py /opt/sunfish/nnue_4k/net.sfnn 120 40
 
 # The bridge, pinned to the commit the integration test runs against, plus
 # the production patch (lichess-bot.patch) the same test applies: overflow

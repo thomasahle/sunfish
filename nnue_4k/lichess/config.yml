@@ -5,7 +5,7 @@ url: "https://lichess.org/"
 
 engine:
   dir: "/opt/sunfish"
-  name: "nnue_4k/sunfish_packed.py"
+  name: "nnue_4k/sunfish_nnue.py"
   working_dir: "/opt/sunfish"
   protocol: "uci"
   ponder: true

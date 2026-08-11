@@ -28,9 +28,9 @@ sys.path.insert(0, str(ROOT / "sunfish_ui"))
 def load():
     os.environ["SF_NET"] = str(ROOT / "nnue_4k" / "packed" / "net128.sfnn")
     spec = importlib.util.spec_from_file_location(
-        "sunfish", ROOT / "nnue_4k" / "sunfish_packed.py")
+        "sunfish", ROOT / "nnue_4k" / "sunfish_nnue.py")
     mod = importlib.util.module_from_spec(spec)
-    sys.modules["sunfish_packed_fen"] = mod
+    sys.modules["sunfish_nnue_fen"] = mod
     spec.loader.exec_module(mod)
     import uci
     uci.sunfish = mod          # what uci.run() would do

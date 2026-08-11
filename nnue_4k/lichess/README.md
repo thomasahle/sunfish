@@ -1,6 +1,6 @@
 # Packed-NNUE sunfish as a lichess bot
 
-Deployment bundle for running `sunfish_packed.py` (through `tools/uci.py`:
+Deployment bundle for running `sunfish_nnue.py` (through `tools/uci.py`:
 pondering, Hash/TABLE_SIZE, FEN positions) as its own lichess bot on an
 Oracle always-free ARM instance (A1, 2 OCPU / 12 GB, aarch64, Ubuntu).
 

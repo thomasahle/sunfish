@@ -71,10 +71,15 @@ Validation-loss ladder (fixed 200k val split): v2 0.00875 → kb4 0.00825
 net in this directory is `net128kb8.sfnn` (val 0.00800, the strongest
 *play-confirmed* artifact at freeze time).
 
+> Renamed 2026-08-11: this engine file was `sunfish_packed.py` through
+> the development branch's history — the commit ledger refers to it by
+> that name. "Packed" belongs to the big-int lane representation and
+> the ≤4096-byte artifact; the file is the NNUE engine.
+
 ## The 4k build
 
 ```
-tools/build/pack.sh nnue_4k/sunfish_packed.py out.packed
+tools/build/pack.sh nnue_4k/sunfish_nnue.py out.packed
 ```
 
 pyminify + xz + a 116-byte self-extracting header. Current state: the
@@ -100,8 +105,8 @@ python packed/train_packed.py \
   --N 128 --kb 8 --epochs 14 --batch 16384 --limit 30000000 \
   --losspow 2.6 --factor 1 --cache quiet30M_kb8.pkl --out net.pickle
 python packed/build_ext.py net.pickle net.sfnn        # quantize + certify
-python packed/verify.py sunfish_packed.py net.sfnn    # prove it
-python packed/shapecheck.py sunfish_packed.py net.sfnn  # search-friendliness
+python packed/verify.py sunfish_nnue.py net.sfnn    # prove it
+python packed/shapecheck.py sunfish_nnue.py net.sfnn  # search-friendliness
 ```
 
 Data is the lichess Stockfish-eval dump, quiet-filtered; training is

@@ -26,9 +26,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 def load_engine(table_size):
     os.environ["SF_NET"] = str(ROOT / "nnue_4k" / "packed" / "net128.sfnn")
     spec = importlib.util.spec_from_file_location(
-        "sunfish_packed_race", ROOT / "nnue_4k" / "sunfish_packed.py")
+        "sunfish_nnue_race", ROOT / "nnue_4k" / "sunfish_nnue.py")
     mod = importlib.util.module_from_spec(spec)
-    sys.modules["sunfish_packed_race"] = mod
+    sys.modules["sunfish_nnue_race"] = mod
     spec.loader.exec_module(mod)
     mod.TABLE_SIZE = table_size
     return mod
