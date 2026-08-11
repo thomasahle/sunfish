@@ -80,8 +80,16 @@ G status --porcelain --untracked-files=no | sed 's/^...//' | while IFS= read -r 
         || die "modified tracked file in /opt/sunfish differs from origin/master - resolve by hand: $f"
     echo "note: $f is locally modified but matches origin/master (upstreamed hotfix) - will absorb"
 done
-UNTRACKED=$(G status --porcelain | grep -c '^??' || true)
-[ "$UNTRACKED" = 0 ] || echo "note: $UNTRACKED untracked file(s) in /opt/sunfish (deploy artifacts like net.sfnn are expected)"
+# An untracked file that master now tracks blocks the checkout. Byte-identical
+# copies (files deployed before they were committed) are absorbed; others abort.
+G status --porcelain | sed -n 's/^?? //p' | while IFS= read -r f; do
+    if G cat-file -e "FETCH_HEAD:$f" 2>/dev/null; then
+        G cat-file blob "FETCH_HEAD:$f" | cmp -s - "/opt/sunfish/$f" \
+            || die "untracked /opt/sunfish/$f differs from the now-tracked copy on origin/master - resolve by hand"
+        [ "$ACTION" = check ] && echo "note: untracked $f matches origin/master (will become tracked)" || {
+            sudo -u sunfish rm "/opt/sunfish/$f"; echo "absorbed untracked $f (identical, now tracked)"; }
+    else echo "note: untracked $f (deploy artifact, e.g. net.sfnn - left alone)"; fi
+done
 OLD=$(G rev-parse HEAD); NEW=$(G rev-parse FETCH_HEAD)
 if [ "$OLD" != "$NEW" ]; then
     G merge-base --is-ancestor HEAD FETCH_HEAD \
@@ -123,19 +131,27 @@ if [ -n "$DRIFT" ]; then
         TOKEN=$(sudo sed -n 's/^token: *"\(.*\)"/\1/p' /opt/lichess-bot/config.yml)
         [ -n "$TOKEN" ] || die "could not extract live token - not rewriting config"
         sudo sed "s/YOUR_TOKEN_HERE/$TOKEN/" "/opt/sunfish/$BUNDLE/config.yml" > /tmp/config.yml.new
-        sudo install -m 600 /tmp/config.yml.new /opt/lichess-bot/config.yml; sudo rm /tmp/config.yml.new
+        # -o/-g: the unit runs as sunfish; a root-owned 600 config is unreadable
+        # to it (found live: took the bot down for 4 minutes on 2026-08-11)
+        sudo install -m 600 -o sunfish -g sunfish /tmp/config.yml.new /opt/lichess-bot/config.yml
+        sudo rm /tmp/config.yml.new
         echo "config rewritten from template (token preserved)"
     else echo "(pass --sync-config to rewrite from the template; token is preserved)"; fi
 fi
 
-# 5. Engine smoke BEFORE the restart: a broken engine must fail here, not in a game.
+# 5. Engine smoke BEFORE the restart, under the unit's own Environment= (e.g.
+# SF_NET): smoking a different net than the service uses proved worthless live
+# (2026-08-11: smoke green, bot dead on a stale deployed net).
+UNIT_ENV=$(systemctl show "$UNIT" -p Environment --value 2>/dev/null || true)
 cd /opt/sunfish
 if [ ! -f "$ENGINE" ] && [ "$ACTION" = check ]; then
     echo "engine $ENGINE not present at the current checkout - it arrives with the update"
 else
-    printf 'uci\nquit\n' | timeout 60 sudo -u sunfish python3 "$ENGINE" | grep -q uciok \
-        || die "engine smoke failed: $ENGINE does not answer uciok"
-    echo "engine smoke ok: $ENGINE"
+    printf 'uci\nisready\nposition startpos\ngo movetime 200\nquit\n' \
+        | timeout 60 sudo -u sunfish env $UNIT_ENV python3 "$ENGINE" | grep -q bestmove \
+        || die "engine smoke failed: $ENGINE (env: ${UNIT_ENV:-none}) - if this is a stale
+net, migrate it: python3 nnue_4k/packed/embed_tables.py NET_IN NET_OUT"
+    echo "engine smoke ok: $ENGINE (env: ${UNIT_ENV:-none})"
 fi
 REMOTE
 
