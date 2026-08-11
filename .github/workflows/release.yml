@@ -36,17 +36,32 @@ jobs:
           | timeout 60 sunfish-uci | tee /dev/stderr | grep '^bestmove' > bm.txt
         grep -q '^bestmove' bm.txt
         ! grep -q '^bestmove [a-h][12]' bm.txt
-    - name: Build the packed 4K engine
+    - name: Build the packed TCEC shell engines
+      # Self-executing shell files for the TCEC 4k division: classic
+      # under 4096 bytes (historically ~3.3KB), and - once nnue_4k/ is
+      # merged - the NNUE engine under 4096. Budgets are asserted: an
+      # artifact labeled 4k that exceeds 4096 bytes is a lie, and the
+      # release should fail rather than ship it.
       run: |
         pip install python-minifier
-        bash tools/build/pack.sh sunfish.py sunfish-4k.packed
-        wc -c sunfish-4k.packed
+        bash tools/build/pack.sh sunfish.py sunfish-classic-4k.sh
+        CB=$(wc -c < sunfish-classic-4k.sh)
+        echo "classic packed: $CB bytes"
+        test "$CB" -le 4096
+        if [ -f nnue_4k/sunfish_packed.py ]; then
+          (cd nnue_4k && bash ../tools/build/pack.sh sunfish_packed.py ../sunfish-nnue-4k.sh)
+          NB=$(wc -c < sunfish-nnue-4k.sh)
+          echo "nnue packed: $NB bytes"
+          test "$NB" -le 4096
+        else
+          echo "nnue_4k/ not present - classic artifact only"
+        fi
     - uses: actions/upload-artifact@v4
       with:
         name: dist
         path: |
           dist/
-          sunfish-4k.packed
+          sunfish-*-4k.sh
 
   publish-pypi:
     needs: build
@@ -79,4 +94,4 @@ jobs:
           --repo "$GITHUB_REPOSITORY" \
           --title "sunfish $GITHUB_REF_NAME" \
           --generate-notes \
-          dist/*.tar.gz dist/*.whl sunfish-4k.packed
+          dist/*.tar.gz dist/*.whl sunfish-*-4k.sh
