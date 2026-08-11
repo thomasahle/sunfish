@@ -17,33 +17,9 @@ The second easiest way is to play in your terminal:
 <pre>
 $ <b>pip install sunfish</b>
 $ <b>sunfish</b>
-
-Playing against sunfish 2026.
-Do you want to be white or black? <b>black</b>
-  1 ♖ ♘ ♗ ♔ ♕ ♗ ♘ ♖
-  2 ♙ ♙ ♙ ♙ ♙ ♙ ♙ ♙
-  3
-  4
-  5
-  6
-  7 ♟ ♟ ♟ ♟ ♟ ♟ ♟ ♟
-  8 ♜ ♞ ♝ ♚ ♛ ♝ ♞ ♜
-    h g f e d c b a
-
-<b>+0.23</b> · depth 7 · 12k nodes · 14k/s · 0.9s
- My move: d4
-  1 ♖ ♘ ♗ ♔ ♕ ♗ ♘ ♖
-  2 ♙ ♙ ♙ ♙   ♙ ♙ ♙
-  3
-  4         ♙
-  5
-  6
-  7 ♟ ♟ ♟ ♟ ♟ ♟ ♟ ♟
-  8 ♜ ♞ ♝ ♚ ♛ ♝ ♞ ♜
-    h g f e d c b a
-
-Your move (e.g. c6 or g8h6): <b>Nf6</b>
 </pre>
+
+![Playing sunfish in the terminal](docs/screenshot.png)
 
 Or, from a repo checkout, just run `sunfish_ui/fancy.py -cmd ./sunfish.py`.
 
