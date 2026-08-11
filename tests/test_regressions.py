@@ -41,7 +41,7 @@ def load_sunfish():
 
 sf = load_sunfish()
 
-import sunfish_tools.uci as uci  # noqa: E402
+import sunfish_ui.uci as uci  # noqa: E402
 
 uci.sunfish = sf  # the UCI module resolves the engine module via this global
 

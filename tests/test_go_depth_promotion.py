@@ -22,7 +22,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import sunfish
-from sunfish_tools import uci
+from sunfish_ui import uci
 
 # go_loop/render_move/pv reach the engine through the module global that
 # run() normally injects; bind it the same way run() does.

@@ -5,13 +5,13 @@ kilobytes. The scripts here produce that artifact from `sunfish.py`.
 
 ## pack.sh — the full packer
 
-    bash build/pack.sh sunfish.py sunfish.packed
+    bash tools/build/pack.sh sunfish.py sunfish.packed
 
 Pipeline:
 
 1. **Strip the development-only code.** Everything between
    `# minifier-hide start` and `# minifier-hide end` markers is deleted
-   with `sed`. That removes the `import sunfish_tools.uci` bridge (the
+   with `sed`. That removes the `import sunfish_ui.uci` bridge (the
    full UCI implementation, used everywhere else — development, the
    lichess bot, and `pip install sunfish`), leaving the self-contained
    "tiny" UCI loop at the bottom of `sunfish.py` as the packed engine's

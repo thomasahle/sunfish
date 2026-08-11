@@ -17,10 +17,11 @@ Homepage = "https://github.com/thomasahle/sunfish"
 
 [project.scripts]
 sunfish = "sunfish:main"
+sunfish-play = "sunfish_ui.fancy:run"
 
 [project.optional-dependencies]
-# For the tools/ scripts (terminal play, testing) in a repo checkout.
-tools = [
+# For the terminal play interface: pip install 'sunfish[play]' && sunfish-play
+play = [
     "chess==1.9.4",
     "tqdm==4.67.1",
 ]
@@ -40,5 +41,5 @@ dev = [
 # shipped: those are development scripts, and `tools` is far too generic
 # a name for a distribution to claim in site-packages.
 py-modules = ["sunfish"]
-packages = ["sunfish_tools"]
+packages = ["sunfish_ui"]
 

@@ -24,7 +24,7 @@ jobs:
         pip install dist/*.whl
         printf 'uci\nisready\nposition startpos\ngo movetime 300\nquit\n' \
           | timeout 60 sunfish | tee /dev/stderr | grep -q bestmove
-        # The wheel must ship sunfish_tools/, i.e. the real UCI interface.
+        # The wheel must ship sunfish_ui/, i.e. the real UCI interface.
         # Run from an empty directory so only the installed copy can satisfy
         # the import, and use a Black-to-move FEN: a wheel that shipped
         # sunfish.py alone cannot start at all, and one that answered from
@@ -37,7 +37,7 @@ jobs:
     - name: Build the packed 4K engine
       run: |
         pip install python-minifier
-        bash build/pack.sh sunfish.py sunfish-4k.packed
+        bash tools/build/pack.sh sunfish.py sunfish-4k.packed
         wc -c sunfish-4k.packed
     - uses: actions/upload-artifact@v4
       with:

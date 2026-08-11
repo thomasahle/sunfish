@@ -8,7 +8,7 @@ Everything here is offline and synthetic:
   lichess connection (and no lichess-bot checkout) is needed.
 
 The numbers the tests assert against come from the production measurements
-recorded in contrib/lichess/cpu_credit.py.
+recorded in tools/lichess/cpu_credit.py.
 """
 
 import importlib.util
@@ -23,7 +23,7 @@ CONTRIB = Path(__file__).resolve().parent.parent / "contrib" / "lichess"
 
 
 def _load(name):
-    """Import a module from contrib/lichess/ by path (it is not a package)."""
+    """Import a module from tools/lichess/ by path (it is not a package)."""
     spec = importlib.util.spec_from_file_location(name, CONTRIB / f"{name}.py")
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod

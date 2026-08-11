@@ -484,7 +484,7 @@ version = "2026"
 source = { editable = "." }
 
 [package.optional-dependencies]
-tools = [
+play = [
     { name = "chess" },
     { name = "tqdm" },
 ]
@@ -508,10 +508,10 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "chess", marker = "extra == 'tools'", specifier = "==1.9.4" },
-    { name = "tqdm", marker = "extra == 'tools'", specifier = "==4.67.1" },
+    { name = "chess", marker = "extra == 'play'", specifier = "==1.9.4" },
+    { name = "tqdm", marker = "extra == 'play'", specifier = "==4.67.1" },
 ]
-provides-extras = ["tools"]
+provides-extras = ["play"]
 
 [package.metadata.requires-dev]
 dev = [
