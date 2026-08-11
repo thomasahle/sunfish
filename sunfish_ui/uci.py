@@ -141,6 +141,18 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
     # current depth's candidate only if no depth ever completed. The pv
     # walk is used for the ponder hint only when it agrees with what we
     # actually play - tp_move[root] can hold a mid-dive artifact.
+    # Diagnostic tripline for the unexplained early-return reports (~3/28
+    # local once, 0.1-0.2s against a >1s budget; NOT reproduced in 260
+    # scripted go/ponderhit/stop cycles).  A timed search that ends far
+    # under budget without a stop announces itself -- "info string" is
+    # spec-legal, GUIs and lichess-bot log it, so a live occurrence
+    # self-documents instead of vanishing.
+    elapsed = time.perf_counter() - start
+    if (elapsed < max_movetime / 3 and max_movetime < 10**5
+            and not stop_event.is_set() and last_depth < 5):
+        print(f"info string EARLY-RETURN-DIAG elapsed={elapsed:.3f} "
+              f"budget={max_movetime:.2f} depth={last_depth} "
+              f"deadline_in={(searcher.deadline or 0) - time.time():.3f}")
     played = best_move or cand
     my_pv = pv(searcher, hist[-1], include_scores=False)
     if played and len(my_pv) > 1 and my_pv[0] == played:
