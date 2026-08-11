@@ -101,15 +101,15 @@ if NB:
     BOFFY = tuple(o + NB * LBITS for o in BOFFX)
     CB2 = float(1 << (2 * _d["bshift"]))
     BU = _d["u"]
+    BTAIL = _d.get("tail")
+    if BTAIL:
+        T1W, T1B = BTAIL["t1w"], BTAIL["t1b"]
+        T2W, T2B = BTAIL["t2w"][0], BTAIL["t2b"][0]
 if RFF:
     _FB = (2 * _d["N"] + 2 * NB) * LBITS
     ROFFX = tuple(_FB + 32 * k for k in range(RFF))
     ROFFY = tuple(_FB + 32 * (RFF + k) for k in range(RFF))
     RW = tuple(_d["rw"])
-    BTAIL = _d.get("tail")
-    if BTAIL:
-        T1W, T1B = BTAIL["t1w"], BTAIL["t1b"]
-        T2W, T2B = BTAIL["t2w"][0], BTAIL["t2b"][0]
 # minifier-hide end
 if (EXT or MTS) and "_FULL" not in dir():
     raise SystemExit("extended/segmented net: use the repo engine")
