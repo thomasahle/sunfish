@@ -632,7 +632,16 @@ tactic only, so a full build takes seconds.
   the mate band), sound only in a modified form (`boundRm`,
   `bound_null_spec_Rm`) under a margin premise proven false for every
   useful margin (`razorMargin_required`) and vacuous beyond them
-  (`razorMargin_trigger_vacuous`).  See "Proposed prunings: proven
+  (`razorMargin_trigger_vacuous`).  The check extension: sound and
+  landed in the key-determined depth-shift form (`boundE_null_spec`,
+  `extE_no_crossing`, `forcedMate_ext` — mates at in-check roots
+  visible one ply earlier), while the recursive at-entry form has NO
+  declared value function (`checkExt_no_declared_value` /
+  `checkExt_any_value`: on the perpetual-check cycle its defining
+  equations admit every band value at the same key) and the budgeted
+  repair is well-defined exactly when the budget joins the table key
+  (`nullValueEB`, `nullValueEB_zero`, `ext_budget_value_bearing`,
+  `ext_recursive_ne_shift`).  See "Proposed prunings: proven
   envelopes" below for the full verdicts and engine guidance.
 
 ## The premise inventory (current, one place)
@@ -1654,6 +1663,90 @@ fidelity premise is proven on the countermodel; axioms
 `propext, Quot.sound` only — the fidelity bundle included).
 `bound_null_spec_Rm` / `razorMargin_no_crossing` consume `Bounded` +
 `RazorMargin` and inherit layer 1''`s `Classical.choice`.
+
+### Candidate 2 — the check extension: SOUND ONLY IN THE KEY-DETERMINED (DEPTH-SHIFT) FORM; the recursive form has no spec at all
+
+**The proposal**: `e(pos) = 1` if the side to move is in check
+(`inCheckB`, the board predicate already modeled); at node entry the
+effective depth is `d' = d + e(pos)`, children searched at `d' − 1`,
+the entry stored at the `(pos, d)` key.
+
+**Verdict, in three parts** (the `can_ext` doctrine of the guideline
+section, now with machine-checked teeth on both of its branches):
+
+- **The key-determined form is sound and lands whole.**  With declared
+  function `nullValueE d p = nullValueD2 (d + e p) p` — a function of
+  the key, because `e` is position-derived — layer 1 transfers by
+  instantiation (`boundE_null_spec` / `boundKCXE_null_spec`),
+  no-crossing holds at every `(pos, depth)` key with NO new key field
+  (`extE_no_crossing`), and the liveness bound IMPROVES:
+  `forcedMate_ext` — at an in-check root a mate-in-k is visible at
+  every `D ≥ k`, one ply earlier than `forcedMate_complete`'s `k + 1`
+  (premises unchanged: `ValFloor` + `NoZugzwang`, layer 2).  The
+  honesty clause: `nullValueE`'s fold consumes UNEXTENDED children, so
+  the implementing engine must search children FLAT — the effective
+  depths telescope, only the probed node's own horizon moves, and the
+  form is a depth relabeling (deeper root probes at in-check nodes),
+  NOT a deeper search of checking lines.
+- **The recursive at-entry form — what `depth += pos.in_check()` at
+  the top of `bound()` actually computes, each child re-extending at
+  its own entry — has NO declared value function.**  `ExtValueEqns`
+  states its defining equations verbatim (`extValueEqns_of_checkFree`:
+  on a check-free game they are `nullValueD2`'s own equations, and the
+  shipped function satisfies them — the equations are the right
+  generalization, the extension itself is what breaks them).  On the
+  two-position mutual-check cycle `CexPerp` — real chess: perpetual
+  check — **`checkExt_any_value`** solves the equations with an
+  ARBITRARY band value `x` at `pa` (and `−x` at `pb`) at every depth,
+  and **`checkExt_no_declared_value`** exhibits two solutions
+  disagreeing at one `(pos, depth)` key.  There is no function for a
+  table entry to describe: point spec, table invariant and termination
+  fail together, before any theorem about the search can be stated.
+  The engine reading is non-termination: around the cycle the
+  effective depth never decreases — `pa` at depth `d` recurses through
+  `pb` back to `pa` at depth `d` — and sunfish's in-search recursion
+  has no repetition stop (the `history` check guards root-line
+  repetitions only).
+- **The budgeted repair is sound exactly when the budget joins the
+  key.**  `nullValueEB` threads a per-path extension budget `b`
+  (extension consumed from it); the DEFINITION is the theorem the
+  naive form lacks — Lean accepts it with measure `b + d`, an extended
+  step trading one budget for one depth — and `nullValueEB_zero`
+  proves budget 0 collapses to the shipped `nullValueD2` (the repair
+  extends the spec, not replaces it).  But
+  **`ext_budget_value_bearing`**: budgets 0 and 1 disagree at a fixed
+  `(pos, depth)` key, so a table serving it must key on
+  `(pos, depth, budget)` — the `can_ext` doctrine's key-must-grow
+  branch, the `extended_value_not_key_independent` shape with the
+  history-state made explicit.  And **`ext_recursive_ne_shift`**: at a
+  quiet node above a check chain, the budgeted recursive extension
+  (budget ample, cap never binding) sees the mate the extra ply
+  reveals while the shift function does not — no depth relabeling
+  recovers the recursive extension; deepening checking LINES genuinely
+  requires the key-bearing budget.
+
+**What an engine change may and may not do**: the ONLY change the
+landed theorems license as-is is the depth-shift form — `depth`
+effective at the probed node, children flat, store at the incoming
+key — whose value is a relabeling (and whose liveness gain is real but
+confined to in-check roots of stored subtrees).  `depth +=
+pos.in_check()` at the top of `bound()` is FORBIDDEN in any form that
+lets children re-extend: it diverges on perpetual check and its table
+entries describe no function (`checkExt_no_declared_value`).  A PR
+wanting genuinely deeper checking lines must thread an extension
+budget AND widen the `tp_score` key to `(pos, depth, budget)`, paying
+the partitioned hit rate the `can_ext` doctrine prices — with the
+search-side spec for the budgeted consumer as the (stated, unstarted)
+proof obligation: `bound_null_spec''` re-proven against
+`nullValueEB`, budget threaded through the recursion.
+
+Premises consumed: the depth-shift transfers consume exactly the
+double-primed premise lists (`Bounded`; production side adds
+`KingCaptureValHigh` + `CaptureFirst`) and inherit their
+`Classical.choice`; `forcedMate_ext` consumes `ValFloor` +
+`NoZugzwang` (layer 2, unchanged); the impossibility and budget
+theorems consume NOTHING (axioms `propext, Quot.sound` only,
+countermodels and the well-founded definition included).
 
 ## Prior art
 
