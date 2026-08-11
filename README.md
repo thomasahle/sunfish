@@ -113,13 +113,17 @@ There are many ways in which you may try to make Sunfish stronger. First you cou
 
 The other way to make Sunfish stronger is to give it more knowledge of chess. The current evaluation function only uses piece square tables - it doesn't even distinguish between midgame and endgame. You can also experiment with more pruning - currently only null move is done - and extensions - currently none are used. Finally Sunfish might benefit from a more advanced move ordering, MVV/LVA and SEE perhaps?
 
-An easy way to get a strong Sunfish is to run with the [PyPy Just-In-Time interpreter](https://pypy.org/). In particular, the Python 2.7 version of PyPy gives a 250 ELO boost compared to the CPython (2 or 3) interpreters at fast time controls:
+An easy way to get a strong Sunfish is to run it with the
+[PyPy Just-In-Time interpreter](https://pypy.org/) — the launcher at the top
+of `sunfish.py` picks `pypy3` automatically when installed. Measured on the
+current engine (fixed-depth battery, identical node counts): **PyPy 3.11
+searches ~2.7x faster than CPython 3.14** (81 vs 30 knps), worth on the
+order of 100 Elo at fast time controls.
 
-    Rank Name                    Elo     +/-   Games   Score   Draws
-       1 pypy2.7 (7.1)           166      38     300   72.2%   19.7%
-       2 pypy3.6 (7.1)            47      35     300   56.7%   21.3%
-       3 python3.7               -97      36     300   36.3%   20.7%
-       4 python2.7              -109      35     300   34.8%   24.3%
+(Historical footnote: sunfish once ran fastest under PyPy 2.7, and an old
+version of this table said so. Modern sunfish requires Python >= 3.8 —
+the code uses the walrus operator — and modern PyPy 3 has long since
+closed the gap.)
 
 
 # Family
