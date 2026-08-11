@@ -19,7 +19,7 @@ standard disk is in GCP's always-free tier.
 ```bash
 gcloud auth login
 gcloud config set project <your-project-id>   # project must have billing enabled
-contrib/lichess/gcp-create.sh <LICHESS_BOT_TOKEN>
+tools/lichess/gcp-create.sh <LICHESS_BOT_TOKEN>
 ```
 
 That creates the VM, installs pypy3 + sunfish + lichess-bot, and starts a
@@ -31,7 +31,7 @@ Create an always-free ARM instance (up to 4 cores / 24GB) with Ubuntu in the
 Oracle Cloud console, then on the VM:
 
 ```bash
-curl -sL https://raw.githubusercontent.com/thomasahle/sunfish/master/contrib/lichess/setup.sh \
+curl -sL https://raw.githubusercontent.com/thomasahle/sunfish/master/tools/lichess/setup.sh \
   | sudo bash -s -- <LICHESS_BOT_TOKEN>
 ```
 
@@ -47,7 +47,7 @@ sudo systemctl restart sunfish-lichess  # after config changes
 cd /opt/sunfish && sudo -u sunfish git pull   # update the engine
 
 systemctl status sunfish-credit-gate    # the CPU-credit gate
-python3 /opt/sunfish/contrib/lichess/cpu_credit.py --status   # gate snapshot
+python3 /opt/sunfish/tools/lichess/cpu_credit.py --status   # gate snapshot
 ls -l /run/sunfish-throttled            # exists => declining new challenges
 ```
 
@@ -155,16 +155,16 @@ sudo -u sunfish sed -i \
 cd /opt/sunfish && sudo -u sunfish git pull
 
 # 2. Install the gate daemon and the updated bot unit
-sudo cp contrib/lichess/sunfish-credit-gate.service /etc/systemd/system/
-sudo cp contrib/lichess/sunfish-lichess.service     /etc/systemd/system/
-sudo cp contrib/lichess/extra_game_handlers.py      /opt/lichess-bot/
+sudo cp tools/lichess/sunfish-credit-gate.service /etc/systemd/system/
+sudo cp tools/lichess/sunfish-lichess.service     /etc/systemd/system/
+sudo cp tools/lichess/extra_game_handlers.py      /opt/lichess-bot/
 sudo chown sunfish /opt/lichess-bot/extra_game_handlers.py
 sudo systemctl daemon-reload
 
 # 3. Start the gate first and confirm it is sane BEFORE touching the bot
 sudo systemctl enable --now sunfish-credit-gate
 sleep 30
-python3 /opt/sunfish/contrib/lichess/cpu_credit.py --status
+python3 /opt/sunfish/tools/lichess/cpu_credit.py --status
 #   expect: "gate_open": true, small deficit, "throttled_now": false
 ls -l /run/sunfish-throttled     # should NOT exist on a healthy box
 
@@ -207,8 +207,8 @@ EOF
 # on 300000, not the template's 100000 -- check your backup), drop
 # interpreter/interpreter_options.
 # Revert the unit (drop CPUWeight):
-cd /opt/sunfish && sudo -u sunfish git checkout HEAD~1 -- contrib/lichess/
-sudo cp contrib/lichess/sunfish-lichess.service /etc/systemd/system/
+cd /opt/sunfish && sudo -u sunfish git checkout HEAD~1 -- tools/lichess/
+sudo cp tools/lichess/sunfish-lichess.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl restart sunfish-lichess
 ```
