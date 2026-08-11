@@ -155,6 +155,19 @@ sudo -u sunfish sed -i \
 
 ## Deploying these changes to a running bot
 
+The scripted way, from your own machine (idle-gated restart via the lichess
+API, drift checks, engine smoke test; also handles the NNUE bot and PyPI
+release tags):
+
+```bash
+tools/deploy.sh classic user@host   # this bundle
+tools/deploy.sh nnue                # nnue_4k/lichess on the Oracle box
+tools/deploy.sh nnue --check        # report-only
+tools/deploy.sh pypi v2027         # push a release tag; CI publishes
+```
+
+The manual steps it automates:
+
 ```bash
 # 1. Pick up the new engine + contrib files.
 #    If this fails with "insufficient permission for adding an object", a
