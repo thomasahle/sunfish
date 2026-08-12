@@ -140,6 +140,37 @@ class TestCappedNullMove:
         assert not any(gamma == 1 - sf.MATE_LOWER for gamma, _, _ in calls)
 
 
+class TestFilteredCheckEvasion:
+    """Extending check evasions must keep the QS filter from inventing mate.
+
+    Black is checked by f3, and Kf5/Kh4/Kh5 are its only legal moves. Their
+    intrinsic values (-102/-105/-105) all fall just below val_lower(1)=-100.
+    Without the extension, the fold searches only illegal pseudo-moves and
+    returns -MATE_UPPER; one ply earlier, that makes f3+ look like mate.
+    """
+
+    CHILD = "rnbq2nr/2p1bppp/p2p4/1p2p3/2P3k1/PP3P1N/3PP2P/RNQ1KB1R b KQ - 0 10"
+    PARENT = "rnbq2nr/2p1bppp/p2p4/1p2p3/2P3k1/PP5N/3PPP1P/RNQ1KB1R w KQ - 0 10"
+
+    @pytest.mark.parametrize(("qs_a", "depth"), ((140, 1), (60, 2)))
+    def test_subthreshold_king_moves_refute_mate(self, monkeypatch, qs_a, depth):
+        monkeypatch.setattr(sf, "QS_A", qs_a)
+        sf.pst["K"] = sf.K_MID
+        child = hist_from_fen(self.CHILD)[-1]
+        legal = [m for m in child.gen_moves() if not child.move(m).king_capture()]
+        assert sorted(child.value(m) for m in legal) == [-105, -105, -102]
+        assert max(child.value(m) for m in legal) < sf.QS - depth * sf.QS_A
+
+        searcher = sf.Searcher()
+        searcher.root, searcher.history = child, set()
+        assert searcher.bound(child, 1 - sf.MATE_LOWER, depth, root=True) > -sf.MATE_LOWER
+
+        parent = hist_from_fen(self.PARENT)[-1]
+        searcher = sf.Searcher()
+        searcher.root, searcher.history = parent, set()
+        assert searcher.bound(parent, sf.MATE_LOWER, depth + 1, root=True) < sf.MATE_LOWER
+
+
 class TestNullSentinelMasking:
     """Audit finding A1: in pawn endings the null-move gate
     (abs(score) < 500) admits a "pass" that yields a normal material
