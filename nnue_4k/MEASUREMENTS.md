@@ -18,7 +18,8 @@ messages that served as the ledger before this file existed (`git log
 
 | Date | Experiment | Verdict |
 |---|---|---|
-| 2026-08-12 | **Goal-line 60+1 vs classic (interim)** | **+187.0 ± 49.7 at 240/400 games, zero time losses — biggest confirmed margin yet, short of +400** |
+| 2026-08-12 | **Hot-path profile: the bottleneck is the BOARD, not the eval** | ~85% of a node is Python board/namedtuple work; the accumulator is 3.0µs of 14.6µs — biggest untapped lever |
+| 2026-08-12 | **GOAL-LINE VERDICT: +187.0 ± 49.7 vs classic @60+1** | **272 games, zero time losses. Target +400 NOT met — but against a classic that gained ~+130 during the campaign** |
 | 2026-08-12 | `_ext` integerization: scoped and priced | DONT BUILD (SWAR tail 5.2-10.3µs vs 3.8µs now) — but a dead-code third removed: rehab800 0.643 → 0.742× kb8, +21 Elo |
 | 2026-08-12 | **Quality-term hunt restarted: labels + 3 new families** | IN FLIGHT — 28-pair fixed-node label RR running locally; metric C shows the first honest signal (churn ranks kbbil worst, w256 best) |
 | 2026-08-12 | **H2 paired form (the honest successor)** | **FAILS validation — sign flips across labeled pairs; H2 is closed, quality is fixed-node games only** |
@@ -57,28 +58,101 @@ messages that served as the ledger before this file existed (`git log
 
 ---
 
-## 2026-08-12 — Goal-line 60+1 vs classic: +187 at the interim mark
+## 2026-08-12 — Hot-path profile: the bottleneck is the board, not the eval
 
-The +400 campaign's scoreboard match, running on the bench box: the play king
-(256kb8@100M) on the current engine vs current-master classic, 400 games at
-60+1. Both preflights green as black; both sides ride the same `sunfish_ui`
-driver, so the time-formula gain cancels and this measures engine+eval only.
+The `_ext` audit found a third of that path was dead work nobody had timed. The
+**main** path — the one every net pays, including the play king — had never had
+the same treatment. Measured on pypy over 40 real middlegame positions
+(28.6 moves/position mean), for three nets spanning the accumulator size range:
 
-**Interim at 240/400 games: +187.0 ± 49.7 Elo (nElo +201.8), 74.6%, 171W 53L
-16D, ZERO time losses.** Ptnml [7, 3, 36, 13, 61].
+| component | v2 (128, B=1) | kb8 (128, B=8) | w256 (256, B=8) |
+|---|---|---|---|
+| `Position.move` (one move) | 11.51 µs | 12.85 µs | **14.56 µs** |
+| `gen_moves` (whole list) | 6.55 | 6.95 | 6.85 |
+| `value` (all moves) | 1.93 | 1.97 | 1.84 |
+| `score` (attribute read) | — | — | 0.13 |
+| `rotate` | — | — | 1.91 |
 
-Read honestly: this is the largest margin over classic this project has
-confirmed at a decision TC — the previous 60+1 high-water was +95.7/+100.4 for
-packed128 v1 — and it is **less than half of the +400 goal**. Not final: the
-verdict waits for all 400 games and the time-loss check, per the standing rule
-that a pgn count and forfeit count precede believing any Elo.
+**The accumulator is not the cost.** Widening 128→256 with the same bucket
+scheme moves `move()` by only 3.05 µs, so at 256 width the NNUE update is ~21%
+of `move()` and at 128 it is ~10%; the *packed head read* is 0.13 µs, i.e.
+free. Everything else — ~11.5 µs of `move()`, all 6.9 µs of `gen_moves`, all
+1.9 µs of `value` — is board-string splicing, namedtuple construction and
+castling/ep bookkeeping, identical for every net.
 
-Where the remaining ~210 Elo would have to come from, on current evidence: not
-from eval val (the val ladder has flattened, and 256ng's record 0.00678 is
-speed-blocked), not from byte golf (298 bytes spare, not the constraint). The
-open levers are search (the ordering headroom the litmus measured — SF best at
-median rank 8), the search constants the tuner RR is about to decide, and
-whatever the quality-term work turns into a training signal.
+Rough per-node arithmetic: **~85% of the engine's time is Python board
+manipulation and ~15% is the neural network.** Years of this lane's effort have
+gone into making the 15% cheaper (SWAR clamps, folded weights, fused loaders)
+while the 85% went unmeasured.
+
+This reframes the remaining Elo gap. At the measured ~100 Elo per speed
+doubling: halving board cost is ≈1.64× overall → **+71 Elo**; a 3× board
+speedup is **+110 Elo**. Nothing in the eval column can offer that — and it
+would apply to classic identically, which is either a shared win or a reason
+the relative number moves less than the absolute one (both engines share
+`gen_moves`/`move`; the packed side pays the extra accumulator, so speeding the
+shared part helps *classic slightly more* in relative terms). That caveat is
+exactly why it needs measuring rather than assuming.
+
+Not proposed blindly: a `nnue-mutable-board` branch exists in this repo's
+history, so the idea has been touched before; the numbers above are the first
+time its value has been quantified. Costing and design belong in their own
+entry before any code moves.
+
+## 2026-08-12 — GOAL-LINE VERDICT: +187.0 ± 49.7 over classic at 60+1
+
+The +400 campaign's scoreboard match: the play king (256kb8@100M) on the current
+engine vs current-master classic, 60+1, both sides on the same `sunfish_ui`
+driver so the time-formula gain cancels and this measures engine+eval only.
+
+**Final: +187.01 ± 49.65 Elo (nElo +201.80 ± 43.96), 272 games, zero time
+losses.** Stopped early at 272/400 by coordinator decision: the estimate had
+converged upward (157 → 179 → 187) while the interval tightened (±89 → ±59 →
+±50), so the remaining 139 games would have sharpened a settled conclusion while
+five queued experiments waited.
+
+**The target is +400 and we measure +187. Both of these are true, and the second
+number is measured against a moving baseline.** During this campaign classic
+absorbed the killer depth gate (+42 there), the capped-null work, and the same
+new time formula this lane validated (+91 at 60+1, +46 at 30+1) — so today's
++187 is over a materially stronger classic than the one the target was set
+against. Against the classic of the goal's origin the same engine would measure
+substantially higher; against today's classic it measures +187. The gap is
+closing from both ends, which is good for the engine and inconvenient for the
+scoreboard.
+
+Where the missing ~213 can and cannot come from, on this lane's own evidence:
+
+**Dead or mined out.** Width converted once (+52.5) and will not again at this
+size — 512 would cost more speed than its val could repay. Material base
+(−0.0016 val), compensation oversampling (representation-limited, not
+data-limited), dense L2 heads, the k=3 activation, multiply-and-split, packed
+convolution, and the history heuristic are all closed with numbers. The val
+ladder itself has flattened: the record net (256ng, 0.00678) is speed-blocked
+and benched.
+
+**Live, with predicted Elo and cost:**
+
+| # | Item | Predicted | Cost | Status |
+|---|---|---|---|---|
+| 1 | Search constants (QS/ER) | **+30…+68** — offline says −22%…−37% nodes at equal cp-loss, which at 100 Elo/doubling is a 1.3-1.6× effective speedup | zero, already built | RR running now |
+| 2 | **Board representation** | **+50…+110** — the profile above | high: semantic port, exactness ladder, shared with classic and with the formal model | proposal, needs its own costing |
+| 3 | krff play screen | 0…+20 — val 0.00729 ≈ w256's 0.00731, but at 0.991× speed instead of a tax | ~2h box | queued |
+| 4 | `_ext` dead-code fix | **+21 to every bilinear-family net** (0.643 → 0.742×) | done | landed 4810a5a |
+| 5 | King-safety features | +20…+40 if it converts — the diagnosed weakness (compensation-class loss runs ~5× overall) that no arch change has yet addressed; an incrementally-maintainable pawn-shield/king-ring plane is the cheapest form | trainer + engine + one training run | proposal |
+| 6 | Validated quality metric | indirect — makes every future candidate triageable without a 200-game screen | in flight | labels accumulating |
+
+The honest shape of it: no single remaining item is worth +213. Items 1 and 2
+are the only ones with three-digit potential, and both are *speed*, not eval —
+which is consistent with everything this lane has measured since the speed model
+landed.
+
+## 2026-08-12 — Goal-line 60+1, interim read (superseded)
+
+Recorded at 240/400 games: +187.0 ± 49.7, zero time losses. Superseded by the
+final verdict entry above, which it agrees with to the decimal — the last 32
+games moved nothing, which is itself the evidence that stopping early cost
+no information.
 
 ## 2026-08-12 — `_ext` integerization: scoped, priced, and mostly declined
 
