@@ -42,6 +42,8 @@ Since 2026-08-12 this lane serves **two separate goals** and entries say which:
 | 2026-08-12 | Hot-path profile (superseded in part) | ~85%-board claim WRONG — see the correction entry above |
 | 2026-08-12 | **GOAL-LINE VERDICT: +187.0 ± 49.7 vs classic @60+1** | **272 games, zero time losses. Target +400 NOT met — but against a classic that gained ~+130 during the campaign** |
 | 2026-08-12 | `_ext` integerization: scoped and priced | DONT BUILD (SWAR tail 5.2-10.3µs vs 3.8µs now) — but a dead-code third removed: rehab800 0.643 → 0.742× kb8, +21 Elo |
+| 2026-08-12 | **LMR CONVERTS: +65.0 ± 43.3 at fixed nodes** | 200 games, 0 forfeits, 0 illegal — 59.25%. First clean local screen, and the first reduction lands |
+| 2026-08-12 | Sudden-death budget fix (lichess bot) | `/40` when `winc==0`; a 3+0 loss on time with no move overrunning. Artifact byte-identical at 3913 |
 | 2026-08-12 | **VOID: every local fixed-node game was a time forfeit** | 425/425 label-RR games, 54/54 LMR, 40/40 ng — node cap silently ignored. Labels withdrawn; metric C's own numbers stand (no games involved) |
 | 2026-08-12 | Quality-term hunt restarted: labels + 3 new families | Metric C measured (churn ranks kbbil worst, w256 best); its LABEL half is void — see the entry above |
 | 2026-08-12 | **H2 paired form (the honest successor)** | **FAILS validation — sign flips across labeled pairs; H2 is closed, quality is fixed-node games only** |
@@ -79,6 +81,70 @@ Since 2026-08-12 this lane serves **two separate goals** and entries say which:
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-12 — LMR converts: +65.0 ± 43.3 at fixed nodes
+
+The first reduction, and the first *clean* local screen — the node cap honoured,
+the driver named in the log, and a smoke test read back before the run.
+
+**lmr vs base, 20000 nodes/move, 200 games, kb8@128 both sides, srand 20260830:
++65.02 ± 43.32 Elo (nElo +74.39), 59.25%, 102W 65L 33D. Zero time forfeits, zero
+illegal moves** (136 adjudications, 64 normal).
+
+Fixed nodes is the honest test here: both sides get identical effort, so this
+isolates whether the reduction *spends* nodes better rather than rewarding
+whichever engine searches faster. It does — a ply shallower on late quiet moves,
+re-searched at full depth only on a fail-high, is worth ~65 Elo for **+36 bytes**
+and a 64% node reduction at fixed depth (265210 → 94442).
+
+Caveats kept honest: the interval is wide (±43) and excludes zero comfortably but
+not overwhelmingly; this is one net at one node budget; and ice4's +81 for the
+same feature is a different engine at millions of nodes, so the agreement in sign
+and rough magnitude is reassurance, not confirmation. A timed confirmation at
+30+1 belongs on the box queue behind the current chain.
+
+**LMR stays in.** RFP remains held at 0 pending its own screen *on top of* LMR,
+with the mate suite as an acceptance gate — the pair loses mates (5/8 → 3/8)
+where each alone does not.
+
+## 2026-08-12 — Sudden death needs a flatter divisor (lichess bot, not the artifact)
+
+`sunfish-nnue-engine` lost `lichess.org/EAThUL0P` on time at move 73 of a 3+0
+game **without a single move overrunning**. `wtime/12` spent 12.8 s of a 180 s
+budget on ply 9; below 2 s the `wtime/2 - 1000` cap goes negative, the budget
+collapses to the 0.05 s floor, and ~200 ms/move of unavoidable lag drains the
+rest.
+
+    think = min(wtime / (12 if winc else 40) + 0.9 * winc, wtime / 2 - 1000)
+
+Behind `minifier-hide`, so **the artifact is byte-identical at 3913**: TCEC is
+1800+3, `winc` is never zero there, and the branch would be dead code. The
+lichess bot runs the unminified module and gets the fix.
+
+Simulated budget walk, before trusting the change (and the harness was checked
+against the *old* formula first, so it can actually fail):
+
+| scheme | 3+0, 73 mv | 3+0, 100 mv | 3+2, 80 mv | 1800+3, 120 mv |
+|---|---|---|---|---|
+| `/12` (current) | FLAG | FLAG | ok 6 s | ok 8 s |
+| **`/40` (fixed)** | **ok 22 s** | **ok 7 s** | ok 6 s | ok 8 s |
+
+First-move spend at 3+0 falls 15.0 s → 4.5 s. `/40` is classic's constant and
+classic does not flag, so it carries production evidence rather than being fitted
+to one game. Movecount-aware divisors were simulated and are *worse*: a shrinking
+"moves remaining" divisor spends more per move as the game lengthens, which is
+backwards for sudden death.
+
+The regression (`tests/test_time_budget.py`, 8 tests) walks the curve directly,
+because **no existing gate can see this class of bug** — the ladder measures
+nodes, bytes and correctness, and a match would need a real 3+0 game. It extracts
+the formula from the source rather than duplicating it, so a reshaped budget line
+fails loudly instead of testing a stale copy.
+
+Note the ms/seconds trap bit twice in one day: the extracted expression yields
+milliseconds and `main()` divides by 1000 on the next line, the same confusion
+that produced a 590-second move earlier. The conversion now lives in one named
+place.
 
 ## 2026-08-12 — VOID: every local fixed-node game was a time forfeit
 
