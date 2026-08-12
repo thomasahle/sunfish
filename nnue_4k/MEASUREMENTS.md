@@ -141,13 +141,77 @@ six labels**, though probes (+0.60) and flips (+0.66) have the right sign by
 Spearman where val is *negative* (−0.26). This is exactly the resolution problem
 Thomas identified; the verdict waits for the 28-pair set.
 
-### Status
+### Workstream 2B — decision-margin-weighted regret (measured)
 
-Families A (outcome calibration vs actual W/D/L, no oracle) and B
-(decision-margin-restricted regret, SF multipv≤30cp with a sensitivity sweep)
-are computed but not yet validated — they need the labels. Nothing enters the
-formula until leave-one-out on the enlarged set says it beats the null. H3 stays
-unstarted.
+SF multipv=2 at depth 12 over 400 real-game positions; engine choices at fixed
+depth 4; cp-loss restricted to positions where the oracle's top two moves are
+within the margin. Sensitivity sweep, so "restricting helps" is testable:
+
+| net | ≤15cp | ≤30cp | ≤60cp | ≤120cp | all |
+|---|---|---|---|---|---|
+| v2 | 24.7 | 28.8 | 35.5 | 42.6 | 46.7 |
+| kb4 | 23.4 | 27.5 | 32.6 | 39.6 | 44.3 |
+| kb8 | **21.3** | **25.1** | 31.7 | 39.7 | 43.8 |
+| kbbil | 25.3 | 29.3 | 37.6 | 44.3 | 47.3 |
+| rehab800 | 25.0 | 31.0 | 36.2 | 41.7 | 44.5 |
+| w256 | 21.4 | 28.4 | 32.0 | 37.4 | **38.7** |
+| msp | **19.1** | **23.5** | **27.9** | **35.7** | 39.4 |
+| krff | 23.1 | 26.8 | 33.4 | 38.8 | 43.1 |
+| *n positions* | 173 | 225 | 289 | 340 | 400 |
+
+The restricted columns put kb8/w256/msp at the top and kbbil at the bottom,
+which is the play order — but note the sweep does **not** yet show restriction
+helping: on the six-label preliminary, Spearman is +0.20 at ≤15cp against +0.43
+unrestricted. On six labels that comparison is not worth much either way; it is
+recorded so the 15-pair rerun can confirm or kill the margin hypothesis itself.
+
+**A useful tension to settle:** family B says rehab800 (25.0) and kbbil (25.3)
+are clearly *worse in quality* than kb8 (21.3), while the speed-adjusted labels
+say both are within ~1 Elo of kb8 once speed is removed. Both cannot be right.
+The fixed-node RR is the referee: if rehab/kbbil land near zero, B is measuring
+something that does not reach play; if they land clearly negative, the
+speed-only model has been over-crediting speed and the quality term is real and
+large. This is the most informative single thing the running matches will decide.
+
+### Workstream 2A — outcome calibration: confounded as computed
+
+| net | K_own | logloss@K_own | Brier | logloss@K_shared(233) | n |
+|---|---|---|---|---|---|
+| v2 | 169 | **0.52944** | 0.13058 | 0.53791 | 4000 |
+| kb4 | 246 | 0.59143 | 0.10982 | 0.59168 | 4000 |
+| kb8 | 258 | **0.60855** | 0.15378 | 0.60928 | 4000 |
+| kbbil | 258 | 0.58094 | 0.12312 | 0.58179 | 4000 |
+| rehab800 | 223 | 0.56777 | 0.12942 | 0.56791 | 4000 |
+| w256 | 254 | 0.59557 | 0.14857 | 0.59613 | 4000 |
+
+This ranks v2 **best** and kb8 **worst** — anti-correlated with play — and the
+reason is a confound in the *position sets*, not in the idea: each net's games
+come from a different screen, so the opponent differs. v2's pgn is against
+classic (a far weaker opponent, so outcomes are lopsided and easy to predict);
+kb8's is against w256 (a near-equal opponent, so outcomes are near coin-flips
+and logloss is necessarily high). Calibration measured on head-to-head screens
+mostly measures **opponent parity**.
+
+The fix is already running rather than hypothetical: the local RR has a uniform
+opponent mix by construction, so A must be recomputed on its pgn before it is
+judged. No verdict on A until then.
+
+### Status and honest sizing note
+
+All three families are computed; none is validated. On the six speed-adjusted
+labels every family — and quiet val as control — fails to beat the null RMS of
+45.7 (probes/depth 46.5, B-unrestricted 47.1, B≤15cp 48.1, PV flips 48.7,
+sibling sd 51.5, val 55.4). That is the resolution problem, not a set of
+verdicts.
+
+Sizing reality, recorded because it constrains everything: at 20000 nodes/move
+these engines take ~90s per game on the laptop, so the original 8-net/28-pair
+plan needed ~42 hours — too much for Thomas's working machine. Re-scoped to the
+**six nets that already have timed labels** (15 pairs, still 2.5× the old label
+count), which doubles the games-per-pair rate and lets the same run test the
+speed model directly. fastchess cycles pairs evenly, so partial results stay
+balanced and labels can be harvested at any moment; the run simply accumulates
+precision until stopped. H3 remains unstarted.
 
 ## 2026-08-12 — H2 paired form: fails validation, and H2 is closed
 
