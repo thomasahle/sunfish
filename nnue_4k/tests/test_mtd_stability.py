@@ -99,8 +99,8 @@ def test_survives_a_lying_bound():
     rng = random.Random(7)
     real = s.bound
 
-    def lying_bound(p, gamma, depth, root=False):
-        v = real(p, gamma, depth, root=root)
+    def lying_bound(p, gamma, depth, root=False, **kw):
+        v = real(p, gamma, depth, root=root, **kw)
         if root and rng.random() < 0.5:        # contradict half the probes
             return gamma + rng.choice([-40, 40])
         return v

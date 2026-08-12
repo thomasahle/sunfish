@@ -304,6 +304,9 @@ PROBE_CAP = 40
 # Late move reduction: reduce quiet moves whose static value is below this,
 # once past the first few in the sorted list. 0 disables (classic parity).
 LMR = 60
+# Late move pruning: quiet moves past LMP + depth^2 (doubled when
+# improving) are skipped at depth < 4. 0 disables. Held until screened.
+LMP = 0
 # Reverse futility pruning margin per ply. 0 disables.
 # HELD AT 0: implemented and gated, but it INTERACTS with LMR. On the
 # mate-in-1 suite, baseline finds 5/8, LMR alone 5/8, RFP alone 5/8 --
@@ -542,7 +545,7 @@ class Searcher:
         self.node_cap = 1 << 62          # testing only; see bound()
         # minifier-hide end
 
-    def bound(self, pos, gamma, depth, root=False):
+    def bound(self, pos, gamma, depth, root=False, ps=0, pps=0):
         """ Let s* be the score of the sub-tree from pos at this depth, as
             a function of (pos, depth) alone. This includes null moves and
             QS pruning, and global parameters like self.history that don't
@@ -664,7 +667,7 @@ class Searcher:
             # fixed-depth floor). Both halves stay. No null at root, so we
             # can always return a move.
             if not root and depth > 2 and abs(pos.ps) < 500 and any(c in pos.board for c in "RBNQ"):
-                score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
+                score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3, ps=pos.score, pps=ps)
                 # A fail high is a virtual claim, and needs verification
                 # before it may cut: if the king is capturable the capture is
                 # substituted (the node must report the exact MATE_UPPER)
@@ -709,7 +712,7 @@ class Searcher:
             # We will search it again in the main loop below, but the tp will
             # make this mostly free.
             if killer and pos.value(killer) >= val_lower:
-                yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)
+                yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1, ps=pos.score, pps=ps)
 
             # Then all the other moves
             # Quiescent search: only moves above the val-limit are admitted -
@@ -740,6 +743,20 @@ class Searcher:
                     # so it can't get any better than this.
                     break
 
+                # LATE MOVE PRUNING. Past a move count that shrinks with
+                # depth, quiet moves are abandoned outright rather than
+                # reduced. `improving` -- our static score against the same
+                # side's score two plies ago -- doubles the allowance when
+                # the position is getting better, which is what makes LMP
+                # safe enough to be worth having: when things are going
+                # well a late quiet move is unlikely to be the only save,
+                # and when they are not we look at more of them.
+                # The list is sorted by static value, so breaking is the
+                # same argument the futility break already relies on.
+                if LMP and depth < 4 and val < LMR and \
+                        cnt > LMP + depth * depth * (2 if pos.score > pps else 1):
+                    break
+
                 # LATE MOVE REDUCTION. The move list is sorted by static
                 # value, so a quiet move arriving late is one the ordering
                 # already judged unpromising: search it a ply shallower and
@@ -753,9 +770,9 @@ class Searcher:
                 # the reduced search only needs to be trusted when it FAILS
                 # LOW (score < gamma), and a fail-high is re-run at full depth.
                 red = LMR and depth > 2 and cnt > 2 and val < LMR
-                score = -self.bound(pos.move(move), 1 - gamma, depth - 2 if red else depth - 1)
+                score = -self.bound(pos.move(move), 1 - gamma, depth - 2 if red else depth - 1, ps=pos.score, pps=ps)
                 if red and score >= gamma:
-                    score = -self.bound(pos.move(move), 1 - gamma, depth - 1)
+                    score = -self.bound(pos.move(move), 1 - gamma, depth - 1, ps=pos.score, pps=ps)
                 yield move, score
 
         # Run through the moves, shortcutting when score >= gamma.
