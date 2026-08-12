@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **Byte accounting fixed to the ENTRY; LMP threshold pre-registered** | entry **3573** (+56 for LMP), **523 spare**; nnue engine 3973. Keep LMP only at ≥1.0 Elo/byte (≥+56 Elo) |
 | 2026-08-13 | **4k entry vs classic @10+0.1 (interim)** | **~+133 ± 120 at 51/600 games**, zero time losses — same eval both sides, so this is our SEARCH. Flips the confounded fixed-node sign |
 | 2026-08-13 | **+400 decomposition checked: eval worth ~+224, not ~+160** | goal60 predates LMR/guards, so more of its +187 belongs to eval. Priority unchanged — search must still supply +232…+344 |
 | 2026-08-13 | RR stopped early; Texel trend isolated | Bug was ~50 Elo of the −66.8; residual **−16.7 ± 31.2** covers zero. TC baseline unblocked and running |
@@ -110,6 +111,55 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — Byte accounting fixed to the ENTRY, and a pre-registered threshold for LMP
+
+**Correction to my own reporting.** I wrote "artifact 3913 → 3973 (+60)" for
+LMP + improving. 3913 is the **nnue engine**, which is not a valid entry — it
+dies without an external net. The thing with a hard 4096-byte ceiling is
+`pst_entry.py`. Measured by building both, not by adding a remembered number:
+
+| build | packed | note |
+|---|---|---|
+| **entry, pre-LMP** (tag `4k-entry-v1`) | **3517** | the real baseline |
+| **entry, with LMP + improving** | **3573** | **+56**, leaving **523 spare** |
+| nnue engine, same source | 3973 | not an entry; reported second, for contrast |
+
+The composed guess was +60; measured is **+56**. Small, but it is the third time
+tonight that a composed byte figure missed a measured one (the entry itself was
+3517 against a composed 3787), always in the direction of the estimate being
+wrong. **Convention from here: entry bytes first with spare, nnue engine second,
+and every figure produced by `pack.sh` on a real file.**
+
+### Threshold, fixed before the screen reports
+
+LMP costs 56 bytes — about 11% of the remaining budget for one feature. Deciding
+the keep/drop rule now so it cannot be fitted to the outcome:
+
+- **Keep if ≥ 1.0 Elo/byte, i.e. ≥ +56 Elo** on its fixed-node screen.
+- **Drop below that**, and the 56 bytes come back out, because ~523 spare bytes
+  have to serve corrhist, history, IIR and whatever the eval track wants.
+
+For calibration: ice4 prices LMP+improving at 123 Elo, which at our byte cost
+would be 2.2 Elo/byte — comfortably above LMR's measured 1.8.
+
+### A transfer coefficient is starting to form
+
+Two data points on how much of a C++ engine's search technique survives the move
+to a Python engine with an *incremental* eval:
+
+| feature | ice4 Elo/byte | ours | ratio |
+|---|---|---|---|
+| LMR | 81/10 = 8.1 | 65/36 = **1.8** | 0.22 |
+| ice4 stack average | 421/131 = 3.2 | — | — |
+| LMP + improving | 123/? | pending, 56 B | pending |
+
+Our bytes are dearer than theirs (Python source through lzma versus hand-golfed
+C++), so the Elo/byte ratio conflates two things — Elo transfer and byte cost —
+and the honest reading is the *Elo* column, not the rate. If LMP lands near 2.0
+Elo/byte the pattern becomes a usable prior for **triaging corrhist, history and
+IIR before building them**, which is worth more than any single feature: it turns
+a build-and-measure list into a ranked one.
 
 ## 2026-08-13 — First sight of the number that matters: the 4k entry leads classic
 
