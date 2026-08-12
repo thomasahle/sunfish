@@ -115,7 +115,7 @@ how much effort it cost.
 
 ---
 
-## 2026-08-13 — BASELINE FINAL: the 4k entry is +19.1 ± 12.9 over classic
+## 2026-08-13 — BASELINE FINAL: the 4k entry is +19.1 ± 24.5 over classic
 
 **600 games at 10+0.1, zero time losses, zero illegal moves. Entry 265 wins,
 classic 232, 103 draws — 52.75%, so +19.1 ± 24.5 Elo for the entry (95%; the
