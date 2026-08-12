@@ -18,7 +18,7 @@ messages that served as the ledger before this file existed (`git log
 
 | Date | Experiment | Verdict |
 |---|---|---|
-| 2026-08-12 | Mate distance (issue #11) | Floors unchanged, score separation real, **practical reach capped by EVAL_ROUGHNESS**; 30+1 match QUEUED |
+| 2026-08-12 | Mate distance (issue #11) | Score separation real (60 pts at d6), **play bit-identical: 0/300 move or node diffs, 0 conversion diffs**; 30+1 match QUEUED |
 | 2026-08-12 | H2 optimism bias, controls | DEAD in simple form — every net is an optimist on its own losses (kb8 +105 worst) |
 | 2026-08-12 | krff gates (256×kb8×rff64) | PASS all — val 0.00729, shape 0.53%, **nps 0.991× — rff is free at width** |
 | 2026-08-12 | History heuristic removal | REMOVED — sound history measures 1.01 node ratio; the −49% was the bug |
@@ -54,86 +54,108 @@ messages that served as the ledger before this file existed (`git log
 
 ---
 
-## 2026-08-12 — Mate distance: the value function separates, the driver mostly cannot use it
+## 2026-08-12 — Mate distance: the value separates, the play does not move
 
 Issue #11 (2014, "Tempo"): every checkmate scored the flat `-MATE_LOWER`, so
 "a mate in 6 is considered the same as a mate in 1". The terminal correction
-now deposits the depth still unspent when the mate was found,
-`mate = -MATE_LOWER - min(depth * EVAL_ROUGHNESS, 21366)`, which negation carries home as
-`MATE_LOWER + (depth - plies)`.
+now deposits the depth still unspent when the mate was found, one
+`EVAL_ROUGHNESS` per ply:
 
-**Value level — works exactly as designed.** On
-`8/3Q4/8/8/8/3R4/5K1k/8 w` (three mating moves, eight moves that mate in
-three) at depth 6:
+```python
+mate = -MATE_LOWER - min(depth * EVAL_ROUGHNESS, MATE_UPPER - MATE_LOWER - 1)
+```
 
-| | mate in 1 | mate in 3 |
+Negation carries it home as `MATE_LOWER + (depth - plies) * EVAL_ROUGHNESS`.
+
+**Why the multiplier.** The first version deposited one point per ply. That
+version measured a real separation in the value function and still could not
+reach the root: MTD-bi stops at `upper - lower <= EVAL_ROUGHNESS`, so the
+driver's last window sits within 15 of the true value and any move within 15
+of the maximum can take the final cutoff. One ply per point is inside that
+window by construction. Scaling by `EVAL_ROUGHNESS` puts consecutive
+distances a full bracket apart. (Thomas's call, after the one-point version
+measured the ceiling.)
+
+**Band headroom, checked not assumed.** Deepest mate value
+`-MATE_LOWER - 21366 = -69289 = 1 - MATE_UPPER`, exactly one point above the
+illegal-move sentinel `-MATE_UPPER = -69290`; its negation `69289` exactly one
+below the king-capture sentinel. That one point is load-bearing both ways:
+`live |= score > -MATE_UPPER` still separates a legal move into the deepest
+representable mate from an illegal move, and `r = MATE_UPPER` at a capturable
+node stays unambiguous. Static-quantity tests (`pos.score <= -MATE_LOWER`,
+`pos.value(move) >= MATE_LOWER`, the null cap at 515) are untouched and their
+margin to the nearest mate value is now 15 wider. Clamp binds at unspent
+depth 1425; `search` iterates to 999.
+
+**Score level — works, at the intended scale.** On
+`8/3Q4/8/8/8/3R4/5K1k/8 w` (three mating moves, four that mate in three):
+
+| depth | | mate in 1 | mate in 3 | gap |
+|---|---|---|---|---|
+| 6 | master | 47923 | 47923 | **0** |
+| 6 | one point/ply | 47928 | 47924 | 4 |
+| 6 | shipped (x15) | 47998 | 47938 | **60** |
+
+Mate-in-1 root score by depth, shipped: 47938, 47953, 47968, 47983, 47998,
+48013 (`MATE_LOWER + (D-1)*15`); master reports 47923 at every depth.
+
+**Play level — no measurable change anywhere. Four probes, all null:**
+
+| probe | positions | result |
 |---|---|---|
-| master | 47923 | 47923 |
-| matedist | 47928 | 47924 |
+| WAC lockstep @d4 | 300 | root move differs **0**, node count differs **0**, score differs 14 (the mate lines) |
+| conversion, won endgames @d5, cap 40 plies | 60 | 29/60 converted for both, mean **10.52 plies both**, **0 differences** |
+| forced-mate-in-3 race @d8, attack and defend | 40 | **every playout identical** |
+| lost defender with a real choice of how long to hold out @d6 | 60 | both play the LONGEST defence **60/60** |
 
-Master cannot tell them apart at all; matedist separates them by 4, which is
-exactly the two-move difference doubled. Pinned by
-`tests/test_regressions.py::TestMateDistance` (score separation, the exact
-`MATE_LOWER + depth - 1` for a mate in 1, the exact `-MATE_LOWER - depth` at
-a checkmated node).
+Identical to the one-point-per-ply run on every one of these. The conversion
+probe is the one that was supposed to move, and it did not: 10.52 vs 10.52,
+zero positions differing, before and after the multiplier.
 
-**Fixed-depth floors — bit-for-bit identical to master** on every suite:
-mate1 8/8, mate2 20/20, mate3 5/5, mate4 5/10, stalemate0 4/4, stalemate1
-3/4, stalemate2 18/130, WAC 94/300 @d3, bratko 5/24, 3fold 2/8. 271 tests
-pass. Packed 3250 B (master 3234 B, limit 4096).
+**Why, traced.** The tie the flat value could not break is rare, because
+sunfish's horizon means only ONE of the candidate lines is usually recognised
+as a mate at all. Two mechanisms:
 
-**Conversion probe — no measurable effect, and the reason is instructive.**
-60 random won endgames (KQK / KRK / KRRK), fixed depth 5, cap 40 plies,
-defender held fixed at frozen master: 29/60 converted for BOTH trees, mean
-10.52 plies for both, **zero positions differed**. A second probe over 40
-forced-mate-in-3 positions at depth 8 (attack and defend directions):
-**every single playout identical**.
+* **Attacker side** — a faster mate appears at a SHALLOWER iteration, so ID
+  (and IID, `bound(pos, gamma, depth-3, root=True)`) finds it first, stores it
+  as the killer, and the killer cuts at every deeper iteration.
+* **Defender side** — a slower mate is BEYOND the horizon, so it scores as an
+  ordinary eval, which is hundreds of points above `-MATE_LOWER`. Traced on
+  `8/8/k7/8/2R1K3/1R6/8/8 b` (replies: mated in 3 vs mated in 1): at depths
+  4/6/8/9 the mate-in-3 reply scores -511/-535/-55/-55 while the mate-in-1
+  reply scores -981/0/0/0 — never a mate-vs-mate comparison at all.
 
-Two reasons, both worth recording:
+So: **sunfish's dawdling protection comes from iterative deepening and the
+horizon, not from the mate score.** That is a real negative result and it
+should be recorded as one. What the change buys is a value function that is
+provably distance-ordered (which is what the play-level liveness theorem in
+`formal/Sunfish/Liveness.lean` needs — the statement cannot be formed without
+it) and a reported mate score that means something. It does not buy plies.
 
-1. **Iterative deepening already sorts by distance.** A mate in 1 first
-   appears at depth 2, where it is the only move in the band; it is stored
-   as the killer and re-tried first at every deeper iteration, cutting
-   immediately. IID (`bound(pos, gamma, depth-3, root=True)`) does the same
-   inside a single probe. Sunfish was already picking the shortest mate it
-   had *found*, without being able to *score* it.
-2. **`EVAL_ROUGHNESS = 15` blurs the new information at the root.** MTD-bi
-   stops when `upper - lower <= EVAL_ROUGHNESS`, so the last window sits
-   within 15 of the true value and any move within 15 of the maximum can
-   take the cutoff. Mate distances differ by 1 per ply, so the driver cannot
-   separate mating lines less than ~15 plies apart. The fix is sound and the
-   value function is strictly better ordered, but the *driver* only sees it
-   for large distance gaps.
+**Floors — identical to master, line for line**, at both scales: mate1 8/8,
+mate2 20/20, mate3 5/5, mate4 5/10, stalemate0 4/4, stalemate1 3/4,
+stalemate2 18/130, WAC 94/300 @d3, bratko 5/24, 3fold 2/8. 271 tests pass.
+Packed 3244 B (master 3234 B, limit 4096).
 
-That second point is the honest ceiling on this change as shipped, and the
-obvious follow-up: make the bisection's stopping rule mate-aware (keep
-bisecting while the bracket is inside the mate band) so the root can act on
-the distance it now has. Not done here — it is a driver change with its own
-Elo question.
-
-**Rejected alternative, with a proof-level reason.** The other way to get
-distance-from-node is a per-ply step on the score
-(`score -= sign(score)` at each negation, mate in k = `MATE_UPPER - 2k`).
-It is UNSOUND with sunfish's zero-window probe: the step map is not
-injective at the band edge (`up(MATE_LOWER) = up(MATE_LOWER - 1)`), so no
-single child window separates the child's fail-high from its fail-low, and
+**Rejected alternative, with a proof-level reason.** Distance-from-node via a
+per-ply step on the score (`score -= sign(score)`, mate in k =
+`MATE_UPPER - 2k`) is UNSOUND with sunfish's zero-window probe: the step map
+is not injective at the band edge (`up(MATE_LOWER) = up(MATE_LOWER - 1)`), so
+no single child window separates the child's fail-high from its fail-low, and
 the fail-soft point spec breaks by one at both
 `boundD2 child (1-gamma) = -gamma` and `= 1 - gamma`. Restoring it needs a
-gamma-dependent child window
-(`1 - gamma - [MATE_LOWER <= gamma < MATE_UPPER] + [gamma <= -MATE_LOWER]`),
-i.e. a change to the search contract. It was implemented, the hole was found
-in the Lean transport, and it was reverted; `formal/Sunfish/GameTree.lean`
-keeps `up` and its machine-checked non-injectivity as the record.
+gamma-dependent child window. Implemented, caught in the Lean transport,
+reverted; `formal/Sunfish/GameTree.lean` keeps `up` and its machine-checked
+non-injectivity as the record.
 
 **Elo: QUEUED, not measured.** 300 games at 30+1, openings_2k.epd, srand
 20260812, `-recover`, concurrency 6, waiting on `WIDENING_RR.txt` plus a
-20-minute fastchess-quiet window (`~/sunfish-bench/matedist/`). Given the
-probes above, the prior is "flat"; the match is there to rule out a
-regression, not to find a win.
+20-minute fastchess-quiet window (`~/sunfish-bench/matedist/`). Given a
+0/300 fixed-depth lockstep the prior is "flat to the point of invisibility";
+the match exists to rule out a regression.
 
-**Related negative, already on record:** the other half of issue #11, the
-tempo term itself, was measured and rejected — T-eval −8.1 ± 32.6, T-null
-−115.2 ± 43.7.
+**Related negative, already on record:** the tempo half of issue #11 was
+measured and rejected — T-eval -8.1 +/- 32.6, T-null -115.2 +/- 43.7.
 
 ---
 
