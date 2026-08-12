@@ -31,6 +31,12 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
+# The production hosts, one Oracle A1 instance per bot (see the header).
+# Override per-invocation with the env vars or a trailing user@host argument,
+# e.g. after a rebuild:  CLASSIC_HOST=ubuntu@1.2.3.4 tools/deploy.sh classic
+CLASSIC_HOST=${CLASSIC_HOST:-ubuntu@147.224.58.218}   # OCI: sunfish-classic
+NNUE_HOST=${NNUE_HOST:-ubuntu@146.235.195.115}        # OCI: sunfish-nnue
+
 die() { echo "deploy: $*" >&2; exit 1; }
 
 MODE=${1:-}; shift || true
@@ -45,10 +51,10 @@ esac; done
 case $MODE in
     nnue)    BUNDLE=nnue_4k/lichess UNIT=sunfish-packed  ACCOUNT=sunfish-nnue-engine
              BOTDIR=/opt/lichess-bot
-             HOST=${HOST:-ubuntu@146.235.195.115} ;;
+             HOST=${HOST:-$NNUE_HOST} ;;
     classic) BUNDLE=tools/lichess   UNIT=sunfish-lichess ACCOUNT=sunfish-engine
              BOTDIR=/opt/lichess-bot
-             HOST=${HOST:-ubuntu@147.224.58.218} ;;
+             HOST=${HOST:-$CLASSIC_HOST} ;;
     pypi)
         TAG=${HOST:?usage: deploy.sh pypi vNNNN}
         VER=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)
