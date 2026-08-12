@@ -326,6 +326,9 @@ class Searcher:
         # depth, so so there is no reason to keep different depths in the transposition table.
         depth = max(depth, 0)
 
+        # Search every check evasion one ply deeper, as in micro-Max.
+        if depth and pos.rotate(nullmove=True).king_capture(): depth += 1
+
         # Sunfish is a king-capture engine, so we should always check if we
         # still have a king. Notice since this is the only termination check,
         # the remaining code has to be comfortable with being mated, stalemated
