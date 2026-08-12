@@ -46,6 +46,8 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-12 | **MILESTONE: valid 4k entry built and verified** | **3517 bytes measured** (composed estimate said 3787), plays alone in an empty dir with SF_NET unset, **579 spare** |
+| 2026-08-12 | **DECISION: PST is the main line, NNUE the challenger** | NNUE pays 705 B of machinery before its first weight, against a 579-byte eval — challenger must win per byte, machinery included |
 | 2026-08-12 | **Engine byte decomposition: the thesis is in arithmetic trouble** | NNUE machinery 705 B + 553 B richer core = the 1258 overrun. PST entry fits at 3787 (309 spare); NNUE entry leaves **183 B** for the net |
 | 2026-08-12 | **Accounting: 71% of logged work served the unbounded net** | The 4k track was priced and never built. Drift recorded, allocation corrected |
 | 2026-08-12 | **The engine was ALREADY unstable** | Bracket crossings fire with LMR=0 — the one-value-per-key invariant was violated before any reduction; we just had no instrument |
@@ -101,6 +103,75 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-12 — MILESTONE: a valid 4k entry exists, measured at 3517 bytes
+
+**Built, not composed.** The previous entry's `3208 + 579 = 3787` added a PST
+cost measured against a *different* source, and lzma shares one dictionary
+across the whole stream, so that sum was not a prediction of anything. Built for
+real — our engine with the NNUE machinery removed and classic's tables pasted
+into the source, through `tools/build/pack.sh`:
+
+| | bytes |
+|---|---|
+| composed estimate | 3787 |
+| **measured artifact** | **3517** |
+| **spare under 4096** | **579** |
+
+The measurement beats the sum by **270 bytes**, in our favour, for exactly the
+reason the sum was untrustworthy: the tables compress better inside this
+engine's stream than they did as a subtraction from classic's. The method
+warning cuts both ways.
+
+### The acceptance test, which is what makes it an entry
+
+    /tmp/entrytest$ ls
+    entry                       # 3517 bytes, nothing else
+    /tmp/entrytest$ env -u SF_NET ./entry
+    id name sunfish 2026-packed
+    uciok
+    readyok
+    bestmove g1f3
+
+**Alone in a directory, with `SF_NET` unset, it plays — and leaves nothing
+behind.** That is the definition we have never satisfied before: the nnue
+artifact at "3913" dies with `FileNotFoundError` under the same test. Sanity
+beyond starting up: mate-in-1 suite 5/8 (identical to the NNUE engine's own
+score at the same depth), and a legal continuation from a 6-ply opening line.
+
+It is **reproducible from committed sources**: `tools/build/make_pst_entry.py`
+generates `nnue_4k/pst_entry.py` mechanically from `sunfish_nnue.py` +
+`sunfish.py`, and repacking the committed source reproduces the identical 3517
+bytes.
+
+**What it is:** classic's evaluation with *our* search — the KCX port, the MTD
+instability guards, LMR (+65.0 ± 43.3 at fixed nodes), the time-budget work. It
+should be stronger than classic at equal bytes, and that screen is the next
+measurement rather than a claim.
+
+## 2026-08-12 — DECISION: rank+file/PST is the main line; NNUE is the challenger
+
+Recorded as a dated decision so it cannot drift back quietly.
+
+| entry | composition | total | spare |
+|---|---|---|---|
+| **PST (main line)** | engine 3208 + classic's tables, measured together | **3517** | **579** |
+| NNUE (challenger) | engine 3913 incl. 705 B machinery + blob | 4096 | **blob ≤ 183 B** |
+
+The NNUE path must pay **705 bytes of decode machinery it cannot amortise**
+before its first weight, against a baseline whose entire evaluation is 579 bytes
+and which now has 579 bytes of headroom. Its effective budget against that
+baseline is negative unless a net wins decisively. Affording even a 1200-byte
+blob needs the engine at 2896 — cutting 1017 while keeping the machinery, which
+would put our non-NNUE core at 2191 against classic's already-golfed 2655.
+
+**Therefore: PST is the main line. NNUE is a challenger that must prove itself
+per byte, machinery included.** The small ternary nets (N=8/16/32) still run,
+and the screen reports **Elo per byte including the 705** — a clean number ends
+the argument either way, and the arithmetic must not prejudge the measurement.
+
+Calibration, unchanged: packed128v2 is −225 ± 65 vs molly, classic −372 ± 91.
+Having a valid entry is a milestone in *rule compliance*, not in strength.
 
 ## 2026-08-12 — The engine is the problem, and the arithmetic may kill the thesis
 
