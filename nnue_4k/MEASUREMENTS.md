@@ -28,6 +28,7 @@ Since 2026-08-12 this lane serves **two separate goals** and entries say which:
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-12 | **Box collision hazard: atomic lock adopted** | Three lanes watched one quiet window. My redundant waiter cancelled, the rest take `mkdir`-atomic `.boxlock` — mechanism offered to all lanes |
 | 2026-08-12 | **Rules audit: packer, UCI surface, joint-vs-split** | Split beats joint by **156 B**; artifact already rules-minimal (only **42 B** reclaimable); no-temp-file packer built and verified |
 | 2026-08-12 | Time divisor at the real TC | Gap confirmed: 1800+3 gives a **150 s** first move. Scaled sweep (180+0.3, 5 arms) queued behind a 20-min quiet gate |
 | 2026-08-12 | **4k design space priced (weights RAW, not xz)** | Ternary base-3 packing + factorisation beat the width-5 baseline **5-50×** in parameters at 1920 B; width is ~free in speed at this scale |
@@ -74,6 +75,54 @@ Since 2026-08-12 this lane serves **two separate goals** and entries say which:
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-12 — Box collision hazard: an atomic lock, and one fewer waiter
+
+Three lanes were armed on the bench box watching for the same quiet window
+(mine, the widening RR, and delaybonus). A shared window oversubscribes the box
+and corrupts every lane's 30+1 measurements, which has happened here before.
+
+**My lane made it worse than it looked.** `fixednode_chain.sh` gated on
+`PACKED_MSP.txt` *existing* — and when the msp screen was cancelled, the
+cancellation marker satisfied that gate. My waiter was released into the
+contested window by the very act of cancelling an unrelated screen. Gating on a
+file's existence, when that file can also mean "cancelled", is a bug pattern
+worth remembering: **a marker should be read for its content, not its presence.**
+
+Fixes applied, in order of value:
+
+1. **Removed a waiter entirely.** `fixednode_chain.sh` was going to run the H1
+   fixed-node battery on the box — which is redundant, because the same battery
+   is already running on the laptop where fixed-node results are
+   machine-independent and cost the bench box nothing. Cancelled (PID-killed),
+   with `FIXEDNODE_H1.txt` written as an explicit cancellation marker that says
+   *not a completed screen, do not read Elo from this file*. `krff_fn.sh`, which
+   chained behind it, was killed with it. Contention drops from three lanes to
+   two by deleting work rather than scheduling it.
+2. **Atomic lock for what remains.** `~/sunfish-bench/boxlock.sh`, sourced by any
+   lane:
+
+       . $HOME/sunfish-bench/boxlock.sh
+       box_acquire my-lane-name
+
+   `mkdir` is atomic on POSIX, so exactly one lane wins. It records
+   `$$ lane date` in `.boxlock/owner` for diagnosis, traps EXIT/INT/TERM to
+   release, and reclaims a lock older than **12 hours when no fastchess is
+   running**, so a killed lane cannot deadlock the box forever.
+3. **Ordering matters more than the lock.** My first version acquired the lock
+   and *then* waited for quiet — which would have let this lane preempt the
+   widening and delaybonus RRs that were queued ahead of it. Corrected to
+   **wait for quiet → acquire → re-verify after 45 s → launch**, releasing and
+   resuming the wait if another lane took the window in between. The lock
+   settles who owns the *moment of launch*, and must never be held while idle.
+
+Also note, for anyone replacing a running waiter: overwriting the script file
+leaves the running process on the old inode, so the old waiter must be killed by
+explicit PID and relaunched — and verified afterwards, since one of my kills
+silently failed and briefly left two copies racing.
+
+Offered to the other lanes: the widening lane's jitter-and-recheck is sound but
+probabilistic; this is the same idea made exact, and costs two lines.
 
 ## 2026-08-12 — Rules audit: the packer, the UCI surface, and joint-vs-split settled
 
