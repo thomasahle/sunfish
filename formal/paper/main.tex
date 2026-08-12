@@ -29,6 +29,7 @@
 \usepackage{xcolor}
 \usepackage[normalem]{ulem}
 \usepackage{tikz}
+\usepackage{chessboard}
 \usetikzlibrary{arrows.meta,positioning,calc,fit}
 
 % ---------- tikz styles -------------------------------------------------
@@ -82,7 +83,7 @@
 \maketitle
 
 \begin{abstract}
-Sunfish is a chess engine whose whole logic fits in 136 lines of Python,
+Sunfish is a chess engine whose whole logic fits in 142 lines of Python,
 and whose docstrings state, in unusually precise English, the contracts
 its search is supposed to satisfy.  We report on a campaign that
 treated those docstrings as latent formal specifications: we transcribed
@@ -172,7 +173,7 @@ tournament price is pending (Section~\ref{sec:empirical}).
 
 Sunfish\footnote{\url{https://github.com/thomasahle/sunfish}} is a
 minimalist chess engine: with comments and whitespace removed, the
-engine proper is 136 lines of Python, yet it plays at ratings above 2000
+engine proper is 142 lines of Python, yet it plays at ratings above 2000
 on Lichess, where it runs in production as the bot
 \texttt{sunfish-engine}.  What makes it an unusual verification target
 is not its size but its \emph{documentation}: the docstring of its
@@ -764,7 +765,7 @@ After the 15-probe budget the converged bracket \emph{reports} the
 classification --- \texttt{EVAL\_ROUGHNESS} slop only on the certified
 side, none on the no-false-mates side.\\
 \texttt{forcedMate\_of\_nullValueD2t}, \texttt{eventual\_classification\_t} & ValFloor, EvalQuiet, root legality &
-The frontier-tail t-variant (\emph{proven, not shipped}):
+The shipped frontier-tail QS value:
 no-false-mates and the trichotomy's honesty arm with \emph{no chess
 premise}; \texttt{cexF\_t\_positive} turns the countermodel into a
 positive test.\\
@@ -921,7 +922,7 @@ weakening the theorems.\\
 \addlinespace
 \texttt{cexF\_false\_mate\_at\_frontier} \newline (\texttt{CexF},
 \texttt{Liveness.lean}; Section~\ref{sec:liveness}) &
-No-false-mates for the shipped declared value \emph{without}
+No-false-mates for the pre-tail declared value \emph{without}
 \texttt{NoMaskedMobility}. &
 5-position game, every fidelity premise proven on it: the depth-2
 declared value is the full $\MU$, yet \emph{no} forced mate exists ---
@@ -2506,6 +2507,22 @@ fold.  One more ply computes the honest $0$.
 \leanref{cexF\_false\_mate\_at\_frontier, CexF}{Liveness.lean}
 \end{counterexample}
 
+The abstract shape occurs in legal chess:
+\begin{center}
+\chessboard[
+  smallboard,
+  setfen=rnbq2nr/2p1bppp/p2p4/1p2p3/2P3k1/PP3P1N/3PP2P/RNQ1KB1R,
+  mover=b,
+  showmover=false,
+  color=blue!60!black,
+  markstyle=border,
+  markfields={f5,h4,h5}]
+\end{center}
+Black is checked and its only legal replies, marked on the board, are
+Kf5, Kh4, and Kh5, valued $-102,-105,-105$.  The old depth-1 fold
+returned $-\MU$; at the legal parent, a depth-2 probe consequently
+called f3+ mate.
+
 At defender remaining depth $\ge 2$ the tables' floor admits
 everything ($-192 \ge \mathit{val\_lower}(2) = -240$); depth exactly 1
 is the frontier, and the premise that closes it is
@@ -2517,9 +2534,8 @@ reduced correction scan would have needed
 full coverage shipped, and is hereby \emph{resurrected} as a live
 layer-2 premise with its first real consumers ---
 \texttt{cexF\_masked\_mobility} proves it is required, not merely
-convenient.  No natural chess position violating it is known, but
-table arithmetic does not exclude one; it therefore sits in the
-ledger, named and stated, like every other bet
+convenient.  The legal witness above shows that it is not a valid chess
+premise; the frontier-tail construction below discharges it.
 (Table~\ref{tab:ledger}).
 
 \paragraph{Evaluation retargeting between searches.}
@@ -2578,8 +2594,8 @@ Two honesty notes, both from the module comment.  ``Draw'' here means
 detected as $0$ --- K+B vs.\ K converges to the sub-band arm, not to a
 draw score.  And the premise ledger is per-arm
 (Table~\ref{tab:liveledger}): the win and loss arms pay
-\emph{NoZugzwang}; the neither arm --- the honesty arm --- pays
-\emph{NoMaskedMobility} and no zugzwang statement at all.  On the
+\emph{NoZugzwang}; the shipped frontier-tail honesty arm pays no chess
+premise at all.  On the
 axiom side, the entire value level of the liveness arc is
 \texttt{propext}/\texttt{Quot.sound} only; the driver corollaries
 inherit layer 1's \texttt{Classical.choice}.
@@ -2596,7 +2612,7 @@ ValFloor & ---\\
 Transfer to the declared value (\texttt{forcedMate\_complete}); the
 trichotomy's win/loss arms &
 ValFloor & NoZugzwang (layer 2, second consumer)\\
-No false mates; the trichotomy's ``neither'' arm
+Pre-tail no-false-mates theorem
 (\texttt{forcedMate\_of\_nullValueD2}) &
 ValFloor, EvalQuiet, root legality (\emph{HistoryLegal} shape) &
 NoMaskedMobility (layer 2; required, Cex.~\ref{cex:frontier})\\
@@ -2605,20 +2621,18 @@ Driver convergence and budget (\texttt{driver\_probe\_budget}) &
 Best-move attainment (\texttt{storedMove\_attains}) &
 layer-1 premises & ---\\
 Frontier-tail t-variant, honesty arm
-(\texttt{forcedMate\_of\_nullValueD2t}; \emph{proven, not shipped}) &
+(\texttt{forcedMate\_of\_nullValueD2t}; shipped at the QS frontier) &
 ValFloor, EvalQuiet, root legality & \textbf{none}\\
 \bottomrule
 \end{tabular}
 \caption{The liveness premise ledger, per arm.  Layer 1 --- and with
-it table consistency --- still consumes no chess statement anywhere in
-this section; the two chess premises are both layer-2, and each is
-either measured (\emph{NoZugzwang}: the $-34.9 \pm 40.3$ null-removal
-row of Table~\ref{tab:elo}) or equipped with a proven discharge
-option (\emph{NoMaskedMobility}: the frontier-tail variant below).}
+it table consistency --- consumes no chess statement.  The finding
+side retains \emph{NoZugzwang}; the shipped frontier-tail value
+removes \emph{NoMaskedMobility} from the honesty side.}
 \label{tab:liveledger}
 \end{table}
 
-\paragraph{The discharge option, proven but not shipped.}
+\paragraph{The shipped discharge.}
 \texttt{NoMaskedMobility} comes with its repair worked out to the
 theorem level: the \emph{frontier-tail} variant
 ($\mathrm{negamaxD2t}$ / $\mathrm{nullValueD2t}$,
@@ -2636,13 +2650,15 @@ survives with the same $k+1$/$k+2$ bounds, the trichotomy's honesty
 arm is paid by fidelity alone (\texttt{eventual\_classification\_t}),
 and the countermodel becomes a positive test
 (\texttt{cexF\_t\_positive}: the honest $0$ at the depths where the
-shipped value fabricated $\MU$).  The corresponding engine change ---
-at the correction gate, where the scan already runs, search the
-sub-threshold legal moves at $\mathrm{depth}-1$ and fold them in as
-real yields --- is \emph{not made}: the model sits alongside the
-shipped one exactly as the primed consumers of
-Section~\ref{sec:verify} did, so the decision can eventually be taken
-with theorems and an ELO screen in hand rather than with either alone.
+pre-tail value fabricated $\MU$).  The engine first preserves the exact
+terminal override: no legal move replaces every numeric candidate with
+mate or stalemate.  At a nonterminal node with no admitted legal witness,
+an unstored, null-free \texttt{qs\_tail} retry reuses the ordinary move
+loop over only the filtered-out moves.  \texttt{WindowReport.max}
+validates its report join with the first probe's virtual evidence, while
+\texttt{foldMax\_filtered\_tail\_retry} proves that their values join to
+the t-variant's full fold.  With the default thresholds, only depth 1
+can have an omitted tail.
 
 % =========================================================================
 \section{Proof-First Pruning: Pricing Changes Before They Exist}
@@ -3089,9 +3105,8 @@ Recursive form of the same bet (\texttt{CanNull.lean}). &
 \texttt{NoMaskedMobility} &
 A position whose every depth-1-admitted move is illegal has no legal
 move at all. &
-\textbf{Named} (resurrected, Sec.~\ref{sec:liveness}); required for
-no-false-mates (Cex.~\ref{cex:frontier}); proven discharge option on
-record (the frontier-tail variant), not shipped\\
+\textbf{Refuted} on a legal board and discharged by the shipped
+frontier-tail search (Cex.~\ref{cex:frontier})\\
 \midrule
 \multicolumn{3}{@{}l}{\emph{Transfer to the shipped consumer}}\\
 \texttt{KingCaptureValHigh} &
@@ -3134,7 +3149,8 @@ A capturable node always reports $\MU$. &
 The correction's legality scan may skip QS-filtered moves. &
 \textbf{Refuted} (\texttt{reducedScan\_needs\_premise}); our own
 proposed optimization.  (Its premise, \texttt{NoMaskedMobility}, has
-since been \emph{resurrected} as a live layer-2 row above)\\
+since been refuted on a legal board and discharged by the shipped
+frontier-tail search)\\
 \texttt{ExtKeyIndependent} &
 Extended-search value is a function of $(\mathrm{pos}, \mathrm{depth})$
 alone. &
@@ -3522,7 +3538,7 @@ The verified prior work above shares a convenient property that sunfish
 does not have: it specifies searches over \emph{legal} move
 generators, where ``no moves'' is directly observable and terminal
 values need no reconstruction.  Pseudo-legal, king-capture search ---
-the idiom that makes a 136-line engine possible at all --- moves
+the idiom that makes a 142-line engine possible at all --- moves
 terminality from an observation to an inference, and
 Section~\ref{sec:refuted} is an account of that inference going wrong
 in three ways.  We are not aware of prior formal work on it, and we
@@ -3630,7 +3646,8 @@ hole (\texttt{NoMaskedMobility}) is one we had \emph{retired} weeks
 earlier as belonging to a rejected optimization.  The ledger's rule
 that refuted and retired statements are kept, named, is what made the
 resurrection a one-line status change instead of an archaeology
-project.
+project.  The frontier-tail search now ships, and a legal-board witness
+confirms that the abstract countermodel identified a real bug.
 
 \paragraph{Measurement contamination.}
 Every rule in \texttt{docs/TESTING.md} exists because its absence

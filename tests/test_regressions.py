@@ -129,15 +129,49 @@ class TestCappedNullMove:
         searcher.root, searcher.history = pos, set()
         calls, bound = [], searcher.bound
 
-        def observed(pos, gamma, depth, root=False):
+        def observed(pos, gamma, depth, root=False, qs_tail=False):
             calls.append((gamma, depth, root))
-            return bound(pos, gamma, depth, root)
+            return bound(pos, gamma, depth, root, qs_tail)
 
         searcher.bound = observed
         score = bound(pos, 0, 6)
 
         assert score == pos.score + sf.EVAL_ROUGHNESS == 409
         assert not any(gamma == 1 - sf.MATE_LOWER for gamma, _, _ in calls)
+
+
+class TestFilteredCheckEvasion:
+    """The QS filter must not turn a costly legal evasion into mate.
+
+    This legal random-play position realizes the formal frontier countermodel:
+    Black is checked by f3, and Kf5/Kh4/Kh5 are its only legal moves. Their
+    intrinsic values (-102/-105/-105) all fall just below val_lower(1)=-100.
+    The old fold searched only illegal pseudo-moves and returned -MATE_UPPER;
+    one ply earlier, that made f3+ look like mate.
+    """
+
+    CHILD = "rnbq2nr/2p1bppp/p2p4/1p2p3/2P3k1/PP3P1N/3PP2P/RNQ1KB1R b KQ - 0 10"
+    PARENT = "rnbq2nr/2p1bppp/p2p4/1p2p3/2P3k1/PP5N/3PPP1P/RNQ1KB1R w KQ - 0 10"
+
+    @pytest.mark.parametrize(("qs_a", "depth"), ((140, 1), (60, 2)))
+    def test_subthreshold_king_moves_refute_mate(self, monkeypatch, qs_a, depth):
+        monkeypatch.setattr(sf, "QS_A", qs_a)
+        sf.pst["K"] = sf.K_MID
+        child = hist_from_fen(self.CHILD)[-1]
+        legal = [m for m in child.gen_moves() if not child.move(m).king_capture()]
+        assert sorted(child.value(m) for m in legal) == [-105, -105, -102]
+        assert max(child.value(m) for m in legal) < sf.QS - depth * sf.QS_A
+
+        searcher = sf.Searcher()
+        searcher.root = child
+        searcher.history = set()
+        assert searcher.bound(child, 1 - sf.MATE_LOWER, depth, root=True) > -sf.MATE_LOWER
+
+        parent = hist_from_fen(self.PARENT)[-1]
+        searcher = sf.Searcher()
+        searcher.root = parent
+        searcher.history = set()
+        assert searcher.bound(parent, sf.MATE_LOWER, depth + 1, root=True) < sf.MATE_LOWER
 
 
 class TestNullSentinelMasking:

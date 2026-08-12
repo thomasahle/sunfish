@@ -286,7 +286,7 @@ class Searcher:
         self.tp_score, self.tp_move, self.history = {}, {}, set()
         self.nodes, self.deadline = 0, 1 << 63
 
-    def bound(self, pos, gamma, depth, root=False):
+    def bound(self, pos, gamma, depth, root=False, qs_tail=False):
         """ Let s* be the score of the sub-tree from pos at this depth, as
             a function of (pos, depth) alone. This includes null moves and
             QS pruning, and global parameters like self.history that don't
@@ -314,6 +314,9 @@ class Searcher:
               a virtual cutoff need not have one.
             - a nonterminal root fail-high leaves its real score witness in
               tp_move[root].
+
+            qs_tail is an internal root=True probe of moves below only this
+            node's QS filter. Its result is never stored under the normal key.
             """
 
         self.nodes += 1
@@ -334,14 +337,12 @@ class Searcher:
             return -MATE_UPPER
 
         # Look in the table if we have already searched this position before.
-        # Driver probes (the search root, and IID below) are UNSTORED: they
-        # skip the table in both directions, the repetition-0 and the null
-        # option, and store nothing - so every entry in the table describes
-        # ONE value function, determined by (pos, depth) alone, and the key
-        # needs no flag. (The root's own entry was provably dead weight: the
-        # driver picks each gamma strictly inside its bracket, which is the
-        # same two numbers the entry held.) At the root 'entry' stays
-        # unbound - its only other reader is the store below, also skipped.
+        # Driver probes (the search root and IID below) and the QS-tail retry
+        # are UNSTORED: they skip the table in both directions, repetition-0,
+        # and the null option, and store nothing. Every table entry therefore
+        # describes one value function determined by (pos, depth), and the key
+        # needs no flag. For these probes 'entry' stays unbound; its only other
+        # reader is the store below, which is also skipped.
         if not root:
             entry = self.tp_score.get((pos, depth), Entry(-MATE_UPPER, MATE_UPPER))
             if entry.lower >= gamma: return entry.lower
@@ -351,6 +352,8 @@ class Searcher:
             # - at the root (a driver probe) since it is in history, but not a draw.
             # - at depth=0, since it would be expensive and break "futility pruning".
             if depth > 0 and pos in self.history: return 0
+
+        val_lower = QS - depth * QS_A
 
         # Generator of moves to search in order.
         # This allows us to define the moves, but only calculate them if needed.
@@ -390,32 +393,32 @@ class Searcher:
             # runs as a driver probe (root=True): no null cutoff that would
             # end it without storing a move, no repetition truncation, and
             # no table entry under deviant semantics.
-            if not killer and depth > 2:
+            if not qs_tail and not killer and depth > 2:
                 self.bound(pos, gamma, depth - 3, root=True)
                 killer = self.tp_move.get(pos)
 
-            # We only generate moves with an intrinsic score above some treshold
+            # We only generate moves with an intrinsic score above some threshold
             # that decreases with depth. This is a generalization of Quiescent Search,
             # See https://chessprogramming.org/Quiescence_Search for details.
-            val_lower = QS - depth * QS_A
-
             # Now finally play the killer move. But note that we have to respect
             # the QS lower bound, otherwise we would get search instability.
             # We will search it again in the main loop below, but the tp will
             # make this mostly free.
-            if killer and pos.value(killer) >= val_lower:
+            if not qs_tail and killer and pos.value(killer) >= val_lower:
                 yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)
 
             # Then all the other moves
-            # Quiescent search: only moves above the val-limit are admitted -
-            # filtering BEFORE the sort skips sorting the sub-threshold tail
-            # (most of the list at QS nodes), and is literally the model's
-            # movesAbove form (formal/Sunfish/Stalemate.lean).
-            for val, move in sorted(((v, m) for m in pos.gen_moves() if (v:=pos.value(m)) >= val_lower), reverse=True):
+            # Quiescent search admits only moves above the value limit. The
+            # verification probe takes the complementary tail in generator
+            # order, with no killer, IID, or futility shortcut.
+            values = ((v, m) for m in pos.gen_moves()
+                      if ((v := pos.value(m)) >= val_lower) != qs_tail)
+            ordered = values if qs_tail else sorted(values, reverse=True)
+            for val, move in ordered:
                 # If the new score is less than gamma, the opponent will for sure just
                 # stand pat, since ""pos.score + val < gamma === -(pos.score + val) >= 1-gamma""
                 # This is known as futility pruning.
-                if depth <= 1 and pos.score + val < gamma:
+                if not qs_tail and depth <= 1 and pos.score + val < gamma:
                     # Need special case for MATE, since it would normally be caught
                     # before standing pat. A sub-mate futility yield estimates
                     # the child's stand-pat without searching it, so it is
@@ -451,11 +454,17 @@ class Searcher:
                         del self.tp_move[next(k for k in self.tp_move if k != self.root)]
                 break
 
-        # If only virtual evidence was seen, classify terminality exactly.
-        if depth and not live and all(
-                pos.move(m).king_capture() for m in pos.gen_moves()):
-            # We can't move, but is it a checkmate or stalemate?
-            best = -MATE_LOWER if pos.rotate(nullmove=True).king_capture() else 0
+        # If no legal move was searched, terminality overrides every candidate.
+        # Otherwise an admitted legal move proves liveness; if none exists,
+        # retry only the filtered tail and join it with the virtual evidence.
+        if depth and not live:
+            legal = (m for m in pos.gen_moves() if not pos.move(m).king_capture())
+            move = next(legal, None)
+            if move is None:
+                best = -MATE_LOWER if pos.rotate(nullmove=True).king_capture() else 0
+            elif not qs_tail and pos.value(move) < val_lower and all(
+                    pos.value(m) < val_lower for m in legal):
+                best = max(best, self.bound(pos, gamma, depth, root=True, qs_tail=True))
 
         # Table part 2. Every search decision is gamma-independent, so all
         # bounds target one value function determined by the key and stored

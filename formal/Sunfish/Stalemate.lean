@@ -4349,18 +4349,19 @@ def scanNewB (G : QSGame) (d : Nat) (p : G.Pos) : Bool :=
     (decide (1 < d) && decide (val_lower d ≤ G.val p m)) ||
     hasKingCapture G.toNullGame.toGame m)
 
-/-- **NoMaskedMobility** (the premise the reduced scan genuinely needs
--- `reducedScan_needs_premise` below is the countermodel; the hoped-for
-"chess-assumption-free" equivalence is FALSE without it): a position
-whose every depth-1-admitted move is illegal has no legal move at all.
-Failure shape: all high-valued moves illegal while some legal move
-drops more than `QS_A - QS` (= 100) of table value -- the depth-1 node
-then returns the raw `-MATE_UPPER` fold although the scan SAW the legal
-move, a depth-2 parent converts that to a spurious `MATE_UPPER`, and
-from depth 3 up the probe-free scan trusts the corrupted sentinel.
-Chess-plausibility: no natural position with ONLY >100cp-dropping legal
-moves is known; table arithmetic does not exclude it (`ValFloor` is
-192 > 100). -/
+/-- **NoMaskedMobility** (the premise the pre-frontier-tail scan
+genuinely needed -- `reducedScan_needs_premise` below is the
+countermodel): a position whose every depth-1-admitted move is illegal
+has no legal move at all.  The premise is false in real chess.  In
+
+  rnbq2nr/2p1bppp/p2p4/1p2p3/2P3k1/PP3P1N/3PP2P/RNQ1KB1R b KQ -
+
+Black is checked and its only legal moves, Kf5, Kh4, and Kh5, have
+intrinsic values -102, -105, and -105: all lie below
+`val_lower 1 = -100`.  The old
+depth-1 fold returned `-MATE_UPPER`, and a depth-2 parent called f3+
+mate.  The shipped frontier-tail search now discharges this premise by
+searching those legal omitted moves when the antecedent is observed. -/
 def NoMaskedMobility (G : QSGame) : Prop :=
   ∀ p, (∀ m ∈ movesAbove G (val_lower 1) p, hasKingCapture G.toNullGame.toGame m = true) →
     ∀ m ∈ G.moves p, hasKingCapture G.toNullGame.toGame m = true

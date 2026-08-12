@@ -46,6 +46,17 @@ theorem WindowReport.cap (cap gamma report value : Int)
     simp only [WindowReport, Int.min_def] <;>
     split <;> split <;> omega
 
+/-- Reports for two fixed candidates at the same window can be combined with
+`max`.  This is the report-level rule used to join a filtered probe's virtual
+evidence with a real-move retry over its filtered-out tail. -/
+theorem WindowReport.max (gamma reportA valueA reportB valueB : Int)
+    (ha : WindowReport gamma reportA valueA)
+    (hb : WindowReport gamma reportB valueB) :
+    WindowReport gamma (max reportA reportB) (max valueA valueB) := by
+  rcases ha with ha | ha <;> rcases hb with hb | hb <;>
+    simp only [WindowReport, Int.max_def] <;>
+    split <;> split <;> omega
+
 /-- The exact local proof obligation of the Python expression
 `min(cap, -bound(pass, 1 - gamma, depth - 3))`. -/
 theorem cappedNull_report (cap gamma childReport childValue : Int)

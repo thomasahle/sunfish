@@ -15,7 +15,7 @@ the code-model correspondence itself checked.
 
 Audited regions (one hash per object, whitespace-normalized so pure
 reformatting of surrounding code does not fire):
-  - Searcher.bound       (the search: every mapping-table row)
+  - Searcher.bound       (the search, including the QS frontier retry)
   - Searcher.search      (the MTD-bi driver: Driver.lean)
   - Position.rotate      (RotateNegatesScore)
   - Position.move        (ValGame.score_identity)
@@ -45,7 +45,7 @@ EXPECTED = {
     "Position.move": "69bb2460cd611c9e",
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "11d52eaa8a661352",
-    "Searcher.bound": "4edd8e042e0373c3",
+    "Searcher.bound": "d2f66300ccdb9d56",
     "Searcher.search": "f9aa8c81b84ff44b",
     "constants": "02227a9fd04eb181",
 }
@@ -68,9 +68,10 @@ def extract_regions():
             for item in node.body:
                 if isinstance(item, ast.FunctionDef):
                     key = f"{node.name}.{item.name}"
-                    if key in ("Searcher.bound", "Searcher.search", "Position.rotate",
-                               "Position.move", "Position.value", "Position.gen_moves",
-                               "Position.king_capture"):
+                    if key in (
+                            "Searcher.bound", "Searcher.search", "Position.rotate",
+                            "Position.move", "Position.value", "Position.gen_moves",
+                            "Position.king_capture"):
                         regions[key] = ast.get_source_segment(src, item)
     consts = []
     for node in tree.body:
@@ -96,14 +97,17 @@ def extract_regions():
 ANCHORS = [
     "def king_capture",
     "killer = self.tp_move.get(pos)",
-    "if killer and pos.value(killer) >= val_lower:",
+    "if not qs_tail and killer and pos.value(killer) >= val_lower:",
     "yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)",
     "yield None, pos.score",
     "score = min(pos.score + EVAL_ROUGHNESS,",
-    "if depth <= 1 and pos.score + val < gamma:",
+    "if not qs_tail and depth <= 1 and pos.score + val < gamma:",
     "yield (move, MATE_UPPER) if val >= MATE_LOWER else (None, pos.score + val)",
     "best, live = -MATE_UPPER, False",
-    "if depth and not live and all(",
+    "if depth and not live:",
+    "legal = (m for m in pos.gen_moves() if not pos.move(m).king_capture())",
+    "move = next(legal, None)",
+    "self.bound(pos, gamma, depth, root=True, qs_tail=True)",
     "pos.rotate(nullmove=True).king_capture()",
     "self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)",
     "lower, upper = 1 - MATE_UPPER, MATE_UPPER",

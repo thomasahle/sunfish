@@ -101,6 +101,27 @@ virtual cutoff.
 At a terminal root, a fail-high has no move. Both UCI loops therefore stop
 iterative deepening and emit `bestmove (none)` without dereferencing `move`.
 
+## The QS frontier
+
+When a positive-depth fold has no legal real witness, `Searcher.bound` scans
+the full move set:
+
+- no legal move gives exact mate or stalemate, overriding every numeric
+  candidate;
+- an admitted legal move proves that the ordinary filtered value is the right
+  one;
+- otherwise an unstored, null-free `qs_tail` probe reuses the ordinary move
+  loop over only the filtered-out moves.
+
+The trigger is determined by the position and fixed QS threshold, not by the
+window or move table. With the default tables and thresholds, omitted legal
+moves can occur only at depth 1; applying the rule at every depth also keeps
+the repair aligned with runtime-tuned QS thresholds.
+`WindowReport.max` validates the report join, and
+`foldMax_filtered_tail_retry` identifies its fixed value with the full fold.
+`forcedMate_of_nullValueD2t` needs `ValFloor` and `EvalQuiet`, but no
+`NoMaskedMobility` chess assumption at the default frontier.
+
 ## Move-table contract
 
 The current `tp_move` contract is deliberately narrow:
@@ -123,9 +144,10 @@ at capturable nodes.
 | recursive zero-window move search | `Bound.bound_spec` |
 | null child report negation | `WindowReport.negate` |
 | `min(pos.score + EVAL_ROUGHNESS, pass_report)` | `cappedNull_report` |
-| score guard keeps the cap below positive mate | `guardedStaticCap_in_scoreBand`, `guardedCappedNull_below_positiveMate` |
+| score guard keeps the cap below positive mate | score-band theorems in `CappedNull.lean` |
 | full-width move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
 | sticky legality evidence and terminal override | terminal/finalizer results in `Stalemate.lean` |
+| QS frontier-tail retry | `WindowReport.max`, `foldMax_filtered_tail_retry`, `forcedMate_of_nullValueD2t` |
 | king-capture evaluation margins and ordering | `EvalBounds.lean` |
 | legal killer lifecycle and eviction | `Killer.lean` |
 | root versus interior null behavior | `CanNull.lean` |

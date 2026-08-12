@@ -7,9 +7,11 @@ honesty arm unconditional.
 
 The composition of everything the liveness arc has proven, stated once:
 for a legally-reached position (`hasKingCapture` false, king on the
-board), the declared value `nullValueD2` -- the function the shipped
-search provably brackets (`bound_null_spec` / `boundKCX_null_spec`,
-layer 1, no chess premise) -- eventually classifies the position:
+board), the boundary-null model's declared value `nullValueD2` -- the
+function bracketed by `bound_null_spec` / `boundKCX_null_spec` --
+eventually classifies the position.  `CappedNull.lean` separately
+replaces that model's pass transformer for the current source; the QS
+frontier argument in Part B is independent of the depth>2 null term.
 
 * **win**: a forced mate in ≤ k plies puts the value in the mate band
   at every depth `D ≥ k + 1` (`forcedMate_complete`);
@@ -30,7 +32,7 @@ layer 1, no chess premise) -- eventually classifies the position:
 | `NoMaskedMobility` | chess, layer 2 | neither (the honesty side; required per `CexF`) |
 | `Bounded`, `KillerLegal`, `KingCaptureValHigh`, `CaptureFirst` | fidelity / theorem | only the probe/driver corollaries, through layer 1 |
 
-The two recorded discharge options, NEITHER implemented in the engine:
+The two recorded discharge options have different production status:
 
 * for `NoZugzwang` (finding side): the depth-decaying null guard
   (`abs(score) < 500 - 10*depth`) -- switches the pass off at large
@@ -39,13 +41,11 @@ The two recorded discharge options, NEITHER implemented in the engine:
   decision: give the layer-2 assumption the exercise instead).
 * for `NoMaskedMobility` (honesty side): the FRONTIER TAIL SEARCH --
   Part B of this file.  Verify-on-suspicion applied to the QS filter:
-  when a mate-band conclusion is forming at a depth where filtering was
-  active, unfilter.  For the t-variant defined below the honesty arm is
-  a THEOREM under fidelity premises alone -- `NoMaskedMobility` is not
-  assumed, its role is discharged by construction -- and `CexF` becomes
-  a positive test.  Proof-first: NO code change shipped; the t-model
-  sits alongside like `boundKCX''` did, so the decision can be made
-  with theorems (and later an Elo screen) in hand.
+  when every admitted move is illegal, unfilter.  For the t-variant
+  defined below the honesty arm is a THEOREM under fidelity premises
+  alone -- `NoMaskedMobility` is discharged by construction -- and
+  `CexF` becomes a positive test.  The engine implements this split in
+  the unstored `qs_tail` retry at every configured QS frontier.
 
 **What "draw" means here, honestly.**  The game being classified is the
 game sunfish plays: chess WITHOUT draw rules.  "Neither" =
@@ -304,11 +304,11 @@ theorem classification_visible_kcx (G : QSGame) (guard kill : G.Pos → Bool)
 
 **The design** (Thomas: "don't set QS_A=232, there must be another
 way" -- this is the other way).  Verify-on-suspicion applied to the QS
-val-filter itself: when a mate-band conclusion is forming at a depth
-where filtering was active, UNFILTER -- fold the filtered-out tail
-too.  Proof-first: NO code change is shipped; the t-model sits
-alongside the shipped model exactly as `boundKCX''` did, so the
-decision can be made with theorems (and later an Elo screen) in hand.
+val-filter itself: when every admitted move is illegal, UNFILTER --
+fold the filtered-out tail too.  `Searcher.bound(..., qs_tail=True)`
+reuses the ordinary fold for this unstored retry at every positive depth;
+`ValFloor` proves that only depth 1 can need it under the shipped tables
+and default thresholds.
 
 **The trigger shape, adjusted and RECORDED.**  The task's first-draft
 trigger was "depth-1 fold ≤ -MATE_LOWER".  The shape proven here is:
@@ -366,25 +366,16 @@ interior depth.  Three reasons, all load-bearing:
   required, the t-variant computes the honest draw 0 at depth 2 (and
   3).
 
-**What the code change would be** (for the decision, not shipped): in
-`bound`'s move loop the QS break stays; at the post-loop correction
-site -- where `not live` already triggers the full `king_capture()`
-scan -- when the scan finds legal moves but every ADMITTED move was
-illegal (equivalently: every legal move the scan found sits below
-`val_lower`), search those found legal moves at `depth - 1` with the
-same window and fold the yields into `best`/`live` before the
-store/return.  Cost: only at not-live fail-low nodes, where the scan
-already runs.  The tail yields are REAL yields -- they set `live`, so
-a tail escape disproves terminality exactly as the scan does, and the
-`termFix` interaction stays coherent (the correction still fires only
-when the scan certifies NO legal move anywhere).  A tail fail-high is
-a real fail-high: it may store `tp_move`, and the `storedMoveLegal`
-certificate applies to it verbatim.  The engine-side residue shared
-with everything downstream of the QS leaf: depth-0 reports are
-fail-soft, not exact, so the depth-1 alignment argument leans on the
-same QS-as-eval leaf abstraction (and its known sentinel-masking
-channel) as every layer-1 theorem -- nothing new is assumed, and
-nothing about this variant widens that channel.
+**The code correspondence.**  The QS break stays.  After a
+positive-depth fold with no legal real witness, the source scans for an
+admitted legal move.  If none exists but the position is nonterminal, it
+makes an unstored, null-free retry over the current node's filtered-out
+tail.  `WindowReport.max` joins that real-move report with the first
+probe's virtual evidence; `foldMax_filtered_tail_retry` proves that
+their fixed values join to the full fold used by `nullValueD2t`.  A retry
+fail-high is real and uses the ordinary `tp_move` store site.  Under the
+default thresholds this can add moves only at depth 1, where child
+reports remain fail-soft rather than exact.
 
 Axioms: the t-value theorems are `propext`/`Quot.sound` only (checked;
 nothing here routes through layer 1, and the omega-vs-`absurd` point
@@ -446,6 +437,18 @@ theorem foldMax_filter_le {α : Type _} (w : α → Int) (f : α → Bool)
     (l : List α) (init : Int) :
     foldMax w (l.filter f) init ≤ foldMax w l init := by
   rw [foldMax_filter_split w f l init]
+  omega
+
+/-- Reusing the ordinary fold for a null-free retry of the filtered-out tail
+is exactly the full fold: the first report retains `init`, while the retry
+contributes the complementary moves from `LOSS`. -/
+theorem foldMax_filtered_tail_retry {α : Type _} (w : α → Int) (f : α → Bool)
+    (l : List α) (init : Int) (hinit : LOSS ≤ init) :
+    max (foldMax w (l.filter f) init)
+        (foldMax w (l.filter fun a => !(f a)) LOSS) = foldMax w l init := by
+  have hbase := foldMax_ge_init w (l.filter f) init
+  rw [foldMax_filter_split w f l init,
+    foldMax_init_split w (l.filter fun a => !(f a)) init hinit]
   omega
 
 /-- **The real-move t-value**: `negamaxD2` with the unfilter trigger --
@@ -992,9 +995,9 @@ theorem admitted_frontier_escape_t (G : QSGame) (guard : G.Pos → Bool)
 mate-band declared t-value at a legally-reached root IS a forced mate
 within the probed depth, under FIDELITY premises alone
 (`ValFloor G 192` + `EvalQuiet`).  `NoMaskedMobility` -- required for
-the shipped `nullValueD2` (`cexF_masked_mobility`) -- is absent: where
-the shipped value's defender fold could silently drop the escape, the
-t-fold provably contains it. -/
+the pre-tail `nullValueD2` (`cexF_masked_mobility`) -- is absent: where
+that value's defender fold could silently drop the escape, the t-fold
+provably contains it. -/
 theorem forcedMate_of_nullValueD2t (G : QSGame) (guard : G.Pos → Bool)
     (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame) :
     ∀ (D : Nat) (p : G.Pos),
@@ -1272,7 +1275,7 @@ theorem cexF_t_M_depth1 :
   omega
 
 /-- **The positive test, bundled**: on the countermodel that proved
-`NoMaskedMobility` REQUIRED for the shipped value (`cexF_bandValue`:
+`NoMaskedMobility` REQUIRED for the pre-tail value (`cexF_bandValue`:
 depth-2 declared value the full `MATE_UPPER`; `cexF_no_forcedMate`: no
 mate exists), the t-variant computes the honest draw 0 at depth 2
 already -- and stays there at depth 3. -/
