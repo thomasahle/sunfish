@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **4k entry vs classic @10+0.1 (interim)** | **~+133 ± 120 at 51/600 games**, zero time losses — same eval both sides, so this is our SEARCH. Flips the confounded fixed-node sign |
 | 2026-08-13 | **+400 decomposition checked: eval worth ~+224, not ~+160** | goal60 predates LMR/guards, so more of its +187 belongs to eval. Priority unchanged — search must still supply +232…+344 |
 | 2026-08-13 | RR stopped early; Texel trend isolated | Bug was ~50 Elo of the −66.8; residual **−16.7 ± 31.2** covers zero. TC baseline unblocked and running |
 | 2026-08-13 | **"Fixed nodes" wasn't: the cap rewarded pruning LESS** | classic overshot 1.74× vs our 1.32× — LMR penalised for its own virtue. Fixed in-search (gap now 1.70× actual); classic comparisons move to TIME |
@@ -109,6 +110,33 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — First sight of the number that matters: the 4k entry leads classic
+
+**Interim, 51 games of 600 at 10+0.1, zero time losses and zero bad
+terminations: the 4k PST entry is ahead of classic by roughly +133 (±120 at this
+count).** Wide interval, not a result yet — but it is the first reading of the
+quantity the whole +400 goal is defined against, taken in the instrument the goal
+is defined in, and it is positive.
+
+Worth sitting with the shape of it. The entry is **classic's own evaluation** —
+the same 384 integers — plus our search: the KCX port, the MTD instability
+guards, LMR, and the time-budget work. Same eval, same byte class, and it is
+winning on search alone. That is consistent with LMR's +65 at fixed nodes and
+with the ice4 rate (+421 Elo for 131 bytes) being the right target for this lane.
+
+It also **contradicts the confounded fixed-node reading** of the same pairing
+(classic +33.2 ± 29.7, i.e. our entry *behind*), which is exactly what the 1.70×
+node-cap artefact predicted: at fixed nodes classic was silently getting 70% more
+work, and removing that flips the sign. Two instruments disagreeing by ~165 Elo
+on the same two engines is the strongest single argument in this ledger for
+measuring in the instrument the goal is written in.
+
+Protecting the measurement, since three lanes share one laptop: load was 18.5 on
+12 cores when it started and is now ~12-13 with the other lane's games stopped;
+my match is ~299% of that. **No second match runs alongside it, and time losses
+are being watched specifically** — zero so far, and any that appear will be
+reported as a contention artefact rather than folded into the result.
 
 ## 2026-08-13 — The +400 decomposition, checked: the eval half is bigger than it looks
 
