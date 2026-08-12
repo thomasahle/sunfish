@@ -115,6 +115,60 @@ how much effort it cost.
 
 ---
 
+## 2026-08-13 — BASELINE FINAL: the 4k entry is +19.1 ± 12.9 over classic
+
+**600 games at 10+0.1, zero time losses, zero illegal moves. Entry 265 wins,
+classic 232, 103 draws — 52.75%, so +19.1 ± 12.9 Elo for the entry.**
+
+(Counted from the pgn rather than read off fastchess's summary line, which
+reports from the first-named engine's perspective and is easy to sign-flip. The
+summary said `Elo: -19.13` *for classic*; same number, opposite viewpoint.)
+
+This is the number the +400 goal is measured from, and it is now real rather
+than borrowed from the 14.9 MB engine. **Our entire search advantage over
+classic is ~+19 Elo**, which leaves **~+380 to find**.
+
+### The accounting does not close, and the gap is ~46 Elo
+
+| term | value |
+|---|---|
+| speed (1.098× on the box, 1.136× on the laptop, both interleaved) | +14…+19 |
+| LMR (its own fixed-node screen, **on the NNUE engine**) | +65 |
+| KCX port (measured) | −16 |
+| **expected** | **~+63…+68** |
+| **measured** | **+19.1 ± 12.9** |
+| **unaccounted** | **~46** |
+
+The speed term I verified independently on the box: interleaved, six openings,
+same movetime — classic 35527 nps, entry 39020, **ratio 1.098**, and the entry
+reaches a full ply deeper (7-8 vs 6-7). The laptop's 1.136 and the box's 1.098
+agree in direction and differ about as much as their loads differ, so the term
+is real and small.
+
+**The prime suspect is LMR's +65 not transferring**, and the mechanism is the
+same one that explained RFP: the trigger is `val < LMR` where
+`val = pos.value(move)`. With a net, that static move value carries learned
+positional information and separates quiet moves from tactical ones; with a
+piece-square table it is a plain material-plus-square delta and separates them
+far more crudely. **A reduction rule is only as good as the ordering signal it
+reduces on.**
+
+So the rule widens once more: it is not only *eval-margin-based pruning* that
+must be re-gated per eval, but **any search heuristic whose trigger reads the
+eval** — RFP, LMP, futility, QS delta, **and LMR itself**.
+
+**Test queued ahead of LMP** (it answers a question the rest of the queue
+depends on): LMR on vs off, both on the PST entry, fixed nodes, SPRT. Three
+consequences ride on it —
+
+1. if LMR is worth much less on PSTs, ice4's catalogue **cannot be summed** and
+   the transfer coefficient is per-(feature, eval), not per-feature;
+2. **move-count LMR stops being an increment and becomes the main line**, since
+   a move-count trigger does not read the eval at all — a real advantage for a
+   weak-eval engine, and how ice4 and 4ku do it;
+3. if LMR *does* hold at ~+65 here, something else is costing ~46 Elo and that
+   needs finding before anything is added on top.
+
 ## 2026-08-13 — Fixed-N screens were underpowered for what we are hunting
 
 Caught before spending the queue rather than after. A 300-game screen resolves
