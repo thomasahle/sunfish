@@ -46,6 +46,8 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-12 | **Texel tuning: 10.1% better fit for ZERO bytes** | +13 bytes total (3517→3530); fixed-node screen running. Tapering adds only 1.8pp more for ~400 bytes |
+| 2026-08-12 | **Our Elo/byte cost model is INVERTED vs ice4/4ku** | Incremental eval makes (piece,square) terms free and whole-position terms (mobility!) expensive — their 4.0 Elo/byte is not available to us |
 | 2026-08-12 | **MILESTONE: valid 4k entry built and verified** | **3517 bytes measured** (composed estimate said 3787), plays alone in an empty dir with SF_NET unset, **579 spare** |
 | 2026-08-12 | **DECISION: PST is the main line, NNUE the challenger** | NNUE pays 705 B of machinery before its first weight, against a 579-byte eval — challenger must win per byte, machinery included |
 | 2026-08-12 | **Engine byte decomposition: the thesis is in arithmetic trouble** | NNUE machinery 705 B + 553 B richer core = the 1258 overrun. PST entry fits at 3787 (309 spare); NNUE entry leaves **183 B** for the net |
@@ -103,6 +105,93 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-12 — Texel tuning is free; tapering is not; and our cost model is inverted
+
+Three results from one evening's local work, all on the **main line** (the PST
+entry), none of them needing the bench box.
+
+### The tuning set (built locally, no box time)
+
+15,328 unique positions sampled sparsely from our own game pgns — the
+distribution the engine actually plays — labelled with local Stockfish at depth
+8. Phase coverage is honest: 21% opening, 32% middlegame, 32% late-middlegame,
+15% endgame, mean phase 12.2/24, so an endgame-sensitive term *can* show value
+in this data if it has any.
+
+### Texel tuning: 10.1% better fit, zero bytes
+
+Classic's eval is **exactly linear** in its 384 table values, so this is a
+closed-form linear fit with a sigmoid link, not a black-box search — seconds of
+compute, warm-started from classic's own tables so it can only improve on them.
+
+| | sigmoid-MSE loss |
+|---|---|
+| classic's tables (2014 vintage) | 0.020908 |
+| **Texel-tuned** | **0.018802** |
+| improvement | **10.1%** |
+
+Piece values barely moved — N 280→283, B 320→325, R 479→475, Q 929→926 — which
+is the reassuring outcome: the fit refines the tables rather than diverging.
+Artifact cost: **3517 → 3530 bytes, +13** (same 384 integers, marginally longer
+digit strings), leaving 566 spare. Both entries verified standalone in an empty
+directory. **A fixed-node screen against the untuned entry is running**; loss
+improvement is not Elo until it plays.
+
+### Tapering: +1.8 points more, for ~300-400 bytes
+
+The same fit extended to a tapered model (mg and eg tables interpolated by
+phase) stays linear in 768 parameters, so it costs one more tuner run:
+
+| model | loss | vs classic |
+|---|---|---|
+| classic | 0.020908 | — |
+| tuned, single table | 0.018802 | 10.1% |
+| **tuned, tapered** | **0.018414** | **11.9%** |
+
+**Tapering adds 1.8 points over the free tune, and would cost a second 384-value
+table (~300 bytes) plus a second accumulator threaded through `Position`,
+`move`, `rotate` and `from_board` (~100 bytes).** Against the LMR bar of 1.8
+Elo/byte that is a poor trade, and the ordering is what matters: do the free
+thing first, and treat tapering as a candidate that must justify ~400 bytes of
+the 566 remaining. Caveat kept: this is one dataset of our own games, and HCE
+literature rates tapering higher than 1.8 points — but our data has 47%
+late-middlegame-or-endgame positions, so the measurement is not obviously
+starved of the regime tapering serves.
+
+### The architectural finding worth carrying forward
+
+**Our cost model is inverted relative to ice4 and 4ku, and the field's Elo/byte
+numbers do not transfer.** Our eval is O(1) *incremental*: `score` is carried in
+the position and updated by `value(move)`. So
+
+- terms that are a function of **(piece, square)** — PSTs, tapering,
+  king-bucketed tables — stay **free at runtime**, and
+- terms that depend on the **whole position** — mobility, pawn structure,
+  king-ring attacks — are **expensive for us and cheap for them**, because they
+  recompute eval per node anyway and we do not.
+
+ice4 prices mobility at 104 Elo for 26 bytes (4.0 Elo/byte, better than LMR's
+1.8). For us it would force move generation at every leaf that currently stands
+pat on a carried score. That number is **not** available to us at that price,
+and the same applies to every whole-position term in the field study. What *is*
+available cheaply is anything decodable into a table — which is exactly what the
+startup-decode reframe exploits, and why tapering (not mobility) is our natural
+next eval upgrade despite being worth less in their engines.
+
+### Small nets, first numbers
+
+| net | val | vs pst anchor 0.01533 |
+|---|---|---|
+| N=8 ternary | 0.01364 | −11.0% |
+| N=16 ternary | **0.01307** | **−14.7%** |
+| N=16 float | running | — |
+| (large net for scale) | 0.00678 | −55.8% |
+
+A 16-wide ternary net fits the same data 14.7% better than the piece-square
+prior alone. Whether that survives the 705 bytes of decode machinery is the
+screen still to come, and the arithmetic says it must win decisively to pay for
+itself.
 
 ## 2026-08-12 — MILESTONE: a valid 4k entry exists, measured at 3517 bytes
 
