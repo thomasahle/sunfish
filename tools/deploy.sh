@@ -109,8 +109,18 @@ if [ "$LIVE_PIN" != "$PIN" ]; then
         sudo /opt/lichess-bot/venv/bin/pip install -q -r /opt/lichess-bot/requirements.txt
         echo "re-pinned + patched + requirements refreshed"; }
 else
-    sudo -u sunfish git -C /opt/lichess-bot diff --quiet \
-        && echo "WARNING: lichess-bot tree is pristine - the bundle patch is NOT applied" || true
+    # Same pin: the PATCH may still have changed (it did on 2026-08-12, and
+    # the fix silently didn't deploy). Compare patch-ids and re-apply.
+    APPLIED=$(sudo -u sunfish git -C /opt/lichess-bot diff | git patch-id --stable | cut -d" " -f1)
+    WANT=$(sudo -u sunfish git -C /opt/sunfish show HEAD:"$BUNDLE/lichess-bot.patch" | git patch-id --stable | cut -d" " -f1)
+    if [ -z "$APPLIED" ]; then
+        echo "WARNING: lichess-bot tree is pristine - the bundle patch is NOT applied"
+    elif [ "$APPLIED" != "$WANT" ]; then
+        [ "$ACTION" = check ] && echo "would re-apply changed bundle patch" || {
+            sudo -u sunfish git -C /opt/lichess-bot checkout -qf "$PIN"
+            sudo -u sunfish git -C /opt/lichess-bot apply "/opt/sunfish/$BUNDLE/lichess-bot.patch"
+            echo "re-applied changed bundle patch"; }
+    fi
 fi
 
 # 3. Contrib files the bot reads from /opt/lichess-bot, not the repo.
