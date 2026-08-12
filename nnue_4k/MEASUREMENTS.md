@@ -28,6 +28,8 @@ Since 2026-08-12 this lane serves **two separate goals** and entries say which:
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-12 | **The engine was ALREADY unstable** | Bracket crossings fire with LMR=0 — the one-value-per-key invariant was violated before any reduction; we just had no instrument |
+| 2026-08-12 | MTD guards + LMR landed (packed only) | Guards cost +26 B and 0 nodes; LMR −64% nodes at depth 5 for +36 B. Fixed-node screen running |
 | 2026-08-12 | **Packing REVERSED twice: base-3 AND lzma, joint not split** | Compose, don't choose: b3+lzma −1000 B vs raw base-3; one joint lzma stream −1007 B vs split. My earlier "split is right" was measured on incompressible data |
 | 2026-08-12 | **Box collision hazard: atomic lock adopted** | Three lanes watched one quiet window. My redundant waiter cancelled, the rest take `mkdir`-atomic `.boxlock` — mechanism offered to all lanes |
 | 2026-08-12 | **Rules audit: packer, UCI surface, joint-vs-split** | Split beats joint by **156 B**; artifact already rules-minimal (only **42 B** reclaimable); no-temp-file packer built and verified |
@@ -76,6 +78,72 @@ Since 2026-08-12 this lane serves **two separate goals** and entries say which:
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-12 — The guards fire with LMR switched off: we were already unstable
+
+The reduction family is approved for the packed engine and forbidden for
+classic. Guards went in first, as instructed — and the first thing they did was
+report that **the engine has been unstable all along**.
+
+Running 60 real positions to depth 5 with **LMR=0**, i.e. the engine exactly as
+it has played every match in this ledger:
+
+    info string MTD-GUARD bracket crossed: depth 3 lower 344 upper 332
+    info string MTD-GUARD bracket crossed: depth 2 lower 896 upper 893
+    info string MTD-GUARD bracket crossed: depth 3 lower 961 upper 893
+
+Two null-window probes of the same position at different gammas returned
+contradictory answers, crossing the bracket, with no reduction in sight. The
+likely mechanism is the one that was always there: `tp_move` is mutable state
+that steers ordering, ordering decides which cutoffs happen, cutoffs decide
+what `tp_score` stores, and the depth≤1 futility branch **breaks out of the move
+loop** on an order-dependent condition. That is order-dependent pruning, which
+is enough to break one-value-per-key.
+
+Consequences worth stating plainly:
+
+- The "we prove ≤ 15 probes" invariant had **already** stopped applying to the
+  packed engine before today. It is now a runtime check rather than an
+  assumption, which is what it should always have been here.
+- Previously a crossing was survivable by luck: `while lower < upper - ER` is
+  false once `lower > upper`, so the loop exited — but the final `gamma` was
+  computed from a crossed bracket, so the last probe of a depth could be run at
+  a nonsense window. Now it stops deliberately and says so.
+- **Classic is a different question.** Its invariant is defended by the Lean
+  development and it is not getting these features; nothing here implies
+  classic is unstable. But the same futility-break/ordering interaction exists
+  there, and the formal lane should be told that this engine — same search
+  skeleton — demonstrably crosses brackets, so the proof's premises deserve a
+  re-read rather than an assumption of transfer.
+
+### Guards, measured
+
+Monotone tightening (`max`/`min`), bracket-crossing stop, a 40-probe cap that
+prints `MTD-GUARD` loudly in dev builds and silently breaks in the artifact, and
+commit-on-completed-depth promoted from belt-and-braces to load-bearing. Cost:
+**+26 bytes, and bench nodes 265210 — exactly the standing baseline**, because
+`max`/`min` are no-ops while probes stay consistent. Six regression tests
+(`test_mtd_stability.py`) cover warm-table re-searches, a deliberately *lying*
+`bound()` that contradicts half the root probes, and a source check so a
+refactor cannot silently drop the guards.
+
+### LMR, landed and under screen
+
+First reduction, placed where our sorted move list makes it natural: quiet moves
+(`val < 60`) arriving after the first three at depth > 2 are searched a ply
+short, and re-searched at full depth only on a fail-high. A null-window driver
+makes that verification cheap — the reduced result only needs trusting when it
+fails low.
+
+- bench nodes at depth 5: **265210 → 94442 (−64%)**
+- artifact: 3824 → **3860 (+36 bytes)**
+- 20 tests green, verify battery green
+
+Node reduction is not Elo, so it is on screen now: LMR vs base at **fixed 20000
+nodes/move**, 200 games, same net both sides. Fixed-node is the honest test for
+a reduction — both sides get identical effort and the question is purely whether
+the reduction spends it better. It runs on the laptop, so the bench box keeps
+its queue.
 
 ## 2026-08-12 — Packing, reversed twice: compose base-3 with lzma, and go joint
 

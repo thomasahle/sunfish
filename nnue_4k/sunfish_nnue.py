@@ -301,6 +301,9 @@ EVAL_ROUGHNESS = 15
 # The stable engine provably needs <= 15; this engine may not, so the bound
 # is enforced rather than assumed.
 PROBE_CAP = 40
+# Late move reduction: reduce quiet moves whose static value is below this,
+# once past the first few in the sorted list. 0 disables (classic parity).
+LMR = 60
 # Max entries kept in each transposition table, roughly 1GB per million.
 # Python dicts keep insertion order, so we cheaply evict the oldest entry
 # when full (see issue #95).
@@ -672,8 +675,8 @@ class Searcher:
             # value. A history-credit order key tried here scrambled that
             # order and paid -449 Elo (ledger 5f5f34d); made sound, the
             # history table measured a 1.01 node ratio -- worthless.
-            for val, move in sorted(((v, m) for m in pos.gen_moves()
-                                     if (v:=pos.value(m)) >= val_lower), reverse=True):
+            for cnt, (val, move) in enumerate(sorted(((v, m) for m in pos.gen_moves()
+                                     if (v:=pos.value(m)) >= val_lower), reverse=True)):
                 # If the new score is less than gamma, the opponent will for sure just
                 # stand pat, since ""pos.score + val < gamma === -(pos.score + val) >= 1-gamma""
                 # This is known as futility pruning.
@@ -690,7 +693,23 @@ class Searcher:
                     # so it can't get any better than this.
                     break
 
-                yield move, -self.bound(pos.move(move), 1 - gamma, depth - 1)
+                # LATE MOVE REDUCTION. The move list is sorted by static
+                # value, so a quiet move arriving late is one the ordering
+                # already judged unpromising: search it a ply shallower and
+                # only pay full depth if it surprises us. This is the first
+                # deliberate break of one-value-per-key -- the reduction
+                # depends on cnt, which depends on ordering, which depends on
+                # mutable table state, so the same position can now be
+                # searched to different depths on different visits. The MTD
+                # guards in search() exist for exactly this.
+                # A null-window driver makes the verification re-search cheap:
+                # the reduced search only needs to be trusted when it FAILS
+                # LOW (score < gamma), and a fail-high is re-run at full depth.
+                red = LMR and depth > 2 and cnt > 2 and val < LMR
+                score = -self.bound(pos.move(move), 1 - gamma, depth - 2 if red else depth - 1)
+                if red and score >= gamma:
+                    score = -self.bound(pos.move(move), 1 - gamma, depth - 1)
+                yield move, score
 
         # Run through the moves, shortcutting when score >= gamma.
         # live is True if we saw a legal (not null, score > -MATE_UPPER) move
