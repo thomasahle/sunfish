@@ -59,7 +59,7 @@ messages that served as the ledger before this file existed (`git log
 Issue #11 (2014, "Tempo"): every checkmate scored the flat `-MATE_LOWER`, so
 "a mate in 6 is considered the same as a mate in 1". The terminal correction
 now deposits the depth still unspent when the mate was found,
-`mate = -MATE_LOWER - min(depth, MATE_SPAN)`, which negation carries home as
+`mate = -MATE_LOWER - min(depth * EVAL_ROUGHNESS, 21366)`, which negation carries home as
 `MATE_LOWER + (depth - plies)`.
 
 **Value level — works exactly as designed.** On

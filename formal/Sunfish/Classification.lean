@@ -727,8 +727,7 @@ theorem forcedMate_negamaxD2t (G : QSGame) (hF : ValFloor G 192)
             by_cases hkgm : G.eval m ≤ -MATE_LOWER
             · rw [negamaxD2t_kingGone G (d' + 1) m hkgm]; omega
             · rw [negamaxD2t_of_allIllegal G d' m hkgm (by simp [hleg]) hmate.1]
-              simp only [terminalValue]
-              rw [if_pos hmate.2]
+              have := terminalValue_mate G (d' + 1) m hmate.2
               omega
         have hfold : -(negamaxD2t G d m)
             ≤ foldMax (fun x => -(negamaxD2t G d x))
@@ -793,8 +792,7 @@ theorem forcedlyMated_negamaxD2t (G : QSGame) (hF : ValFloor G 192)
       cases hFL with
       | inl hcm =>
         rw [negamaxD2t_of_allIllegal G d q hkg hcapq' hcm.1]
-        simp only [terminalValue]
-        rw [if_pos hcm.2]
+        have := terminalValue_mate G (d + 1) q hcm.2
         omega
       | inr h =>
         obtain ⟨hai, hall⟩ := h
@@ -1029,12 +1027,8 @@ theorem forcedMate_of_nullValueD2t (G : QSGame) (guard : G.Pos → Bool)
       | true =>
         exfalso
         rw [nullValueD2t_of_allIllegal G guard d p hkg hcap hai] at hband
-        simp only [terminalValue] at hband
-        by_cases hic : inCheckB G.toNullGame p = true
-        · rw [if_pos hic] at hband
-          omega
-        · rw [if_neg hic] at hband
-          omega
+        have := (terminalValue_bounds G (d + 1) p).2
+        omega
       | false =>
         have hwit : ∃ m ∈ G.moves p,
             MATE_LOWER ≤ -(nullValueD2t G guard d m) := by

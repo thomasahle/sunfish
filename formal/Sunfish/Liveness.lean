@@ -131,24 +131,22 @@ bonus is the depth still UNSPENT when the mate lands, `D - n`, which is
 exactly what `terminalValue` deposits and negation carries home
 unchanged.  `21366 = MATE_UPPER - MATE_LOWER - 1` is `terminalValue`'s
 own clamp; no search comes within three orders of magnitude of it. -/
-def mateFloor (D n : Nat) : Int := MATE_LOWER + min ((D : Int) - (n : Int)) 21366
-
-theorem mateFloor_ge (D n : Nat) (h : 1 ≤ D) : MATE_LOWER < mateFloor D n ∨ True := by
-  exact Or.inr trivial
+def mateFloor (D n : Nat) : Int :=
+  MATE_LOWER + min (((D : Int) - (n : Int)) * EVAL_ROUGHNESS) 21366
 
 /-- The floor is in the band and strictly below the king-capture
 sentinel: a mate report can never be confused with "the king is gone". -/
 theorem mateFloor_lt_MATE_UPPER (D n : Nat) : mateFloor D n < MATE_UPPER := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
-  unfold mateFloor
+  unfold mateFloor EVAL_ROUGHNESS
   omega
 
 /-- Deeper search, better report: the floor is monotone in the depth. -/
 theorem mateFloor_mono {D E : Nat} (h : D ≤ E) (n : Nat) :
     mateFloor D n ≤ mateFloor E n := by
   have hDE : (D : Int) ≤ (E : Int) := Int.ofNat_le.mpr h
-  unfold mateFloor
+  unfold mateFloor EVAL_ROUGHNESS
   omega
 
 /-- **Mate-in-k completeness on the real-move layer, WITH THE
@@ -178,7 +176,7 @@ theorem forcedMate_negamaxD2 (G : QSGame) (hF : ValFloor G 192)
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
-  simp only [mateFloor]
+  simp only [mateFloor, EVAL_ROUGHNESS]
   induction hFM with
   | @mate k p m hkg hm hleg hmate =>
     intro D hD
@@ -190,14 +188,14 @@ theorem forcedMate_negamaxD2 (G : QSGame) (hF : ValFloor G 192)
       · have hai : allIllegalB G p = false := allIllegalB_false_of_legal hm hleg
         rw [negamaxD2_of_fold G d p hkg hcap hai]
         have hmem := mem_movesAbove_of_floor G hF (d := d + 1) (by omega) hm
-        have hchild : negamaxD2 G d m ≤ -MATE_LOWER - min (d : Int) 21366 := by
+        have hchild : negamaxD2 G d m ≤ -MATE_LOWER - min ((d : Int) * 15) 21366 := by
           cases d with
           | zero => omega
           | succ d' =>
             by_cases hkgm : G.eval m ≤ -MATE_LOWER
             · rw [negamaxD2_kingGone G (d' + 1) m hkgm]; omega
             · rw [negamaxD2_of_allIllegal G d' m hkgm (by simp [hleg]) hmate.1]
-              simp only [terminalValue]
+              simp only [terminalValue, EVAL_ROUGHNESS]
               rw [if_pos hmate.2]
               omega
         have hfold : -(negamaxD2 G d m)
@@ -216,7 +214,7 @@ theorem forcedMate_negamaxD2 (G : QSGame) (hF : ValFloor G 192)
         rw [negamaxD2_of_fold G d p hkg hcap hai]
         have hmem := mem_movesAbove_of_floor G hF (d := d + 1) (by omega) hm
         have hchild : negamaxD2 G d m
-            ≤ -(MATE_LOWER + min ((d : Int) - 1 - (k : Int)) 21366) := by
+            ≤ -(MATE_LOWER + min (((d : Int) - 1 - (k : Int)) * 15) 21366) := by
           cases d with
           | zero => omega
           | succ d' =>
@@ -225,7 +223,7 @@ theorem forcedMate_negamaxD2 (G : QSGame) (hF : ValFloor G 192)
             · rw [negamaxD2_of_fold G d' m hkgm (by simp [hleg]) hnt]
               refine foldMax_le _ _ _ (fun m' hm' => ?_) (by omega)
               show -(negamaxD2 G d' m')
-                ≤ -(MATE_LOWER + min (((d' : Int) + 1) - 1 - (k : Int)) 21366)
+                ≤ -(MATE_LOWER + min ((((d' : Int) + 1) - 1 - (k : Int)) * 15) 21366)
               have hm'' : m' ∈ G.moves m :=
                 movesAbove_subset G _ m m' hm'
               have hkgm' : ¬ (G.eval m' ≤ -MATE_LOWER) := by
@@ -271,10 +269,12 @@ theorem forcedlyMated_negamaxD2 (G : QSGame) (hF : ValFloor G 192)
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
     (hFL : ForcedlyMated G k q) :
     ∀ D : Nat, k + 2 ≤ D →
-      negamaxD2 G D q ≤ -(MATE_LOWER + min ((D : Int) - 1 - (k : Int)) 21366) := by
+      negamaxD2 G D q
+        ≤ -(MATE_LOWER + min (((D : Int) - 1 - (k : Int)) * EVAL_ROUGHNESS) 21366) := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
+  simp only [EVAL_ROUGHNESS]
   intro D hD
   cases D with
   | zero => omega
@@ -286,7 +286,7 @@ theorem forcedlyMated_negamaxD2 (G : QSGame) (hF : ValFloor G 192)
       cases hFL with
       | inl hcm =>
         rw [negamaxD2_of_allIllegal G d q hkg hcapq' hcm.1]
-        simp only [terminalValue]
+        simp only [terminalValue, EVAL_ROUGHNESS]
         rw [if_pos hcm.2]
         omega
       | inr h =>
@@ -294,7 +294,7 @@ theorem forcedlyMated_negamaxD2 (G : QSGame) (hF : ValFloor G 192)
         rw [negamaxD2_of_fold G d q hkg hcapq' hai]
         refine foldMax_le _ _ _ (fun m hm => ?_) (by omega)
         show -(negamaxD2 G d m)
-          ≤ -(MATE_LOWER + min (((d : Int) + 1) - 1 - (k : Int)) 21366)
+          ≤ -(MATE_LOWER + min (((((d : Int) + 1) - 1 - (k : Int))) * 15) 21366)
         have hm' : m ∈ G.moves q := movesAbove_subset G _ q m hm
         cases hcm : hasKingCapture G.toNullGame.toGame m with
         | true =>
@@ -307,7 +307,7 @@ theorem forcedlyMated_negamaxD2 (G : QSGame) (hF : ValFloor G 192)
           rw [negamaxD2_of_capture G d m hkgm hcm]; omega
         | false =>
           have := forcedMate_negamaxD2 G hF (hall m hm' hcm) d (by omega)
-          simp only [mateFloor] at this
+          simp only [mateFloor, EVAL_ROUGHNESS] at this ⊢
           omega
 
 /-! ### The flat corollaries (the pre-distance statements) -/
@@ -322,7 +322,7 @@ theorem forcedMate_negamaxD2_band (G : QSGame) (hF : ValFloor G 192)
   intro D hD
   have h := forcedMate_negamaxD2 G hF hFM D hD
   have hd : (k : Int) + 1 ≤ (D : Int) := by exact_mod_cast hD
-  simp only [mateFloor] at h
+  simp only [mateFloor, EVAL_ROUGHNESS] at h
   omega
 
 /-- The dual, `min`-free. -/
@@ -335,21 +335,8 @@ theorem forcedlyMated_negamaxD2_band (G : QSGame) (hF : ValFloor G 192)
   intro D hD
   have h := forcedlyMated_negamaxD2 G hF hcapq hFL D hD
   have hd : (k : Int) + 2 ≤ (D : Int) := by exact_mod_cast hD
+  simp only [EVAL_ROUGHNESS] at h
   omega
-
-/-- **The point of the whole exercise, in one inequality**: at a fixed
-remaining depth, a mate `j` plies SOONER is worth at least `j` more.
-A forced mate in `k` floors the report at `MATE_LOWER + (D - k)`; a
-position whose defender is forcedly mated in `k` ceilings it at
-`-(MATE_LOWER + (D - 1 - k))`.  Two mating moves whose forced-mate
-indices differ therefore CANNOT tie, which is precisely what
-`-MATE_LOWER` for every mate could not deliver (issue #11, 2014). -/
-theorem faster_mate_scores_higher (G : QSGame) (hF : ValFloor G 192)
-    {j k : Nat} {p q : G.Pos} (hj : ForcedMate G j p) (hk : ForcedMate G k q)
-    (hjk : j < k) (D : Nat) (hD : k + 1 ≤ D) (hspan : (D : Int) ≤ 21366) :
-    negamaxD2 G D q < negamaxD2 G D p ∨
-      mateFloor D k ≤ negamaxD2 G D q := by
-  exact Or.inr (forcedMate_negamaxD2 G hF hk D hD)
 
 /-! ### The transfer to the declared function -/
 
@@ -1096,12 +1083,8 @@ theorem forcedMate_of_nullValueD2 (G : QSGame) (guard : G.Pos → Bool)
       | true =>
         exfalso
         rw [nullValueD2_of_allIllegal G guard d p hkg hcap hai] at hband
-        simp only [terminalValue] at hband
-        by_cases hic : inCheckB G.toNullGame p = true
-        · rw [if_pos hic] at hband
-          omega
-        · rw [if_neg hic] at hband
-          omega
+        have := (terminalValue_bounds G (d + 1) p).2
+        omega
       | false =>
         rw [nullValueD2_of_fold G guard d p hkg hcap hai] at hband
         obtain ⟨m, hmem, hmv⟩ :=
@@ -1338,7 +1321,7 @@ theorem forcedMate_of_value_dist (G : QSGame) (guard : G.Pos → Bool)
     (hNM : NoMaskedMobility G) :
     ∀ (D t : Nat) (p : G.Pos),
       hasKingCapture G.toNullGame.toGame p = false →
-      MATE_LOWER + (t : Int) ≤ nullValueD2 G guard D p →
+      MATE_LOWER + (t : Int) * EVAL_ROUGHNESS ≤ nullValueD2 G guard D p →
       ∃ n, 1 ≤ n ∧ n + t ≤ D ∧ ForcedMate G n p := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
@@ -1346,6 +1329,8 @@ theorem forcedMate_of_value_dist (G : QSGame) (guard : G.Pos → Bool)
   induction D using Nat.strongRecOn with
   | _ D ih =>
     intro t p hcapf hband
+    simp only [EVAL_ROUGHNESS] at hband
+    have htnn : 0 ≤ (t : Int) := Int.ofNat_nonneg t
     have hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true) := by simp [hcapf]
     by_cases hkg : G.eval p ≤ -MATE_LOWER
     · rw [nullValueD2_kingGone G guard D p hkg] at hband
@@ -1372,7 +1357,7 @@ theorem forcedMate_of_value_dist (G : QSGame) (guard : G.Pos → Bool)
             (movesAbove G (val_lower (d + 1)) p) (nullTermD2 G guard d p)
             (by have := nullTermD2_lt_ML G guard d p; omega) hband
         have hm : m ∈ G.moves p := movesAbove_subset G _ p m hmem
-        have hchild : nullValueD2 G guard d m ≤ -(MATE_LOWER + (t : Int)) := by omega
+        have hchild : nullValueD2 G guard d m ≤ -(MATE_LOWER + (t : Int) * 15) := by omega
         have hkgm : ¬ (G.eval m ≤ -MATE_LOWER) := fun hh =>
           hcap ((hasKingCapture_iff G.toNullGame.toGame p).mpr ⟨m, hm, hh⟩)
         have hlegm : hasKingCapture G.toNullGame.toGame m = false := by
@@ -1400,11 +1385,11 @@ theorem forcedMate_of_value_dist (G : QSGame) (guard : G.Pos → Bool)
               -- exact value pins `t` at or below the depth it was found
               -- with, which is exactly the `n + t <= D` the caller wants.
               refine ⟨1, Nat.le_refl _, ?_, ForcedMate.mate (k := 0) hkg hm hlegm ⟨hai', hic⟩⟩
-              simp only [terminalValue] at hchild
+              simp only [terminalValue, EVAL_ROUGHNESS] at hchild
               rw [if_pos hic] at hchild
-              have htd : (t : Int) ≤ (d' : Int) + 1 := by
-                have : ((d' + 1 : Nat) : Int) = (d' : Int) + 1 := by omega
-                omega
+              have hc : ((d' + 1 : Nat) : Int) = (d' : Int) + 1 := by omega
+              rw [hc] at hchild
+              have htd : (t : Int) ≤ (d' : Int) + 1 := by omega
               omega
             · exfalso
               simp only [terminalValue] at hchild
@@ -1413,7 +1398,7 @@ theorem forcedMate_of_value_dist (G : QSGame) (guard : G.Pos → Bool)
           | false =>
             rw [nullValueD2_of_fold G guard d' m hkgm hcapm hai'] at hchild
             have hrep : ∀ m' ∈ movesAbove G (val_lower (d' + 1)) m,
-                MATE_LOWER + (t : Int) ≤ nullValueD2 G guard d' m' := by
+                MATE_LOWER + (t : Int) * 15 ≤ nullValueD2 G guard d' m' := by
               intro m' hm'
               have hle : -(nullValueD2 G guard d' m')
                   ≤ foldMax (fun x => -(nullValueD2 G guard d' x))
@@ -1433,7 +1418,8 @@ theorem forcedMate_of_value_dist (G : QSGame) (guard : G.Pos → Bool)
               have hmem0 : m0 ∈ movesAbove G (val_lower (d'' + 1 + 1)) m :=
                 mem_movesAbove_of_floor G hF (d := d'' + 1 + 1) (by omega) hm0
               obtain ⟨n0, hn01, hn02, _⟩ :=
-                ih (d'' + 1) (by omega) t m0 hleg0 (hrep m0 hmem0)
+                ih (d'' + 1) (by omega) t m0 hleg0
+                  (by simp only [EVAL_ROUGHNESS]; exact hrep m0 hmem0)
               have hts : t ≤ d'' := by omega
               refine ⟨(d'' + 1 - t) + 2, by omega, by omega, ?_⟩
               refine ForcedMate.step (k := d'' + 1 - t) hkg hm hlegm hai' ?_
@@ -1441,7 +1427,8 @@ theorem forcedMate_of_value_dist (G : QSGame) (guard : G.Pos → Bool)
               have hmem' : m' ∈ movesAbove G (val_lower (d'' + 1 + 1)) m :=
                 mem_movesAbove_of_floor G hF (d := d'' + 1 + 1) (by omega) hm'
               obtain ⟨n', _, hn'2, hn'3⟩ :=
-                ih (d'' + 1) (by omega) t m' hleg' (hrep m' hmem')
+                ih (d'' + 1) (by omega) t m' hleg'
+                  (by simp only [EVAL_ROUGHNESS]; exact hrep m' hmem')
               exact forcedMate_mono G hn'3 (d'' + 1 - t) (by omega)
 
 /-- The mated-side dual, with the distance, split so the checkmated
@@ -1452,7 +1439,8 @@ theorem forcedlyMated_of_value_dist (G : QSGame) (guard : G.Pos → Bool)
     (D t : Nat) (q : G.Pos)
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
     (hkgq : ¬ (G.eval q ≤ -MATE_LOWER))
-    (hlo : nullValueD2 G guard (D + 1) q ≤ -(MATE_LOWER + (t : Int))) :
+    (hlo : nullValueD2 G guard (D + 1) q
+      ≤ -(MATE_LOWER + (t : Int) * EVAL_ROUGHNESS)) :
     Checkmated G q ∨
       (allIllegalB G q = false ∧ ∃ n, 1 ≤ n ∧ n + t ≤ D ∧
         ∀ m ∈ G.moves q, hasKingCapture G.toNullGame.toGame m = false →
@@ -1460,6 +1448,8 @@ theorem forcedlyMated_of_value_dist (G : QSGame) (guard : G.Pos → Bool)
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
   have hcapq' : ¬ (hasKingCapture G.toNullGame.toGame q = true) := by simp [hcapq]
+  simp only [EVAL_ROUGHNESS] at hlo
+  have htnn : 0 ≤ (t : Int) := Int.ofNat_nonneg t
   cases hai : allIllegalB G q with
   | true =>
     rw [nullValueD2_of_allIllegal G guard D q hkgq hcapq' hai] at hlo
@@ -1472,7 +1462,7 @@ theorem forcedlyMated_of_value_dist (G : QSGame) (guard : G.Pos → Bool)
   | false =>
     rw [nullValueD2_of_fold G guard D q hkgq hcapq' hai] at hlo
     have hrep : ∀ m' ∈ movesAbove G (val_lower (D + 1)) q,
-        MATE_LOWER + (t : Int) ≤ nullValueD2 G guard D m' := by
+        MATE_LOWER + (t : Int) * 15 ≤ nullValueD2 G guard D m' := by
       intro m' hm'
       have hle : -(nullValueD2 G guard D m')
           ≤ foldMax (fun x => -(nullValueD2 G guard D x))
@@ -1488,12 +1478,14 @@ theorem forcedlyMated_of_value_dist (G : QSGame) (guard : G.Pos → Bool)
       have hmem0 : m0 ∈ movesAbove G (val_lower (D' + 1 + 1)) q :=
         mem_movesAbove_of_floor G hF (d := D' + 1 + 1) (by omega) hm0
       obtain ⟨n0, hn01, hn02, _⟩ :=
-        forcedMate_of_value_dist G guard hF hQ hNM (D' + 1) t m0 hleg0 (hrep m0 hmem0)
+        forcedMate_of_value_dist G guard hF hQ hNM (D' + 1) t m0 hleg0
+          (by simp only [EVAL_ROUGHNESS]; exact hrep m0 hmem0)
       refine Or.inr ⟨rfl, D' + 1 - t, by omega, by omega, fun m' hm' hleg' => ?_⟩
       have hmem' : m' ∈ movesAbove G (val_lower (D' + 1 + 1)) q :=
         mem_movesAbove_of_floor G hF (d := D' + 1 + 1) (by omega) hm'
       obtain ⟨n', _, hn'2, hn'3⟩ :=
-        forcedMate_of_value_dist G guard hF hQ hNM (D' + 1) t m' hleg' (hrep m' hmem')
+        forcedMate_of_value_dist G guard hF hQ hNM (D' + 1) t m' hleg'
+          (by simp only [EVAL_ROUGHNESS]; exact hrep m' hmem')
       exact forcedMate_mono G hn'3 (D' + 1 - t) (by omega)
 
 /-! ### The engine's move, and the game it produces -/
@@ -1575,7 +1567,7 @@ theorem forcedMate_play_mates (G : QSGame) (guard : G.Pos → Bool)
     (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
     (hch : MaximalChoice G guard d ch) :
     ∀ (k : Nat) (p : G.Pos),
-      1 ≤ k → k + 1 ≤ d + 1 → (d : Int) ≤ 21366 →
+      1 ≤ k → k + 1 ≤ d + 1 → (d : Int) * EVAL_ROUGHNESS ≤ 21366 →
       hasKingCapture G.toNullGame.toGame p = false →
       ForcedMate G k p →
       MatesWithin G ch k p := by
@@ -1589,9 +1581,10 @@ theorem forcedMate_play_mates (G : QSGame) (guard : G.Pos → Bool)
     have hkd' : (k : Int) + 1 ≤ (d : Int) + 1 := by exact_mod_cast hkd
     -- 1. the root's declared value carries the distance
     have hval := forcedMate_complete G guard hF hZ hFM (d + 1) hkd
-    have hvalv : MATE_LOWER + (((d + 1 - k : Nat)) : Int)
+    simp only [EVAL_ROUGHNESS] at hspan
+    have hvalv : MATE_LOWER + (((d + 1 - k : Nat)) : Int) * 15
         ≤ nullValueD2 G guard (d + 1) p := by
-      simp only [mateFloor] at hval
+      simp only [mateFloor, EVAL_ROUGHNESS] at hval
       have hc : (((d + 1 - k : Nat)) : Int) = (d : Int) + 1 - (k : Int) := by omega
       have hc2 : ((d + 1 : Nat) : Int) = (d : Int) + 1 := by omega
       rw [hc]
@@ -1616,6 +1609,7 @@ theorem forcedMate_play_mates (G : QSGame) (guard : G.Pos → Bool)
     have hvfold := hvalv
     rw [nullValueD2_of_fold G guard d p hkg hcap hai] at hvfold
     have hnn : (0 : Int) ≤ (((d + 1 - k : Nat)) : Int) := Int.ofNat_nonneg _
+    have hnn15 : (0 : Int) ≤ (((d + 1 - k : Nat)) : Int) * 15 := by omega
     obtain ⟨mw, hmw, hmwv⟩ :=
       foldMax_failHigh_witness (fun x => -(nullValueD2 G guard d x))
         (movesAbove G (val_lower (d + 1)) p) (nullTermD2 G guard d p)
@@ -1623,7 +1617,7 @@ theorem forcedMate_play_mates (G : QSGame) (guard : G.Pos → Bool)
     -- The chosen move is at least as good as the witness the fold names,
     -- so its mate is at least as NEAR -- the step the flat value cannot take.
     have hchv : nullValueD2 G guard d (ch p)
-        ≤ -(MATE_LOWER + (((d + 1 - k : Nat)) : Int)) := by
+        ≤ -(MATE_LOWER + (((d + 1 - k : Nat)) : Int) * 15) := by
       have := hmax mw hmw
       omega
     -- 4. the reached position is legal, with its king on the board
@@ -1644,7 +1638,9 @@ theorem forcedMate_play_mates (G : QSGame) (guard : G.Pos → Bool)
       | zero => exact absurd hkd (by omega)
       | succ n => exact ⟨n, rfl⟩
     have hcv : nullValueD2 G guard (d0 + 1) (ch p)
-        ≤ -(MATE_LOWER + (((d0 + 1 + 1 - k : Nat)) : Int)) := hchv
+        ≤ -(MATE_LOWER + (((d0 + 1 + 1 - k : Nat)) : Int) * EVAL_ROUGHNESS) := by
+      simp only [EVAL_ROUGHNESS]
+      exact hchv
     have hFL := forcedlyMated_of_value_dist G guard hF hQ hNM d0
       (d0 + 1 + 1 - k) (ch p) hcapc hkgc hcv
     -- 6. read off the play
@@ -1659,7 +1655,8 @@ theorem forcedMate_play_mates (G : QSGame) (guard : G.Pos → Bool)
       refine matesWithin_mono G ch (MatesWithin.step (n := n) hnt ?_) k hnk
       intro m hm hleg
       have hcapm : hasKingCapture G.toNullGame.toGame m = false := hleg
-      exact ih n (by omega) m hn1 (by omega) (by omega) hcapm (hall m hm hleg)
+      exact ih n (by omega) m hn1 (by omega) (by simp only [EVAL_ROUGHNESS]; omega)
+        hcapm (hall m hm hleg)
 
 /-! ### The countermodel: the frontier premise is genuinely needed
 

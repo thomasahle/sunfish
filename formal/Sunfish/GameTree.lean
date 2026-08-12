@@ -30,6 +30,11 @@ Corresponds to `best = -MATE_UPPER` at sunfish.py line 379: if no move
 (not even the QS stand-pat) raises `best`, the position counts as lost. -/
 def LOSS : Int := -MATE_UPPER
 
+/-- `EVAL_ROUGHNESS` (sunfish.py's search constants).  It is the width
+the MTD-bi bracket stops at -- and, since `terminalValue` scales mate
+distance by it, also the score one ply of mate distance is worth. -/
+def EVAL_ROUGHNESS : Int := 15
+
 /-! The exact value the terminal correction assigns to CHECKMATE is
 `1 - MATE_UPPER`:
 

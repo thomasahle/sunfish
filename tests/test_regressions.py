@@ -209,12 +209,17 @@ class TestMateDistance:
     carried no information about HOW FAR the mate was: at the fold, every
     winning move tied, and the losing side had no reason to hold out. The
     terminal correction now deposits the depth still unspent when the mate
-    was found (``-MATE_LOWER - min(depth, MATE_SPAN)``), which negation
-    carries home as ``MATE_LOWER + (depth - plies)``.
+    was found, one ``EVAL_ROUGHNESS`` per ply, which negation carries home
+    as ``MATE_LOWER + (depth - plies) * EVAL_ROUGHNESS``.
+
+    The scale matters: MTD-bi stops bisecting at ``upper - lower <=
+    EVAL_ROUGHNESS``, so at one point per ply the driver's final window
+    could not separate two mating moves and the ordering never reached the
+    root. A whole bracket per ply is what makes it visible.
 
     The position below is the complaint in miniature: three mating moves
     and eight moves that mate in three, all scoring exactly 47923 on
-    master."""
+    master, and 47998 vs 47938 at depth 6 here."""
 
     FEN = "8/3Q4/8/8/8/3R4/5K1k/8 w - - 0 1"
     FAST = ("d3h3", "d7h3", "d7h7")  # mate in 1
@@ -233,9 +238,10 @@ class TestMateDistance:
         slow = [self.yield_of(hist, m, depth) for m in self.SLOW]
         assert min(fast) >= sf.MATE_LOWER, f"mate in 1 left the band: {fast}"
         assert min(slow) >= sf.MATE_LOWER, f"mate in 3 left the band: {slow}"
-        assert min(fast) > max(slow), (
+        assert min(fast) - max(slow) >= sf.EVAL_ROUGHNESS, (
             f"depth {depth}: mate in 1 scored {fast}, mate in 3 scored {slow} "
-            "- the search cannot tell them apart"
+            f"- the gap must clear EVAL_ROUGHNESS ({sf.EVAL_ROUGHNESS}) or the "
+            "driver's final bracket swallows it"
         )
         assert len(set(fast)) == 1 and len(set(slow)) == 1, (
             f"same distance, different score: {fast} / {slow}"
@@ -248,9 +254,9 @@ class TestMateDistance:
         hist = hist_from_fen("3k4/8/3K4/8/8/8/8/7R w - - 0 1")
         searcher = sf.Searcher()
         score = searcher.bound(hist[-1], sf.MATE_LOWER, depth, root=True)
-        assert score == sf.MATE_LOWER + depth - 1, (
-            f"depth {depth}: mate in 1 scored {score}, "
-            f"expected {sf.MATE_LOWER + depth - 1}"
+        want = sf.MATE_LOWER + (depth - 1) * sf.EVAL_ROUGHNESS
+        assert score == want, (
+            f"depth {depth}: mate in 1 scored {score}, expected {want}"
         )
         assert render(hist, searcher.tp_move[hist[-1]]) == "h1h8"
 
@@ -267,12 +273,16 @@ class TestMateDistance:
     @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
     def test_checkmated_node_reports_its_distance(self, depth):
         """The mated side's half of the contract: being mated with `depth`
-        still unspent is worth exactly -MATE_LOWER - depth, so of two lost
-        replies the one that postpones the mate scores strictly higher."""
+        still unspent is worth exactly -MATE_LOWER - depth*EVAL_ROUGHNESS, so
+        of two lost replies the one that postpones the mate scores strictly
+        higher - by a whole bracket per ply."""
         hist = hist_from_fen("3k3R/8/3K4/8/8/8/8/8 b - - 1 1")
         searcher = sf.Searcher()
         score = searcher.bound(hist[-1], sf.MATE_LOWER, depth, root=True)
-        assert score == -sf.MATE_LOWER - depth, (
-            f"depth {depth}: checkmated node scored {score}, "
-            f"expected {-sf.MATE_LOWER - depth}"
+        want = -sf.MATE_LOWER - depth * sf.EVAL_ROUGHNESS
+        assert score == want, (
+            f"depth {depth}: checkmated node scored {score}, expected {want}"
+        )
+        assert score > -sf.MATE_UPPER, (
+            "a mate value collided with the illegal-move sentinel"
         )

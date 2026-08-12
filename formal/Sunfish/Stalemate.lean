@@ -1876,27 +1876,37 @@ def CorrectionTerminal (G : QSGame) (d : Nat) (p : G.Pos) : Prop :=
 and for checkmate
 
 ```python
-mate = -MATE_LOWER - min(depth, MATE_SPAN)
+mate = -MATE_LOWER - min(depth * EVAL_ROUGHNESS, MATE_UPPER - MATE_LOWER - 1)
 ```
 
 **The mate value carries its distance.**  `depth` is the search depth
-still UNSPENT when the mate was found, so a mate one ply from the root
-scores `depth - 1` above the band floor and a mate at the horizon
-barely clears it: negated up the tree, the winner's report ranks the
-mating lines SHORTEST-FIRST and the loser's ranks them LONGEST-FIRST
-(issue #11).  Only `(pos, depth)` enters -- the same key the
-transposition table already uses -- so the table needs no store/probe
-adjustment and its one-value-per-key invariant is untouched.  Measuring
-the distance from the ROOT is exactly what would have broken that.
+still UNSPENT when the mate was found, so a mate near the root scores
+far above the band floor and a mate at the horizon barely clears it:
+negated up the tree, the winner's report ranks the mating lines
+SHORTEST-FIRST and the loser's ranks them LONGEST-FIRST (issue #11).
+Only `(pos, depth)` enters -- the same key the transposition table
+already uses -- so the table needs no store/probe adjustment and its
+one-value-per-key invariant is untouched.  Measuring the distance from
+the ROOT is exactly what would have broken that.
+
+**One ply is worth a whole `EVAL_ROUGHNESS`.**  That is the width the
+MTD-bi bracket stops at (`while lower < upper - EVAL_ROUGHNESS`), so at
+one point per ply the driver's final window could not separate two
+mates and the ordering never reached the root.  Scaled, consecutive
+distances are a full bracket apart.
 
 `min` against `MATE_UPPER - MATE_LOWER - 1 = 21366` keeps the value
 inside the band at every depth, with no side condition to carry: the
-`Bounded`-shaped facts below stay unconditional.  `terminalValue G 0 p`
-is the historical flat value, which is what the RETIRED pre-d2 layer
-(`qsDrawFix`, `negamaxQS`) still assigns at every depth. -/
+`Bounded`-shaped facts below stay unconditional, and the deepest value
+`1 - MATE_UPPER` stays exactly one point clear of `-MATE_UPPER`, which
+the fold reads as "illegal move".  The clamp binds only at unspent
+depth 1425, three orders of magnitude past the driver's `range(1,
+1000)`.  `terminalValue G 0 p` is the historical flat value, which is
+what the RETIRED pre-d2 layer (`qsDrawFix`, `negamaxQS`) still assigns
+at every depth. -/
 def terminalValue (G : QSGame) (d : Nat) (p : G.Pos) : Int :=
   if inCheckB G.toNullGame p = true then
-    -MATE_LOWER - min (d : Int) (MATE_UPPER - MATE_LOWER - 1)
+    -MATE_LOWER - min ((d : Int) * EVAL_ROUGHNESS) (MATE_UPPER - MATE_LOWER - 1)
   else 0
 
 /-- The terminal value never leaves the band, at any depth: mate is at
@@ -1907,7 +1917,8 @@ theorem terminalValue_bounds (G : QSGame) (d : Nat) (p : G.Pos) :
     1 - MATE_UPPER ≤ terminalValue G d p ∧ terminalValue G d p ≤ 0 := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
-  unfold terminalValue
+  have hnn : 0 ≤ (d : Int) := Int.ofNat_nonneg d
+  unfold terminalValue EVAL_ROUGHNESS
   split <;> omega
 
 /-- At a checkmated node the value is in the mated band, however deep
@@ -1917,17 +1928,19 @@ theorem terminalValue_mate (G : QSGame) (d : Nat) (p : G.Pos)
     terminalValue G d p ≤ -MATE_LOWER := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
-  unfold terminalValue
+  have hnn : 0 ≤ (d : Int) := Int.ofNat_nonneg d
+  unfold terminalValue EVAL_ROUGHNESS
   rw [if_pos h]
   omega
 
-/-- **The distance itself**: at a checkmated node with `d ≤ 21366`
-still to spend, the value is EXACTLY `-MATE_LOWER - d`.  Every mate
-theorem's exact-distance conclusion is this equation negated up the
-tree. -/
+/-- **The distance itself**: at a checkmated node with `d * 15 ≤ 21366`
+still to spend, the value is EXACTLY
+`-MATE_LOWER - d * EVAL_ROUGHNESS`.  Every mate theorem's
+exact-distance conclusion is this equation negated up the tree. -/
 theorem terminalValue_exact (G : QSGame) (d : Nat) (p : G.Pos)
-    (h : inCheckB G.toNullGame p = true) (hd : (d : Int) ≤ 21366) :
-    terminalValue G d p = -MATE_LOWER - (d : Int) := by
+    (h : inCheckB G.toNullGame p = true)
+    (hd : (d : Int) * EVAL_ROUGHNESS ≤ 21366) :
+    terminalValue G d p = -MATE_LOWER - (d : Int) * EVAL_ROUGHNESS := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
   unfold terminalValue
@@ -1942,7 +1955,8 @@ theorem terminalValue_anti (G : QSGame) {d e : Nat} (h : d ≤ e) (p : G.Pos) :
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
   have hde : (d : Int) ≤ (e : Int) := Int.ofNat_le.mpr h
-  unfold terminalValue
+  have hnn : 0 ≤ (d : Int) := Int.ofNat_nonneg d
+  unfold terminalValue EVAL_ROUGHNESS
   split <;> omega
 
 /-- At a correction-terminal node the filtered draw-aware value IS the
@@ -3469,10 +3483,8 @@ theorem nullValueD2_bounded (G : QSGame) (guard : G.Pos → Bool)
         · cases hai : allIllegalB G p with
           | true =>
             rw [nullValueD2_of_allIllegal G guard d p hkg hcap hai]
-            simp only [terminalValue]
-            by_cases hic : inCheckB G.toNullGame p = true
-            · rw [if_pos hic]; omega
-            · rw [if_neg hic]; omega
+            have := terminalValue_bounds G (d + 1) p
+            omega
           | false =>
             rw [nullValueD2_of_fold G guard d p hkg hcap hai]
             have hTl := nullTermD2_ge_LOSS G guard d p
