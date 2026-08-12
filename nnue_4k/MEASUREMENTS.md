@@ -18,6 +18,8 @@ messages that served as the ledger before this file existed (`git log
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-12 | **Goal-line 60+1 vs classic (interim)** | **+187.0 ± 49.7 at 240/400 games, zero time losses — biggest confirmed margin yet, short of +400** |
+| 2026-08-12 | `_ext` integerization: scoped and priced | DONT BUILD (SWAR tail 5.2-10.3µs vs 3.8µs now) — but a dead-code third removed: rehab800 0.643 → 0.742× kb8, +21 Elo |
 | 2026-08-12 | **Quality-term hunt restarted: labels + 3 new families** | IN FLIGHT — 28-pair fixed-node label RR running locally; metric C shows the first honest signal (churn ranks kbbil worst, w256 best) |
 | 2026-08-12 | **H2 paired form (the honest successor)** | **FAILS validation — sign flips across labeled pairs; H2 is closed, quality is fixed-node games only** |
 | 2026-08-12 | H2 optimism bias, controls | DEAD in simple form — every net is an optimist on its own losses (kb8 +105 worst) |
@@ -54,6 +56,86 @@ messages that served as the ledger before this file existed (`git log
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-12 — Goal-line 60+1 vs classic: +187 at the interim mark
+
+The +400 campaign's scoreboard match, running on the bench box: the play king
+(256kb8@100M) on the current engine vs current-master classic, 400 games at
+60+1. Both preflights green as black; both sides ride the same `sunfish_ui`
+driver, so the time-formula gain cancels and this measures engine+eval only.
+
+**Interim at 240/400 games: +187.0 ± 49.7 Elo (nElo +201.8), 74.6%, 171W 53L
+16D, ZERO time losses.** Ptnml [7, 3, 36, 13, 61].
+
+Read honestly: this is the largest margin over classic this project has
+confirmed at a decision TC — the previous 60+1 high-water was +95.7/+100.4 for
+packed128 v1 — and it is **less than half of the +400 goal**. Not final: the
+verdict waits for all 400 games and the time-loss check, per the standing rule
+that a pgn count and forfeit count precede believing any Elo.
+
+Where the remaining ~210 Elo would have to come from, on current evidence: not
+from eval val (the val ladder has flattened, and 256ng's record 0.00678 is
+speed-blocked), not from byte golf (298 bytes spare, not the constraint). The
+open levers are search (the ordering headroom the litmus measured — SF best at
+median rank 8), the search constants the tuner RR is about to decide, and
+whatever the quality-term work turns into a training signal.
+
+## 2026-08-12 — `_ext` integerization: scoped, priced, and mostly declined
+
+The root-cause analysis named this the ext family's unlock: the extension nets
+are speed-blocked, not quality-blocked, so making `_ext` cheap would let their
+measured eval advantage compete. Scoped against the profile (`_ext` = 8.0µs of a
+38.6µs move: float `_mlp` tail 3.8µs, `cnt` scan 2.7µs, bigint extract 0.98µs,
+m² conv 0.56µs).
+
+**1. A third of it was dead code — fixed.** `cnt` was computed *unconditionally*
+at the top of `_ext`, but it is only used inside `if PHASE_S:`. rehab800 has
+**zero** phase buckets, so every evaluation spent 2.7µs — 34% of `_ext` — on a
+value it then discarded. Now computed only when phase exists, and via one
+C-level `bd.count(".")` (64 squares minus empties) instead of a 120-step
+generator. Verified **bit-identical on 1500 positions for both rehab800
+(phase-less) and kbbil (phase-8, exercising the live path)**; 14 tests green,
+verify battery green (18208 positions), artifact unchanged at 3798 bytes (the
+ext path is minifier-hidden, so this is free).
+
+**2. Folding the tail into a big-int multiply: priced and declined.** The
+project's signature trick would put each of the 16 weight rows at its own lane
+offset and get all 16 dot products from one multiply. That needs 16 rows × 9
+inputs at stride 18 = 288 lanes = 4608 bits at 16-bit lanes (6912 at 24-bit),
+and the measured multiply-width curve (0.123µs@512b → 13.5µs@8192b, ≈n^1.7) puts
+that at **5.2µs (16-bit) to 10.3µs (24-bit) against the 3.8µs the Python loop
+costs today**. Slower. This is the same wall that closed multiply-and-split and
+the packed convolution: big-int multiplies only pay when the lane count is small.
+
+**3. "Integerizing" per se is not the lever.** Under pypy the tail's cost is
+288 multiply-adds and 32 `tanh` calls — loop iterations, not float boxing. Int
+arithmetic would execute the same number of iterations.
+
+**Verdict: do not build the integerization.** The one free win is landed; the
+rest of the tail is irreducible in this language, and the measured answer to
+"the ext family is speed-blocked" already exists in the other direction —
+**krff runs at 0.991× because rff replaces bilinear+tail entirely**. The
+family's future is rff-shaped, not tail-optimized.
+
+What the cheap fix actually buys, measured (same interleaved probe, before and
+after):
+
+| | rehab800 nps | ratio vs kb8 | implied Elo hurdle |
+|---|---|---|---|
+| before | 51317 | 0.643 | −65 |
+| after | **56050** | **0.742** | **−44** |
+
+**+21 Elo for deleting a line of dead work.** Note the arithmetic predicted only
+0.696 from the 2.7µs microbench; the measured 0.742 beats it, because dropping a
+120-step generator per evaluation relieves allocation and JIT pressure beyond
+the isolated cost of the loop itself — a reminder that microbench components
+under-count what removing them is worth.
+
+Still a −44 hurdle, so the fix helps and does not rescue the bilinear family;
+only rff does. (Cross-machine note: the before-ratio measured **0.643 on the
+laptop against 0.647 on the bench box** — independent confirmation that these
+speed ratios are machine-independent, which is what makes the local fixed-node
+labels valid.)
 
 ## 2026-08-12 — The quality term, restarted: why four metrics failed, and the label problem
 

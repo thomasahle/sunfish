@@ -198,7 +198,6 @@ def _ext(y, v, pf, bd, acc):
     nets at load).  v is already mover-signed; the phase piece count is
     derived from the board -- dev-only cost, no state to drift."""
     d = float(v) / (1 << SHIFT)
-    cnt = sum(c in _PIECES for c in bd)
     if NB:
         A = [((y >> o) & BGMASK) % M16 for o in BOFFX]
         Bv = [((y >> o) & BGMASK) % M16 for o in BOFFY]
@@ -222,6 +221,11 @@ def _ext(y, v, pf, bd, acc):
     if RFF:
         d += _rff_term(acc, pf)
     if PHASE_S:
+        # 64 squares minus the empties: one C-level count instead of a
+        # 120-step genexpr, and only for nets that actually have phase
+        # buckets (it used to run unconditionally -- a third of _ext's
+        # cost, spent on nothing, for every phase-less ext net).
+        cnt = 64 - bd.count(".")
         b = (cnt - 1) * len(PHASE_S) // 32
         d *= PHASE_S[min(max(b, 0), len(PHASE_S) - 1)]
     d = -CLAMP if d < -CLAMP else (CLAMP if d > CLAMP else d)
