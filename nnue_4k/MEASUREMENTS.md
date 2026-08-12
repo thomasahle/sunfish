@@ -46,6 +46,8 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **Screens moved to the box; stale driver found armed there** | Both box checkouts had `max_nodes`=0 and no version — the 425-game failure waiting. Isolated v2 tree; refusal verified on the box |
+| 2026-08-13 | RFP mate gate passes on the PST entry (5 vs 5) | The 5/8→3/8 loss was **eval-dependent** (NNUE eval), not a property of LMR+RFP |
 | 2026-08-13 | **Byte accounting fixed to the ENTRY; LMP threshold pre-registered** | entry **3573** (+56 for LMP), **523 spare**; nnue engine 3973. Keep LMP only at ≥1.0 Elo/byte (≥+56 Elo) |
 | 2026-08-13 | **4k entry vs classic @10+0.1 (interim)** | **~+133 ± 120 at 51/600 games**, zero time losses — same eval both sides, so this is our SEARCH. Flips the confounded fixed-node sign |
 | 2026-08-13 | **+400 decomposition checked: eval worth ~+224, not ~+160** | goal60 predates LMR/guards, so more of its +187 belongs to eval. Priority unchanged — search must still supply +232…+344 |
@@ -111,6 +113,42 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — Screens moved to the bench box; the stale driver was waiting there
+
+The fixed-node queue moved off the 12-core laptop to the bench box: 96 cores,
+load 12.4, one other job (not ours, ~23 processes, untouched). Fixed-node
+our-vs-our is the machine-independent class, so it is safe under load; anything
+against classic stays on the laptop at a time control.
+
+**The stale-driver trap was already armed on the box.** Both existing checkouts
+there — `goal60/sunfish_ui` and `tdiv/sunfish_ui` — report `max_nodes` count **0**
+and no `DRIVER_VERSION`. Any screen run against them would have silently
+degraded to a movetime match, which is exactly the failure that voided 425 games.
+Screens now run from an isolated `screens/` tree with a fresh v2 driver, and both
+directions were verified **on the box**, not locally:
+
+    fresh:  info string driver .../screens/sunfish_ui/uci.py v2 nodes fen  -> plays
+    stale:  info string driver /tmp/stale_ui_parent/sunfish_ui/uci.py v1 nodes fen
+            sunfish_ui driver ... is version 1, need >= 2 ... [refuses]
+
+The refusal **surfaces in the log** rather than being swallowed by a wrapper,
+which was the specific thing to check.
+
+Footprint: 17 processes of ours against the ≤20 rule, load 17.5 of 96 cores.
+
+### First result: RFP's mate gate passes on the PST entry
+
+    RFP mate gate: base=5 variant=5   (mate-in-1 suite, depth 4)
+
+**No regression** — where the same feature pair lost mates **5/8 → 3/8** on the
+NNUE engine. So that interaction was **eval-dependent**, not a property of
+LMR+RFP as such: with classic's piece-square tables the mate scores survive.
+Worth remembering before generalising any search-feature interaction across
+evals — the gate has to run against the eval the feature will ship with.
+
+The RFP screen is running (300 games, fixed nodes, our-vs-our), LMP chained
+behind it with its own gate.
 
 ## 2026-08-13 — Byte accounting fixed to the ENTRY, and a pre-registered threshold for LMP
 
