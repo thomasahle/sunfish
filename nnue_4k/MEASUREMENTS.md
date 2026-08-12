@@ -14,20 +14,39 @@ Entries dated 2026-08-09 through 2026-08-12 were backfilled from the commit
 messages that served as the ledger before this file existed (`git log
 --grep="Measurement record"`); those commits remain in history unchanged.
 
-## Two targets, different currencies
+## The goal is the 4k entry
 
-Since 2026-08-12 this lane serves **two separate goals** and entries say which:
+**4k has always been the goal of this workstream.** One file, ≤ 4096 bytes
+total, evaluation data included. Everything in this ledger is judged by whether
+it moves that artifact.
 
-- **The lichess bot** — no size limit. Keeps the large net (256kb8@100M, 14.9 MB).
-  Everything about strength, speed and search quality serves this.
-- **The 4k entry** — ONE file ≤ 4096 bytes, *including the evaluation data*. This
-  is a compression problem with a strength objective, and almost none of the
-  large-net work transfers.
+The lichess bot is a **testbed and a public demo — a byproduct**, not a second
+objective. "No size limit" describes the testbed; it was never a licence to
+optimise a different engine. Work on the unbounded net is justified **only
+insofar as it transfers to the 4k artifact**, and where it does not transfer,
+the entry must say so at the time rather than banking it as progress.
+
+Practical rules that follow:
+
+- Report **engine bytes and net bytes together, always**. A net size without the
+  engine size beside it is the confusion that produced the "3798, 298 under
+  budget" claim, when the real artifact was 541 KB.
+- Search work (reductions, guards, time management) **transfers** — those are
+  search bytes and they ship in the artifact.
+- Large-net eval work (width, king buckets, data scale, the ext family)
+  **largely does not**. It earned its place only as a source of teachers for
+  distillation and of instruments (shapecheck, the speed model) that apply at
+  any size.
+
+An earlier version of this section described "two targets, different
+currencies". That was drift, and the accounting entry dated 2026-08-12 records
+how much effort it cost.
 
 ## Index
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-12 | **Accounting: 71% of logged work served the unbounded net** | The 4k track was priced and never built. Drift recorded, allocation corrected |
 | 2026-08-12 | **The engine was ALREADY unstable** | Bracket crossings fire with LMR=0 — the one-value-per-key invariant was violated before any reduction; we just had no instrument |
 | 2026-08-12 | MTD guards + LMR landed (packed only) | Guards cost +26 B and 0 nodes; LMR −64% nodes at depth 5 for +36 B. Fixed-node screen running |
 | 2026-08-12 | **Packing REVERSED twice: base-3 AND lzma, joint not split** | Compose, don't choose: b3+lzma −1000 B vs raw base-3; one joint lzma stream −1007 B vs split. My earlier "split is right" was measured on incompressible data |
@@ -81,6 +100,49 @@ Since 2026-08-12 this lane serves **two separate goals** and entries say which:
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-12 — Where the effort actually went: an accounting
+
+4k has always been the goal. This is a plain count of what the ledger's 51
+logged experiments served, classified by the target they move:
+
+| served | entries | share |
+|---|---|---|
+| the unbounded net (width, buckets, data scale, ext family, quality metrics) | 36 | 71% |
+| search (transfers to the artifact: reductions, guards, time management) | 7 | 14% |
+| the 4k artifact itself (budget, packing, field study, UCI surface) | 8 | 16% |
+
+**The 4k track was priced and never built.** Every number needed to build it has
+been measured — the real budget (engine 3913 + net 183 today, against a target
+split of ~2100 + ~1900), the packing (base-3 composed with joint lzma, worth
+1007 bytes over the alternatives), the design space (ternary + mirror gives 5-50×
+the parameters of the width-5 baseline at 1920 B), the field's technique (ice4's
+entire eval is 333 characters; everyone factorises PST), and the floor to beat
+(our own 1207-byte rank-6 factorised net inside a 4008-byte artifact at
+`0c0a33a`). None of it has been turned into a trained net.
+
+Meanwhile the unbounded net was pushed from val 0.00875 to 0.00678 across roughly
+two dozen trainings, and the artifact that would actually be entered still ships
+distilled PSTs at approximately classic's strength.
+
+How the drift happened is worth recording, because it was not a single decision:
+the README claimed nets were external to the budget, which made large-net work
+look like 4k progress; when that premise was corrected, I wrote a "two targets"
+section that preserved the same allocation under a new justification. My own
+sentence — *"almost none of the large-net work transfers"* — should have
+triggered a re-plan. Instead it became a caption for a second scoreboard.
+
+What was **not** wasted: the search work (LMR's +65 is artifact bytes), the
+instruments (shapecheck, the speed model at ~100 Elo/doubling, the cp-loss
+frontier), the packing and budget measurements, and the large net itself as a
+**distillation teacher** for the small one. What was: most of the eval-side
+training, which bought val on an architecture that cannot fit.
+
+Calibration to keep the next result honest: packed128v2 is **−225 ± 65** vs molly
+and classic is **−372 ± 91**, so even the 14.9 MB engine is not competitive in
+this field. Fitting a net into 1900 bytes is **necessary, not sufficient** — a
+win against our own PST baseline is not a win against the division, and should
+never be reported as one.
 
 ## 2026-08-12 — LMR converts: +65.0 ± 43.3 at fixed nodes
 
