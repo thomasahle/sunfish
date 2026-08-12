@@ -43,10 +43,35 @@ The packed representation (`packed/pnet.py` documents every invariant):
   tail, a material-phase output scale) are implemented end-to-end and
   verified, but currently *not* deployed: see the lesson below.
 
+## Testing the artifact: PGN books only, never EPD/FEN
+
+The artifact implements exactly the UCI subset the rules mandate —
+`position startpos (moves ...)` — and has **no FEN support**: `from_fen` lives
+in `sunfish_ui/`, which the packer strips.
+
+So **the artifact can only be tested against PGN (move-sequence) opening
+books.** Point an EPD/FEN book at it and every game silently starts from the
+*standard* position while the GUI believes the opening was set — the engine
+answers `d2d4` as Black and the match measures nothing. Observed exactly that
+way here; the games ended as "illegal move" only because the wrong-position
+moves happened to be illegal, and a book sharing a legal move with the start
+position would have produced a plausible, entirely meaningless result instead.
+
+```
+fastchess ... -openings file=book.pgn format=pgn order=random   # correct
+fastchess ... -openings file=book.epd format=epd order=random   # WRONG
+```
+
+Screens of *search or eval* changes may use EPD books, because those run the dev
+build through `sunfish_ui/`, which does parse FEN. The rule is about the packed
+artifact specifically. When in doubt, check the first game's moves against the
+book position before trusting the run.
+
 ## The 4k build
 
 ```
-tools/build/pack.sh nnue_4k/sunfish_nnue.py out.packed
+tools/build/pack.sh   nnue_4k/sunfish_nnue.py out.packed   # engine only (needs SF_NET)
+tools/build/pack_entry.sh engine.py weights out.packed     # the competition artifact
 ```
 
 pyminify + xz + a 74-byte self-extracting header (bash process

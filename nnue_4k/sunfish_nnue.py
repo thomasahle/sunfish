@@ -881,16 +881,39 @@ hist = [from_board(initial)]
 def main():
     # minifier-hide start
     # Development checkout: use the full-featured UCI interface in
-    # tools/ (pondering, Hash option, spec-complete go parsing). An
-    # installed or packed sunfish has no tools/ and falls through to
-    # the built-in loop below, which is all a GUI needs.
+    # sunfish_ui/ (pondering, Hash option, spec-complete go parsing,
+    # FEN, node limits). An installed or packed sunfish has no
+    # sunfish_ui/ and falls through to the built-in loop below, which is
+    # all the 4k rules require.
     try:
         import sys
+        import inspect
+        # NOTE this puts THIS FILE'S GRANDPARENT at the front of sys.path,
+        # ahead of PYTHONPATH and the repo, so any stray sunfish_ui/ sitting
+        # there wins the import. A stale copy did exactly that once and
+        # silently turned 425 fixed-node games into movetime games -- every
+        # one a time forfeit -- because it predated `go nodes`. Hence the two
+        # rules below: say which driver resolved, and refuse to run one that
+        # is missing a capability rather than degrading into the builtin loop.
         sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        import sunfish_ui.uci
-        return sunfish_ui.uci.run(sys.modules[__name__], hist[-1])
+        import sunfish_ui.uci as _drv
     except ImportError:
-        pass
+        _drv = None
+    if _drv is not None:
+        _p = inspect.signature(_drv.go_loop).parameters
+        _nodes, _fen = "max_nodes" in _p, hasattr(_drv, "from_fen")
+        print("info string driver", _drv.__file__,
+              "nodes" if _nodes else "NO-NODES", "fen" if _fen else "NO-FEN",
+              flush=True)
+        if not (_nodes and _fen):
+            raise SystemExit(
+                "sunfish_ui driver at %s lacks required capabilities "
+                "(max_nodes=%s from_fen=%s). Refusing to fall back to the "
+                "builtin loop: that fallback is what made the last failure "
+                "silent (movetime-only, then startpos-only against an EPD "
+                "book). Remove the stale copy or fix the driver."
+                % (_drv.__file__, _nodes, _fen))
+        return _drv.run(sys.modules[__name__], hist[-1])
     # minifier-hide end
 
     searcher = Searcher()
@@ -928,7 +951,7 @@ def main():
             # movetime + epsilon and the GUI has already called the flag.
             # Keep 5% back (min 30ms) as polling slack. Measured the hard
             # way: 425 local fixed-node games, every single one a forfeit.
-            think = times.get("movetime", think * 1000) / 1000
+            think = times.get("movetime", think) / 1000
             if "movetime" in times: think -= max(think * .05, .03)
 
             start = time.time()
