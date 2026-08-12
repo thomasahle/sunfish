@@ -74,6 +74,25 @@ piece-square tables and is already within the limit.
 
 The v1 engine (92c4746) packed to 3952 bytes.
 
+### What the rules actually say
+
+From the [TCEC 4k rules](https://wiki.chessdom.org/TCEC_4k_Rules), the clauses
+that bind this engine:
+
+- One file, 4096 bytes, and nothing exempts evaluation data.
+- "Startup should be within 60s and not leave itself any files lying around."
+  So arbitrary load-time preprocessing is affordable — but a packer should use
+  process substitution rather than `mktemp`, to leave nothing behind.
+- **numpy is explicitly allowed** for Python entries. `pypy3`, `xz`, `tail`,
+  `sh`, `chmod` are all on the allowed-commands list, and "a self decompressing
+  shell script" is explicitly permitted — the packing approach here is
+  legitimate. python-chess, if ever used, would count toward the size.
+- The required UCI subset is only `uci`, `uciok`, `isready`, `readyok`,
+  `position startpos (moves ..)`, `go [wtime .. btime .. winc .. binc ..]`,
+  `bestmove`, `quit` — **FEN parsing is not required**, though unsupported
+  commands such as `stop` and `ucinewgame` must be tolerated.
+- The tournament time control is **30 min + 3 s**, and pondering is disabled.
+
 ## Net format (`.sfnn`)
 
 One JSON header line (all scalar fields — no code execution on load;
