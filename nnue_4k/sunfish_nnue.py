@@ -304,6 +304,9 @@ PROBE_CAP = 40
 # Late move reduction: reduce quiet moves whose static value is below this,
 # once past the first few in the sorted list. 0 disables (classic parity).
 LMR = 60
+# Minimum sunfish_ui driver version this engine will run against; see the
+# check in main(). Raise it in the same commit that bumps DRIVER_VERSION.
+REQUIRED_DRIVER = 2
 # Reverse futility pruning margin per ply. 0 disables.
 # HELD AT 0: implemented and gated, but it INTERACTS with LMR. On the
 # mate-in-1 suite, baseline finds 5/8, LMR alone 5/8, RFP alone 5/8 --
@@ -916,9 +919,23 @@ def main():
     if _drv is not None:
         _p = inspect.signature(_drv.go_loop).parameters
         _nodes, _fen = "max_nodes" in _p, hasattr(_drv, "from_fen")
-        print("info string driver", _drv.__file__,
+        # A capability check catches a MISSING feature; a stale copy that
+        # merely predates a FIX passes every capability test while behaving
+        # differently. The version stamp is the only thing that catches that,
+        # and it is the cheapest insurance against tonight's worst failure
+        # class -- three separate incidents from one shadowed driver.
+        _ver = getattr(_drv, "DRIVER_VERSION", 0)
+        print("info string driver", _drv.__file__, "v%d" % _ver,
               "nodes" if _nodes else "NO-NODES", "fen" if _fen else "NO-FEN",
               flush=True)
+        if _ver < REQUIRED_DRIVER:
+            raise SystemExit(
+                "sunfish_ui driver at %s is version %d, need >= %d. This is a "
+                "STALE copy shadowing the repo one: sys.path puts this file's "
+                "grandparent first, so a scratch copy wins the import and "
+                "silently behaves like an older engine (it voided 425 games "
+                "once). Delete it or refresh it from the repo."
+                % (_drv.__file__, _ver, REQUIRED_DRIVER))
         if not (_nodes and _fen):
             raise SystemExit(
                 "sunfish_ui driver at %s lacks required capabilities "

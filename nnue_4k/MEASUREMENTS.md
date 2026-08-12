@@ -46,7 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
-| 2026-08-13 | **"Fixed nodes" wasn't: the cap rewarded pruning LESS** | classic overshot 1.74× vs our 1.32× — LMR penalised for its own virtue. Fixed in-search; classic comparisons move to TIME |
+| 2026-08-13 | **"Fixed nodes" wasn't: the cap rewarded pruning LESS** | classic overshot 1.74× vs our 1.32× — LMR penalised for its own virtue. Fixed in-search (gap now 1.70× actual); classic comparisons move to TIME |
 | 2026-08-12 | **Texel screen −66.8 ± 35.5: the king table was mirrored** | A better fit playing worse was a bug in the EMIT path, not a fit-vs-play effect. Fixed; re-screening |
 | 2026-08-12 | **Texel tuning: 10.1% better fit for ZERO bytes** | +13 bytes total (3517→3530); fixed-node screen running. Tapering adds only 1.8pp more for ~400 bytes |
 | 2026-08-12 | **Our Elo/byte cost model is INVERTED vs ice4/4ku** | Incremental eval makes (piece,square) terms free and whole-position terms (mobility!) expensive — their 4.0 Elo/byte is not available to us |
@@ -136,9 +136,30 @@ Behind `minifier-hide`; artifact unchanged at 3913; 28 tests green. Re-measured,
 our engine now stops at or before the cap (0.77× of nominal, the abandoned
 iteration's work going unreported).
 
-**And that makes the classic comparison worse, not better: 2.27× in classic's
-favour.** Fixing one side cannot equalise a budget the other side ignores, and
-`sunfish.py` is out of scope. So the instrument splits:
+**And that makes the classic comparison worse, not better — 1.70× in classic's
+favour, up from 1.32×.** Fixing one side cannot equalise a budget the other side
+ignores, and `sunfish.py` is out of scope.
+
+Be careful with that number, because the fix changed what `info nodes` *means*.
+Once a cap aborts mid-iteration, the last info line is the last **completed**
+depth, so the abandoned iteration's work is never reported:
+
+| | reported | actual |
+|---|---|---|
+| our engine, cap 20000 | 13829-18502 | **20480 every time** (cap + the 2048-node check granularity) |
+| classic (no mid-iteration abort) | 34742 | 34742 |
+
+So actual-vs-actual is 34742 / 20480 = **1.70×**. Dividing reported by reported
+gives 2.26× and overstates the gap by a third — an artifact of the reporting
+change, not a real effect.
+
+**General rule, since the next person to measure this will hit the same
+ambiguity: once a cap aborts mid-iteration, `info nodes` is a lower bound on
+work done, not a measure of it.** Any fixed-node fairness check must compare
+actual consumption — instrument `searcher.nodes` at abort, or infer it from the
+cap — never the last info line.
+
+So the instrument splits:
 
 - **our-variant vs our-variant → fixed nodes**, where the rule is symmetric and
   now exact;

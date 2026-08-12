@@ -8,6 +8,16 @@ from functools import partial
 
 print = partial(print, flush=True)
 
+# Driver capability version. BUMP THIS whenever the driver gains a feature an
+# engine may depend on, and raise the engine's required minimum in the same
+# commit. A stale copy of this file shadowing the repo one (sys.path puts the
+# engine's grandparent first) silently voided 425 games, nearly voided the
+# node-cap fix, and cost a third debugging session in one night. A capability
+# check catches a MISSING feature; only a version catches a STALE one.
+#   1: go nodes / max_nodes support
+#   2: node_cap enforced inside the search (mid-iteration, not per depth)
+DRIVER_VERSION = 2
+
 # Longest a "go ponder"/"go infinite" search may run without hearing
 # "stop"/"ponderhit". Those commands carry no time budget, so the only thing
 # that ends them is the GUI -- and if that message is ever lost the search
