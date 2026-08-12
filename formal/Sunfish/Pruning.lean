@@ -154,20 +154,21 @@ definitional (`rfl`-checkable); only the branches that read
 `eval rz = v` need the quietness hypotheses. -/
 
 /-- The checkmated child: oracle-terminal, in check, exact value
-`-MATE_LOWER` -- at any guard. -/
+`-MATE_LOWER - 1` -- the flat mate value plus the ONE ply of depth the
+search still had in hand when it found the mate (mate distance). -/
 theorem cexRz_value_mm (v : Int) (g : RzPos → Bool) :
-    nullValueD2 (CexRz v) g 1 RzPos.mm = -MATE_LOWER := by
+    nullValueD2 (CexRz v) g 1 RzPos.mm = -MATE_LOWER - 1 := by
   rw [nullValueD2_of_allIllegal (CexRz v) g 0 RzPos.mm
     (by show ¬ ((0 : Int) ≤ -MATE_LOWER); decide)
     (fun h => Bool.noConfusion h) rfl]
   rfl
 
 /-- The mate-in-1 is real: the depth-2 declared value at the razored
-node is the full `MATE_LOWER`.  (`guard` is irrelevant: the pass term
-requires `2 < depth`.) -/
+node is `MATE_LOWER + 1` -- the mate band, one ply of distance in.
+(`guard` is irrelevant: the pass term requires `2 < depth`.) -/
 theorem cexRz_value_rz (v : Int) (g : RzPos → Bool)
     (hv1 : -MATE_LOWER < v) :
-    nullValueD2 (CexRz v) g 2 RzPos.rz = MATE_LOWER := by
+    nullValueD2 (CexRz v) g 2 RzPos.rz = MATE_LOWER + 1 := by
   rw [nullValueD2_of_fold (CexRz v) g 1 RzPos.rz
     (by show ¬ (v ≤ -MATE_LOWER); omega)
     (fun h => Bool.noConfusion h) rfl]
@@ -182,8 +183,8 @@ theorem cexRz_value_rz (v : Int) (g : RzPos → Bool)
 
 /-- The real-move value agrees: the crossing is not a null artifact. -/
 theorem cexRz_real (v : Int) (hv1 : -MATE_LOWER < v) :
-    negamaxD2 (CexRz v) 2 RzPos.rz = MATE_LOWER := by
-  have hmm : negamaxD2 (CexRz v) 1 RzPos.mm = -MATE_LOWER := by
+    negamaxD2 (CexRz v) 2 RzPos.rz = MATE_LOWER + 1 := by
+  have hmm : negamaxD2 (CexRz v) 1 RzPos.mm = -MATE_LOWER - 1 := by
     rw [negamaxD2_of_allIllegal (CexRz v) 0 RzPos.mm
       (by show ¬ ((0 : Int) ≤ -MATE_LOWER); decide)
       (fun h => Bool.noConfusion h) rfl]
@@ -237,7 +238,7 @@ mate: a sound fail-high report of `MATE_LOWER`. -/
 theorem cexRz_bound2 (v : Int)
     (hv1 : -MATE_LOWER < v) :
     boundD2'' (CexRz v) gF 2 RzPos.rz MATE_LOWER
-      = MATE_LOWER := by
+      = MATE_LOWER + 1 := by
   simp only [boundD2'']
   rw [if_neg (show ¬ ((CexRz v).eval RzPos.rz ≤ -MATE_LOWER) by
         show ¬ (v ≤ -MATE_LOWER); omega),
@@ -576,7 +577,7 @@ def ExtValueEqns (G : QSGame) (guard : G.Pos → Bool)
       else match d + extB G p with
         | 0 => G.eval p
         | k + 1 =>
-          if allIllegalB G p = true then terminalValue G p
+          if allIllegalB G p = true then terminalValue G (k + 1) p
           else
             foldMax (fun m => -(V k m))
               (movesAbove G (val_lower (k + 1)) p)
@@ -671,7 +672,7 @@ theorem perpSol_satisfies (x : Int)
     have he : extB CexPerp PPos.pa = 1 := rfl
     rw [he]
     show perpSol x d PPos.pa
-      = if allIllegalB CexPerp PPos.pa = true then terminalValue CexPerp PPos.pa
+      = if allIllegalB CexPerp PPos.pa = true then terminalValue CexPerp (d + 1) PPos.pa
         else
           foldMax (fun m => -(perpSol x d m))
             (movesAbove CexPerp (val_lower (d + 1)) PPos.pa)
@@ -703,7 +704,7 @@ theorem perpSol_satisfies (x : Int)
     have he : extB CexPerp PPos.pb = 1 := rfl
     rw [he]
     show perpSol x d PPos.pb
-      = if allIllegalB CexPerp PPos.pb = true then terminalValue CexPerp PPos.pb
+      = if allIllegalB CexPerp PPos.pb = true then terminalValue CexPerp (d + 1) PPos.pb
         else
           foldMax (fun m => -(perpSol x d m))
             (movesAbove CexPerp (val_lower (d + 1)) PPos.pb)
@@ -792,7 +793,7 @@ def nullValueEB (G : QSGame) (guard : G.Pos → Bool) : Nat → Nat → G.Pos �
     else match _hdd : d + extAt G b p with
       | 0 => G.eval p
       | k + 1 =>
-        if allIllegalB G p = true then terminalValue G p
+        if allIllegalB G p = true then terminalValue G (k + 1) p
         else
           foldMax (fun m => -(nullValueEB G guard (b - extAt G b p) k m))
             (movesAbove G (val_lower (k + 1)) p)
@@ -838,10 +839,10 @@ extension must key on `(pos, depth, budget)`.  The `can_ext`
 doctrine's key-must-grow branch, cf.
 `extended_value_not_key_independent` (Tricks.lean). -/
 theorem ext_budget_value_bearing :
-    nullValueEB (CexRz 0) gF 1 1 RzPos.rz = MATE_LOWER ∧
+    nullValueEB (CexRz 0) gF 1 1 RzPos.rz = MATE_LOWER + 1 ∧
     nullValueEB (CexRz 0) gF 0 1 RzPos.rz = 0 := by
   constructor
-  · have hmm : nullValueEB (CexRz 0) gF 0 1 RzPos.mm = -MATE_LOWER := by
+  · have hmm : nullValueEB (CexRz 0) gF 0 1 RzPos.mm = -MATE_LOWER - 1 := by
       rw [nullValueEB_zero]
       exact cexRz_value_mm 0 gF
     rw [nullValueEB]
@@ -849,7 +850,7 @@ theorem ext_budget_value_bearing :
     have he : extAt (CexRz 0) 1 RzPos.rz = 1 := by decide
     rw [he]
     show (if allIllegalB (CexRz 0) RzPos.rz = true
-        then terminalValue (CexRz 0) RzPos.rz
+        then terminalValue (CexRz 0) 2 RzPos.rz
         else
           foldMax (fun m => -(nullValueEB (CexRz 0) gF (1 - 1) 1 m))
             (movesAbove (CexRz 0) (val_lower 2) RzPos.rz)
@@ -857,13 +858,13 @@ theorem ext_budget_value_bearing :
               (if -(nullValueEB (CexRz 0) gF (1 - 1) (2 - 3) ((CexRz 0).pass RzPos.rz)) < MATE_LOWER then
                 max LOSS (-(nullValueEB (CexRz 0) gF (1 - 1) (2 - 3) ((CexRz 0).pass RzPos.rz)))
               else LOSS)
-            else LOSS)) = MATE_LOWER
+            else LOSS)) = MATE_LOWER + 1
     rw [if_neg (by decide)]
     rw [if_neg (fun h => Bool.noConfusion h.1)]
     have hma : movesAbove (CexRz 0) (val_lower 2) RzPos.rz = [RzPos.mm] := rfl
     rw [hma]
     simp only [foldMax]
-    show max LOSS (-(nullValueEB (CexRz 0) gF 0 1 RzPos.mm)) = MATE_LOWER
+    show max LOSS (-(nullValueEB (CexRz 0) gF 0 1 RzPos.mm)) = MATE_LOWER + 1
     rw [hmm]
     decide
   · rw [nullValueEB_zero]
@@ -894,16 +895,16 @@ is zero -- does not.  No depth relabeling recovers the recursive
 extension; deepening checking LINES genuinely requires the
 key-bearing budget. -/
 theorem ext_recursive_ne_shift :
-    nullValueEB (CexRz 0) gF 2 2 RzPos.r0 = -MATE_LOWER ∧
+    nullValueEB (CexRz 0) gF 2 2 RzPos.r0 = -MATE_LOWER - 2 ∧
     nullValueE (CexRz 0) gF 2 RzPos.r0 = 0 := by
   constructor
-  · have hmm : nullValueEB (CexRz 0) gF 1 1 RzPos.mm = -MATE_LOWER := by
+  · have hmm : nullValueEB (CexRz 0) gF 1 1 RzPos.mm = -MATE_LOWER - 2 := by
       rw [nullValueEB]
       rw [if_neg (by decide), if_neg (by decide)]
       have he : extAt (CexRz 0) 1 RzPos.mm = 1 := by decide
       rw [he]
       show (if allIllegalB (CexRz 0) RzPos.mm = true
-          then terminalValue (CexRz 0) RzPos.mm
+          then terminalValue (CexRz 0) 2 RzPos.mm
           else
             foldMax (fun m => -(nullValueEB (CexRz 0) gF (1 - 1) 1 m))
               (movesAbove (CexRz 0) (val_lower 2) RzPos.mm)
@@ -911,16 +912,16 @@ theorem ext_recursive_ne_shift :
                 (if -(nullValueEB (CexRz 0) gF (1 - 1) (2 - 3) ((CexRz 0).pass RzPos.mm)) < MATE_LOWER then
                   max LOSS (-(nullValueEB (CexRz 0) gF (1 - 1) (2 - 3) ((CexRz 0).pass RzPos.mm)))
                 else LOSS)
-              else LOSS)) = -MATE_LOWER
+              else LOSS)) = -MATE_LOWER - 2
       rw [if_pos (by decide)]
       decide
-    have hrz : nullValueEB (CexRz 0) gF 2 1 RzPos.rz = MATE_LOWER := by
+    have hrz : nullValueEB (CexRz 0) gF 2 1 RzPos.rz = MATE_LOWER + 2 := by
       rw [nullValueEB]
       rw [if_neg (by decide), if_neg (by decide)]
       have he : extAt (CexRz 0) 2 RzPos.rz = 1 := by decide
       rw [he]
       show (if allIllegalB (CexRz 0) RzPos.rz = true
-          then terminalValue (CexRz 0) RzPos.rz
+          then terminalValue (CexRz 0) 2 RzPos.rz
           else
             foldMax (fun m => -(nullValueEB (CexRz 0) gF (2 - 1) 1 m))
               (movesAbove (CexRz 0) (val_lower 2) RzPos.rz)
@@ -928,13 +929,13 @@ theorem ext_recursive_ne_shift :
                 (if -(nullValueEB (CexRz 0) gF (2 - 1) (2 - 3) ((CexRz 0).pass RzPos.rz)) < MATE_LOWER then
                   max LOSS (-(nullValueEB (CexRz 0) gF (2 - 1) (2 - 3) ((CexRz 0).pass RzPos.rz)))
                 else LOSS)
-              else LOSS)) = MATE_LOWER
+              else LOSS)) = MATE_LOWER + 2
       rw [if_neg (by decide)]
       rw [if_neg (fun h => Bool.noConfusion h.1)]
       have hma : movesAbove (CexRz 0) (val_lower 2) RzPos.rz = [RzPos.mm] := rfl
       rw [hma]
       simp only [foldMax]
-      show max LOSS (-(nullValueEB (CexRz 0) gF 1 1 RzPos.mm)) = MATE_LOWER
+      show max LOSS (-(nullValueEB (CexRz 0) gF 1 1 RzPos.mm)) = MATE_LOWER + 2
       rw [hmm]
       decide
     rw [nullValueEB]
@@ -942,7 +943,7 @@ theorem ext_recursive_ne_shift :
     have he : extAt (CexRz 0) 2 RzPos.r0 = 0 := by decide
     rw [he]
     show (if allIllegalB (CexRz 0) RzPos.r0 = true
-        then terminalValue (CexRz 0) RzPos.r0
+        then terminalValue (CexRz 0) 2 RzPos.r0
         else
           foldMax (fun m => -(nullValueEB (CexRz 0) gF (2 - 0) 1 m))
             (movesAbove (CexRz 0) (val_lower 2) RzPos.r0)
@@ -950,13 +951,13 @@ theorem ext_recursive_ne_shift :
               (if -(nullValueEB (CexRz 0) gF (2 - 0) (2 - 3) ((CexRz 0).pass RzPos.r0)) < MATE_LOWER then
                 max LOSS (-(nullValueEB (CexRz 0) gF (2 - 0) (2 - 3) ((CexRz 0).pass RzPos.r0)))
               else LOSS)
-            else LOSS)) = -MATE_LOWER
+            else LOSS)) = -MATE_LOWER - 2
     rw [if_neg (by decide)]
     rw [if_neg (fun h => Bool.noConfusion h.1)]
     have hma : movesAbove (CexRz 0) (val_lower 2) RzPos.r0 = [RzPos.rz] := rfl
     rw [hma]
     simp only [foldMax]
-    show max LOSS (-(nullValueEB (CexRz 0) gF 2 1 RzPos.rz)) = -MATE_LOWER
+    show max LOSS (-(nullValueEB (CexRz 0) gF 2 1 RzPos.rz)) = -MATE_LOWER - 2
     rw [hrz]
     decide
   · unfold nullValueE

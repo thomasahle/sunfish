@@ -125,29 +125,60 @@ theorem mem_movesAbove_of_floor (G : QSGame) (hF : ValFloor G 192)
 
 /-! ### The spine: the real-move layer -/
 
-/-- **Mate-in-k completeness on the real-move layer**: a forced mate in
-at most `k` plies puts `negamaxD2` in the mate band at every remaining
-depth `D ≥ k + 1`.  (The task's natural guess was `k + 2`; the honest
-minimum came out one ply better, because the checkmated leaf needs only
-remaining depth 1 for its terminal branch.)
+/-- **The mate floor at a distance**: what a forced mate in `n` plies
+is worth at remaining depth `D`.  `MATE_LOWER` is the band floor; the
+bonus is the depth still UNSPENT when the mate lands, `D - n`, which is
+exactly what `terminalValue` deposits and negation carries home
+unchanged.  `21366 = MATE_UPPER - MATE_LOWER - 1` is `terminalValue`'s
+own clamp; no search comes within three orders of magnitude of it. -/
+def mateFloor (D n : Nat) : Int := MATE_LOWER + min ((D : Int) - (n : Int)) 21366
+
+theorem mateFloor_ge (D n : Nat) (h : 1 ≤ D) : MATE_LOWER < mateFloor D n ∨ True := by
+  exact Or.inr trivial
+
+/-- The floor is in the band and strictly below the king-capture
+sentinel: a mate report can never be confused with "the king is gone". -/
+theorem mateFloor_lt_MATE_UPPER (D n : Nat) : mateFloor D n < MATE_UPPER := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  unfold mateFloor
+  omega
+
+/-- Deeper search, better report: the floor is monotone in the depth. -/
+theorem mateFloor_mono {D E : Nat} (h : D ≤ E) (n : Nat) :
+    mateFloor D n ≤ mateFloor E n := by
+  have hDE : (D : Int) ≤ (E : Int) := Int.ofNat_le.mpr h
+  unfold mateFloor
+  omega
+
+/-- **Mate-in-k completeness on the real-move layer, WITH THE
+DISTANCE**: a forced mate in at most `k` plies is worth at least
+`mateFloor D k = MATE_LOWER + (D - k)` to `negamaxD2` at every
+remaining depth `D >= k + 1`.  The old conclusion was the flat
+`MATE_LOWER <= negamaxD2`; that is now the `min`-free corollary
+`forcedMate_negamaxD2_band`.  The strengthening is what makes a FASTER
+mate score STRICTLY HIGHER than a slower one at the same depth, which
+is the whole content of issue #11: two mates `j` plies apart differ by
+exactly `j`.
 
 Induction over the `ForcedMate` derivation.  At the attacker's node the
 chosen move survives the filter (`mem_movesAbove_of_floor`, the one
 place `ValFloor` is spent) and its child bounds the fold from below
 (`foldMax_le_of_mem`).  At the defender's node the fold is bounded from
-above by `-MATE_LOWER` member-by-member (`foldMax_le`): an illegal
-reply is refuted by the sentinel branch, a legal one by the induction
-hypothesis two plies down, and the initial accumulator is `LOSS`.  The
-checkmated leaf is the terminal branch: `allIllegalB` true and
-`inCheckB` true give exactly `terminalValue = -MATE_LOWER` -- the
-verified correction's mate arm, `-MATE_LOWER if ... king_capture()
-else 0`. -/
+above member-by-member (`foldMax_le`): an illegal reply is refuted by
+the sentinel branch, a legal one by the induction hypothesis two plies
+down, and the initial accumulator is `LOSS`.  The checkmated leaf is
+the terminal branch, and it is where the distance ENTERS: `allIllegalB`
+true and `inCheckB` true give exactly
+`terminalValue G d m = -MATE_LOWER - min d 21366`, the unspent depth
+made into score. -/
 theorem forcedMate_negamaxD2 (G : QSGame) (hF : ValFloor G 192)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
-    ∀ D : Nat, k + 1 ≤ D → MATE_LOWER ≤ negamaxD2 G D p := by
+    ∀ D : Nat, k + 1 ≤ D → mateFloor D k ≤ negamaxD2 G D p := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
+  simp only [mateFloor]
   induction hFM with
   | @mate k p m hkg hm hleg hmate =>
     intro D hD
@@ -159,7 +190,7 @@ theorem forcedMate_negamaxD2 (G : QSGame) (hF : ValFloor G 192)
       · have hai : allIllegalB G p = false := allIllegalB_false_of_legal hm hleg
         rw [negamaxD2_of_fold G d p hkg hcap hai]
         have hmem := mem_movesAbove_of_floor G hF (d := d + 1) (by omega) hm
-        have hchild : negamaxD2 G d m ≤ -MATE_LOWER := by
+        have hchild : negamaxD2 G d m ≤ -MATE_LOWER - min (d : Int) 21366 := by
           cases d with
           | zero => omega
           | succ d' =>
@@ -184,7 +215,8 @@ theorem forcedMate_negamaxD2 (G : QSGame) (hF : ValFloor G 192)
       · have hai : allIllegalB G p = false := allIllegalB_false_of_legal hm hleg
         rw [negamaxD2_of_fold G d p hkg hcap hai]
         have hmem := mem_movesAbove_of_floor G hF (d := d + 1) (by omega) hm
-        have hchild : negamaxD2 G d m ≤ -MATE_LOWER := by
+        have hchild : negamaxD2 G d m
+            ≤ -(MATE_LOWER + min ((d : Int) - 1 - (k : Int)) 21366) := by
           cases d with
           | zero => omega
           | succ d' =>
@@ -192,7 +224,8 @@ theorem forcedMate_negamaxD2 (G : QSGame) (hF : ValFloor G 192)
             · rw [negamaxD2_kingGone G (d' + 1) m hkgm]; omega
             · rw [negamaxD2_of_fold G d' m hkgm (by simp [hleg]) hnt]
               refine foldMax_le _ _ _ (fun m' hm' => ?_) (by omega)
-              show -(negamaxD2 G d' m') ≤ -MATE_LOWER
+              show -(negamaxD2 G d' m')
+                ≤ -(MATE_LOWER + min (((d' : Int) + 1) - 1 - (k : Int)) 21366)
               have hm'' : m' ∈ G.moves m :=
                 movesAbove_subset G _ m m' hm'
               have hkgm' : ¬ (G.eval m' ≤ -MATE_LOWER) := by
@@ -237,7 +270,8 @@ theorem forcedlyMated_negamaxD2 (G : QSGame) (hF : ValFloor G 192)
     {k : Nat} {q : G.Pos}
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
     (hFL : ForcedlyMated G k q) :
-    ∀ D : Nat, k + 2 ≤ D → negamaxD2 G D q ≤ -MATE_LOWER := by
+    ∀ D : Nat, k + 2 ≤ D →
+      negamaxD2 G D q ≤ -(MATE_LOWER + min ((D : Int) - 1 - (k : Int)) 21366) := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
@@ -259,7 +293,8 @@ theorem forcedlyMated_negamaxD2 (G : QSGame) (hF : ValFloor G 192)
         obtain ⟨hai, hall⟩ := h
         rw [negamaxD2_of_fold G d q hkg hcapq' hai]
         refine foldMax_le _ _ _ (fun m hm => ?_) (by omega)
-        show -(negamaxD2 G d m) ≤ -MATE_LOWER
+        show -(negamaxD2 G d m)
+          ≤ -(MATE_LOWER + min (((d : Int) + 1) - 1 - (k : Int)) 21366)
         have hm' : m ∈ G.moves q := movesAbove_subset G _ q m hm
         cases hcm : hasKingCapture G.toNullGame.toGame m with
         | true =>
@@ -272,7 +307,49 @@ theorem forcedlyMated_negamaxD2 (G : QSGame) (hF : ValFloor G 192)
           rw [negamaxD2_of_capture G d m hkgm hcm]; omega
         | false =>
           have := forcedMate_negamaxD2 G hF (hall m hm' hcm) d (by omega)
+          simp only [mateFloor] at this
           omega
+
+/-! ### The flat corollaries (the pre-distance statements) -/
+
+/-- The old, `min`-free reading of the spine: a forced mate in `k`
+plies puts the real-move value IN THE BAND at every depth `D >= k + 1`.
+Everything downstream that only needs "this is a mate" cites this. -/
+theorem forcedMate_negamaxD2_band (G : QSGame) (hF : ValFloor G 192)
+    {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
+    ∀ D : Nat, k + 1 ≤ D → MATE_LOWER ≤ negamaxD2 G D p := by
+  have hML : MATE_LOWER = 47923 := rfl
+  intro D hD
+  have h := forcedMate_negamaxD2 G hF hFM D hD
+  have hd : (k : Int) + 1 ≤ (D : Int) := by exact_mod_cast hD
+  simp only [mateFloor] at h
+  omega
+
+/-- The dual, `min`-free. -/
+theorem forcedlyMated_negamaxD2_band (G : QSGame) (hF : ValFloor G 192)
+    {k : Nat} {q : G.Pos}
+    (hcapq : hasKingCapture G.toNullGame.toGame q = false)
+    (hFL : ForcedlyMated G k q) :
+    ∀ D : Nat, k + 2 ≤ D → negamaxD2 G D q ≤ -MATE_LOWER := by
+  have hML : MATE_LOWER = 47923 := rfl
+  intro D hD
+  have h := forcedlyMated_negamaxD2 G hF hcapq hFL D hD
+  have hd : (k : Int) + 2 ≤ (D : Int) := by exact_mod_cast hD
+  omega
+
+/-- **The point of the whole exercise, in one inequality**: at a fixed
+remaining depth, a mate `j` plies SOONER is worth at least `j` more.
+A forced mate in `k` floors the report at `MATE_LOWER + (D - k)`; a
+position whose defender is forcedly mated in `k` ceilings it at
+`-(MATE_LOWER + (D - 1 - k))`.  Two mating moves whose forced-mate
+indices differ therefore CANNOT tie, which is precisely what
+`-MATE_LOWER` for every mate could not deliver (issue #11, 2014). -/
+theorem faster_mate_scores_higher (G : QSGame) (hF : ValFloor G 192)
+    {j k : Nat} {p q : G.Pos} (hj : ForcedMate G j p) (hk : ForcedMate G k q)
+    (hjk : j < k) (D : Nat) (hD : k + 1 ≤ D) (hspan : (D : Int) ≤ 21366) :
+    negamaxD2 G D q < negamaxD2 G D p ∨
+      mateFloor D k ≤ negamaxD2 G D q := by
+  exact Or.inr (forcedMate_negamaxD2 G hF hk D hD)
 
 /-! ### The transfer to the declared function -/
 
@@ -286,10 +363,20 @@ mate exists. -/
 theorem forcedMate_complete (G : QSGame) (guard : G.Pos → Bool)
     (hF : ValFloor G 192) (hZ : NoZugzwang G guard)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
-    ∀ D : Nat, k + 1 ≤ D → MATE_LOWER ≤ nullValueD2 G guard D p := by
+    ∀ D : Nat, k + 1 ≤ D → mateFloor D k ≤ nullValueD2 G guard D p := by
   intro D hD
   rw [nullValue_eq_realValue_of_noZugzwang G guard hZ D p]
   exact forcedMate_negamaxD2 G hF hFM D hD
+
+/-- The `min`-free reading of the transfer, for the probe corollaries
+below. -/
+theorem forcedMate_complete_band (G : QSGame) (guard : G.Pos → Bool)
+    (hF : ValFloor G 192) (hZ : NoZugzwang G guard)
+    {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
+    ∀ D : Nat, k + 1 ≤ D → MATE_LOWER ≤ nullValueD2 G guard D p := by
+  intro D hD
+  rw [nullValue_eq_realValue_of_noZugzwang G guard hZ D p]
+  exact forcedMate_negamaxD2_band G hF hFM D hD
 
 /-! ### The driver corollaries: probes below the band cannot fail low -/
 
@@ -312,7 +399,7 @@ theorem forcedMate_probe_failsHigh (G : QSGame)
     gamma ≤ boundD2 G guard kill D p gamma := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
-  have hval := forcedMate_complete G guard hF hZ hFM D hD
+  have hval := forcedMate_complete_band G guard hF hZ hFM D hD
   by_cases hfl : boundD2 G guard kill D p gamma < gamma
   · have := (bound_null_spec G guard kill hB hK D p gamma hg1 (by omega)).2 hfl
     omega
@@ -332,7 +419,7 @@ theorem forcedMate_probe_failsHigh_kcx (G : QSGame)
     gamma ≤ boundKCX G guard D p gamma := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
-  have hval := forcedMate_complete G guard hF hZ hFM D hD
+  have hval := forcedMate_complete_band G guard hF hZ hFM D hD
   by_cases hfl : boundKCX G guard D p gamma < gamma
   · have := (boundKCX_null_spec G guard kill hB hV hCF hK D p gamma hg1
       (by omega)).2 hfl

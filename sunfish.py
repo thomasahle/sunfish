@@ -126,10 +126,15 @@ directions = {
 # Mate value must be greater than 8*queen + 2*(rook+knight+bishop)
 # King value is set to twice this value such that if the opponent is
 # 8 queens up, but we got the king, we still exceed MATE_VALUE.
-# When a MATE is detected, we'll set the score to MATE_UPPER - plies to get there
-# E.g. Mate in 3 will be MATE_UPPER - 6
+# A mate found with `depth` still to spend scores MATE_LOWER + depth, so a
+# mate delivered near the root outscores one delivered near the horizon:
+# among winning lines the search takes the SHORTEST, and the losing side
+# drags the mate out as long as it can (issue #11). MATE_SPAN caps the
+# bonus inside the band; the driver never gets within three orders of
+# magnitude of it.
 MATE_LOWER = piece["K"] - 13 * piece["Q"]
 MATE_UPPER = piece["K"] + 10 * piece["Q"]
+MATE_SPAN = MATE_UPPER - MATE_LOWER - 1
 
 # Constants for tuning search
 QS = 40
@@ -308,7 +313,10 @@ class Searcher:
             - if depth >= 1:
                 - if the opponent king capturable: r = MATE_UPPER
                   (note this is stronger than just gamma <= r <= s*.)
-                - if mate/stalemate returns the exact -MATE_LOWER / 0.
+                - if mate/stalemate returns the exact
+                  -MATE_LOWER - min(depth, MATE_SPAN) / 0. The mate value
+                  carries the unspent depth, so s* is still a function of
+                  (pos, depth) - see the constant block.
             - every move in tp_move is legal. When a searched real move causes
               a fail-high at depth >= 1, it is written as the score witness;
               a virtual cutoff need not have one.
@@ -455,7 +463,16 @@ class Searcher:
         if depth and not live and all(
                 pos.move(m).king_capture() for m in pos.gen_moves()):
             # We can't move, but is it a checkmate or stalemate?
-            best = -MATE_LOWER if pos.rotate(nullmove=True).king_capture() else 0
+            # The mate carries its DISTANCE: the depth we still had left when
+            # we found it. A mate one ply from the root leaves depth-1 unspent
+            # and scores that much above the band floor, a mate at the horizon
+            # barely clears it - so the winner picks the fastest mate and the
+            # loser the slowest (issue #11). Nothing but (pos, depth) enters,
+            # which is why the table needs no store/probe adjustment and keeps
+            # its one value per key: measuring the distance from the ROOT is
+            # what would have poisoned it.
+            mate = -MATE_LOWER - min(depth, MATE_SPAN)
+            best = mate if pos.rotate(nullmove=True).king_capture() else 0
 
         # Table part 2. Every search decision is gamma-independent, so all
         # bounds target one value function determined by the key and stored

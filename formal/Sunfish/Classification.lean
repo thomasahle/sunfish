@@ -460,7 +460,7 @@ def negamaxD2t (G : QSGame) : Nat → G.Pos → Int
   | d + 1, p =>
     if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
     else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
-    else if allIllegalB G p = true then terminalValue G p
+    else if allIllegalB G p = true then terminalValue G (d + 1) p
     else
       foldMax (fun m => -(negamaxD2t G d m))
         (if allAdmittedIllegalB G (d + 1) p = true then G.moves p
@@ -478,7 +478,7 @@ def nullValueD2t (G : QSGame) (guard : G.Pos → Bool) : Nat → G.Pos → Int
   | d + 1, p =>
     if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
     else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
-    else if allIllegalB G p = true then terminalValue G p
+    else if allIllegalB G p = true then terminalValue G (d + 1) p
     else
       foldMax (fun m => -(nullValueD2t G guard d m))
         (if allAdmittedIllegalB G (d + 1) p = true then G.moves p
@@ -519,7 +519,7 @@ theorem negamaxD2t_of_allIllegal (G : QSGame) (d : Nat) (p : G.Pos)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
     (hai : allIllegalB G p = true) :
-    negamaxD2t G (d + 1) p = terminalValue G p := by
+    negamaxD2t G (d + 1) p = terminalValue G (d + 1) p := by
   simp only [negamaxD2t]
   rw [if_neg hkg, if_neg hcap, if_pos hai]
 
@@ -564,7 +564,7 @@ theorem nullValueD2t_of_allIllegal (G : QSGame) (guard : G.Pos → Bool)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
     (hai : allIllegalB G p = true) :
-    nullValueD2t G guard (d + 1) p = terminalValue G p := by
+    nullValueD2t G guard (d + 1) p = terminalValue G (d + 1) p := by
   simp only [nullValueD2t]
   rw [if_neg hkg, if_neg hcap, if_pos hai]
 

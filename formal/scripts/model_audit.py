@@ -22,7 +22,7 @@ reformatting of surrounding code does not fire):
   - Position.value       (KingCaptureValHigh / HighValIsKingCapture)
   - Position.gen_moves   (Game.moves, CaptureFirst's list)
   - Position.king_capture (the substitution/in-check scan, kp = 0 note)
-  - constants            (MATE_LOWER, MATE_UPPER, QS, QS_A,
+  - constants            (MATE_LOWER, MATE_UPPER, MATE_SPAN, QS, QS_A,
                           EVAL_ROUGHNESS, TABLE_SIZE)
 
 Run from the repo root:  python formal/scripts/model_audit.py
@@ -37,7 +37,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SUNFISH = ROOT / "sunfish.py"
 
-CONSTANTS = ["MATE_LOWER", "MATE_UPPER", "QS", "QS_A", "EVAL_ROUGHNESS", "TABLE_SIZE"]
+CONSTANTS = ["MATE_LOWER", "MATE_UPPER", "MATE_SPAN", "QS", "QS_A", "EVAL_ROUGHNESS", "TABLE_SIZE"]
 
 EXPECTED = {
     "Position.gen_moves": "3453dbe008109d3d",
@@ -45,9 +45,9 @@ EXPECTED = {
     "Position.move": "69bb2460cd611c9e",
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "11d52eaa8a661352",
-    "Searcher.bound": "4edd8e042e0373c3",
+    "Searcher.bound": "2975a03de1bf3106",
     "Searcher.search": "f9aa8c81b84ff44b",
-    "constants": "02227a9fd04eb181",
+    "constants": "0daa2fe8fde249d7",
 }
 
 
@@ -105,6 +105,7 @@ ANCHORS = [
     "best, live = -MATE_UPPER, False",
     "if depth and not live and all(",
     "pos.rotate(nullmove=True).king_capture()",
+    "mate = -MATE_LOWER - min(depth, MATE_SPAN)",
     "self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)",
     "lower, upper = 1 - MATE_UPPER, MATE_UPPER",
     "if depth > 0 and pos in self.history:",
@@ -112,7 +113,7 @@ ANCHORS = [
 
 # Raw "line N" citations in the Lean sources are fragile: they rot silently.
 # We ratchet rather than ban outright -- the count may fall, never rise.
-LINE_CITATION_BUDGET = 149
+LINE_CITATION_BUDGET = 148
 
 
 def check_anchors(src):

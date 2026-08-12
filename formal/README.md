@@ -76,6 +76,48 @@ It concerns the quality of the null approximation, not the fail-soft report
 transport. The non-pawn-piece guard excludes pawn-only zugzwangs; the score
 guard and cap make null pruning more conservative in unbalanced positions.
 
+## Mate distance
+
+Checkmate is not one number.  The terminal correction assigns
+
+```python
+mate = -MATE_LOWER - min(depth, MATE_SPAN)
+```
+
+where `depth` is the search depth still UNSPENT when the mate was found and
+`MATE_SPAN = MATE_UPPER - MATE_LOWER - 1 = 21366`.  Negated up the tree the
+bonus survives unchanged, so at one fixed root depth `D` a forced mate `k`
+plies away reports `MATE_LOWER + (D - k)`: faster mates score strictly
+higher, and the losing side prefers the line that postpones the mate.  With
+the previous flat `-MATE_LOWER` every mate tied, which is issue #11 (2014).
+
+**Why distance from the horizon and not from the root.**  The value must
+stay a function of `(pos, depth)` alone -- that is the invariant the whole
+table rests on.  Unspent depth is such a function; distance from the root is
+not, and would force store/probe adjustment on every table access.
+
+**Why not a per-ply step on the score** (the other way to get distance from
+the node, `score -= sign(score)` at each negation): it is UNSOUND with
+sunfish's zero-window probe.  The step map is not injective at the band edge
+(`up(MATE_LOWER) = up(MATE_LOWER - 1)`), so no single child window can
+separate the child's fail-high from its fail-low, and the fail-soft point
+spec breaks by one at `boundD2 child (1 - gamma) = -gamma` and at
+`= 1 - gamma`.  Restoring it needs a gamma-dependent child window
+(`1 - gamma - [MATE_LOWER <= gamma < MATE_UPPER] + [gamma <= -MATE_LOWER]`),
+i.e. a change to the search contract itself.  `GameTree.lean` carries `up`
+and its non-injectivity as the machine-checked record of that dead end.
+
+Lean:
+
+| fact | theorem |
+|---|---|
+| the terminal value stays in the band at every depth | `terminalValue_bounds` |
+| it is exactly `-MATE_LOWER - depth` below the clamp | `terminalValue_exact` |
+| deeper unspent depth is worse for the mated side | `terminalValue_anti` |
+| a forced mate in `k` is worth `MATE_LOWER + (D - k)` | `forcedMate_negamaxD2` |
+| the mated dual | `forcedlyMated_negamaxD2` |
+| the old flat readings, as corollaries | `*_band` |
+
 ## Terminal positions and legality evidence
 
 The move fold maintains two independent facts:
@@ -127,6 +169,7 @@ at capturable nodes.
 | full-width move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
 | sticky legality evidence and terminal override | terminal/finalizer results in `Stalemate.lean` |
 | king-capture evaluation margins and ordering | `EvalBounds.lean` |
+| `mate = -MATE_LOWER - min(depth, MATE_SPAN)` | `terminalValue`, `terminalValue_exact` |
 | legal killer lifecycle and eviction | `Killer.lean` |
 | root versus interior null behavior | `CanNull.lean` |
 | transposition-table interval updates | `TableSwap.lean` and table results in `Stalemate.lean` |
