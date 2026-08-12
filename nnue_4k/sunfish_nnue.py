@@ -922,7 +922,14 @@ def main():
             # increment-aware budget; see sunfish_ui/uci.py for the audit
             # numbers and the safety argument
             think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1000)
-            think = times.get("movetime", think) / 1000
+            # A GUI-supplied movetime is a HARD limit that the GUI itself
+            # enforces, so spending all of it forfeits: the node counter is
+            # only checked every 2048 nodes, so the search returns at
+            # movetime + epsilon and the GUI has already called the flag.
+            # Keep 5% back (min 30ms) as polling slack. Measured the hard
+            # way: 425 local fixed-node games, every single one a forfeit.
+            think = times.get("movetime", think * 1000) / 1000
+            if "movetime" in times: think -= max(think * .05, .03)
 
             start = time.time()
             # Hard in-search deadline: iteration boundaries can be seconds
@@ -935,10 +942,21 @@ def main():
             # fail-low dive probe at an absurd gamma and is only a
             # candidate (classic's Qxc6 giveaway class).
             best, cand, d0 = None, None, 1
+            # minifier-hide start
+            # "go nodes N": equal-effort matches. Testing-only -- the 4k
+            # rules mandate no such command, so the artifact does not carry
+            # it. Without this a fixed-node match silently becomes a
+            # movetime match and every game ends in a forfeit.
+            max_nodes = times.get("nodes", 0)
+            # minifier-hide end
             try:
                 for depth, gamma, score, move in searcher.search(hist):
                     if depth > d0:
                         best, d0 = cand or best, depth
+                    # minifier-hide start
+                    if max_nodes and searcher.nodes >= max_nodes and (best or cand):
+                        break
+                    # minifier-hide end
                     if score >= gamma:
                         i, j = move.i, move.j
                         if len(hist) % 2 == 0:
