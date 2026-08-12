@@ -7,10 +7,14 @@
 #   tools/deploy.sh classic [user@host] [--check] [--sync-config]
 #   tools/deploy.sh pypi vNNNN
 #
-# Both bots live on the Oracle A1 box (classic migrated off the GCP e2-micro
-# 2026-08-12: burst-credit exhaustion cost it 2-3x nps during busy hours).
-# They share the /opt/sunfish checkout but each has its own bridge install,
-# selected by BOTDIR below.
+# Each bot has its OWN Oracle A1 box (2 OCPU / 12 GB each, us-sanjose-1):
+# classic on 147.224.58.218, nnue on 146.235.195.115. Together they consume
+# the whole Always Free A1 allowance, so neither can be grown. Both use the
+# stock /opt/lichess-bot layout; only the host differs.
+#
+# Getting the host wrong is not a no-op: two bridges holding the same
+# account's token race each other's moves (2026-08-12, live -- the loser's
+# move POST comes back 400 and the game desyncs). One box per account.
 #
 # Bot deploy: update /opt/sunfish to origin/master (fast-forward only - a box
 # with local commits aborts loudly), re-pin lichess-bot + re-apply the bundle
@@ -43,8 +47,8 @@ case $MODE in
              BOTDIR=/opt/lichess-bot
              HOST=${HOST:-ubuntu@146.235.195.115} ;;
     classic) BUNDLE=tools/lichess   UNIT=sunfish-lichess ACCOUNT=sunfish-engine
-             BOTDIR=/opt/lichess-bot-classic
-             HOST=${HOST:-ubuntu@146.235.195.115} ;;
+             BOTDIR=/opt/lichess-bot
+             HOST=${HOST:-ubuntu@147.224.58.218} ;;
     pypi)
         TAG=${HOST:?usage: deploy.sh pypi vNNNN}
         VER=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)
