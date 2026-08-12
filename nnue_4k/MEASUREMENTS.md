@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **Screens switched to SPRT mid-flight** | 300-game fixed-N resolves to ±40 while candidates are +18…+90 — the bottom half was under the noise floor of its own test |
 | 2026-08-13 | **Screens moved to the box; stale driver found armed there** | Both box checkouts had `max_nodes`=0 and no version — the 425-game failure waiting. Isolated v2 tree; refusal verified on the box |
 | 2026-08-13 | RFP mate gate passes on the PST entry (5 vs 5) | The 5/8→3/8 loss was **eval-dependent** (NNUE eval), not a property of LMR+RFP |
 | 2026-08-13 | **Byte accounting fixed to the ENTRY; LMP threshold pre-registered** | entry **3573** (+56 for LMP), **523 spare**; nnue engine 3973. Keep LMP only at ≥1.0 Elo/byte (≥+56 Elo) |
@@ -113,6 +114,42 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — Fixed-N screens were underpowered for what we are hunting
+
+Caught before spending the queue rather than after. A 300-game screen resolves
+to roughly **±40 Elo**. The candidates are ice4 items of 37-123 Elo in *their*
+engine, and our one transfer point (ice4 81 → ours +65 for LMR) suggests 50-80%
+carries over, so realistic values here are **+18 to +90**. The bottom half of
+that range sits **below the noise floor of the test designed to detect it**: a
+genuine +25 returns "+25 ± 40" and gets dropped. Across five features that is a
+systematic bias toward discarding real gains, and a +400 target cannot afford to
+throw away +25s.
+
+Switched to **SPRT** (`elo0=0 elo1=10 alpha=beta=0.05`, capped at 1000 games).
+It stops as soon as the evidence is decisive either way and keeps playing only
+while the answer is genuinely in doubt, so duds and clear winners both resolve
+cheaply and the budget flows to the marginal cases.
+
+Three things deliberately kept separate, because SPRT does not answer them:
+
+1. **The mate gate still runs first** and skips the screen on regression. SPRT
+   measures Elo; it says nothing about losing forced mates.
+2. **The byte thresholds stay pre-registered** — RFP must clear +31 Elo for its
+   31 bytes, LMP +56 for its 56 — so the keep/drop line cannot be fitted to the
+   result.
+3. **An SPRT pass is not an effect size.** The stopping rule terminates when the
+   estimate has wandered far enough from zero, which biases the terminal number
+   away from zero. A pass means "positive", not "this positive". Winners
+   therefore get a fixed-N confirmation to earn a number for the Elo/byte
+   column — affordable precisely because SPRT discarded the losers cheaply.
+
+Also recorded, since it corrupted two of my own status reports: `pgrep -fc
+"…/screens"` matched **18 unrelated `gsd-screensaver-proxy` processes**, and a
+later `pgrep -f "screens/bin/e_pst"` matched **its own ssh command line**. My
+"17 processes" and "2 orphaned engines" figures were both artefacts. Process
+counts need patterns that cannot match the query itself, and `-recover` means
+engines must be stopped by killing their fastchess parent, not the engines.
 
 ## 2026-08-13 — Screens moved to the bench box; the stale driver was waiting there
 
