@@ -7,7 +7,7 @@ stories: the search was formally verified and got *simpler* for it, two
 families of production bugs were found and fixed, the engine became a
 proper package, and a strong NNUE sibling grew up next to it.
 
-### The engine (136 clean lines, ~3.3KB packed)
+### The engine (138 clean lines, ~3.3KB packed)
 
 - **The search's promises are now theorems.** The `bound()` docstring
   states the full contract — the fail-soft bracket, the exact promises

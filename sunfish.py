@@ -556,26 +556,34 @@ def main():
             times = dict(zip(args[1::2], map(int, args[2::2])))
             side = "wb"[len(hist) % 2 == 0]
             wtime, winc = times.get(side + "time", 60000), times.get(side + "inc", 0)
-            think = min(wtime / 40 + winc, wtime / 2 - 1000)
+            # Increment-aware budget + hard in-search deadline, exactly as
+            # sunfish_ui/uci.py and the nnue loop: t/40+inc structurally
+            # underspent (+91/+46 Elo measured), and iteration boundaries
+            # alone can overrun arbitrarily at deep depths.
+            think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1000)
             think = times.get("movetime", think) / 1000
 
             start = time.time()
+            searcher.deadline = start + max(think, .05)
             # A fail high gives the move that achieved it, but only a
             # COMPLETED depth's last fail-high is trustworthy - a stop
             # inside a depth can catch a probe at a nonsense window.
             best, cand, d0 = None, None, 1
-            for depth, gamma, score, move in searcher.search(hist):
-                if depth > d0:
-                    best, d0 = cand or best, depth
-                if score >= gamma:
-                    if move is None: print("info depth", depth, "score cp", score); break
-                    i, j = move.i, move.j
-                    if len(hist) % 2 == 0:
-                        i, j = 119 - i, 119 - j
-                    cand = render(i) + render(j) + move.prom.lower()
-                    print("info depth", depth, "score cp", score, "pv", cand)
-                if (best or cand) and time.time() - start > think * 0.8:
-                    break
+            try:
+                for depth, gamma, score, move in searcher.search(hist):
+                    if depth > d0:
+                        best, d0 = cand or best, depth
+                    if score >= gamma:
+                        if move is None: print("info depth", depth, "score cp", score); break
+                        i, j = move.i, move.j
+                        if len(hist) % 2 == 0:
+                            i, j = 119 - i, 119 - j
+                        cand = render(i) + render(j) + move.prom.lower()
+                        print("info depth", depth, "score cp", score, "pv", cand)
+                    if (best or cand) and time.time() - start > think * 0.8:
+                        break
+            except Stop:
+                pass
 
             print("bestmove", best or cand or '(none)')
 
