@@ -14,10 +14,23 @@ Entries dated 2026-08-09 through 2026-08-12 were backfilled from the commit
 messages that served as the ledger before this file existed (`git log
 --grep="Measurement record"`); those commits remain in history unchanged.
 
+## Two targets, different currencies
+
+Since 2026-08-12 this lane serves **two separate goals** and entries say which:
+
+- **The lichess bot** — no size limit. Keeps the large net (256kb8@100M, 14.9 MB).
+  Everything about strength, speed and search quality serves this.
+- **The 4k entry** — ONE file ≤ 4096 bytes, *including the evaluation data*. This
+  is a compression problem with a strength objective, and almost none of the
+  large-net work transfers.
+
 ## Index
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-12 | **4k budget re-derived: the net counts** | Real artifact = **541,781 B** (engine 4488 + net 537,152), not "3798, 298 under". Packing mechanism recovered and verified running |
+| 2026-08-12 | **Field study: ice4 + 4ku eval packing** | ice4's ENTIRE eval = **333 characters**; both engines factorise PST into rank+file. Our 768×128 is 98,304 values |
+| 2026-08-12 | Historical 1207-byte net decoded | **Trained rank-6 factorisation**: 816 int8 → 4608 PST values, exact by construction |
 | 2026-08-12 | **CORRECTION: the bottleneck is `nn_cp`, not the board** | The "85% board" claim was an inference error (marginal ≠ total). Measured: net 8.1µs vs board 2.9µs of a 14.6µs move — mutable board is worth ~+15 Elo, not +71…+110 |
 | 2026-08-12 | Hot-path profile (superseded in part) | ~85%-board claim WRONG — see the correction entry above |
 | 2026-08-12 | **GOAL-LINE VERDICT: +187.0 ± 49.7 vs classic @60+1** | **272 games, zero time losses. Target +400 NOT met — but against a classic that gained ~+130 during the campaign** |
@@ -58,6 +71,157 @@ messages that served as the ledger before this file existed (`git log
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-12 — The 4k budget, re-derived: the net counts, and the mechanism already existed
+
+**Premise correction (Thomas, via b267a19): the net counts toward the 4096
+bytes.** The README's claim that nets are external and unbudgeted was, in his
+words, cope. Under TCEC 4k the entry is one file ≤ 4096 bytes and the evaluation
+data is part of it — which is precisely why the division is hard.
+
+### What the artifact actually weighs
+
+Built with the recovered two-part packer (below), current engine + our
+*smallest* net:
+
+| part | bytes |
+|---|---|
+| self-extracting head | 141 |
+| engine, minified + xz | 4488 (3724 with the ext machinery stripped, as `pack.sh` does) |
+| net (net128v2, the smallest we have) | 537,152 |
+| **total** | **541,781** |
+
+Against 4096 that is **132× over** with the smallest net and **1830× over** with
+the shipped 7.5 MB kb8 net. "3798 bytes, 298 under budget" measured the engine
+only — and that engine cannot even evaluate on its own, since the piece-square
+tables now live in the net file. The tables-in-net migration therefore saved
+**nothing**: it moved ~600 counted bytes from one counted place to another.
+
+Working budget with today's engine: 4096 − 141 (head) − 3724 (engine) = **231
+bytes for all evaluation data.** The engine has to shrink by ~1000-1500 bytes
+before a net of useful size can exist.
+
+For reference, **classic packs to 3234 bytes including its piece-square tables**
+— the engine branded 4k is the one that does not fit; the one not branded 4k
+does.
+
+### The packing mechanism, recovered and re-verified
+
+`build/pack_nnue.sh` @ `0c0a33a` (verified present) xz's the minified engine,
+appends the net **raw**, and splits them in a self-extracting head:
+
+    tail -c +130 "$0" | head -c 2672 | xz -d > $T    # engine
+    tail -c 1207 "$0" > $M                            # net
+    pypy3 -u $T $M
+
+Its committed artifact `build/sunfish_nnue.sh` is **4008 bytes = 129 head + 2672
+engine + 1207 net** — verified by `git ls-tree`. I rebuilt the same shape
+against today's toolchain (`SF_NET=$M` instead of argv) and **it builds and
+runs**: `uci` → `uciok` → `readyok` → `bestmove g1f3`. So the mechanism is not
+speculative; only the sizes are wrong.
+
+### What 1207 bytes bought (the existence proof)
+
+`models/color2.pickle` decoded: `{"ars": 6 int8 arrays, "scale": float}`, 1140
+bytes of payload. The engine at that commit expands them:
+
+    pst = np.einsum("ocp,sc->pso", nn[1].reshape(L1,6,6), nn[0].reshape(64,6))
+
+- `nn[0]` = 64×6 square embedding (384 int8)
+- `nn[1]` = 12×6×6 piece mixer (432 int8)
+- product = 6 pieces × 64 squares × 12 outputs = **4608 values from 816 bytes**
+
+then a small MLP (24→21→14→1) on the accumulated features. This is a **trained
+rank-6 factorisation**, and it is exact by construction — the model *is* the
+factorisation, so there is no approximation error. That distinction matters:
+SVD-ing our current dense 768×128 matrix to rank 8 costs 2077 bytes for a 0.52
+mean relative error, while training the factorised form directly costs 816 bytes
+and no error at all. **Approximating a big net is the wrong move; training a
+small structured one is the right one.**
+
+### The frontier, measured on real trained weights
+
+Bit-packed then xz -9e (pb=0), from the kb8 float export's plain 768-feature
+slice:
+
+| width | 8-bit | 4-bit | 2-bit |
+|---|---|---|---|
+| 128 | 94461 | 45692 | 14980 |
+| 32 | 23803 | 11600 | 3967 |
+| 16 | 11921 | 5813 | **2043** |
+| 8 | 6050 | 2971 | **1092** |
+| 4 | 3046 | 1498 | 558 |
+
+Feature-count reduction at 8 hidden, 4-bit: 768 features 2971 B → 384 features
+1486 B → 192 (piece × 32, file-mirrored) **754 B**. Low-rank SVD of the dense
+matrix is dominated everywhere (rank 8 = 2077 B at 0.52 error, worse than simply
+training 768×8 at 2-bit for 1092 B).
+
+So in a realistic ~1400-byte net budget the dense options are 768×8 @2-bit
+(1092 B) or 384×16 @2-bit (~1000 B) — while the *factorised* option buys a
+768×12-equivalent table for ~816 B, and that is before quantising the factors
+below int8.
+
+### Field study: how ice4 and 4ku fit an eval in a few hundred bytes
+
+**ice4** (MinusKelvin, Rust/C++ hybrid; read from source). Its **entire
+evaluation is one string literal**:
+
+    #define DATA_STRING L"7QM862- :G<851&\";CLIG;-&AMVWPA<.MUwfb]I:&!E[P>..."
+    #define EG_OFFSET 166
+    int get_data(int i) { return data[i] + 0x10000 * data[i+EG_OFFSET] - S(32,32); }
+
+**333 characters total = 166 midgame + 167 endgame parameters**, one character
+per parameter, biased by 32 into printable range, midgame and endgame in two
+halves of the same string, combined into a packed `S(mg,eg)` int. Zero syntax
+overhead — compare a Python list literal at ~4 bytes per value before
+compression. Their PSTs are assembled procedurally in `init_tables()` from
+rank/file components rather than stored as 64-square tables.
+
+**4ku** (kz04px): same packing idea, `S(mg,eg) = (eg<<16) + mg`, and the PST is
+explicitly **decomposed into `pst_rank[48]` + `pst_file[48]`** — 96 values
+instead of 6×64 = 384. Terms: material[6], the rank/file PSTs, mobilities[5],
+king_attacks[4], passers[4], pawn protection/threat/doubled, bishop pair.
+Bitboards throughout, with the usual modern search (aspiration windows, NMP with
+a static-eval-scaled reduction, LMR, both futility directions, TT with
+upper/lower/exact flags).
+
+**The unifying trick both use, and the historical sunfish net also used:
+factorise the piece-square table.** Rank+file decomposition (4ku, ice4) is
+literally rank-1-plus-rank-1; the old sunfish NNUE used a learned rank-6 latent.
+None of them stores a full 6×64 table, let alone 768×128.
+
+One free byte win adopted from ice4's `compress.sh`, which brute-forces 1350
+lzma parameter combinations and keeps the best: swept `lc`/`mf`/`nice` over our
+minified engine and found **4 bytes** (`lc=3,mf=hc4,nice=64` vs our fixed
+`preset=9e,pb=0`). Small because `pb=0` was already the dominant choice, but
+free and it applies to classic too.
+
+### The research problem, priced
+
+Target: strongest eval in ~1200-1600 bytes, with the engine cut to ~2400-2700.
+The bigint accumulator is retained — factors expand into the packed rows **at
+load time**, so the artifact ships ~1 KB of factors while the search still gets
+the fast packed accumulator. That is the synthesis: 2026-era bigint speed with
+2023-era packing discipline.
+
+| option | bytes | predicted strength | note |
+|---|---|---|---|
+| trained rank-6 factorisation, 768→12 (historical shape) | ~816 | the floor to beat — that artifact was weak | exact, proven to fit |
+| rank-8/12 factorisation, 768→16-24, int8 factors | ~1100-1600 | best candidate: more capacity than the floor, still fits | needs a trainer change |
+| dense 768×8 @ 2-bit | 1092 | fewer effective params than the factorised form at equal bytes | no trainer change |
+| dense 384×16 @ 2-bit (colour-shared rows) | ~1000 | as above with feature sharing | cheap to try |
+| rank+file PST, 4ku style, hand-tuned | ~200-400 | proven strong in this division, but abandons the NNUE thesis | fallback |
+| SVD of the current dense net | 2077 @ rank 8 | dominated — 0.52 rel error | **rejected, measured** |
+
+Engine-side, the ~1000-1500 bytes must come from: the sfnn loader (JSON + base64
+is expensive; raw int8 appended after the payload needs only `int.from_bytes`),
+the tables (regenerated from factors instead of stored), and a feature-by-feature
+re-examination now that the budget is real — the KCX port cost +62 bytes and the
+history heuristic already came out for being worthless.
+
+**Nothing here changes the lichess bot**, which has no size limit and correctly
+keeps the 14.9 MB net; the `nn_cp` and search findings continue to serve it.
 
 ## 2026-08-12 — CORRECTION: the bottleneck is `nn_cp`, and the mutable board is a ~+15 item
 
