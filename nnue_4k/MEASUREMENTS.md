@@ -118,7 +118,14 @@ how much effort it cost.
 ## 2026-08-13 — BASELINE FINAL: the 4k entry is +19.1 ± 12.9 over classic
 
 **600 games at 10+0.1, zero time losses, zero illegal moves. Entry 265 wins,
-classic 232, 103 draws — 52.75%, so +19.1 ± 12.9 Elo for the entry.**
+classic 232, 103 draws — 52.75%, so +19.1 ± 24.5 Elo for the entry (95%; the
+interval covers zero).**
+
+*Interval convention, stated because I got it wrong first:* my pgn recount
+produced ±12.9, which is **one sigma**, while fastchess reports ~95% (±24.49)
+— and every other interval in this ledger is fastchess's. Quoting the 1σ figure
+would have made this result look twice as precise as the ones it sits beside.
+**This ledger quotes 95% intervals throughout.**
 
 (Counted from the pgn rather than read off fastchess's summary line, which
 reports from the first-named engine's perspective and is easy to sign-flip. The
@@ -136,7 +143,7 @@ classic is ~+19 Elo**, which leaves **~+380 to find**.
 | LMR (its own fixed-node screen, **on the NNUE engine**) | +65 |
 | KCX port (measured) | −16 |
 | **expected** | **~+63…+68** |
-| **measured** | **+19.1 ± 12.9** |
+| **measured** | **+19.1 ± 24.5** |
 | **unaccounted** | **~46** |
 
 The speed term I verified independently on the box: interleaved, six openings,
