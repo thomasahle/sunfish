@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **LMR-on-PST: outcomes PRE-REGISTERED before the result** | Three readings written down in advance, incl. the live possibility that LMR is *costing* the shipped entry Elo |
 | 2026-08-13 | **Screens switched to SPRT mid-flight** | 300-game fixed-N resolves to ±40 while candidates are +18…+90 — the bottom half was under the noise floor of its own test |
 | 2026-08-13 | **Screens moved to the box; stale driver found armed there** | Both box checkouts had `max_nodes`=0 and no version — the 425-game failure waiting. Isolated v2 tree; refusal verified on the box |
 | 2026-08-13 | RFP mate gate passes on the PST entry (5 vs 5) | The 5/8→3/8 loss was **eval-dependent** (NNUE eval), not a property of LMR+RFP |
@@ -114,6 +115,38 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — LMR on the PST entry: outcomes pre-registered
+
+Written before either test reports, so the interpretation cannot be fitted to
+the number. Two instruments, two machines, one question — the box runs it at
+**fixed nodes** (our-vs-our, load-tolerant) and the laptop runs the **timed**
+counterpart at 10+0.1, which is the instrument the +400 goal is defined in.
+Agreement would be strong evidence; disagreement is itself informative, since
+LMR's whole claim is that it spends a *budget* better.
+
+**The question:** LMR's +65 was screened on the **NNUE engine**. The shipped
+entry uses **classic's PSTs**, and LMR's trigger is `val < LMR` where
+`val = pos.value(move)` — a learned positional signal in one case, a plain
+material-plus-square delta in the other. A reduction is only as good as the
+ordering signal it reduces on.
+
+| outcome | reading | what changes |
+|---|---|---|
+| **≈ +65** | transfers intact | ice4's catalogue is summable; the ~46 unaccounted Elo lives elsewhere and needs its own hunt; queue continues as planned |
+| **≈ 0…+20** | eval-triggered heuristics do not transfer to a weak eval | **move-count LMR becomes the main line** (its trigger never reads the eval); RFP/LMP/futility/QS-delta all need re-pricing before being trusted; ice4's +421 is *not* our +421, and the +400 route runs through eval-independent search plus the eval itself |
+| **negative** | LMR is **costing** the shipped entry Elo | removing it is a *free* gain — bytes back and strength up |
+
+The third case is not far-fetched and is being checked rather than dismissed:
+LMR was screened on a different eval, its threshold `LMR = 60` sits inside the
+region the tuner showed to be **flat** (identical nodes *and* moves for
+LMR ∈ {40…300}), and the baseline is ~46 Elo short of what the parts predict.
+**A feature that does not transfer does not merely fail to help.**
+
+Reporting rules for both, fixed now: **95% intervals** like everything else in
+this ledger, and since an SPRT pass is not an effect size, the number that
+enters the Elo/byte column comes from a **fixed-N confirmation**, not from the
+SPRT's terminal estimate.
 
 ## 2026-08-13 — BASELINE FINAL: the 4k entry is +19.1 ± 24.5 over classic
 
