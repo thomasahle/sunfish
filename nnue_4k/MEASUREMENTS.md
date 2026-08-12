@@ -18,6 +18,7 @@ messages that served as the ledger before this file existed (`git log
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-12 | **H2 paired form (the honest successor)** | **FAILS validation — sign flips across labeled pairs; H2 is closed, quality is fixed-node games only** |
 | 2026-08-12 | H2 optimism bias, controls | DEAD in simple form — every net is an optimist on its own losses (kb8 +105 worst) |
 | 2026-08-12 | krff gates (256×kb8×rff64) | PASS all — val 0.00729, shape 0.53%, **nps 0.991× — rff is free at width** |
 | 2026-08-12 | History heuristic removal | REMOVED — sound history measures 1.01 node ratio; the −49% was the bug |
@@ -52,6 +53,61 @@ messages that served as the ledger before this file existed (`git log
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-12 — H2 paired form: fails validation, and H2 is closed
+
+The successor to the dead unpaired form: `bias_A − bias_B` on identical
+positions, candidate vs incumbent, on the candidate's own-game positions, with
+the reverse pairing as the tautology control.
+
+First, a structural simplification worth recording — in the paired form the
+oracle **cancels exactly**:
+
+    bias_A − bias_B = (score_A − SF) − (score_B − SF) = score_A − score_B
+
+No Stockfish is needed at all, and since both nets carry the same pst base the
+difference isolates the net residual. The metric is free to compute.
+
+Results (head-to-head games only; `D_X` = mean(score_X − score_other) over
+positions from games X lost, X to move):
+
+| pair | D_candidate | D_incumbent | asymmetry | measured play ΔElo |
+|---|---|---|---|---|
+| rehab800 vs kb8 | +86.9 ± 1.8 (n=3688) | +119.8 ± 2.6 (n=2208) | **−32.9** | −70.4 |
+| kbbil vs kb8 | +94.8 ± 2.0 (n=3846) | +125.0 ± 2.7 (n=2222) | **−30.2** | −83.2 |
+| kb8 vs 256kb8@100M | +122.9 ± 1.7 (n=3771) | +68.4 ± 2.0 (n=2637) | **+54.6** | −52.5 |
+
+**Neutral control** (same net pairs, mean score difference over the 1500 frozen
+non-selected shapecheck FENs): rehab −3.2 ± 2.9, kbbil −3.9 ± 3.3, w256 −4.0 ±
+2.6 cp. All zero within noise. So the +68…+125 numbers above are **entirely a
+selection effect**, not a per-net eval offset — the selection effect is real and
+enormous, and it points the same way for both members of every pair, which is
+the tautology in quantified form.
+
+**The asymmetry fails to rank play.** In the first two pairs the worse net has
+the *smaller* own-loss optimism (asymmetry negative); in the third the worse net
+has the *larger* (asymmetry positive). The sign flips while the label's sign
+does not — 2-of-3 with opposite thirds is not a predictor at n=3.
+
+The cleanest statement of the failure: `D_kb8` is **+119.8 / +125.0 / +122.9**
+against three different opponents — essentially constant — while kb8's play
+result against those same opponents varies from clearly winning (vs rehab, vs
+kbbil) to clearly losing (vs w256). A quantity that stays fixed while the label
+moves carries no information about the label.
+
+**Consequence, stated plainly: H2 is closed.** Both forms of the offline
+optimism metric are dead, joining timed cp-loss, agreement, and quiet val on the
+list of offline proxies that do not measure play quality. Quality is measured by
+**fixed-node games (H1)** and nothing else this lane has built. H3 (the
+loss-function change) is NOT sketched: it was conditional on H2 validating, and
+designing a training objective around a signal that failed its own validation is
+exactly the mistake this ledger exists to prevent. If a quality-side training
+lever is wanted, it must be derived from fixed-node game outcomes — which is
+what the H1 battery will produce.
+
+Cost of the whole H2 arc: ~2 hours of box time, no games. That is the argument
+for cheap offline instruments even when they fail — this one cost less than a
+single 200-game screen and removed a whole class of hypotheses.
 
 ## 2026-08-12 — H2 optimism bias: the simple form dies on its controls
 
