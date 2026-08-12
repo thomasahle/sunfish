@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **"Fixed nodes" wasn't: the cap rewarded pruning LESS** | classic overshot 1.74× vs our 1.32× — LMR penalised for its own virtue. Fixed in-search; classic comparisons move to TIME |
 | 2026-08-12 | **Texel screen −66.8 ± 35.5: the king table was mirrored** | A better fit playing worse was a bug in the EMIT path, not a fit-vs-play effect. Fixed; re-screening |
 | 2026-08-12 | **Texel tuning: 10.1% better fit for ZERO bytes** | +13 bytes total (3517→3530); fixed-node screen running. Tapering adds only 1.8pp more for ~400 bytes |
 | 2026-08-12 | **Our Elo/byte cost model is INVERTED vs ice4/4ku** | Incremental eval makes (piece,square) terms free and whole-position terms (mobility!) expensive — their 4.0 Elo/byte is not available to us |
@@ -106,6 +107,56 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — "Fixed nodes" was not fixed: the cap rewarded pruning less
+
+Verified independently before acting. At a 20000-node cap over six opening
+lines:
+
+| engine | mean nodes | overshoot |
+|---|---|---|
+| classic | 34742 | **1.74×** |
+| pstbase | 26336 | 1.32× |
+| psttuned | 26422 | 1.32× |
+
+`go nodes N` was checked only **between completed depths**, so an engine sails
+past the cap by however large its last iteration was.
+
+**The mechanism is perverse: a per-depth cap systematically rewards the engine
+that prunes LESS.** Classic has no LMR, so its iterations are bigger and it
+overshoots further — LMR was being penalised by the measurement for precisely
+the property that makes it good, by ~30% of nodes, worth about +38 Elo at 100
+Elo/doubling. That covers classic's entire apparent +10.5 over `pstbase`, and it
+explains the transitivity violation in the interim table (tuned-vs-classic read
+−103 where base+tune implied −37).
+
+**Fix:** the cap is enforced inside `bound()` at the same granularity as the
+deadline (every 2048 nodes), so the search aborts mid-iteration like a timeout.
+Behind `minifier-hide`; artifact unchanged at 3913; 28 tests green. Re-measured,
+our engine now stops at or before the cap (0.77× of nominal, the abandoned
+iteration's work going unreported).
+
+**And that makes the classic comparison worse, not better: 2.27× in classic's
+favour.** Fixing one side cannot equalise a budget the other side ignores, and
+`sunfish.py` is out of scope. So the instrument splits:
+
+- **our-variant vs our-variant → fixed nodes**, where the rule is symmetric and
+  now exact;
+- **anything vs classic → time control**, which has no such confound and is the
+  instrument "+400 Elo over classic" is actually defined in.
+
+A 600-game 10+0.1 baseline (PST entry vs classic) is queued behind the running
+RR so the two never share the CPU.
+
+**What survives:** `psttuned` vs `pstbase` is fair (overshoot ratio 1.03×,
+median 1.06) — the Texel verdict stands on its own. The LMR screen (+65.0 ±
+43.3) is safe and if anything understated, since the no-LMR side was the one
+getting extra nodes.
+
+**Third occurrence tonight of the stale-driver trap:** the first re-probe showed
+the fix doing nothing, because the engines were loading a scratchpad copy of
+`sunfish_ui` that predated the edit. The capability check added earlier catches a
+*missing* feature, not a *stale* one — a version stamp would.
 
 ## 2026-08-12 — A better fit that played 67 Elo worse: the king table was mirrored
 
