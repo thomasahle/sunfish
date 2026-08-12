@@ -28,6 +28,7 @@ Since 2026-08-12 this lane serves **two separate goals** and entries say which:
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-12 | **4k design space priced (weights RAW, not xz)** | Ternary base-3 packing + factorisation beat the width-5 baseline **5-50×** in parameters at 1920 B; width is ~free in speed at this scale |
 | 2026-08-12 | **4k budget re-derived: the net counts** | Real artifact = **541,781 B** (engine 4488 + net 537,152), not "3798, 298 under". Packing mechanism recovered and verified running |
 | 2026-08-12 | **Field study: ice4 + 4ku eval packing** | ice4's ENTIRE eval = **333 characters**; both engines factorise PST into rank+file. Our 768×128 is 98,304 values |
 | 2026-08-12 | Historical 1207-byte net decoded | **Trained rank-6 factorisation**: 816 int8 → 4608 PST values, exact by construction |
@@ -71,6 +72,122 @@ Since 2026-08-12 this lane serves **two separate goals** and entries say which:
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-12 — The 4k design space, priced: weights are RAW, and width is nearly free
+
+Two premise corrections applied before pricing. **(1) The weight blob is appended
+RAW, not compressed** — the historical packer xz's the engine *source* and
+concatenates the model untouched, so for the blob what matters is bit-packing and
+parameter count, never entropy; only the engine source benefits from
+compressibility and from ice4's lzma parameter search. **(2) numpy is permitted
+by the TCEC rules**, so arbitrary load-time expansion is free in bytes. Local
+note, not a rules matter: our pypy3 has no numpy on either the laptop or the
+bench box, so any numpy-using build needs it installed for pypy or must fall
+back to CPython. Measured, that fallback costs **83552 nps (pypy3) vs 39424 nps
+(CPython) = 2.12×, about −110 Elo** — painful but survivable, and much less than
+the order of magnitude I expected, because this engine is big-integer heavy and
+CPython's bigint operations are C-level too. Load-time-only numpy is still the
+safe form: import it, expand into the packed rows, never touch it in search.
+
+### Width is nearly free at 4k scale — my earlier arithmetic was wrong
+
+`nn_cp` costs 6.43 µs at width 256 (512 lanes), i.e. **0.025 µs per lane**, while
+board mechanics run ~20 µs per node. So at the widths a 4k net can afford:
+
+| width | nn_cp | node | vs width 5 | speed Elo |
+|---|---|---|---|---|
+| 5 | 0.13 µs | 20.1 µs | 1.000× | 0 |
+| 25 | 0.63 | 20.6 | 0.976× | −3 |
+| 50 | 1.26 | 21.3 | 0.947× | −8 |
+| 100 | 2.51 | 22.5 | 0.894× | −16 |
+| 256 | 6.43 | 26.4 | 0.761× | −40 |
+
+I previously priced width-64 at "−368 Elo" by scaling the *whole node* with
+width. That was wrong: only the eval scales, and it is a small share at these
+sizes. **Correct conclusion: below width ~50 the byte budget is the binding
+constraint, not speed** — so the design should spend everything on parameters
+per byte and stop worrying about width.
+
+### The ten ideas, priced in RAW bytes at Thomas's 1920-byte budget
+
+Baseline: 384 features (6 pieces × 64 squares) × 5 hidden × int8 = 1920 B.
+
+| scheme | width at 1920 B | free params | note |
+|---|---|---|---|
+| dense int8 | 5 | 1,920 | **the baseline** |
+| dense int4 (2/byte) | 10 | 3,840 | trivial to implement |
+| mirror-folded dense int8 (32 files) | 10 | 3,840 | pure symmetry win |
+| factorised rank-12 int8 | 16 | 1,920 | rank-limited |
+| rank+file (4ku style) | 20 | 7,680 | no full 64-sq table |
+| **dense ternary, base-3 packed** | **25** | **9,600** | 5 values/byte, 3⁵=243<256 |
+| shared 8-basis int8 | 29 | 1,904 | 8 spatial bases + coeffs |
+| DCT top-10 per table | 32 | 1,920 | smooth-PST prior |
+| factorised rank-6 int8 | 42 | 1,896 | the historical scheme |
+| **mirror + ternary** | **50** | **19,200** | symmetry × packing, stacks |
+| factorised rank-6 ternary | 256 | 9,600 | rank 6 caps real capacity |
+
+Two honest caveats on that table. The factorised rows buy *width* but not
+independent capacity — a rank-6 scheme constrains the 384×W matrix to six
+spatial patterns however wide it gets, so "width 256" there is not comparable to
+a dense width 256; its value is extra hidden units with independent clamps, not
+extra spatial resolution. And the "free params" column counts stored numbers, not
+expressiveness.
+
+The clear winners are the ones that reduce **bits per weight** and exploit
+**symmetry**, because both raise parameters *and* keep full rank: ternary base-3
+packing gives 5 values/byte deterministically (no compressor in the loop), and
+folding the board about the king's file halves the table. Together they are
+**19,200 parameters at width 50 in the same 1920 bytes — 10× the baseline's
+parameters** at a measured −8 Elo speed cost.
+
+### Seeded random projection: tested first, and it does not dominate
+
+The cheap decisive test — how well can a *fixed random* basis represent the
+trained embedding, against the optimal learned basis of the same width (SVD,
+fraction of unexplained variance):
+
+| width | learned | random | ratio |
+|---|---|---|---|
+| 4 | 0.405 | 0.994 | 2.5× |
+| 16 | 0.257 | 0.980 | 3.8× |
+| 64 | 0.084 | 0.917 | 10.9× |
+| 256 | 0.000 | 0.670 | — |
+
+A random basis needs roughly **100× the width** for comparable fidelity: random
+at 256 is still worse than learned at 4. The input space is sparse
+piece-square indicators, and Johnson-Lindenstrauss preserves distances, not the
+specific structure a learned basis captures. It stores zero basis bytes, and
+width is cheap, so it is not *absurd* — but at equal width it is far worse than
+learned, and its byte advantage is beaten outright by ternary+mirror, which is
+full-rank and learned.
+
+Where seeded random features **have** already earned their place in this project
+is as an *addition* rather than a replacement: the rff work (random Fourier
+features, a seeded random projection with a cosine read-out) produced the largest
+single-feature val gain we ever measured (−3.9%) and krff runs at 0.991× speed.
+That is the correct role for idea (a) — free extra nonlinear width on top of a
+learned core, not a substitute for it.
+
+### What to build
+
+1. **Ternary base-3 packing + king-file mirror**, dense and learned, trained with
+   a ternary-aware scheme (straight-through estimator, per-row scale). Target
+   width 40-50 at ~1900 B. This is the option that beats the width-5 baseline by
+   10× in parameters with a −8 Elo speed cost and no rank ceiling.
+2. **Distillation from the big net as teacher** (idea h) — orthogonal, stacks
+   with any representation, and the 14.9 MB net is a far better target than raw
+   labels for a model this small.
+3. **rff lanes on top** if bytes remain, since they are free-width and already
+   validated here.
+
+Deferred with reasons: compression-aware training (moot — the blob is raw);
+low-rank/tensor decompositions (rank ceiling, and SVD of a dense net measured
+badly); DCT and shared-basis (dominated by ternary+mirror on parameters, worth
+revisiting only if training shows the smooth prior helps); feature hashing and
+codebooks (real but second-order once bits-per-weight is already minimal).
+
+Still to measure before building: joint xz of engine+weights versus the split
+scheme, which the historical packer chose without recording a comparison.
 
 ## 2026-08-12 — The 4k budget, re-derived: the net counts, and the mechanism already existed
 
