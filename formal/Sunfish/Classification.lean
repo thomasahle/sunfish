@@ -109,10 +109,10 @@ theorem eventual_classification (G : QSGame) (guard : G.Pos → Bool)
   have hML : MATE_LOWER = 47923 := rfl
   refine ⟨?_, ?_, ?_⟩
   · intro k hFM D hD
-    exact forcedMate_complete G guard hF hZ hFM D hD
+    exact forcedMate_complete_band G guard hF hZ hFM D hD
   · intro k hFMd D hD
     rw [nullValue_eq_realValue_of_noZugzwang G guard hZ D p]
-    exact forcedlyMated_negamaxD2 G hF hcapf hFMd D hD
+    exact forcedlyMated_negamaxD2_band G hF hcapf hFMd D hD
   · intro hnFM hnFMd D
     constructor
     · by_cases hlo : nullValueD2 G guard D p ≤ -MATE_LOWER
@@ -143,8 +143,8 @@ theorem classification_exclusive (G : QSGame) (hF : ValFloor G 192)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)
     (hFM : ForcedMate G k p) (hFMd : ForcedlyMated G k' p) : False := by
   have hML : MATE_LOWER = 47923 := rfl
-  have h1 := forcedMate_negamaxD2 G hF hFM (k + k' + 2) (by omega)
-  have h2 := forcedlyMated_negamaxD2 G hF hcapf hFMd (k + k' + 2) (by omega)
+  have h1 := forcedMate_negamaxD2_band G hF hFM (k + k' + 2) (by omega)
+  have h2 := forcedlyMated_negamaxD2_band G hF hcapf hFMd (k + k' + 2) (by omega)
   omega
 
 /-- The "eventual" reading, win side: a forced mate exists at SOME
@@ -157,7 +157,7 @@ theorem eventual_mate_iff (G : QSGame) (guard : G.Pos → Bool)
     (∃ k, ForcedMate G k p) ↔ ∃ D, MATE_LOWER ≤ nullValueD2 G guard D p := by
   constructor
   · rintro ⟨k, hFM⟩
-    exact ⟨k + 1, forcedMate_complete G guard hF hZ hFM (k + 1) (Nat.le_refl _)⟩
+    exact ⟨k + 1, forcedMate_complete_band G guard hF hZ hFM (k + 1) (Nat.le_refl _)⟩
   · rintro ⟨D, hD⟩
     exact ⟨D, forcedMate_of_nullValueD2 G guard hF hQ hNM D p hcapf hD⟩
 
@@ -174,7 +174,7 @@ theorem eventual_mated_iff (G : QSGame) (guard : G.Pos → Bool)
   · rintro ⟨k, hFMd⟩
     refine ⟨k + 2, ?_⟩
     rw [nullValue_eq_realValue_of_noZugzwang G guard hZ]
-    exact forcedlyMated_negamaxD2 G hF hcapf hFMd (k + 2) (Nat.le_refl _)
+    exact forcedlyMated_negamaxD2_band G hF hcapf hFMd (k + 2) (Nat.le_refl _)
   · rintro ⟨D, hD⟩
     cases D with
     | zero =>

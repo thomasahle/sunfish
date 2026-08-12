@@ -555,7 +555,7 @@ theorem forcedMate_ext (G : QSGame) (guard : G.Pos → Bool)
   unfold nullValueE
   have he : extB G p = 1 := by unfold extB; rw [if_pos hic]
   rw [he]
-  exact forcedMate_complete G guard hF hZ hFM (D + 1) (by omega)
+  exact forcedMate_complete_band G guard hF hZ hFM (D + 1) (by omega)
 
 /-! ### The recursive at-entry form has no declared value function -/
 
