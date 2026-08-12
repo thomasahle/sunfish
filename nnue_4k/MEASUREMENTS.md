@@ -107,7 +107,7 @@ Mate-in-1 root score by depth, shipped: 47938, 47953, 47968, 47983, 47998,
 | bratko lockstep @d6 | 24 | root move **0**, node count **0**, score differs 1 |
 | mate2 lockstep @d6 | 212 | root move **0**, node count differs 94, score differs 212 |
 | conversion, won endgames @d5, cap 40 plies | 60 | 29/60 converted for both, mean **10.52 plies both**, **0 differences** |
-| forced-mate-in-3 race @d8, attack and defend | 40 | **every playout identical** |
+| forced-mate-in-3 race @d8, attack and defend | 40 | **every playout identical**; attack 3.00 plies both, defend 3.00 plies both |
 | lost defender with a real choice of how long to hold out @d6 | 60 | both play the LONGEST defence **60/60** |
 
 The mate2 row is the sharp one: on a corpus where mates ARE resolved the new
@@ -117,7 +117,8 @@ played is the same in all 212. So this is not a no-op internally; it is a
 no-op at the move.
 
 Byte-identical to the one-point-per-ply run on the conversion and race
-probes -- `diff` of the two 60-position conversion logs is empty. The
+probes -- `diff` of the two 60-position conversion logs is empty, and so is
+`diff` of the two 40-position race logs. The
 conversion probe is the one that was supposed to move, and it did not:
 10.52 vs 10.52 plies, zero positions differing, at one point per ply and at
 fifteen.
