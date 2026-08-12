@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-12 | **Engine byte decomposition: the thesis is in arithmetic trouble** | NNUE machinery 705 B + 553 B richer core = the 1258 overrun. PST entry fits at 3787 (309 spare); NNUE entry leaves **183 B** for the net |
 | 2026-08-12 | **Accounting: 71% of logged work served the unbounded net** | The 4k track was priced and never built. Drift recorded, allocation corrected |
 | 2026-08-12 | **The engine was ALREADY unstable** | Bracket crossings fire with LMR=0 — the one-value-per-key invariant was violated before any reduction; we just had no instrument |
 | 2026-08-12 | MTD guards + LMR landed (packed only) | Guards cost +26 B and 0 nodes; LMR −64% nodes at depth 5 for +36 B. Fixed-node screen running |
@@ -100,6 +101,82 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-12 — The engine is the problem, and the arithmetic may kill the thesis
+
+**Correction first.** The figure "3913" has been circulating in this ledger as if
+it were an artifact size. It is **engine only, with zero evaluation data**. Run
+the packed artifact in an empty directory with `SF_NET` unset and it dies with
+`FileNotFoundError: net128kb8.sfnn` before making a move — classic packed the
+same way plays immediately. **The nnue artifact is not a valid entry at any
+size.** That conflation is the same cope the README carried, and it survived
+because nobody built the thing and ran it in an empty directory. Every entry
+from here reports engine bytes and eval bytes separately, with the packer that
+produced them (`tools/build/pack.sh`).
+
+### Per-feature cost, by stripping and repacking
+
+| variant | packed | delta |
+|---|---|---|
+| current engine, no eval data | 3913 | — |
+| −LMR | 3868 | **−45** |
+| −RFP (disabled branch) | 3882 | **−31** |
+| −king buckets (B>1 paths) | 3865 | **−48** |
+| −MTD guards | 3918 | **+5** |
+| `nn_cp` stubbed, constants left | 4222 | **+309** |
+
+The last two are lzma artefacts, not free lunches, and are recorded as a warning
+about this method: removing code changes the compression context, and stubbing
+`nn_cp` while leaving its SWAR constants defined-but-unused *destroys* shared
+context and makes the file bigger. A feature's cost must be measured by removing
+the feature **and everything only it uses**.
+
+Done properly — loader, SWAR constants, head and accumulator plumbing all
+removed together:
+
+| | packed |
+|---|---|
+| our engine, no eval data | 3913 |
+| same engine, packed-NNUE machinery removed | **3208** |
+| **→ NNUE machinery** | **705** |
+| classic engine alone | 2655 |
+| **→ our non-NNUE core vs classic's** | **+553** |
+
+So the 1258-byte overrun is **705 bytes of NNUE machinery + 553 bytes of richer
+search and UCI** (of which LMR 45, the dead RFP branch 31 and king buckets 48 are
+measured; the rest is the KCX port and the wider shell).
+
+### The arithmetic that decides the thesis
+
+| entry | composition | total | spare |
+|---|---|---|---|
+| **PST** | engine 3208 + classic's eval 579 | **3787** | **309** |
+| **NNUE** | engine 3913 (incl. 705 machinery) + blob | 4096 | **blob ≤ 183 B** |
+
+**A PST-based version of our engine already fits, with 309 bytes to spare — and
+it keeps our search work, including LMR's +65.** That is a valid 4k entry today,
+which we have never had.
+
+The NNUE entry has **183 bytes for the net**. To afford even a 1200-byte blob the
+engine must reach 2896, i.e. cut 1017 bytes while *keeping* the 705 of machinery
+— which requires the non-NNUE core to shrink to 2191 against classic's 2655.
+Classic is already golfed and does less than we do.
+
+**So the NNUE-in-4k thesis is in arithmetic trouble before any question of net
+quality.** The re-stated question — can any eval beat classic's 579-byte PST per
+byte — is now sharper than intended: the net must beat it while carrying 705
+bytes of decode machinery it cannot amortise, on a budget with 309 bytes of
+headroom in the PST configuration.
+
+The honest read: **rank+file/PST is the main line, not the fallback.** The small
+nets now training (N=8/16/32 ternary) still answer a real question — what a
+trained eval is worth per byte — but they are being priced against a baseline
+that is currently winning on arithmetic alone. If they lose, the 4k entry is a
+golfed classic-style engine carrying our search improvements, and that is a
+perfectly good entry.
+
+Calibration unchanged and worth repeating: packed128v2 is −225 ± 65 vs molly,
+classic −372 ± 91. Fitting in 4096 is necessary, not sufficient.
 
 ## 2026-08-12 — Where the effort actually went: an accounting
 
