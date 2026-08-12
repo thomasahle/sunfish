@@ -36,7 +36,7 @@ greeting:
   # The 2026-08-11 incident: a 156+ char greeting was not just dropped -- its
   # rejected POST cancelled the bot's first move in every game.
   hello: "Hi {opponent}! I'm sunfish-nnue by Thomas D. Ahle - my whole neural net lives in one big integer. Good luck!"
-  goodbye: "Good game! Play me again any time, or read my source at github.com/thomasahle/sunfish"
+  goodbye: "Good game! Thanks for playing!"
   hello_spectators: "Hi! I'm {me}, a tiny open-source Python NNUE engine (github.com/thomasahle/sunfish)"
   goodbye_spectators: "Good game! Thanks for watching!"
 
