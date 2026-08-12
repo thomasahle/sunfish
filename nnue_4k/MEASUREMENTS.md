@@ -46,6 +46,8 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **+400 decomposition checked: eval worth ~+224, not ~+160** | goal60 predates LMR/guards, so more of its +187 belongs to eval. Priority unchanged — search must still supply +232…+344 |
+| 2026-08-13 | RR stopped early; Texel trend isolated | Bug was ~50 Elo of the −66.8; residual **−16.7 ± 31.2** covers zero. TC baseline unblocked and running |
 | 2026-08-13 | **"Fixed nodes" wasn't: the cap rewarded pruning LESS** | classic overshot 1.74× vs our 1.32× — LMR penalised for its own virtue. Fixed in-search (gap now 1.70× actual); classic comparisons move to TIME |
 | 2026-08-12 | **Texel screen −66.8 ± 35.5: the king table was mirrored** | A better fit playing worse was a bug in the EMIT path, not a fit-vs-play effect. Fixed; re-screening |
 | 2026-08-12 | **Texel tuning: 10.1% better fit for ZERO bytes** | +13 bytes total (3517→3530); fixed-node screen running. Tapering adds only 1.8pp more for ~400 bytes |
@@ -107,6 +109,89 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — The +400 decomposition, checked: the eval half is bigger than it looks
+
+Asked to sanity-check the split rather than accept it. The shape is right and the
+priority that follows from it is right; one term is misattributed, and it matters
+for how much eval headroom we think exists.
+
+**The confound:** the two measurements being subtracted come from **different
+search stacks**. Verified directly on the goal60 engine — `grep` for LMR,
+`PROBE_CAP`, `node_cap`, history: **all zero**, only `king_capture` present. That
+engine had the KCX port and the time formula and nothing else; LMR and the MTD
+guards landed today, after it played.
+
+So with `S` = search contribution vs classic and `E` = the net eval's
+contribution over classic's PST:
+
+    goal60   measured  S_old + E = +187 ± 50     (KCX-era search)
+    pstbase  measures  S_new     ≈ +28 (prelim)  (KCX + guards + LMR)
+    and      S_old = S_new − L                   (L = LMR's contribution)
+
+| assumed L | implied S_old | implied **E** |
+|---|---|---|
+| 0 (same search both sides) | +28 | +159 |
+| +30 | −2 | +189 |
+| **+65** (LMR's screened value) | **−37** | **+224** |
+
+**So the net eval is probably worth ~+224, not ~+160** — the engine that scored
++187 had a *weaker* search than today's, so more of that +187 belongs to the
+eval. A pleasant correction, but it does **not** change the priority:
+
+| tiny eval captures | its Elo | search must then supply |
+|---|---|---|
+| 25% of the big net | +56 | **+344** |
+| 50% | +112 | **+288** |
+| 75% | +168 | **+232** |
+
+Even at an implausible 75% capture in ~566 bytes, **search must supply more than
+the entire current gap**. Search is the larger half, exactly as claimed. For
+reference, ice4's own stack sums to **+421 Elo for 131 bytes**
+(LMR 81, LMP+improving 123, corrhist 70, RFP 58, history 52, IIR 37) — which is
+where a +232…+344 search contribution would have to come from, and is the reason
+the modern-search track outranks the eval track tonight.
+
+Two caveats on the arithmetic itself, since it is doing a lot of work: Elo
+contributions are assumed **additive**, which they are not exactly (a better eval
+makes reductions safer, so search and eval interact), and `S_new ≈ +28` is a
+preliminary from a confounded fixed-node run. The TC baseline replaces it.
+
+## 2026-08-13 — RR stopped early: the critical measurement was queued behind discards
+
+The 3-way RR was at 315/900 with ~400 of the remaining games belonging to
+`classic` pairings that the 1.70× node confound makes uninterpretable — and the
+10+0.1 TC baseline, which calibrates the whole +400 goal, was gated behind them.
+Stopped it; the TC baseline started immediately and is running clean.
+
+I considered keeping the classic pairings as a cross-check on the confound and
+decided against it: the confound was already measured **directly** (actual
+consumption 34742 vs 20480), so a confounded play result adds nothing a clean
+measurement has not already given.
+
+**Preserved, quoted separately, not to be merged with any later run**
+(`rr3_partial_313games.pgn`, 315 games):
+
+| pairing | W-D-L | n | Elo | status |
+|---|---|---|---|---|
+| classic v pstbase | 45-25-35 | 105 | +33.2 ± 29.7 | **unusable** (1.70× confound) |
+| classic v psttuned | 62-13-29 | 104 | +114.2 ± 33.3 | **unusable** |
+| pstbase v psttuned | 46-17-41 | 104 | **+16.7 ± 31.2** | fair (overshoot ratio 1.03×) |
+
+### The Texel trend is the real finding
+
+| build | Texel tune vs untuned |
+|---|---|
+| before the king-mirror fix | **−66.8 ± 35.5** (300 games) |
+| after the fix | **−16.7 ± 31.2** (104 games, preliminary) |
+
+The mirrored king table accounted for roughly **50 Elo**. What remains is a small
+negative whose interval covers zero. The honest current statement is that
+**Texel tuning on 15k Stockfish-labelled positions has not converted to play** —
+a real negative, and consistent with the pipeline-versus-model lesson: the fit
+improved 10.1% and the engine did not. A standalone 300-game rerun is queued
+behind the TC baseline to settle it at a third the cost of running it inside a
+3-way.
 
 ## 2026-08-13 — "Fixed nodes" was not fixed: the cap rewarded pruning less
 
