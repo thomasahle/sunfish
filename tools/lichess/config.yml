@@ -23,16 +23,18 @@ engine:
     # Sized from measurement, not guesswork. Under pypy3 each transposition
     # entry costs ~0.8 kB resident, and TABLE_SIZE bounds tp_score and
     # tp_move independently, so the tables can reach 2 * TABLE_SIZE entries:
-    #   TABLE_SIZE=50000  -> ~100k entries -> ~80 MB tables + ~36 MB pypy3
-    #                        baseline = ~120 MB peak RSS.
-    # The 1 GB free-tier VM has ~970 MB usable and already runs lichess-bot's
-    # multiprocessing pool (~150 MB across 6 processes); the production box was
-    # found running TABLE_SIZE=300000 (~516 MB peak RSS, which does not fit),
-    # sitting with ~245 MB paged out *while idle* and accumulating 467 s of
-    # full IO-pressure stall over 3.75 days. An engine that swaps mid-search
-    # is slow in a way no scheduling fix repairs.
-    # On a machine with 4 GB+, raise this to 1000000 (~1 GB).
-    TABLE_SIZE: 50000
+    #   TABLE_SIZE=1000000 -> ~2M entries -> ~1.6 GB tables + ~36 MB pypy3
+    #                         baseline = ~1.7 GB peak RSS.
+    # Sized for the Oracle A1 box (measured shape: 2 OCPUs / 12 GB), shared
+    # with the nnue bot, whose tables peak at 5-6 GB at its own 10^6 (its
+    # entries carry accumulator big ints, ~2-3 kB each -- see
+    # nnue_4k/lichess/config.yml). Worst case: ~1.7 GB (classic) + ~6 GB
+    # (nnue) + ~1 GB (OS, bots' pools) ~= 9 GB of 12 GB. An engine that
+    # swaps mid-search is slow in a way no scheduling fix repairs -- the old
+    # 1 GB GCP box was found at TABLE_SIZE=300000 (~516 MB peak RSS), paging
+    # ~245 MB *while idle*. On a 1 GB box this must come DOWN to 50000
+    # (~120 MB peak RSS).
+    TABLE_SIZE: 1000000
 
 challenge:
   concurrency: 1

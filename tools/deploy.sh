@@ -4,8 +4,13 @@
 # this script is the deploy.
 #
 #   tools/deploy.sh nnue    [user@host] [--check] [--sync-config]
-#   tools/deploy.sh classic  user@host  [--check] [--sync-config]
+#   tools/deploy.sh classic [user@host] [--check] [--sync-config]
 #   tools/deploy.sh pypi vNNNN
+#
+# Both bots live on the Oracle A1 box (classic migrated off the GCP e2-micro
+# 2026-08-12: burst-credit exhaustion cost it 2-3x nps during busy hours).
+# They share the /opt/sunfish checkout but each has its own bridge install,
+# selected by BOTDIR below.
 #
 # Bot deploy: update /opt/sunfish to origin/master (fast-forward only - a box
 # with local commits aborts loudly), re-pin lichess-bot + re-apply the bundle
@@ -35,9 +40,11 @@ esac; done
 
 case $MODE in
     nnue)    BUNDLE=nnue_4k/lichess UNIT=sunfish-packed  ACCOUNT=sunfish-nnue-engine
+             BOTDIR=/opt/lichess-bot
              HOST=${HOST:-ubuntu@146.235.195.115} ;;
     classic) BUNDLE=tools/lichess   UNIT=sunfish-lichess ACCOUNT=sunfish-engine
-             [ -n "$HOST" ] || die "classic has no default host (the GCP box is being retired) - pass user@host" ;;
+             BOTDIR=/opt/lichess-bot-classic
+             HOST=${HOST:-ubuntu@146.235.195.115} ;;
     pypi)
         TAG=${HOST:?usage: deploy.sh pypi vNNNN}
         VER=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml)
@@ -58,18 +65,25 @@ esac
 PIN=$(sed -n 's/^LICHESS_BOT_COMMIT=\([0-9a-f]*\)$/\1/p' "$BUNDLE/setup.sh")
 ENGINE=$(sed -n 's/^  name: "\(.*\)"/\1/p' "$BUNDLE/config.yml")
 [ -n "$PIN" ] && [ -n "$ENGINE" ] || die "could not parse pin/engine from $BUNDLE"
-echo "== $MODE bot on $HOST: unit=$UNIT engine=$ENGINE pin=${PIN:0:8} action=$ACTION"
+
+# The challenge-gate hook is per-box, not per-bundle: the Oracle box's gate is
+# sunfish-cost-gate (flag /run/sunfish-costgate), which is what the nnue
+# bundle's hook watches -- both bots deploy that one.  The classic bundle's
+# hook is the GCP credit-gate variant and retired with the e2-micro.
+HOOK_BUNDLE=nnue_4k/lichess
+
+echo "== $MODE bot on $HOST: unit=$UNIT botdir=$BOTDIR engine=$ENGINE pin=${PIN:0:8} action=$ACTION"
 
 playing() { curl -sf "https://lichess.org/api/users/status?ids=$ACCOUNT" \
     | python3 -c 'import json,sys; d=json.load(sys.stdin)[0]; print("yes" if d.get("playing") else "no")'; }
 
 # Phase 1 on the box: update, verify, sync, smoke - everything except the restart.
-ssh "$HOST" "ACTION=$ACTION SYNC_CONFIG=$SYNC_CONFIG BUNDLE=$BUNDLE ENGINE=$ENGINE PIN=$PIN UNIT=$UNIT bash -s" <<'REMOTE'
+ssh "$HOST" "ACTION=$ACTION SYNC_CONFIG=$SYNC_CONFIG BUNDLE=$BUNDLE HOOK_BUNDLE=$HOOK_BUNDLE BOTDIR=$BOTDIR ENGINE=$ENGINE PIN=$PIN UNIT=$UNIT bash -s" <<'REMOTE'
 set -euo pipefail
 die() { echo "deploy[remote]: $*" >&2; exit 1; }
 G() { sudo -u sunfish git -C /opt/sunfish "$@"; }
 
-[ -d /opt/sunfish ] && [ -d /opt/lichess-bot ] || die "/opt/sunfish or /opt/lichess-bot missing - run setup.sh first"
+[ -d /opt/sunfish ] && [ -d "$BOTDIR" ] || die "/opt/sunfish or $BOTDIR missing - run setup.sh first"
 
 # 1. Engine checkout -> origin/master, fast-forward only, loud otherwise.
 G fetch -q origin master
@@ -99,51 +113,58 @@ if [ "$OLD" != "$NEW" ]; then
 else echo "engine already at ${NEW:0:8}"; fi
 
 # 2. lichess-bot pin + patch: the tested tree is the deployed tree.
-LIVE_PIN=$(sudo -u sunfish git -C /opt/lichess-bot rev-parse HEAD)
+LIVE_PIN=$(sudo -u sunfish git -C "$BOTDIR" rev-parse HEAD)
 if [ "$LIVE_PIN" != "$PIN" ]; then
     echo "lichess-bot pin ${LIVE_PIN:0:8} != expected ${PIN:0:8}"
     [ "$ACTION" = check ] || {
-        sudo -u sunfish git -C /opt/lichess-bot fetch -q origin "$PIN"
-        sudo -u sunfish git -C /opt/lichess-bot checkout -qf "$PIN"
-        sudo -u sunfish git -C /opt/lichess-bot apply "/opt/sunfish/$BUNDLE/lichess-bot.patch"
-        sudo /opt/lichess-bot/venv/bin/pip install -q -r /opt/lichess-bot/requirements.txt
+        sudo -u sunfish git -C "$BOTDIR" fetch -q origin "$PIN"
+        sudo -u sunfish git -C "$BOTDIR" checkout -qf "$PIN"
+        sudo -u sunfish git -C "$BOTDIR" apply "/opt/sunfish/$BUNDLE/lichess-bot.patch"
+        sudo "$BOTDIR/venv/bin/pip" install -q -r "$BOTDIR/requirements.txt"
         echo "re-pinned + patched + requirements refreshed"; }
 else
     # Same pin: the PATCH may still have changed (it did on 2026-08-12, and
     # the fix silently didn't deploy). Compare patch-ids and re-apply.
-    APPLIED=$(sudo -u sunfish git -C /opt/lichess-bot diff | git patch-id --stable | cut -d" " -f1)
+    APPLIED=$(sudo -u sunfish git -C "$BOTDIR" diff | git patch-id --stable | cut -d" " -f1)
     WANT=$(sudo -u sunfish git -C /opt/sunfish show HEAD:"$BUNDLE/lichess-bot.patch" | git patch-id --stable | cut -d" " -f1)
     if [ -z "$APPLIED" ]; then
         echo "WARNING: lichess-bot tree is pristine - the bundle patch is NOT applied"
     elif [ "$APPLIED" != "$WANT" ]; then
         [ "$ACTION" = check ] && echo "would re-apply changed bundle patch" || {
-            sudo -u sunfish git -C /opt/lichess-bot checkout -qf "$PIN"
-            sudo -u sunfish git -C /opt/lichess-bot apply "/opt/sunfish/$BUNDLE/lichess-bot.patch"
+            sudo -u sunfish git -C "$BOTDIR" checkout -qf "$PIN"
+            sudo -u sunfish git -C "$BOTDIR" apply "/opt/sunfish/$BUNDLE/lichess-bot.patch"
             echo "re-applied changed bundle patch"; }
     fi
 fi
 
-# 3. Contrib files the bot reads from /opt/lichess-bot, not the repo.
+# 3. Contrib files the bot reads from its install dir, not the repo.  The
+# challenge-gate hook comes from HOOK_BUNDLE (the box's gate), not BUNDLE.
 for f in extra_game_handlers.py; do
-    if ! sudo cmp -s "/opt/sunfish/$BUNDLE/$f" "/opt/lichess-bot/$f"; then
+    if ! sudo cmp -s "/opt/sunfish/$HOOK_BUNDLE/$f" "$BOTDIR/$f"; then
         [ "$ACTION" = check ] && echo "would sync: $f" || {
-            sudo cp "/opt/sunfish/$BUNDLE/$f" "/opt/lichess-bot/$f"; echo "synced: $f"; }
+            sudo cp "/opt/sunfish/$HOOK_BUNDLE/$f" "$BOTDIR/$f"; echo "synced: $f"; }
     fi
 done
 
 # 4. Config drift: report always, rewrite only on request, token preserved.
-LIVE_CFG=$(sudo sed 's/^token:.*/token: MASKED/' /opt/lichess-bot/config.yml)
+LIVE_CFG=$(sudo sed 's/^token:.*/token: MASKED/' "$BOTDIR/config.yml")
 TPL_CFG=$(sed 's/^token:.*/token: MASKED/' "/opt/sunfish/$BUNDLE/config.yml")
 DRIFT=$(diff <(printf '%s\n' "$LIVE_CFG") <(printf '%s\n' "$TPL_CFG")) || [ $? -eq 1 ] || die "config diff failed"
 if [ -n "$DRIFT" ]; then
     echo "config drift (live vs bundle template):"; echo "$DRIFT"
     if [ "$SYNC_CONFIG" = 1 ] && [ "$ACTION" != check ]; then
-        TOKEN=$(sudo sed -n 's/^token: *"\(.*\)"/\1/p' /opt/lichess-bot/config.yml)
+        TOKEN=$(sudo sed -n 's/^token: *"\(.*\)"/\1/p' "$BOTDIR/config.yml")
         [ -n "$TOKEN" ] || die "could not extract live token - not rewriting config"
-        sudo sed "s/YOUR_TOKEN_HERE/$TOKEN/" "/opt/sunfish/$BUNDLE/config.yml" > /tmp/config.yml.new
+        # The token is fed via stdin, never argv: sudo logs every command
+        # line to the journal, so a `sed s/.../$TOKEN/` would write the
+        # secret into journalctl (observed live, 2026-08-12).
+        printf '%s' "$TOKEN" | sudo env "TPL=/opt/sunfish/$BUNDLE/config.yml" python3 -c '
+import os, sys
+sys.stdout.write(open(os.environ["TPL"]).read().replace("YOUR_TOKEN_HERE", sys.stdin.read()))' \
+            > /tmp/config.yml.new
         # -o/-g: the unit runs as sunfish; a root-owned 600 config is unreadable
         # to it (found live: took the bot down for 4 minutes on 2026-08-11)
-        sudo install -m 600 -o sunfish -g sunfish /tmp/config.yml.new /opt/lichess-bot/config.yml
+        sudo install -m 600 -o sunfish -g sunfish /tmp/config.yml.new "$BOTDIR/config.yml"
         sudo rm /tmp/config.yml.new
         echo "config rewritten from template (token preserved)"
     else echo "(pass --sync-config to rewrite from the template; token is preserved)"; fi
