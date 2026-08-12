@@ -75,9 +75,10 @@ def stop_softly(searcher, gen):
         pass
 
 
-def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False):
+def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False,
+            max_nodes=0):
     if debug:
-        print(f"Going movetime={max_movetime}, depth={max_depth}")
+        print(f"Going movetime={max_movetime}, depth={max_depth}, nodes={max_nodes}")
 
     # perf_counter: monotonic and high-resolution everywhere - on Windows
     # time.time() ticks at ~15.6ms, so a fast first iteration measured 0.0
@@ -137,6 +138,11 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
         # We may not have a move yet at depth = 1
         if depth > 1:
             if elapsed > max_movetime * 2 / 3:
+                break
+            # "go nodes N": equal-thinking matches (fixed-node testing).
+            # Checked between probes, so both sides overshoot by at most
+            # one MTD probe - symmetric, which is all fixed-node needs.
+            if max_nodes and searcher.nodes >= max_nodes:
                 break
             if stop_event.is_set():
                 break
@@ -454,6 +460,10 @@ def run(sunfish_module, startpos):
                         think,
                         max_depth,
                         debug=debug,
+                        # mate_loop has no node budget; fixed-node play is a
+                        # go_loop concern only.
+                        **({"max_nodes": opts["nodes"]}
+                           if "nodes" in opts and loop is go_loop else {}),
                     )
 
                     # Make sure we get informed if the job fails
