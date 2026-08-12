@@ -106,17 +106,17 @@ chmod 600 /opt/lichess-bot/config.yml
 chown -R sunfish:sunfish /opt/lichess-bot /opt/sunfish
 
 chmod +x /opt/sunfish/nnue_4k/lichess/watchdog.sh
-cp /opt/sunfish/nnue_4k/lichess/sunfish-packed.service /etc/systemd/system/
+cp /opt/sunfish/nnue_4k/lichess/sunfish-nnue.service /etc/systemd/system/
 cp /opt/sunfish/nnue_4k/lichess/sunfish-cost-gate.service /etc/systemd/system/
 cp /opt/sunfish/nnue_4k/lichess/sunfish-watchdog.service /etc/systemd/system/
 cp /opt/sunfish/nnue_4k/lichess/sunfish-watchdog.timer /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now sunfish-cost-gate
-systemctl enable --now sunfish-packed
+systemctl enable --now sunfish-nnue
 systemctl enable --now sunfish-watchdog.timer
 
 echo
-echo "Done. Status:   systemctl status sunfish-packed"
-echo "Logs:           journalctl -u sunfish-packed -f"
+echo "Done. Status:   systemctl status sunfish-nnue"
+echo "Logs:           journalctl -u sunfish-nnue -f"
 echo "Deployed build: cat /opt/sunfish/nnue_4k/DEPLOYED.txt"
 echo "Cost tripwire:  systemctl status sunfish-cost-gate; cost_gate.py --status"

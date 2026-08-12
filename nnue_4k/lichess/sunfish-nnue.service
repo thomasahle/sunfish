@@ -1,5 +1,5 @@
 [Unit]
-Description=Sunfish packed-NNUE lichess bot
+Description=Sunfish NNUE lichess bot
 After=network-online.target
 Wants=network-online.target
 

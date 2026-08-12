@@ -9,7 +9,7 @@
 # games on startup, so a restart is always safe).
 #
 # Run from a systemd timer (sunfish-watchdog.timer, every minute):
-#   watchdog.sh <systemd-unit>       e.g. watchdog.sh sunfish-packed
+#   watchdog.sh <systemd-unit>       e.g. watchdog.sh sunfish-nnue
 set -u
 
 UNIT="${1:?usage: watchdog.sh <systemd-unit>}"

@@ -49,7 +49,7 @@ for a in "$@"; do case $a in
 esac; done
 
 case $MODE in
-    nnue)    BUNDLE=nnue_4k/lichess UNIT=sunfish-packed  ACCOUNT=sunfish-nnue-engine
+    nnue)    BUNDLE=nnue_4k/lichess UNIT=sunfish-nnue  ACCOUNT=sunfish-nnue-engine
              BOTDIR=/opt/lichess-bot
              HOST=${HOST:-$NNUE_HOST} ;;
     classic) BUNDLE=tools/lichess   UNIT=sunfish-lichess ACCOUNT=sunfish-engine
