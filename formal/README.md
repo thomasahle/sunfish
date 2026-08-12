@@ -118,6 +118,47 @@ Lean:
 | the mated dual | `forcedlyMated_negamaxD2` |
 | the old flat readings, as corollaries | `*_band` |
 
+## Play-level liveness
+
+`Liveness.lean` milestone 3.  Everything else in this directory is about
+ONE search.  This is about the GAME: define the engine's own move choice,
+iterate it, let the defender answer with anything legal.
+
+```text
+forcedMate_play_mates :
+  MaximalChoice G guard d ch →
+  ForcedMate G k p → 1 ≤ k → k + 1 ≤ d + 1 → (d : Int) ≤ 21366 →
+  hasKingCapture G p = false →
+  MatesWithin G ch k p
+```
+
+`MatesWithin G ch k p`: the attacker plays `ch`, the defender plays ANY
+legal move, and a `Checkmated` position is reached within `k` plies.
+
+The statement could not be FORMED before mate distance.  With every mate
+worth the flat `-MATE_LOWER` the value function does not rank the mating
+moves at all, so "the move the value picks" is any mating move whatsoever
+and iterating it need not arrive.  What makes the proof go through is
+exactly that a nearer mate is worth strictly more: the chosen move's value
+is at least the spec witness's, hence (`forcedMate_of_value_dist`, the
+converse refined to carry the distance) its mate is at least as near.
+
+Honest about `MaximalChoice`: it says `ch p` maximises the declared value
+among the admitted moves.  That idealises an exactly-converged bisection.
+`search` stops at `upper - lower <= EVAL_ROUGHNESS`, so the shipped root can
+settle for a move within 15 of the maximum, and mate distances differ by one
+per ply -- the shipped driver therefore acts on this ordering only for gaps
+wider than `EVAL_ROUGHNESS`.  Tie-breaking is free: the theorem holds for
+every maximising choice.  Depth is fixed at `d + 1` for every move of the
+play.
+
+Premises: `ValFloor G 192` + `EvalQuiet` (fidelity, tables),
+`NoMaskedMobility` (chess, layer 2 -- required, `CexF`), `NoZugzwang`
+(chess, layer 2), root legality.  No new chess premise.  `#print axioms`:
+`propext, Classical.choice, Quot.sound` (the choice comes from the classical
+case split in `legal_of_allIllegalB_false`); the distance spine
+`forcedMate_negamaxD2` itself stays choice-free at `propext, Quot.sound`.
+
 ## Terminal positions and legality evidence
 
 The move fold maintains two independent facts:
