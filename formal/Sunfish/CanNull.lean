@@ -45,11 +45,13 @@ THE COLLAPSED STORY (was: a two-function layering keyed by
 * IID (line 381) is the same rootProbe shape at `depth - 3`, and stores
   nothing under its own key; its purpose -- killer arrival via
   `tp_move` fail-highs inside the probe -- is `Sunfish/Killer.lean`'s
-  territory, unchanged here.  (The model has no killers, so the IID
-  guard `not killer and depth > 2` reduces to `depth > 2`, which is
-  what the model runs; the probe's table effect is its children's
-  interior stores, modeled as the table component of the root
-  recursion.)
+  territory, unchanged here.  The source guard is now
+  `not killer and depth > 3`, since a depth-3 probe would enter
+  quiescence and cannot store a killer.  This model collapses depth-zero
+  quiescence to `eval`, so the corresponding transform in its uniform
+  recurrence is definitionally the identity on the table.  At greater
+  depths the probe's table effect is its children's interior stores,
+  modeled as the table component of the root recursion.
 * `nullValue_plain` (PROVEN under `NullBetOK`): relating `nullValue` to
   the null-free `plainValue` is where the null-move BET lives.
   Zugzwang only ever threatens this bridge, never self-consistency: a
@@ -546,8 +548,9 @@ theorem cNodeTail_spec (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos
 result discarded, table kept), move loop, plain keyed store (481-485).
 Driver probes (`root = true`, the search root and IID): king-gone, then
 straight to the move loop over ordinary interior children -- no lookup,
-no repetition-0, no null yield, no store; at `depth > 2` the probe still
-runs its own nested IID (table effect only). -/
+no repetition-0, no null yield, no store. Above depth 3 the probe still
+runs its own nested IID (table effect only); at depth 3 the model's
+depth-zero transform is the identity noted above. -/
 def boundNullTT (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos] :
     Nat → Bool → G.Pos → Int → Table G.toGame → Int × Table G.toGame
   | 0, _, p, _gamma, t =>

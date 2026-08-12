@@ -45,7 +45,7 @@ EXPECTED = {
     "Position.move": "69bb2460cd611c9e",
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "11d52eaa8a661352",
-    "Searcher.bound": "4edd8e042e0373c3",
+    "Searcher.bound": "a700f268be5b9915",
     "Searcher.search": "f9aa8c81b84ff44b",
     "constants": "02227a9fd04eb181",
 }
@@ -96,6 +96,7 @@ def extract_regions():
 ANCHORS = [
     "def king_capture",
     "killer = self.tp_move.get(pos)",
+    "if not killer and depth > 3:",
     "if killer and pos.value(killer) >= val_lower:",
     "yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)",
     "yield None, pos.score",
