@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-12 | **Texel screen −66.8 ± 35.5: the king table was mirrored** | A better fit playing worse was a bug in the EMIT path, not a fit-vs-play effect. Fixed; re-screening |
 | 2026-08-12 | **Texel tuning: 10.1% better fit for ZERO bytes** | +13 bytes total (3517→3530); fixed-node screen running. Tapering adds only 1.8pp more for ~400 bytes |
 | 2026-08-12 | **Our Elo/byte cost model is INVERTED vs ice4/4ku** | Incremental eval makes (piece,square) terms free and whole-position terms (mobility!) expensive — their 4.0 Elo/byte is not available to us |
 | 2026-08-12 | **MILESTONE: valid 4k entry built and verified** | **3517 bytes measured** (composed estimate said 3787), plays alone in an empty dir with SF_NET unset, **579 spare** |
@@ -105,6 +106,46 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-12 — A better fit that played 67 Elo worse: the king table was mirrored
+
+The Texel screen came back **−66.82 ± 35.49 over 300 games, zero bad
+terminations** — the tuned tables fit the data 10.1% better and played 67 Elo
+*worse*. That magnitude from a 384-parameter linear refit is not a subtle
+fit-versus-play effect; it is a bug, and it was.
+
+Hypotheses, tested in order of cheapness:
+
+1. **Table orientation round-trip** — tested by rebuilding classic's own tables
+   through the tuner's forward and backward transforms: clean, except ±1 rounding
+   on knights from the median re-basing. *Not it — or so it appeared.*
+2. **Eval shape** (the kbbil lesson: search constants are absolute centipawns and
+   a rescaled table breaks them) — tuned vs classic std 30-39 vs 31-42, ranges
+   comparable, square-to-square |delta| mean 37.3 vs 37.0, p99 125 vs 124.
+   *Not it.*
+3. **The emit path** — and there it was.
+
+The king's table was written back **vertically mirrored**. Every other piece got
+`reshape(8,8)[::-1]` to undo the forward flip; the `if p == "K": continue`
+branch skipped it. The king PST is the single most orientation-sensitive table
+in the engine — castling shelter at the bottom, mating net at the top — so a
+mirrored one marches the king up the board in the middlegame.
+
+**Why the verification missed it, which is the lesson worth keeping:** my
+round-trip test *re-implemented* the emit logic rather than calling it, and the
+re-implementation had no `K` special case. It verified code that was not the code
+being shipped. A round-trip check must invoke the actual function, not a copy of
+what you believe it does.
+
+**Why the fit never noticed:** the loss is computed in the tuner's own feature
+space, which was self-consistent throughout. The bug lived entirely in the
+translation to the engine's table layout — invisible to every offline metric and
+visible immediately in games. This is a cleaner example of "offline metrics
+cannot validate a pipeline" than any of the eval-quality work.
+
+Fixed, king now byte-identical to classic's table, entry rebuilt at **3528
+bytes**. The corrected tune is being re-screened inside the three-way baseline
+round-robin below.
 
 ## 2026-08-12 — Texel tuning is free; tapering is not; and our cost model is inverted
 

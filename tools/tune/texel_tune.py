@@ -80,7 +80,12 @@ out = {}
 for pi, p in enumerate(PIECES):
     tab = w[pi * 64:(pi + 1) * 64]
     if p == "K":
-        out[p] = [int(round(v)) for v in (w0[pi * 64:(pi + 1) * 64] - piece[p])]
+        # UN-FLIP like every other piece. Emitting the king un-flipped was a
+        # real bug: it mirrored the most orientation-sensitive table in the
+        # engine (castling shelter vs the 8th rank) and cost -67 Elo while
+        # the FIT looked 10% better, because the fit never sees the emit.
+        kt = (w0[pi * 64:(pi + 1) * 64] - piece[p])
+        out[p] = np.round(kt).astype(int).reshape(8, 8)[::-1].reshape(64).tolist()
         continue
     base = float(np.median(tab))                 # new piece value
     rel = np.round(tab - base).astype(int)
