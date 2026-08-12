@@ -94,6 +94,11 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
     # class of giveaways - possible.
     best_move = cand = None
     last_depth = 1
+    if max_nodes:
+        # stop mid-iteration, not between depths: a per-depth check rewards
+        # whichever engine prunes less (bigger last iteration = bigger
+        # overshoot). Measured 1.74x vs 1.32x at a 20000 cap.
+        searcher.node_cap = max_nodes
     for depth, gamma, score, move in stop_softly(searcher, searcher.search(hist)):
         if depth > last_depth:
             best_move, last_depth = cand or best_move, depth

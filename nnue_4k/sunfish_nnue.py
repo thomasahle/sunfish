@@ -538,6 +538,9 @@ class Searcher:
     def __init__(self):
         self.tp_score, self.tp_move, self.history = {}, {}, set()
         self.nodes, self.deadline = 0, 1 << 63
+        # minifier-hide start
+        self.node_cap = 1 << 62          # testing only; see bound()
+        # minifier-hide end
 
     def bound(self, pos, gamma, depth, root=False):
         """ Let s* be the score of the sub-tree from pos at this depth, as
@@ -566,6 +569,17 @@ class Searcher:
             """
 
         self.nodes += 1
+        # minifier-hide start
+        # Node budget enforced INSIDE the search, at the same granularity as
+        # the deadline. Checking a node cap only between completed depths
+        # rewards whichever engine prunes LESS: its last iteration is bigger,
+        # so it sails further past the cap. Measured at a 20000 cap, classic
+        # (no LMR) reached 34742 nodes -- 1.74x -- against 26336 for the same
+        # engine with LMR, a ~30% free advantage worth ~38 Elo. Testing-only:
+        # the 4k rules mandate no node command, so the artifact carries none
+        # of this.
+        if self.nodes % 2048 == 0 and self.nodes > self.node_cap: raise Stop
+        # minifier-hide end
         # Enforce the time budget inside the search: iteration boundaries can
         # be seconds apart on slow hardware, this is checked every ~2k nodes.
         if self.nodes % 2048 == 0 and time.time() > self.deadline: raise Stop
@@ -989,6 +1003,7 @@ def main():
             # it. Without this a fixed-node match silently becomes a
             # movetime match and every game ends in a forfeit.
             max_nodes = times.get("nodes", 0)
+            searcher.node_cap = max_nodes or 1 << 62
             # minifier-hide end
             try:
                 for depth, gamma, score, move in searcher.search(hist):
