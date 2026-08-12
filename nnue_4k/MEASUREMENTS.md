@@ -28,6 +28,8 @@ Since 2026-08-12 this lane serves **two separate goals** and entries say which:
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-12 | **Rules audit: packer, UCI surface, joint-vs-split** | Split beats joint by **156 B**; artifact already rules-minimal (only **42 B** reclaimable); no-temp-file packer built and verified |
+| 2026-08-12 | Time divisor at the real TC | Gap confirmed: 1800+3 gives a **150 s** first move. Scaled sweep (180+0.3, 5 arms) queued behind a 20-min quiet gate |
 | 2026-08-12 | **4k design space priced (weights RAW, not xz)** | Ternary base-3 packing + factorisation beat the width-5 baseline **5-50×** in parameters at 1920 B; width is ~free in speed at this scale |
 | 2026-08-12 | **4k budget re-derived: the net counts** | Real artifact = **541,781 B** (engine 4488 + net 537,152), not "3798, 298 under". Packing mechanism recovered and verified running |
 | 2026-08-12 | **Field study: ice4 + 4ku eval packing** | ice4's ENTIRE eval = **333 characters**; both engines factorise PST into rank+file. Our 768×128 is 98,304 values |
@@ -72,6 +74,104 @@ Since 2026-08-12 this lane serves **two separate goals** and entries say which:
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-12 — Rules audit: the packer, the UCI surface, and joint-vs-split settled
+
+Working from the fetched rules (operative clauses now in the README, 369e8c1).
+
+### Startup is a non-issue
+
+"Startup should be within 60s", numpy is explicitly allowed, and pypy3/xz/tail/
+sh/mktemp are on the allowed-commands list with self-decompressing shell scripts
+explicitly permitted. Load-time expansion is therefore unconstrained — every
+scheme that trades load compute for stored bytes is legitimate. (Kept for the
+record: if a build ever had to fall back to CPython for numpy, that costs
+83552 → 39424 nps ≈ −110 Elo, so prefer numpy-optional designs, but nothing in
+the rules forces the issue.)
+
+### Joint vs split packing — measured, and the split wins
+
+The historical packer chose to xz the engine and append the model raw without
+recording why. On a 2 KB bit-packed blob:
+
+| layout | bytes | delta |
+|---|---|---|
+| **split** (engine xz'd, weights raw) | engine + 2048 | — |
+| joint, base64 blob inside the source | +156 | worse |
+| joint, escaped latin-1 inside the source | +746 | much worse |
+
+lzma cannot compress already-packed weights but still pays for the encoding, so
+the split is right. Same result for a base-3 ternary blob (+143). **Design
+locked: engine source compressed, weight blob appended raw.**
+
+### The delivery mechanism, rebuilt to leave nothing behind
+
+The rules require the entry "not leave itself any files lying around". The
+historical combined packer used `mktemp` for both streams; `pack.sh` (engine
+only) already used process substitution. Attempting process substitution for
+*both* streams **fails**: bash tears the `/dev/fd` down across `exec`, so the
+engine reads an empty weight stream (reproduced in isolation, then fixed).
+
+The working shape has the engine read the weights **from the artifact itself**,
+whose path the head already knows:
+
+    #!/bin/bash
+    export SF_A="$0" SF_N=<blob length>
+    exec $(command -v pypy3||echo python3) <(tail -c+<K> "$0"|head -c<L>|xz -d)
+
+Verified end to end: `uci` → `uciok` → `readyok` → `bestmove`, and zero temp
+files created. Costs, measured: head 74 → 118 (+44) and engine +39 for carrying
+both the dev `SF_NET` path and the artifact path — most of that 39 comes back in
+a real 4k build by hiding the dev branch. `tools/build/pack_entry.sh` is the
+competition packer; `pack.sh` remains the engine-only one.
+
+### UCI surface: already rules-minimal, 42 bytes reclaimable
+
+The mandated subset is `uci`, `uciok`, `isready`, `readyok`,
+`position startpos (moves ...)`, `go`/`go wtime A btime B winc C binc D`,
+`bestmove`, `quit`, with `stop`/`ucinewgame` merely tolerated. Audited the
+artifact's built-in loop against exactly that list — **there is no FEN parsing in
+the artifact at all**; `from_fen` lives in `sunfish_ui`, which the packer strips.
+`from_board` survives but is load-bearing (it builds the initial position), not
+FEN machinery.
+
+What is genuinely non-mandated, measured by packing each removal:
+
+| removal | bytes |
+|---|---|
+| `movetime` support in `go` | 9 |
+| `info depth … pv …` output | 21 |
+| `from_board`'s unused `pf` branch | 8 |
+| shorter `id name` | 4 |
+| **total** | **42** |
+
+Small, and worth taking when the 4k build is assembled, but it confirms the
+shell was never the problem — the weights are.
+
+### Time control: the gap is real and now under test
+
+The tournament plays **1800+3 with pondering disabled**, and our divisor was
+fitted at 60+1 and 30+1. At 1800+3, `wtime/12 + 0.9*inc` spends **150 s on move
+one** — demonstrated accidentally when a smoke test of the packed artifact hung
+for two minutes on exactly that command.
+
+The arithmetic is survivable (proportional spending cannot exhaust the clock:
+~670 s left after 12 moves, ~295 s after 24, ~15 s/move by move 40), and with a
+book dropping engines in around move 10 the first move is a real middlegame
+decision rather than a wasted book move. What is untested is whether **/12 is
+right in this regime**: at 30+1 the increment replenishes a third of each move's
+budget, while at 1800+3 the increment is noise and the divisor alone sets the
+shape.
+
+Queued: a divisor sweep at **180+0.3**, which preserves the 600:1
+base-to-increment ratio at a tenth the cost, five arms (D = 12 current, 16, 20,
+25, 30 — spanning our aggressive setting to the conventional rules of thumb),
+240 games round-robin, `SF_TDIV` selecting the arm. It is gated on **20 minutes
+of box quiet** so it can never run beside another timed match or jump the queue.
+**Caveat recorded in the marker itself: scaling preserves the allocation policy,
+not absolute depth, so it validates the policy only — the winner still needs a
+confirmation run at the true 1800+3 before entry.** The result also serves the
+lichess bot, where the same divisor governs rapid and classical play.
 
 ## 2026-08-12 — The 4k design space, priced: weights are RAW, and width is nearly free
 
