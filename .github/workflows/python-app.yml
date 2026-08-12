@@ -66,6 +66,15 @@ jobs:
         { printf 'uci\nisready\nposition startpos\ngo movetime 300\n'; sleep 3; printf 'quit\n'; } \
           | timeout 60 ./sunfish.packed | tee /dev/stderr | grep -q bestmove
         rm sunfish.packed
+    - name: 4k entry is fresh and under budget
+      # nnue_4k/pst_entry.py is GENERATED. That is only worth something if it
+      # stays true: the committed source once drifted 38 lines behind its
+      # generator with nobody noticing, because the drift was inside
+      # minifier-hide and the packed bytes were unchanged. Checks the source
+      # against the generator AND the artifact against the 4096-byte ceiling.
+      run: |
+        pip install python-minifier
+        bash tools/build/check_entry.sh
     - name: Minify test (tools/build/clean.sh) + README line-count claim
       # clean.sh is the source of the README's "N lines of code" claim.
       # Assert the minified engine actually runs, and that the README

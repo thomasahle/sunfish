@@ -368,6 +368,9 @@ class Searcher:
     def __init__(self):
         self.tp_score, self.tp_move, self.history = {}, {}, set()
         self.nodes, self.deadline = 0, 1 << 63
+        # minifier-hide start
+        self.node_cap = 1 << 62          # testing only; see bound()
+        # minifier-hide end
 
     def bound(self, pos, gamma, depth, root=False):
         """ Let s* be the score of the sub-tree from pos at this depth, as
@@ -396,6 +399,17 @@ class Searcher:
             """
 
         self.nodes += 1
+        # minifier-hide start
+        # Node budget enforced INSIDE the search, at the same granularity as
+        # the deadline. Checking a node cap only between completed depths
+        # rewards whichever engine prunes LESS: its last iteration is bigger,
+        # so it sails further past the cap. Measured at a 20000 cap, classic
+        # (no LMR) reached 34742 nodes -- 1.74x -- against 26336 for the same
+        # engine with LMR, a ~30% free advantage worth ~38 Elo. Testing-only:
+        # the 4k rules mandate no node command, so the artifact carries none
+        # of this.
+        if self.nodes % 2048 == 0 and self.nodes > self.node_cap: raise Stop
+        # minifier-hide end
         # Enforce the time budget inside the search: iteration boundaries can
         # be seconds apart on slow hardware, this is checked every ~2k nodes.
         if self.nodes % 2048 == 0 and time.time() > self.deadline: raise Stop
@@ -721,9 +735,24 @@ def main():
     if _drv is not None:
         _p = inspect.signature(_drv.go_loop).parameters
         _nodes, _fen = "max_nodes" in _p, hasattr(_drv, "from_fen")
-        print("info string driver", _drv.__file__,
+        # A capability check catches a MISSING feature; a stale copy that
+        # merely predates a FIX passes every capability test while behaving
+        # differently. The version stamp is the only thing that catches that,
+        # and it is the cheapest insurance against tonight's worst failure
+        # class -- three separate incidents from one shadowed driver.
+        _ver = getattr(_drv, "DRIVER_VERSION", 0)
+        print("info string driver", _drv.__file__, "v%d" % _ver,
               "nodes" if _nodes else "NO-NODES", "fen" if _fen else "NO-FEN",
               flush=True)
+        REQUIRED_DRIVER = 2      # raise with DRIVER_VERSION, same commit
+        if _ver < REQUIRED_DRIVER:
+            raise SystemExit(
+                "sunfish_ui driver at %s is version %d, need >= %d. This is a "
+                "STALE copy shadowing the repo one: sys.path puts this file's "
+                "grandparent first, so a scratch copy wins the import and "
+                "silently behaves like an older engine (it voided 425 games "
+                "once). Delete it or refresh it from the repo."
+                % (_drv.__file__, _ver, REQUIRED_DRIVER))
         if not (_nodes and _fen):
             raise SystemExit(
                 "sunfish_ui driver at %s lacks required capabilities "
@@ -808,6 +837,7 @@ def main():
             # it. Without this a fixed-node match silently becomes a
             # movetime match and every game ends in a forfeit.
             max_nodes = times.get("nodes", 0)
+            searcher.node_cap = max_nodes or 1 << 62
             # minifier-hide end
             try:
                 for depth, gamma, score, move in searcher.search(hist):
