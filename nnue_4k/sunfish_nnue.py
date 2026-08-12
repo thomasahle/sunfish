@@ -945,6 +945,24 @@ def main():
             # increment-aware budget; see sunfish_ui/uci.py for the audit
             # numbers and the safety argument
             think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1000)
+            # minifier-hide start
+            # SUDDEN DEATH needs a flatter divisor. With winc == 0, /12 spends
+            # 7% of the whole budget on one early move (12.8s of 180s on ply 9
+            # in lichess.org/EAThUL0P) and the game is lost on time at move 73
+            # without a single move overrunning: below 2s the wtime/2 - 1000
+            # cap goes negative, the budget collapses to the 0.05s floor, and
+            # ~200ms/move of unavoidable lag drains the rest.
+            # /40 is what classic uses and classic does not flag, so this is a
+            # constant with production evidence rather than a fit to one game.
+            # Movecount-aware divisors were simulated and are WORSE: a
+            # shrinking "moves remaining" divisor spends MORE per move as the
+            # game lengthens, which is backwards for sudden death.
+            # TCEC is 1800+3, so winc is always non-zero there and this line
+            # is dead code in the artifact -- which is why it is hidden, and
+            # why the artifact stays byte-for-byte unchanged. The increment
+            # case is identical to the line above by construction.
+            think = min(wtime / (12 if winc else 40) + 0.9 * winc, wtime / 2 - 1000)
+            # minifier-hide end
             # A GUI-supplied movetime is a HARD limit that the GUI itself
             # enforces, so spending all of it forfeits: the node counter is
             # only checked every 2048 nodes, so the search returns at
