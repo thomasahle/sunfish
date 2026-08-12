@@ -42,7 +42,8 @@ Since 2026-08-12 this lane serves **two separate goals** and entries say which:
 | 2026-08-12 | Hot-path profile (superseded in part) | ~85%-board claim WRONG — see the correction entry above |
 | 2026-08-12 | **GOAL-LINE VERDICT: +187.0 ± 49.7 vs classic @60+1** | **272 games, zero time losses. Target +400 NOT met — but against a classic that gained ~+130 during the campaign** |
 | 2026-08-12 | `_ext` integerization: scoped and priced | DONT BUILD (SWAR tail 5.2-10.3µs vs 3.8µs now) — but a dead-code third removed: rehab800 0.643 → 0.742× kb8, +21 Elo |
-| 2026-08-12 | **Quality-term hunt restarted: labels + 3 new families** | IN FLIGHT — 28-pair fixed-node label RR running locally; metric C shows the first honest signal (churn ranks kbbil worst, w256 best) |
+| 2026-08-12 | **VOID: every local fixed-node game was a time forfeit** | 425/425 label-RR games, 54/54 LMR, 40/40 ng — node cap silently ignored. Labels withdrawn; metric C's own numbers stand (no games involved) |
+| 2026-08-12 | Quality-term hunt restarted: labels + 3 new families | Metric C measured (churn ranks kbbil worst, w256 best); its LABEL half is void — see the entry above |
 | 2026-08-12 | **H2 paired form (the honest successor)** | **FAILS validation — sign flips across labeled pairs; H2 is closed, quality is fixed-node games only** |
 | 2026-08-12 | H2 optimism bias, controls | DEAD in simple form — every net is an optimist on its own losses (kb8 +105 worst) |
 | 2026-08-12 | krff gates (256×kb8×rff64) | PASS all — val 0.00729, shape 0.53%, **nps 0.991× — rff is free at width** |
@@ -78,6 +79,48 @@ Since 2026-08-12 this lane serves **two separate goals** and entries say which:
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-12 — VOID: every local fixed-node game was a time forfeit
+
+**Withdrawal.** Every game of every local fixed-node match ended in a time
+forfeit — 425 of 425 in the label RR, 54 of 54 in the LMR screen, 40 of 40 in
+the ng match. The winner of each game was whichever engine happened not to
+overrun first. None of it measured chess.
+
+Two independent defects, both now fixed (`0df49cf`):
+
+1. **The node cap was ignored.** fastchess sends `st=30 nodes=20000`; the
+   engines honoured the movetime and dropped the cap, so every move burned the
+   full 30 s. The root cause was not the engine I had already patched:
+   `sunfish_nnue.py` inserts `dirname(dirname(__file__))` at the *front* of
+   `sys.path`, and the scratchpad parent held a **stale copy of the driver**
+   predating the go-nodes support, which shadowed both the repo driver and
+   `PYTHONPATH`. `grep max_nodes` on it: 0. Fixed by removing the stale copy
+   *and* by giving the engine's own builtin loop node support, so a fixed-node
+   screen no longer depends on which driver happens to be importable. Verified
+   the cap binds and scales: depth 6 at 20k nodes, depth 9 at 200k.
+2. **Movetime was taken to the last millisecond.** With the deadline checked
+   every 2048 nodes, `think = movetime/1000` returns at movetime + ε and the GUI
+   has already flagged. Now 5% (min 30 ms) is held back.
+
+**What is unsupported as a result:** the 15 pairwise fixed-node labels and every
+number derived from them — the H1 battery, its three pre-registered predictions
+(rehab/kbbil ≈ 0 at fixed nodes), and the fixed-node arm of the metric
+validation. I had already recorded those labels as "too noisy to mine, do not
+quote" at ~28 games/pair, so nothing downstream had been built on them; they are
+now void rather than merely noisy, which is a cleaner state.
+
+**What still stands, because no games were involved:** metric families A, B and
+C and their numbers; the LMR/RFP mate-suite interaction (5/8 → 3/8, from the
+mate suite); the crossing attribution; the packing and budget measurements; and
+every bench/verify/byte figure.
+
+**Lesson, and it is not "check the pgn":** I chose fixed-node testing precisely
+*because* it is machine-independent, then never verified that the node limit was
+being applied. A protocol feature that silently degrades to a different
+experiment is worse than one that fails loudly. Any future match on a new
+protocol gets a single-game smoke test with the termination reason read back
+before the full run is launched.
 
 ## 2026-08-12 — The guards fire with LMR switched off: we were already unstable
 
