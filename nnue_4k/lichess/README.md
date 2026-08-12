@@ -19,7 +19,10 @@ Oracle always-free ARM instance (A1, 2 OCPU / 12 GB, aarch64, Ubuntu).
 games past `challenge.concurrency` are aborted promptly instead of silently
 starved, a dead event stream restarts the bot instead of leaving it
 deaf-but-online, and a failed chat POST can no longer cancel the engine's
-move). The bot-integration CI job applies the same patch, so the tested tree
+move; plus the 2026-08-12 fix: a replayed `gameStart` for a game already
+being served is ignored, and an overflow game the bot cannot abort is named
+in an ERROR and left alone, never resigned — a game we are not playing is
+not ours to end). The bot-integration CI job applies the same patch, so the tested tree
 is the deployed tree; `tests/test_lichess_config.py` keeps the pin, the
 patch, and the greeting lengths (lichess drops chat over 140 chars) honest.
 `watchdog.sh` + `sunfish-watchdog.timer` are the belt-and-braces layer: if

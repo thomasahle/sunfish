@@ -91,8 +91,14 @@ def test_patch_ships_and_targets_the_bridge(BUNDLE):
     assert "EVENT_STREAM_SILENCE_LIMIT" in patch, "stream-death fix missing"
     assert "games_in_progress" in patch, "concurrency overflow fix missing"
     assert "move_due" in patch, "interrupted-move retry fix missing"
-    assert "Resigning overflow game: abort refused" in patch, \
-        "unabortable-overflow resign fallback missing"
+    assert "duplicate gameStart" in patch, "gameStart dedupe missing"
+    assert "we_have_moved" in patch, "overflow guard on games we have moved in missing"
+    # Withdrawn 2026-08-12: the resign fallback for an unabortable overflow
+    # game resigned two games (x4E0Q6js, bQQnPWSb) that a second bridge on the
+    # same account was playing.  A game we are not playing is not ours to end,
+    # so the bridge must never call resign for any reason.
+    assert "li.resign" not in patch, \
+        "the bridge resigns a game; the resign fallback was withdrawn as unsafe"
 
 
 def test_setup_pin_matches_integration_test(BUNDLE):
