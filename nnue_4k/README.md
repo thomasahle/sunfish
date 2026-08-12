@@ -4,7 +4,8 @@ A sunfish variant whose evaluation is classic's exact piece-square score
 plus a trained neural residual — with the entire accumulator *and* the
 evaluation head living in **one Python integer**, so a wide net costs a
 handful of big-int operations per node instead of a Python-level loop.
-The engine still packs to a few kilobytes (see *The 4k build*).
+The engine code packs to a few kilobytes, but the net it loads does not —
+see *The 4k build* for where that leaves the 4096-byte goal.
 
 ## Architecture
 
@@ -50,11 +51,28 @@ tools/build/pack.sh nnue_4k/sunfish_nnue.py out.packed
 
 pyminify + xz + a 74-byte self-extracting header (bash process
 substitution: the payload decompresses straight into a `/dev/fd` path,
-so there is no temp file, no cleanup subshell, and no chmod). Current
-state: the engine packs to **3851 bytes** against the 4096-byte budget
-— the base eval tables ship inside the net file, where data belongs.
-The v1 engine (92c4746) packed to 3952 bytes; nets are external
-(`SF_NET`) and not part of the budget.
+so there is no temp file, no cleanup subshell, and no chmod).
+
+**The net counts toward the 4096 bytes.** An earlier version of this
+file claimed nets were external and outside the budget. That was wrong:
+under the TCEC 4k rules the entry is one file of at most 4096 bytes, and
+the evaluation data is part of the engine — which is why rival 4k
+engines such as ice4 and 4ku carry their entire evaluation as packed
+constants inside the limit. Moving the base tables out of the source and
+into the net file therefore saved nothing; it moved counted bytes from
+one counted place to another.
+
+Current state, stated honestly: the engine code packs to **~3800 bytes**
+and the smallest shipped net is **7.5 MB**, so the total is roughly
+three orders of magnitude over the limit. The 4k goal is open, not
+nearly met. With the engine at its present size there would be under
+300 bytes left for weights; reaching 4096 in total needs both a much
+smaller engine and a net compressed to the low kilobytes — extreme
+quantisation, weight sharing, or procedurally generated tables. The
+classic engine, by contrast, packs to 3196 bytes *including* its
+piece-square tables and is already within the limit.
+
+The v1 engine (92c4746) packed to 3952 bytes.
 
 ## Net format (`.sfnn`)
 
