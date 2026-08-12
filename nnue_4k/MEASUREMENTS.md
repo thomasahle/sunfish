@@ -106,15 +106,24 @@ Mate-in-1 root score by depth, shipped: 47938, 47953, 47968, 47983, 47998,
 | WAC lockstep @d4 | 300 | root move **0**, node count **0**, score differs 14 |
 | bratko lockstep @d6 | 24 | root move **0**, node count **0**, score differs 1 |
 | mate2 lockstep @d6 | 212 | root move **0**, node count differs 94, score differs 212 |
+| mate3 lockstep @d8 | 14 | root move **0**, node count differs 8, score differs 13 |
 | conversion, won endgames @d5, cap 40 plies | 60 | 29/60 converted for both, mean **10.52 plies both**, **0 differences** |
 | forced-mate-in-3 race @d8, attack and defend | 40 | **every playout identical**; attack 3.00 plies both, defend 3.00 plies both |
 | lost defender with a real choice of how long to hold out @d6 | 60 | both play the LONGEST defence **60/60** |
 
-The mate2 row is the sharp one: on a corpus where mates ARE resolved the new
-scores do perturb the search (94/212 positions search a handful of nodes
-differently, every one of the 212 reports a different score) and the move
-played is the same in all 212. So this is not a no-op internally; it is a
-no-op at the move.
+The two mate rows are the sharp ones: on corpora where mates ARE resolved the
+new scores perturb the search, and the move played is the same every time --
+0 of 212 at depth 6, 0 of 14 at depth 8. So this is not a no-op internally;
+it is a no-op at the move.
+
+**But it is not free, either.** The mate3 node deltas at depth 8 are
+-0.22%, +0.13%, -0.03%, **+4.62%**, -0.01%. A few percent of nodes in
+mate-heavy positions is a time-to-depth change, and TESTING.md rule 12 is
+explicit that time-to-depth is the hidden variable that has flipped the sign
+of a result in this repo twice. So the queued wall-clock match is NOT a
+formality: identical move choice at fixed depth does not imply identical
+strength on a clock. The prior is still flat, but the match is the only thing
+that can say so.
 
 Byte-identical to the one-point-per-ply run on the conversion and race
 probes -- `diff` of the two 60-position conversion logs is empty, and so is
