@@ -209,7 +209,8 @@ class TestMateDistance:
     carried no information about HOW FAR the mate was: at the fold, every
     winning move tied, and the losing side had no reason to hold out. The
     terminal correction now deposits the depth still unspent when the mate
-    was found, one ``EVAL_ROUGHNESS`` per ply, which negation carries home
+    was found, one ``EVAL_ROUGHNESS`` per ply -- ``max(1 - MATE_UPPER,
+    -MATE_LOWER - depth * EVAL_ROUGHNESS)`` -- which negation carries home
     as ``MATE_LOWER + (depth - plies) * EVAL_ROUGHNESS``.
 
     The scale matters: MTD-bi stops bisecting at ``upper - lower <=

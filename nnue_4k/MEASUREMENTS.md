@@ -62,7 +62,7 @@ now deposits the depth still unspent when the mate was found, one
 `EVAL_ROUGHNESS` per ply:
 
 ```python
-mate = -MATE_LOWER - min(depth * EVAL_ROUGHNESS, MATE_UPPER - MATE_LOWER - 1)
+mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)
 ```
 
 Negation carries it home as `MATE_LOWER + (depth - plies) * EVAL_ROUGHNESS`.
@@ -155,7 +155,9 @@ it) and a reported mate score that means something. It does not buy plies.
 **Floors — identical to master, line for line**, at both scales: mate1 8/8,
 mate2 20/20, mate3 5/5, mate4 5/10, stalemate0 4/4, stalemate1 3/4,
 stalemate2 18/130, WAC 94/300 @d3, bratko 5/24, 3fold 2/8. 271 tests pass.
-Packed 3244 B (master 3234 B, limit 4096).
+Packed **3231 B -- 3 bytes UNDER master's 3234** (limit 4096): the max
+spelling is shorter than the line it replaces, and after xz it more than
+pays for the feature.
 
 **Rejected alternative, with a proof-level reason.** Distance-from-node via a
 per-ply step on the score (`score -= sign(score)`, mate in k =

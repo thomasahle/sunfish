@@ -1876,7 +1876,7 @@ def CorrectionTerminal (G : QSGame) (d : Nat) (p : G.Pos) : Prop :=
 and for checkmate
 
 ```python
-mate = -MATE_LOWER - min(depth * EVAL_ROUGHNESS, MATE_UPPER - MATE_LOWER - 1)
+mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)
 ```
 
 **The mate value carries its distance.**  `depth` is the search depth
@@ -1895,18 +1895,21 @@ one point per ply the driver's final window could not separate two
 mates and the ordering never reached the root.  Scaled, consecutive
 distances are a full bracket apart.
 
-`min` against `MATE_UPPER - MATE_LOWER - 1 = 21366` keeps the value
-inside the band at every depth, with no side condition to carry: the
-`Bounded`-shaped facts below stay unconditional, and the deepest value
-`1 - MATE_UPPER` stays exactly one point clear of `-MATE_UPPER`, which
-the fold reads as "illegal move".  The clamp binds only at unspent
-depth 1425, three orders of magnitude past the driver's `range(1,
-1000)`.  `terminalValue G 0 p` is the historical flat value, which is
+The floor keeps the value inside the band at every depth, with no side
+condition to carry: the `Bounded`-shaped facts below stay
+unconditional.  It is `1 - MATE_UPPER` and NOT `-MATE_UPPER`, and the
+one point matters: this value is negated on the way up, and negated
+again one ply later, so a node valued `-MATE_UPPER` would reach its
+GRANDPARENT as exactly the illegal-move sentinel -- and the fold's
+`score > -MATE_UPPER` is strict, so `live` would stay unset for a legal
+move and the terminal correction could fire at a position that has
+legal moves.  The floor binds only at unspent depth 1425, three orders
+of magnitude past the driver's `range(1, 1000)`.  `terminalValue G 0 p` is the historical flat value, which is
 what the RETIRED pre-d2 layer (`qsDrawFix`, `negamaxQS`) still assigns
 at every depth. -/
 def terminalValue (G : QSGame) (d : Nat) (p : G.Pos) : Int :=
   if inCheckB G.toNullGame p = true then
-    -MATE_LOWER - min ((d : Int) * EVAL_ROUGHNESS) (MATE_UPPER - MATE_LOWER - 1)
+    max (1 - MATE_UPPER) (-MATE_LOWER - (d : Int) * EVAL_ROUGHNESS)
   else 0
 
 /-- The terminal value never leaves the band, at any depth: mate is at

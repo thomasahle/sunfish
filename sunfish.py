@@ -312,8 +312,8 @@ class Searcher:
             - if depth >= 1:
                 - if the opponent king capturable: r = MATE_UPPER
                   (note this is stronger than just gamma <= r <= s*.)
-                - if mate/stalemate returns the exact -MATE_LOWER
-                  - min(depth * EVAL_ROUGHNESS, MATE_UPPER - MATE_LOWER - 1)
+                - if mate/stalemate returns the exact
+                  max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)
                   / 0. The mate value carries the unspent depth, so s* is
                   still a function of (pos, depth) - see the constants.
             - every move in tp_move is legal. When a searched real move causes
@@ -468,10 +468,12 @@ class Searcher:
             # survives the driver's final bracket. Nothing but (pos, depth)
             # enters, which is why the table needs no store/probe adjustment
             # and keeps its one value per key: measuring the distance from the
-            # ROOT is what would have poisoned it. The min keeps the deepest
-            # mate at 1 - MATE_UPPER, one point clear of the king-gone
-            # sentinel that the fold reads as "illegal move".
-            mate = -MATE_LOWER - min(depth * EVAL_ROUGHNESS, MATE_UPPER - MATE_LOWER - 1)
+            # ROOT is what would have poisoned it. The floor is 1 - MATE_UPPER
+            # and not -MATE_UPPER: one ply up this value is negated, and one
+            # more it is back, so -MATE_UPPER here would reach a grandparent
+            # as exactly the illegal-move sentinel and "score > -MATE_UPPER"
+            # would leave `live` unset for a legal move.
+            mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)
             best = mate if pos.rotate(nullmove=True).king_capture() else 0
 
         # Table part 2. Every search decision is gamma-independent, so all

@@ -81,7 +81,7 @@ guard and cap make null pruning more conservative in unbalanced positions.
 Checkmate is not one number.  The terminal correction assigns
 
 ```python
-mate = -MATE_LOWER - min(depth * EVAL_ROUGHNESS, MATE_UPPER - MATE_LOWER - 1)
+mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)
 ```
 
 where `depth` is the search depth still UNSPENT when the mate was found.
@@ -98,10 +98,17 @@ cutoff.  At one point per ply the ordering would exist in the value function
 and never reach the root.  Scaled, consecutive mate distances are a full
 bracket apart.
 
-**Band headroom, checked rather than assumed.**  The deepest mate value is
-`-MATE_LOWER - 21366 = -69289 = 1 - MATE_UPPER`, exactly one point above the
-illegal-move sentinel `-MATE_UPPER = -69290`, and its negation `69289` is
-exactly one point below the king-capture sentinel `MATE_UPPER`.  That one
+**Band headroom, checked rather than assumed.**  The floor `1 - MATE_UPPER`
+is the deepest mate value, `-69289`, exactly one point above the illegal-move
+sentinel `-MATE_UPPER = -69290`; its negation `69289` is exactly one point
+below the king-capture sentinel `MATE_UPPER`.  Writing the floor as
+`-MATE_UPPER` instead would be off by one and unsafe: the value is negated on
+the way up and negated again a ply later, so a node valued `-MATE_UPPER`
+reaches its GRANDPARENT as exactly the sentinel, and `score > -MATE_UPPER` is
+strict -- `live` would stay unset for a legal move and the terminal
+correction could fire at a position that has legal moves.  Machine-checked:
+the two spellings first differ at unspent depth 1425, and at that depth the
+grandparent yield is `-69289` (live) versus `-69290` (not live).  The one
 point is load-bearing in both directions and it is exact:
 
 * `live |= move is not None and score > -MATE_UPPER` still separates "legal
@@ -242,7 +249,7 @@ at capturable nodes.
 | full-width move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
 | sticky legality evidence and terminal override | terminal/finalizer results in `Stalemate.lean` |
 | king-capture evaluation margins and ordering | `EvalBounds.lean` |
-| `mate = -MATE_LOWER - min(depth * EVAL_ROUGHNESS, ...)` | `terminalValue`, `terminalValue_exact` |
+| `mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)` | `terminalValue`, `terminalValue_exact` |
 | legal killer lifecycle and eviction | `Killer.lean` |
 | root versus interior null behavior | `CanNull.lean` |
 | transposition-table interval updates | `TableSwap.lean` and table results in `Stalemate.lean` |
