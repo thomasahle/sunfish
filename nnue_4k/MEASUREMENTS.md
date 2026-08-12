@@ -28,6 +28,7 @@ Since 2026-08-12 this lane serves **two separate goals** and entries say which:
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-12 | **Packing REVERSED twice: base-3 AND lzma, joint not split** | Compose, don't choose: b3+lzma −1000 B vs raw base-3; one joint lzma stream −1007 B vs split. My earlier "split is right" was measured on incompressible data |
 | 2026-08-12 | **Box collision hazard: atomic lock adopted** | Three lanes watched one quiet window. My redundant waiter cancelled, the rest take `mkdir`-atomic `.boxlock` — mechanism offered to all lanes |
 | 2026-08-12 | **Rules audit: packer, UCI surface, joint-vs-split** | Split beats joint by **156 B**; artifact already rules-minimal (only **42 B** reclaimable); no-temp-file packer built and verified |
 | 2026-08-12 | Time divisor at the real TC | Gap confirmed: 1800+3 gives a **150 s** first move. Scaled sweep (180+0.3, 5 arms) queued behind a 20-min quiet gate |
@@ -75,6 +76,74 @@ Since 2026-08-12 this lane serves **two separate goals** and entries say which:
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-12 — Packing, reversed twice: compose base-3 with lzma, and go joint
+
+The intelligence lane's finding — that base-3 packing loses to LZMA once trits
+are sparse — is right in direction, and checking it on our own weights changed
+two decisions, one of which was mine.
+
+### Base-3 vs LZMA: the answer is *both*
+
+Ternarising the real trained embedding (768×25 slice, threshold swept):
+
+| zeros | raw base-3 | base-3 → lzma | 1 byte/trit → lzma |
+|---|---|---|---|
+| 42.1% | 3840 | **3393** | 3873 |
+| 55.5% | 3840 | **3173** | 3586 |
+| 66.4% | 3840 | **2840** | 3118 |
+
+**Base-3 packing and LZMA are not alternatives — compose them.** Packing does the
+alphabet compaction (8 bits → 1.58/trit) and LZMA then finds the spatial
+correlation that survives it, worth a further 447-1000 bytes.
+
+The stated ~45% crossover comes from *uniform random* trits, and my control
+reproduces it exactly: random blobs at 20%/45% zeros prefer raw base-3 (1920 vs
+1937/1932) and only at 70% does LZMA win (1668). Real weights are not uniform —
+neighbouring squares of the same piece are correlated — so on real data the
+composed form wins at **every** sparsity, including 19.7% zeros. Do not tune the
+training threshold to chase a crossover that only exists for random data;
+measure the actual blob.
+
+### Joint vs split: my earlier conclusion was measured on the wrong data
+
+I previously locked "engine source xz'd, weights appended raw", measuring a blob
+of `os.urandom`. That was the wrong sample: incompressible by construction, so
+of course folding it into the stream only added encoding overhead. With a real
+ternary blob:
+
+| layout | bytes | vs split |
+|---|---|---|
+| split (engine.lzma + blob raw) | 16532 | — |
+| **joint, one lzma stream, byte concatenation** | **15525** | **−1007** |
+| joint, base64 literal in source | 16026 | −506 |
+| joint, escaped latin-1 literal | 16057 | −475 |
+
+**Joint wins by ~1000 bytes**, and the extra 13-byte container header the split
+pays is the least of it. Even the naive in-source literal forms beat splitting.
+
+The mechanism works without temp files: compress `[engine source][blob]` as one
+stream; the head pipes only the first `ENGLEN` bytes to the interpreter
+(`… | xz -d | head -c ENGLEN`), and the engine recovers its own weights with
+Python's built-in `lzma` — read the artifact from `SF_A`, decompress, slice past
+`ENGLEN`. Costs one extra decompression at startup, which the 60 s rules budget
+absorbs without noticing, and about 90 bytes of Python against 1007 saved.
+
+**Corrected design: one LZMA stream containing base-3-packed ternary weights
+after the engine source.** `pack_entry.sh` needs rewriting to this shape; the
+self-read `SF_A` mechanism it already uses is exactly what the engine needs to
+find the blob.
+
+### Still to verify from the same report
+
+The PST re-encoding (−310/−320 B) rests on the same principle this measurement
+confirms — eval data belongs *inside* the compressed stream, quantised and
+range-narrowed. It applies to **classic's** source (the packed engine's tables
+already live in the net file), so it is a shared-packer, build-time transform,
+and it should be measured before it is claimed. Same for the −103 attribute
+renaming and the −120/−155 UCI shell; the `eg_scale` term (~20 Elo, zero
+parameters) and mobility-fused-into-movegen (104 Elo for 26 B) are engine
+changes that need our own SPRT, not ice4's.
 
 ## 2026-08-12 — Box collision hazard: an atomic lock, and one fewer waiter
 
@@ -150,8 +219,11 @@ recording why. On a 2 KB bit-packed blob:
 | joint, escaped latin-1 inside the source | +746 | much worse |
 
 lzma cannot compress already-packed weights but still pays for the encoding, so
-the split is right. Same result for a base-3 ternary blob (+143). **Design
-locked: engine source compressed, weight blob appended raw.**
+the split is right. Same result for a base-3 ternary blob (+143).
+
+**SUPERSEDED — this measurement used `os.urandom`, i.e. incompressible data, and
+the conclusion does not survive on real weights. Re-measured with a genuine
+ternary blob, JOINT wins by 1007 bytes. See "Packing, reversed twice" above.**
 
 ### The delivery mechanism, rebuilt to leave nothing behind
 
