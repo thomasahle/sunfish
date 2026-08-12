@@ -304,9 +304,6 @@ PROBE_CAP = 40
 # Late move reduction: reduce quiet moves whose static value is below this,
 # once past the first few in the sorted list. 0 disables (classic parity).
 LMR = 60
-# Minimum sunfish_ui driver version this engine will run against; see the
-# check in main(). Raise it in the same commit that bumps DRIVER_VERSION.
-REQUIRED_DRIVER = 2
 # Reverse futility pruning margin per ply. 0 disables.
 # HELD AT 0: implemented and gated, but it INTERACTS with LMR. On the
 # mate-in-1 suite, baseline finds 5/8, LMR alone 5/8, RFP alone 5/8 --
@@ -928,6 +925,7 @@ def main():
         print("info string driver", _drv.__file__, "v%d" % _ver,
               "nodes" if _nodes else "NO-NODES", "fen" if _fen else "NO-FEN",
               flush=True)
+        REQUIRED_DRIVER = 2      # raise with DRIVER_VERSION, same commit
         if _ver < REQUIRED_DRIVER:
             raise SystemExit(
                 "sunfish_ui driver at %s is version %d, need >= %d. This is a "
