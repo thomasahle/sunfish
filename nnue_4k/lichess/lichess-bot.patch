@@ -40,7 +40,7 @@ index 891a771..bcf5c2f 100644
      def abort(self, game_id: str) -> None:
          """Aborts a game."""
 diff --git a/lib/lichess_bot.py b/lib/lichess_bot.py
-index 63ab211..a9260c3 100644
+index 63ab211..cc746fc 100644
 --- a/lib/lichess_bot.py
 +++ b/lib/lichess_bot.py
 @@ -344,6 +344,7 @@ def lichess_bot_main(li: lichess.Lichess,
@@ -130,7 +130,7 @@ index 63ab211..a9260c3 100644
          chlng = challenge_queue[0]
          if chlng.from_self:
              challenge_queue.pop(0)
-@@ -562,9 +585,37 @@ def game_is_active(li: lichess.Lichess, game_id: str) -> bool:
+@@ -562,9 +585,53 @@ def game_is_active(li: lichess.Lichess, game_id: str) -> bool:
      return game_id in (ongoing_game["gameId"] for ongoing_game in active_games)
  
  
@@ -144,7 +144,7 @@ index 63ab211..a9260c3 100644
 -                      play_game_args: PlayGameArgsType, pool: POOL_TYPE) -> None:
 -    """Start a game thread."""
 +                      play_game_args: PlayGameArgsType, pool: POOL_TYPE, max_games: int) -> None:
-+    """Start a game thread, or abort the game if no process would be free to play it."""
++    """Start a game thread, or abort (or resign) the game if no process would be free to play it."""
 +    li = play_game_args["li"]
 +    if len(games_in_progress) >= max_games and game_id not in games_in_progress:
 +        # Races when starting games (e.g. an opponent accepting an outgoing
@@ -161,16 +161,32 @@ index 63ab211..a9260c3 100644
 +            active_games.pop(game_id, None)
 +            log_proc_count("Freed", active_games)
 +            return
-+        except (HTTPError, ReadTimeout) as e:
-+            # Aborting fails once a game has two or more moves (e.g. a game
-+            # rediscovered after a restart). Playing it with the pool's
-+            # reserve process is better than abandoning it.
-+            logger.warning(f"Could not abort game {game_id} ({e}). Playing it with the reserve process instead.")
++        except (HTTPError, ReadTimeout, RemoteDisconnected, RequestsConnectionError) as e:
++            # Aborting fails once a game has two or more moves (it is past its
++            # abortable window, e.g. a game rediscovered after a restart).
++            # Playing it anyway would split the single full-strength process
++            # between two games and starve the original game into a time
++            # forfeit, so resign the overflow game instead. A resign of a
++            # rated game costs rating, which is why the ratingless abort
++            # stays the first choice.
++            logger.warning(f"Could not abort game {game_id} ({e}). Resigning overflow game: abort refused.")
++            try:
++                li.resign(game_id)
++            except (HTTPError, ReadTimeout, RemoteDisconnected, RequestsConnectionError) as resign_error:
++                # A failed resign must never propagate out of this handler:
++                # an exception here would interrupt the event that also owes
++                # the ORIGINAL game its move (the same principle as failed
++                # chat messages). The overflow game is left for lichess to
++                # abandon; it is never slow-served.
++                logger.warning(f"Could not resign game {game_id}: {resign_error}")
++            active_games.pop(game_id, None)
++            log_proc_count("Freed", active_games)
++            return
 +    games_in_progress.add(game_id)
      active_games[game_id] = opponent_name
      log_proc_count("Used", active_games)
      play_game_args["game_id"] = game_id
-@@ -615,7 +666,7 @@ def start_game(event: EventType,
+@@ -615,7 +682,7 @@ def start_game(event: EventType,
          startup_correspondence_games.remove(game_id)
      else:
          opponent_name = event["game"].get("opponent", {}).get("username", "")
@@ -179,7 +195,7 @@ index 63ab211..a9260c3 100644
  
  
  def enough_time_to_queue(event: EventType, config: Configuration) -> bool:
-@@ -724,6 +775,14 @@ def play_game(li: lichess.Lichess,
+@@ -724,6 +791,14 @@ def play_game(li: lichess.Lichess,
              game_stream = itertools.chain([json.dumps(game.state).encode("utf-8")], lines)
              quit_after_all_games_finish = config.quit_after_all_games_finish
              stay_in_game = True
@@ -194,7 +210,7 @@ index 63ab211..a9260c3 100644
              while stay_in_game and (not stop.terminated or quit_after_all_games_finish) and not stop.force_quit:
                  move_attempted = False
                  try:
-@@ -737,6 +796,7 @@ def play_game(li: lichess.Lichess,
+@@ -737,6 +812,7 @@ def play_game(li: lichess.Lichess,
                          takeback_field = game.state.get("btakeback") if game.is_white else game.state.get("wtakeback")
  
                          if not is_game_over(game) and is_engine_move(game, prior_game, board):
@@ -202,7 +218,7 @@ index 63ab211..a9260c3 100644
                              disconnect_time = correspondence_disconnect_time
                              say_hello(conversation, hello, hello_spectators, board)
                              setup_timer = Timer()
-@@ -752,6 +812,8 @@ def play_game(li: lichess.Lichess,
+@@ -752,6 +828,8 @@ def play_game(li: lichess.Lichess,
                                               correspondence_move_time,
                                               engine_cfg,
                                               fake_think_time(config, board, game))
@@ -211,7 +227,7 @@ index 63ab211..a9260c3 100644
                              time.sleep(to_seconds(delay))
                          elif is_game_over(game):
                              tell_user_game_result(game, board)
-@@ -770,8 +832,29 @@ def play_game(li: lichess.Lichess,
+@@ -770,8 +848,29 @@ def play_game(li: lichess.Lichess,
                          terminate_time = msec(wbtime) + msec(wbinc) + seconds(60)
                          game.ping(abort_time, terminate_time, disconnect_time)
                          prior_game = copy.deepcopy(game)

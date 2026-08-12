@@ -21,7 +21,11 @@ here:
   beyond ``challenge.concurrency`` (e.g. an outgoing matchmaking challenge
   accepted at the same time as an incoming one) must be aborted promptly, not
   queued behind the busy game process where it would sit until lichess
-  abandons it (production: game ZbT4vfAs, 2026-08-11).
+  abandons it (production: game ZbT4vfAs, 2026-08-11).  An overflow game past
+  its abortable window (lichess answers the abort with 400) must be resigned,
+  never played alongside the served game (production: game 9ZfJoFj2,
+  2026-08-12, whose "Playing it" fallback starved tF7hJY7T into a time
+  forfeit).
 * ``test_event_stream_death_is_loud``: if the process reading the event
   stream dies, the bot must notice the silence, say so in the log, and
   restart -- never idle deaf-but-online for an hour (production: 2026-08-11
@@ -347,8 +351,13 @@ def test_overflow_games_are_aborted_not_starved(lichess_bot, tmp_path):
     this; so does reconnecting with several games live).  Unpatched
     lichess-bot gives one such game the pool's reserve process and quietly
     queues the rest forever -- game ZbT4vfAs never saw a move until lichess
-    abandoned it.  The invariant: every started game is either played at
-    full strength or promptly, explicitly aborted.
+    abandoned it.  Also covers the 2026-08-12 production incident: an
+    overflow game that already has moves is past its abortable window, so
+    lichess answers the abort with 400 -- game 9ZfJoFj2 was then "played"
+    with the busy game's core and starved tF7hJY7T into a time forfeit.
+    Such a game must be resigned instead.  The invariant: every started game
+    is either played at full strength or promptly, explicitly ended (aborted
+    if abortable, resigned otherwise) -- never slow-served.
     """
     mock = MockLichess()
     mock.start()
@@ -370,16 +379,28 @@ def test_overflow_games_are_aborted_not_starved(lichess_bot, tmp_path):
                                            opponent_delay=999.0, seed=5 + i)
                     for i in range(2)]
 
+        # A third overflow game arrives already mid-game (it has moves), so
+        # it is past its abortable window and the mock -- like lila -- answers
+        # the abort with 400.  Production 2026-08-12: bare gameStart for
+        # 9ZfJoFj2 while tF7hJY7T was being served.  The bot must resign it,
+        # never play it with the served game's core.
+        unabortable_id = mock.start_direct_game(bot_plays_white=True,
+                                                clock_limit=60,
+                                                opponent_delay=999.0, seed=9,
+                                                initial_moves=("e2e4", "e7e5"))
+
         deadline = time.monotonic() + ABORT_WINDOW
-        for game_id in overflow:
+        for game_id, expected in [(g, "aborted") for g in overflow] + \
+                                 [(unabortable_id, "resign")]:
             game = mock.games[game_id]
             _wait_for(lambda g=game: g.status != "started",
                       max(0.1, deadline - time.monotonic()),
-                      f"overflow game {game_id} was never aborted: it would "
-                      "sit unserved until lichess abandoned it", proc)
-            assert game.status == "aborted", \
+                      f"overflow game {game_id} was never ended: it would "
+                      "sit unserved until lichess abandoned it (or starve "
+                      "the served game if played)", proc)
+            assert game.status == expected, \
                 f"overflow game {game_id} ended {game.status}, expected a " \
-                "prompt abort"
+                f"prompt {expected}"
             assert not game.bot_move_latencies, \
                 f"overflow game {game_id} received engine moves: the one " \
                 "game slot must keep full strength (concurrency stays 1)"
@@ -389,6 +410,12 @@ def test_overflow_games_are_aborted_not_starved(lichess_bot, tmp_path):
         _wait_for(game1.finished.is_set, GAME_TIMEOUT,
                   f"game {challenge_id} did not finish", proc)
         _check_game(game1, "served game")
+
+        # The resign fallback must be loud in the log (whitespace collapsed:
+        # the bot's console handler wraps long lines).
+        log_flat = " ".join(log_path.read_text(errors="replace").split())
+        assert "Resigning overflow game: abort refused" in log_flat, \
+            "the abort-refused resign was not logged loudly"
 
 
 @pytest.mark.skipif(shutil.which("lsof") is None, reason="needs lsof")

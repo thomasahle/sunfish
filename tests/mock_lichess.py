@@ -484,7 +484,8 @@ class MockLichess:
 
     def start_direct_game(self, bot_plays_white: bool = True, clock_limit: int = 60,
                           clock_increment: int = 0, opponent_delay=0.0,
-                          move_cap: int = 200, rated: bool = False, seed=None) -> str:
+                          move_cap: int = 200, rated: bool = False, seed=None,
+                          initial_moves: tuple = ()) -> str:
         """Start a game without any challenge/accept exchange; returns the game id.
 
         This is legitimate wire behavior: lichess emits a bare gameStart when
@@ -492,6 +493,11 @@ class MockLichess:
         replays gameStart for ongoing games whenever the event stream
         (re)connects.  The bot never gets to accept or reserve these games --
         exactly the race that overflows challenge.concurrency.
+
+        `initial_moves` (UCI strings) are on the board before the gameStart is
+        emitted.  Two or more make the game unabortable -- lila answers the
+        abort with 400, like a mid-game gameStart for a game that already has
+        moves.
         """
         self._game_counter += 1
         game_id = f"dirGam{self._game_counter:02d}"
@@ -500,6 +506,8 @@ class MockLichess:
                     clock_limit=clock_limit, clock_increment=clock_increment,
                     opponent_delay=opponent_delay, move_cap=move_cap,
                     rated=rated, seed=seed)
+        for uci in initial_moves:
+            game.board.push(chess.Move.from_uci(uci))
         self.games[game_id] = game
         game.start()
         self.push_event({"type": "gameStart", "game": game.event_info_json()})

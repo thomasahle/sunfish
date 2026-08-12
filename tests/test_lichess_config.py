@@ -87,10 +87,12 @@ def test_patch_ships_and_targets_the_bridge(BUNDLE):
     assert patch.startswith("diff --git"), "lichess-bot.patch is not a git diff"
     for target in ("lib/lichess.py", "lib/lichess_bot.py"):
         assert f"a/{target}" in patch, f"patch no longer covers {target}"
-    # The three production fixes must all be present.
+    # The production fixes must all be present.
     assert "EVENT_STREAM_SILENCE_LIMIT" in patch, "stream-death fix missing"
     assert "games_in_progress" in patch, "concurrency overflow fix missing"
     assert "move_due" in patch, "interrupted-move retry fix missing"
+    assert "Resigning overflow game: abort refused" in patch, \
+        "unabortable-overflow resign fallback missing"
 
 
 def test_setup_pin_matches_integration_test(BUNDLE):
