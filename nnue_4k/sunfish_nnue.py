@@ -297,6 +297,10 @@ directions = {
 QS = 40
 QS_A = 140
 EVAL_ROUGHNESS = 15
+# Probes per depth before the MTD driver gives up and commits what it has.
+# The stable engine provably needs <= 15; this engine may not, so the bound
+# is enforced rather than assumed.
+PROBE_CAP = 40
 # Max entries kept in each transposition table, roughly 1GB per million.
 # Python dicts keep insertion order, so we cheaply evict the oldest entry
 # when full (see issue #95).
@@ -755,12 +759,39 @@ class Searcher:
             # Inv: lower <= score <= upper
             # 'while lower != upper' would work, but it's too much effort to spend
             # on what's probably not going to change the move played.
-            lower, upper = 1 - MATE_UPPER, MATE_UPPER
+            lower, upper, probes = 1 - MATE_UPPER, MATE_UPPER, 0
             while lower < upper - EVAL_ROUGHNESS:
                 score = self.bound(pos, gamma, depth, root=True)
-                if score >= gamma: lower = score
-                if score < gamma: upper = score
+                # INSTABILITY GUARDS. This engine deliberately breaks
+                # one-value-per-key (reductions, history, gamma-dependent
+                # cutoffs), and MTD-bi has no real window in which to absorb
+                # a contradiction: it only ever probes null windows and
+                # bisects on the answers, assuming they bracket ONE function.
+                # Two probes can now disagree (">= 100" at gamma=100, then
+                # "< 50" at gamma=50), so:
+                #  (a) tighten MONOTONICALLY -- max/min rather than plain
+                #      assignment -- so a contradictory probe can never widen
+                #      the bracket and spin the loop forever;
+                #  (b) stop if the bracket CROSSES, committing the last
+                #      self-consistent value rather than bisecting nonsense;
+                #  (c) cap the probes per depth. We used to PROVE <= 15; that
+                #      proof does not survive instability, so the invariant
+                #      becomes a runtime check that trips loudly (dev builds)
+                #      instead of silently ceasing to hold.
+                if score >= gamma: lower = max(lower, score)
+                else: upper = min(upper, score)
+                probes += 1
                 yield depth, gamma, score, self.tp_move.get(pos)
+                if lower > upper or probes > PROBE_CAP:
+                    # minifier-hide start
+                    if probes > PROBE_CAP:
+                        print("info string MTD-GUARD probe cap hit: depth", depth,
+                              "lower", lower, "upper", upper, flush=True)
+                    if lower > upper:
+                        print("info string MTD-GUARD bracket crossed: depth", depth,
+                              "lower", lower, "upper", upper, flush=True)
+                    # minifier-hide end
+                    break
                 gamma = (lower + upper + 1) // 2
 
 
