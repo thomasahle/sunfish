@@ -18,7 +18,8 @@ messages that served as the ledger before this file existed (`git log
 
 | Date | Experiment | Verdict |
 |---|---|---|
-| 2026-08-12 | **Hot-path profile: the bottleneck is the BOARD, not the eval** | ~85% of a node is Python board/namedtuple work; the accumulator is 3.0µs of 14.6µs — biggest untapped lever |
+| 2026-08-12 | **CORRECTION: the bottleneck is `nn_cp`, not the board** | The "85% board" claim was an inference error (marginal ≠ total). Measured: net 8.1µs vs board 2.9µs of a 14.6µs move — mutable board is worth ~+15 Elo, not +71…+110 |
+| 2026-08-12 | Hot-path profile (superseded in part) | ~85%-board claim WRONG — see the correction entry above |
 | 2026-08-12 | **GOAL-LINE VERDICT: +187.0 ± 49.7 vs classic @60+1** | **272 games, zero time losses. Target +400 NOT met — but against a classic that gained ~+130 during the campaign** |
 | 2026-08-12 | `_ext` integerization: scoped and priced | DONT BUILD (SWAR tail 5.2-10.3µs vs 3.8µs now) — but a dead-code third removed: rehab800 0.643 → 0.742× kb8, +21 Elo |
 | 2026-08-12 | **Quality-term hunt restarted: labels + 3 new families** | IN FLIGHT — 28-pair fixed-node label RR running locally; metric C shows the first honest signal (churn ranks kbbil worst, w256 best) |
@@ -58,7 +59,94 @@ messages that served as the ledger before this file existed (`git log
 
 ---
 
-## 2026-08-12 — Hot-path profile: the bottleneck is the board, not the eval
+## 2026-08-12 — CORRECTION: the bottleneck is `nn_cp`, and the mutable board is a ~+15 item
+
+**The entry below this one is wrong and I am correcting it before anyone builds
+on it.** It claimed ~85% of a node is board mechanics and ~15% is the network,
+and priced a mutable board at +71…+110 Elo. The inference was bad: I measured
+that widening 128→256 moves `move()` by only 3.05 µs and read that as "the
+network costs 3 µs". That is the **marginal** cost of doubling the width, not
+the **total** cost of the network. A 128-wide net still pays a full output
+layer.
+
+Measured directly (pypy, 40 middlegame positions, w256 — the play king),
+component by component inside a 14.56 µs `move()`:
+
+| component | µs | kind |
+|---|---|---|
+| **`nn_cp` (packed head: SWAR clamp + 2 modular hsums)** | **6.43** | network |
+| accumulator delta (4 big-int row adds) | 1.68 | network |
+| `board[::-1].swapcase()` (the always-white rotate) | 1.88 | board |
+| `Position(...)` namedtuple construction | 0.64 | board |
+| `put` splice ×3 | ~0.34 | board |
+| `value(move)` | 0.045 | board |
+| `hash(pos)` — the TT key | 0.409 | TT |
+| …of which `hash(acc)` alone | 0.504* | TT |
+| `hash(board)` alone | 0.129 | TT |
+| `eq(pos, child)` | 0.332 | TT |
+
+\* measured separately, so it exceeds the whole-tuple figure — namedtuple
+hashing short-circuits on the fields it reaches first; the point stands that the
+accumulator is the expensive field in the key.
+
+**So the network is ~8.1 µs (≈55% of `move()`) and board mechanics are ~2.9 µs
+(≈14%).** Against a full node of roughly `move` + `gen_moves` + `value` ≈ 23 µs,
+a perfect mutable board removes at most the 2.86 µs of rotate + namedtuple +
+splices, and gives some of it back as make/unmake bookkeeping. That is ~10-12%,
+i.e. **+15 Elo, not +71…+110**.
+
+The honest consequence: **the mutable board was approved on the strength of a
+number I got wrong.** It is still positive, and "anything goes" still licenses
+it, but it is now a high-effort/high-risk item worth about as much as the
+one-line `_ext` fix that already landed (+21), and less than the search-constant
+RR now running (+30…+68). It should not be the next thing built.
+
+**The real target is `nn_cp` at 6.43 µs** — 28% of a node, paid on every single
+position created. It is ~22 sequential big-integer operations on 8192-bit ints
+(AND, shift, ×`ONES`, OR, subtract, two `% M16` reductions). `ONES` is
+`2^15 − 1`, a *small* constant, so these are linear-time big×small operations,
+not the n^1.7 multiplies that killed multiply-and-split — the cost is the
+op *count* at that width. Two concrete leads, both cheap to test and both
+bit-exactness-checkable: (1) fuse the two `% M16` reductions into one by
+differencing the blocks first and recovering the sign from the residue, since
+|lane-sum difference| < M16; (2) drop one mask construction by re-deriving the
+cap mask from the relu mask. Each big-int op removed is ~0.3 µs ≈ +4 Elo.
+
+Also worth its own small experiment: the TT key hashes the accumulator, which is
+**derived** from the board and therefore redundant for identity — `hash(pos)`
+0.409 µs against `hash(board)` 0.129 µs, on every probe and store.
+
+### Archaeology of the previous attempt (verified, not repeated)
+
+`0622039` / `86141a6` on `nnue-mutable-board` (2026-08-05) rewrote
+`Position.move`/`rotate` as `@contextmanager`s. The interface was right; the
+body was the problem, and it is worth quoting because it inverts the whole
+point:
+
+    orig_board = self.board
+    orig_wf = self.wf.copy(); orig_bf = self.bf.copy()
+    board_list = list(self.board)
+    wf = self.wf.copy(); bf = self.bf.copy()
+
+A full board copy **plus four feature-vector copies per node**, restored from
+the snapshot afterwards — strictly *more* allocation than the immutable version
+it replaced, with contextlib generator overhead on top. It bought the syntax and
+none of the speed. `dc6c554` ("Fix crash on black-to-move FEN positions — rotate
+is a context manager") shows the shape also leaked into callers that assumed
+value semantics.
+
+If it is ever built, the design constraints are now known: true make/unmake by
+inverse operation (touch only the 2-4 squares moved, subtract exactly the deltas
+added, no copies on the hot path); hand-written `__enter__`/`__exit__` rather
+than contextlib, measured against an explicit make/unmake variant as the speed
+ceiling; every caller holding a `Position` across a move enumerated first (the
+driver's `hist` list above all), because make/unmake ends value semantics; and
+**perft before the node-identity bench**, since a mutable board that mutates
+wrong fails perft instantly. Note also that the TT keys on `Position` — with
+mutation, that key must become an explicit incremental hash, which is a second
+substantial piece of work the +15 has to pay for.
+
+## 2026-08-12 — Hot-path profile (the "85% board" claim here is WRONG — see the correction above)
 
 The `_ext` audit found a third of that path was dead work nobody had timed. The
 **main** path — the one every net pays, including the play king — had never had
@@ -84,6 +172,11 @@ Rough per-node arithmetic: **~85% of the engine's time is Python board
 manipulation and ~15% is the neural network.** Years of this lane's effort have
 gone into making the 15% cheaper (SWAR clamps, folded weights, fused loaders)
 while the 85% went unmeasured.
+
+*(Superseded: the ~85%/15% split below rests on the marginal-vs-total error
+corrected in the entry above. Measured properly, the network is ~55% of `move()`
+and board mechanics ~14%, so the figures in this paragraph are wrong by roughly
+5×. Kept for the record.)*
 
 This reframes the remaining Elo gap. At the measured ~100 Elo per speed
 doubling: halving board cost is ≈1.64× overall → **+71 Elo**; a 3× board
@@ -136,7 +229,7 @@ and benched.
 | # | Item | Predicted | Cost | Status |
 |---|---|---|---|---|
 | 1 | Search constants (QS/ER) | **+30…+68** — offline says −22%…−37% nodes at equal cp-loss, which at 100 Elo/doubling is a 1.3-1.6× effective speedup | zero, already built | RR running now |
-| 2 | **Board representation** | **+50…+110** — the profile above | high: semantic port, exactness ladder, shared with classic and with the formal model | proposal, needs its own costing |
+| 2 | **Board representation** | **+15** (corrected; the +50…+110 was the marginal-vs-total error) | high: semantic port, exactness ladder, shared with classic and with the formal model | proposal, needs its own costing |
 | 3 | krff play screen | 0…+20 — val 0.00729 ≈ w256's 0.00731, but at 0.991× speed instead of a tax | ~2h box | queued |
 | 4 | `_ext` dead-code fix | **+21 to every bilinear-family net** (0.643 → 0.742×) | done | landed 4810a5a |
 | 5 | King-safety features | +20…+40 if it converts — the diagnosed weakness (compensation-class loss runs ~5× overall) that no arch change has yet addressed; an incrementally-maintainable pawn-shield/king-ring plane is the cheapest form | trainer + engine + one training run | proposal |
