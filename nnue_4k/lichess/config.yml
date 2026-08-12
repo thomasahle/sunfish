@@ -61,4 +61,19 @@ challenge:
     - rated
 
 matchmaking:
-  allow_matchmaking: false
+  # Challenge a random online bot after a spell of idleness: the bots sit
+  # unchallenged for long stretches, and games are the only instrument we
+  # trust. Never during a game -- with concurrency 1, an outgoing challenge
+  # accepted mid-game is precisely the overflow race that has bitten us.
+  allow_matchmaking: true
+  allow_during_games: false
+  challenge_timeout: 10               # idle minutes before going looking
+  challenge_initial_time:             # blitz and rapid: where the eval shows
+    - 180
+    - 300
+  challenge_increment:
+    - 1
+    - 2
+  opponent_rating_difference: 300
+  challenge_mode: "rated"             # the point is to move the rating
+  challenge_filter: "coarse"          # don't pester bots that declined
