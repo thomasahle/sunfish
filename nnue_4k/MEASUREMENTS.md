@@ -18,6 +18,7 @@ messages that served as the ledger before this file existed (`git log
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-12 | **Quality-term hunt restarted: labels + 3 new families** | IN FLIGHT — 28-pair fixed-node label RR running locally; metric C shows the first honest signal (churn ranks kbbil worst, w256 best) |
 | 2026-08-12 | **H2 paired form (the honest successor)** | **FAILS validation — sign flips across labeled pairs; H2 is closed, quality is fixed-node games only** |
 | 2026-08-12 | H2 optimism bias, controls | DEAD in simple form — every net is an optimist on its own losses (kb8 +105 worst) |
 | 2026-08-12 | krff gates (256×kb8×rff64) | PASS all — val 0.00729, shape 0.53%, **nps 0.991× — rff is free at width** |
@@ -53,6 +54,100 @@ messages that served as the ledger before this file existed (`git log
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-12 — The quality term, restarted: why four metrics failed, and the label problem
+
+Thomas rejected "quality = fixed-node games only" and named the root cause the
+four dead metrics share. It is worth stating exactly, because it is the design
+rule for everything that follows:
+
+> **Elo depends on eval error only through the decisions it changes.** Error far
+> from a decision boundary is free; error between two near-equal moves flips the
+> choice. Every metric so far averaged error uniformly over a position set,
+> diluting the signal that matters with error that does not — and sampled the
+> wrong distributions (dump positions, own-loss positions, frozen FENs) instead
+> of positions where the engine's choice is actually close.
+
+There is a second, independent problem: **we were validating against six
+pairwise labels.** Six cannot separate a real correlation from luck, which means
+a good metric could already have been rejected wrongly. Labels come first.
+
+### Workstream 1 — more labels (running)
+
+Fixed-node results are machine-independent, so the labels do not need the bench
+box (busy with Thomas's pr171 match). Running locally on the Mac with fastchess
+built there: **8 nets, round-robin, 28 pairs, 20000 nodes/move, 60 games/pair =
+1680 games**, openings_2k, `-recover`, concurrency 3 and niced (it is Thomas's
+working laptop). The roster is v2, kb4, kb8, kbbil, rehab800, w256, msp, krff;
+the pre-registered 256ng-vs-w256 test is chained behind it.
+
+This required `go nodes N` in the driver (landed e500a9a) and turned up an
+infrastructure bug worth recording: two net files had arrived **truncated** from
+an interrupted copy — w256 at 5.4MB against its real 14.9MB — and one was
+already in a running match. Caught by a size check against the source before it
+burned an overnight run; every net is now byte-size verified and load-verified
+before use. *Any pgn produced between those two events would have been silently
+garbage.*
+
+### Pre-registered predictions (the speed model bets on this RR)
+
+Fixed-node labels have the speed term **zero by construction**, so the speed
+model makes a falsifiable prediction: fixed-node ΔElo should equal the timed
+ΔElo minus 102·log2(nps ratio). Written down before the games finish:
+
+| pair | predicted fixed-node ΔElo |
+|---|---|
+| kb8 vs kb4 | +70.6 |
+| w256 vs kb8 | +77.1 |
+| kb4 vs v2 | −27.8 |
+| rehab800 vs kb8 | **−1.2** (the whole −70.4 was speed) |
+| kbbil vs kb8 | **−1.0** (the whole −83.2 was speed) |
+
+If rehab800 and kbbil come out near zero at fixed nodes, the speed model is
+confirmed a second independent way and the ext family's eval is vindicated. If
+they come out clearly negative, the speed-only model was over-crediting speed
+and the quality term is bigger than believed. Either outcome is informative.
+
+### Workstream 2A — metric family C: search cooperation (measured)
+
+The mechanism H4 always needed: an eval that is accurate but *jumpy between
+siblings* makes MTD-bi re-probe, so the same depth costs more probes and the
+engine is effectively slower even at equal nps. Measured at equal depth 5 over
+60 real-game positions:
+
+| net | nodes@d5 | probes/depth | PV flips | sibling sd |
+|---|---|---|---|---|
+| v2 | 1350259 | 6.22 | 0.283 | 0.557 |
+| kb4 | 982170 | 6.24 | 0.290 | 0.572 |
+| kb8 | 1340319 | 6.28 | 0.287 | 0.641 |
+| kbbil | 1092014 | **6.44** | **0.330** | 0.628 |
+| rehab800 | 961613 | 6.34 | 0.290 | 0.667 |
+| w256 | 1216432 | **6.22** | **0.273** | 0.684 |
+| msp | 1060932 | 6.29 | 0.290 | 0.608 |
+| krff | 1126190 | 6.24 | **0.273** | 0.628 |
+
+The churn columns order the two extremes correctly on the first try: kbbil (the
+−83 collapse) has the most re-probing and the least stable PV; w256 (the +52.5
+play king) has the least of both, with krff tied at the top on flips. Note
+**sibling sd does NOT track play** (w256 has the highest raw jumpiness while
+playing best) — so the useful quantity is what the *search* does with the eval,
+not the eval's raw variance. That distinction is the whole content of "with a
+mechanism".
+
+Preliminary validation against the six speed-adjusted quality labels (timed
+ΔElo minus the speed term): probes/depth LOO RMS 46.5, PV flips 48.7, sibling sd
+51.5, quiet val 55.4 — all against a null of 45.7, i.e. **none clears the bar on
+six labels**, though probes (+0.60) and flips (+0.66) have the right sign by
+Spearman where val is *negative* (−0.26). This is exactly the resolution problem
+Thomas identified; the verdict waits for the 28-pair set.
+
+### Status
+
+Families A (outcome calibration vs actual W/D/L, no oracle) and B
+(decision-margin-restricted regret, SF multipv≤30cp with a sensitivity sweep)
+are computed but not yet validated — they need the labels. Nothing enters the
+formula until leave-one-out on the enlarged set says it beats the null. H3 stays
+unstarted.
 
 ## 2026-08-12 — H2 paired form: fails validation, and H2 is closed
 
