@@ -663,7 +663,13 @@ class Searcher:
             # and the futility val stay the static pos.value (the sort may
             # reorder, never re-admit -- the killer/tp_move ordering
             # precedent covers this invariance class).
-            hh = self.hh
+            # At frontier nodes (depth <= 1) the key MUST stay the static
+            # value alone: the futility break below discards the rest of
+            # the list, which is only sound when iteration is descending
+            # in val. A history-scrambled order let an early low-val move
+            # break away later non-futile moves -- the node failed low,
+            # the parent inflated, and the screen paid -449 Elo for it.
+            hh = self.hh if depth > 1 else {}
             for _, val, move in sorted(((v + hh.get((pos.board[m.i], m.j), 0), v, m)
                                         for m in pos.gen_moves()
                                         if (v:=pos.value(m)) >= val_lower), reverse=True):
