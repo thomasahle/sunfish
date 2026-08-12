@@ -68,12 +68,16 @@ matchmaking:
   allow_matchmaking: true
   allow_during_games: false
   challenge_timeout: 10               # idle minutes before going looking
-  challenge_initial_time:             # blitz and rapid: where the eval shows
+  challenge_initial_time:             # 60+0 through 300+3, picked at random
+    - 60
+    - 120
     - 180
     - 300
   challenge_increment:
+    - 0
     - 1
     - 2
+    - 3
   opponent_rating_difference: 300
   challenge_mode: "rated"             # the point is to move the rating
   challenge_filter: "coarse"          # don't pester bots that declined
