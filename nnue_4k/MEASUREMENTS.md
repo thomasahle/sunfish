@@ -174,15 +174,35 @@ which was the specific thing to check.
 
 Footprint: 17 processes of ours against the ≤20 rule, load 17.5 of 96 cores.
 
-### First result: RFP's mate gate passes on the PST entry
+### First result: RFP's mate gate passes on the PST entry — and the earlier finding was over-generalised
 
     RFP mate gate: base=5 variant=5   (mate-in-1 suite, depth 4)
 
-**No regression** — where the same feature pair lost mates **5/8 → 3/8** on the
-NNUE engine. So that interaction was **eval-dependent**, not a property of
-LMR+RFP as such: with classic's piece-square tables the mate scores survive.
-Worth remembering before generalising any search-feature interaction across
-evals — the gate has to run against the eval the feature will ship with.
+**No regression**, where the same feature pair lost mates **5/8 → 3/8** on the
+NNUE engine. I recorded that earlier as "LMR+RFP loses mates". That was wrong as
+stated: it is **eval-dependent**, and the mechanism says why.
+
+RFP prunes on a **static-eval margin** — `score - margin*depth >= gamma` returns
+without searching. Whether that is safe near a forced mate depends entirely on
+how the evaluation scores near-mate positions:
+
+- **A net's outputs near mate are learned**, and mate positions are rare and
+  extreme in training data, so its scores there are poorly calibrated and can sit
+  far from the mate band. A margin test against a miscalibrated score prunes the
+  line that proves the mate.
+- **A PST's output is a fixed material-plus-position sum.** Near mate it is
+  whatever the material says, predictably, and the mate band (`MATE_LOWER`) sits
+  far above anything the tables can produce — so the margin test does not fire
+  where the mate lives.
+
+Same search feature, same margin, opposite outcome, because the two evals behave
+differently in exactly the region the feature reasons about.
+
+**The general rule, which will bite again:** *eval-margin-based pruning must be
+re-gated per eval and never inherited across evals.* That covers RFP, LMP,
+futility pruning, delta pruning in QS — and it applies to the startup-decode
+work, where the whole point is to change what the eval is. A gate result is a
+property of the (feature, eval) pair, not of the feature.
 
 The RFP screen is running (300 games, fixed nodes, our-vs-our), LMP chained
 behind it with its own gate.
