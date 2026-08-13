@@ -46,6 +46,8 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-14 | **PRE-REGISTERED: the gamma seed goes to a NON-INFERIORITY screen — and it lands in the SEARCH lane, not here** | +5 B on every base; **every arm passes first yield with it**, including both that fail without; 1.0000× nodes and the **same move 40/40** at completed depth 8. H1 = engine1 = seed; LAND if the 95% LB excludes −10 |
+| 2026-08-14 | **The obvious timed spot-check is VACUOUS, by arithmetic** | No abort can land before node 2,048, so any build with max first yield ≤2,048 is immune at *every* TC — and at 10+0.1 the `0.9·winc` term floors `think` at ~3,800 nodes. Re-specified to **1+0, b8 vs b8seed**, with a base-vs-seed control pair |
 | 2026-08-14 | **THE MIX IS THE MECHANISM — a SIZE-MATCHED control swings phase 18-24 by 16.8 points** | At identical N=8,792: natural mix **+11.70 ± 7.58 worse** than classic (40/40 splits), flat mix **−4.95 ± 3.51 better**. Pre-registered check CLEARED. Not the halved data — the mix |
 | 2026-08-14 | **The gamma seed is a BLOCKER, not a lead: SIX fitted candidates, six times at the cliff** | b1 passes first yield by **37 nodes**, b8 fails at 2,433. The +5-byte root seed clears every arm ever fitted here (2.8–5.2× margin). The byte-negative arm cannot be screened until it lands |
 | 2026-08-14 | The trainer's single-split band row is an OUTLIER in the band the check turns on | Seed 20260813 reads +4.15% for `bal8792` against a 12-split range of [−12.06, +1.64], and +14.24% for d1 against [+2.12, +14.13] — extreme in both, because the FEN-keyed split makes the two sets inherit the same unlucky draw |
@@ -222,6 +224,137 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-14 — PRE-REGISTRATION: the root gamma seed goes to a NON-INFERIORITY screen. It is a SEARCH change and it does not land here
+
+The seed is now formally a **blocker** on the eval programme: `b8` and `d8`, the
+two byte-negative arms, fail the first-yield gate, and `b1` passes it by 37
+nodes. This entry is the screen kit, written before the script is staged.
+
+**WHERE THIS LANDS. The seed is a SEARCH change.** If it passes it lands as a
+**search-lane commit on `nnue-4k` in `sunfish-packed`**, not on
+`eval-decode-track`, and the commit/PR authorship should say so. This lane owns
+the measurements below because it owns all eight first-yield builds; it does not
+own the change.
+
+### The arm, built by the generator
+
+`make_variants.py` mod `seed`: `gamma = 0` → `gamma = pos.score - 150` at the
+root probe, one anchor, asserted to occur exactly once. Composed with every
+candidate through the same generator rather than by hand.
+
+| arm | packed | vs base | | arm | packed | vs base |
+|---|---|---|---|---|---|---|
+| base | 3350 | — | | seed | 3355 | **+5** |
+| d1 | 3421 | +71 | | d1seed | 3426 | +76 |
+| d8 | 3306 | −44 | | d8seed | 3311 | −39 |
+| b1 | 3431 | +81 | | b1seed | 3436 | +86 |
+| b8 | 3316 | −34 | | b8seed | 3321 | −29 |
+
+**+5 bytes on every base**, which is the whole price.
+
+### First yield: every arm, both bases, one instrument
+
+| arm | median | p90 | p99 | **MAX** | gate |
+|---|---|---|---|---|---|
+| base | 5 | 28 | 178 | **780** | PASS |
+| **seed** | 4 | 24 | 80 | **171** | PASS |
+| d1 | 5 | 40 | 220 | 1,896 | PASS |
+| **d1seed** | 4 | 26 | 123 | **537** | PASS |
+| d8 | 5 | 44 | 377 | 2,059 | **FAIL** |
+| **d8seed** | 4 | 26 | 125 | **478** | PASS |
+| b1 | 4 | 38 | 447 | 2,011 | PASS |
+| **b1seed** | 4 | 24 | 140 | **728** | PASS |
+| b8 | 5 | 42 | 620 | 2,433 | **FAIL** |
+| **b8seed** | 4 | 22 | 140 | **394** | PASS |
+
+Generator-built and re-measured from scratch; the numbers reproduce the earlier
+hand-substituted ones exactly. **Every arm passes with the seed**, including
+both that fail without it, and the incumbent improves 4.6×.
+
+### The other gates, and the cost
+
+| | base | seed |
+|---|---|---|
+| legality | 100/100 | **100/100** |
+| mate-in-1 | 8/8 | **8/8** |
+| standalone, empty dir | `g1f3` | **`g1f3`** |
+| nodes to complete depth 8, 40 positions | 691,287 | **691,313 = 1.0000×** |
+| same move at completed depth 8 | — | **40/40** |
+
+At equal completed depth the seeded search returns **the same move on every one
+of 40 positions and costs 0.004% more nodes**. The seed only changes what a
+search that is *stopped* commits to — which is exactly why it still needs games.
+
+### THE SCREEN, pre-registered
+
+Non-inferiority: the seed is bought for correctness, not Elo, so the question is
+whether it costs anything, not whether it gains.
+
+| | |
+|---|---|
+| instrument | `ab_fixednode.sh`, 20,000 fixed nodes, the 2,000-position book, arena `eval-c1-20260813` |
+| **engine1** | **`seed`** |
+| engine2 | `base` |
+| SPRT | **elo0 = −10, elo1 = 0**, α = β = 0.05 |
+
+**THE ORIENTATION TRAP, written out because it has bitten this project.**
+fastchess states `elo0`/`elo1` **in engine1's frame** — verified against our own
+record, not assumed: the C2 screen ran `-engine name=base` first with
+`elo0=0 elo1=10` and reported "H1 was accepted" when **base** scored 63.18%. So
+with `seed` as engine1:
+
+- **H1 accepted → the seed is not inferior by 10 Elo → LAND.**
+- **H0 accepted → the seed is worse than −10 → DROP.**
+- **LAND requires the 95% lower bound to exclude −10**; DROP only on a
+  demonstrated real cost. An undecided run at cap is reported as undecided.
+
+### WHAT FIXED-NODE CANNOT SEE, and why the obvious timed check is VACUOUS
+
+The seed's entire benefit is *yield timing under `Stop`*, and fixed-node play
+never raises `Stop` before the search has answered. The SPRT above can therefore
+only show that the seed **costs nothing**; it cannot show that it **buys**
+anything. A timed check has to do that, and the naive version does not work:
+
+Both stop conditions are polled at `self.nodes % 2048 == 0`, so **no abort can
+land before node 2,048**. Any build whose max first yield is ≤ 2,048 is immune
+to the `(none)` class at *every* time control. base is 780 and seed is 171 —
+**both immune**. The driver's budget is
+`think = min(wtime/12 + 0.9·winc, wtime/2 − 1)` seconds, and at the measured
+42,473 nps, 2,048 nodes ≈ **48 ms**.
+
+- At **10+0.1** the `0.9·winc` term alone floors `think` at 90 ms ≈ 3,800 nodes.
+  **Nothing is ever aborted before node 2,048**, so base-vs-seed at 10+0.1
+  returns zero for both arms whatever is true. That is a gate that passes
+  everything — the exact failure mode this lane has paid for four times.
+- At **1+0** (`winc = 0`), `think = wtime/12` drops below 48 ms whenever
+  `wtime < 0.58 s`, which happens in the endgame of essentially every game.
+
+**So the spot-check is re-specified, and this is a deliberate deviation from the
+suggested 200 games @ 10+0.1:**
+
+| | |
+|---|---|
+| TC | **1+0** (zero increment — the increment is what makes the check vacuous) |
+| arms | **`b8` vs `b8seed`** — b8's max first yield is 2,433, *above* the cliff |
+| control pair | `base` vs `seed`, same TC |
+| n | 200 games per pair |
+| counted | `bestmove (none)`, illegal-move adjudications, time forfeits |
+| **prediction** | **`b8` > 0; `b8seed` = 0; base = 0 and seed = 0** |
+
+The control pair is what makes it an instrument rather than an anecdote: it
+shows the time control alone does not manufacture the failure. **This is a
+correctness count, not an Elo measurement**, and it is registered as such —
+1+0 on a shared box is far too noisy for a strength claim and none is made.
+
+### Not pre-registered, deliberately
+
+No Elo prediction. The seed changes the bisection, so a stopped search can
+commit to a different move; whether that is worth anything is what the screen is
+for, and this lane's record on predicting Elo from anything other than games is
+0 for 2.
 
 ---
 

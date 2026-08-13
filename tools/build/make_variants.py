@@ -92,6 +92,23 @@ MODS = {
     # the halved position count. See the pre-registration entry.
     "b1": _deferred(1, False, "", "tools/tune/candidates/bal/students.json", "linear"),
     "b8": _deferred(8, False, "K", "tools/tune/candidates/bal/students.json", "q8"),
+    # ---- SEARCH: the root gamma seed. THIS IS NOT AN EVAL MOD -------------
+    # `search()` starts every search at gamma = 0 and bisects. The root stores a
+    # move ONLY on a fail-high, so the node count of the first root fail-high --
+    # the "first yield" -- is the earliest the engine can answer at all, and
+    # both stop conditions are polled at `nodes % 2048 == 0`. A build whose
+    # first yield exceeds 2048 answers `bestmove (none)`.
+    #
+    # Seeding BELOW the static score makes the first probe cheap and one-sided:
+    # it is a fail-HIGH, which is the kind that produces a move. `pos.score`
+    # alone is a trade, not a fix -- it helps every fit and makes the incumbent
+    # WORSE (780 -> 2,920), because seeding at the true value makes the first
+    # probe a coin flip. The -150 offset is what makes it one-sided.
+    #
+    # Eight builds measured: every fitted eval this lane has produced sits at
+    # or over the 2,048 cliff, and this clears all of them. It is a SEARCH
+    # change and lands in the search lane, not here.
+    "seed": ("\n        gamma = 0\n", "\n        gamma = pos.score - 150\n"),
     # Cap the null-move score at static eval plus one score bucket, exactly as
     # classic does. Ours has never capped it: the score is both a looser cutoff
     # trigger AND this node's returned value, so an inflated pass estimate
