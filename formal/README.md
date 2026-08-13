@@ -259,6 +259,10 @@ The model abstracts Python's board representation, move generation, sorting,
 and table implementation. The audit pins the corresponding source regions;
 tests and chess corpora validate those executable primitives.
 
+The source materializes the `movesAbove` pairs as a list before `sorted`.
+`sorted` exhausts either representation and returns the same descending
+sequence, so this is only an execution-level choice, not a model distinction.
+
 IID starts at depth 4 because quiescence cannot write `tp_move`.
 `CanNull.lean` keeps a uniform recurrence at depth 3; its depth-zero root
 transform is the identity, so the model and source are extensionally equal.

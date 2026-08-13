@@ -418,7 +418,9 @@ class Searcher:
             # filtering BEFORE the sort skips sorting the sub-threshold tail
             # (most of the list at QS nodes), and is literally the model's
             # movesAbove form (formal/Sunfish/Stalemate.lean).
-            for val, move in sorted(((v, m) for m in pos.gen_moves() if (v:=pos.value(m)) >= val_lower), reverse=True):
+            for val, move in sorted(
+                    [(v, m) for m in pos.gen_moves()
+                     if (v := pos.value(m)) >= val_lower], reverse=True):
                 # If the new score is less than gamma, the opponent will for sure just
                 # stand pat, since ""pos.score + val < gamma === -(pos.score + val) >= 1-gamma""
                 # This is known as futility pruning.
