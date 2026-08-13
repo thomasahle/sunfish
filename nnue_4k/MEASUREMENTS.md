@@ -46,6 +46,10 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **C1 DROPPED: −57.7 ± 25.5 over 651 games, and it answers `bestmove (none)`** | SPRT stopped early for base (339W/232L/79D). Bar was UB > 0; UB is **−32**. A-vs-A control exactly 50.00% |
+| 2026-08-13 | **THE CAUSE IS MIRRORING, not the fit and not the quantisation** | Four encodings, one position: exact and **step-8 unmirrored both play fine**; both MIRRORED arms return no move. Kills the mirrored 7-bucket design |
+| 2026-08-13 | The 100-position legality gate passed a build that emits no move in real play | Normal middlegame position, fails at **every depth incl. 1**, no info line at all. Gates are only as good as their position sample |
+| 2026-08-13 | fastchess's illegal-move counter double-counts, and `(none)` is not illegal | One incident reported as **2**; "illegal move" actually meant the engine produced nothing. Different bug, different investigation |
 | 2026-08-13 | **REBASED onto nnue-4k: entry 3350, engine 2886, eval 464, CEILING 1210** | base-90 on top of IIR + interface trims. Re-measured, never composed. C1 **3187 (−163)**, C2 **3412 (+62)** |
 | 2026-08-13 | **`price_engine.sh` returned a SILENTLY WRONG answer on the base-90 entry** | "eval costs 30, engine 3320" — its regex matched a `\n}` far below the eval. Fixed for both entry forms; the literal-form number reproduces at 2942/503 |
 | 2026-08-13 | **C1's bar RE-DERIVED: its byte credit is VOID under the new allocation** | Eval bytes stopped being scarce (746 under the ceiling, and the directive is to FILL it), so C1 must now clear **LB > 0**, not LB > −15 |
@@ -196,6 +200,119 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-13 — C1 DROPPED at −57.7, and the cause is MIRRORING, which also makes the engine answer `bestmove (none)`
+
+The screen ran, and it did not merely fail its bar — it found a correctness bug
+and a bisection that overturns the encoding the whole 1024-1500 B design was
+about to be built on.
+
+### The screen
+
+Fixed-node our-vs-our on the box, 20,000 nodes, SPRT elo0=0 elo1=10,
+alpha=beta=0.05, 2,000-position book, concurrency 8. **Raw counts first, as
+required, before any Elo number:**
+
+| | games | base W | base L | D | base score% |
+|---|---|---|---|---|---|
+| **base vs C1** | **651** | **339** | **232** | **79** | **58.23%** |
+
+**C1 = −57.72 ± 25.53 Elo.** SPRT stopped early, H1 accepted *for base*.
+0 time forfeits.
+
+**Pre-registered verdict: DROP.** The re-derived bar was "DROP if the upper
+bound is below 0"; the upper bound is **−32.2**. This is not the modal flat
+result that was predicted — it is materially worse than that.
+
+Controls, all clean:
+
+- **A-vs-A driver control**: `e_aa.py`, byte-identical to `e_base.py` (same
+  sha256), same directory, same `PYTHONPATH`. 120 games, **47W 47L 26D,
+  exactly 50.00%**, 0 forfeits, 0 illegal. Both arms provably get the same UCI
+  driver, and the harness is unbiased.
+- **Gates before games**: legality 100/100 and mate-in-1 8/8 on every arm.
+
+### The engine answered `bestmove (none)` in a real game — and it reproduces
+
+The match reported an illegal move. It was not an illegal move; it was **no
+move at all**, by C1, in game 65. Reproduced deterministically:
+
+```
+position fen rnbqkb1r/pp2pppp/3p4/2pnP3/3P4/2P2N2/PP3PPP/RNBQKB1R b KQkq d3 0 11
+e_base.py  ->  bestmove b8c6
+e_c1.py    ->  bestmove (none)
+```
+
+Not in check. Not a tail position. A **normal middlegame position**, and it
+fails at **every depth including 1**, emitting no `info` score line at all — so
+the search returns nothing from the root rather than searching badly. Identical
+whether the position is given as a FEN or replayed through its move list, so it
+is positional and eval-dependent, not a history artifact.
+
+**The 100-position legality gate passed this build.** Its three classes (forced,
+in-check, quiet-random) do not reach whatever this is, which is the second time
+this lane has learned that a gate is only as good as its position sample.
+
+### The bisection: it is MIRRORING, not the fit and not the quantisation
+
+Four encodings of the *same fit*, one position, seconds of work — the cheapest
+decisive measurement in this whole entry:
+
+| arm | encoding | move |
+|---|---|---|
+| base | classic tables | `b8c6` |
+| **C2** | fit, exact | `d6e5` |
+| **q8** | fit, **step 8**, unmirrored, K exact | `d6e5` |
+| **m1** | fit, **exact**, MIRRORED, K exact | **`(none)`** |
+| **C1** | fit, step 8, MIRRORED, K exact | **`(none)`** |
+
+**Mirroring is the cause.** Quantisation is exonerated — `q8` at step 8 plays
+the same move as the exact fit. And `m1` is at full resolution, so this is not
+a rounding artifact; folding the tables left-right is itself what breaks it.
+Note the king table was held **bit-identical** (`exact="K"`) in both failing
+arms, so the earlier kend-perturbation explanation does not cover this: it is
+the PNBRQ fold alone.
+
+### What this costs the 1024-1500 B design
+
+The recommendation in the entry below was **7 phase buckets at mirrored
+step 8** — 1120 parameters for 1147 eval bytes. **Mirroring is what made that
+fit in the budget**, and mirroring is now implicated in a correctness failure
+and, pending C2, possibly in most of the −57.7.
+
+Re-reading the grid with mirroring off the table:
+
+- **4 phase buckets, step 8, unmirrored: 1280 parameters, ~1102-1110 eval B,
+  total 3988-3995 — still IN BUDGET.** The budget is reachable without
+  mirroring at all.
+- But the data gets worse, not better: unmirrored is 320 parameters per set, so
+  4 phase quantiles is **3,024 / 320 = 9.5 pos/param** — below the taper's
+  failure point of 11, where mirrored 4-bucket was 18.9.
+
+So mirroring was the trick that made the parameter count affordable *in data*
+as well as in bytes, and it is not available. **The data constraint tightens.**
+Every conclusion in the entry below stands and this sharpens the last one:
+**do not fit the budget-filling candidate on this generator.**
+
+### Two instrument notes
+
+- **The harness's illegal-move counter double-counts.** It greps `-ci 'illegal
+  move'`, which matches both the `[Termination "illegal move"]` tag and the
+  in-game comment, so one incident is reported as **2**. Distinct terminations:
+  1. Anyone reading that line as an incident count is reading double.
+- **`bestmove (none)` is reported by fastchess as an illegal move**, which sends
+  you looking for a move-generation bug when the real event is that the engine
+  produced nothing. The two failure modes need different investigations.
+
+### Next, and running
+
+**C2 (the same fit, exact, unmirrored) is on the box now.** With mirroring
+implicated, C2 stops being an optional tiebreak and becomes the measurement
+that matters: it separates *does this fit convert to Elo* — the question that
+gates the whole budget-filling design — from *what does mirroring cost*.
+Its bar is unchanged: LB > 0 to land, and its real job is the generator verdict.
 
 ---
 
