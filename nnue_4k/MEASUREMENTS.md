@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **Legality gate built, positive-controlled, wired in** | Fails the pre-fix LMP on 2/100, passes the fix and the shipped entry. Caught a **stale broken LMP copy** on the laptop |
 | 2026-08-13 | **ENGINE PROPERTY: pseudo-legal movegen, no notion of check** | Not an LMP bug — it will bite every count-triggered or tail-pruning rule. `best > -MATE_UPPER` is now the required preamble |
 | 2026-08-13 | Guards measured INERT on the PST entry | 0 probe-cap hits, 0 bracket crossings to depth 10 — bisection collapses to one arm, ~600 games saved |
 | 2026-08-13 | **LMP is BROKEN, not weak: it returned an illegal move** | Reproduced deterministically. Cause is NOT break-vs-skip (falsified) — it prunes the only legal escape when in check. Fixed and re-gated |
@@ -120,6 +121,61 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — The legality gate, and the fifth stale copy
+
+`tools/build/legality_gate.py`. It asks the question a mate suite does not:
+**is a legal move ALWAYS produced?**
+
+**The obvious version of this gate does not work**, which is the part worth
+keeping. Sampling in-check positions indiscriminately **passes** a build that
+demonstrably emits illegal moves — most in-check positions have several escapes,
+so the pathological case never comes up. The gate needs a dedicated **FORCED**
+class: in check with **≤ 2 legal replies**, which is where the only legal move
+sorts to the tail that count-triggered rules discard.
+
+Positive-controlled in both directions, by me as well as by its author:
+
+| build | FORCED (40) | in check (30) | quiet (30) | verdict |
+|---|---|---|---|---|
+| shipped entry `e_pstbase.py` | 0 | 0 | 0 | **PASS** |
+| LMP **pre-fix** | 1 no-move | 1 no-move | 0 | **FAIL** |
+| LMP **post-fix** (`best > -MATE_UPPER`) | 0 | 0 | 0 | **PASS** |
+
+The two failing positions reproduce exactly:
+`3r1k1r/1Qb1n1pp/3p4/4p3/bnP1p1P1/3P1P2/PP3q1P/2RK1B1R w - - 1 26` and
+`3R2kr/8/1p1p1p1p/5p1P/2pn2p1/Q1P5/P2b2P1/RKB2BR1 b - - 0 34`, both
+`bestmove (none)`. **So the fix is verified by the instrument that caught the
+bug**, which is a stronger statement than my single-position reproduction.
+
+It is now wired **ahead of** the mate gate in the box chain, for both arms — it
+costs seconds, not games, and a screen that runs on an illegal-move build is
+wasted from the first game.
+
+### The fifth stale copy
+
+Two LMP builds existed and only one was fixed. The box's queued build carried
+the guard (`md5 9ad938103f68`); **the laptop's `e_pstlmp.py` did not**
+(`c1ed68e68c3d`, guard count 0) — I had written the fix to a *new* file,
+`e_pstlmpsafe.py`, shipped that to the box, and left the original sitting next
+to it. All copies are now identical (`777c60cfed83`), the obsolete `skip`
+variant is deleted, and the box screen was confirmed to be running the fixed
+build before this was noticed.
+
+**That is the fifth stale-copy failure tonight**: the driver (425 void games),
+the scratchpad driver (near-miss on the node cap), the entry source (38 lines),
+the box checkouts (marked), and now an engine variant. The pattern is always the
+same — a fix written to a new path while the old path stays live and reachable.
+The version stamp fixed it for the driver; nothing yet fixes it for variant
+files, and the honest mitigation is that variants should be **generated at
+screen time from a single source**, not accumulated as files.
+
+Also corrected in every copy: the comment claiming *"the list is sorted by
+static value, so breaking is the same argument the futility break already relies
+on"*. That justification is disproved — futility is **value**-triggered, so
+sortedness licenses its break; LMP is **count**-triggered, and a count says
+nothing about what remains. A comment asserting a disproved justification is how
+the next person re-derives the bug.
 
 ## 2026-08-13 — ENGINE PROPERTY: pseudo-legal movegen with no notion of check
 
