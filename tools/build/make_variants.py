@@ -26,10 +26,89 @@ import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = os.path.join(REPO, "nnue_4k", "pst_entry.py")
+sys.path.insert(0, os.path.join(REPO, "tools", "eval4k"))
+
+
+def _eval_mod(step, half, exact, fits="tools/tune/candidates/fits.json", arm="flat"):
+    """An EVAL mod: swap the whole eval region for a fitted table set.
+
+    DEFERRED, and that is not a style choice. `MODS` is built at import, so an
+    eval mod whose fit file is absent used to raise before the dict existed --
+    taking every unrelated SEARCH mod down with it and breaking the generator
+    for lanes that had nothing to do with the eval. The mod is a callable that
+    reads its fit when it is BUILT, so a missing fit fails loudly for the one
+    candidate that needs it and for nothing else.
+
+    Every other mod here is a search change written as literal text. The eval
+    candidates cannot be, because their tables come from the fit -- so the
+    anchor is the entry's current eval region (unique by construction, and the
+    occurs-exactly-once check still applies) and the replacement is whatever
+    `codec.emit` produces at this encoding. Same single-source rule as the rest
+    of the file: the candidate is GENERATED at screen time from the committed
+    fit, never accumulated as a file that can go stale against the base.
+    """
+    import json
+
+    import codec
+    import splice
+    P = "PNBRQK"
+    doc = json.load(open(os.path.join(REPO, fits)))
+    T = (doc["arms"][arm] if "arms" in doc else doc[arm])["tables"]
+    vals = {p: int(T["_value_" + p]) for p in P}
+    raw = {p: [int(v) for v in T[p]] for p in P}
+    _, region, _ = splice.split(open(SRC).read())
+    return (region, "\n" + codec.emit(vals, raw, step, half, exact=exact).strip("\n") + "\n")
+
+
+def _deferred(*a, **kw):
+    return lambda: _eval_mod(*a, **kw)
+
 
 # Each mod is (anchor, replacement), or a LIST of such pairs for a mod that
 # has to touch several places. Every anchor MUST appear exactly once.
 MODS = {
+    # ---- EVAL candidates (see nnue_4k/MEASUREMENTS.md, the fits entry) ------
+    # Same 384-parameter Texel refit of classic's tables, at two encodings.
+    # C1 mirrors and quantises to step 8 and holds the king table back exact,
+    # so the landed kend fix is bit-identical; C2 stores the same fit at full
+    # resolution. C1 vs C2 is therefore a clean measurement of what the
+    # compression costs IN PLAY, which loss cannot answer.
+    "c1": _deferred(8, True, "K"),
+    "c2": _deferred(1, False, ""),
+    # ---- DISTILLED candidates: the same 384-parameter model and the same
+    # positions as C2, trained on OUR OWN SEARCH's converged value at 160,000
+    # nodes instead of Stockfish depth 8. D1 is exact, so D1-vs-C2 changes the
+    # TEACHER and nothing else; D8 is the shippable step-8 form, which is
+    # quantisation-aware rather than rounded afterwards and gives bytes BACK.
+    # The king is held exact at any step: the codec quantises every table it is
+    # handed, and the landed kend fix is not a fit's to round.
+    "d1": _deferred(1, False, "", "tools/tune/candidates/students.json", "linear"),
+    "d8": _deferred(8, False, "K", "tools/tune/candidates/students.json", "q8"),
+    # ---- PHASE-BALANCED candidates. Same teacher and the same LABELS as d1 --
+    # these are drawn from d1's own set -- but a flat 2,198-per-band mix instead
+    # of the natural 43/31/11/15. The size-matched natural-mix control
+    # (nat8792) is stably 13.3% WORSE than classic at phase 18-24 over 40
+    # splits while these are 3.5% better, so the mix is the mechanism and not
+    # the halved position count. See the pre-registration entry.
+    "b1": _deferred(1, False, "", "tools/tune/candidates/bal/students.json", "linear"),
+    "b8": _deferred(8, False, "K", "tools/tune/candidates/bal/students.json", "q8"),
+    # ---- SEARCH: the root gamma seed. THIS IS NOT AN EVAL MOD -------------
+    # `search()` starts every search at gamma = 0 and bisects. The root stores a
+    # move ONLY on a fail-high, so the node count of the first root fail-high --
+    # the "first yield" -- is the earliest the engine can answer at all, and
+    # both stop conditions are polled at `nodes % 2048 == 0`. A build whose
+    # first yield exceeds 2048 answers `bestmove (none)`.
+    #
+    # Seeding BELOW the static score makes the first probe cheap and one-sided:
+    # it is a fail-HIGH, which is the kind that produces a move. `pos.score`
+    # alone is a trade, not a fix -- it helps every fit and makes the incumbent
+    # WORSE (780 -> 2,920), because seeding at the true value makes the first
+    # probe a coin flip. The -150 offset is what makes it one-sided.
+    #
+    # Eight builds measured: every fitted eval this lane has produced sits at
+    # or over the 2,048 cliff, and this clears all of them. It is a SEARCH
+    # change and lands in the search lane, not here.
+    "seed": ("\n        gamma = 0\n", "\n        gamma = pos.score - 150\n"),
     # Cap the null-move score at static eval plus one score bucket, exactly as
     # classic does. Ours has never capped it: the score is both a looser cutoff
     # trigger AND this node's returned value, so an inflated pass estimate
@@ -319,6 +398,7 @@ def build(mods):
     src = open(SRC).read()
     for mod in mods:
         edits = MODS[mod]
+        if callable(edits): edits = edits()          # deferred eval mods
         if isinstance(edits[0], str): edits = [edits]
         for anchor, repl in edits:
             n = src.count(anchor)

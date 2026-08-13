@@ -18,26 +18,54 @@ __version__ = "2026-packed"
 version = "sunfish " + __version__
 
 ###############################################################################
-# Evaluation: classic sunfish's piece-square tables, and nothing else
+# Packed big-integer NNUE residual
 ###############################################################################
-# THERE IS NO NET HERE. This file is generated from the packed-NNUE engine by
-# tools/build/make_pst_entry.py, which excises the loader, the accumulator and
-# the residual, and pastes classic's tables in their place. The evaluation is
-#     score = pst(pos)
-# kept exactly incremental, so `value(move)` stays an exact delta of it for
-# move ordering, the QS admission gate and the futility test.
+# The evaluation is
+#     score = pst(pos)  +  clip(nn(pos), -CLAMP, CLAMP)
+# where pst() is classic sunfish's exact incremental piece-square score (so
+# `value(move)` stays exact for move ordering, the QS gate and futility) and
+# nn() is a 768 -> N -> 1 net whose whole accumulator and whole head live in
+# ONE Python int.  See packed/pnet.py for the lane layout and why the head
+# needs no per-lane multiply.
 
-piece = {"P": 100, "N": 280, "B": 320, "R": 479, "Q": 929, "K": 60000}
+piece = {"P": 83, "N": 229, "B": 256, "R": 366, "Q": 698, "K": 60000}
 _v=0
-for _c in "%E?&Hx<oRTp~2m@6+@~l]sSlRTuQ.6)vPkJX&]rh}J(</a7jD9^9SB@NH+(H`),o_%o^&zm;TNp^wslv2MwS7BT?evqBWO%2},QzYBrmf7cEi<x5ElrI><ga[(Tq-fZIdAGWc-ayyB<fJKu$EdW]DY1ax&C$YEpF`QCL7-~yWzZ%D&7W#<^6POa+QX5q^Q0es_hCz}4dn}PAh_,*y-TQ)*F&(c/wPCEq5ICf7V.oVZq=8zT`RyEHbB#j+SipMRy[dKS)%dQFk@,(4PqbP_X^D|2Pw(T@u-69%1~S(h(CD@C(3R<0Lqj(.#hL5cft)%(;TaSro??GcSy0U%Tv3<f{h(,(1BfW/%OqL.f[aIzgQ%@eJ#=8Z7J&I7Jj>vJc#7<TMA4tymp<zQSPx~u>#:fPo?80<85sW]z%vnTEpiD@DG{7>`Iq52|/yK_FSAquv@#VJhUW+Zc#r":
+for _c in "33}[}zamo?X}jEgdd%GBu5@pFc1^4*8QI=P,fC^0)dkzo03/:DItay|?=STEf]qJKrYW0)$b},:]|j)(Qvjx})(cW<{U%ivTJV4_wX`6pO0D*Z-7X<E$m-<6@~MCTSUWdx`jBdUe0P`QII~8":
  _d=ord(_c)-35;_v=_v*90+_d-(_d>4)-(_d>56)
 pst = {}
-for _k in "PNBRQK":
- _t = [_v // 210 ** _i % 210 * 1 - 107 + piece[_k] for _i in range(64)]
- _v //= 210 ** 64
+pst1 = {}
+for _k in "PNBRQ":
+ _t = [_v // 57 ** _i % 57 * 8 - 240 + piece[_k] for _i in range(32)]
+ _v //= 57 ** 32
+ _r = [_t[_i * 4:_i * 4 + 4] for _i in range(8)]
+ pst[_k] = pst1[_k] = tuple([0] * 20 + sum(([0] + _q + _q[::-1] + [0] for _q in _r), []) + [0] * 20)
+_v=0
+for _c in "}:^o$X09O<a:NI?xy{|2q2QBnLicNSzFJlTdzAL.Eaku^M.48d&Uv{ezO4E+I<zWi6P+&ls&5q":
+ _d=ord(_c)-35;_v=_v*90+_d-(_d>4)-(_d>56)
+for _k in "K":
+ _t = [_v // 183 ** _i % 183 * 1 - 99 + piece[_k] for _i in range(64)]
+ _v //= 183 ** 64
  pst[_k] = tuple([0] * 20 + sum(([0] + _t[_i * 8:_i * 8 + 8] + [0] for _i in range(8)), []) + [0] * 20)
 K_MID, K_END = pst["K"], tuple(piece["K"] + 70
    - 10 * (abs(2 * (i // 10) - 11) + abs(2 * (i % 10) - 9)) for i in range(120))
+
+piece2 = {"P": 108, "N": 279, "B": 302, "R": 505, "Q": 885, "K": 60000}
+_v=0
+for _c in "%.&1^&uWQ$S}(xq]}4`HllKM*QFGWPWa%Zd^{p1^<2lwK]VA#NQZM4e,i&rng{*EI78b,Wf[-.@aVrq`mXZ,KXKh-DP/;T&L3M;lIyIMxR#4SLa9[_?<,HStREj*yX@>[LhGXia;VzK%XzBKZwbX>":
+ _d=ord(_c)-35;_v=_v*90+_d-(_d>4)-(_d>56)
+pst2 = {}
+for _k in "PNBRQ":
+ _t = [_v // 65 ** _i % 65 * 8 - 336 + piece2[_k] for _i in range(32)]
+ _v //= 65 ** 32
+ _r = [_t[_i * 4:_i * 4 + 4] for _i in range(8)]
+ pst2[_k] = tuple([0] * 20 + sum(([0] + _q + _q[::-1] + [0] for _q in _r), []) + [0] * 20)
+_v=0
+for _c in "}:^o$X09O<a:NI?xy{|2q2QBnLicNSzFJlTdzAL.Eaku^M.48d&Uv{ezO4E+I<zWi6P+&ls&5q":
+ _d=ord(_c)-35;_v=_v*90+_d-(_d>4)-(_d>56)
+for _k in "K":
+ _t = [_v // 183 ** _i % 183 * 1 - 99 + piece2[_k] for _i in range(64)]
+ _v //= 183 ** 64
+ pst2[_k] = tuple([0] * 20 + sum(([0] + _t[_i * 8:_i * 8 + 8] + [0] for _i in range(8)), []) + [0] * 20)
 
 ###############################################################################
 
@@ -45,7 +73,8 @@ K_MID, K_END = pst["K"], tuple(piece["K"] + 70
 # That's pretty good given we have 64*6 = 384 values.
 # Though probably we could do better...
 # For one thing, they could easily all fit into int8.
-# MATE values derive from the classic piece values (K=60000, Q=929).
+# MATE values derive from the classic piece values (K=60000, Q=929);
+# the tables themselves ride in the net file (see the loader above).
 MATE_LOWER = 60000 - 13 * 929
 MATE_UPPER = 60000 + 10 * 929
 
@@ -134,19 +163,23 @@ Move = namedtuple("Move", "i j prom")
 class Position(namedtuple("Position", "board score wc bc ep kp")):
     """A state of a chess game
     board -- a 120 char representation of the board
-    score -- the piece-square evaluation, kept exactly incremental so that
-             value(move) below stays an exact delta of it
+    score -- the board evaluation: ps + the clipped net residual
+    ps -- the piece-square part of the score alone, kept exactly incremental
+          so that value(move) below stays an exact delta of it
     wc -- the castling rights, [west/queen side, east/king side]
     bc -- the opponent castling rights, [west/king side, east/queen side]
     ep - the en passant square
     kp - the king passant square
+    acc -- the packed NNUE accumulator (one big int, 2N + 2*nb lanes)
+    pf -- perspective flag: which of the two lane blocks is the mover's
+    kb -- combined king-bucket index B*bucket(white) + bucket(black), in
+          ABSOLUTE colours (0 for plain B == 1 nets)
 
-    `score` is a function of the other fields, so identity -- what the
-    transposition table, the killer table and the repetition set key on --
-    deliberately ignores it. That is LOAD-BEARING, not tidiness: pst["K"]
-    is swapped between K_MID and K_END per search, so the same board can
-    carry two different scores across a table change, and a repetition set
-    or a killer table that compared scores would stop recognising it.
+    score/ps/acc/pf/kb are all functions of the other fields, so
+    identity -- what the transposition table, the killer table and the
+    repetition set key on -- deliberately ignores them.  Keeping the
+    accumulator out of __hash__ also keeps hashing off the big int, which
+    would otherwise cost more than the evaluation it feeds.
     """
 
     def __hash__(self):
@@ -348,19 +381,6 @@ class Searcher:
         # depth, so so there is no reason to keep different depths in the transposition table.
         depth = max(depth, 0)
 
-        # The killer is read ONCE here, not again inside moves(): the reduction
-        # below needs to know whether this position has a table move, and
-        # hashing the position twice to ask one question cost 7% of nps.
-        killer = self.tp_move.get(pos)
-
-        # INTERNAL ITERATIVE REDUCTION. No table move means this node has never
-        # been searched from here, so its ordering is static value alone and
-        # full depth is the dearest possible way to discover that. Search it a
-        # ply shallower instead. This REPLACED the IID probe, which answered
-        # the same question by running a whole extra shallow search; keeping
-        # both would pay twice for one observation.
-        if depth > 2 and killer is None: depth -= 1
-
         # Sunfish is a king-capture engine, so we should always check if we
         # still have a king. Notice since this is the only termination check,
         # the remaining code has to be comfortable with being mated, stalemated
@@ -396,10 +416,11 @@ class Searcher:
         # Generator of moves to search in order.
         # This allows us to define the moves, but only calculate them if needed.
         def moves():
-            # `killer` comes from the enclosing scope, read once at the top of
-            # bound(). It is still read before null-move, which is the property
-            # that mattered: the entry could otherwise be evicted or overwritten
-            # with something worse while the null search runs.
+            # Look for the strongest move from earlier searches of this position.
+            # See https://chessprogramming.org/Killer_Move for details.
+            # We read this "killer move" before null-move in case it would get
+            # evicted from the table or replaced with something else worse.
+            killer = self.tp_move.get(pos)
 
             # First try not moving at all, i.e. the null move.
             # See https://chessprogramming.org/Null_Move for details.
@@ -450,6 +471,16 @@ class Searcher:
             if depth == 0:
                 yield None, pos.score
 
+            # Back to killer moves: This heuristic is so good, that if there
+            # is no registered move, it's worth it to run a shallow search to find one.
+            # See https://chessprogramming.org/Internal_Iterative_Deepening for detais.
+            # This is known as Internal Iterative Deepening (IID). The probe
+            # runs as a driver probe (root=True): no null cutoff that would
+            # end it without storing a move, no repetition truncation, and
+            # no table entry under deviant semantics.
+            if not killer and depth > 2:
+                self.bound(pos, gamma, depth - 3, root=True)
+                killer = self.tp_move.get(pos)
 
             # We only generate moves with an intrinsic score above some treshold
             # that decreases with depth. This is a generalization of Quiescent Search,
@@ -564,6 +595,7 @@ class Searcher:
         # Classic's K_END is a centralization gradient, and classic keys it
         # on queens-off. Both directions every search: table state must
         # never outlive the condition.
+        pst.update(pst2 if "Q" not in pos.board or "q" not in pos.board else pst1)
         pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END
         # The carried score was accumulated under the OTHER table.
         pos = self.root = from_board(pos.board, pos.wc, pos.bc, pos.ep, pos.kp)
@@ -623,7 +655,7 @@ class Searcher:
 def parse(c): return A1 + ord(c[0]) - ord("a") - 10 * (int(c[1]) - 1)
 def render(i): return chr((i - A1) % 10 + ord("a")) + str(1 - (i - A1) // 10)
 
-def from_board(board, wc=(True, True), bc=(True, True), ep=0, kp=0):
+def from_board(board, wc=(True, True), bc=(True, True), ep=0, kp=0, pf=0):
     """Build a position from scratch; `board` is in the mover's orientation."""
     score = sum(pst[p][i] if p.isupper() else -pst[p.upper()][119 - i]
                 for i, p in enumerate(board) if p.isalpha())
@@ -712,29 +744,27 @@ def main():
             times = dict(zip(args[1::2], map(int, args[2::2])))
             side = "wb"[len(hist) % 2 == 0]
             wtime, winc = times.get(side + "time", 60000), times.get(side + "inc", 0)
-            # TC-conditional budget; see sunfish_ui/uci.py for the increment
-            # audit numbers and the safety argument.
-            # INCREMENT (winc > 0): /12 + 0.9*inc front-loads the middlegame
-            # where depth buys Elo; measured fine at 30+1 and on lichess.
-            # SUDDEN DEATH (winc == 0) needs a flatter divisor: /12 spends 7%
-            # of the whole budget on one early move (12.8s of 180s on ply 9
-            # in lichess.org/EAThUL0P) and the game is lost on time at move
-            # 73 without a single move overrunning: below 2s the
-            # wtime/2 - 1000 cap goes negative, the budget collapses to the
-            # 0.05s floor, and ~200ms/move of unavoidable lag drains the rest.
-            # /40 is what classic uses and classic does not flag -- a constant
-            # with production evidence rather than a fit to one game.
+            # increment-aware budget; see sunfish_ui/uci.py for the audit
+            # numbers and the safety argument
+            think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1000)
+            # minifier-hide start
+            # SUDDEN DEATH needs a flatter divisor. With winc == 0, /12 spends
+            # 7% of the whole budget on one early move (12.8s of 180s on ply 9
+            # in lichess.org/EAThUL0P) and the game is lost on time at move 73
+            # without a single move overrunning: below 2s the wtime/2 - 1000
+            # cap goes negative, the budget collapses to the 0.05s floor, and
+            # ~200ms/move of unavoidable lag drains the rest.
+            # /40 is what classic uses and classic does not flag, so this is a
+            # constant with production evidence rather than a fit to one game.
             # Movecount-aware divisors were simulated and are WORSE: a
             # shrinking "moves remaining" divisor spends MORE per move as the
             # game lengthens, which is backwards for sudden death.
-            # This branch used to hide behind minifier-hide on the theory that
-            # the artifact only ever plays 1800+3 (TCEC) and winc == 0 was
-            # dead code there. The 300+0 python-league ladder falsified that:
-            # the packed artifact played /12 on 97.2% of 4,158 matched moves
-            # (LOSS_TAXONOMY.md P0) while this source carried the fix. The
-            # branch now SHIPS: a fix that exists in source but not in the
-            # artifact is a defect class, not a byte saving.
+            # TCEC is 1800+3, so winc is always non-zero there and this line
+            # is dead code in the artifact -- which is why it is hidden, and
+            # why the artifact stays byte-for-byte unchanged. The increment
+            # case is identical to the line above by construction.
             think = min(wtime / (12 if winc else 40) + 0.9 * winc, wtime / 2 - 1000)
+            # minifier-hide end
             # A GUI-supplied movetime is a HARD limit that the GUI itself
             # enforces, so spending all of it forfeits: the node counter is
             # only checked every 2048 nodes, so the search returns at
@@ -776,6 +806,7 @@ def main():
                         if len(hist) % 2 == 0:
                             i, j = 119 - i, 119 - j
                         cand = render(i) + render(j) + move.prom.lower()
+                        print("info depth", depth, "score cp", score, "pv", cand)
                     if (best or cand) and time.time() - start > think * 0.8:
                         break
             except Stop:

@@ -46,11 +46,45 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-14 | **PRE-REGISTERED: the gamma seed goes to a NON-INFERIORITY screen — and it lands in the SEARCH lane, not here** | +5 B on every base; **every arm passes first yield with it**, including both that fail without; 1.0000× nodes and the **same move 40/40** at completed depth 8. H1 = engine1 = seed; LAND if the 95% LB excludes −10 |
+| 2026-08-14 | **The obvious timed spot-check is VACUOUS, by arithmetic** | No abort can land before node 2,048, so any build with max first yield ≤2,048 is immune at *every* TC — and at 10+0.1 the `0.9·winc` term floors `think` at ~3,800 nodes. Re-specified to **1+0, b8 vs b8seed**, with a base-vs-seed control pair |
+| 2026-08-14 | **THE MIX IS THE MECHANISM — a SIZE-MATCHED control swings phase 18-24 by 16.8 points** | At identical N=8,792: natural mix **+11.70 ± 7.58 worse** than classic (40/40 splits), flat mix **−4.95 ± 3.51 better**. Pre-registered check CLEARED. Not the halved data — the mix |
+| 2026-08-14 | **The gamma seed is a BLOCKER, not a lead: SIX fitted candidates, six times at the cliff** | b1 passes first yield by **37 nodes**, b8 fails at 2,433. The +5-byte root seed clears every arm ever fitted here (2.8–5.2× margin). The byte-negative arm cannot be screened until it lands |
+| 2026-08-14 | The trainer's single-split band row is an OUTLIER in the band the check turns on | Seed 20260813 reads +4.15% for `bal8792` against a 12-split range of [−12.06, +1.64], and +14.24% for d1 against [+2.12, +14.13] — extreme in both, because the FEN-keyed split makes the two sets inherit the same unlucky draw |
+| 2026-08-14 | **PRE-REGISTERED: the phase-balanced set — flat 2,198/band, 8,792 positions, written before selection** | Mechanism check that can only CANCEL: `bal8792` must not be worse than classic at phase 18-24, where d1 was **+7.47 ± 3.14 worse on all 12 splits**. Size control `nat8792` separates mix from N |
+| 2026-08-14 | **THE CORPUS IS EXHAUSTED: 198 positions left in 4,482 games** | 19,491 + 198 = 19,689, exactly the recorded collection — a positive control on the census. So the experiment re-balances labels we ALREADY have and costs no machine time at all |
 | 2026-08-13 | **`bestmove (none)` ROOT-CAUSED: budget starvation before the first yield** | The depth-1 gamma=0 probe costs **32,638 nodes against a 20,000-node budget**; `bound()` raises `Stop` before `search()` ever yields, so `go_loop` gets an empty stream. Shipped entry needs **23** on the same position |
 | 2026-08-13 | **REFUTED: "mirroring is the cause."** Mirroring is a slowdown, not a switch | Nodes to first yield: base **23**, c2 1,362, q8 1,745, m1 9,086, c1 32,638. c1 is simply the arm that crosses 20,000. **Unmirrored c2/q8 fail the new gate too** |
 | 2026-08-13 | **REFUTED: "fails at every depth including 1."** That was the repro harness | A piped `quit` races the search — run()'s quit branch sets `deadline = 0`. Driven without the race, **every arm answers at `go depth 1` and `go depth 3`** |
 | 2026-08-13 | **Gate hole closed: wrong POSITIONS, and the wrong QUESTION** | Random-playout positions cut off in ~2 nodes (unbalanced); quiet balanced openings are the expensive class. New **FIRST-YIELD arm**, 334 book positions: base **0 over, worst 582**; c1 **10 over, worst 10,359** |
 | 2026-08-13 | The gate only ever sent `go movetime`; the arena plays **fixed-node** | Both budget paths are gated now, and `ab_fixednode.sh` passes its own `--nodes`. Negative: the node arm alone caught nothing — the position class was the binding hole |
+| 2026-08-13 | **d1 DROPPED at −76.0 ± 28.3 over 462 games — and 384-parameter distillation on this position set is CLOSED** | UB **−47.7** against a bar of UB < 0. C2 was −93.8 ± 32.7 on the same openings; the intervals overlap, so the teacher swap is **not** what was wrong. Pre-registered closure condition, met |
+| 2026-08-13 | **The phase-band statistic does NOT predict Elo — it points the wrong way** | C2 was 8.00% BETTER at phase 18-24 and played −93.8; d1 is 7.47% WORSE there and played −76.0. The band that was stable across 12 splits carries no Elo signal |
+| 2026-08-13 | Held-out loss has now mis-ranked **twice**, on two different teachers | C2 −5.9% → −93.8 Elo; d1 −7.78% → −76.0 Elo. Fitting the search's own value 7.8% better still costs 76 Elo. A-vs-A control on the same book slice: **exactly 50.00%** (47/47/26) |
+| 2026-08-13 | **The mate gate was scoring the OPENING POSITION**, and reported `MISS ILLEGAL` for the shipped entry | It feeds `position fen`, which only the driver understands; a variant in a scratch dir runs the builtin loop. base/d1/d8 are all **8/8** once the banner is demanded. Fourth incident of this class |
+| 2026-08-13 | The tracked training set carried the bench box's name; **scrubbed before the branch was ever pushed** | `set20260813.npz` `d792b420…` → **`2410786e…`**, arrays bit-identical, `host` the only key dropped |
+| 2026-08-13 | **THE DISTILLED STUDENT FITS EXACTLY AS WELL AS C2 — and is stably WORSE where it matters** | Same positions, same split: SF **−7.85 ± 0.81**, distilled **−7.70 ± 0.90**. But at phase 18-24 the distilled student is **+7.47 ± 3.14 WORSE than classic on every split**, where the SF student was −8.00 better |
+| 2026-08-13 | **The blocker is the POSITION MIX, not the teacher — and distillation is what makes that cheap to fix** | Classic's loss against our own search at phase 18-24 is **0.007962**, its best band: no headroom, and a global fit spends it to buy the endgame where **65.6%** of positions live |
+| 2026-08-13 | **d8 misses the first-yield gate by ELEVEN NODES** (2,059 vs a 2,048 window) | The margin case the measuring gate exists for. d1 passes at 1,896/2,048 — a 7% margin against the entry's 2.6×. **The 5-byte gamma seed fixes both** (537 and 478) |
+| 2026-08-13 | **TEACHER CHOSEN: our own search at 160,000 nodes — and its value never converges** | 2.8× the measured 30+1 frontier (56,829 nodes), r **0.9919** with a 4× deeper teacher. From 40k up, 21% of positions still move >25 cp per 4× — that is tactics, not tolerance, and 384 parameters cannot hold it |
+| 2026-08-13 | **NEW GATE: first yield. The shipped entry passes at 780 nodes; ALL FOUR fits fail** | C1 32,640, m1 9,088, q8 3,707, C2 2,568 against a 2,048-node window. Measuring the count, not the `(none)` symptom, is what gave it power — the binary form caught only its own reproducer |
+| 2026-08-13 | **LEAD: the `bestmove (none)` class is removable for 5 BYTES at the root's gamma seed** | `gamma = pos.score - 150` takes the worst first yield from 780 to **171** on the entry and from 32,640 to **396** on C1 — every arm passes. 1.0001× nodes to depth 8. Un-suspends mirroring if it screens clean |
+| 2026-08-13 | **CORRECTION: C2's post-mortem MECHANISM does not survive a re-split** | Over 12 splits the middlegame band is **−2.96 ± 2.36 and its sign FLIPS** — it is the least-improved band, not a worse one. The anti-correlation stands; its explanation does not |
+| 2026-08-13 | The first-yield gate scored PASS for every arm until it checked its own driver | An entry resolving no `sunfish_ui/` runs the builtin loop, which ignores `position fen` and answers from the OPENING position. Third time this lane has paid for it |
+| 2026-08-13 | Torch trainer validated against C2 on four axes, incl. its failure mode | −5.93% held-out, bands −9.81/+0.56, **3412 bytes (+62)**, and first yield **2,568 on the same FEN** as the box's `e_c2.py` |
+| 2026-08-13 | **Quantisation-aware (STE) students are BYTE-NEGATIVE: q8 −53 B, q16 −93 B** | q8 keeps the whole fit (−5.91% vs −5.93%). Round-trip check caught the codec quantising the **king** table, silently rounding the landed `kend` fix |
+| 2026-08-13 | `torch.optim.LBFGS`'s default `tolerance_grad` is a silent no-op at this loss scale | Gradients ~1e-9 vs a 1e-7 default: the fit returns its warm start and every band reads 0.00%, which looks like a result |
+| 2026-08-13 | **BOTH CANDIDATES DROPPED — and held-out loss is ANTI-CORRELATED with strength** | C2, the clean unmirrored fit, is **−93.8 ± 32.7** over 405 games while its held-out loss was **5.9% better than classic**. The objective, not the bytes, is the blocker |
+| 2026-08-13 | **C1 DROPPED: −57.7 ± 25.5 over 651 games, and it answers `bestmove (none)`** | SPRT stopped early for base (339W/232L/79D). Bar was UB > 0; UB is **−32**. A-vs-A control exactly 50.00% |
+| 2026-08-13 | **THE CAUSE IS MIRRORING, not the fit and not the quantisation** | Four encodings, one position: exact and **step-8 unmirrored both play fine**; both MIRRORED arms return no move. Kills the mirrored 7-bucket design |
+| 2026-08-13 | The 100-position legality gate passed a build that emits no move in real play | Normal middlegame position, fails at **every depth incl. 1**, no info line at all. Gates are only as good as their position sample |
+| 2026-08-13 | fastchess's illegal-move counter double-counts, and `(none)` is not illegal | One incident reported as **2**; "illegal move" actually meant the engine produced nothing. Different bug, different investigation |
+| 2026-08-13 | **REBASED onto nnue-4k: entry 3350, engine 2886, eval 464, CEILING 1210** | base-90 on top of IIR + interface trims. Re-measured, never composed. C1 **3187 (−163)**, C2 **3412 (+62)** |
+| 2026-08-13 | **`price_engine.sh` returned a SILENTLY WRONG answer on the base-90 entry** | "eval costs 30, engine 3320" — its regex matched a `\n}` far below the eval. Fixed for both entry forms; the literal-form number reproduces at 2942/503 |
+| 2026-08-13 | **C1's bar RE-DERIVED: its byte credit is VOID under the new allocation** | Eval bytes stopped being scarce (746 under the ceiling, and the directive is to FILL it), so C1 must now clear **LB > 0**, not LB > −15 |
+| 2026-08-13 | **THE 1024-1500 B GRID, PRICED BY BUILDING** | Bytes reach it — 7 phase buckets = **1148 eval B**. **The data does not**: the straw man's worst bucket holds **48 positions for 160 parameters** |
+| 2026-08-13 | **King-wing buckets are unusable on our data: 0.3 pos/param** | 80.4% of positions have the white king on the king side. Phase quantiles are the partition that survives — 4 = 18.9, 6 = 12.8, 7 = 8.8 pos/param |
+| 2026-08-13 | Bucket-census instrument corrected: rank quantiles are not implementable | It reported 12.0 pos/param at 8 buckets where the shippable partition gives **6.5** — phase is a coarse integer and a rank cut splits a value the root cannot |
 | 2026-08-13 | **THE GOLF TARGET WAS THE WRONG NUMBER: eval already has 1132 B** | 4096 − 2942 = **1132 ≥ Thomas's "at least 1024"**. 2500 assumed the full 1500-byte eval. The eval lane's grid, not golf, is the binding constraint |
 | 2026-08-13 | Info/PV line cut: **−22 B, entry 3445, engine 2942** | Node counts bit-identical (2,342,657 both), gates green, artifact still streams bestmove LIVE to a pipe with stdin open |
 | 2026-08-13 | **Two of the three "safe" trims are NOT safe, with evidence** | `version` globals are in the driver's `ENGINE_API` — cutting them makes the entry **unmeasurable in every dev checkout**. `movetime` is a silent-forfeit hazard with a live consumer in `deploy.sh` |
@@ -79,6 +113,31 @@ how much effort it cost.
 | 2026-08-13 | corrhist byte price, `pack.sh` on real files | **+127 B** (entry 3475 -> **3602**, spare 621 -> 494). Golfing recovers 5 B -- lzma already had the repetition |
 | 2026-08-13 | corrhist keep/drop **PRE-REGISTERED** before the screen | Standing 1.0 Elo/byte bar => needs fixed-node **>= +135.5**. The budget-average rate the +400 goal implies (0.41 Elo/byte) would need only +60.5; both written down, decided on the strict one |
 | 2026-08-13 | corrhist correction table censused: not a feedback runaway | median +2...+8 cp, 1-5% at the +/-120 clamp, 4-7k entries per search. The screen measures the feature, not a degenerate one |
+| 2026-08-13 | **`legality_gate.py` scored a LAUNCH failure as 100 chess failures** | It ran packed artifacts under `python3`. The **shipped entry** "failed" 100/100 no-move. Fixed, both controls green |
+| 2026-08-13 | **Phase reweighting does not pay — 4 schemes, all fail the pre-registered bar** | Every one LOSES on held-out (paired bootstrap CIs strictly below 0), and **none wins the phase-balanced metric it was built for**. No third candidate |
+| 2026-08-13 | The flat refit is an ENDGAME refit: 0 gain in the middlegame band | −9.8% at phase 0-5, **+0.6% (worse) at phase 12-17**. Caveat now attached to the C1/C2 screen |
+| 2026-08-13 | **King buckets priced by BUILDING: ~134 B/bucket confirmed for filler** | 2-bucket +155…+172, 4-bucket **+128…+136 per bucket** at mirrored step 8. Exact encoding is dead: 4-bucket = **4505 B, 409 OVER** |
+| 2026-08-13 | **Taper re-anchored on the landed generator; the seam root got 13 B cheaper** | Old splice targeted a deleted anchor and failed its own assert. Seam machinery **+50 B**, blend **+115 B**; fitted taper now **3439** (was 3452) |
+| 2026-08-13 | **Filler data is a FLOOR, not an upper bound** | Real fitted tables cost **60-75 B MORE** than filler of the same shape: fitted values are less round. Reverses the old script's stated reasoning |
+| 2026-08-13 | `codec.emit` accepted a `piece` dict and IGNORED it | Hard-coded classic's values; all three callers hand-patched the line back. Fixed at source, entry **byte-identical at 3378** |
+| 2026-08-13 | **FITS DONE: two candidates, bars pre-registered, no Elo claimed** | **C1 3215 B (−163!), C2 3441 B (+63)**, both legality-green. Held-out −5.3%/−5.9%. Taper DROPPED on data, not price |
+| 2026-08-13 | **Quantisation is free in loss and SAVES bytes** | step 8 = −88 B for nothing; mirroring −159 more and held-out loss *improves* (regularisation). A refit is **not** byte-free: +63 B exact |
+| 2026-08-13 | **Continuous phase blend does not fit: 4157 bytes, 61 OVER** | Dead on price whatever its loss. The queens-seam taper is affordable (+74 B) but its data is not there |
+| 2026-08-13 | Mirroring silently perturbed the landed `kend` fix | Classic's king table is asymmetric by up to **111 cp**. `codec.emit(exact="K")` holds it back bit-identical for 84 B, so a screen tests the fit and not a bundle |
+| 2026-08-13 | **Training loss cannot compare models of different size** | The 768-param taper looks 2× better in-sample than held out. All candidate losses are now on a seeded 80/20 split |
+| 2026-08-13 | `codec.mixed` wrapped at 64 bits on numpy input | A ~3000-bit accumulator turned numpy and silently encoded garbage; symptom was a 10-min hang, not a wrong number. `int()` + a wrap control in the self-test |
+| 2026-08-13 | **TRAINING SET LABELLED: 19,491 positions, Stockfish 18 @ depth 8** | Committed at `tools/tune/data/set20260813.npz`. Material-vs-label corr **0.727**, sign agreement **92.7%**. **65.6% at ≤16 pieces** vs 47% in the lost set. No fit run |
+| 2026-08-13 | **Labels were slot-dependent: the TT carried across positions** | Same FEN, two slots, **−14 vs −22**; others 83→97 and −90→−149. Both modes run-to-run reproducible, which is why it was invisible. `ucinewgame` per position now makes the label a function of (fen, depth, version) |
+| 2026-08-13 | `X` is a difference feature — it cannot give you the phase | White Pe2 and black Pe7 cancel in the same cell. `\|X\|.sum()` reads 11.1 pieces where the board has 14.3; phase must come from `fens` |
+| 2026-08-13 | Stockfish 18 built from source on the box (no root) | Official binaries need `GLIBCXX_3.4.30`, box has 3.4.29. gcc 11.5, `ARCH=x86-64-avx512icl`. A pinned source build is the more portable recipe anyway |
+| 2026-08-13 | **Training set: durable home, 19,689 positions ready, labelling NOT started** | Games under `~/repos/sunfish-data/pgn/` (4,482 games). New mix is **65.7% at ≤16 pieces** vs 47% in the lost set. Box has no Stockfish; laptop is owned by the ladder — needs a call |
+| 2026-08-13 | **LANDED on top of kend+fresh: the entry is 3378 bytes, 718 spare** | Rebuilt, not composed: −97 on this base, not the −94 of the last one. All gates green, 60/60 same move AND same score |
+| 2026-08-13 | **`agree.py` was comparing two different UCI DRIVERS** | An engine outside the repo tree silently uses the builtin `go` loop. A byte-identical copy of the entry "disagreed" with itself 39/60 on score. Both arms now STAGED into one directory, and an A-vs-A positive control is wired in |
+| 2026-08-13 | **Eval tables decode at startup: entry 3483 → 3389, 707 spare** | Tables bit-identical; 60/60 same move AND same score at fixed nodes. Decoder costs **13 B**, decode 1.07 ms. *(Measured on the pre-kend/fresh base; superseded by the 3378 row above)* |
+| 2026-08-13 | Eval-data price list, one build per row | Literal 1.31 B/value → base-90 exact 1.03 → step-8 0.65 → mirrored step-8 0.70 (192 values). Codec within 10% of the entropy bound |
+| 2026-08-13 | **Tapering re-priced: −77 bytes, not +400** | Two mirrored step-8 tables + root blend = **3312 B, 784 spare**. No second accumulator: the root already rebuilds a table. **No Elo claimed** |
+| 2026-08-13 | Historical 1207-byte net re-decoded (correction) | 944 B of factors (not 816) → 7680 values, but they feed an **18→10→1 MLP per node** — it is a runtime net, not a PST |
+| 2026-08-13 | **Stale-score bug in the shipped entry: 134 cp** | The bare-king `K_MID`/`K_END` swap invalidates the carried incremental score. Pre-existing; fix is in `search()` |
 | 2026-08-13 | **HOLE RR COMPLETE: 4,000 games, and `entry_kf` SHIPS** | **+107.5 ± 31.6 vs classic**, 0 forfeits, 0 illegal. The hole reproduced at **−71.3** and the fix closes it to **+20.0**. Landed: entry **3483 → 3475, 621 spare** |
 | 2026-08-13 | LMR's timed value is the SAME with and without the eval bug | +65.9 ± 27.1 (unfixed) vs +72.3 ± 25.1 (fixed). LMR was never "masking" the hole — the defects were additive |
 | 2026-08-13 | Classic-anchored differences run ~50 Elo above the head-to-head ones | Both signs agree, magnitudes do not (1.5σ). Head-to-head is the paired instrument; the anchored spread is the one to distrust |
@@ -172,6 +231,1443 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-14 — PRE-REGISTRATION: the root gamma seed goes to a NON-INFERIORITY screen. It is a SEARCH change and it does not land here
+
+The seed is now formally a **blocker** on the eval programme: `b8` and `d8`, the
+two byte-negative arms, fail the first-yield gate, and `b1` passes it by 37
+nodes. This entry is the screen kit, written before the script is staged.
+
+**WHERE THIS LANDS. The seed is a SEARCH change.** If it passes it lands as a
+**search-lane commit on `nnue-4k` in `sunfish-packed`**, not on
+`eval-decode-track`, and the commit/PR authorship should say so. This lane owns
+the measurements below because it owns all eight first-yield builds; it does not
+own the change.
+
+### The arm, built by the generator
+
+`make_variants.py` mod `seed`: `gamma = 0` → `gamma = pos.score - 150` at the
+root probe, one anchor, asserted to occur exactly once. Composed with every
+candidate through the same generator rather than by hand.
+
+| arm | packed | vs base | | arm | packed | vs base |
+|---|---|---|---|---|---|---|
+| base | 3350 | — | | seed | 3355 | **+5** |
+| d1 | 3421 | +71 | | d1seed | 3426 | +76 |
+| d8 | 3306 | −44 | | d8seed | 3311 | −39 |
+| b1 | 3431 | +81 | | b1seed | 3436 | +86 |
+| b8 | 3316 | −34 | | b8seed | 3321 | −29 |
+
+**+5 bytes on every base**, which is the whole price.
+
+### First yield: every arm, both bases, one instrument
+
+| arm | median | p90 | p99 | **MAX** | gate |
+|---|---|---|---|---|---|
+| base | 5 | 28 | 178 | **780** | PASS |
+| **seed** | 4 | 24 | 80 | **171** | PASS |
+| d1 | 5 | 40 | 220 | 1,896 | PASS |
+| **d1seed** | 4 | 26 | 123 | **537** | PASS |
+| d8 | 5 | 44 | 377 | 2,059 | **FAIL** |
+| **d8seed** | 4 | 26 | 125 | **478** | PASS |
+| b1 | 4 | 38 | 447 | 2,011 | PASS |
+| **b1seed** | 4 | 24 | 140 | **728** | PASS |
+| b8 | 5 | 42 | 620 | 2,433 | **FAIL** |
+| **b8seed** | 4 | 22 | 140 | **394** | PASS |
+
+Generator-built and re-measured from scratch; the numbers reproduce the earlier
+hand-substituted ones exactly. **Every arm passes with the seed**, including
+both that fail without it, and the incumbent improves 4.6×.
+
+### The other gates, and the cost
+
+| | base | seed |
+|---|---|---|
+| legality | 100/100 | **100/100** |
+| mate-in-1 | 8/8 | **8/8** |
+| standalone, empty dir | `g1f3` | **`g1f3`** |
+| nodes to complete depth 8, 40 positions | 691,287 | **691,313 = 1.0000×** |
+| same move at completed depth 8 | — | **40/40** |
+
+At equal completed depth the seeded search returns **the same move on every one
+of 40 positions and costs 0.004% more nodes**. The seed only changes what a
+search that is *stopped* commits to — which is exactly why it still needs games.
+
+### THE SCREEN, pre-registered
+
+Non-inferiority: the seed is bought for correctness, not Elo, so the question is
+whether it costs anything, not whether it gains.
+
+| | |
+|---|---|
+| instrument | `ab_fixednode.sh`, 20,000 fixed nodes, the 2,000-position book, arena `eval-c1-20260813` |
+| **engine1** | **`seed`** |
+| engine2 | `base` |
+| SPRT | **elo0 = −10, elo1 = 0**, α = β = 0.05 |
+
+**THE ORIENTATION TRAP, written out because it has bitten this project.**
+fastchess states `elo0`/`elo1` **in engine1's frame** — verified against our own
+record, not assumed: the C2 screen ran `-engine name=base` first with
+`elo0=0 elo1=10` and reported "H1 was accepted" when **base** scored 63.18%. So
+with `seed` as engine1:
+
+- **H1 accepted → the seed is not inferior by 10 Elo → LAND.**
+- **H0 accepted → the seed is worse than −10 → DROP.**
+- **LAND requires the 95% lower bound to exclude −10**; DROP only on a
+  demonstrated real cost. An undecided run at cap is reported as undecided.
+
+### WHAT FIXED-NODE CANNOT SEE, and why the obvious timed check is VACUOUS
+
+The seed's entire benefit is *yield timing under `Stop`*, and fixed-node play
+never raises `Stop` before the search has answered. The SPRT above can therefore
+only show that the seed **costs nothing**; it cannot show that it **buys**
+anything. A timed check has to do that, and the naive version does not work:
+
+Both stop conditions are polled at `self.nodes % 2048 == 0`, so **no abort can
+land before node 2,048**. Any build whose max first yield is ≤ 2,048 is immune
+to the `(none)` class at *every* time control. base is 780 and seed is 171 —
+**both immune**. The driver's budget is
+`think = min(wtime/12 + 0.9·winc, wtime/2 − 1)` seconds, and at the measured
+42,473 nps, 2,048 nodes ≈ **48 ms**.
+
+- At **10+0.1** the `0.9·winc` term alone floors `think` at 90 ms ≈ 3,800 nodes.
+  **Nothing is ever aborted before node 2,048**, so base-vs-seed at 10+0.1
+  returns zero for both arms whatever is true. That is a gate that passes
+  everything — the exact failure mode this lane has paid for four times.
+- At **1+0** (`winc = 0`), `think = wtime/12` drops below 48 ms whenever
+  `wtime < 0.58 s`, which happens in the endgame of essentially every game.
+
+**So the spot-check is re-specified, and this is a deliberate deviation from the
+suggested 200 games @ 10+0.1:**
+
+| | |
+|---|---|
+| TC | **1+0** (zero increment — the increment is what makes the check vacuous) |
+| arms | **`b8` vs `b8seed`** — b8's max first yield is 2,433, *above* the cliff |
+| control pair | `base` vs `seed`, same TC |
+| n | 200 games per pair |
+| counted | `bestmove (none)`, illegal-move adjudications, time forfeits |
+| **prediction** | **`b8` > 0; `b8seed` = 0; base = 0 and seed = 0** |
+
+The control pair is what makes it an instrument rather than an anecdote: it
+shows the time control alone does not manufacture the failure. **This is a
+correctness count, not an Elo measurement**, and it is registered as such —
+1+0 on a shared box is far too noisy for a strength claim and none is made.
+
+### The kit, staged and UNARMED
+
+`tools/screens/seed_screen.sh`. Same discipline as `label_corpus.sh`: the GO
+marker is checked **once**, it never waits and never chains, and the producer
+writes `RESULT_seedscreen.txt` on **every** exit path including a crash or a
+kill. Controls run before staging: unarmed → refuses with a result file
+(exit 2); armed with an incomplete arena → refuses **before any games**
+(exit 3), naming the missing file.
+
+Two preflights inside the script that are not decoration:
+
+- **Legality and first yield on all four arms**, seconds rather than games.
+- **`b8` must STILL FAIL the node gate.** It is the positive control for
+  stage 2 — if a rebuild has quietly fixed it there is nothing left to catch,
+  and stage 2 would report a clean sheet that means nothing. The script aborts
+  (exit 7) rather than produce that.
+
+Staged into the arena that measured C1, C2 and d1, md5-verified after transfer,
+and probed one position each to confirm the real driver resolves (`v2 nodes
+fen`, all three answering `e1e8`):
+
+| in `eval-c1-20260813` | |
+|---|---|
+| arms | `bin/e_seed.py`, `bin/e_b8.py`, `bin/e_b8seed.py` (+ `e_base.py` already there) |
+| wrappers | `w_seed.sh`, `w_b8.sh`, `w_b8seed.sh` |
+| script | `seed_screen.sh` |
+| GO marker | **absent — UNARMED** |
+
+Nothing was launched: the box is owned by the Thomas-side systemd queue and the
+laptop by the ladder.
+
+### Not pre-registered, deliberately
+
+No Elo prediction. The seed changes the bisection, so a stopped search can
+commit to a different move; whether that is worth anything is what the screen is
+for, and this lane's record on predicting Elo from anything other than games is
+0 for 2.
+
+---
+
+## 2026-08-14 — THE MIX IS THE MECHANISM: a size-matched control swings phase 18-24 by 16.8 points. The pre-registered check is CLEARED, and b8 fails first yield like every fit before it
+
+The pre-registration is the entry below; this is what came out of it. **No games
+have been played. Nothing here is an Elo claim** — the metric involved has now
+mis-ranked twice.
+
+### The mechanism check, and the control that makes it mean something
+
+Three fits, all on labels from the same teacher, differing only in which
+positions they see. 12 splits each, as registered (`band_stability.py`,
+`sha256(split + fen)`):
+
+| arm | N | mix | OVERALL | 0-5 | 6-11 | 12-17 | **18-24** |
+|---|---|---|---|---|---|---|---|
+| `d1` | 19,434 | natural | −7.70 ± 0.90 | −13.34 ± 1.37 | −7.32 ± 1.65 | +0.12 ± 1.35 | **+7.47 ± 3.14** |
+| `nat8792` | 8,792 | natural | −5.05 ± 1.27 | −11.20 ± 2.51 | −4.05 ± 2.97 | +4.23 ± 4.62 | **+11.70 ± 7.58** |
+| **`bal8792`** | **8,792** | **flat** | −3.89 ± 1.06 | −4.27 ± 2.98 | −2.80 ± 3.03 | −3.39 ± 2.57 | **−4.95 ± 3.51** |
+
+**The pre-registered condition was that `bal8792` must not be worse than classic
+at phase 18-24. It is 4.95% BETTER.** Check cleared.
+
+**The size control is what makes this a result rather than a coincidence.**
+`nat8792` has exactly the same number of positions as `bal8792` and the natural
+mix, and it is **+11.70% worse** in that band — worse than d1, not better. So
+halving the data does not produce the effect; **changing the mix does**, and the
+swing at identical N is **16.65 points**.
+
+Extended to 40 splits afterwards (post-hoc, reported as such — the registered
+number is the 12-split one above):
+
+| arm | 18-24 over 40 splits | splits worse than classic |
+|---|---|---|
+| `nat8792` | **+13.31 ± 6.12** | **40 of 40** |
+| `bal8792` | **−3.52 ± 3.98** | a minority (range −12.24 … +5.37) |
+
+The trade that was diagnosed after d1 is now demonstrated as a controlled
+intervention: with a majority endgame band to buy, the fit sells phase 18-24;
+with no majority band, it stops.
+
+**The honest caveat.** These 40 splits re-split the *same* 8,792 positions, so
+the spread measures split noise, not sampling error over positions. It says the
+band difference between the arms is not an artefact of which split you look at.
+It does not say the fit would behave this way on a fresh corpus.
+
+### Instrument note: the trainer's default split is an outlier in this band
+
+`distill_train.py` reports bands on one split (seed 20260813) and it reads
+**+4.15%** for `bal8792` at phase 18-24 — outside the entire 12-split range
+[−12.06, +1.64], and on the wrong side of the check. The same seed also gave
+d1 **+14.24%** against its 12-split range of [+2.12, +14.13]: **extreme in both
+sets, in the same band, because the split is FEN-keyed and the two sets share
+positions**, so an unlucky draw is inherited rather than re-rolled.
+
+This is not a bug and the pre-registration is what protected the result: the
+check was put on the 12-split table before any of it was run. **No band number
+from the trainer's single split should be read as a mechanism** — that is the
+error that produced C2's post-mortem in the first place.
+
+### The candidates, priced and gated
+
+| | b1 (exact) | b8 (step 8, K exact) |
+|---|---|---|
+| packed | **3431 B (+81)** | **3316 B (−34)** |
+| held-out (single split) | −2.53% | −2.25% |
+| decode round trip | OK | OK |
+| standalone | `d2d4` | `b1c3` |
+| legality | 100/100 | 100/100 |
+| mate-in-1 | 8/8 | 8/8 |
+| **first yield, max** | **2,011 — PASS by 37 nodes** | **2,433 — FAIL** |
+
+`b1` passes with a **1.8% margin**. That is the thinnest pass this gate has ever
+recorded, and the gate exists precisely because a build one ordering change from
+failing is not safe.
+
+### SIX fitted candidates, six times at the cliff. The gamma seed is a BLOCKER, not a lead
+
+| build | shipped seed | `gamma = pos.score - 150` |
+|---|---|---|
+| entry | 780 | **171** |
+| C2 | 2,568 FAIL | 453 |
+| m1 | 9,088 FAIL | 250 |
+| C1 | 32,640 FAIL | 396 |
+| d1 | 1,896 | 537 |
+| d8 | 2,059 FAIL | 478 |
+| **b1** | **2,011** | **728** |
+| **b8** | **2,433 FAIL** | **394** |
+
+Every fitted eval this lane has produced lands within a factor of ~1.2 of the
+2,048-node cliff or over it; the two that "pass" do so by 37 and 152 nodes. The
++5-byte root seed clears **all of them** with 2.8–5.2× margin. This was routed
+to the search lane as a lead. On this evidence it is a **prerequisite for
+shipping any fitted eval at all**, and the step-8 arm — the one that gives bytes
+back — cannot be screened until it lands.
+
+### What is staged, and what is not
+
+`tools/tune/label_corpus.sh` enlarges the corpus and labels at 160k. It is
+**STAGED, NOT ARMED**: it checks a GO marker **once** and exits if it is absent,
+never waits, and never chains. Its producer writes `RESULT.txt` on **every**
+exit path including crashes, so a consumer can never poll forever on a job that
+died. Controls run: unarmed → refuses with a result file; wrong teacher sha →
+refuses **before** labelling; missing teacher file → reports *not found* rather
+than *changed* (the first version conflated them, which would have sent a reader
+hunting for a commit that never happened).
+
+Sizing for when a slot exists, measured from the census: a flat draw at d1's N
+needs 4,858 per band, so the shortfall is **2,660 at phase 12-17 and 1,948 at
+18-24** — about 23,500 fresh sampled positions, on the order of 5,000 games,
+which the box arenas hold. At the measured 0.58 pos/s per worker that is ~17
+minutes on 8 workers.
+
+### Cost of everything above
+
+One census pass, five fits and two band-stability sweeps, all single-threaded at
+`nice -n 15` on the laptop: **under four minutes of CPU in total**, nothing on
+the box, no labelling, no games.
+
+---
+
+## 2026-08-14 — PRE-REGISTRATION: the phase-balanced set. The corpus is EXHAUSTED, so the experiment is a re-balance of labels we already have — and it costs nothing to run
+
+**Nothing is selected, fitted or labelled below. This entry is written first, on
+purpose.** Two programmes have now died on this instrument, and both times the
+explanation arrived after the number. This one states the mix, the arms, the
+mechanism check and the bar before a single position is drawn.
+
+### First, the finding that chooses the design: there are no new positions
+
+The plan was to sample a phase-balanced set from the existing corpora. Censused
+with the sampling rule byte-identical to `texel_data.py` (`ply>=10`, every 7th
+ply, not in check, `>=6` pieces), over every game in `~/repos/sunfish-data/pgn`
+— 4,482 games, walked to the end rather than stopped early:
+
+| | |
+|---|---|
+| unique positions the rule admits | 19,689 |
+| already spent in `set20260813` | 19,491 |
+| **left over** | **198** |
+
+| band | available |
+|---|---|
+| 0-5 | 34 |
+| 6-11 | 69 |
+| 12-17 | 74 |
+| 18-24 | 21 |
+
+**The corpus is exhausted.** 19,491 + 198 = 19,689, exactly the "positions
+collected" recorded when the set was built, which is also a positive control on
+the census: this walker reproduces the original sampler's yield to the position.
+No phase-balanced set of any useful size can be drawn from the games on this
+laptop. Enlarging the corpus means pulling PGNs off the box and labelling new
+positions, and that needs a machine.
+
+### So the experiment inverts: re-balance the labels we ALREADY have
+
+`distill160k` holds 19,434 positions **already labelled by our own search at
+160,000 nodes**. Its band structure:
+
+| band | count | share |
+|---|---|---|
+| 0-5 | 8,374 | 43.1% |
+| 6-11 | 5,952 | 30.6% |
+| **12-17** | **2,198** | **11.3%** |
+| 18-24 | 2,910 | 15.0% |
+
+A flat draw is capped by the thinnest band at **2,198 per band, 8,792 total**,
+and it fits entirely inside a set that is already labelled. So the whole
+experiment costs **one census and three CPU-minutes of fitting** — no teacher
+run, no box slot, nothing added to either machine tonight.
+
+It also buys the cleanest single variable this lane has ever had. d1 and the
+balanced fit share the same teacher, the same labels, the same feature
+construction, the same split rule, the same model, the same encoding, the same
+gates and the same screen. **They differ in which subset of the same labelled
+positions the fit sees, and in nothing else.**
+
+### PRE-REGISTERED TARGET MIX: flat, 2,198 per band, 8,792 positions
+
+Written before selection, with the alternatives that were considered and
+rejected, so nobody re-derives them later:
+
+- **FLAT (chosen).** The measured failure is a *trade*: the fit sells phase
+  18-24, where classic's loss against our teacher is already lowest
+  (0.007962, its best band), to buy phase 0-5, where 43.1% of the positions
+  live. Under a flat mix that trade has no payoff, because there is no majority
+  band to buy. It is the minimal intervention, it has **no free parameter**, and
+  it is legible: one number per band, all equal.
+- **Headroom-weighted** (weight ∝ classic's per-band loss) — **rejected**. It
+  would weight 12-17 and 0-5 up and 18-24 *down*, which is the direction that
+  just failed. It optimises the same quantity the loss already optimises.
+- **Play-frequency weighted** — **rejected**, because that is what the corpus
+  already is. Sampling every 7th ply of real games *is* the frequency with which
+  positions occur, and 43/31/11/15 is the mix that produced −93.8 and −76.0.
+
+### The arms, and the control that separates MIX from SIZE
+
+Halving the data is a confound. So three fits, not two:
+
+| arm | positions | mix | purpose |
+|---|---|---|---|
+| `d1` (measured) | 19,434 | natural 43/31/11/15 | the incumbent result, **−76.0 ± 28.3** |
+| **`nat8792`** | **8,792** | **natural** | **the size control.** Same N as the candidate, unbalanced. Anything the balanced arm gains must survive this |
+| **`bal8792`** | **8,792** | **flat 25/25/25/25** | the candidate |
+
+Without `nat8792` a difference between `d1` and `bal8792` could be the mix or
+could be having half the data, and there would be no way to tell.
+
+### PRE-REGISTERED MECHANISM CHECK — it can only CANCEL a screen, never justify one
+
+Held-out loss decides nothing about strength; that is on the record twice over.
+But it can say whether the intervention **did the thing it was designed to do**,
+and if it did not there is nothing worth spending games on:
+
+> **Condition to proceed:** on the 12-split band table, `bal8792` must not be
+> worse than classic at phase 18-24. d1 was **+7.47 ± 3.14 worse** there on all
+> 12 splits. If the balanced fit is still stably worse in that band, the mix was
+> not the mechanism, the diagnosis that survived d1 is wrong too, and this
+> closes **without a box slot**.
+
+This is a veto, not a trigger. Clearing it does not make the arm good — d1
+cleared every gate it had and lost 76 Elo.
+
+### Everything downstream is unchanged, deliberately
+
+| | |
+|---|---|
+| teacher | our own search @ 160,000 nodes, unchanged, labels reused verbatim |
+| split | 20% held out by `sha256(seed + fen)`, seed 20260813 — **FEN-keyed, so a position keeps its side of the split in every set it appears in** |
+| model | the same 384 parameters, king frozen at the landed `kend` fix |
+| encodings | exact (`b1`) and step-8 STE with `exact="K"` (`b8`), as d1/d8 |
+| gates | decode round trip, `check_entry.sh`, legality, mate, **first yield ≤ 2048**, A-vs-A |
+| screen | `ab_fixednode.sh`, 20,000 nodes, SPRT elo0=0 elo1=10, α=β=0.05, 2,000-position book, in the arena that measured C1, C2 and d1 |
+| **bar** | **LAND at 95% LB > 0, DROP at UB < 0** |
+
+Band predictions beyond the mechanism check are **not** registered: the band
+statistic failed its stability test once and its prediction test once, and it is
+being used here only to verify an intervention, never to forecast Elo.
+
+### What makes this different from the two programmes that died — and what does not
+
+**Different:** C2 and d1 were both free to spend the high-phase band to buy the
+majority, and d1 measurably did. Under a flat mix that trade has no payoff. This
+is the first intervention aimed at the mechanism that was actually measured
+rather than at the objective (C2 → d1 changed the teacher, and the teacher was
+not it).
+
+**Not different, and worth saying plainly:** it is the same 384-parameter linear
+model on the same features fitted by least squares, and the two dead programmes
+prove that a 6-8% held-out improvement on this model carries no Elo whatsoever.
+The mix could be the mechanism *and* the model still be too small to profit from
+fixing it. The honest expectation is that this is a coin flip, and the reason to
+spend the slot is that it is the last cheap hypothesis standing before the
+conclusion becomes "384 global parameters cannot be improved by fitting, at any
+mix, with any teacher" — which is itself a result worth having on the record.
+
+### Cost, and why it is being written tonight
+
+The box is running Thomas-side timed matches and the laptop is running the timed
+ladder. Nothing here adds sustained load to either: the census is one pass over
+19,434 FENs, and the fits are single-threaded, `nice -n 15`, ~1 minute each.
+The labelling recipe for *enlarging* the corpus is staged but **not armed** —
+it needs a machine, and it will be scheduled, not chained.
+
+---
+
+## 2026-08-13 — d1 DROPPED at −76.0: the teacher was not the problem, the band statistic does not predict Elo, and 384-parameter distillation on this set is CLOSED
+
+The screen ran in the arena that measured C1 and C2, on C2's own openings, and
+it resolved against the candidate. Below: the verdict, the pre-registered
+closure it triggers, and two instrument/hygiene defects found on the way by the
+ordinary discipline of running every gate on the **shipped entry** first.
+
+### THE VERDICT
+
+| | |
+|---|---|
+| games | **462** raw `[Result]` lines (460 paired; 2 unpaired dropped by `pair_elo`) |
+| **d1, raw PGN** | **W 146 · L 247 · D 69 — 39.07%** |
+| **Elo** | **−75.96 ± 28.29** (95%), i.e. **[−104.3, −47.7]** |
+| SPRT | stopped early, H1 accepted **for base** |
+| time forfeits / illegal / `(none)` | **0 / 0 / 0** |
+| A-vs-A control, same book slice | **exactly 50.00%** — 47 W / 47 L / 26 D over 120 raw games, 0 forfeits |
+
+**DROP.** The bar was UB < 0 and the upper bound is −47.7. It is not close.
+
+### The pre-registered closure condition is MET
+
+The registered wording: *"the informative comparison is against −93.8, not
+against zero. If the distilled student's point estimate is not materially above
+C2's, the teacher swap is not what was wrong, and 384-parameter distillation on
+this position set is closed."*
+
+| | teacher | held-out vs classic | Elo (95%) |
+|---|---|---|---|
+| C2 | Stockfish 18 @ depth 8 | −5.9% | **−93.8 ± 32.7** |
+| **d1** | **our own search @ 160,000 nodes** | **−7.78%** | **−76.0 ± 28.3** |
+
+Both screened on the same instrument, the same book, and — since d1 reused
+C2's srand — **the same 500 openings**. The point estimate moved **+17.9 Elo**
+and the intervals overlap over most of their length ([−104, −48] against
+[−126, −61]). That is not materially above C2.
+
+**So the teacher is not what was wrong, and 384-parameter distillation on this
+position set is CLOSED** by the rule written before the labels finished. The
+teacher itself is not discredited — it is Stockfish-free, reproducible, and
+cost 10 core-hours — but it does not rescue a 384-parameter global fit, and
+nothing further should be spent testing teachers on this position mix.
+
+### The phase-band statistic does not predict Elo. It points the WRONG WAY
+
+This was the one thing the coordinator asked the screen to answer, and the
+answer is clean:
+
+| | phase 18-24 held-out | Elo |
+|---|---|---|
+| C2 | **−8.00% (BETTER than classic)** | −93.8 |
+| d1 | **+7.47% (WORSE than classic, on all 12 splits)** | **−76.0** |
+
+The student that is stably *worse* in the band played *better*. Carried
+verbatim from the coordinator, and it stands: *the phase-band evidence arrived
+after the bar was set and the bar is not revised; honest expectation is that d1
+drops; the informative output is whether the band statistic predicts Elo (C2 is
+the control: it improved that band and lost 94).* It does not. The band
+programme has now failed twice — once on stability (its sign flipped across
+splits) and now on prediction — and nothing further should be built on it.
+
+### Held-out loss has now mis-ranked on BOTH teachers
+
+C2 fitted Stockfish 5.9% better than classic and lost 94. d1 fits **our own
+search's converged value 7.78% better than classic** — the quantity the engine
+literally maximises, on labels the engine itself produced — and loses 76.
+Two teachers, two objectives, same direction. The 384-parameter model does not
+have an objective problem that a better label fixes.
+
+What is left standing from the whole distillation pass is the measured
+diagnosis, not the candidate: **65.6% of the positions are endgame, classic
+already predicts our own search best at phase 18-24 (0.007962, its best band),
+and a global least-squares fit spends that band to buy the majority.** The
+position mix is the open axis, and this teacher makes it cheap to re-sample.
+
+### The screen, as run
+
+`base` (the landed 3350 B entry) vs **`d1`** (the distilled exact student,
+3421 B, +71). Instrument byte-for-byte the one that produced C1's −57.7 and
+C2's −93.8: `ab_fixednode.sh`, **20,000 nodes**, SPRT elo0=0 elo1=10,
+α=β=0.05, the 2,000-position book, 500 rounds, concurrency 8. Launched
+21:42:43 UTC, complete 22:03:13 UTC; the A-vs-A control ran 22:05:05–22:12:38.
+
+`base` (the landed 3350 B entry) vs **`d1`** (the distilled exact student,
+3421 B, +71). Instrument byte-for-byte the one that produced C1's −57.7 and
+C2's −93.8: `ab_fixednode.sh`, **20,000 nodes**, SPRT elo0=0 elo1=10,
+α=β=0.05, the 2,000-position book, 500 rounds, concurrency 8.
+
+It runs in **`eval-c1-20260813`, the same arena**, not a new one. Every
+instrument file there was checked md5-identical to the repo at launch —
+`ab_fixednode.sh`, `legality_gate.py`, `pair_elo.py`, and `sunfish_ui/` at
+`DRIVER_VERSION = 2` — and the arena's `bin/e_base.py` is byte-identical to a
+fresh `make_variants.py base` off the landed tree, so the incumbent arm is not a
+stale copy of anything. `e_d1.py` was rebuilt from that tree and its md5 checked
+after transfer. **srand is 20260815, C2's own seed**, so d1 plays the *same 500
+openings C2 played*.
+
+Gates before games, both arms, locally under CPython and on the box under the
+pypy3 that actually plays:
+
+| | base | d1 |
+|---|---|---|
+| packed | 3350 | **3421 (+71)** |
+| decode round trip | — | OK |
+| legality | 100/100 | 100/100 |
+| mate-in-1 | 8/8 | 8/8 |
+| first yield, max (window 2,048) | **780** | **1,896** |
+
+The bar was **not revised**: LAND at 95% LB > 0, DROP at UB < 0.
+
+`d8` was **not** in this screen. It fails first yield at 2,059 against a 2,048
+window and is not screenable until the search lane's 5-byte gamma seed lands.
+
+### COTENANCY INCIDENT: a timed RR voided itself six minutes after this launch
+
+Reported because it is not mine to interpret and the timing is short.
+
+At launch (21:42:08 UTC) the box was 96 cores at load 10.89, running the formal
+lane's widening RR — 7 engines, 840 games at **30+1**, concurrency 8 — plus a
+root `cliosoft` service at 19.7% CPU and one `innovus` job systemd-capped at 4
+cores. This screen added 16 `nice -n 5` pypy3 processes at 21:42:43.
+
+At **21:48 UTC** the widening lane voided its own run, renaming its output to
+`VOID_process_leak_20260813T2148Z`. Its log stops at game ~115 of 840.
+
+I did not touch that lane's arena, processes or files, and I cannot establish
+causation from here. What is on the record and relevant: **that runner had
+deliberately waited from Aug 12 18:00 until 21:13 for a "10-min fastchess-quiet
+window" before launching**, so it was built on the premise of an otherwise
+quiet box; its matches are **timed**, and `ab_fixednode.sh`'s own header says
+timed comparisons need a quiet machine while fixed-node ones do not. The
+cotenancy that provably cannot corrupt *this* screen is not the same claim as
+cotenancy being harmless to a *timed* neighbour. Flagged for the coordinator;
+the correlation is 6 minutes and the mechanism is plausible in at least two
+ways (load on a timed match, or my pypy3 processes tripping their leak
+detector).
+
+The d1 numbers themselves are unaffected: fixed-node play is node-counted, the
+A-vs-A control on the same book slice returned exactly 50.00%, and there were
+no time forfeits in either match.
+
+### The mate gate was answering from the OPENING position
+
+`mate_gate.py` feeds `position fen`, which **only `sunfish_ui/uci.py`
+understands**. An entry whose grandparent directory has no `sunfish_ui/` — which
+is every variant a generator writes into a scratch directory — falls through to
+the builtin loop, which knows `position startpos` alone. It searched the opening
+position and answered an opening move.
+
+Run that way the gate reported **`MISS ILLEGAL g1f3` for the SHIPPED ENTRY** on
+three mates it in fact solves. Loud rather than silent, unlike the first-yield
+gate's first run, but still a chess verdict on a position the engine never
+saw — and the **fourth** incident of this exact class in this lane (`agree.py`,
+the stale driver that voided 425 games, the first-yield gate, now this).
+
+Fixed the same way the first-yield gate was: resolve a checkout that has a
+driver, set `PYTHONPATH`, **demand the banner by name**, and take source entries
+only, since `position fen` cannot reach a packed artifact at all. Re-run:
+base, d1, d8 all **8/8**, and a packed artifact is now refused instead of scored.
+
+### The tracked training set carried the bench box's name
+
+`distill_pack.py` copied the labeller's meta into the `.npz` verbatim, including
+the machine it ran on, and `set20260813.npz` — a **tracked file** — already
+carried `"host": "hardware"`.
+
+The branch has never been pushed, so this was still cheap. `distill_pack.py` now
+drops the key, and the committed set has been rewritten:
+
+| | |
+|---|---|
+| pre-scrub sha256 | `d792b42081f0adec10cbcb17ca72a7a96949cfac21fe1b97be1935b3cffc4c13` |
+| **post-scrub sha256** | **`2410786e14f09fecbcea8c94f74fd1378d04b0f1aa634cb27702f0890196ed4d`** |
+| arrays | `X`, `y`, `fens` **bit-identical**, verified against an untouched copy |
+| meta | dropped exactly `{host}`; every other field equal |
+
+**C1's and C2's provenance therefore refers to the pre-scrub sha of the same
+bytes minus one metadata key** — the training data behind those two verdicts is
+unchanged, and `fits.json` records no `data_sha256` to update. The pre-scrub
+blob exists only in this branch's history and must never be pushed.
+`distill160k.npz` (`b0ed8b6617a7…`) was built after the fix and was never
+affected.
+
+Verification note, because the first attempt was wrong: reading arrays back
+through the *same* `np.load` handle after overwriting the file compares the new
+file with itself — `numpy` reads lazily from disk offsets. The check above is
+against a copy taken before the write.
+
+---
+
+## 2026-08-13 — The distillation teacher, specified and priced; a new gate that all four old fits fail; and the C2 post-mortem's mechanism does NOT survive a re-split
+
+Thomas's reorder: distillation first, and the teacher is **our own search's
+converged value**, not a shallow Stockfish score. Static SF-depth-8 loss is on
+record as anti-correlated with strength (C2 fitted it 5.9% better and played
+−93.8), and the search's own value is the quantity the engine actually
+maximises. This entry is the teacher spec, the budget choice behind it, the
+instruments built to gate what comes out, one correction, and the students.
+**No Elo is claimed anywhere below.**
+
+### The frontier the teacher has to beat, measured not assumed
+
+A teacher at the student's own depth teaches nothing. So the budget is chosen
+against the budget the engine actually spends, measured on the bench box under
+its ordinary match load (load 24 of 96, two `tc=30+1` matches cotenant):
+
+| | median | min | max |
+|---|---|---|---|
+| depth at 30+1 | **9** | 7 | 15 |
+| nodes at 30+1 | **56,829** | 23,797 | 112,506 |
+
+16 positions, `wtime 30000 winc 1000`, so `think = wtime/12 + 0.9*inc = 3.40 s`
+at a median 42,473 nps. Re-measured after the cotenant matches finished (load
+10.75): median **67,642 nodes, depth 10**, 54,638 nps. So the frontier is
+**57k–68k nodes** depending on what else the box is doing. The fixed-node
+screens run at **20,000**, which from the sweep below is ~6.5 ply.
+
+**The honest tension, stated rather than glossed.** At 160,000 nodes the
+teacher's mean *completed* depth is 9.74. Against the **screen** budget where
+the candidate is actually judged that is 8× the nodes and ~3 plies — a real
+teacher. Against a **30+1 game move** it is only 2.4–2.8× the nodes and about
+one ply, so this teacher is not teaching the student to see deeper than the
+engine plays; it is teaching it to agree with a slightly better version of
+itself. Buying the extra plies is what 640k would do, and the sweep below says
+that buys 0.008 of correlation while 21% of positions still churn >25 cp. If
+the distilled student converts at all, raising the budget is the first axis to
+re-open.
+
+### The teacher's value does NOT converge. It plateaus, and the plateau is tactics
+
+320 phase-stratified positions labelled at five budgets, every one labelled at
+every budget:
+
+| budget | mean depth | median \|Δ\| vs previous | mean \|Δ\| | >25cp | r with 640k |
+|---|---|---|---|---|---|
+| 2,500 | 4.27 | — | — | — | 0.9241 |
+| 10,000 | 5.54 | 8 | 15.8 | 13.4% | 0.9345 |
+| 40,000 | 7.61 | 12 | 24.9 | 22.5% | 0.9710 |
+| **160,000** | **9.74** | 10 | 22.8 | 21.2% | **0.9919** |
+| 640,000 | 11.91 | 10 | 21.0 | 21.6% | 1 |
+
+Read the middle columns first. **The label never stops moving**: from 40k
+upward, a 4× budget increase still shifts ~21% of positions by more than 25 cp,
+and the median shift sits flat at 10 cp. This is not a convergence tolerance
+that more nodes would close — it is tactical content entering and leaving the
+value, and **a 384-parameter piece-square table cannot represent it at any
+budget**. Buying more of it is buying label noise.
+
+What does keep improving is agreement with the deepest run, and it saturates:
+**r = 0.9919 at 160k**, so a 4× more expensive teacher would move 0.8% of the
+variance.
+
+**Chosen: N = 160,000 nodes.** Justified on four measured grounds — 2.8× the
+30+1 play frontier and 8× the screen budget; median completed depth 9.74
+against the frontier's 9; r = 0.9919 against 4× the cost; and 1.8 s/position,
+which is ~10 core-hours for the whole set and fits inside the cotenancy rule.
+640k would be 5× that for 0.008 of correlation.
+
+### Dataset spec
+
+| | |
+|---|---|
+| positions | the **same 19,491 FENs** as `set20260813.npz` |
+| teacher | `nnue_4k/pst_entry.py`, sha256 `f2f0bdc87cd1…`, the shipped entry |
+| budget | `go nodes 160000`, node cap only, no wall clock |
+| label | score of the **last completed depth**, MTD bracket midpoint, white POV |
+| features | 6×64 piece-square counts, white minus mirrored black — byte-identical construction to `texel_data.py` |
+| dropped | positions where the teacher saw a mate at the root, counted not coerced |
+
+The positions are deliberately **unchanged**. C2 differed from classic in the
+teacher AND could have differed in a dozen other ways; the distilled student
+differs from C2 in the label and in nothing else, so if it converts, the
+teacher is why and no other explanation is available. Re-sampling the position
+mix is a separate axis, and the teacher is free of Stockfish, so it can be run
+over any number of new positions later without a relabelling dependency.
+
+### Two controls on the labeller, both of which the SF labeller needed
+
+- **Order/TT control.** `Searcher.search` clears `tp_score` but *not*
+  `tp_move`, and move ordering changes the tree — the same carry-over that
+  made Stockfish score one FEN −14 in one slot and −22 in another. A fresh
+  `Searcher` is built per position, and 40 positions labelled forward and then
+  **reversed** produce **bit-identical records in every field**.
+- **Interpreter control.** The same 8 positions labelled under CPython 3.14.5
+  on the laptop and PyPy 3.11.13 on the box give **identical labels**. The
+  label is a function of (fen, budget, engine sha) alone.
+
+**Positive control on the extraction itself**: for the first sweep position the
+labeller reports 353 cp at depth 5, and the engine's own `info` stream on the
+same position converges to `lower 348 / upper 359` at depth 5 — midpoint 353.
+The number is the engine's, not a re-derivation of it.
+
+### What the 384-parameter model can actually express, measured
+
+Two numbers that frame every fit this lane has run, on the SF-labelled set:
+
+- Adding classic's piece-square terms to **pure material** moves the
+  correlation with either teacher by **~0.000-0.004** (0.7364 → 0.7368 ours,
+  0.7298 → 0.7284 SF). Material is essentially the whole raw signal.
+- Yet refitting **only the 5 free piece values** buys **−1.31%** held-out,
+  against **−7.63%** for all 384 parameters. So the square terms carry ~83% of
+  the loss improvement while contributing almost nothing to raw correlation.
+
+The fit's gain therefore lives entirely in a component that is small next to
+material. Stated as an observation, not a mechanism — the last mechanism this
+lane asserted from a single split is the one being corrected below.
+
+For the record, the SF fit's piece values: P 100, N 280→**265**, B 320→**295**,
+R 479→**473**, Q 929→**839**. Overall eval scale is unchanged (sd ratio 1.014
+on 5,074 real positions), so this is a change in the *relative* piece values —
+the queen down 10% against a near-unchanged rook — not a rescaling.
+
+### How different is this teacher from Stockfish? Enough to matter
+
+On the 320 sweep positions, our 160k value against SF depth 8: **r = 0.884**,
+**median absolute difference 86 cp**, mean difference −3.7 cp, sd 324 vs 304.
+So the scale matches (no piece-value scale mismatch to absorb) while the
+per-position disagreement is large. This is a real change of target, not a
+relabelling that moves things a little.
+
+### NEW GATE: `tools/build/first_yield_gate.py`, and all four old fits fail it
+
+`main()` can only print a move the search handed it, and the search hands one
+over only on a **root fail-high with a move**. Both stop conditions are polled
+at `self.nodes % 2048 == 0`, so **the earliest an abort can land is node
+2,048**. A build whose first fail-high needs more than that has a budget — of
+nodes *or of time*, so this is not a fixed-node-only hazard — at which it
+prints `bestmove (none)`.
+
+The first version asked the binary question (`go nodes 1`, is it `(none)`) and
+over 505 positions caught C1 on **exactly one**: the position already known to
+fail. A gate whose power comes from carrying its own reproducer catches the bug
+it was written for and nothing else. It now **measures the node count**, which
+turns a 1-in-505 event into a distribution with a margin:
+
+| arm | median | p99 | **max** | verdict |
+|---|---|---|---|---|
+| **shipped entry** | 5 | 178 | **780** | PASS |
+| C2 (exact, unmirrored) | 5 | 369 | **2,568** | FAIL |
+| q8 (step 8, post-hoc rounded) | 5 | 361 | **3,707** | FAIL |
+| m1 (exact, mirrored) | 5 | 167 | **9,088** | FAIL |
+| C1 (step 8, mirrored) | 5 | 283 | **32,640** | FAIL |
+
+505 phase-stratified positions from our own games, plus the C1 reproducer.
+**Every fitted candidate this lane has produced fails; the shipped entry passes
+with a 2.6× margin.** The ordering by max reproduces the bisection's ordering
+exactly — mirroring is worst — from an instrument that knows nothing about
+mirroring.
+
+Two things this gate needed to be true rather than reassuring:
+
+- **A subprocess control.** The measured node count is checked against
+  `go nodes 1` through the real UCI surface on the worst positions plus a fixed
+  slice; a number that did not predict the played move would be a generator
+  nobody had validated.
+- **A driver assertion, which it needed on its first run.** An entry that
+  resolves no `sunfish_ui/` falls through to the **builtin loop, which knows
+  only `position startpos`** — it ignores the FEN, searches the opening
+  position, and answers a legal-looking move. The gate scored **PASS for every
+  arm including C1** until it started demanding the driver banner by name. Same
+  class as the `agree.py` incident; third time this lane has paid for it.
+
+### The C2 post-mortem's MECHANISM does not survive a re-split
+
+The recorded explanation for C2 was a band diagnostic: "the whole −5.31% lives
+in the endgame and the middlegame band is slightly worse than classic
+(+0.6% at phase 12-17)". That was read off **one** held-out split, and the band
+holds ~450 positions. Refitting the identical model on **12 splits**:
+
+| band | mean | sd | min | max | sign |
+|---|---|---|---|---|---|
+| OVERALL | −7.85 | 0.81 | −8.66 | −5.82 | stable |
+| phase 0-5 | −10.92 | 1.75 | −13.22 | −7.32 | stable |
+| phase 6-11 | −6.11 | 1.16 | −7.97 | −4.25 | stable |
+| **phase 12-17** | **−2.96** | **2.36** | **−6.36** | **+0.94** | **FLIPS** |
+| phase 18-24 | −8.00 | 1.95 | −12.16 | −5.20 | stable |
+
+**The middlegame band is the LEAST IMPROVED band, not a worse one**, and its
+sign is not determined at this sample size. The anti-correlation itself is
+untouched — the fit is reliably ~8% better on held-out loss and played −93.8
+Elo — but *why* is now unexplained, and the phase-reweighting programme that
+was justified by this mechanism was aimed at a statistic that flips sign.
+Recorded so that nothing further is built on it.
+
+### The torch trainer is validated against a fit whose Elo we already know
+
+`tools/tune/distill_train.py`, `torch.optim` only, seeded and deterministic,
+CPU, single-threaded (the laptop is running a timed league). Run on the **old
+SF-labelled set** it must reproduce C2, and it does — on four independent
+axes:
+
+| | recorded for C2 | torch harness |
+|---|---|---|
+| held-out vs classic | −5.9% | **−5.93%** |
+| phase 0-5 / 12-17 | −9.8% / +0.6% | **−9.81% / +0.56%** |
+| packed bytes | 3412 (+62) | **3412 (+62)** |
+| first yield, worst position | 2,568 nodes (box `e_c2.py`) | **2,568 nodes, same FEN** |
+
+The last row is the strongest one: an independently rebuilt candidate
+reproduces the incumbent's failure mode node for node.
+
+**The split is now keyed on `sha256(seed + fen)`, not on a row permutation.**
+The distilled set drops the positions where the teacher saw a mate, so an
+index-based split puts *different positions* in the two teachers' held-out
+sets and the single-variable comparison silently stops being true.
+
+### Quantisation-aware students are BYTE-NEGATIVE
+
+Straight-through rounding inside the forward pass, so the fit is over tables we
+can actually store rather than a float fit rounded afterwards. On the SF set
+(harness exercise, not a candidate):
+
+| arm | held-out | packed | vs entry |
+|---|---|---|---|
+| linear (exact) | −5.93% | 3412 | +62 |
+| **q8** | −5.91% | **3297** | **−53** |
+| **q16** | −5.11% | **3257** | **−93** |
+
+Step 8 keeps essentially the whole fit and gives **53 bytes back** against the
+shipped entry. Two defects were caught getting there, both by the round-trip
+check: the codec **quantises every table it is handed, including the king**, so
+a step-8 emit silently rounded the landed `kend` fix (`exact="K"` holds it, ~84
+B); and the piece value must be snapped to the same grid, or subtracting it
+shifts the whole table half a step off and the codec rounds a second time.
+
+### Instrument note: `torch.optim.LBFGS`'s default tolerance is a silent no-op here
+
+At this loss scale (~0.017) the gradients are ~1e-9 and the **default
+`tolerance_grad=1e-7` declares convergence before the first step**. The "fit"
+comes back exactly equal to its warm start and every band reads `0.00%`, which
+looks like a result rather than a failure. Caught by a run where *every* number
+was zero; `tolerance_grad=1e-12` is now set explicitly everywhere.
+
+### THE STUDENTS: on the metric, the teacher swap changes NOTHING
+
+19,491 positions labelled (66.6 min, 8 workers), 19,434 kept, 57 dropped as
+mates at the root, mean completed depth 10.10, label sd 366 cp. Both teachers
+trained on **the identical 19,434 positions with the identical FEN-keyed
+split**, each measured against its own classic baseline (the baselines differ
+because the labels differ — 0.017804 for SF, 0.014239 for ours: **the incumbent
+already predicts its own search far better than it predicts Stockfish**, so
+there is less headroom to win).
+
+| | classic | student | improvement |
+|---|---|---|---|
+| SF depth 8, exact | 0.017804 | 0.016443 | **−7.65%** |
+| **our search @160k, exact** | 0.014239 | 0.013131 | **−7.78%** |
+
+Over 12 splits: SF **−7.85 ± 0.81**, distilled **−7.70 ± 0.90**. **They are the
+same number.** Distilling the search's own value does not make the 384-parameter
+model fit better *or* worse in aggregate — which is neither good news nor bad,
+because this is the metric that ranked C2 above classic while C2 played −93.8.
+
+### And on the band structure it is stably WORSE where it matters most
+
+This is the finding. 12 splits, distilled student:
+
+| band | mean | sd | min | max | sign | SF student, same test |
+|---|---|---|---|---|---|---|
+| OVERALL | −7.70 | 0.90 | −9.33 | −6.38 | stable | −7.85 |
+| phase 0-5 | −13.34 | 1.37 | −15.09 | −10.65 | stable | −10.92 |
+| phase 6-11 | −7.32 | 1.65 | −10.73 | −4.70 | stable | −6.11 |
+| phase 12-17 | +0.12 | 1.35 | −1.68 | +3.11 | FLIPS | −2.96 (flips) |
+| **phase 18-24** | **+7.47** | **3.14** | **+2.12** | **+14.13** | **stable** | **−8.00 (stable)** |
+
+**The distilled student is reliably worse than classic in the highest-phase
+band** — every split, by 2 to 14% — where the SF student was reliably *better*.
+Unlike C2's post-mortem, this one does not flip: it is a real property of this
+generator.
+
+The cause is visible in the baselines. Against our own teacher, classic's
+held-out loss at phase 18-24 is **0.007962**, by far its best band: with most
+of the material still on, our own search's value is nearly what classic's table
+already says. There is almost no headroom there, and a global least-squares fit
+spends that band to buy the endgame band, where the loss is large and **65.6%
+of the positions live**.
+
+So the diagnosis that was wrongly attached to C2 turns out to be *true of the
+distilled student*, stably, and for a reason that is now measured rather than
+guessed: **it is the POSITION MIX, not the teacher.** And the position mix is
+exactly what distillation makes cheap to fix — this teacher needs no Stockfish,
+so any number of high-phase positions can be labelled without an external
+dependency. That is the axis the evidence points at, and it is not the axis
+that was just tested.
+
+### Prices and gates
+
+| arm | held-out | packed | vs entry | first yield (max) | legality | mate |
+|---|---|---|---|---|---|---|
+| **d1** (exact) | −7.78% | **3421** | **+71** | 1,896 | 100/100 | 8/8 |
+| **d8** (step 8, K exact) | −7.50% | **3306** | **−44** | **2,059 FAIL** | 100/100 | 8/8 |
+| q16 (step 16) | −6.91% | 3267 | −83 | not gated | — | — |
+
+Decode round trip OK and standalone-in-an-empty-directory OK on all three.
+
+**d8 misses the gate by 11 nodes.** That is the margin case the measuring form
+of the gate exists to catch: one position in 505 needs 2,059 nodes where the
+window is 2,048, so this build emits `bestmove (none)` at some budget. d1
+passes but at **1,896 of 2,048** — a 7% margin against the shipped entry's 2.6×.
+
+**And the search lane's 5-byte seed fixes both**: with
+`gamma = pos.score - 150`, d1's worst goes 1,896 → **537** and d8's 2,059 →
+**478**, both passing comfortably. Every fitted table this lane has produced
+sits near this cliff; the seed is what moves them off it. **The search change is
+a prerequisite for shipping any fitted eval, quantised or not.**
+
+### Pre-registered, before the labels finish
+
+Screen: fixed-node 20,000 our-vs-our, SPRT elo0=0 elo1=10, alpha=beta=0.05,
+2,000-position book — **identical to C1's and C2's screens**, so the numbers
+are directly comparable. Gates first: decode round trip, legality 100/100, mate
+8/8, **first yield**, and an A-vs-A control. Slot to be requested from the
+coordinator; this lane launches nothing itself.
+
+- **LAND** if the 95% lower bound is **> 0**. This is C1's *re-derived* bar, not
+  its original LB > −15: eval bytes stopped being scarce (746 under the
+  ceiling, and the directive is to fill it), so a byte credit is void. The
+  step-8 arm gives bytes back, which strengthens the case at the same bar but
+  does not lower it.
+- **DROP** if the upper bound is below 0.
+- **The informative comparison is against −93.8**, not against zero. If the
+  distilled student's point estimate is not materially above C2's, the teacher
+  swap is not what was wrong, and 384-parameter distillation on this position
+  set is closed.
+- **No band prediction is registered**, because the band statistic had just
+  failed its own stability test on the SF set.
+
+**POST-HOC, and marked as such because it arrived after the bar was set:** the
+distilled student's phase 18-24 band then turned out to be stable *and* bad
+(+7.47 ± 3.14, every split). The bar above is **not** being revised — that is
+the whole point of writing it down first — but the honest expectation now is
+that this arm is more likely to drop than to land, and the thing worth learning
+from the screen is *whether the band statistic predicts Elo at all*. C2 gives
+the control: it improved that band and lost 94. If d1 degrades that band and
+loses about the same, the band is not the lever either, and the next candidate
+should change the POSITION MIX rather than the teacher or the encoding.
+
+**d8 is NOT screenable as it stands** — it fails the first-yield gate. Either
+it screens on top of the gamma-seed change, or it does not screen.
+
+### LEAD FOR THE SEARCH LANE: the `(none)` class is removable for 5 bytes
+
+The gate makes the cause visible. `search()` starts every search at **`gamma =
+0`** and bisects. The root stores a move **only on a fail-high** — measured, not
+assumed: on the C1 reproducer the first moment `tp_move[root]` is populated is
+the same probe as the first fail-high, at node 32,640 for C1 and node 25 for the
+entry. So there is no earlier move to fall back on, and "report the fail-low
+move" is not a fix that exists. The seed is the whole mechanism.
+
+Seeding it differently, measured on the 505-position gate:
+
+| root seed | entry | C2 | m1 | C1 |
+|---|---|---|---|---|
+| `gamma = 0` (shipped) | 780 | 2,568 | 9,088 | 32,640 |
+| `gamma = pos.score` | **2,920 FAIL** | 1,357 | 1,140 | 5,197 FAIL |
+| **`gamma = pos.score - 150`** | **171** | **453** | **250** | **396** |
+
+`pos.score` alone is a **trade, not a fix** — it helps every fit and makes the
+incumbent worse, because seeding at the true value makes the first probe a
+coin flip and it is a fail-HIGH that produces a move. Seeding *below* it makes
+the first probe cheap and one-sided: **every arm passes, including C1, and the
+shipped entry improves 4.6×.**
+
+Priced by building: **+5 bytes** (3350 → 3355) and **1.0001× nodes to complete
+depth 8** over 40 positions — the seed only affects the first probes, and gamma
+persists across depths.
+
+**This is not an Elo claim and the constant is not tuned.** Changing the seed
+changes the whole bisection and therefore what a stopped search plays; it needs
+its own screen like anything else. But if it holds, it removes the correctness
+objection that suspended mirroring — which is what made 7 phase buckets
+affordable in the first place. Routed to the search lane, not built here.
+
+### Conditions
+
+Box: 8 `nice -n 15` pypy3 labellers, 0.55 pos/s each, alongside two of our own
+`tc=30+1` matches at concurrency 10. Load **22.5 → 26.5 of 96 cores**. Labelling
+never gates a match and this one could not have distorted one; no fastchess
+process was started by this lane. Laptop CPU used only for the 384-parameter
+fits (single-threaded) while the league ladder ran.
+
+---
+
+## 2026-08-13 — C1 DROPPED at −57.7, and the cause is MIRRORING, which also makes the engine answer `bestmove (none)`
+
+The screen ran, and it did not merely fail its bar — it found a correctness bug
+and a bisection that overturns the encoding the whole 1024-1500 B design was
+about to be built on.
+
+### The screen
+
+Fixed-node our-vs-our on the box, 20,000 nodes, SPRT elo0=0 elo1=10,
+alpha=beta=0.05, 2,000-position book, concurrency 8. **Raw counts first, as
+required, before any Elo number:**
+
+| | games | base W | base L | D | base score% |
+|---|---|---|---|---|---|
+| **base vs C1** | **651** | **339** | **232** | **79** | **58.23%** |
+
+**C1 = −57.72 ± 25.53 Elo.** SPRT stopped early, H1 accepted *for base*.
+0 time forfeits.
+
+**Pre-registered verdict: DROP.** The re-derived bar was "DROP if the upper
+bound is below 0"; the upper bound is **−32.2**. This is not the modal flat
+result that was predicted — it is materially worse than that.
+
+Controls, all clean:
+
+- **A-vs-A driver control**: `e_aa.py`, byte-identical to `e_base.py` (same
+  sha256), same directory, same `PYTHONPATH`. 120 games, **47W 47L 26D,
+  exactly 50.00%**, 0 forfeits, 0 illegal. Both arms provably get the same UCI
+  driver, and the harness is unbiased.
+- **Gates before games**: legality 100/100 and mate-in-1 8/8 on every arm.
+
+### The engine answered `bestmove (none)` in a real game — and it reproduces
+
+The match reported an illegal move. It was not an illegal move; it was **no
+move at all**, by C1, in game 65. Reproduced deterministically:
+
+```
+position fen rnbqkb1r/pp2pppp/3p4/2pnP3/3P4/2P2N2/PP3PPP/RNBQKB1R b KQkq d3 0 11
+e_base.py  ->  bestmove b8c6
+e_c1.py    ->  bestmove (none)
+```
+
+Not in check. Not a tail position. A **normal middlegame position**, and it
+fails at **every depth including 1**, emitting no `info` score line at all — so
+the search returns nothing from the root rather than searching badly. Identical
+whether the position is given as a FEN or replayed through its move list, so it
+is positional and eval-dependent, not a history artifact.
+
+**The 100-position legality gate passed this build.** Its three classes (forced,
+in-check, quiet-random) do not reach whatever this is, which is the second time
+this lane has learned that a gate is only as good as its position sample.
+
+### The bisection: it is MIRRORING, not the fit and not the quantisation
+
+Four encodings of the *same fit*, one position, seconds of work — the cheapest
+decisive measurement in this whole entry:
+
+| arm | encoding | move |
+|---|---|---|
+| base | classic tables | `b8c6` |
+| **C2** | fit, exact | `d6e5` |
+| **q8** | fit, **step 8**, unmirrored, K exact | `d6e5` |
+| **m1** | fit, **exact**, MIRRORED, K exact | **`(none)`** |
+| **C1** | fit, step 8, MIRRORED, K exact | **`(none)`** |
+
+**Mirroring is the cause.** Quantisation is exonerated — `q8` at step 8 plays
+the same move as the exact fit. And `m1` is at full resolution, so this is not
+a rounding artifact; folding the tables left-right is itself what breaks it.
+Note the king table was held **bit-identical** (`exact="K"`) in both failing
+arms, so the earlier kend-perturbation explanation does not cover this: it is
+the PNBRQ fold alone.
+
+### What this costs the 1024-1500 B design
+
+The recommendation in the entry below was **7 phase buckets at mirrored
+step 8** — 1120 parameters for 1147 eval bytes. **Mirroring is what made that
+fit in the budget**, and mirroring is now implicated in a correctness failure
+and, pending C2, possibly in most of the −57.7.
+
+Re-reading the grid with mirroring off the table:
+
+- **4 phase buckets, step 8, unmirrored: 1280 parameters, ~1102-1110 eval B,
+  total 3988-3995 — still IN BUDGET.** The budget is reachable without
+  mirroring at all.
+- But the data gets worse, not better: unmirrored is 320 parameters per set, so
+  4 phase quantiles is **3,024 / 320 = 9.5 pos/param** — below the taper's
+  failure point of 11, where mirrored 4-bucket was 18.9.
+
+So mirroring was the trick that made the parameter count affordable *in data*
+as well as in bytes, and it is not available. **The data constraint tightens.**
+Every conclusion in the entry below stands and this sharpens the last one:
+**do not fit the budget-filling candidate on this generator.**
+
+### Two instrument notes
+
+- **The harness's illegal-move counter double-counts.** It greps `-ci 'illegal
+  move'`, which matches both the `[Termination "illegal move"]` tag and the
+  in-game comment, so one incident is reported as **2**. Distinct terminations:
+  1. Anyone reading that line as an incident count is reading double.
+- **`bestmove (none)` is reported by fastchess as an illegal move**, which sends
+  you looking for a move-generation bug when the real event is that the engine
+  produced nothing. The two failure modes need different investigations.
+
+### C2 answers the generator question, and the answer is worse: the FIT is −94
+
+C2 is the same fit at exact resolution with no mirroring, so it carries no
+compression and — confirmed over 405 games — **no `bestmove (none)` incidents,
+0 illegal, 0 forfeits.** It is a clean measurement of the fit alone.
+
+| | games | base W | base L | D | base score% | candidate Elo |
+|---|---|---|---|---|---|---|
+| base vs **C1** (mirrored step 8) | 651 | 339 | 232 | 79 | 58.23% | **−57.72 ± 25.53** |
+| base vs **C2** (exact, unmirrored) | 405 | 235 | 129 | 38 | 63.18% | **−93.83 ± 32.69** |
+
+Both SPRTs stopped early, H1 accepted for base. **Both candidates DROPPED.**
+1,056 games total, zero time forfeits.
+
+Two readings, and the second is the one that matters:
+
+1. **Mirroring is not what cost the Elo — it was recovering some of it.** C1 is
+   36.1 ± 41.3 *better* than C2, which straddles zero but points the same way
+   the held-out loss did: halving the parameters regularises away per-square
+   noise the fit had memorised. Mirroring's problem is the correctness bug, not
+   the strength.
+2. **The fit itself is worth about −94 Elo**, and its held-out loss said it was
+   **5.9% BETTER than classic**.
+
+### The headline: on this dataset, held-out loss is ANTI-CORRELATED with strength
+
+This is not the 2026-08-12 story repeating. That time a better-fitting table
+played worse because of a bug in the emit path — an un-flipped king table — and
+the fix restored the relationship. This time there is no bug in the measured
+arm: C2 emits exactly what it fitted, is re-scored from its own emitted
+integers, plays 405 clean games, and is **−94**.
+
+The mechanism was visible in advance and is now confirmed in play. The
+phase-band diagnostic said the whole −5.31% lived in the endgame and the
+middlegame band was *slightly worse than classic*. Games are decided in the
+middlegame. A Texel fit on a set that is 65.6% endgame optimises the band that
+does not decide games, at the expense of the band that does.
+
+### Consequence for the 1024-1500 byte design: the objective is now the blocker
+
+Everything below about bytes stands — 7 phase buckets fit in 1147 eval B, the
+grid is priced, the ceiling is 1210. **None of it should be built yet**, and
+the reason has moved:
+
+- **Not bytes.** The budget is reachable, unmirrored, at 4 phase buckets.
+- **Not only data.** The pos/param gate said the straw man was 37× past
+  known-bad, and that stands.
+- **The objective.** A 384-parameter fit by this objective on this set is −94
+  Elo. **Filling 1024-1500 bytes with 1,280 parameters fitted the same way is
+  buying more of exactly what just lost 94 Elo.** Capacity multiplies whatever
+  the generator produces, and this generator produces negative Elo.
+
+**Recommendation, updated and firm: do not fit the budget-filling candidate.**
+The next thing this lane should measure is not a bigger table, it is a
+generator that converts:
+
+1. **Fix the objective's blind spot before its capacity.** The cheapest test is
+   a phase-band-weighted or middlegame-only refit screened at 384 parameters —
+   the same cheap arm that just gave a decisive answer in 405 games. If a
+   384-parameter fit cannot beat classic in play, no 1,280-parameter version
+   will. (Note this is *not* the reweighting already refuted below: that was
+   selected on held-out loss, the metric now shown to mis-rank. It has to be
+   selected in games.)
+2. **Distillation is now the leading route rather than a nice-to-have.** A
+   teacher labels as many positions as we sample, which fixes the data gate
+   *and* lets the target be the search's own value rather than a
+   win-probability proxy that demonstrably mis-ranks middlegames.
+3. **Mirroring is suspended on correctness** regardless of the above, until the
+   `bestmove (none)` path in the root is understood — that is an engine bug the
+   eval merely exposed, and it belongs to the search lane.
+
+The one unambiguous asset from this round: **quantisation to step 8 is free and
+safe** (`q8` plays the exact fit's move, and step 8 saves ~180 B), so whenever a
+generator does convert, its tables can be stored cheaply.
+
+---
+
+## 2026-08-13 — The 1024-1500 byte eval, priced by building: the BYTES are there and the DATA is not
+
+Thomas's allocation — eval 1024-1500 B, engine ~2500 — flips this lane from
+byte-minimising to capacity-maximising. Below is the whole grid, every row a
+real entry source through `tools/build/pack.sh`, size off disk, run alone in an
+empty directory. **No Elo is claimed and nothing here is fitted yet**; the
+deliverable is prices and one recommendation.
+
+### First, what "eval bytes" even means
+
+lzma carries one dictionary across the file, so no region has an intrinsic
+size. The only honest definition is differential, against a build identical
+except that it holds no table data:
+
+> eval bytes(X) = packed(entry with X) − packed(entry with a ZERO stub)
+
+The stub still defines `piece`, `pst`, `K_MID`, `K_END` — the same engine with a
+flat evaluation. On the rebased base that is **2886 B**, so the eval today
+occupies **464** and its **ceiling is 1210**.
+
+### The grid (classic-derived filler, K exact throughout)
+
+| partition | encoding | sets | params | packed | eval B |
+|---|---|---|---|---|---|
+| 1 flat | step 8, mirrored | 1 | 160 | 3167 | 281 |
+| 2 seam | step 8, mirrored | 2 | 320 | 3323 | 437 |
+| 4 wings | step 8, mirrored | 4 | 640 | 3573 | 687 |
+| 4 wings | step 8 | 4 | 1280 | 3988 | **1102** |
+| 8 seam × wings4 | step 8, mirrored | 8 | 1280 | 4021 | **1135** |
+| 8 seam × wings4 | step 2, mirrored | 8 | 1280 | 4379 | over 4096 |
+| 4 wings | exact | 4 | 1280 | 4478 | over 4096 |
+
+Machinery is sublinear and nearly free — the 4-bucket selector plus three extra
+decode loops costs **97 B** when the data is identical, ~32 per bucket, because
+the loops compress against each other. **Exact resolution is dead at every set
+count above two.**
+
+### How many sets actually fit, on fitted-SHAPED data
+
+Correcting filler by the measured "+60-75 B per fitted set" would be composed
+arithmetic. Instead, a better build: permute the **real fitted tables** per set,
+which preserves the fitted value multiset — the roundness that makes fitted data
+expensive — while making the sets distinct, and needs no new fit.
+
+| sets | step 8 mirr | step 4 mirr | step 2 mirr |
+|---|---|---|---|
+| 1 | 301 | 319 | 340 |
+| 4 | 746 | 832 | 922 |
+| 6 | 992 | **1125 (in budget)** | over 4096 |
+| 7 | **1111 (in budget)** | over 4096 | over 4096 |
+| 8 | over 4096 | over 4096 | over 4096 |
+
+Marginal cost settles at **~125-135 B per extra set** at mirrored step 8. Note
+this brackets from the *other* side: permuted sets share a value distribution
+that lzma exploits, where the one genuinely independent fit we have (the qseam
+second set) cost **+224**. A real candidate sits between, and the way to push it
+to the cheap end is to fit extra sets as **regularised deltas from the base
+set**, sharing piece values — which is also the fix for the data problem below.
+
+### The recommended partition is PHASE quantiles, not king wings
+
+King-wing buckets were the straw man. They are unusable on our data: **80.4% of
+positions have the white king on the king side**, so the wing product has a
+nearly empty corner. Phase quantiles are far better balanced. Both priced:
+
+| partition | sets | params | packed | spare | eval B |
+|---|---|---|---|---|---|
+| phase quantiles | 4 | 640 | 3648 | 448 | 762 |
+| phase quantiles | 6 | 960 | 3899 | 197 | 1013 |
+| **phase quantiles** | **7** | **1120** | **4033** | **63** | **1147 — IN BUDGET** |
+| phase quantiles | 8 | 1280 | 4144 | −48 | over 4096 |
+
+The selector is a 25-character phase→bucket string indexed by the piece-count
+phase, read once at the root — the same mechanism as the queens-off swap, so no
+per-node cost and no second accumulator. Decode of the largest build: **0.96 ms**
+against a 60 s startup budget.
+
+**So the bytes reach the budget: 7 phase buckets, 1120 free parameters,
+1147 eval B, 63 spare.**
+
+### And the data does not. This is the finding.
+
+Every bucket is fitted from its own positions, so what matters is the WORST
+bucket's positions-per-parameter. The reference is measured, not assumed: the
+queens-seam taper was dropped at **11 pos/param**, where it played a2a3 to
+depth 5.
+
+| partition | sets | worst bucket | pos/param | |
+|---|---|---|---|---|
+| 1 flat | 1 | 15,592 | 97.5 | OK |
+| 2 seam (queens-off) | 2 | 3,544 | 22.1 | thin |
+| 4 wings (wk × bk) | 4 | 981 | **6.1** | below the failure point |
+| **8 seam × wings4 (the straw man)** | 8 | **48** | **0.3** | **37× worse than known-bad** |
+| 4 phase quantiles | 4 | 3,024 | 18.9 | thin |
+| 6 phase quantiles | 6 | 2,044 | 12.8 | marginal |
+| **7 phase quantiles (the in-budget row)** | 7 | 1,406 | **8.8** | **below the failure point** |
+| 8 phase quantiles | 8 | 1,035 | 6.5 | below the failure point |
+
+**The straw man's worst bucket holds 48 training positions for 160 parameters.**
+It is not close, and no encoding choice fixes it — buckets buy capacity by
+*dividing the data*.
+
+A correction to my own instrument, recorded because it flattered the answer:
+the first version cut *ranks* into equal parts and reported 12.0 pos/param at 8
+buckets. That partition cannot ship. Phase is a coarse integer with a lumpy
+histogram (2,300 of 15,592 training positions sit at phase 4 alone), so a rank
+cut splits a phase value between two buckets and the root, which sees only the
+phase, cannot reproduce it. The shippable number is **6.5**.
+
+### Recommendation
+
+1. **Do not fit the budget-filling candidate yet.** At 7 buckets it is 8.8
+   pos/param — below the point where this lane has already watched a bucketed
+   fit fail. Filling 1024-1500 B with the current generator would be buying
+   memorisation and paying bytes for it.
+2. **The honest maximum on today's data is ~4-6 phase buckets** (18.9 → 12.8
+   pos/param, 762 → 1013 eval B) — which lands just under Thomas's 1024 floor.
+   That is the gap, stated in the currency that binds: **not bytes, positions.**
+3. **The generator is the unlock, and there are two.** Distilling from a trained
+   teacher removes the labelling budget from the equation entirely — it can
+   label as many positions as we sample, so pos/param stops being a function of
+   Stockfish time. That is what makes the ternary N=16 net (−14.7% val)
+   interesting now: with 1120 parameters to decode INTO, it finally has a
+   student worth its capacity. The cheaper route in parallel is simply more
+   games (caprr's 4,000 plus the ladder), which the set already knows how to
+   consume.
+4. **Fit extra sets as regularised deltas from a shared base**, not
+   independently. It halves the effective parameter count at the same nominal
+   capacity, and it is also what moves the byte cost from the +224 end of the
+   bracket to the +130 end. Both problems, one change.
+5. **Mirroring stays** until C1 vs C2 says otherwise — that screen is the only
+   measurement of what compression costs in play, and it gates whether the
+   budget buys 7 mirrored sets or 3 unmirrored ones.
+
+---
+
+## 2026-08-13 — Rebased onto the moved base, C1/C2 re-measured, and C1's bar re-derived because its byte credit no longer exists
+
+The eval lane's work was sitting on a base two landings behind. Rebased
+`eval-decode-track` onto `nnue-4k` (IIR + the interface trims), regenerated,
+and **re-measured every number rather than adjusting the old ones.**
+
+| | packed | engine-sans-eval | eval | eval ceiling |
+|---|---|---|---|---|
+| `nnue-4k` tip (literal tables) | 3445 | 2942 | 503 | 1154 |
+| **rebased, base-90 decode** | **3350** | **2886** | **464** | **1210** |
+
+Base-90 is worth **−95 bytes on this base**, against −97 on the previous one —
+the usual reminder that a byte saving is a property of the pair, not of the
+change. **The eval ceiling is 1210 B**, so Thomas's 1024 floor is reachable
+today and his 1500 needs ~290 B more from the search lane.
+
+### `price_engine.sh` was returning a silently wrong answer on this entry
+
+Run against the base-90 entry it reported **"eval data costs 30, ENGINE 3320"**.
+Its regex looks for a `pst` literal to zero; there is no literal any more, so it
+matched a `\n}` hundreds of lines below the eval and zeroed something unrelated.
+Both numbers were wrong and neither looked wrong — and this instrument is where
+the golf target's 2942/1132 came from, so it needed to be right before the
+allocation was argued over.
+
+Fixed to handle both entry forms, and to **abort rather than guess** if it
+recognises neither. The literal form still reproduces **2942 / 503** exactly, so
+the golf lane's published numbers stand; the base-90 form now reads 2886 / 464.
+
+### The candidates, rebuilt from the current generator
+
+C1 and C2 are no longer hand-staged files. They are **mods in
+`tools/build/make_variants.py`**, generated at screen time from the committed
+fit — the same single-source rule the search variants follow, because the whole
+point of that file is that a candidate cannot go stale against its base.
+
+| | packed | vs entry | eval bytes | spare |
+|---|---|---|---|---|
+| entry (rebased) | 3350 | — | 464 | 746 |
+| **C1** flat refit, mirrored step 8, K exact | **3187** | **−163** | 301 | 909 |
+| **C2** flat refit, exact | **3412** | **+62** | 526 | 684 |
+
+The deltas survived the base change almost exactly (−163 and +62, against −163
+and +63 before). The generated sources pack to the same bytes as the direct
+codec builds, which is the check that the mod and the pricer agree.
+
+### The bars are RE-DERIVED, because the old ones were denominated in a currency that no longer exists
+
+C1's old bar was *"LAND if the 95% lower bound is above −15 Elo"*, and the −15
+was a byte credit: C1 saved 163 bytes when bytes were scarce. **Under Thomas's
+allocation they are not scarce.** The eval sits 746 bytes under its own ceiling
+and the standing instruction is to FILL it to 1024-1500. A byte saved inside the
+eval now buys nothing the project wants — it moves *away* from the target.
+
+So, pre-registered before the screen runs:
+
+- **C1 LANDS only if the 95% interval's lower bound is above 0.** No byte
+  credit. **DROP if the upper bound is below 0.** Between those, C1 is not
+  landed and the result is read as the generator verdict below.
+- **C2's old +63 Elo bar is void too** — a +62 byte eval cost is now *wanted*,
+  not charged at 1.0 Elo/byte. C2 lands over the entry only on LB > 0, and
+  **C1 − C2 is the mirroring measurement**, which is the only thing loss cannot
+  answer. Run only if C1 leaves mirroring ambiguous.
+
+### What the screen is actually FOR now: it is a generator validation
+
+This is the part that matters more than whether C1 lands. A bucketed
+1024-1500 B eval is **the same fit with more parameters on the same data.** So:
+
+- **C1 clearly positive** ⇒ the Texel objective on `set20260813` converts to
+  Elo, and the budget-filling design is justified on this data, subject to the
+  positions-per-parameter gate below.
+- **C1 flat or negative** ⇒ scaling that fit to 1120 parameters across 7 buckets
+  is not justified, and the budget should be filled only after the GENERATOR
+  changes — a distilled teacher or more data — not after more parameters.
+
+A flat result is the modal outcome and was predicted in advance: C1's −5.31%
+held-out is almost entirely endgame, and in the middlegame band the fit is
+very slightly *worse* than classic.
+
+### Gates, on the box, before any game
+
+| arm | legality (40 FORCED / 30 check / 30 quiet) | mate-in-1 |
+|---|---|---|
+| `e_base.py` (the 3350 entry) | 0 no-move, 0 illegal — PASSED | 8/8 |
+| `e_c1.py` | 0 no-move, 0 illegal — PASSED | 8/8 |
+| `e_aa.py` (A-vs-A control arm) | 0 no-move, 0 illegal — PASSED | — |
+
+The mate gate is new (`tools/build/mate_gate.py`) and deliberately does not
+replace the legality gate — the standing warning is that a mate suite passed
+5-vs-5 on the very build that answered `bestmove (none)`. It verifies mate-in-1
+by PLAYING the move and asking python-chess whether the result is checkmate,
+never by reading a score: a score check would pass an engine that reports
+`mate 1` and then plays something else.
+
+`e_aa.py` is byte-identical to `e_base.py` (same sha256), staged in the same
+directory with the same `PYTHONPATH`, so both arms provably get the same UCI
+driver. That is the control the `agree.py` incident earned, where an engine
+outside the repo tree silently picked up the builtin `go` loop and a
+byte-identical copy of the entry "disagreed" with itself 39/60.
+
+### Cotenancy: the slot was not actually free, and the screen waited
+
+The coordinator's slot handoff said the box arena was idle. It was not:
+`elo-masked-cap-20260813` was **363 games into a 600-game `tc=30+1` TIMED
+match** at concurrency 10. A fixed-node screen is insensitive to load, but the
+match beside it is not, and this project has already voided one 200-game match
+to a shared-machine effect. The screen was **staged and held** rather than
+launched, and went out only after that match completed. Logged here because
+"the slot is yours" is a claim about the box, and the box is checkable.
 
 ## 2026-08-13 — `bestmove (none)` is BUDGET STARVATION, not mirroring; and the gate's hole was its positions
 
@@ -1155,6 +2651,863 @@ because with no tc the `sunfish_ui` driver sets the in-search deadline to
 now + 600 s (the 1.5 s default belongs to the builtin loop, which only the
 packed artifact runs) — and both arms print which driver they resolved, which
 the script compares and refuses to proceed on.
+## 2026-08-13 — The legality gate was scoring a LAUNCH failure as 100 chess failures, on the shipped entry
+
+Run the gate on a **packed artifact** and it reports:
+
+```
+FORCED    n= 40  no-move=40  illegal=0
+IN CHECK  n= 30  no-move=30  illegal=0
+quiet     n= 30  no-move=30  illegal=0
+GATE FAILED: 100 bad answers
+```
+
+on the **landed 3378-byte entry**. Nothing is wrong with the entry. The gate
+launched every engine as `[sys.executable, ENGINE]`, and a packed artifact is a
+`#!/bin/bash` self-extractor: under `python3` it dies on line 1. The engine
+never started, stderr was never captured, and "produced no output" was recorded
+as "produced no move" — 100 times, with a chess-shaped verdict and no hint of
+the real cause.
+
+This is the **never-hide-errors** class, in its most expensive form: a *fake
+red*. The ledger's "C1 and C2 both pass the legality gate" line was produced by
+running the gate on the `.py` sources, which take the interpreter path and work
+— so the tooling had been passing and failing for reasons unrelated to chess
+depending only on which file extension it was handed.
+
+Fixed: `.py` still goes through the interpreter, anything else is executed
+directly, stderr is captured, and **an engine that emits nothing at all is a
+loud abort, never a chess verdict**. Both controls run:
+
+| control | result |
+|---|---|
+| landed entry, packed | 40/30/30, **0 no-move, 0 illegal — PASSED** |
+| landed entry, `.py` source | 40/30/30, **0 no-move, 0 illegal — PASSED** |
+| **C1 (3215 B), packed** | 40/30/30, **0 no-move, 0 illegal — PASSED** |
+| **C2 (3441 B), packed** | 40/30/30, **0 no-move, 0 illegal — PASSED** |
+| an engine that exits immediately (negative control) | `ENGINE DID NOT START` |
+
+C1 and C2 had only ever been gated as `.py` sources. They are now green **as
+the packed artifacts that will actually play**, so the screening slot does not
+have to spend itself discovering a launch problem.
+
+All three skeletons below were then gated against the entry as an A-vs-A
+control, and all four arms are identical: 0 no-move, 0 illegal.
+
+---
+
+## 2026-08-13 — Phase reweighting fails its pre-registered bar four times, and the flat refit turns out to be an ENDGAME refit
+
+The labelled set is 65.6% at ≤ 16 pieces (mean phase 8.44/24, 73.7% below 12),
+so every uniform fit is mostly a fit to endgames. Does correcting that skew
+produce a better table? **No — and the reason is more useful than the answer.**
+
+Phase is counted off the FEN board field, never off `X`. The control is printed
+by the script rather than asserted in a comment: `|X|.sum()` reads **11.08**
+pieces per position where the boards hold **14.27**.
+
+### Pre-registered before any result was looked at
+
+- **M1** (primary): unweighted held-out loss on the pinned seeded 80/20 split —
+  the number C1/C2 were selected on, so it is comparable to the ledger.
+- **M2** (secondary): phase-*balanced* held-out loss, validation rows reweighted
+  to a flat phase density estimated on **train rows only**. This is the metric a
+  reweighting is designed to win, so it cannot be the primary.
+- **Bar for a third candidate**: paired-bootstrap 95% interval of
+  (uniform − reweighted) must be **strictly above 0 on M1** and **not below 0 on
+  M2**. Same held-out rows resampled together, 10,000 resamples, so split luck
+  cancels.
+
+### Result: nothing clears it
+
+| weighting | M1 | M2 | M1 Δ vs uniform (95% CI) | M2 Δ (95% CI) | verdict |
+|---|---|---|---|---|---|
+| uniform (= C1/C2's fit) | **0.016800** | 0.019018 | — | — | — |
+| flatphase (full correction) | 0.017296 | 0.019071 | −0.000496 [−0.00069, −0.00030] | −0.000053 [−0.00033, +0.00023] | no |
+| sqrtflat (half correction) | 0.016943 | 0.018960 | −0.000142 [−0.00023, −0.00005] | +0.000058 [−0.00007, +0.00019] | no |
+| mgtilt (1 + ph/24) | 0.016856 | 0.018951 | −0.000056 [−0.00011, −0.000004] | +0.000067 [−0.00001, +0.00015] | no |
+| mgonly (ph/24) | 0.017499 | 0.019171 | −0.000699 [−0.00091, −0.00048] | −0.000153 [−0.00045, +0.00015] | no |
+
+Every reweighting loses on M1, and — the informative part — **not one wins the
+phase-balanced metric it exists to win.** The best M2 delta, mgtilt's +0.000067,
+straddles zero against an M2 level of 0.019. Reweighting 384 shared parameters
+does not buy middlegame accuracy; it only trades loss between bands.
+
+The uniform arm reproduces the landed candidate exactly (M1 0.016800; scored
+through the **codec's own decode** at C1's step-8/mirrored/K-exact encoding,
+0.016911 = **−5.31% vs classic**, the ledger's C1 figure to the digit), so this
+is the same fit, not a lookalike.
+
+### Where the loss actually lives — and a caveat for the C1/C2 screen
+
+Held-out loss by phase band (3,899 rows):
+
+| band | rows | classic | uniform fit | mgtilt | flatphase | taper (768p) |
+|---|---|---|---|---|---|---|
+| 0-5 deep eg | 1675 | 0.016304 | **0.014705** (−9.8%) | 0.014931 | 0.015544 | 0.014547 |
+| 6-11 endgame | 1211 | 0.017645 | **0.016686** (−5.4%) | 0.016837 | 0.017666 | 0.017326 |
+| 12-17 middle | 446 | 0.022460 | **0.022587 (+0.6%, WORSE)** | 0.022392 | 0.022065 | 0.023005 |
+| 18-24 opening | 567 | 0.019299 | 0.018682 (−3.2%) | 0.018229 | 0.017931 | 0.016728 |
+
+**C1's −5.31% is almost entirely endgame.** In the middlegame band the fit is
+not better than classic — it is very slightly worse. A reweighting has nothing
+to move because the flat table is already at its capacity in every band; the
+skew of the set is *not* what is holding the middlegame back.
+
+Two consequences, both recorded before any game is played:
+
+1. **Caveat attached to the C1/C2 screen.** Screening games start from a book
+   and spend their decisive moves in exactly the band where this fit buys
+   nothing. C1's bar (*lower bound above −15*, i.e. "do not lose") was already
+   the right shape; this says a *win* should not be expected, and a flat result
+   is the modal outcome rather than a disappointment.
+2. **It points at capacity, not data weighting.** The taper column moves the
+   opening band (0.019299 → 0.016728) where no reweighting could — and gives
+   the middlegame band back, which is its 22.6%-of-the-set data problem showing
+   up exactly where the earlier entry predicted. More middlegame *data* plus a
+   second table *set*, not a different weighting of the same 384 parameters.
+
+**No third candidate.** C1 and C2 stand as the screening pair. Script:
+`tools/tune/fit_phaseweighted.py`.
+
+---
+
+## 2026-08-13 — The taper re-anchored on the landed generator, and king buckets priced by building
+
+Two skeleton prices, both **shape prices with filler data — no Elo is claimed
+and no candidate is proposed here.** Every row is one real entry source through
+`tools/build/pack.sh`, measured off disk, run alone in an empty directory with
+`SF_NET` unset, and gated for legality against the entry as an A-vs-A control.
+
+### The old taper pricer was pointing at a deleted anchor
+
+`price_taper.py` spliced at the **bare-king** swap, which the `kend` fix
+replaced with classic's queens-off rule months of commits ago. It failed its own
+`assert old in src` — so its numbers could not be reproduced from it at all.
+Re-anchored, and the landed root changes the arithmetic twice in our favour:
+
+1. **The queens-off king rule IS the phase seam.** The engine already tests
+   queens-off once per search; selecting a whole second table set on the *same*
+   boolean costs one `pst.update` and no new condition.
+2. **The stale-score rebuild is already there.** `pos = self.root = from_board(…)`
+   follows the swap, so a taper inherits it for **zero bytes** — it used to be
+   part of the taper's own price.
+
+Hoisting the shared boolean into a local also made the fitted two-set candidate
+**13 bytes cheaper than the ledger's B row: 3439, not 3452.**
+
+`K` is never in a second set: its two tables are the landed `kend` fix, so it
+rides in the exact block and the root keeps its own K_MID/K_END line.
+
+### Taper: measured (one-set references first — the marginal is unreadable against 3378)
+
+One set, classic tables: exact **3400**, step 8 **3276**, step 8 mirrored
+**3195** (entry as landed: 3378).
+
+| root | encoding | filler | bytes | spare | vs entry | **vs 1-set** |
+|---|---|---|---|---|---|---|
+| seam | step 8, mirrored, K exact | same (machinery only) | 3247 | 849 | −131 | **+52** |
+| seam | step 8, mirrored, K exact | shuffled | 3342 | 754 | −36 | **+147** |
+| seam | step 8, mirrored, K exact | perturbed | 3358 | 738 | −20 | **+163** |
+| blend | step 8, mirrored, K exact | same (machinery only) | 3312 | 784 | −66 | **+117** |
+| blend | step 8, mirrored, K exact | perturbed | 3421 | 675 | +43 | **+226** |
+| seam | exact | perturbed | 3786 | 310 | +408 | +386 |
+| blend | exact | perturbed | 3848 | 248 | +470 | +448 |
+
+**The seam root costs ~50 bytes of machinery; the continuous blend costs ~115** —
+the phase loop is 65 bytes dearer than the boolean update, at every encoding,
+and it buys the more expressive form. Decode of the largest build: **0.54 ms**
+against a 60 s startup budget.
+
+### Filler is a FLOOR, not an upper bound — the old script had this backwards
+
+The previous docstring reasoned that filler over-prices, "because a real eg
+table would share structure with mg and lzma would find some of it". Measured
+against the **real fitted qseam tables through the same builder**: the fitted
+second set costs **+224** over C1, where filler of the same shape costs
++147…+163. Filler is **60-75 bytes CHEAP**. Fitted values are less round than
+classic's hand-made ones, and that costs more than correlation saves — the same
+effect that made a plain refit +63 bytes instead of free. Every filler figure in
+this entry is therefore a floor.
+
+(Secondary, same mechanism: `shuffled` prices consistently *below* `perturbed`.
+Permuting reuses the exact value multiset; adding noise widens lo..hi and buys
+extra levels in the mixed-radix pack.)
+
+### King buckets: the ~134 B/bucket estimate was arithmetic; here it is built
+
+What a king bucket **can** be in this engine: the score is incremental and both
+sides read one shared `pst`, so a per-side own-king bucket would change the
+table whenever a king moves and invalidate every carried score in the tree —
+that is a different engine, not a pricing question. What is free is the
+mechanism `kend` already uses: a **position-global** property read once at the
+root. So these are king-**wing** buckets (white king wing × black king wing; the
+2-bucket form folds that to same-wing / opposite-wing).
+
+| buckets | encoding | filler | bytes | spare | vs 1-set | **per extra bucket** |
+|---|---|---|---|---|---|---|
+| 2 | step 8, mirrored, K exact | same | 3258 | 838 | +63 | 63 (machinery) |
+| 2 | step 8, mirrored, K exact | shuffled | 3350 | 746 | +155 | **155** |
+| 2 | step 8, mirrored, K exact | perturbed | 3367 | 729 | +172 | **172** |
+| 4 | step 8, mirrored, K exact | same | 3292 | 804 | +97 | 32 (machinery) |
+| 4 | step 8, mirrored, K exact | shuffled | 3579 | 517 | +384 | **128** |
+| 4 | step 8, mirrored, K exact | perturbed | 3602 | 494 | +407 | **136** |
+| 4 | step 8, K exact (not mirrored) | perturbed | 4013 | 83 | +737 | 246 |
+| 4 | **exact** | perturbed | **4505** | **−409** | +1105 | 368 |
+
+Readings:
+
+- **The ~134 B/bucket estimate is confirmed for filler at mirrored step 8** —
+  measured 128-136 B per extra bucket at four buckets. It was never built
+  before; now it is.
+- **Machinery is sublinear and nearly free**: the 4-bucket selector plus three
+  extra decode loops costs 97 bytes when the data is identical, ~32 per bucket,
+  because the loops compress against each other.
+- **Only the mirrored step-8 encoding survives.** At exact resolution a
+  4-bucket build is **4505 bytes, 409 over the limit** — dead on price, recorded
+  so nobody re-derives it. Even unmirrored step 8 leaves 83 spare, which is not
+  a budget.
+- Decode of the largest bucket build: **0.96 ms**.
+
+Applying the filler-is-a-floor correction (+60-75 B/set), a *fitted* 4-bucket
+version projects to roughly 3215 + 3×~200 ≈ **3.8 kB**. That number is
+**composed arithmetic and must be built before it is believed** — the last time
+this lane projected a second table set it said ~134 and the exact build came
+back +670.
+
+### One silent trap fixed at its source
+
+`codec.emit(piece, raw, …)` accepted a `piece` dict and **ignored it**: the
+value line was a hard-coded copy of classic's numbers. All three callers
+happened to patch the line back out afterwards, so no landed figure is wrong —
+verified by reproducing **C1 at 3215 and C2 at 3441 to the byte** — but the
+failure mode of forgetting is a plausible-looking artifact carrying the wrong
+piece values, which is the mirrored-king / numpy-wrap class again. `emit` now
+uses what it is given. The entry regenerates **byte-identical at 3378** and
+`check_entry.sh` is green.
+
+---
+
+## 2026-08-13 — Fits done: quantisation is FREE and SAVES bytes, the taper is affordable but its data is not there, and two candidates go forward
+
+Fits are candidate generators. The last one improved the loss 10.1% and played
+−16.7 ± 31.2. **No Elo is claimed anywhere below**; the deliverable is tables,
+prices and a pre-registered bar.
+
+Every loss is **held out** — an 80/20 split by position, seeded, and no fit ever
+saw the 3,899 validation rows. That is not pedantry: `texel_tune.py` reported
+*training* loss, which cannot compare a 384-parameter table against a
+768-parameter tapered one, because the bigger model wins in-sample by
+construction. On training loss the taper looks twice as good as it is.
+
+### The fits
+
+| candidate | params | train | **held out** | vs classic |
+|---|---|---|---|---|
+| classic, no fit | — | 0.017916 | 0.017860 | — |
+| A flat refit | 384 | 0.015762 | **0.016800** | −5.9% |
+| B taper at the queens seam | 768 | 0.014774 | **0.016693** | −6.5% |
+| C continuous 24-point phase blend | 768 | 0.014308 | **0.016565** | −7.3% |
+
+**Every emit was verified.** Each candidate is re-scored from its own emitted
+integer tables, reconstructed exactly as the engine indexes them; all three
+matched their fitted loss. This is the check that was missing when an un-flipped
+king table cost −67 Elo while the fit looked 10% better — the fit never sees the
+emit, so the emit has to be scored separately.
+
+### The prices, built not composed — and quantisation is the whole story
+
+| candidate | bytes | vs 3378 | spare | held out |
+|---|---|---|---|---|
+| A flat, exact | 3441 | **+63** | 655 | −5.93% |
+| A flat, step 2 | 3385 | +7 | 711 | −6.02% |
+| A flat, step 8 | 3290 | −88 | 806 | −5.96% |
+| A flat, mirrored step 8 | 3131 | −247 | 965 | −6.27% |
+| **A flat, mirrored step 8, king exact** | **3215** | **−163** | **881** | **−5.31%** |
+| B queens-seam, 2nd set exact | 4048 | +670 | 48 | −6.52% |
+| B queens-seam, 2nd set mirrored step 8 | 3720 | +342 | 376 | −7.57% |
+| B queens-seam, both mirrored step 8 | 3391 | +13 | 705 | −7.19% |
+| **B queens-seam, both mirrored step 8, king exact** | **3452** | **+74** | 644 | −6.30% |
+| C continuous phase blend, exact | 4157 | **+779** | **−61** | −7.25% |
+
+Four things follow.
+
+1. **A refit is NOT free.** "The shape is unchanged so the bytes are unchanged"
+   is a composed claim and it is wrong: fitted values are less round than
+   classic's hand-made ones and cost **+63 bytes** at exact resolution. The
+   ledger's old "+13 bytes total" for a Texel candidate was measured on a
+   different base and must not be reused.
+2. **Quantisation is free in loss and pays in bytes.** step 8 costs nothing
+   measurable (−5.96% against −5.93% exact) and saves 88 bytes; mirroring saves
+   another 159. Held-out loss *improves* under mirroring — halving the
+   parameters regularises away per-square noise the fit had memorised.
+3. **The continuous phase blend does not fit in 4096 bytes.** 4157, sixty-one
+   over. Dead on price, whatever its loss. Recorded so nobody re-derives it.
+4. **The taper's shape is affordable** — +74 bytes with the king held exact,
+   against a ledger projection of ~134 and a naive exact build of +670. Two
+   mirrored table sets compress against each other.
+
+### Mirroring perturbs the landed kend fix, so the king is now held out of it
+
+`emit(half=True)` mirrored **all six** tables, and classic's tables are not
+symmetric: 28 of 32 file-pairs differ in the king table, by up to **111 cp**,
+and that asymmetry is the castling-side preference the `kend` fix depends on. A
+screen of a mirrored candidate would have measured the fit and an unmeasured
+perturbation of a landed +30.5 Elo fix as one bundle, and a negative result
+would have said nothing about either.
+
+`codec.emit` now takes an `exact=` set that holds named tables back into a
+second, full-resolution decode block. With `exact="K"` the king table and
+`K_MID` are **bit-identical** to the landed entry's, verified by assert. It
+costs 84 bytes (3131 → 3215) and it buys an interpretable screen.
+
+### The taper is dropped from screening: its data is not there
+
+`B` is cheap and it fits, but it does not go forward, and the reason is not
+price:
+
+- The queens-on subset is **22.6%** of an already endgame-heavy set — about
+  3,500 training positions for 320 free parameters, **11 per parameter**. Its
+  train/held-out gap is the widest of the three fits.
+- The packed artifact, on a real clock from the start position, plays
+  **a2a3** and reaches only **depth 5**, where the landed entry reaches depth 10
+  and candidate A reaches 8. An engine whose best opening move is a rook-pawn
+  push is not a screening candidate; it is a diagnosis.
+
+So the taper is **blocked on data, not on bytes** — the +74-byte price stands
+and is worth revisiting once the set is less endgame-skewed, or once the second
+set is fitted as a regularised delta from the first rather than independently.
+This is the phase-mix finding cashing out exactly where it was predicted to.
+
+### Going forward: two candidates, bars pre-registered
+
+Both pass the legality gate (40 FORCED / 30 in-check / 30 quiet, 0 no-move,
+0 illegal). Sources at `tools/tune/candidates/`.
+
+| | bytes | vs entry | held out | packed artifact from startpos |
+|---|---|---|---|---|
+| **C1** flat refit, mirrored step 8, king exact | **3215** | **−163** | −5.31% | e2e4, depth 8 |
+| **C2** flat refit, exact | **3441** | **+63** | −5.93% | b1c3, depth 9 |
+
+**Pre-registered, before any game is played:**
+
+- **C1 saves 163 bytes**, so it does not need to win, only not to lose: **LAND
+  if the 95% interval's lower bound is above −15 Elo** against the 3378-byte
+  entry. **DROP if the upper bound is below 0.**
+- **C2 costs 63 bytes**, so the project's standing 1.0 Elo/byte rule applies:
+  **LAND only at ≥ +63 Elo.** Its real job is to be the **control that isolates
+  mirroring** — C1 and C2 are the same fit, and the difference between them is
+  the compression, measured in play rather than in loss.
+- Both screens: fixed-node **our-vs-our on the box** against the current
+  3378-byte entry, legality gate and mate gate first, SPRT with these bars,
+  the A-vs-A driver control, 95% intervals, and a fixed-N confirmation for any
+  winner's Elo/byte number.
+
+One caveat carried forward rather than resolved: at a real clock C1 reached
+depth 8 where the landed entry reached 10. Node efficiency is not loss, and
+~100 Elo per doubling is this project's own estimate, so a better-fitting eval
+that searches shallower can still lose. The screen measures the sum; if C1
+comes back negative, that is the first place to look.
+
+### One more silent-corruption bug, in the codec
+
+`codec.mixed` accumulates a ~3000-bit Python integer. A single **numpy int64**
+anywhere in its input makes the whole product numpy and it **wraps at 64 bits**,
+producing a valid-looking source that encodes garbage — announced only by a
+`RuntimeWarning` in a log nobody reads. It reached the pricing harness through
+tables built with numpy, and the symptom was not a wrong number but a 10-minute
+hang: the garbage tables made the artifact miss `bestmove`, so every standalone
+check sat out its 120 s timeout.
+
+`int()` on every input now, and the codec self-test carries a **64-bit wrap
+control** that fails if numpy inputs ever disagree with Python ones. The landed
+entry is byte-identical after the fix (3378), verified.
+
+---
+
+## 2026-08-13 — THE TRAINING SET IS LABELLED: 19,491 positions, Stockfish 18 @ depth 8, and the labels are a function of the position alone
+
+The set that gates every training candidate exists again, and it is
+**committed** at `tools/tune/data/set20260813.npz` (995 KB) with its run log
+beside it. Sources stay at `~/repos/sunfish-data/`.
+
+| | |
+|---|---|
+| positions collected | 19,689 |
+| **positions kept** | **19,491** (198 dropped: mate scores or \|cp\| ≥ 1500) |
+| labeller | **Stockfish 18**, depth 8, Threads 2, Hash 64 MB |
+| engine sha256 | `0a119807d135b44f…` (built on the box, see below) |
+| npz sha256 | `d792b42081f0adec…` as committed here; **`2410786e14f09fec…` after the 2026-08-13 host-field scrub** (see the scrub entry — same arrays, one metadata key dropped) |
+| source games | 4,482 (4,000 hole RR + 444 kend screen + 38 ladder snapshot) |
+| wall time | ~5.4 min at 61 pos/s |
+
+### The binary: built, not downloaded, and it took two tries to get right
+
+The official `sf_18` Linux binaries need `GLIBCXX_3.4.30`; the box tops out at
+`3.4.29`, so `stockfish-ubuntu-x86-64-avx512icl` would not start at all. Built
+from the pinned `sf_18` source tarball instead (src sha256 `22a19556…`) with
+the box's own gcc 11.5.0, `ARCH=x86-64-avx512icl` — the matching target for its
+Ice Lake-SP Xeon 8375C (`avx512_vnni`, `avx512_vbmi2`). Nets `nn-c288c895ea92`
+and `nn-37f18f62d772` fetched and validated by `make net`. Binary lives at
+`~/sunfish-bench/bin/stockfish`; user-space, no root, no system change.
+**Building against the box's own libstdc++ is also the more reproducible
+choice** — the recipe is (source tag, compiler, arch), which does not depend on
+someone else's build host.
+
+**One instrument failure on the way, mine:** the first smoke test was
+`printf "position startpos\ngo depth 12\nquit\n" | stockfish`, which returned
+`bestmove a2a3` and looked like a broken build. It was a broken *test* — `quit`
+arrives before the search finishes and aborts it. A driver that waits for
+`bestmove` gets `e2e4` at +48 cp, `Bc5` in the Italian, and `Ra8#` found as
+`mate 1`. Piping a whole UCI session into an engine's stdin only works if the
+engine is allowed to finish.
+
+### The labels are a property of the position, not of their slot in the list
+
+`texel_data.py` reused one Stockfish process across all positions without
+clearing the hash, so the transposition table carried over and **the same FEN
+got a different label depending on what preceded it**. Measured at depth 8 on
+the box: one FEN scored **−14 in one slot and −22 in another**, and two other
+positions moved **83 → 97** and **−90 → −149**. Both modes are perfectly
+run-to-run reproducible, which is exactly why this was invisible — a re-run
+agrees with itself and the bias stays.
+
+`ucinewgame` + `isready` now runs before every position, and Hash dropped
+256 → 64 MB because the table is cleared anyway and a bigger one only makes the
+clear slower. Cost: nothing measurable (61 pos/s). The label is now a function
+of **(fen, depth, engine version)** alone.
+
+### Checks that the data is what it claims
+
+- **Sign convention, the one that would poison everything silently**:
+  correlation between raw material balance and label **0.727**, and where
+  material is ≥ 300 cp the signs agree **92.7%** of the time (n=4,465). A
+  white/black POV or mirror error would destroy both numbers.
+- **Feature encoding**: `X` rebuilt straight from the FEN on 300 random rows,
+  **0 mismatches**.
+- Distribution: median **+3 cp**, mean +21, σ 320, 52.0% white-better, 23.8%
+  inside ±50. No duplicate FENs.
+- Provenance travels **inside** the npz (`meta`): engine name and sha256,
+  depth, threads, hash-clear flag, per-PGN name/size/sha, the sampling and
+  filter rules, POV, counts, build time and host.
+
+### `X` cannot tell you the phase — use `fens`
+
+`X` is a *difference* feature: a white pawn on e2 and a black pawn on e7 land
+on the same `(piece, mirrored square)` cell and **cancel**. So `|X|.sum()` is
+a material *imbalance* count, not a piece count — it reads 11.1 pieces where
+the board has 14.3. Phase must be recomputed from `fens`, which is one more
+reason they are stored. The first read of the labelled set got this wrong and
+reported a 0.1% opening bucket.
+
+True phase mix of the 19,491, from the boards:
+
+| phase (pieces) | share | n | mean \|cp\| |
+|---|---|---|---|
+| opening 25-32 | 9.5% | 1,856 | 161 |
+| middle 17-24 | 24.8% | 4,840 | 228 |
+| late-middle 9-16 | 40.5% | 7,885 | 289 |
+| endgame 6-8 | 25.2% | 4,910 | 239 |
+
+**65.6% of the set sits at ≤ 16 pieces, against 47% in the lost set.** Recorded
+as a property, not corrected. It may be *better* for the eg tables and the king
+table — those terms live exactly here — or it may simply be a different bias
+than the one the old opening-heavy set carried. The honest position: the last
+Texel fit's non-conversion (10.1% better fit, −16.7 ± 31.2 in play) now has two
+candidate explanations and this set discriminates neither on its own. `fens` is
+in the file, so **any future fit can reweight by phase without relabelling** —
+noted as an option, deliberately not built.
+
+### Conditions
+
+Box, throughout: load 12.3 → 14.2 on 96 cores, **20-22 of our own pypy3 match
+processes cotenant** the whole time plus another user's npm work; our labeller
+was one `nice -n 10` Stockfish at Threads 2, ~196% CPU. Labelling never gates a
+match and this one could not have distorted one. No laptop CPU was used; the
+league ladder was untouched.
+
+### Reproduce
+
+    python3 tools/tune/texel_data.py OUT.npz 30000 8 \
+        ~/repos/sunfish-data/pgn <stockfish> 2
+
+Arguments are `OUT.npz [NPOS] [DEPTH] [PGNDIR] [STOCKFISH] [THREADS]`. An empty
+games directory or a missing Stockfish now **asserts** instead of quietly
+writing a valid empty `.npz`.
+
+**Next, and not started: no fit has been run.**
+
+---
+
+## 2026-08-13 — The training set has a durable home and 19,689 positions waiting; labelling is the only step left and it is NOT started
+
+The 15,328 Stockfish-labelled positions that gate every training candidate
+died with a session scratchpad. Two causes, and only one of them was the
+purge: `tools/tune/texel_data.py` globbed `tools/tune/arena/*.pgn`, a
+directory that was **never committed**, and `tools/tune/.gitignore` ignored
+`data.npz`. Both the inputs and the output were, by construction, things git
+would not keep. **Regeneration, not restoration** — the original set is gone.
+
+### The durable store
+
+Source games now live at **`~/repos/sunfish-data/pgn/`** — outside every
+worktree, outside every scratchpad:
+
+| file | games | source |
+|---|---|---|
+| `box_caprr_hole.pgn` | 4000 | the hole round-robin, 10+0.1, five arms incl. classic |
+| `box_caprr_kend.pgn` | 444 | the king-table screen |
+| `laptop_pyleague_20260813_123259_snapshot.pgn` | 38 | league ladder snapshot at 13:44, taken as a **copy** of a growing file |
+
+4,482 games. `texel_data.py` no longer hard-codes where games or Stockfish
+live: both are arguments (`OUT.npz [NPOS] [DEPTH] [PGNDIR] [STOCKFISH]`,
+defaulting to the store above), and an empty games directory now **asserts**
+instead of quietly writing a valid empty `.npz`.
+
+### The yield, dry-run without spending a single Stockfish node
+
+Sampling only — `ply >= 10`, every 7th ply, not in check, ≥ 6 pieces, dedup
+by FEN — over the 4,482 games:
+
+    box_caprr_hole.pgn      4000 games ->  15760 new unique
+    box_caprr_kend.pgn       444 games ->   3538 new unique
+    pyleague snapshot          38 games ->    391 new unique
+    TOTAL unique positions available: 19689
+
+**19,689 available against the 15,328 that were lost**, and the phase mix is
+not the old one:
+
+| phase (pieces) | new set | the lost set |
+|---|---|---|
+| opening 25-32 | **9.4%** | 21% |
+| middle 17-24 | **24.9%** | 32% |
+| late-middle 9-16 | **40.6%** | 32% |
+| endgame 6-8 | **25.1%** | 15% |
+
+The new set is **far more endgame-weighted** — 65.7% at or below 16 pieces
+against 47%. That is not a defect to correct before it is understood: the
+eg half of the tapered candidate and the king table are exactly the terms
+this material informs, and the old set's opening-heavy mix is one plausible
+reason Texel tuning fitted 10.1% better and then played −16.7 ± 31.2. It is
+recorded here so that whatever the next fit does, nobody attributes it to the
+tuner when the data distribution moved underneath it.
+
+### Not started, and why
+
+**No labelling has run.** ~20k positions at depth 8 on 2 threads is real CPU,
+and this laptop's timed league ladder owns it for about a day; Stockfish
+would show up in the ladder's own cotenancy sampler. The box is the
+alternative and it is **not ready**: `which stockfish` finds nothing there
+(numpy 2.0.2 and python-chess are present, 96 cores, load ~12.6 with 2 pypy3
+at ~50%). So the open decision is *install Stockfish on the box and label
+there*, or *wait for the ladder and label here* — it needs a call, not a
+default. Everything up to that line is done and durable.
+
+One rule adopted from the loss: the labelled `.npz` gets **committed to the
+branch**, not gitignored. A few MB of int8 that gates an entire track is not
+a throwaway artifact.
+
+---
+
+## 2026-08-13 — Base-90 lands on the moved base: 3378 bytes, 718 spare, and the agreement instrument was comparing two different drivers
+
+The startup decode was measured on the pre-`kend`/`fresh` entry (the entry
+below). The search lane then landed `kend`+`fresh` at 3475. **The two numbers
+were never allowed to be added**, and they don't add: lzma carries one
+dictionary across the whole stream, so the second lander rebuilds. Rebuilt, on
+the real file, through `tools/build/pack.sh`:
+
+| | bytes | spare |
+|---|---|---|
+| entry, `kend`+`fresh`, decimal-literal tables | 3475 | 621 |
+| **entry, `kend`+`fresh`, startup-decoded tables** | **3378** | **718** |
+
+**−97, not −94.** The composed guess (3475 − 94 = 3381) would have been wrong
+by 3 bytes in the safe direction this time; it is the sixth composed byte
+figure in this project to miss, and the first one nobody acted on.
+
+Rebased rather than cherry-picked: the eval commit is a single commit whose
+only overlap with the search lane is textual (the generator's head vs its
+tail), so a rebase keeps one linear history and one commit to review. Three
+conflicts, all resolved by keeping master's version where it had landed
+independently: master's `pathlib`-derived `REPO` (PR #176) supersedes the
+identical `os.path`-derived fix this lane wrote in parallel — the `os` import
+it added is gone with it.
+
+### The instrument failure: a byte-identical engine disagreed with itself
+
+The pre-registered gate was "same move and same score over ~60 positions
+against the pre-decode build". The first run came back **60/60 moves but
+21/60 scores**, which reads exactly like a decoder that is not exact. It was
+not. Two harness defects, found by asking the instrument to compare the
+candidate against *a copy of itself*:
+
+1. **`go nodes N` is not fixed effort.** The node cap is an *additional* stop
+   on top of the clock, and with no time fields the engine defaults to
+   `wtime=60000` → a 1.5 s deadline with a 1.2 s soft break. Under the league
+   ladder's load that break can fire first. Fixed by sending an hour on both
+   clocks so only the cap binds. *(This was not the cause here — 8000 nodes
+   takes ~90 ms — but it was a live trap for any slower budget.)*
+2. **The engine picks its UCI driver from its own path.** `main()` does
+   `sys.path.insert(0, grandparent(__file__))` and imports `sunfish_ui`. An
+   engine at `REPO/nnue_4k/x.py` gets the full driver; the *same bytes* copied
+   to `/var/folders/...` find nothing and fall into the builtin `go` loop,
+   which parses `go` differently. `agree.py` compared an in-repo file against
+   a scratchpad file — **two different programs**. That is the whole 39-score
+   gap, and it is reproducible: byte-identical copy, 39/60 scores differ.
+
+Both are fixed in `tools/eval4k/agree.py`. Every arm is now **staged into one
+directory under the repo** before it is run, `ask()` returns the engine's own
+`info string driver` line, and `compare()` **raises** if the two arms did not
+resolve the same driver. The script now runs a **positive** control (A against
+a byte-identical copy, which must agree everywhere) as well as the negative
+one, and fails loudly if either misbehaves.
+
+The lesson generalises past this lane: *where an engine file sits changes what
+engine it is*. Any harness in this repo that copies an engine somewhere before
+running it is comparing something other than what it thinks.
+
+### The gates, after the fix
+
+    A vs B     positions 60  nodes 8000   same move 60/60   same score 60/60
+    self       positions 60  nodes 8000   same move 60/60   same score 60/60
+    control    positions 60  nodes 8000   same move 33/60   same score  1/60
+
+- **Tables bit-identical**, asserted inside the generator on every build, and
+  re-checked independently at runtime: `piece`, `pst` (all six, padded),
+  `K_MID` and `K_END` all compare equal against the literal build.
+- `check_entry.sh`: source matches generator, packs to **3378 (718 spare)**.
+- `legality_gate.py`: **40 FORCED / 30 in-check / 30 quiet, 0 no-move,
+  0 illegal**.
+- Artifact **alone in an empty directory with `SF_NET` and `PYTHONPATH`
+  unset**: `uciok` → `readyok` → `bestmove g1f3`, **no files left behind**.
+- `nnue_4k/tests`: 28 passed.
+
+**No Elo is claimed and no match should be spent.** The engine is behaviourally
+identical to the one that measured +107.5 ± 31.6 vs classic; this buys 97 bytes
+of headroom for the eval work that follows, nothing else.
+
+By the same rule that produced the −97: **the tapering price below (3312 B,
+−77) is now stale too, and it cannot simply be re-run.** `price_taper.py`
+splices the phase blend in at the bare-king swap, and `kend` deleted that
+line — the script now fails its own anchor assert (`bare-king swap not
+found`) rather than pricing something else, which is the correct behaviour.
+Re-anchoring it is part of the taper candidate, not of this landing, because
+the new king rule (`K_MID` iff both queens are on) is *itself* a phase rule
+and the two have to be reconciled before there is a shape to price. Its
+*shape* argument — mirrored step-8 eg table at 134 B, no second accumulator
+because the root already rebuilds — is unaffected; only the number is, and
+the eg data behind it was filler in the first place.
+
+One number recorded rather than resolved: our locally packed 3475-byte
+baseline hashes to `823cb35c…`, while the search lane's ledger records
+`939506a5…` for the same 3475 bytes. Both are internally consistent and
+size-identical — the lane packed on the bench box, we pack on the laptop, and
+`pyminify`/`xz` versions differ. **A packed sha is only comparable within one
+toolchain**; the size is the portable number.
+
+Conditions: laptop, timed league ladder cotenant throughout (load ~5.4 on
+12 cores, 3 pypy3 + 1 python at ~100%). No matches, screens or nps figures
+were taken. Every figure above is either a byte count or a deterministic
+fixed-node comparison, and the positive control certifies that the
+determinism actually held.
+
+---
+
+## 2026-08-13 — The eval decodes at startup: 94 bytes free and EXACT, and tapering now costs LESS than the table it replaces
+
+*(Pointer added on landing, no number below altered: every byte figure in this
+entry is measured on the **pre-`kend`/`fresh`** entry, which no longer exists.
+The shipped figures are in the 3378-byte entry above; the price-list ratios and
+the shape arguments here still hold.)*
+
+The reframe under test: **the net is a compression scheme for tables, not a
+runtime evaluator.** TCEC 4k gives 60 s of startup, so evaluation data should
+be stored in whatever form is smallest and expanded once at load time into the
+plain 120-square tables the search already reads. Nothing enters the hot loop;
+`value(move)` still does two lookups and the score stays O(1) incremental.
+
+Every number below is **built, not composed** — one real file per row through
+`tools/build/pack.sh`, size read off disk.
+
+### Landed: the entry is 3389 bytes with 707 spare, and it plays identically
+
+| | bytes | spare |
+|---|---|---|
+| entry, decimal-literal tables (previous) | 3483 | 613 |
+| **entry, startup-decoded tables** | **3389** | **707** |
+
+The 384 numbers are unchanged — the decoder reproduces classic's tables
+**bit-identically**, asserted inside the generator on every build. Gates:
+
+- `check_entry.sh`: source matches generator, packs to 3389.
+- `legality_gate.py`: 100/100, **0 no-move, 0 illegal**, including the 40 forced
+  (in check, ≤2 legal replies) positions.
+- Standalone in an empty directory with `SF_NET` unset: `uciok` → `readyok` →
+  `bestmove d2d4`, **no files left behind**.
+- `nnue_4k/tests`: 28 passed.
+- **Behavioural identity, 60 positions at 8000 fixed nodes: 60/60 same move,
+  60/60 same score.** No match is needed to justify this change and none should
+  be spent on it.
+
+### The decoder
+
+Nine lines. All six tables are one big integer in mixed radix, written as a
+base-90 string over ASCII 35..126 minus the apostrophe and the backslash:
+
+    _v=0
+    for _c in "...": _d=ord(_c)-35;_v=_v*90+_d-(_d>4)-(_d>56)
+
+**No numpy.** (Aside: the ledger's "our pypy3 has no numpy" note is stale —
+this laptop's pypy3 has numpy 2.4.6 — but a decoder that needs nothing beats a
+decoder that needs a wheel, and integer arithmetic is fast enough that the
+question never arises.) Decode cost **1.07 ms** against a 60 000 ms budget.
+
+### The price list, one build per row
+
+Measured against `b90_null` = 2994 B (the decode machinery with a 1-value
+payload), so the third column is the marginal cost of the DATA alone.
+
+| scheme | entry bytes | data bytes | B/value | tables |
+|---|---|---|---|---|
+| decimal literal (what we shipped) | 3483 | **502** | 1.31 | exact |
+| **base-90, exact (210 levels)** | **3389** | **395** | **1.03** | **exact** |
+| base-90, step 2 | 3337 | 343 | 0.89 | max abs err 1 |
+| base-90, step 4 | 3291 | 297 | 0.77 | 2 |
+| base-90, step 8 | 3242 | 248 | 0.65 | 4 |
+| base-90, step 16 | 3195 | 201 | 0.52 | 8 |
+| file-mirrored, exact (192 values) | 3200 | 206 | 1.07 | 87 |
+| file-mirrored, step 4 | 3152 | 158 | 0.82 | 88 |
+| file-mirrored, step 8 | 3128 | 134 | 0.70 | 88 |
+| *the decoder machinery itself* | 2994 | **13** | — | — |
+
+Three things follow.
+
+1. **The decoder is free (13 bytes).** Its cost is a rounding error against any
+   payload, so the question is only ever how few values you need and how
+   coarsely you can round them.
+2. **Exact re-encoding buys 94 bytes and nothing else** — the entropy of 384
+   int8 values is the floor and lzma on decimal text was only 27% above it.
+   Anyone hoping for a 300-byte win from *encoding* should stop here.
+3. **The wins are in fewer values and fewer levels.** step 8 costs 0.65 B/value
+   against an entropy bound of 0.59 — the codec is within 10% of optimal, so
+   further work on the *codec* is worth at most ~10%. Work on the *shape*.
+
+### What the historical 1207-byte net actually is (correcting an earlier entry)
+
+The 2026-08-12 entry read `models/color2.pickle` @ `0c0a33a` as "a trained
+rank-6 factorisation, 816 int8 → 4608 PST values, exact by construction". Two
+corrections after decoding it against its own engine (`sunfish_nnue_color.py`
+@ the same commit):
+
+| array | bytes | what it is |
+|---|---|---|
+| `ars[0]` | 384 | 64 squares × 6 latent dims |
+| `ars[1]` | 360 | 10 outputs × 6 dims × 6 piece types |
+| `ars[2]` | 6 | **never referenced by the engine — 6 dead bytes** |
+| `ars[3]` | 200 | 10 × 10 × 2 colour combiner |
+| `ars[4]` | 180 | layer1, 10 × 18 |
+| `ars[5]` | 10 | layer2, 10 × 1 |
+| | 1140 | + 67 bytes of pickle framing = the 1207 |
+
+1. The factorisation is **944 bytes, not 816**, and it produces
+   2 × 6 × 64 × **10** = 7680 values (the earlier read dropped the colour
+   einsum). 8.1 values per byte.
+2. **It is not a PST.** Those 10 dims are an *accumulator*, and the engine runs
+   an 18 → 10 → 1 MLP on them at every node. The historical artifact is exactly
+   the thing this project has proven cannot pay for itself — a net in the hot
+   loop — and its 4008-byte artifact was weak.
+
+So it is the floor to beat in *packing density*, and an anti-pattern in
+architecture. The transferable half is the shape: a rank-r factorisation of
+(square × piece). For a **scalar** table that is 64r + 6r values against 384,
+which beats the codec only below r≈5 — i.e. the factorisation is *dominated* by
+plain mirroring plus quantisation at the precision a PST actually needs. That
+is why the ladder above stores values and not factors.
+
+### A 134 cp stale-score bug in the shipped entry
+
+Found while looking for somewhere to hang a phase blend. `search()` swaps
+`pst["K"]` between `K_MID` and `K_END` at the root, but the artifact's UCI loop
+accumulates `score` incrementally from the initial position for the whole game.
+Everything banked before the swap used the other table.
+
+    KRK, white Ke4 Rd1, black Kg7
+    carried score (accumulated under K_MID)   399
+    consistent with K_END                     533
+    STALE BY                                 -134 cp
+
+The offset is fixed at the moment of the swap and then flips sign every ply as
+the score rotates, so it acts like a ±134 cp tempo bonus on stand-pat and
+futility — in bare-king endings, which is precisely what `K_END` was added to
+win. This is **pre-existing, not introduced by the decoder**, and the fix is one
+line inside the swap block (rebuild the root from `from_board`). It sits in
+`search()`, so it is being handed to the search lane rather than landed here.
+
+### The candidate: tapering is now cheaper than the table it replaces
+
+The ledger declined tapering at "~300-400 B for the second table plus ~100 B of
+accumulator threading" for 1.8 loss-points. Both halves of that price are wrong
+now:
+
+- the second table costs **134-248 B** through the codec, not 300-400;
+- **no second accumulator is needed.** The engine already rebuilds a table at
+  the root once per search (the `K_MID`/`K_END` swap), and tapering is that same
+  mechanism with a phase instead of a boolean. Tables stay fixed for the whole
+  search, which is what the comment there already requires.
+
+Built and packed, with the root-score rebuild included and the eg table filled
+with *uncorrelated* perturbed data (so the data figure is an upper bound — a
+real eg table shares structure with mg and lzma would find some of it):
+
+| build | bytes | spare | vs today |
+|---|---|---|---|
+| entry today (single table, exact) | 3389 | 707 | — |
+| tapered, two full 384-value tables, step 8 | 3544 | 552 | **+155** |
+| **tapered, two mirrored 192-value tables, step 8** | **3312** | **784** | **−77** |
+
+Both play standalone in an empty directory; decode 2.12 ms and 0.80 ms.
+
+**A tapered eval fits in 77 bytes LESS than the untapered one we ship.** That
+is the whole point of the reframe, and it is measured.
+
+### What is NOT claimed, and what would have to be true
+
+No Elo is claimed for tapering. The honest state of the evidence is hostile:
+Texel tuning improved the fit 10.1% and measured **−16.7 ± 31.2** in play, and
+tapering added only 1.8 points on top of that same fit on that same data. **A
+static-loss argument for this candidate would be the third time this lane
+believed one.** What has changed is the price, not the evidence.
+
+The candidate is also **not trainable today**: the 15 328-position labelled set
+lived in a session scratchpad and was purged, so `tools/tune/texel_taper.py`
+has no input. Rebuilding it needs game pgns plus local Stockfish and is the
+gating step, not the byte budget.
+
+Two other things the price list makes affordable, recorded so they are not
+re-derived: **file mirroring** costs 283 B to *save* and changes the tables by
+up to 87 cp (classic's hand tables are not symmetric — the asymmetries look
+like 2014 noise, e.g. N c7=+100 against d7=−36), and **king-bucketed tables**
+now cost ~134 B per bucket, which puts a 4-bucket table inside the 707 spare
+for the first time. Both change the eval and neither may skip a screen.
+
+### Harness failures found tonight (all the same shape as the other eight)
+
+- `tools/build/make_pst_entry.py` had **`REPO` hard-coded to an absolute
+  path**, so running it inside a git worktree regenerated the entry from the
+  *other* checkout's sources and `check_entry.sh` cheerfully verified a file it
+  had never read. Fixed to derive the root from `__file__`.
+- The first version of `agree.py` drove the **packed artifact** with
+  `position fen` and `go depth 5`. The artifact's built-in UCI loop supports
+  neither: it ignores `position fen` outright and parses `go depth 5` as "60 s
+  on the clock". It would have reported agreement figures for the wrong
+  positions at a nondeterministic budget. Rewritten to drive the *source*
+  through the `sunfish_ui` driver at fixed nodes.
+- `legality_gate.py` takes the engine **source**, not the artifact — it runs
+  `[sys.executable, ENGINE]`. Handed the packed file it reports 100 bad answers
+  that read exactly like an engine bug.
+- `agree.py` ships its own negative control and it fires: perturb one table
+  value and agreement drops to **34/60 moves and 1/60 scores**.
 
 ## 2026-08-13 — THE HOLE ROUND-ROBIN, COMPLETE: 4,000 games, and the fix ships
 
