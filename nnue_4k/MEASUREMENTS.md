@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **BOTH CANDIDATES DROPPED — and held-out loss is ANTI-CORRELATED with strength** | C2, the clean unmirrored fit, is **−93.8 ± 32.7** over 405 games while its held-out loss was **5.9% better than classic**. The objective, not the bytes, is the blocker |
 | 2026-08-13 | **C1 DROPPED: −57.7 ± 25.5 over 651 games, and it answers `bestmove (none)`** | SPRT stopped early for base (339W/232L/79D). Bar was UB > 0; UB is **−32**. A-vs-A control exactly 50.00% |
 | 2026-08-13 | **THE CAUSE IS MIRRORING, not the fit and not the quantisation** | Four encodings, one position: exact and **step-8 unmirrored both play fine**; both MIRRORED arms return no move. Kills the mirrored 7-bucket design |
 | 2026-08-13 | The 100-position legality gate passed a build that emits no move in real play | Normal middlegame position, fails at **every depth incl. 1**, no info line at all. Gates are only as good as their position sample |
@@ -306,13 +307,80 @@ Every conclusion in the entry below stands and this sharpens the last one:
   you looking for a move-generation bug when the real event is that the engine
   produced nothing. The two failure modes need different investigations.
 
-### Next, and running
+### C2 answers the generator question, and the answer is worse: the FIT is −94
 
-**C2 (the same fit, exact, unmirrored) is on the box now.** With mirroring
-implicated, C2 stops being an optional tiebreak and becomes the measurement
-that matters: it separates *does this fit convert to Elo* — the question that
-gates the whole budget-filling design — from *what does mirroring cost*.
-Its bar is unchanged: LB > 0 to land, and its real job is the generator verdict.
+C2 is the same fit at exact resolution with no mirroring, so it carries no
+compression and — confirmed over 405 games — **no `bestmove (none)` incidents,
+0 illegal, 0 forfeits.** It is a clean measurement of the fit alone.
+
+| | games | base W | base L | D | base score% | candidate Elo |
+|---|---|---|---|---|---|---|
+| base vs **C1** (mirrored step 8) | 651 | 339 | 232 | 79 | 58.23% | **−57.72 ± 25.53** |
+| base vs **C2** (exact, unmirrored) | 405 | 235 | 129 | 38 | 63.18% | **−93.83 ± 32.69** |
+
+Both SPRTs stopped early, H1 accepted for base. **Both candidates DROPPED.**
+1,056 games total, zero time forfeits.
+
+Two readings, and the second is the one that matters:
+
+1. **Mirroring is not what cost the Elo — it was recovering some of it.** C1 is
+   36.1 ± 41.3 *better* than C2, which straddles zero but points the same way
+   the held-out loss did: halving the parameters regularises away per-square
+   noise the fit had memorised. Mirroring's problem is the correctness bug, not
+   the strength.
+2. **The fit itself is worth about −94 Elo**, and its held-out loss said it was
+   **5.9% BETTER than classic**.
+
+### The headline: on this dataset, held-out loss is ANTI-CORRELATED with strength
+
+This is not the 2026-08-12 story repeating. That time a better-fitting table
+played worse because of a bug in the emit path — an un-flipped king table — and
+the fix restored the relationship. This time there is no bug in the measured
+arm: C2 emits exactly what it fitted, is re-scored from its own emitted
+integers, plays 405 clean games, and is **−94**.
+
+The mechanism was visible in advance and is now confirmed in play. The
+phase-band diagnostic said the whole −5.31% lived in the endgame and the
+middlegame band was *slightly worse than classic*. Games are decided in the
+middlegame. A Texel fit on a set that is 65.6% endgame optimises the band that
+does not decide games, at the expense of the band that does.
+
+### Consequence for the 1024-1500 byte design: the objective is now the blocker
+
+Everything below about bytes stands — 7 phase buckets fit in 1147 eval B, the
+grid is priced, the ceiling is 1210. **None of it should be built yet**, and
+the reason has moved:
+
+- **Not bytes.** The budget is reachable, unmirrored, at 4 phase buckets.
+- **Not only data.** The pos/param gate said the straw man was 37× past
+  known-bad, and that stands.
+- **The objective.** A 384-parameter fit by this objective on this set is −94
+  Elo. **Filling 1024-1500 bytes with 1,280 parameters fitted the same way is
+  buying more of exactly what just lost 94 Elo.** Capacity multiplies whatever
+  the generator produces, and this generator produces negative Elo.
+
+**Recommendation, updated and firm: do not fit the budget-filling candidate.**
+The next thing this lane should measure is not a bigger table, it is a
+generator that converts:
+
+1. **Fix the objective's blind spot before its capacity.** The cheapest test is
+   a phase-band-weighted or middlegame-only refit screened at 384 parameters —
+   the same cheap arm that just gave a decisive answer in 405 games. If a
+   384-parameter fit cannot beat classic in play, no 1,280-parameter version
+   will. (Note this is *not* the reweighting already refuted below: that was
+   selected on held-out loss, the metric now shown to mis-rank. It has to be
+   selected in games.)
+2. **Distillation is now the leading route rather than a nice-to-have.** A
+   teacher labels as many positions as we sample, which fixes the data gate
+   *and* lets the target be the search's own value rather than a
+   win-probability proxy that demonstrably mis-ranks middlegames.
+3. **Mirroring is suspended on correctness** regardless of the above, until the
+   `bestmove (none)` path in the root is understood — that is an engine bug the
+   eval merely exposed, and it belongs to the search lane.
+
+The one unambiguous asset from this round: **quantisation to step 8 is free and
+safe** (`q8` plays the exact fit's move, and step 8 saves ~180 B), so whenever a
+generator does convert, its tables can be stored cheaply.
 
 ---
 
