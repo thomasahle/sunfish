@@ -10,7 +10,6 @@ exit 1
 ":"""
 
 import time
-from itertools import count
 from collections import namedtuple
 
 version = "sunfish 2026"
