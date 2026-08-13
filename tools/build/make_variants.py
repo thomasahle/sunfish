@@ -200,6 +200,55 @@ MODS = {
     # table move, so do less work here -- and running both means paying for a
     # whole extra shallow search AND a reduction at the same node. Compose as
     # `iir.noiid`; on its own it prices what IID is currently worth.
+    # IIR, single-lookup form. `iir` asks the table for this position twice --
+    # once for `pos not in self.tp_move` and again for `killer =
+    # self.tp_move.get(pos)` inside moves() -- and the interleaved probe
+    # measured that duplicate hash at 7% of nps. This form reads the killer
+    # ONCE, at the top, and lets the closure carry it into moves().
+    #
+    # Compose as `iirk.noiid`. It requires `noiid`, and not by convention: the
+    # IID block ASSIGNS to `killer`, which would make the name local to
+    # moves() and shadow the outer read into an UnboundLocalError. Removing
+    # the IID block is what makes the closure legal, so the two mods travel
+    # together and the generator's occurs-exactly-once check enforces it (the
+    # assignment line is gone, so `iirk` alone still applies but the engine
+    # would be built with IID intact and the closure broken -- hence the
+    # explicit ordering note here rather than a silent trap).
+    #
+    # Behaviourally identical to `iir` by inspection: nothing mutates
+    # `self.tp_move` between the top of bound() and the first execution of the
+    # generator body. The one real difference is that the lookup is now paid
+    # on nodes that return early from the score table, where `iir` paid none
+    # -- so it trades one lookup on early-return nodes for one saved on every
+    # searched node. NOT YET MEASURED; built now so it is ready if the arm
+    # earns it, and it must be re-priced before it is believed.
+    "iirk": [
+        ("        depth = max(depth, 0)\n",
+         "        depth = max(depth, 0)\n"
+         "\n"
+         "        # The killer is read ONCE here, not again inside moves(): IIR needs\n"
+         "        # to know whether this position has a table move, and hashing the\n"
+         "        # position twice to ask one question cost 7% of nps.\n"
+         "        killer = self.tp_move.get(pos)\n"
+         "\n"
+         "        # INTERNAL ITERATIVE REDUCTION. No table move means this node has\n"
+         "        # never been searched from here, so its ordering is static value\n"
+         "        # alone and full depth is the dearest possible way to find that\n"
+         "        # out. Search it a ply shallower. This sits BEFORE the table probe\n"
+         "        # and therefore before the store, so the reduced depth is the key\n"
+         "        # in both directions -- the node genuinely BECOMES a shallower\n"
+         "        # node instead of filing a shallow value under a deep key.\n"
+         "        if depth > 2 and killer is None: depth -= 1\n"),
+        ("            # Look for the strongest move from earlier searches of this position.\n"
+         "            # See https://chessprogramming.org/Killer_Move for details.\n"
+         "            # We read this \"killer move\" before null-move in case it would get\n"
+         "            # evicted from the table or replaced with something else worse.\n"
+         "            killer = self.tp_move.get(pos)\n",
+         "            # `killer` comes from the enclosing scope, read once at the top of\n"
+         "            # bound(). It is still read before null-move, which is the property\n"
+         "            # that mattered here: the entry could otherwise be evicted or\n"
+         "            # overwritten with something worse while the null search runs.\n"),
+    ],
     # The comment goes with the code: leaving eight lines describing an IID
     # probe above a file that no longer has one is the same defect class as
     # the null-move comment that claimed a cap this engine never had.

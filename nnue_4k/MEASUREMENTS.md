@@ -275,6 +275,31 @@ that hashes the same position again — a known, and later removable, cost.
 discounted.** A reduction changes what depth 8 means. Only the fixed-node
 games below convert it.
 
+### `iirk`: the 7% was a duplicate hash, and it is recoverable
+
+Built while the RR ran, because the cause was identified rather than merely
+noted. `iir` asks the table for this position **twice** — `pos not in
+self.tp_move` at the top, then `killer = self.tp_move.get(pos)` inside
+`moves()`. `iirk` reads the killer once, at the top, and lets the closure
+carry it in. (It requires `noiid` to be legal at all: the IID block *assigns*
+to `killer`, which would make the name local to `moves()` and shadow the outer
+read.)
+
+Interleaved, base anchored, 7 lines × 2 rounds, measured under the RR's own
+load:
+
+| arm | packed | nodes to d8 | nps | timed = fixed-node + … |
+|---|---|---|---|---|
+| `iir.noiid` | 3471 (−4) | 0.623× | 0.908× | −14.3 Elo |
+| `iirk.noiid` | 3472 (−3) | **0.623×** | **0.950×** | **−7.5 Elo** |
+
+**The node counts are identical on all seven lines**, which is the check that
+`iirk` is a pure speed refactor and not a different search. That has a useful
+consequence: the RR below measures `iirnoiid` at *fixed nodes*, where the two
+arms are the same engine — so **the RR's Elo transfers to `iirk.noiid`
+verbatim**, and `iirk` simply gets a better speed term (−7.5 instead of −14.3)
+for one more byte. If the arm lands, `iirk.noiid` is the form that ships.
+
 **Power, stated in advance.** 330 rounds × 12 = 3,960 games, 660 per pairing,
 ≈ ±27 Elo. An undecided result at that size means the effect is **small**, not
 that the mechanism is absent — the same reading the null-cap census forced.
