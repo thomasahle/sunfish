@@ -1872,17 +1872,102 @@ def CorrectionTerminal (G : QSGame) (d : Nat) (p : G.Pos) : Prop :=
   ¬ (G.eval p ≤ -MATE_LOWER) ∧ qsGateB G d p = true ∧
   foldMax (fun m => -(negamaxQS G (d - 1) m)) (movesAbove G (val_lower d) p) LOSS = LOSS
 
-/-- The exact terminal value the correction assigns (line 472 on
-`29c7887`): `-MATE_LOWER` for mate (in check), `0` for stalemate. -/
-def terminalValue (G : QSGame) (p : G.Pos) : Int :=
-  if inCheckB G.toNullGame p = true then -MATE_LOWER else 0
+/-- The exact terminal value the correction assigns: `0` for stalemate,
+and for checkmate
+
+```python
+mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)
+```
+
+**The mate value carries its distance.**  `depth` is the search depth
+still UNSPENT when the mate was found, so a mate near the root scores
+far above the band floor and a mate at the horizon barely clears it:
+negated up the tree, the winner's report ranks the mating lines
+SHORTEST-FIRST and the loser's ranks them LONGEST-FIRST (issue #11).
+Only `(pos, depth)` enters -- the same key the transposition table
+already uses -- so the table needs no store/probe adjustment and its
+one-value-per-key invariant is untouched.  Measuring the distance from
+the ROOT is exactly what would have broken that.
+
+**One ply is worth a whole `EVAL_ROUGHNESS`.**  That is the width the
+MTD-bi bracket stops at (`while lower < upper - EVAL_ROUGHNESS`), so at
+one point per ply the driver's final window could not separate two
+mates and the ordering never reached the root.  Scaled, consecutive
+distances are a full bracket apart.
+
+The floor keeps the value inside the band at every depth, with no side
+condition to carry: the `Bounded`-shaped facts below stay
+unconditional.  It is `1 - MATE_UPPER` and NOT `-MATE_UPPER`, and the
+one point matters: this value is negated on the way up, and negated
+again one ply later, so a node valued `-MATE_UPPER` would reach its
+GRANDPARENT as exactly the illegal-move sentinel -- and the fold's
+`score > -MATE_UPPER` is strict, so `live` would stay unset for a legal
+move and the terminal correction could fire at a position that has
+legal moves.  The floor binds only at unspent depth 1425, three orders
+of magnitude past the driver's `range(1, 1000)`.  `terminalValue G 0 p` is the historical flat value, which is
+what the RETIRED pre-d2 layer (`qsDrawFix`, `negamaxQS`) still assigns
+at every depth. -/
+def terminalValue (G : QSGame) (d : Nat) (p : G.Pos) : Int :=
+  if inCheckB G.toNullGame p = true then
+    max (1 - MATE_UPPER) (-MATE_LOWER - (d : Int) * EVAL_ROUGHNESS)
+  else 0
+
+/-- The terminal value never leaves the band, at any depth: mate is at
+worst `1 - MATE_UPPER` (one better than a king already gone, which the
+fold reads as "illegal move") and at best `-MATE_LOWER`; stalemate is
+`0`.  Unconditional -- this is what the clamp buys. -/
+theorem terminalValue_bounds (G : QSGame) (d : Nat) (p : G.Pos) :
+    1 - MATE_UPPER ≤ terminalValue G d p ∧ terminalValue G d p ≤ 0 := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  have hnn : 0 ≤ (d : Int) := Int.ofNat_nonneg d
+  unfold terminalValue EVAL_ROUGHNESS
+  split <;> omega
+
+/-- At a checkmated node the value is in the mated band, however deep
+the search still was. -/
+theorem terminalValue_mate (G : QSGame) (d : Nat) (p : G.Pos)
+    (h : inCheckB G.toNullGame p = true) :
+    terminalValue G d p ≤ -MATE_LOWER := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  have hnn : 0 ≤ (d : Int) := Int.ofNat_nonneg d
+  unfold terminalValue EVAL_ROUGHNESS
+  rw [if_pos h]
+  omega
+
+/-- **The distance itself**: at a checkmated node with `d * 15 ≤ 21366`
+still to spend, the value is EXACTLY
+`-MATE_LOWER - d * EVAL_ROUGHNESS`.  Every mate theorem's
+exact-distance conclusion is this equation negated up the tree. -/
+theorem terminalValue_exact (G : QSGame) (d : Nat) (p : G.Pos)
+    (h : inCheckB G.toNullGame p = true)
+    (hd : (d : Int) * EVAL_ROUGHNESS ≤ 21366) :
+    terminalValue G d p = -MATE_LOWER - (d : Int) * EVAL_ROUGHNESS := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  unfold terminalValue
+  rw [if_pos h]
+  omega
+
+/-- Deeper is worse for the mated side: the terminal value is
+ANTITONE in the unspent depth.  This is the whole mechanism, in one
+line. -/
+theorem terminalValue_anti (G : QSGame) {d e : Nat} (h : d ≤ e) (p : G.Pos) :
+    terminalValue G e p ≤ terminalValue G d p := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  have hde : (d : Int) ≤ (e : Int) := Int.ofNat_le.mpr h
+  have hnn : 0 ≤ (d : Int) := Int.ofNat_nonneg d
+  unfold terminalValue EVAL_ROUGHNESS
+  split <;> omega
 
 /-- At a correction-terminal node the filtered draw-aware value IS the
 terminal value -- the bridge between the old gate condition and the
 exact knowledge the correction asserts. -/
 theorem negamaxQS_of_correctionTerminal (G : QSGame) (d : Nat) (p : G.Pos)
     (h : CorrectionTerminal G (d + 1) p) :
-    negamaxQS G (d + 1) p = terminalValue G p := by
+    negamaxQS G (d + 1) p = terminalValue G 0 p := by
   obtain ⟨hkg, hgate, hfold⟩ := h
   simp only [negamaxQS]
   rw [if_neg hkg]
@@ -1905,7 +1990,7 @@ def TerminalPseudoSafe (G : QSGame) (nully : Nat → G.Pos → Int → Int)
     (guard : G.Pos → Bool) : Prop :=
   ∀ (d : Nat) (p : G.Pos) (gamma : Int),
     CorrectionTerminal G d p → useNull G nully guard d p gamma = true →
-    nully d p gamma ≤ terminalValue G p
+    nully d p gamma ≤ terminalValue G 0 p
 
 /-- **NullAtStalemateNonpositive** (REFUTED in real chess -- the +175
 witness in the module comment): at a correction-terminal node not in
@@ -2035,7 +2120,7 @@ natural violations.  d2 removes the consumer: `if depth and ...`
 excludes depth 0 from the correction, so QS evaluates the fold and
 never claims an exact terminal value. -/
 def StandPatAtTerminal (G : QSGame) : Prop :=
-  ∀ p, CorrectionTerminal0 G p → G.eval p ≤ terminalValue G p
+  ∀ p, CorrectionTerminal0 G p → G.eval p ≤ terminalValue G 0 p
 
 /-- The mate arm of `StandPatAtTerminal`, unfolded: the hypothesis
 forces every depth-0 correction-terminal node to be a stalemate, never a
@@ -2673,9 +2758,8 @@ the sentinel.  Fire only on a fail-low, uncertified, ORACLE-CONFIRMED
 terminal; then assign the exact terminal value, computed since
 `8843bb0` by the direct `rotate(nullmove=True).king_capture()` scan,
 which IS `inCheckB`. -/
-def termFix (G : QSGame) (gamma best S : Int) (p : G.Pos) : Int :=
-  if best < gamma ∧ S = LOSS ∧ allIllegalB G p = true then
-    (if inCheckB G.toNullGame p = true then -MATE_LOWER else 0)
+def termFix (G : QSGame) (d : Nat) (gamma best S : Int) (p : G.Pos) : Int :=
+  if best < gamma ∧ S = LOSS ∧ allIllegalB G p = true then terminalValue G d p
   else best
 
 /-- The verified search, modeling the shipped consumer.  Structure of
@@ -2711,7 +2795,7 @@ def boundD2 (G : QSGame) (guard kill : G.Pos → Bool) :
         gamma ≤ nullVerify G kill (-(boundD2 G guard kill 0 (G.pass p) (1 - gamma))) gamma (boundD2 G guard kill 0 (G.pass p) (1 - MATE_LOWER)) p then
       nullVerify G kill (-(boundD2 G guard kill 0 (G.pass p) (1 - gamma))) gamma (boundD2 G guard kill 0 (G.pass p) (1 - MATE_LOWER)) p
     else
-      termFix G gamma
+      termFix G 1 gamma
         (max (max (nullPartD2 G guard kill (-(boundD2 G guard kill 0 (G.pass p) (1 - gamma))) (boundD2 G guard kill 0 (G.pass p) (1 - MATE_LOWER)) 1 p gamma) (futTerm G 1 gamma p))
           (searchMoves gamma
             (fun m => -(boundD2 G guard kill 0 m (1 - gamma)))
@@ -2727,7 +2811,7 @@ def boundD2 (G : QSGame) (guard kill : G.Pos → Bool) :
         gamma ≤ nullVerify G kill (-(boundD2 G guard kill 0 (G.pass p) (1 - gamma))) gamma (boundD2 G guard kill 0 (G.pass p) (1 - MATE_LOWER)) p then
       nullVerify G kill (-(boundD2 G guard kill 0 (G.pass p) (1 - gamma))) gamma (boundD2 G guard kill 0 (G.pass p) (1 - MATE_LOWER)) p
     else
-      termFix G gamma
+      termFix G 2 gamma
         (max (max (nullPartD2 G guard kill (-(boundD2 G guard kill 0 (G.pass p) (1 - gamma))) (boundD2 G guard kill 0 (G.pass p) (1 - MATE_LOWER)) 2 p gamma) (futTerm G 2 gamma p))
           (searchMoves gamma
             (fun m => -(boundD2 G guard kill 1 m (1 - gamma)))
@@ -2743,7 +2827,7 @@ def boundD2 (G : QSGame) (guard kill : G.Pos → Bool) :
         gamma ≤ nullVerify G kill (-(boundD2 G guard kill d (G.pass p) (1 - gamma))) gamma (boundD2 G guard kill d (G.pass p) (1 - MATE_LOWER)) p then
       nullVerify G kill (-(boundD2 G guard kill d (G.pass p) (1 - gamma))) gamma (boundD2 G guard kill d (G.pass p) (1 - MATE_LOWER)) p
     else
-      termFix G gamma
+      termFix G (d + 3) gamma
         (max (max (nullPartD2 G guard kill (-(boundD2 G guard kill d (G.pass p) (1 - gamma))) (boundD2 G guard kill d (G.pass p) (1 - MATE_LOWER)) (d + 3) p gamma) (futTerm G (d + 3) gamma p))
           (searchMoves gamma
             (fun m => -(boundD2 G guard kill (d + 2) m (1 - gamma)))
@@ -2763,7 +2847,7 @@ theorem boundD2_succ (G : QSGame) (guard kill : G.Pos → Bool) (d : Nat) (p : G
             gamma ≤ nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma (boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) p then
           nullVerify G kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) gamma (boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) p
         else
-          termFix G gamma
+          termFix G (d + 1) gamma
             (max (max (nullPartD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) (d + 1) p gamma)
                 (futTerm G (d + 1) gamma p))
               (searchMoves gamma
@@ -2792,7 +2876,7 @@ def negamaxD2 (G : QSGame) : Nat → G.Pos → Int
   | d + 1, p =>
     if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
     else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
-    else if allIllegalB G p = true then terminalValue G p
+    else if allIllegalB G p = true then terminalValue G (d + 1) p
     else foldMax (fun m => -(negamaxD2 G d m)) (movesAbove G (val_lower (d + 1)) p) LOSS
 
 /-- `BoundSpec` against the d2 value. -/
@@ -2841,7 +2925,7 @@ theorem negamaxD2_of_allIllegal (G : QSGame) (d : Nat) (p : G.Pos)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
     (hai : allIllegalB G p = true) :
-    negamaxD2 G (d + 1) p = terminalValue G p := by
+    negamaxD2 G (d + 1) p = terminalValue G (d + 1) p := by
   simp only [negamaxD2]
   rw [if_neg hkg, if_neg hcap, if_pos hai]
 
@@ -3019,9 +3103,8 @@ theorem boundD2_bounded (G : QSGame) (guard kill : G.Pos → Bool)
                 (searchedAt G (d + 1) gamma p) LOSS = LOSS ∧
               allIllegalB G p = true
           · rw [if_pos hfire]
-            by_cases hpr : inCheckB G.toNullGame p = true
-            · rw [if_pos hpr]; omega
-            · rw [if_neg hpr]; omega
+            have := terminalValue_bounds G (d + 1) p
+            omega
           · rw [if_neg hfire]; omega
 
 /-! ### The two verifier arms, as standalone theorems -/
@@ -3087,22 +3170,20 @@ theorem negativeFailLowVerified (G : QSGame)
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
     (hai : allIllegalB G p = true)
     (hbest : best < gamma) (hlive : S = LOSS) :
-    termFix G gamma best S p = negamaxD2 G (d + 1) p := by
-  have hfix : termFix G gamma best S p
-      = (if inCheckB G.toNullGame p = true then -MATE_LOWER else 0) := by
+    termFix G (d + 1) gamma best S p = negamaxD2 G (d + 1) p := by
+  have hfix : termFix G (d + 1) gamma best S p = terminalValue G (d + 1) p := by
     simp only [termFix]; rw [if_pos ⟨hbest, hlive, hai⟩]
   rw [hfix, negamaxD2_of_allIllegal G d p hkg hcap hai]
-  simp only [terminalValue]
 
 /-- **NegativeFailLowVerified**, guard half: without the oracle's
 confirmation an uncertified fail-low is NOT converted to a terminal
 value -- the fold result passes through untouched.  (The pre-d2 design
 converted on a score-shaped sentinel instead; `qsUngated_not_sound` and
 `a1_unfixed_not_sound` above are what that cost.) -/
-theorem termFix_unverified_passthrough (G : QSGame)
+theorem termFix_unverified_passthrough (G : QSGame) (d : Nat)
     (gamma best S : Int) (p : G.Pos)
     (hai : allIllegalB G p = false) :
-    termFix G gamma best S p = best := by
+    termFix G d gamma best S p = best := by
   simp only [termFix]
   rw [if_neg (fun h => by rw [hai] at h; exact Bool.noConfusion h.2.2)]
 
@@ -3116,30 +3197,28 @@ enter), the lemma needs only: the null part sits below the window
 (`hnlt`, else the cutoff branch would have fired), and at a terminal
 the fold is the identity, the null part is no smaller, and the value is
 the terminal value (`hterm`). -/
-theorem termFix_spec_core (G : QSGame) (p : G.Pos)
+theorem termFix_spec_core (G : QSGame) (d : Nat) (p : G.Pos)
     (gamma S n V : Int)
     (hnlt : n < gamma)
-    (hterm : allIllegalB G p = true → S = LOSS ∧ LOSS ≤ n ∧ V = terminalValue G p)
+    (hterm : allIllegalB G p = true → S = LOSS ∧ LOSS ≤ n ∧ V = terminalValue G d p)
     (hsp1 : allIllegalB G p = false → gamma ≤ S → S ≤ V)
     (hsp2 : allIllegalB G p = false → S < gamma → V ≤ max n S) :
-    (gamma ≤ termFix G gamma (max n S) S p →
-      termFix G gamma (max n S) S p ≤ V) ∧
-    (termFix G gamma (max n S) S p < gamma →
-      V ≤ termFix G gamma (max n S) S p) := by
+    (gamma ≤ termFix G d gamma (max n S) S p →
+      termFix G d gamma (max n S) S p ≤ V) ∧
+    (termFix G d gamma (max n S) S p < gamma →
+      V ≤ termFix G d gamma (max n S) S p) := by
   cases hai : allIllegalB G p with
   | true =>
     obtain ⟨hSL, hnge, hV⟩ := hterm hai
     have hfire : max n S < gamma ∧ S = LOSS ∧ allIllegalB G p = true :=
       ⟨by omega, hSL, hai⟩
-    have hfix : termFix G gamma (max n S) S p
-        = (if inCheckB G.toNullGame p = true then -MATE_LOWER else 0) := by
+    have hfix : termFix G d gamma (max n S) S p = terminalValue G d p := by
       simp only [termFix]; rw [if_pos hfire]
     rw [hfix, hV]
-    simp only [terminalValue]
     exact ⟨fun _ => Int.le_refl _, fun _ => Int.le_refl _⟩
   | false =>
-    have hfix : termFix G gamma (max n S) S p = max n S :=
-      termFix_unverified_passthrough G gamma (max n S) S p hai
+    have hfix : termFix G d gamma (max n S) S p = max n S :=
+      termFix_unverified_passthrough G d gamma (max n S) S p hai
     rw [hfix]
     constructor
     · intro hge
@@ -3312,7 +3391,7 @@ def nullValueD2 (G : QSGame) (guard : G.Pos → Bool) : Nat → G.Pos → Int
   | d + 1, p =>
     if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
     else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
-    else if allIllegalB G p = true then terminalValue G p
+    else if allIllegalB G p = true then terminalValue G (d + 1) p
     else
       foldMax (fun m => -(nullValueD2 G guard d m)) (movesAbove G (val_lower (d + 1)) p)
         (if guard p = true ∧ 2 < d + 1 then
@@ -3351,7 +3430,7 @@ theorem nullValueD2_of_allIllegal (G : QSGame) (guard : G.Pos → Bool)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
     (hai : allIllegalB G p = true) :
-    nullValueD2 G guard (d + 1) p = terminalValue G p := by
+    nullValueD2 G guard (d + 1) p = terminalValue G (d + 1) p := by
   simp only [nullValueD2]
   rw [if_neg hkg, if_neg hcap, if_pos hai]
 
@@ -3407,10 +3486,8 @@ theorem nullValueD2_bounded (G : QSGame) (guard : G.Pos → Bool)
         · cases hai : allIllegalB G p with
           | true =>
             rw [nullValueD2_of_allIllegal G guard d p hkg hcap hai]
-            simp only [terminalValue]
-            by_cases hic : inCheckB G.toNullGame p = true
-            · rw [if_pos hic]; omega
-            · rw [if_neg hic]; omega
+            have := terminalValue_bounds G (d + 1) p
+            omega
           | false =>
             rw [nullValueD2_of_fold G guard d p hkg hcap hai]
             have hTl := nullTermD2_ge_LOSS G guard d p
@@ -3708,7 +3785,7 @@ theorem bound_null_spec (G : QSGame)
                 exact absurd hge (by omega)
           · -- The loop and the correction, through the core lemma.
             have hs : boundD2 G guard kill (d + 1) p gamma
-                = termFix G gamma
+                = termFix G (d + 1) gamma
                     (max (max (nullPartD2 G guard kill (-(boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - gamma))) (boundD2 G guard kill (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) (d + 1) p gamma) (futTerm G (d + 1) gamma p))
                       (searchMoves gamma
                         (fun m => -(boundD2 G guard kill d m (1 - gamma)))
@@ -3754,7 +3831,7 @@ theorem bound_null_spec (G : QSGame)
               exact foldMax_filter_split (fun m => -(nullValueD2 G guard d m))
                 (fun m => futileAt G (d + 1) gamma p m)
                 (movesAbove G (val_lower (d + 1)) p) LOSS
-            refine termFix_spec_core G p gamma _ _ _ ?_ ?_ ?_ ?_
+            refine termFix_spec_core G (d + 1) p gamma _ _ _ ?_ ?_ ?_ ?_
             · -- Both virtual species sit below the window: the null (else
               -- the cutoff fired) and every futility estimate (by
               -- construction).
@@ -4026,9 +4103,9 @@ theorem d2_terminal_stores (G : QSGame)
     (hai : allIllegalB G p = true)
     (gamma : Int) (hg1 : -MATE_UPPER < gamma) (hg2 : gamma ≤ MATE_UPPER) :
     (gamma ≤ boundD2 G guard kill (d + 1) p gamma →
-      boundD2 G guard kill (d + 1) p gamma ≤ terminalValue G p) ∧
+      boundD2 G guard kill (d + 1) p gamma ≤ terminalValue G (d + 1) p) ∧
     (boundD2 G guard kill (d + 1) p gamma < gamma →
-      terminalValue G p ≤ boundD2 G guard kill (d + 1) p gamma) := by
+      terminalValue G (d + 1) p ≤ boundD2 G guard kill (d + 1) p gamma) := by
   have h := bound_null_spec G guard kill hB hK
     (d + 1) p gamma hg1 hg2
   rw [nullValueD2_of_allIllegal G guard d p hkg hcap hai] at h
@@ -4383,7 +4460,7 @@ def boundKCX (G : QSGame) (guard : G.Pos → Bool) :
       (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
        else (-(boundKCX G guard 0 (G.pass p) (1 - gamma))))
     else
-      termFix G gamma
+      termFix G 1 gamma
         (max (max (nFoldKCX G guard (-(boundKCX G guard 0 (G.pass p) (1 - gamma))) (boundKCX G guard 0 (G.pass p) (1 - MATE_LOWER)) 1 p gamma) (futTerm G 1 gamma p))
           (searchMoves gamma
             (fun m => -(boundKCX G guard 0 m (1 - gamma)))
@@ -4398,7 +4475,7 @@ def boundKCX (G : QSGame) (guard : G.Pos → Bool) :
       (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
        else (-(boundKCX G guard 0 (G.pass p) (1 - gamma))))
     else
-      termFix G gamma
+      termFix G 2 gamma
         (max (max (nFoldKCX G guard (-(boundKCX G guard 0 (G.pass p) (1 - gamma))) (boundKCX G guard 0 (G.pass p) (1 - MATE_LOWER)) 2 p gamma) (futTerm G 2 gamma p))
           (searchMoves gamma
             (fun m => -(boundKCX G guard 1 m (1 - gamma)))
@@ -4413,7 +4490,7 @@ def boundKCX (G : QSGame) (guard : G.Pos → Bool) :
       (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
        else (-(boundKCX G guard d (G.pass p) (1 - gamma))))
     else
-      termFix G gamma
+      termFix G (d + 3) gamma
         (max (max (nFoldKCX G guard (-(boundKCX G guard d (G.pass p) (1 - gamma))) (boundKCX G guard d (G.pass p) (1 - MATE_LOWER)) (d + 3) p gamma) (futTerm G (d + 3) gamma p))
           (searchMoves gamma
             (fun m => -(boundKCX G guard (d + 2) m (1 - gamma)))
@@ -4431,7 +4508,7 @@ theorem boundKCX_succ (G : QSGame) (guard : G.Pos → Bool) (d : Nat) (p : G.Pos
           (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
            else (-(boundKCX G guard (d + 1 - 3) (G.pass p) (1 - gamma))))
         else
-          termFix G gamma
+          termFix G (d + 1) gamma
             (max (max (nFoldKCX G guard (-(boundKCX G guard (d + 1 - 3) (G.pass p) (1 - gamma))) (boundKCX G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) (d + 1) p gamma)
                 (futTerm G (d + 1) gamma p))
               (searchMoves gamma
@@ -5499,7 +5576,7 @@ def boundKCX' (G : QSGame) (guard : G.Pos → Bool) :
       (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
        else (-(boundKCX' G guard 0 (G.pass p) (1 - gamma))))
     else
-      termFix G gamma
+      termFix G 1 gamma
         (max (max (nFoldKCX G guard (-(boundKCX' G guard 0 (G.pass p) (1 - gamma))) (boundKCX' G guard 0 (G.pass p) (1 - MATE_LOWER)) 1 p gamma) (futTerm G 1 gamma p))
           (searchMoves gamma
             (fun m => -(boundKCX' G guard 0 m (1 - gamma)))
@@ -5514,7 +5591,7 @@ def boundKCX' (G : QSGame) (guard : G.Pos → Bool) :
       (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
        else (-(boundKCX' G guard 0 (G.pass p) (1 - gamma))))
     else
-      termFix G gamma
+      termFix G 2 gamma
         (max (max (nFoldKCX G guard (-(boundKCX' G guard 0 (G.pass p) (1 - gamma))) (boundKCX' G guard 0 (G.pass p) (1 - MATE_LOWER)) 2 p gamma) (futTerm G 2 gamma p))
           (searchMoves gamma
             (fun m => -(boundKCX' G guard 1 m (1 - gamma)))
@@ -5529,7 +5606,7 @@ def boundKCX' (G : QSGame) (guard : G.Pos → Bool) :
       (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
        else (-(boundKCX' G guard d (G.pass p) (1 - gamma))))
     else
-      termFix G gamma
+      termFix G (d + 3) gamma
         (max (max (nFoldKCX G guard (-(boundKCX' G guard d (G.pass p) (1 - gamma))) (boundKCX' G guard d (G.pass p) (1 - MATE_LOWER)) (d + 3) p gamma) (futTerm G (d + 3) gamma p))
           (searchMoves gamma
             (fun m => -(boundKCX' G guard (d + 2) m (1 - gamma)))
@@ -5547,7 +5624,7 @@ theorem boundKCX'_succ (G : QSGame) (guard : G.Pos → Bool) (d : Nat) (p : G.Po
           (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
            else (-(boundKCX' G guard (d + 1 - 3) (G.pass p) (1 - gamma))))
         else
-          termFix G gamma
+          termFix G (d + 1) gamma
             (max (max (nFoldKCX G guard (-(boundKCX' G guard (d + 1 - 3) (G.pass p) (1 - gamma))) (boundKCX' G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) (d + 1) p gamma)
                 (futTerm G (d + 1) gamma p))
               (searchMoves gamma
@@ -5840,8 +5917,8 @@ oracle scan alone -- no fail-low gate.  In the no-cut fold the old
 `best < gamma` conjunct was implied anyway (every virtual species sits
 below the window when the cutoff did not fire); the new content is that
 the CUT path now routes through the same override. -/
-def termFix2 (G : QSGame) (best S : Int) (p : G.Pos) : Int :=
-  if S = LOSS ∧ allIllegalB G p = true then terminalValue G p else best
+def termFix2 (G : QSGame) (d : Nat) (best S : Int) (p : G.Pos) : Int :=
+  if S = LOSS ∧ allIllegalB G p = true then terminalValue G d p else best
 
 /-- The double-primed cut condition: `NCut'` with the terminal-veto
 conjunct `(rn ≤ 0 ∨ allIllegalB = false)` DELETED.  A virtual
@@ -5873,10 +5950,10 @@ def boundD2'' (G : QSGame) (guard : G.Pos → Bool) :
     else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
     else if useD2'' G guard (-(boundD2'' G guard 0 (G.pass p) (1 - gamma))) (boundD2'' G guard 0 (G.pass p) (1 - MATE_LOWER)) 1 p gamma = true ∧
         gamma ≤ nullVerify'' G (-(boundD2'' G guard 0 (G.pass p) (1 - gamma))) gamma (boundD2'' G guard 0 (G.pass p) (1 - MATE_LOWER)) p then
-      (if allIllegalB G p = true then terminalValue G p
+      (if allIllegalB G p = true then terminalValue G 1 p
        else nullVerify'' G (-(boundD2'' G guard 0 (G.pass p) (1 - gamma))) gamma (boundD2'' G guard 0 (G.pass p) (1 - MATE_LOWER)) p)
     else
-      termFix2 G
+      termFix2 G 1
         (max (max (nullPartD2'' G guard (-(boundD2'' G guard 0 (G.pass p) (1 - gamma))) (boundD2'' G guard 0 (G.pass p) (1 - MATE_LOWER)) 1 p gamma) (futTerm G 1 gamma p))
           (searchMoves gamma
             (fun m => -(boundD2'' G guard 0 m (1 - gamma)))
@@ -5890,10 +5967,10 @@ def boundD2'' (G : QSGame) (guard : G.Pos → Bool) :
     else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
     else if useD2'' G guard (-(boundD2'' G guard 0 (G.pass p) (1 - gamma))) (boundD2'' G guard 0 (G.pass p) (1 - MATE_LOWER)) 2 p gamma = true ∧
         gamma ≤ nullVerify'' G (-(boundD2'' G guard 0 (G.pass p) (1 - gamma))) gamma (boundD2'' G guard 0 (G.pass p) (1 - MATE_LOWER)) p then
-      (if allIllegalB G p = true then terminalValue G p
+      (if allIllegalB G p = true then terminalValue G 2 p
        else nullVerify'' G (-(boundD2'' G guard 0 (G.pass p) (1 - gamma))) gamma (boundD2'' G guard 0 (G.pass p) (1 - MATE_LOWER)) p)
     else
-      termFix2 G
+      termFix2 G 2
         (max (max (nullPartD2'' G guard (-(boundD2'' G guard 0 (G.pass p) (1 - gamma))) (boundD2'' G guard 0 (G.pass p) (1 - MATE_LOWER)) 2 p gamma) (futTerm G 2 gamma p))
           (searchMoves gamma
             (fun m => -(boundD2'' G guard 1 m (1 - gamma)))
@@ -5907,10 +5984,10 @@ def boundD2'' (G : QSGame) (guard : G.Pos → Bool) :
     else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
     else if useD2'' G guard (-(boundD2'' G guard d (G.pass p) (1 - gamma))) (boundD2'' G guard d (G.pass p) (1 - MATE_LOWER)) (d + 3) p gamma = true ∧
         gamma ≤ nullVerify'' G (-(boundD2'' G guard d (G.pass p) (1 - gamma))) gamma (boundD2'' G guard d (G.pass p) (1 - MATE_LOWER)) p then
-      (if allIllegalB G p = true then terminalValue G p
+      (if allIllegalB G p = true then terminalValue G (d + 3) p
        else nullVerify'' G (-(boundD2'' G guard d (G.pass p) (1 - gamma))) gamma (boundD2'' G guard d (G.pass p) (1 - MATE_LOWER)) p)
     else
-      termFix2 G
+      termFix2 G (d + 3)
         (max (max (nullPartD2'' G guard (-(boundD2'' G guard d (G.pass p) (1 - gamma))) (boundD2'' G guard d (G.pass p) (1 - MATE_LOWER)) (d + 3) p gamma) (futTerm G (d + 3) gamma p))
           (searchMoves gamma
             (fun m => -(boundD2'' G guard (d + 2) m (1 - gamma)))
@@ -5935,10 +6012,10 @@ def boundKCX'' (G : QSGame) (guard : G.Pos → Bool) :
     if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
     else if NCut'' G guard (-(boundKCX'' G guard 0 (G.pass p) (1 - gamma))) (boundKCX'' G guard 0 (G.pass p) (1 - MATE_LOWER)) 1 p gamma then
       (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
-       else if allIllegalB G p = true then terminalValue G p
+       else if allIllegalB G p = true then terminalValue G 1 p
        else (-(boundKCX'' G guard 0 (G.pass p) (1 - gamma))))
     else
-      termFix2 G
+      termFix2 G 1
         (max (max (nFoldKCX G guard (-(boundKCX'' G guard 0 (G.pass p) (1 - gamma))) (boundKCX'' G guard 0 (G.pass p) (1 - MATE_LOWER)) 1 p gamma) (futTerm G 1 gamma p))
           (searchMoves gamma
             (fun m => -(boundKCX'' G guard 0 m (1 - gamma)))
@@ -5951,10 +6028,10 @@ def boundKCX'' (G : QSGame) (guard : G.Pos → Bool) :
     if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
     else if NCut'' G guard (-(boundKCX'' G guard 0 (G.pass p) (1 - gamma))) (boundKCX'' G guard 0 (G.pass p) (1 - MATE_LOWER)) 2 p gamma then
       (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
-       else if allIllegalB G p = true then terminalValue G p
+       else if allIllegalB G p = true then terminalValue G 2 p
        else (-(boundKCX'' G guard 0 (G.pass p) (1 - gamma))))
     else
-      termFix2 G
+      termFix2 G 2
         (max (max (nFoldKCX G guard (-(boundKCX'' G guard 0 (G.pass p) (1 - gamma))) (boundKCX'' G guard 0 (G.pass p) (1 - MATE_LOWER)) 2 p gamma) (futTerm G 2 gamma p))
           (searchMoves gamma
             (fun m => -(boundKCX'' G guard 1 m (1 - gamma)))
@@ -5967,10 +6044,10 @@ def boundKCX'' (G : QSGame) (guard : G.Pos → Bool) :
     if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
     else if NCut'' G guard (-(boundKCX'' G guard d (G.pass p) (1 - gamma))) (boundKCX'' G guard d (G.pass p) (1 - MATE_LOWER)) (d + 3) p gamma then
       (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
-       else if allIllegalB G p = true then terminalValue G p
+       else if allIllegalB G p = true then terminalValue G (d + 3) p
        else (-(boundKCX'' G guard d (G.pass p) (1 - gamma))))
     else
-      termFix2 G
+      termFix2 G (d + 3)
         (max (max (nFoldKCX G guard (-(boundKCX'' G guard d (G.pass p) (1 - gamma))) (boundKCX'' G guard d (G.pass p) (1 - MATE_LOWER)) (d + 3) p gamma) (futTerm G (d + 3) gamma p))
           (searchMoves gamma
             (fun m => -(boundKCX'' G guard (d + 2) m (1 - gamma)))
@@ -5987,10 +6064,10 @@ theorem boundD2''_succ (G : QSGame) (guard : G.Pos → Bool) (d : Nat) (p : G.Po
         else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
         else if useD2'' G guard (-(boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - gamma))) (boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) (d + 1) p gamma = true ∧
             gamma ≤ nullVerify'' G (-(boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - gamma))) gamma (boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) p then
-          (if allIllegalB G p = true then terminalValue G p
+          (if allIllegalB G p = true then terminalValue G (d + 1) p
            else nullVerify'' G (-(boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - gamma))) gamma (boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) p)
         else
-          termFix2 G
+          termFix2 G (d + 1)
             (max (max (nullPartD2'' G guard (-(boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - gamma))) (boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) (d + 1) p gamma)
                 (futTerm G (d + 1) gamma p))
               (searchMoves gamma
@@ -6011,10 +6088,10 @@ theorem boundKCX''_succ (G : QSGame) (guard : G.Pos → Bool) (d : Nat) (p : G.P
       = if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
         else if NCut'' G guard (-(boundKCX'' G guard (d + 1 - 3) (G.pass p) (1 - gamma))) (boundKCX'' G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) (d + 1) p gamma then
           (if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
-           else if allIllegalB G p = true then terminalValue G p
+           else if allIllegalB G p = true then terminalValue G (d + 1) p
            else (-(boundKCX'' G guard (d + 1 - 3) (G.pass p) (1 - gamma))))
         else
-          termFix2 G
+          termFix2 G (d + 1)
             (max (max (nFoldKCX G guard (-(boundKCX'' G guard (d + 1 - 3) (G.pass p) (1 - gamma))) (boundKCX'' G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) (d + 1) p gamma)
                 (futTerm G (d + 1) gamma p))
               (searchMoves gamma
@@ -6063,25 +6140,25 @@ theorem boundKCX''_qs_leaf (G : QSGame) (guard : G.Pos → Bool)
 `termFix_spec_core`, and at a verified terminal the override now covers
 BOTH directions by exactness -- the `best < gamma` conjunct the old
 gate carried is not needed for soundness anywhere. -/
-theorem termFix2_spec_core (G : QSGame) (p : G.Pos)
+theorem termFix2_spec_core (G : QSGame) (d : Nat) (p : G.Pos)
     (gamma S n V : Int)
     (hnlt : n < gamma)
-    (hterm : allIllegalB G p = true → S = LOSS ∧ LOSS ≤ n ∧ V = terminalValue G p)
+    (hterm : allIllegalB G p = true → S = LOSS ∧ LOSS ≤ n ∧ V = terminalValue G d p)
     (hsp1 : allIllegalB G p = false → gamma ≤ S → S ≤ V)
     (hsp2 : allIllegalB G p = false → S < gamma → V ≤ max n S) :
-    (gamma ≤ termFix2 G (max n S) S p →
-      termFix2 G (max n S) S p ≤ V) ∧
-    (termFix2 G (max n S) S p < gamma →
-      V ≤ termFix2 G (max n S) S p) := by
+    (gamma ≤ termFix2 G d (max n S) S p →
+      termFix2 G d (max n S) S p ≤ V) ∧
+    (termFix2 G d (max n S) S p < gamma →
+      V ≤ termFix2 G d (max n S) S p) := by
   cases hai : allIllegalB G p with
   | true =>
     obtain ⟨hSL, _, hV⟩ := hterm hai
-    have hfix : termFix2 G (max n S) S p = terminalValue G p := by
+    have hfix : termFix2 G d (max n S) S p = terminalValue G d p := by
       simp only [termFix2]; rw [if_pos ⟨hSL, hai⟩]
     rw [hfix, hV]
     exact ⟨fun _ => Int.le_refl _, fun _ => Int.le_refl _⟩
   | false =>
-    have hfix : termFix2 G (max n S) S p = max n S := by
+    have hfix : termFix2 G d (max n S) S p = max n S := by
       simp only [termFix2]
       rw [if_neg (fun h => by rw [hai] at h; exact Bool.noConfusion h.2)]
     rw [hfix]
@@ -6106,7 +6183,7 @@ theorem boundD2''_terminal_exact (G : QSGame) (guard : G.Pos → Bool)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
     (hai : allIllegalB G p = true) :
-    boundD2'' G guard (d + 1) p gamma = terminalValue G p := by
+    boundD2'' G guard (d + 1) p gamma = terminalValue G (d + 1) p := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
   rw [boundD2''_succ, if_neg hkg, if_neg hcap]
@@ -6141,12 +6218,8 @@ theorem terminal_never_positive'' (G : QSGame) (guard : G.Pos → Bool)
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
     (hai : allIllegalB G p = true) :
     boundD2'' G guard (d + 1) p gamma ≤ 0 := by
-  have hML : MATE_LOWER = 47923 := rfl
   rw [boundD2''_terminal_exact G guard d p gamma hg1 hkg hcap hai]
-  simp only [terminalValue]
-  by_cases hic : inCheckB G.toNullGame p = true
-  · rw [if_pos hic]; omega
-  · rw [if_neg hic]; omega
+  exact (terminalValue_bounds G (d + 1) p).2
 
 /-- The mate side stays free, double-primed: an in-check node's pass is
 king-capturable and reports the exact sentinel, so a
@@ -6212,7 +6285,7 @@ theorem bound_null_spec'' (G : QSGame)
               gamma ≤ nullVerify'' G (-(boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - gamma))) gamma (boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) p
           · -- The cut, normalized at verified terminals.
             have hs : boundD2'' G guard (d + 1) p gamma
-                = (if allIllegalB G p = true then terminalValue G p
+                = (if allIllegalB G p = true then terminalValue G (d + 1) p
                    else nullVerify'' G (-(boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - gamma))) gamma (boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) p) := by
               rw [boundD2''_succ, if_neg hkg, if_neg hcap, if_pos hcut]
             rw [hs]
@@ -6279,7 +6352,7 @@ theorem bound_null_spec'' (G : QSGame)
                 exact absurd hge (by omega)
           · -- The loop and the WIDENED correction, through the new core.
             have hs : boundD2'' G guard (d + 1) p gamma
-                = termFix2 G
+                = termFix2 G (d + 1)
                     (max (max (nullPartD2'' G guard (-(boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - gamma))) (boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) (d + 1) p gamma) (futTerm G (d + 1) gamma p))
                       (searchMoves gamma
                         (fun m => -(boundD2'' G guard d m (1 - gamma)))
@@ -6325,7 +6398,7 @@ theorem bound_null_spec'' (G : QSGame)
               exact foldMax_filter_split (fun m => -(nullValueD2 G guard d m))
                 (fun m => futileAt G (d + 1) gamma p m)
                 (movesAbove G (val_lower (d + 1)) p) LOSS
-            refine termFix2_spec_core G p gamma _ _ _ ?_ ?_ ?_ ?_
+            refine termFix2_spec_core G (d + 1) p gamma _ _ _ ?_ ?_ ?_ ?_
             · -- Both virtual species sit below the window.
               have hnp : nullPartD2'' G guard (-(boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - gamma))) (boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) (d + 1) p gamma < gamma := by
                 simp only [nullPartD2'']

@@ -30,6 +30,120 @@ Corresponds to `best = -MATE_UPPER` at sunfish.py line 379: if no move
 (not even the QS stand-pat) raises `best`, the position counts as lost. -/
 def LOSS : Int := -MATE_UPPER
 
+/-- `EVAL_ROUGHNESS` (sunfish.py's search constants).  It is the width
+the MTD-bi bracket stops at -- and, since `terminalValue` scales mate
+distance by it, also the score one ply of mate distance is worth. -/
+def EVAL_ROUGHNESS : Int := 15
+
+/-! The exact value the terminal correction assigns to CHECKMATE is
+`1 - MATE_UPPER`:
+
+```python
+best = 1 - MATE_UPPER if pos.rotate(nullmove=True).king_capture() else 0
+```
+
+Mated HERE is the deepest LEGAL loss there is -- one better than a king
+already off the board (`-MATE_UPPER`, which the fold reads as "illegal
+move", so the two must stay distinct) -- and `up` walks it back toward
+zero one ply at a time.  It is spelled out rather than named so that
+`omega` sees the arithmetic at every one of its consumers. -/
+
+/-- **One ply of mate distance** (`up` in sunfish.py): a child's report
+`r` as the parent sees it.  Negate it, and step a mate score one place
+toward zero, so a faster mate outscores a slower one.
+
+    def up(r): return -r + (MATE_LOWER <= abs(r) < MATE_UPPER) * ((r > 0) - (r < 0))
+
+The distance is measured FROM THE NODE, not from the root: nothing but
+`(pos, depth)` enters, so the transposition table needs no store/probe
+adjustment and keeps one value per key.  The band EDGES are fixed
+points of the step: `up MATE_UPPER = -MATE_UPPER` keeps the
+illegal-move sentinel exact (the fold's `score > -MATE_UPPER` legality
+test reads it literally) and `up (-MATE_UPPER) = MATE_UPPER` keeps the
+king-capture promise exact.  Below the band `up` is plain negation. -/
+def up (r : Int) : Int :=
+  if MATE_LOWER ≤ r ∧ r < MATE_UPPER then 1 - r
+  else if -MATE_UPPER < r ∧ r ≤ -MATE_LOWER then -1 - r
+  else -r
+
+/-- `up` is antitone: a better child report is a worse parent yield.
+This is all the fail-soft transport ever needs of it. -/
+theorem up_anti {a b : Int} (h : a ≤ b) : up b ≤ up a := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  unfold up
+  split <;> split <;> omega
+
+/-- Outside the mate band `up` is plain negation -- the shape every
+non-mate arithmetic step in the development relies on. -/
+theorem up_of_quiet {r : Int} (h1 : -MATE_LOWER < r) (h2 : r < MATE_LOWER) :
+    up r = -r := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  unfold up
+  rw [if_neg (by omega), if_neg (by omega)]
+
+/-- The illegal-move sentinel is a FIXED POINT of the step: a child that
+reports `MATE_UPPER` (its king can be taken) still hands the parent
+exactly `-MATE_UPPER`, so `live |= score > -MATE_UPPER` is unchanged. -/
+theorem up_MATE_UPPER : up MATE_UPPER = -MATE_UPPER := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  unfold up
+  rw [if_neg (by omega), if_neg (by omega)]
+
+/-- Dually, capturing the king NOW is distance zero: a kingless child
+hands the parent the full `MATE_UPPER`. -/
+theorem up_kingGone : up (-MATE_UPPER) = MATE_UPPER := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  unfold up
+  rw [if_neg (by omega), if_neg (by omega)]
+  omega
+
+/-- Delivering mate is `MATE_UPPER - 2`: the checkmated child reports
+`1 - MATE_UPPER`, and one step back is the winner's mate-in-one.
+Iterating, a mate `k` moves away scores `MATE_UPPER - 2k`, which is the
+convention sunfish.py's constant block has claimed since 2014. -/
+theorem up_of_mated : up (1 - MATE_UPPER) = MATE_UPPER - 2 := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  unfold up
+  rw [if_neg (by omega), if_pos (by omega)]
+  omega
+
+/-- `up` never leaves the score band. -/
+theorem up_bounded {r : Int} (h1 : -MATE_UPPER ≤ r) (h2 : r ≤ MATE_UPPER) :
+    -MATE_UPPER ≤ up r ∧ up r ≤ MATE_UPPER := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  unfold up
+  split <;> (try split) <;> omega
+
+/-- The step never overshoots plain negation by more than one, in either
+direction -- the sandwich that carries every `omega` the old proofs did
+with `-r` alone. -/
+theorem up_sandwich (r : Int) : -r - 1 ≤ up r ∧ up r ≤ -r + 1 := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  unfold up
+  split <;> (try split) <;> omega
+
+/-- A parent yield is a mate-band win exactly when the child was a
+mate-band loss -- and the step costs one point of margin, which is what
+makes the band edge `MATE_LOWER` a horizon rather than a fixed point. -/
+theorem up_mate_iff (r : Int) :
+    (MATE_LOWER ≤ up r ↔ r ≤ -MATE_LOWER - 1) := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  unfold up
+  by_cases h1 : MATE_LOWER ≤ r ∧ r < MATE_UPPER
+  · rw [if_pos h1]; constructor <;> intro <;> omega
+  · rw [if_neg h1]
+    by_cases h2 : -MATE_UPPER < r ∧ r ≤ -MATE_LOWER
+    · rw [if_pos h2]; constructor <;> intro <;> omega
+    · rw [if_neg h2]; constructor <;> intro <;> omega
+
 /-- An abstract two-player zero-sum game.
 
 * `Pos`   -- positions, always seen from the side to move (sunfish rotates

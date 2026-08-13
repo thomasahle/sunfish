@@ -50,9 +50,6 @@ import Sunfish.GameTree
 
 namespace Sunfish
 
-/-- `EVAL_ROUGHNESS` (sunfish.py line 151). -/
-def EVAL_ROUGHNESS : Int := 15
-
 /-- The next probe window: `gamma = (lower + upper + 1) // 2`.  Lean's
 `Int` division agrees with Python's floor division here
 (machine-checked on the negative odd case below). -/

@@ -199,3 +199,91 @@ class TestNullSentinelMasking:
                 f"50-move draw at ply {ply + 1} in a won KPK"
             )
         pytest.fail("no conversion within 120 plies")
+
+
+class TestMateDistance:
+    """github.com/thomasahle/sunfish/issues/11 ("Tempo", 2014): "a mate in 6
+    is considered the same as a mate in 1".
+
+    Every checkmate used to score the flat ``-MATE_LOWER``, so a mating line
+    carried no information about HOW FAR the mate was: at the fold, every
+    winning move tied, and the losing side had no reason to hold out. The
+    terminal correction now deposits the depth still unspent when the mate
+    was found, one ``EVAL_ROUGHNESS`` per ply -- ``max(1 - MATE_UPPER,
+    -MATE_LOWER - depth * EVAL_ROUGHNESS)`` -- which negation carries home
+    as ``MATE_LOWER + (depth - plies) * EVAL_ROUGHNESS``.
+
+    The scale matters: MTD-bi stops bisecting at ``upper - lower <=
+    EVAL_ROUGHNESS``, so at one point per ply the driver's final window
+    could not separate two mating moves and the ordering never reached the
+    root. A whole bracket per ply is what makes it visible.
+
+    The position below is the complaint in miniature: three mating moves
+    and eight moves that mate in three, all scoring exactly 47923 on
+    master, and 47998 vs 47938 at depth 6 here."""
+
+    FEN = "8/3Q4/8/8/8/3R4/5K1k/8 w - - 0 1"
+    FAST = ("d3h3", "d7h3", "d7h7")  # mate in 1
+    SLOW = ("d3a3", "d3b3", "d3c3", "d3d2")  # mate in 3
+
+    def yield_of(self, hist, uci_move, depth):
+        """The parent's view of one move at a fixed depth: -bound(child)."""
+        child = hist[-1].move(uci.parse_move(uci_move, len(hist) % 2 == 1))
+        searcher = sf.Searcher()
+        return -searcher.bound(child, -sf.MATE_LOWER, depth - 1, root=True)
+
+    @pytest.mark.parametrize("depth", [4, 5, 6])
+    def test_faster_mate_scores_strictly_better(self, depth):
+        hist = hist_from_fen(self.FEN)
+        fast = [self.yield_of(hist, m, depth) for m in self.FAST]
+        slow = [self.yield_of(hist, m, depth) for m in self.SLOW]
+        assert min(fast) >= sf.MATE_LOWER, f"mate in 1 left the band: {fast}"
+        assert min(slow) >= sf.MATE_LOWER, f"mate in 3 left the band: {slow}"
+        assert min(fast) - max(slow) >= sf.EVAL_ROUGHNESS, (
+            f"depth {depth}: mate in 1 scored {fast}, mate in 3 scored {slow} "
+            f"- the gap must clear EVAL_ROUGHNESS ({sf.EVAL_ROUGHNESS}) or the "
+            "driver's final bracket swallows it"
+        )
+        assert len(set(fast)) == 1 and len(set(slow)) == 1, (
+            f"same distance, different score: {fast} / {slow}"
+        )
+
+    @pytest.mark.parametrize("depth", [2, 3, 4, 5, 6])
+    def test_mate_in_one_score_carries_the_distance(self, depth):
+        # Ra8# from a bare-rook mate: the score is the band floor plus the
+        # depth the search still had in hand.
+        hist = hist_from_fen("3k4/8/3K4/8/8/8/8/7R w - - 0 1")
+        searcher = sf.Searcher()
+        score = searcher.bound(hist[-1], sf.MATE_LOWER, depth, root=True)
+        want = sf.MATE_LOWER + (depth - 1) * sf.EVAL_ROUGHNESS
+        assert score == want, (
+            f"depth {depth}: mate in 1 scored {score}, expected {want}"
+        )
+        assert render(hist, searcher.tp_move[hist[-1]]) == "h1h8"
+
+    @pytest.mark.parametrize("depth", [4, 6])
+    def test_engine_plays_the_mate_in_one(self, depth):
+        hist = hist_from_fen(self.FEN)
+        searcher = sf.Searcher()
+        for d, gamma, score, move in searcher.search(hist):
+            if d > depth:
+                break
+        played = render(hist, searcher.tp_move[hist[-1]])
+        assert played in self.FAST, f"depth {depth}: dawdled with {played}"
+
+    @pytest.mark.parametrize("depth", [1, 2, 3, 4, 5])
+    def test_checkmated_node_reports_its_distance(self, depth):
+        """The mated side's half of the contract: being mated with `depth`
+        still unspent is worth exactly -MATE_LOWER - depth*EVAL_ROUGHNESS, so
+        of two lost replies the one that postpones the mate scores strictly
+        higher - by a whole bracket per ply."""
+        hist = hist_from_fen("3k3R/8/3K4/8/8/8/8/8 b - - 1 1")
+        searcher = sf.Searcher()
+        score = searcher.bound(hist[-1], sf.MATE_LOWER, depth, root=True)
+        want = -sf.MATE_LOWER - depth * sf.EVAL_ROUGHNESS
+        assert score == want, (
+            f"depth {depth}: checkmated node scored {score}, expected {want}"
+        )
+        assert score > -sf.MATE_UPPER, (
+            "a mate value collided with the illegal-move sentinel"
+        )

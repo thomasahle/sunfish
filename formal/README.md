@@ -76,6 +76,128 @@ It concerns the quality of the null approximation, not the fail-soft report
 transport. The non-pawn-piece guard excludes pawn-only zugzwangs; the score
 guard and cap make null pruning more conservative in unbalanced positions.
 
+## Mate distance
+
+Checkmate is not one number.  The terminal correction assigns
+
+```python
+mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)
+```
+
+where `depth` is the search depth still UNSPENT when the mate was found.
+Negated up the tree the bonus survives unchanged, so at one fixed root depth
+`D` a forced mate `k` plies away reports
+`MATE_LOWER + (D - k) * EVAL_ROUGHNESS`: faster mates score strictly higher,
+and the losing side prefers the line that postpones the mate.  With the
+previous flat `-MATE_LOWER` every mate tied, which is issue #11 (2014).
+
+**Why a whole `EVAL_ROUGHNESS` per ply.**  MTD-bi stops bisecting at
+`upper < lower + EVAL_ROUGHNESS`, so the driver's final window sits within 15
+of the true value and any move within 15 of the maximum can take the last
+cutoff.  At one point per ply the ordering would exist in the value function
+and never reach the root.  Scaled, consecutive mate distances are a full
+bracket apart.
+
+**Band headroom, checked rather than assumed.**  The floor `1 - MATE_UPPER`
+is the deepest mate value, `-69289`, exactly one point above the illegal-move
+sentinel `-MATE_UPPER = -69290`; its negation `69289` is exactly one point
+below the king-capture sentinel `MATE_UPPER`.  Writing the floor as
+`-MATE_UPPER` instead would be off by one and unsafe: the value is negated on
+the way up and negated again a ply later, so a node valued `-MATE_UPPER`
+reaches its GRANDPARENT as exactly the sentinel, and `score > -MATE_UPPER` is
+strict -- `live` would stay unset for a legal move and the terminal
+correction could fire at a position that has legal moves.  Machine-checked:
+the two spellings first differ at unspent depth 1425, and at that depth the
+grandparent yield is `-69289` (live) versus `-69290` (not live).  The one
+point is load-bearing in both directions and it is exact:
+
+* `live |= move is not None and score > -MATE_UPPER` still separates "legal
+  move into the deepest representable mate" (`-69289`, live) from "illegal
+  move" (`-69290`, not live);
+* `r = MATE_UPPER` at a king-capturable node stays unambiguous, since no mate
+  value reaches it;
+* the table's default `Entry(-MATE_UPPER, MATE_UPPER)` still contains every
+  value, and the driver's reset `lower = 1 - MATE_UPPER` coincides with the
+  deepest value -- the wrinkle `BracketOK`'s `max V (1 - MATE_UPPER)` already
+  records;
+* `pos.score <= -MATE_LOWER`, `pos.value(move) >= MATE_LOWER` and the null
+  cap `pos.score + EVAL_ROUGHNESS <= 515` all read static quantities, which
+  `EvalBounds` keeps strictly below `MATE_LOWER`; the gap to the nearest mate
+  value is now `EVAL_ROUGHNESS` wider than before, so those margins only
+  improve.
+
+The clamp binds at unspent depth 1425; `search` iterates to 999, so it never
+binds in play and is there only to make the band facts unconditional.
+
+**Why distance from the horizon and not from the root.**  The value must
+stay a function of `(pos, depth)` alone -- that is the invariant the whole
+table rests on.  Unspent depth is such a function; distance from the root is
+not, and would force store/probe adjustment on every table access.
+
+**Why not a per-ply step on the score** (the other way to get distance from
+the node, `score -= sign(score)` at each negation): it is UNSOUND with
+sunfish's zero-window probe.  The step map is not injective at the band edge
+(`up(MATE_LOWER) = up(MATE_LOWER - 1)`), so no single child window can
+separate the child's fail-high from its fail-low, and the fail-soft point
+spec breaks by one at `boundD2 child (1 - gamma) = -gamma` and at
+`= 1 - gamma`.  Restoring it needs a gamma-dependent child window
+(`1 - gamma - [MATE_LOWER <= gamma < MATE_UPPER] + [gamma <= -MATE_LOWER]`),
+i.e. a change to the search contract itself.  `GameTree.lean` carries `up`
+and its non-injectivity as the machine-checked record of that dead end.
+
+Lean:
+
+| fact | theorem |
+|---|---|
+| the terminal value stays in the band at every depth | `terminalValue_bounds` |
+| it is exactly `-MATE_LOWER - depth` below the clamp | `terminalValue_exact` |
+| deeper unspent depth is worse for the mated side | `terminalValue_anti` |
+| a forced mate in `k` is worth `MATE_LOWER + (D - k) * EVAL_ROUGHNESS` | `forcedMate_negamaxD2` |
+| the mated dual | `forcedlyMated_negamaxD2` |
+| the old flat readings, as corollaries | `*_band` |
+
+## Play-level liveness
+
+`Liveness.lean` milestone 3.  Everything else in this directory is about
+ONE search.  This is about the GAME: define the engine's own move choice,
+iterate it, let the defender answer with anything legal.
+
+```text
+forcedMate_play_mates :
+  MaximalChoice G guard d ch →
+  ForcedMate G k p → 1 ≤ k → k + 1 ≤ d + 1 →
+  (d : Int) * EVAL_ROUGHNESS ≤ 21366 →
+  hasKingCapture G p = false →
+  MatesWithin G ch k p
+```
+
+`MatesWithin G ch k p`: the attacker plays `ch`, the defender plays ANY
+legal move, and a `Checkmated` position is reached within `k` plies.
+
+The statement could not be FORMED before mate distance.  With every mate
+worth the flat `-MATE_LOWER` the value function does not rank the mating
+moves at all, so "the move the value picks" is any mating move whatsoever
+and iterating it need not arrive.  What makes the proof go through is
+exactly that a nearer mate is worth strictly more: the chosen move's value
+is at least the spec witness's, hence (`forcedMate_of_value_dist`, the
+converse refined to carry the distance) its mate is at least as near.
+
+Honest about `MaximalChoice`: it says `ch p` maximises the declared value
+among the admitted moves.  That idealises an exactly-converged bisection.
+`search` stops at `upper - lower <= EVAL_ROUGHNESS`, so the shipped root can
+settle for a move within 15 of the maximum.  That is exactly why one ply of
+distance is worth a whole `EVAL_ROUGHNESS`: at one point per ply the shipped
+driver could not act on the ordering at all.  Tie-breaking is free: the
+theorem holds for every maximising choice.  Depth is fixed at `d + 1` for every move of the
+play.
+
+Premises: `ValFloor G 192` + `EvalQuiet` (fidelity, tables),
+`NoMaskedMobility` (chess, layer 2 -- required, `CexF`), `NoZugzwang`
+(chess, layer 2), root legality.  No new chess premise.  `#print axioms`:
+`propext, Classical.choice, Quot.sound` (the choice comes from the classical
+case split in `legal_of_allIllegalB_false`); the distance spine
+`forcedMate_negamaxD2` itself stays choice-free at `propext, Quot.sound`.
+
 ## Terminal positions and legality evidence
 
 The move fold maintains two independent facts:
@@ -127,6 +249,7 @@ at capturable nodes.
 | full-width move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
 | sticky legality evidence and terminal override | terminal/finalizer results in `Stalemate.lean` |
 | king-capture evaluation margins and ordering | `EvalBounds.lean` |
+| `mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)` | `terminalValue`, `terminalValue_exact` |
 | legal killer lifecycle and eviction | `Killer.lean` |
 | root versus interior null behavior | `CanNull.lean` |
 | transposition-table interval updates | `TableSwap.lean` and table results in `Stalemate.lean` |
