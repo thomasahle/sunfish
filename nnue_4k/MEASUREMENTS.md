@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-14 | **PRE-REGISTERED: H1 tapered endgame terms — `pend` (endgame pawn-advance table) and `kact` (steeper K_END), both ZERO hot-loop cost on the landed queens-off seam** | Hand-designed with mechanisms, per the ledger's fits-play-worse record; passer delta-rule DESIGNED and priced out (score/ps split returns + scan class); screen = fixed-node 20k SPRT 0/10 vs base, LAND at 95% LB > 0 on fixed-N confirm; scan-class terms need timed confirmation, rule written in |
 | 2026-08-14 | **PRE-REGISTERED: the gamma seed goes to a NON-INFERIORITY screen — and it lands in the SEARCH lane, not here** | +5 B on every base; **every arm passes first yield with it**, including both that fail without; 1.0000× nodes and the **same move 40/40** at completed depth 8. H1 = engine1 = seed; LAND if the 95% LB excludes −10 |
 | 2026-08-14 | **The obvious timed spot-check is VACUOUS, by arithmetic** | No abort can land before node 2,048, so any build with max first yield ≤2,048 is immune at *every* TC — and at 10+0.1 the `0.9·winc` term floors `think` at ~3,800 nodes. Re-specified to **1+0, b8 vs b8seed**, with a base-vs-seed control pair |
 | 2026-08-14 | **THE MIX IS THE MECHANISM — a SIZE-MATCHED control swings phase 18-24 by 16.8 points** | At identical N=8,792: natural mix **+11.70 ± 7.58 worse** than classic (40/40 splits), flat mix **−4.95 ± 3.51 better**. Pre-registered check CLEARED. Not the halved data — the mix |
@@ -229,6 +230,172 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-14 — PRE-REGISTRATION: H1 tapered endgame terms — two zero-hot-loop candidates at the queens-off seam, and the passer delta-rule priced out honestly
+
+LOSS_TAXONOMY.md H1: the entry's ENDGAME loss share is 22.3% against classic's
+8.9% under identical 300+0 conditions, the swings happen at NORMAL/HIGH depth
+(eval knowledge, not clock), and both hand-checked exemplars are pawn-race /
+king-activity blindness (41.h3?? c3!, 39.Nd5? and the a-pawn runs). This entry
+is the candidate design and the screen rules, committed BEFORE the mods are
+implemented and before any byte is priced. No games tonight; the laptop runs a
+timed ladder.
+
+**Method stance, from this ledger's own record**: Texel tuning and TWO
+distillation programs fit better and PLAYED WORSE (C1 −57.7, C2 −93.8, d1
+−76.0). RFP, LMP, corrhist and history all closed negative. So these candidates
+are HAND-DESIGNED terms with a written mechanism, not fitted tables — the one
+family this ledger has not yet falsified for endgame knowledge.
+
+### The architectural lever: the root seam is free
+
+`search()` already tests queens-off once per search, swaps `pst["K"]` between
+`K_MID`/`K_END`, and rebuilds the root score with `from_board(...)` (the landed
+kend+fresh fix, +107.5 ± 31.6 in its RR). Any whole-table swap keyed on the
+same root boolean therefore costs ZERO in the hot loop — `value(move)` still
+does two lookups, `move()` still does one delta — and the stale-carried-score
+hazard is already paid for by the rebuild line. The taper pricing entry
+established the same point from the byte side: the seam machinery is ~50 B; it
+was the fitted second table set (+224 B, 11 pos/param) that was dropped, not
+the seam. These candidates put HAND-MADE data on that landed seam.
+
+A second premise dissolves on inspection: a phase condition needs NO
+incremental material counter, because phase is only ever consulted AT THE ROOT
+(once per search, where a full board scan is free) — exactly as kend works
+today. An in-tree phase change would invalidate every carried score in the
+tree; the taper entry already recorded that as "a different engine, not a
+pricing question".
+
+### E1 `pend` — endgame pawn-advance table (IMPLEMENTING)
+
+- **Mechanism → loss class**: at queens-off, every pawn's value grows with
+  advancement, both colours (the mover reads the opponent's pawns through the
+  same table via the 119−i mirror). The entry stops walking into lost races it
+  scores as −0.5, because the opponent's runner is priced before it is inside
+  the QS horizon. Addresses ENDGAME SELF-DETECTED, 28 of 130 losses.
+- **Form**: `P_END = tuple(x and x + (8 - i // 10) ** 2 * 2 for i, x in
+  enumerate(pst["P"]))` — a FORMULA at startup, like K_END itself. Bonus by
+  rank 2..7: 0, 2, 8, 18, 32, 50 (promotion row 72, which consistently
+  discounts the promotion delta pst[prom]−pst["P"]). No codec re-encode: the
+  decoded base tables are shared bit-identical by construction, padding zeros
+  stay zero via `x and`.
+- **Search-coupling discipline (the reason for the quadratic)**: per-move
+  deltas are 2, 6, 10, 14, 18, 22 — ALL below QS = 40 and LMR = 60, so the QS
+  admission gate, the futility break and the reduction trigger keep their
+  measured tuning. A linear slope big enough to matter at rank 6 would cross
+  QS on the single step 6→7 and flood QS with quiet pushes.
+- **Hot-loop cost class**: ZERO (root table swap + startup formula).
+- **Expected bytes**: the formula line, `P_MID` capture, and one root select
+  line; comments are stripped by the packer. Estimate +30…+60 packed B against
+  739 spare. Exact price via pack.sh in the implementation entry.
+- **Pre-mortem**: (a) not passedness-aware — a blockaded or doubled pawn earns
+  the same bonus, so the engine may push pawns it should hold; (b) queens-off
+  is not "low material" — an early queenless middlegame with 4 rooks gets
+  endgame pawn values (fallback: re-gate on a root material count, ~+25 B,
+  design E4); (c) the slope is a guess with a mechanism, not a fit — if the
+  sign is right and the size wrong, a slope sweep is a follow-up, not part of
+  this screen.
+
+### E2 `kact` — steeper K_END centralization (IMPLEMENTING)
+
+- **Mechanism → loss class**: king activity is the other half of H1's
+  evidence. K_END is already selected at queens-off, but its gradient — 10/step
+  of centre manhattan distance — was inherited, never swept on this engine.
+  Steepen to 14/step: an active king out-values a passive one by up to +126
+  across the board instead of +90.
+- **Hot-loop cost class**: ZERO (constant inside the existing startup formula).
+- **Expected bytes**: ±0…2 B (one digit changes).
+- **Pre-mortem**: (a) a diagonal centralizing king step's delta goes 40 → 56,
+  crossing QS = 40, so those steps get firmly admitted at depth 0 — a real
+  tree-shape change, correctly visible at fixed nodes; (b) the entry's OTHER
+  anomaly is mate-proneness (33% of losses) — a king pulled centre-ward at
+  queens-off with rooks on may feed H2 while helping H1. The screen PGNs'
+  got-mated share is a pre-registered SECONDARY reading (reported, not gated).
+
+### E3 — passed-pawn term with a delta rule: DESIGNED AND PRICED OUT (no build)
+
+The mechanism is the best-evidenced of the three (both exemplars are passer
+races), and a sound delta rule EXISTS — passedness of a pawn changes only on:
+its own advance past an adjacent-file enemy pawn's rank, its own file change by
+capture, or an enemy pawn on files f−1..f+1 leaving the front span (captured,
+promoted, or advancing level-past). All local: a move()-time update needs a
+3-file × ≤6-rank rescan for up to 3 affected pawns per side per pawn event.
+Pseudo-legal movegen does NOT break soundness (passedness reads only the board
+string). What kills it tonight is the ARCHITECTURE PRICE, in two parts:
+
+1. **The score/ps split comes back.** In this entry score == ps and
+   `value(move)` is an EXACT delta of it — the generator collapsed the two
+   fields to save bytes. A passer term riding in score but not in value() makes
+   the futility test and QS ordering carry a systematic error term; keeping
+   value() exact means re-introducing the ps field and its threading, i.e.
+   paying back bytes the entry already banked.
+2. **Cost class SCAN, and fixed-node hides it.** The update is a per-pawn-event
+   partial board scan in move() — est. +200…300 code bytes (the expensive
+   kind) and a measurable nps tax concentrated exactly in pawn endings. A
+   fixed-node screen CANNOT price that: any scan-class term that passes fixed
+   nodes MUST take a timed confirmation before landing (rule pre-registered
+   below).
+
+`pend` is the cheap first-order approximation of E3 — an advanced pawn is
+priced whether or not it is technically passed; what it cannot see is the
+passed/blockaded distinction. E3 stays on the shelf unless pend lands AND its
+losses still show passer blindness.
+
+### E4 — material-count root gate (design note, fallback only)
+
+Replace/augment the seam boolean with a root material count (e.g. non-pawn men
+≤ 6) — free at the root, ~+25…35 B, no counter needed. Not screened now: it
+multiplies the arm count and only becomes interesting if pend's failure mode is
+early-queenless misfires (pre-mortem (b)).
+
+### THE SCREEN, pre-registered (post-harvest window, nothing armed tonight)
+
+| | |
+|---|---|
+| instrument | `ab_fixednode.sh`, 20,000 fixed nodes, the 2,000-position book |
+| arms | `pend` vs `base`, `kact` vs `base` — two independent SPRTs; `pend.kact` runs ONLY if both singles read non-negative, then confirms as one arm |
+| **engine1** | **the candidate** (orientation trap: fastchess states bounds in engine1's frame — verified on the C2 record) |
+| SPRT | elo0 = 0, elo1 = 10, α = β = 0.05 |
+| KEEP bar | **LAND requires 95% LB > 0 on a fixed-N confirmation** — SPRT's terminal Elo is biased away from zero and does not earn the number |
+| undecided at cap | reported as undecided, never as a point estimate |
+
+**Gates before any game**, per arm (the b8/d8 lesson — an eval change moves the
+first-yield distribution):
+
+```sh
+B=/tmp/h1screen; mkdir -p $B
+nice -n 15 python3 tools/build/make_variants.py $B base pend kact pend.kact
+for a in base pend kact pendkact; do
+  nice -n 15 python3 tools/build/first_yield_gate.py $B/e_$a.py   # bar: PASS, max <= 2048
+  nice -n 15 python3 tools/build/legality_gate.py $B/e_$a.py 300 --nodes=20000 --first-yield=2048
+                                                                  # bar: GATE PASSED, 0 no-move / 0 illegal
+  nice -n 15 python3 "$ARENA/mate_gate.py" $B/e_$a.py tests/files/mate1.fen 4   # bar: 8/8 parity
+done
+```
+
+**Gamma-seed dependency, decided now**: if the seed has landed on the canonical
+`pst_entry.py` by screen time, every arm inherits it and nothing changes. If it
+has NOT landed and a candidate fails first-yield, the candidate is BLOCKED on
+the seed exactly as b8/d8 are — `.seed` is never composed into one arm only,
+because that would screen two changes as one (the mirrored-kend lesson).
+
+**The nps rule, written into the registration**: fixed-node screens hide
+per-node time. `pend`/`kact` are zero-scan (startup formula + root swap), so
+fixed-node is a fair instrument for them and no timed nps confirmation is
+required. Any SCAN-class term (E3, king-ring counts, mobility) that passes
+fixed nodes needs a timed confirmation BEFORE landing — no exceptions, this
+line is the pre-registration.
+
+**Timed follow-up (effect-size honesty)**: the endgame deficit is amplified
+under timed sudden death (endgame loss share 22.3% timed vs 8.2%/3.8% at fixed
+nodes), so a fixed-node PASS may understate ladder value and a small fixed-node
+positive is still interesting. If a candidate LANDs, it joins the already
+pre-registered 300+0 confirmation round-robin (LOSS_TAXONOMY.md appendix (b):
+tmfix vs entry vs classic) as one more arm of the SAME tournament — shared
+round-robin with the classic anchor, per the standing methodology, not a new
+match.
 
 ---
 
