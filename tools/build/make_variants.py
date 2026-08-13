@@ -110,6 +110,114 @@ MODS = {
          "\n"
          "        # Table part 2. Every search decision is gamma-independent, so all\n"),
     ],
+    # HISTORY HEURISTIC, restored verbatim from 438ac49 (the removal commit),
+    # not re-invented -- the sound form is the one that was already validated
+    # against the -449 Elo soundness bug, and reconstructing it from memory is
+    # how that bug would come back.
+    #
+    # Why it is being re-screened after being removed: the removal rested on a
+    # NODE-RATIO PROXY (1.01 at completed depth 7 over 30 positions), and
+    # ordering quality is not a node count -- it shows up in games. The
+    # measurement also predates the king-table fix, the stale-carried-score
+    # fix, LMR, and the MTD guards, every one of which changes what the search
+    # does with a better-ordered list.
+    #
+    # SOUNDNESS, argued at EVERY consumer of iteration order, because the
+    # consumer nobody re-checked is what cost -449:
+    #   1. the depth<=1 futility BREAK discards the rest of the list, so it is
+    #      only valid while iteration descends in static value. Hence
+    #      `hh = self.hh if depth > 1 else {}`: frontier nodes sort by static
+    #      value alone and the break tests exactly the quantity it sorts by.
+    #   2. LMR's `cnt > 2 and val < LMR` is a NEW consumer that did not exist
+    #      when this code was removed. It is a heuristic, not a contract: a
+    #      reduced search that fails high is re-run at full depth, so a
+    #      reordered list can cost or save work but cannot lose a cutoff.
+    #   3. the ADMISSION test (`v >= val_lower`) and the futility `val` both
+    #      stay the static pos.value. The sort may reorder, never re-admit.
+    "hist": [
+        ("        self.nodes, self.deadline = 0, 1 << 63\n",
+         "        self.nodes, self.deadline = 0, 1 << 63\n"
+         "        self.hh = {}                        # (piece,to) -> cutoff credit\n"),
+        ("            # NOTE the iteration order is a soundness contract, not a\n"
+         "            # heuristic: the futility break below discards the rest of the\n"
+         "            # list, which is only valid when iteration descends in static\n"
+         "            # value. A history-credit order key tried here scrambled that\n"
+         "            # order and paid -449 Elo (ledger 5f5f34d); made sound, the\n"
+         "            # history table measured a 1.01 node ratio -- worthless.\n"
+         "            for cnt, (val, move) in enumerate(sorted(((v, m) for m in pos.gen_moves()\n"
+         "                                     if (v:=pos.value(m)) >= val_lower), reverse=True)):\n",
+         "            # Order key = static value + history credit; the ADMISSION test\n"
+         "            # and the futility val stay the static pos.value (the sort may\n"
+         "            # reorder, never re-admit).\n"
+         "            # At frontier nodes (depth <= 1) the key MUST stay the static\n"
+         "            # value alone: the futility break below discards the rest of\n"
+         "            # the list, which is only sound when iteration is descending\n"
+         "            # in val. A history-scrambled order let an early low-val move\n"
+         "            # break away later non-futile moves -- the node failed low,\n"
+         "            # the parent inflated, and the screen paid -449 Elo for it.\n"
+         "            hh = self.hh if depth > 1 else {}\n"
+         "            for cnt, (_, val, move) in enumerate(sorted(\n"
+         "                                    ((v + hh.get((pos.board[m.i], m.j), 0), v, m)\n"
+         "                                     for m in pos.gen_moves()\n"
+         "                                     if (v:=pos.value(m)) >= val_lower), reverse=True)):\n"),
+        ("                    self.tp_move[pos] = move\n",
+         "                    k = (pos.board[move.i], move.j)\n"
+         "                    self.hh[k] = self.hh.get(k, 0) + depth * depth\n"
+         "                    self.tp_move[pos] = move\n"),
+        ("        self.tp_score.clear()\n",
+         "        self.tp_score.clear()\n"
+         "        self.hh.clear()\n"),
+    ],
+    # INTERNAL ITERATIVE REDUCTION (ice4 prices it at 37). A node with no
+    # table move has never been searched from here, so its ordering is static
+    # value alone and searching it at full depth is the most expensive way to
+    # discover that. Search it a ply shallower instead.
+    #
+    # Placed BEFORE the table probe and therefore before the store, so the
+    # reduced depth is the key in BOTH directions: the node genuinely becomes
+    # a depth-1-shallower node, rather than filing a shallow value under a
+    # deep key -- which is the version of IIR that would break
+    # one-value-per-key outright instead of merely bending it the way LMR
+    # already does.
+    #
+    # Not a pruning rule: no move is discarded and no tail is cut, so the
+    # pseudo-legal-movegen defect that killed LMP cannot reach it and the
+    # `best > -MATE_UPPER` preamble does not apply. It is legality-gated
+    # anyway -- that gate is cheap and the last three assumptions like this
+    # one were wrong.
+    "iir": ("        depth = max(depth, 0)\n",
+            "        depth = max(depth, 0)\n"
+            "\n"
+            "        # INTERNAL ITERATIVE REDUCTION. No table move means this node has\n"
+            "        # never been searched from here, so its ordering is static value\n"
+            "        # alone and full depth is the dearest possible way to find that\n"
+            "        # out. Search it a ply shallower. This sits BEFORE the table probe\n"
+            "        # and therefore before the store, so the reduced depth is the key\n"
+            "        # in both directions -- the node genuinely BECOMES a shallower\n"
+            "        # node instead of filing a shallow value under a deep key.\n"
+            "        if depth > 2 and pos not in self.tp_move: depth -= 1\n"),
+    # Drop the IID probe. IIR is its cheaper answer to the same question -- no
+    # table move, so do less work here -- and running both means paying for a
+    # whole extra shallow search AND a reduction at the same node. Compose as
+    # `iir.noiid`; on its own it prices what IID is currently worth.
+    # The comment goes with the code: leaving eight lines describing an IID
+    # probe above a file that no longer has one is the same defect class as
+    # the null-move comment that claimed a cap this engine never had.
+    "noiid": (
+        "            # Back to killer moves: This heuristic is so good, that if there\n"
+        "            # is no registered move, it's worth it to run a shallow search to find one.\n"
+        "            # See https://chessprogramming.org/Internal_Iterative_Deepening for detais.\n"
+        "            # This is known as Internal Iterative Deepening (IID). The probe\n"
+        "            # runs as a driver probe (root=True): no null cutoff that would\n"
+        "            # end it without storing a move, no repetition truncation, and\n"
+        "            # no table entry under deviant semantics.\n"
+        "            if not killer and depth > 2:\n"
+        "                self.bound(pos, gamma, depth - 3, root=True)\n"
+        "                killer = self.tp_move.get(pos)\n",
+        "            # NO IID. The probe that used to stand here ran a whole extra\n"
+        "            # shallow search whenever there was no table move; `iir` answers\n"
+        "            # the same question by reducing this node instead, and the two\n"
+        "            # together would pay twice for one observation.\n"),
     # Widen corrhist's key back to the whole board. Compose as `corr.wkey`:
     # same corrections, same node counts, strictly more string work per
     # interior node -- it exists to price the key, which is the half of
