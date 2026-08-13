@@ -46,6 +46,10 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **IIR LANDS: +41.3 ± 22.4 head-to-head, and the entry SHRINKS to 3471** | 3,960/3,960 games, 0 forfeits/illegal. Stronger AND smaller — a first for this lane. Shipping form `iirk.noiid` (3472) in fixed-N confirmation |
+| 2026-08-13 | **History DROPPED a second time, now by the right instrument** | −3.2 ± 21.6 over 660 games against a +62 bar. The node-ratio dismissal was right after all; the depth-9 caveat is closed (28% MORE nodes) |
+| 2026-08-13 | **The 4-arm pool is NON-TRANSITIVE, and the pooled ranking misleads** | fastchess ranks `hist` FIRST at +15.8 while its head-to-head with base is −3.2. Raw win counts confirm the intransitivity is real, not an analyzer bug |
+| 2026-08-13 | **Legality gate catches the negative futility margin: 7/100 `bestmove (none)`** | Cause exact: margin in the TEST but not the YIELD ⇒ fail-high on a virtual move ⇒ bound()'s terminal contract broken. Fixed, re-gated 100/100 |
 | 2026-08-13 | **A ZERO-BYTE candidate: the frontier futility margin** | corrhist's only consumer was that test and it LOST by pruning less, so the direction with upside is a NEGATIVE margin. `-QS` packs to **3475 — the entry exactly**. Screening `futm40`/`futm` |
 | 2026-08-13 | Positive-margin mirror, stopped at 215 games as a predicted loser | base 61 wins, fut40 52, fut 47. Reproduces corrhist's sign for 0-3 bytes instead of 127. Preliminary; the box moved to the negative direction |
 | 2026-08-13 | **CORRECTION: corrhist is −54.8, a REGRESSION. I read the sign backwards** | Raw PGN: base 290 wins, corr 192. The entry below stands as written and is WRONG in its direction; the correction entry above it is the one to read |
@@ -152,6 +156,99 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — THE ORDERING RR: history is dead a second time, and IIR lands
+
+**3,960 of 3,960 games** (counted from `order.pgn`), **0 time forfeits, 0
+illegal moves**, 330 complete colour-swapped pairs in every one of the six
+pairings, **not one unpaired game dropped**. 12:43:36 → 14:15:43 UTC, 1h27m28s.
+Every arm passed the driver control (same `uci.py` v2), the mate gate at 5/8
+parity with base, and the legality gate at 40 FORCED / 0 no-move / 0 illegal.
+
+**Every number below was checked against raw PGN win counts before it was
+written down**, which is the process the corrhist sign error bought us.
+
+| pairing | `pair_elo` Elo(A) | raw wins A–B | reading |
+|---|---|---|---|
+| base — hist | +3.16 ± 21.62 | 252 – 246 | **hist −3.2** |
+| base — iirnoiid | −41.25 ± 22.37 | 240 – **318** | **iirnoiid +41.3** |
+| base — noiid | −3.16 ± 10.42 | 240 – 246 | **noiid +3.2** |
+| hist — iirnoiid | −3.16 ± 21.02 | 228 – 234 | iirnoiid +3.2 over hist |
+| hist — noiid | +54.13 ± 20.70 | **294** – 192 | hist +54.1 over noiid |
+| iirnoiid — noiid | +3.16 ± 17.34 | 258 – 252 | iirnoiid +3.2 over noiid |
+
+### The verdicts, against the bars fixed before the games
+
+**`hist` — DROPPED, and this time by the right instrument.** −3.2 ± 21.6
+against a bar of +62 fixed-node. The 2026-08-12 removal used a node-ratio
+proxy, and this revisit exists precisely because that was the wrong
+instrument; 660 games agree with it anyway. History ordering is worth
+**nothing** here at 61 bytes. The caveat that removal carried — *"measured at
+depths 6-7, no evidence either way at depth 9+"* — is now closed from both
+ends: censused at depth 9 it costs **28% more nodes**, and in games it is
+level. **The 61 bytes stay out, and history should not be queued a third time**
+without a materially different mechanism.
+
+**`iirnoiid` — LANDS. +41.3 ± 22.4, and it is byte-negative.** The interval
+excludes zero, the raw count is 318–240, and the entry goes **3475 → 3471**.
+The first item in this lane's history that is both **stronger and smaller**,
+and the largest verified search gain since LMR.
+
+**`noiid` — +3.2 ± 10.4, level.** Byte-negative (−16) with no measurable cost;
+by the pre-registration a non-negative point estimate lands. In practice it is
+subsumed — `iirnoiid` contains it — so what ships is the pair, not `noiid`
+alone.
+
+### The pool is NON-TRANSITIVE, and it is not an analyzer artifact
+
+The triangle does not close, and the raw win counts say exactly what the
+analyzer says:
+
+- `iirnoiid` beats `base` **318–240** (+41.3) but only edges `noiid` **258–252** (+3.2)
+- `noiid` is level with `base` **246–240** (+3.2)
+
+So base → noiid → iirnoiid implies iirnoiid ≈ +6 over base, against +41
+measured directly. Likewise `hist` is level with base and beats `noiid`
+**294–192**.
+
+**What that does to a global fit — fastchess's own ranking table:**
+
+| rank | arm | pooled Elo | head-to-head vs base |
+|---|---|---|---|
+| 1 | hist | **+15.8 ± 12.2** | **−3.2** |
+| 2 | iirnoiid | +15.8 ± 11.8 | **+41.3** |
+| 3 | base | −13.7 ± 10.9 | — |
+| 4 | noiid | −17.9 ± 9.7 | +3.2 |
+
+The pooled fit ranks **`hist` first**, on the strength of one lopsided pairing
+against `noiid`, and ranks `noiid` *below* `base` while their direct match is
+level. This is the predecessor's "anchored differences run high" finding in a
+new costume: **a round-robin's global rating spreads a result against one
+opponent across the whole pool.** Per the standing rule — and because the
+question a shipping decision asks is literally "does this beat the incumbent" —
+**the base head-to-head is the instrument.** Nothing turns on the choice here
+(`hist` fails on both; +29.5 pooled is still far under +62), but the next lane
+to read a ranking table should read this row first.
+
+Draw rates carry the same signal: base–iirnoiid is the most decisive pairing in
+the tournament (**102 draws**), hist–iirnoiid the least (**198**). These arms
+are not the small perturbations of each other that their diffs suggest.
+
+### What ships is not what played
+
+`iirk.noiid` — same search, single `tp_move` lookup, **3472 bytes (−3)**, nps
+0.950 instead of 0.908 — is the form worth landing, and its node counts are
+bit-identical to `iirnoiid`'s on all seven probe lines. That is a strong
+argument, but it is an argument, and the arm has never played a game. A
+**fixed-N confirmation, `base` vs `iirknoiid`, 1,000 games at 20k nodes**,
+launched 14:17 UTC (arm sha `a124a6b8…`, verified identical to a fresh
+generator build). Fixed N and no SPRT: an SPRT pass is not an effect size, and
+neither is a node count.
+
+**`iirk.noiid` must not enter `tools/build/make_pst_entry.py` before that match
+reports** — and the generator is coordinator-sequenced regardless.
+
+Timed value if it confirms: **+41.3 − 7.5 ≈ +34 Elo for −3 bytes.**
 
 ## 2026-08-13 — CORRECTION: corrhist is −54.8. It is a REGRESSION, and I read the sign backwards
 
