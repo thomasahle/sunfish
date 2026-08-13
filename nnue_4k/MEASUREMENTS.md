@@ -74,6 +74,13 @@ how much effort it cost.
 | 2026-08-13 | corrhist byte price, `pack.sh` on real files | **+127 B** (entry 3475 -> **3602**, spare 621 -> 494). Golfing recovers 5 B -- lzma already had the repetition |
 | 2026-08-13 | corrhist keep/drop **PRE-REGISTERED** before the screen | Standing 1.0 Elo/byte bar => needs fixed-node **>= +135.5**. The budget-average rate the +400 goal implies (0.41 Elo/byte) would need only +60.5; both written down, decided on the strict one |
 | 2026-08-13 | corrhist correction table censused: not a feedback runaway | median +2...+8 cp, 1-5% at the +/-120 clamp, 4-7k entries per search. The screen measures the feature, not a degenerate one |
+| 2026-08-13 | **`legality_gate.py` scored a LAUNCH failure as 100 chess failures** | It ran packed artifacts under `python3`. The **shipped entry** "failed" 100/100 no-move. Fixed, both controls green |
+| 2026-08-13 | **Phase reweighting does not pay — 4 schemes, all fail the pre-registered bar** | Every one LOSES on held-out (paired bootstrap CIs strictly below 0), and **none wins the phase-balanced metric it was built for**. No third candidate |
+| 2026-08-13 | The flat refit is an ENDGAME refit: 0 gain in the middlegame band | −9.8% at phase 0-5, **+0.6% (worse) at phase 12-17**. Caveat now attached to the C1/C2 screen |
+| 2026-08-13 | **King buckets priced by BUILDING: ~134 B/bucket confirmed for filler** | 2-bucket +155…+172, 4-bucket **+128…+136 per bucket** at mirrored step 8. Exact encoding is dead: 4-bucket = **4505 B, 409 OVER** |
+| 2026-08-13 | **Taper re-anchored on the landed generator; the seam root got 13 B cheaper** | Old splice targeted a deleted anchor and failed its own assert. Seam machinery **+50 B**, blend **+115 B**; fitted taper now **3439** (was 3452) |
+| 2026-08-13 | **Filler data is a FLOOR, not an upper bound** | Real fitted tables cost **60-75 B MORE** than filler of the same shape: fitted values are less round. Reverses the old script's stated reasoning |
+| 2026-08-13 | `codec.emit` accepted a `piece` dict and IGNORED it | Hard-coded classic's values; all three callers hand-patched the line back. Fixed at source, entry **byte-identical at 3378** |
 | 2026-08-13 | **FITS DONE: two candidates, bars pre-registered, no Elo claimed** | **C1 3215 B (−163!), C2 3441 B (+63)**, both legality-green. Held-out −5.3%/−5.9%. Taper DROPPED on data, not price |
 | 2026-08-13 | **Quantisation is free in loss and SAVES bytes** | step 8 = −88 B for nothing; mirroring −159 more and held-out loss *improves* (regularisation). A refit is **not** byte-free: +63 B exact |
 | 2026-08-13 | **Continuous phase blend does not fit: 4157 bytes, 61 OVER** | Dead on price whatever its loss. The queens-seam taper is affordable (+74 B) but its data is not there |
@@ -1069,6 +1076,243 @@ because with no tc the `sunfish_ui` driver sets the in-search deadline to
 now + 600 s (the 1.5 s default belongs to the builtin loop, which only the
 packed artifact runs) — and both arms print which driver they resolved, which
 the script compares and refuses to proceed on.
+## 2026-08-13 — The legality gate was scoring a LAUNCH failure as 100 chess failures, on the shipped entry
+
+Run the gate on a **packed artifact** and it reports:
+
+```
+FORCED    n= 40  no-move=40  illegal=0
+IN CHECK  n= 30  no-move=30  illegal=0
+quiet     n= 30  no-move=30  illegal=0
+GATE FAILED: 100 bad answers
+```
+
+on the **landed 3378-byte entry**. Nothing is wrong with the entry. The gate
+launched every engine as `[sys.executable, ENGINE]`, and a packed artifact is a
+`#!/bin/bash` self-extractor: under `python3` it dies on line 1. The engine
+never started, stderr was never captured, and "produced no output" was recorded
+as "produced no move" — 100 times, with a chess-shaped verdict and no hint of
+the real cause.
+
+This is the **never-hide-errors** class, in its most expensive form: a *fake
+red*. The ledger's "C1 and C2 both pass the legality gate" line was produced by
+running the gate on the `.py` sources, which take the interpreter path and work
+— so the tooling had been passing and failing for reasons unrelated to chess
+depending only on which file extension it was handed.
+
+Fixed: `.py` still goes through the interpreter, anything else is executed
+directly, stderr is captured, and **an engine that emits nothing at all is a
+loud abort, never a chess verdict**. Both controls run:
+
+| control | result |
+|---|---|
+| landed entry, packed | 40/30/30, **0 no-move, 0 illegal — PASSED** |
+| landed entry, `.py` source | 40/30/30, **0 no-move, 0 illegal — PASSED** |
+| **C1 (3215 B), packed** | 40/30/30, **0 no-move, 0 illegal — PASSED** |
+| **C2 (3441 B), packed** | 40/30/30, **0 no-move, 0 illegal — PASSED** |
+| an engine that exits immediately (negative control) | `ENGINE DID NOT START` |
+
+C1 and C2 had only ever been gated as `.py` sources. They are now green **as
+the packed artifacts that will actually play**, so the screening slot does not
+have to spend itself discovering a launch problem.
+
+All three skeletons below were then gated against the entry as an A-vs-A
+control, and all four arms are identical: 0 no-move, 0 illegal.
+
+---
+
+## 2026-08-13 — Phase reweighting fails its pre-registered bar four times, and the flat refit turns out to be an ENDGAME refit
+
+The labelled set is 65.6% at ≤ 16 pieces (mean phase 8.44/24, 73.7% below 12),
+so every uniform fit is mostly a fit to endgames. Does correcting that skew
+produce a better table? **No — and the reason is more useful than the answer.**
+
+Phase is counted off the FEN board field, never off `X`. The control is printed
+by the script rather than asserted in a comment: `|X|.sum()` reads **11.08**
+pieces per position where the boards hold **14.27**.
+
+### Pre-registered before any result was looked at
+
+- **M1** (primary): unweighted held-out loss on the pinned seeded 80/20 split —
+  the number C1/C2 were selected on, so it is comparable to the ledger.
+- **M2** (secondary): phase-*balanced* held-out loss, validation rows reweighted
+  to a flat phase density estimated on **train rows only**. This is the metric a
+  reweighting is designed to win, so it cannot be the primary.
+- **Bar for a third candidate**: paired-bootstrap 95% interval of
+  (uniform − reweighted) must be **strictly above 0 on M1** and **not below 0 on
+  M2**. Same held-out rows resampled together, 10,000 resamples, so split luck
+  cancels.
+
+### Result: nothing clears it
+
+| weighting | M1 | M2 | M1 Δ vs uniform (95% CI) | M2 Δ (95% CI) | verdict |
+|---|---|---|---|---|---|
+| uniform (= C1/C2's fit) | **0.016800** | 0.019018 | — | — | — |
+| flatphase (full correction) | 0.017296 | 0.019071 | −0.000496 [−0.00069, −0.00030] | −0.000053 [−0.00033, +0.00023] | no |
+| sqrtflat (half correction) | 0.016943 | 0.018960 | −0.000142 [−0.00023, −0.00005] | +0.000058 [−0.00007, +0.00019] | no |
+| mgtilt (1 + ph/24) | 0.016856 | 0.018951 | −0.000056 [−0.00011, −0.000004] | +0.000067 [−0.00001, +0.00015] | no |
+| mgonly (ph/24) | 0.017499 | 0.019171 | −0.000699 [−0.00091, −0.00048] | −0.000153 [−0.00045, +0.00015] | no |
+
+Every reweighting loses on M1, and — the informative part — **not one wins the
+phase-balanced metric it exists to win.** The best M2 delta, mgtilt's +0.000067,
+straddles zero against an M2 level of 0.019. Reweighting 384 shared parameters
+does not buy middlegame accuracy; it only trades loss between bands.
+
+The uniform arm reproduces the landed candidate exactly (M1 0.016800; scored
+through the **codec's own decode** at C1's step-8/mirrored/K-exact encoding,
+0.016911 = **−5.31% vs classic**, the ledger's C1 figure to the digit), so this
+is the same fit, not a lookalike.
+
+### Where the loss actually lives — and a caveat for the C1/C2 screen
+
+Held-out loss by phase band (3,899 rows):
+
+| band | rows | classic | uniform fit | mgtilt | flatphase | taper (768p) |
+|---|---|---|---|---|---|---|
+| 0-5 deep eg | 1675 | 0.016304 | **0.014705** (−9.8%) | 0.014931 | 0.015544 | 0.014547 |
+| 6-11 endgame | 1211 | 0.017645 | **0.016686** (−5.4%) | 0.016837 | 0.017666 | 0.017326 |
+| 12-17 middle | 446 | 0.022460 | **0.022587 (+0.6%, WORSE)** | 0.022392 | 0.022065 | 0.023005 |
+| 18-24 opening | 567 | 0.019299 | 0.018682 (−3.2%) | 0.018229 | 0.017931 | 0.016728 |
+
+**C1's −5.31% is almost entirely endgame.** In the middlegame band the fit is
+not better than classic — it is very slightly worse. A reweighting has nothing
+to move because the flat table is already at its capacity in every band; the
+skew of the set is *not* what is holding the middlegame back.
+
+Two consequences, both recorded before any game is played:
+
+1. **Caveat attached to the C1/C2 screen.** Screening games start from a book
+   and spend their decisive moves in exactly the band where this fit buys
+   nothing. C1's bar (*lower bound above −15*, i.e. "do not lose") was already
+   the right shape; this says a *win* should not be expected, and a flat result
+   is the modal outcome rather than a disappointment.
+2. **It points at capacity, not data weighting.** The taper column moves the
+   opening band (0.019299 → 0.016728) where no reweighting could — and gives
+   the middlegame band back, which is its 22.6%-of-the-set data problem showing
+   up exactly where the earlier entry predicted. More middlegame *data* plus a
+   second table *set*, not a different weighting of the same 384 parameters.
+
+**No third candidate.** C1 and C2 stand as the screening pair. Script:
+`tools/tune/fit_phaseweighted.py`.
+
+---
+
+## 2026-08-13 — The taper re-anchored on the landed generator, and king buckets priced by building
+
+Two skeleton prices, both **shape prices with filler data — no Elo is claimed
+and no candidate is proposed here.** Every row is one real entry source through
+`tools/build/pack.sh`, measured off disk, run alone in an empty directory with
+`SF_NET` unset, and gated for legality against the entry as an A-vs-A control.
+
+### The old taper pricer was pointing at a deleted anchor
+
+`price_taper.py` spliced at the **bare-king** swap, which the `kend` fix
+replaced with classic's queens-off rule months of commits ago. It failed its own
+`assert old in src` — so its numbers could not be reproduced from it at all.
+Re-anchored, and the landed root changes the arithmetic twice in our favour:
+
+1. **The queens-off king rule IS the phase seam.** The engine already tests
+   queens-off once per search; selecting a whole second table set on the *same*
+   boolean costs one `pst.update` and no new condition.
+2. **The stale-score rebuild is already there.** `pos = self.root = from_board(…)`
+   follows the swap, so a taper inherits it for **zero bytes** — it used to be
+   part of the taper's own price.
+
+Hoisting the shared boolean into a local also made the fitted two-set candidate
+**13 bytes cheaper than the ledger's B row: 3439, not 3452.**
+
+`K` is never in a second set: its two tables are the landed `kend` fix, so it
+rides in the exact block and the root keeps its own K_MID/K_END line.
+
+### Taper: measured (one-set references first — the marginal is unreadable against 3378)
+
+One set, classic tables: exact **3400**, step 8 **3276**, step 8 mirrored
+**3195** (entry as landed: 3378).
+
+| root | encoding | filler | bytes | spare | vs entry | **vs 1-set** |
+|---|---|---|---|---|---|---|
+| seam | step 8, mirrored, K exact | same (machinery only) | 3247 | 849 | −131 | **+52** |
+| seam | step 8, mirrored, K exact | shuffled | 3342 | 754 | −36 | **+147** |
+| seam | step 8, mirrored, K exact | perturbed | 3358 | 738 | −20 | **+163** |
+| blend | step 8, mirrored, K exact | same (machinery only) | 3312 | 784 | −66 | **+117** |
+| blend | step 8, mirrored, K exact | perturbed | 3421 | 675 | +43 | **+226** |
+| seam | exact | perturbed | 3786 | 310 | +408 | +386 |
+| blend | exact | perturbed | 3848 | 248 | +470 | +448 |
+
+**The seam root costs ~50 bytes of machinery; the continuous blend costs ~115** —
+the phase loop is 65 bytes dearer than the boolean update, at every encoding,
+and it buys the more expressive form. Decode of the largest build: **0.54 ms**
+against a 60 s startup budget.
+
+### Filler is a FLOOR, not an upper bound — the old script had this backwards
+
+The previous docstring reasoned that filler over-prices, "because a real eg
+table would share structure with mg and lzma would find some of it". Measured
+against the **real fitted qseam tables through the same builder**: the fitted
+second set costs **+224** over C1, where filler of the same shape costs
++147…+163. Filler is **60-75 bytes CHEAP**. Fitted values are less round than
+classic's hand-made ones, and that costs more than correlation saves — the same
+effect that made a plain refit +63 bytes instead of free. Every filler figure in
+this entry is therefore a floor.
+
+(Secondary, same mechanism: `shuffled` prices consistently *below* `perturbed`.
+Permuting reuses the exact value multiset; adding noise widens lo..hi and buys
+extra levels in the mixed-radix pack.)
+
+### King buckets: the ~134 B/bucket estimate was arithmetic; here it is built
+
+What a king bucket **can** be in this engine: the score is incremental and both
+sides read one shared `pst`, so a per-side own-king bucket would change the
+table whenever a king moves and invalidate every carried score in the tree —
+that is a different engine, not a pricing question. What is free is the
+mechanism `kend` already uses: a **position-global** property read once at the
+root. So these are king-**wing** buckets (white king wing × black king wing; the
+2-bucket form folds that to same-wing / opposite-wing).
+
+| buckets | encoding | filler | bytes | spare | vs 1-set | **per extra bucket** |
+|---|---|---|---|---|---|---|
+| 2 | step 8, mirrored, K exact | same | 3258 | 838 | +63 | 63 (machinery) |
+| 2 | step 8, mirrored, K exact | shuffled | 3350 | 746 | +155 | **155** |
+| 2 | step 8, mirrored, K exact | perturbed | 3367 | 729 | +172 | **172** |
+| 4 | step 8, mirrored, K exact | same | 3292 | 804 | +97 | 32 (machinery) |
+| 4 | step 8, mirrored, K exact | shuffled | 3579 | 517 | +384 | **128** |
+| 4 | step 8, mirrored, K exact | perturbed | 3602 | 494 | +407 | **136** |
+| 4 | step 8, K exact (not mirrored) | perturbed | 4013 | 83 | +737 | 246 |
+| 4 | **exact** | perturbed | **4505** | **−409** | +1105 | 368 |
+
+Readings:
+
+- **The ~134 B/bucket estimate is confirmed for filler at mirrored step 8** —
+  measured 128-136 B per extra bucket at four buckets. It was never built
+  before; now it is.
+- **Machinery is sublinear and nearly free**: the 4-bucket selector plus three
+  extra decode loops costs 97 bytes when the data is identical, ~32 per bucket,
+  because the loops compress against each other.
+- **Only the mirrored step-8 encoding survives.** At exact resolution a
+  4-bucket build is **4505 bytes, 409 over the limit** — dead on price, recorded
+  so nobody re-derives it. Even unmirrored step 8 leaves 83 spare, which is not
+  a budget.
+- Decode of the largest bucket build: **0.96 ms**.
+
+Applying the filler-is-a-floor correction (+60-75 B/set), a *fitted* 4-bucket
+version projects to roughly 3215 + 3×~200 ≈ **3.8 kB**. That number is
+**composed arithmetic and must be built before it is believed** — the last time
+this lane projected a second table set it said ~134 and the exact build came
+back +670.
+
+### One silent trap fixed at its source
+
+`codec.emit(piece, raw, …)` accepted a `piece` dict and **ignored it**: the
+value line was a hard-coded copy of classic's numbers. All three callers
+happened to patch the line back out afterwards, so no landed figure is wrong —
+verified by reproducing **C1 at 3215 and C2 at 3441 to the byte** — but the
+failure mode of forgetting is a plausible-looking artifact carrying the wrong
+piece values, which is the mirrored-king / numpy-wrap class again. `emit` now
+uses what it is given. The entry regenerates **byte-identical at 3378** and
+`check_entry.sh` is green.
+
+---
+
 ## 2026-08-13 — Fits done: quantisation is FREE and SAVES bytes, the taper is affordable but its data is not there, and two candidates go forward
 
 Fits are candidate generators. The last one improved the loss 10.1% and played

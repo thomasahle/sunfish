@@ -7,11 +7,23 @@ questions. This asks the second one, and checks legality too.
 Positions in CHECK are the dangerous class: this engine generates pseudo-legal
 moves and has no notion of check, so the single legal reply can sort to the
 tail where count-triggered pruning discards it.
+
+Takes EITHER a .py source or a PACKED artifact. It used to launch every engine
+as `[sys.executable, ENGINE]`, which runs a packed artifact -- a `#!/bin/bash`
+self-extractor -- under python3, where it dies on line 1. The gate then scored
+that as 100 chess failures: "no-move=40/30/30, GATE FAILED", on the shipped
+entry, with the real cause (the engine never started) nowhere in the output.
+An engine that cannot START is now a loud abort, never a chess verdict.
 """
+import os
 import subprocess, sys, chess, random
 
 ENGINE = sys.argv[1]
 MOVETIME = int(sys.argv[2]) if len(sys.argv) > 2 else 300
+# A packed artifact is executable and not Python source; a generator output is
+# .py and may not carry the exec bit.
+ARGV = ([sys.executable, ENGINE] if ENGINE.endswith(".py")
+        else [os.path.abspath(ENGINE)])
 random.seed(20260813)
 
 
@@ -46,19 +58,26 @@ def positions(n_forced=40, n_check=30, n_plain=30):
 
 
 def ask(line):
-    p = subprocess.Popen([sys.executable, ENGINE], stdin=subprocess.PIPE,
-                         stdout=subprocess.PIPE, text=True, bufsize=1)
+    p = subprocess.Popen(ARGV, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, text=True, bufsize=1)
     p.stdin.write(f"uci\nisready\nposition startpos moves {line}\ngo movetime {MOVETIME}\n")
     p.stdin.flush()
     mv = None
+    saw = False
     while True:
         o = p.stdout.readline()
         if not o:
             break
+        saw = True
         if o.startswith("bestmove"):
             mv = o.split()[1] if len(o.split()) > 1 else None
             break
     p.kill()
+    if not saw:
+        # Not a chess answer: the engine produced NOTHING at all. Fail loudly
+        # with the launch error rather than logging it as a missing move.
+        raise SystemExit("ENGINE DID NOT START: %s\nstderr: %s"
+                         % (" ".join(ARGV), p.stderr.read()[-600:].strip()))
     return mv
 
 

@@ -105,7 +105,13 @@ def emit(piece, raw, step=1, half=False, exact=""):
     """
     tabs = {k: list(v) for k, v in raw.items()}
     order = "".join(k for k in ORDER if k not in exact)
-    src = 'piece = {"P": 100, "N": 280, "B": 320, "R": 479, "Q": 929, "K": 60000}\n'
+    # `piece` used to be accepted and then IGNORED: this line was a hard-coded
+    # copy of classic's values, so a caller emitting a fit's OWN values got
+    # classic's back unless it remembered to patch the first line out again.
+    # All three callers did remember -- but the failure mode of forgetting is a
+    # plausible-looking artifact carrying the wrong piece values, which is the
+    # same silent-corruption class as the mirrored king and the numpy wrap.
+    src = "piece = {%s}\n" % ", ".join('"%s": %d' % (k, int(piece[k])) for k in ORDER)
     src += _block(tabs, order, step, half, "pst", init=True)
     if exact:
         src += _block(tabs, "".join(k for k in ORDER if k in exact), 1, False, "pst")
