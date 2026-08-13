@@ -29,8 +29,15 @@ SRC = os.path.join(REPO, "nnue_4k", "pst_entry.py")
 sys.path.insert(0, os.path.join(REPO, "tools", "eval4k"))
 
 
-def _eval_mod(step, half, exact):
+def _eval_mod(step, half, exact, fits="tools/tune/candidates/fits.json", arm="flat"):
     """An EVAL mod: swap the whole eval region for a fitted table set.
+
+    DEFERRED, and that is not a style choice. `MODS` is built at import, so an
+    eval mod whose fit file is absent used to raise before the dict existed --
+    taking every unrelated SEARCH mod down with it and breaking the generator
+    for lanes that had nothing to do with the eval. The mod is a callable that
+    reads its fit when it is BUILT, so a missing fit fails loudly for the one
+    candidate that needs it and for nothing else.
 
     Every other mod here is a search change written as literal text. The eval
     candidates cannot be, because their tables come from the fit -- so the
@@ -45,11 +52,16 @@ def _eval_mod(step, half, exact):
     import codec
     import splice
     P = "PNBRQK"
-    T = json.load(open(os.path.join(REPO, "tools/tune/candidates/fits.json")))["flat"]["tables"]
+    doc = json.load(open(os.path.join(REPO, fits)))
+    T = (doc["arms"][arm] if "arms" in doc else doc[arm])["tables"]
     vals = {p: int(T["_value_" + p]) for p in P}
     raw = {p: [int(v) for v in T[p]] for p in P}
     _, region, _ = splice.split(open(SRC).read())
     return (region, "\n" + codec.emit(vals, raw, step, half, exact=exact).strip("\n") + "\n")
+
+
+def _deferred(*a, **kw):
+    return lambda: _eval_mod(*a, **kw)
 
 
 # Each mod is (anchor, replacement), or a LIST of such pairs for a mod that
@@ -61,8 +73,17 @@ MODS = {
     # so the landed kend fix is bit-identical; C2 stores the same fit at full
     # resolution. C1 vs C2 is therefore a clean measurement of what the
     # compression costs IN PLAY, which loss cannot answer.
-    "c1": _eval_mod(8, True, "K"),
-    "c2": _eval_mod(1, False, ""),
+    "c1": _deferred(8, True, "K"),
+    "c2": _deferred(1, False, ""),
+    # ---- DISTILLED candidates: the same 384-parameter model and the same
+    # positions as C2, trained on OUR OWN SEARCH's converged value at 160,000
+    # nodes instead of Stockfish depth 8. D1 is exact, so D1-vs-C2 changes the
+    # TEACHER and nothing else; D8 is the shippable step-8 form, which is
+    # quantisation-aware rather than rounded afterwards and gives bytes BACK.
+    # The king is held exact at any step: the codec quantises every table it is
+    # handed, and the landed kend fix is not a fit's to round.
+    "d1": _deferred(1, False, "", "tools/tune/candidates/students.json", "linear"),
+    "d8": _deferred(8, False, "K", "tools/tune/candidates/students.json", "q8"),
     # Cap the null-move score at static eval plus one score bucket, exactly as
     # classic does. Ours has never capped it: the score is both a looser cutoff
     # trigger AND this node's returned value, so an inflated pass estimate
@@ -352,6 +373,7 @@ def build(mods):
     src = open(SRC).read()
     for mod in mods:
         edits = MODS[mod]
+        if callable(edits): edits = edits()          # deferred eval mods
         if isinstance(edits[0], str): edits = [edits]
         for anchor, repl in edits:
             n = src.count(anchor)
