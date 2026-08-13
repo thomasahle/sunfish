@@ -245,7 +245,7 @@ at capturable nodes.
 | recursive zero-window move search | `Bound.bound_spec` |
 | null child report negation | `WindowReport.negate` |
 | `min(pos.score + EVAL_ROUGHNESS, pass_report)` | `cappedNull_report` |
-| score guard keeps the cap below positive mate | `guardedStaticCap_in_scoreBand`, `guardedCappedNull_below_positiveMate` |
+| score guard excludes positive mate | `guardedStaticCap_in_scoreBand`, `guardedCappedNull_below_positiveMate` |
 | full-width move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
 | sticky legality evidence and terminal override | terminal/finalizer results in `Stalemate.lean` |
 | king-capture evaluation margins and ordering | `EvalBounds.lean` |
@@ -259,9 +259,11 @@ The model abstracts Python's board representation, move generation, sorting,
 and table implementation. The audit pins the corresponding source regions;
 tests and chess corpora validate those executable primitives.
 
-The source materializes the `movesAbove` pairs as a list before `sorted`.
-`sorted` exhausts either representation and returns the same descending
-sequence, so this is only an execution-level choice, not a model distinction.
+The source iterates only `board[A8:H1 + 1]`; every reachable board has immutable
+padding outside that slice, so this preserves the generated move sequence. It
+also materializes the `movesAbove` pairs as a list before `sorted`. `sorted`
+exhausts either representation and returns the same descending sequence. Both
+are execution-level choices, not model distinctions.
 
 IID starts at depth 4 because quiescence cannot write `tp_move`.
 `CanNull.lean` keeps a uniform recurrence at depth 3; its depth-zero root

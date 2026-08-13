@@ -180,7 +180,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         # NB: `in <literal-str>` is ~30% faster than the equivalent .isupper() /
         # .isspace() / .islower() method calls in CPython; this matters because
         # these checks run millions of times per search.
-        for i, p in enumerate(self.board):
+        for i, p in enumerate(self.board[A8:H1 + 1], A8):
             if p not in "PNBRQK":
                 continue
             for d in directions[p]:
