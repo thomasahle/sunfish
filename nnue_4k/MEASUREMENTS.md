@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **LEAD: LMR may be masking an ~85 Elo hole in the port** | LMR transfers (+127 ± 77 timed, prelim) — which implies entry-minus-LMR is ~85 BELOW classic. Being measured directly, not inferred |
 | 2026-08-13 | **LMR-on-PST: outcomes PRE-REGISTERED before the result** | Three readings written down in advance, incl. the live possibility that LMR is *costing* the shipped entry Elo |
 | 2026-08-13 | **Screens switched to SPRT mid-flight** | 300-game fixed-N resolves to ±40 while candidates are +18…+90 — the bottom half was under the noise floor of its own test |
 | 2026-08-13 | **Screens moved to the box; stale driver found armed there** | Both box checkouts had `max_nodes`=0 and no version — the 425-game failure waiting. Isolated v2 tree; refusal verified on the box |
@@ -115,6 +116,52 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — LEAD (not a finding): LMR transfers, and may be masking a hole
+
+Pre-registered outcome **one**: LMR transfers to the PST eval. Timed 10+0.1,
+77 games, zero bad terminations, my recount from the pgn:
+
+    lmr_on vs lmr_off  =  +127.2 ± 76.5  (95%)
+
+Good news for the catalogue — but combined with the baseline it implies
+something uncomfortable:
+
+    entry              vs classic          = +19  ± 25   (600 games, final)
+    entry              vs entry-minus-LMR  = +127 ± 77   (77 games, preliminary)
+    ⇒ entry-minus-LMR  vs classic          ≈ −108
+
+**Our engine without LMR would be roughly 85-108 Elo WORSE than classic** — while
+running 1.10× faster and reaching a full ply deeper. If that holds, LMR is not
+adding to a healthy base; it is **masking a regression in our port**, and the
+earlier "~46 unaccounted" was an underestimate because it used LMR's
+NNUE-measured +65 rather than its actual value on this eval.
+
+**Two caveats, recorded so this does not harden prematurely.** The +127 is 77
+games with a 77-point interval whose bottom end is +50. And **three-way Elo is
+not reliably additive** when engines differ in more than one way — subtracting
+two intervals compounds both errors and assumes a transitivity that does not
+have to hold. **This is a lead until `entry-minus-LMR vs classic` is measured
+directly**, which is now running on the laptop (timed 10+0.1, SPRT, classic
+first-named so a PASS means classic is better and the hole is real).
+
+### Why it would be the best news of the night
+
+An ~85 Elo defect is **already paid for**. Finding it returns strength we have
+lost, against a goal that needs ~380 — and unlike every feature on the queue it
+costs no bytes.
+
+### Bisection order, all things the entry has and classic does not
+
+| # | suspect | why | status |
+|---|---|---|---|
+| 1 | **KCX port** | measured −15.7 ± 34.9 **on the NNUE engine**; by our own rule that number is a property of the (feature, eval) pair and does not transfer. Largest structural difference. Parent commit `7f7d40a` is pre-KCX | variant to build |
+| 2 | **MTD guards** | change driver behaviour; validated as "0 nodes", never as 0 Elo | **built** (`e_pstnoguards.py`) |
+| 3 | **PROBE_CAP** | a cap that trips changes the answer; never screened on this eval | **built** (`e_pstnocap.py`) |
+| 4 | node-cap machinery | should be inert in timed play — and "should be" is what this session has punished repeatedly | last |
+
+Same discipline throughout: mate gate first, SPRT to discard cheaply, fixed-N
+confirmation for survivors, 95% intervals.
 
 ## 2026-08-13 — LMR on the PST entry: outcomes pre-registered
 
