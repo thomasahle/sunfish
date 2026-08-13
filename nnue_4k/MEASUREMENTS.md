@@ -48,6 +48,7 @@ how much effort it cost.
 |---|---|---|
 | 2026-08-13 | **TEACHER CHOSEN: our own search at 160,000 nodes — and its value never converges** | 2.8× the measured 30+1 frontier (56,829 nodes), r **0.9919** with a 4× deeper teacher. From 40k up, 21% of positions still move >25 cp per 4× — that is tactics, not tolerance, and 384 parameters cannot hold it |
 | 2026-08-13 | **NEW GATE: first yield. The shipped entry passes at 780 nodes; ALL FOUR fits fail** | C1 32,640, m1 9,088, q8 3,707, C2 2,568 against a 2,048-node window. Measuring the count, not the `(none)` symptom, is what gave it power — the binary form caught only its own reproducer |
+| 2026-08-13 | **LEAD: the `bestmove (none)` class is removable for 5 BYTES at the root's gamma seed** | `gamma = pos.score - 150` takes the worst first yield from 780 to **171** on the entry and from 32,640 to **396** on C1 — every arm passes. 1.0001× nodes to depth 8. Un-suspends mirroring if it screens clean |
 | 2026-08-13 | **CORRECTION: C2's post-mortem MECHANISM does not survive a re-split** | Over 12 splits the middlegame band is **−2.96 ± 2.36 and its sign FLIPS** — it is the least-improved band, not a worse one. The anti-correlation stands; its explanation does not |
 | 2026-08-13 | The first-yield gate scored PASS for every arm until it checked its own driver | An entry resolving no `sunfish_ui/` runs the builtin loop, which ignores `position fen` and answers from the OPENING position. Third time this lane has paid for it |
 | 2026-08-13 | Torch trainer validated against C2 on four axes, incl. its failure mode | −5.93% held-out, bands −9.81/+0.56, **3412 bytes (+62)**, and first yield **2,568 on the same FEN** as the box's `e_c2.py` |
@@ -442,6 +443,39 @@ coordinator; this lane launches nothing itself.
   set is closed.
 - **No band prediction is registered**, because the band statistic just failed
   its own stability test.
+
+### LEAD FOR THE SEARCH LANE: the `(none)` class is removable for 5 bytes
+
+The gate makes the cause visible. `search()` starts every search at **`gamma =
+0`** and bisects. The root stores a move **only on a fail-high** — measured, not
+assumed: on the C1 reproducer the first moment `tp_move[root]` is populated is
+the same probe as the first fail-high, at node 32,640 for C1 and node 25 for the
+entry. So there is no earlier move to fall back on, and "report the fail-low
+move" is not a fix that exists. The seed is the whole mechanism.
+
+Seeding it differently, measured on the 505-position gate:
+
+| root seed | entry | C2 | m1 | C1 |
+|---|---|---|---|---|
+| `gamma = 0` (shipped) | 780 | 2,568 | 9,088 | 32,640 |
+| `gamma = pos.score` | **2,920 FAIL** | 1,357 | 1,140 | 5,197 FAIL |
+| **`gamma = pos.score - 150`** | **171** | **453** | **250** | **396** |
+
+`pos.score` alone is a **trade, not a fix** — it helps every fit and makes the
+incumbent worse, because seeding at the true value makes the first probe a
+coin flip and it is a fail-HIGH that produces a move. Seeding *below* it makes
+the first probe cheap and one-sided: **every arm passes, including C1, and the
+shipped entry improves 4.6×.**
+
+Priced by building: **+5 bytes** (3350 → 3355) and **1.0001× nodes to complete
+depth 8** over 40 positions — the seed only affects the first probes, and gamma
+persists across depths.
+
+**This is not an Elo claim and the constant is not tuned.** Changing the seed
+changes the whole bisection and therefore what a stopped search plays; it needs
+its own screen like anything else. But if it holds, it removes the correctness
+objection that suspended mirroring — which is what made 7 phase buckets
+affordable in the first place. Routed to the search lane, not built here.
 
 ### Conditions
 
