@@ -186,6 +186,32 @@ It does not have to win. It has to avoid losing.
   picks between them — a paired number, per the rule that head-to-head beats
   anchored differences where both exist.
 
+### The speed terms, measured before the games so the rule is fully specified
+
+Same interleaved probe, same machine, 7 lines × 3 rounds, base anchored and
+occurring once. These are *inputs to the pre-registered rule*, not results:
+
+| arm | nps | timed = fixed-node + … | time to d8 |
+|---|---|---|---|
+| `hist` | **0.994×** | **−0.9 Elo** | 1.099× |
+| `noiid` | **1.046×** | **+6.6 Elo** | 0.950× |
+| `iirnoiid` | **0.929×** | **−10.6 Elo** | 0.705× |
+
+So `hist` must show **≥ +62 fixed-node** to clear its +61 timed bar.
+
+Two of these are worth reading now. **`noiid` is 4.6% FASTER for 0.7% fewer
+nodes** — the IID probe was costing 5% of wall-clock for 0.7% of the tree,
+because each probe is a `root=True` driver probe that regenerates and sorts
+moves and stores nothing. Dropping it is 16 bytes back and ~+6.6 Elo of pure
+speed before any ordering effect. And **`iirnoiid` is 7% slower per node**,
+which is the `pos not in self.tp_move` hash it pays before the table probe
+that hashes the same position again — a known, and later removable, cost.
+
+**The 0.705× time-to-depth for `iirnoiid` is NOT +50 Elo, and the probe's own
+"nodes +69.7 Elo" line is the confounded reading, printed and hereby
+discounted.** A reduction changes what depth 8 means. Only the fixed-node
+games below convert it.
+
 **Power, stated in advance.** 330 rounds × 12 = 3,960 games, 660 per pairing,
 ≈ ±27 Elo. An undecided result at that size means the effect is **small**, not
 that the mechanism is absent — the same reading the null-cap census forced.
