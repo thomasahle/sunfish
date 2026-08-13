@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **A ZERO-BYTE candidate falls out of corrhist's autopsy** | corrhist's only consumer was the frontier futility test and it won by pruning LESS. A flat margin on that test: `+QS` packs to **3475 — the entry exactly**. Pre-registered, screening |
 | 2026-08-13 | **corrhist DROPPED: the mechanism works and is priced out** | **+54.8 ± 23.3** fixed-node, 617g, SPRT H1 accepted, 0 forfeits/illegal/crossings. Timed ≈ **+46**, i.e. **0.36 Elo/byte** on 127 B against a 1.0 bar. Not disproven — too dear |
 | 2026-08-13 | **IIR replacing IID is BYTE-NEGATIVE: entry 3475 -> 3471** | −4 B, and dropping IID alone is −16 B and node-neutral (0.989x). The first queue item that gives bytes back; it only has to avoid losing |
 | 2026-08-13 | MTD guards censused on every new arm, incl. the ordering change | **0 bracket crossings, 0 probe-cap hits** to depth 9 on all six builds. Also: this counter can NOT be read out of a fastchess log |
@@ -211,6 +212,61 @@ carried on `Position` rather than a `str.translate` per interior node would cost
 nodes-per-move instead of source bytes, and is the only version worth building.
 Shelved, not closed, and the mod stays in `make_variants.py` so it never has to
 be rebuilt from a spec again.
+
+## 2026-08-13 — corrhist's win, for zero bytes: the futility-margin lead, pre-registered
+
+**The best thing corrhist produced may be a hypothesis, not a feature.**
+
+Three facts from its screen, put together:
+
+1. corrhist's **only consumer** is the `depth <= 1` futility test. Everything
+   else it touches is bookkeeping.
+2. It won **+54.8** while searching **more** nodes (1.04× to depth 8, 1.15× to
+   depth 9). So what it bought was **"prune less at frontier nodes"** — the
+   futility rule was too aggressive.
+3. The censused correction table was **systematically optimistic**: mean +10 to
+   +18 cp, median +2 to +8, p90 about +85, and only 1-5% pinned at the clamp.
+
+If the **constant** part of that correction is most of the effect, then a flat
+margin on the same test captures it for almost nothing — and corrhist's 127
+bytes were buying the position-specific half, which is the expensive half and
+possibly the smaller one.
+
+**Priced, `pack.sh` on real files:**
+
+| arm | futility test | packed | Δ |
+|---|---|---|---|
+| `base` | `pos.score + val < gamma` | 3475 | — |
+| `fut` | `+ EVAL_ROUGHNESS` (15) | 3478 | **+3 B** |
+| `fut40` | `+ QS` (40) | **3475** | **ZERO** |
+
+**`fut40` is byte-for-byte the shipped entry.** Both reuse a constant already
+in the stream, so lzma pays almost nothing for them; `QS` costs literally
+nothing. Two margins rather than one, because a screen at a single value cannot
+distinguish "the margin is wrong" from "the margin is too small", and 15 sits
+near the bottom of the range corrhist actually applied.
+
+**Soundness:** a constant added inside the break's test leaves it a constant
+threshold on the sort key `val`, exactly as corrhist's per-node `corr` did. The
+break still tests the quantity it sorts by. The yielded estimate stays honest at
+`pos.score + val` — the margin is a cushion on the *decision to stop looking*,
+not a claim about the position's value.
+
+### Keep/drop, fixed before the games
+
+- **`fut40` (0 bytes).** There is no Elo/byte rule for a free change. **LAND on
+  a non-negative point estimate**; **HELD** if negative with the interval
+  covering zero; **DROP** if the interval excludes zero below. Same rule as the
+  byte-negative arms, same reasoning.
+- **`fut` (+3 B).** Needs ≥ +3 timed at the standing rate, which is to say it
+  needs to be positive.
+- **The `fut` vs `fut40` pairing is the informative one**: it says which
+  direction the margin wants to move, and that is worth more than either
+  arm's verdict, because it points at a tuning axis rather than a feature.
+- **This does not resurrect corrhist.** If a flat margin recovers most of
+  +54.8, corrhist is *more* firmly dropped, not less — 127 bytes for the
+  residual. If it recovers none of it, corrhist's value really was
+  position-specific and the shelved entry keeps its note.
 
 ## 2026-08-13 — The ordering round-robin: pre-registered before it is launched
 
