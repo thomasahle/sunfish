@@ -46,6 +46,11 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **corrhist re-measured on the box: the node saving does not exist** | Interleaved, 7 lines, 3 rounds. nodes **1.042x**, nps **0.944x**, time-to-d8 **1.048x**. The "0.70x / 0.89x, plausibly free" reading was one position on a contended laptop |
+| 2026-08-13 | corrhist's key priced: slicing to ranks 2-7 buys 5.6pp of nps | 0.944x sliced vs **0.888x** full-board, node counts bit-identical. The key, not the correction, is still the whole cost |
+| 2026-08-13 | corrhist byte price, `pack.sh` on real files | **+127 B** (entry 3475 -> **3602**, spare 621 -> 494). Golfing recovers 5 B -- lzma already had the repetition |
+| 2026-08-13 | corrhist keep/drop **PRE-REGISTERED** before the screen | Standing 1.0 Elo/byte bar => needs fixed-node **>= +135.5**. The budget-average rate the +400 goal implies (0.41 Elo/byte) would need only +60.5; both written down, decided on the strict one |
+| 2026-08-13 | corrhist correction table censused: not a feedback runaway | median +2...+8 cp, 1-5% at the +/-120 clamp, 4-7k entries per search. The screen measures the feature, not a degenerate one |
 | 2026-08-13 | **HOLE RR COMPLETE: 4,000 games, and `entry_kf` SHIPS** | **+107.5 ± 31.6 vs classic**, 0 forfeits, 0 illegal. The hole reproduced at **−71.3** and the fix closes it to **+20.0**. Landed: entry **3483 → 3475, 621 spare** |
 | 2026-08-13 | LMR's timed value is the SAME with and without the eval bug | +65.9 ± 27.1 (unfixed) vs +72.3 ± 25.1 (fixed). LMR was never "masking" the hole — the defects were additive |
 | 2026-08-13 | Classic-anchored differences run ~50 Elo above the head-to-head ones | Both signs agree, magnitudes do not (1.5σ). Head-to-head is the paired instrument; the anchored spread is the one to distrust |
@@ -139,6 +144,134 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — corrhist re-measured: the node saving was one position, and it is gone
+
+The queue's premise for corrhist was a single sentence in the entry below:
+*"Interior-only reaches depth 8 faster than the entry does, which makes this
+the first queued feature that is plausibly free."* That sentence rested on
+**one position** (the start position), measured on a laptop that was
+simultaneously running a round-robin, with the two builds not interleaved.
+It does not survive being measured properly.
+
+**The prototype is gone.** `e_pstcorrhist.py` / `e_pstcorrhist2.py` were never
+committed and no copy exists on the laptop, the box, or in git (`git log -S
+corrhist` returns only ledger edits). So corrhist was **re-implemented from
+that entry's written spec** — pawn-skeleton key via `str.translate`, ±120cp
+clamp, 7/8 decay, mates excluded, key not computed in QS — and now lives as a
+generated mod (`corr` in `tools/build/make_variants.py`) rather than as a
+scratch file that can evaporate again. Every number below belongs to the
+rebuild; the old 0.70×/0.79×/0.89× column belongs to a build we no longer
+have and is withdrawn rather than compared against.
+
+**The harness proves itself before it is believed.** The `base` arm reaches
+depth 8 from the start position in **150,870 nodes** — digit-for-digit the
+number in the entry below. The baseline is the same engine it was, so any
+difference in the corrhist column is corrhist.
+
+**Interleaved A/B(/C), one session, one machine**, 7 opening lines × 3 rounds,
+`go depth 8`, arm order rotated every round so shared load enters all three
+alike. Per-line ratios, then the median over lines, so one slow line cannot
+carry the result:
+
+| corr / base | per line | median |
+|---|---|---|
+| nodes to d8 | 0.84 1.12 1.04 0.85 0.94 1.30 1.05 | **1.042** |
+| time to d8 | 1.01 1.19 1.05 0.90 0.94 1.38 1.05 | **1.048** |
+| nps | 0.83 0.94 0.99 0.94 1.00 0.94 1.00 | **0.944** |
+
+**The node saving does not exist.** The median node ratio is *above* one, and
+the per-line spread runs 0.84 to 1.30 — corrhist searches fewer nodes on some
+openings and 30% more on others. The start position, which is the only
+position the old measurement used, is the second-best line in the set (0.84).
+That is the whole correction: a one-position sample landed on a favourable
+tail and was read as a property of the feature.
+
+**The nps question, which was the assignment, answers cleanly: 0.944×.** It
+clears the ~0.90 bar. Load held between **12.19 and 13.68 on 96 cores** across
+all 23 samples of the run (344 s), so this is a ratio taken under genuinely
+steady conditions rather than an average of two different machines-in-time.
+
+**Cotenancy, logged not remembered.** Two foreign tournaments of another
+session's (`elo-intrinsic-tune-20260813`, `elo-lmp30-latch-20260813`, 23
+processes, constant throughout; a third, `elo-rfp80-20260813`, launched at
+12:01 UTC). Other users: `nick-lehrter` at 3.8% on one process throughout, and
+`root` + `zach-belateche` running django at up to ~22% in a few samples. None
+is resource-hungry by the box rule and total load never left its band, so we
+did not yield.
+
+**The key is the cost, and it can be halved.** Pawns only stand on ranks 2-7,
+which is `board[31:89]` in the 120-char layout, so translating the slice is
+*exactly* equivalent to translating the whole board. Measured as its own arm
+(`corr.wkey` restores the full board):
+
+| | nps | time to d8 |
+|---|---|---|
+| corrhist, key on `board[31:89]` | **0.944×** | 1.048× |
+| corrhist, key on the whole board | **0.888×** | 1.107× |
+
+**5.6 percentage points of nps for one slice**, and the two arms' node counts
+are **bit-identical on all seven lines** — which is the check that they really
+are the same corrections and differ only in what the key costs. The full-board
+key would have missed the 0.90 bar on its own. This is the third time in this
+ledger that corrhist's *key*, not its correction, decided the verdict.
+
+**The table is not feeding on its own output.** The depth≤1 futility branch
+yields an estimate built from the corrected static score, and that estimate can
+become the node's `best`, which is what the table learns from — a loop worth
+checking before spending games, because a saturated table would make corrhist a
+blanket futility margin wearing an eval-correction costume. Censused over four
+depth-8 searches: **1.1-4.8% of entries at the +120 clamp, 0.0-0.8% at −120**,
+median +2…+8 cp, p10/p90 about −25/+90, 4-7k entries per search. Healthy, mildly
+optimistic in exactly the way a fail-soft null-window `best` should be, and the
+eviction path never fires.
+
+**Byte price, built not composed.** `pack.sh` on real files, four of them:
+
+| build | packed | note |
+|---|---|---|
+| `nnue_4k/pst_entry.py` | 3475 | the entry |
+| `e_base` (generated variant) | **3475** | identical — the provenance header is free, so the variant path is byte-faithful |
+| `e_corr` | **3602** | **+127 B**, spare 621 → 494 |
+| `e_corr.wkey` | 3597 | the wide key is 5 B *cheaper* in source and 5.6pp dearer in speed |
+
+A golfed rewrite (walrus lookup, truthy sentinel, `clear()` instead of FIFO
+eviction) also lands at 3597: **golfing recovers 5 bytes**, because lzma has
+already claimed the repetition. 127 B is the price, not a starting offer.
+
+### Keep/drop, pre-registered before the screen reports
+
+corrhist costs **127 bytes, 20% of the remaining 621**. The standing bar in
+this ledger is **1.0 Elo/byte** (set for LMP at 56 B, applied to RFP at 31 B,
+against LMR's measured 1.8). Applied here:
+
+- The fixed-node screen measures **quality only**; the speed term is separate
+  and already known. Timed value ≈ fixed-node + 102·log₂(0.944) = **fixed-node
+  − 8.5 Elo**.
+- **KEEP at ≥ +135.5 fixed-node** (= +127 timed = 1.0 Elo/byte). **DROP below.**
+
+And the reading that is *not* the decision rule, written down now so it cannot
+be invented afterwards to rescue a result: the +400 goal needs +293 more Elo
+from ~718 spare bytes, which is **0.41 Elo/byte on average** — the standing bar
+is 2.4× stricter than the budget the goal actually implies. If corrhist lands
+between **+60.5 and +135.5** fixed-node it is a DROP under the bar *and* a live
+question for the coordinator about whether 1.0 Elo/byte is calibrated to a goal
+that only requires 0.41. Below +60.5 there is no question to ask.
+
+For calibration, and it is not encouraging: **LMR**, the largest search win
+this lane has measured, is **+38.9 ± 19.1 fixed-node**. Nothing in this engine
+has ever measured +135.
+
+**Why the screen runs anyway.** The bar is a shipping decision, not a
+measurement, and the two should not be confused. A hard number closes corrhist
+permanently instead of leaving it on every future queue, and if the quality
+half turns out large the byte half is separately attackable (the eval lane just
+found 94 bytes). The screen is our-vs-our fixed nodes, which is valid because
+both arms honour the mid-search cap; `go nodes` cannot decay into movetime here
+because with no tc the `sunfish_ui` driver sets the in-search deadline to
+now + 600 s (the 1.5 s default belongs to the builtin loop, which only the
+packed artifact runs) — and both arms print which driver they resolved, which
+the script compares and refuses to proceed on.
 
 ## 2026-08-13 — THE HOLE ROUND-ROBIN, COMPLETE: 4,000 games, and the fix ships
 
