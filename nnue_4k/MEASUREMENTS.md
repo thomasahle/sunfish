@@ -46,6 +46,12 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **REBASED onto nnue-4k: entry 3350, engine 2886, eval 464, CEILING 1210** | base-90 on top of IIR + interface trims. Re-measured, never composed. C1 **3187 (−163)**, C2 **3412 (+62)** |
+| 2026-08-13 | **`price_engine.sh` returned a SILENTLY WRONG answer on the base-90 entry** | "eval costs 30, engine 3320" — its regex matched a `\n}` far below the eval. Fixed for both entry forms; the literal-form number reproduces at 2942/503 |
+| 2026-08-13 | **C1's bar RE-DERIVED: its byte credit is VOID under the new allocation** | Eval bytes stopped being scarce (746 under the ceiling, and the directive is to FILL it), so C1 must now clear **LB > 0**, not LB > −15 |
+| 2026-08-13 | **THE 1024-1500 B GRID, PRICED BY BUILDING** | Bytes reach it — 7 phase buckets = **1148 eval B**. **The data does not**: the straw man's worst bucket holds **48 positions for 160 parameters** |
+| 2026-08-13 | **King-wing buckets are unusable on our data: 0.3 pos/param** | 80.4% of positions have the white king on the king side. Phase quantiles are the partition that survives — 4 = 18.9, 6 = 12.8, 7 = 8.8 pos/param |
+| 2026-08-13 | Bucket-census instrument corrected: rank quantiles are not implementable | It reported 12.0 pos/param at 8 buckets where the shippable partition gives **6.5** — phase is a coarse integer and a rank cut splits a value the root cannot |
 | 2026-08-13 | **THE GOLF TARGET WAS THE WRONG NUMBER: eval already has 1132 B** | 4096 − 2942 = **1132 ≥ Thomas's "at least 1024"**. 2500 assumed the full 1500-byte eval. The eval lane's grid, not golf, is the binding constraint |
 | 2026-08-13 | Info/PV line cut: **−22 B, entry 3445, engine 2942** | Node counts bit-identical (2,342,657 both), gates green, artifact still streams bestmove LIVE to a pipe with stdin open |
 | 2026-08-13 | **Two of the three "safe" trims are NOT safe, with evidence** | `version` globals are in the driver's `ENGINE_API` — cutting them makes the entry **unmeasurable in every dev checkout**. `movetime` is a silent-forfeit hazard with a live consumer in `deploy.sh` |
@@ -190,6 +196,98 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-13 — Rebased onto the moved base, C1/C2 re-measured, and C1's bar re-derived because its byte credit no longer exists
+
+The eval lane's work was sitting on a base two landings behind. Rebased
+`eval-decode-track` onto `nnue-4k` (IIR + the interface trims), regenerated,
+and **re-measured every number rather than adjusting the old ones.**
+
+| | packed | engine-sans-eval | eval | eval ceiling |
+|---|---|---|---|---|
+| `nnue-4k` tip (literal tables) | 3445 | 2942 | 503 | 1154 |
+| **rebased, base-90 decode** | **3350** | **2886** | **464** | **1210** |
+
+Base-90 is worth **−95 bytes on this base**, against −97 on the previous one —
+the usual reminder that a byte saving is a property of the pair, not of the
+change. **The eval ceiling is 1210 B**, so Thomas's 1024 floor is reachable
+today and his 1500 needs ~290 B more from the search lane.
+
+### `price_engine.sh` was returning a silently wrong answer on this entry
+
+Run against the base-90 entry it reported **"eval data costs 30, ENGINE 3320"**.
+Its regex looks for a `pst` literal to zero; there is no literal any more, so it
+matched a `\n}` hundreds of lines below the eval and zeroed something unrelated.
+Both numbers were wrong and neither looked wrong — and this instrument is where
+the golf target's 2942/1132 came from, so it needed to be right before the
+allocation was argued over.
+
+Fixed to handle both entry forms, and to **abort rather than guess** if it
+recognises neither. The literal form still reproduces **2942 / 503** exactly, so
+the golf lane's published numbers stand; the base-90 form now reads 2886 / 464.
+
+### The candidates, rebuilt from the current generator
+
+C1 and C2 are no longer hand-staged files. They are **mods in
+`tools/build/make_variants.py`**, generated at screen time from the committed
+fit — the same single-source rule the search variants follow, because the whole
+point of that file is that a candidate cannot go stale against its base.
+
+| | packed | vs entry | eval bytes | spare |
+|---|---|---|---|---|
+| entry (rebased) | 3350 | — | 464 | 746 |
+| **C1** flat refit, mirrored step 8, K exact | **3187** | **−163** | 301 | 909 |
+| **C2** flat refit, exact | **3412** | **+62** | 526 | 684 |
+
+The deltas survived the base change almost exactly (−163 and +62, against −163
+and +63 before). The generated sources pack to the same bytes as the direct
+codec builds, which is the check that the mod and the pricer agree.
+
+### The bars are RE-DERIVED, because the old ones were denominated in a currency that no longer exists
+
+C1's old bar was *"LAND if the 95% lower bound is above −15 Elo"*, and the −15
+was a byte credit: C1 saved 163 bytes when bytes were scarce. **Under Thomas's
+allocation they are not scarce.** The eval sits 746 bytes under its own ceiling
+and the standing instruction is to FILL it to 1024-1500. A byte saved inside the
+eval now buys nothing the project wants — it moves *away* from the target.
+
+So, pre-registered before the screen runs:
+
+- **C1 LANDS only if the 95% interval's lower bound is above 0.** No byte
+  credit. **DROP if the upper bound is below 0.** Between those, C1 is not
+  landed and the result is read as the generator verdict below.
+- **C2's old +63 Elo bar is void too** — a +62 byte eval cost is now *wanted*,
+  not charged at 1.0 Elo/byte. C2 lands over the entry only on LB > 0, and
+  **C1 − C2 is the mirroring measurement**, which is the only thing loss cannot
+  answer. Run only if C1 leaves mirroring ambiguous.
+
+### What the screen is actually FOR now: it is a generator validation
+
+This is the part that matters more than whether C1 lands. A bucketed
+1024-1500 B eval is **the same fit with more parameters on the same data.** So:
+
+- **C1 clearly positive** ⇒ the Texel objective on `set20260813` converts to
+  Elo, and the budget-filling design is justified on this data, subject to the
+  positions-per-parameter gate below.
+- **C1 flat or negative** ⇒ scaling that fit to 1120 parameters across 7 buckets
+  is not justified, and the budget should be filled only after the GENERATOR
+  changes — a distilled teacher or more data — not after more parameters.
+
+A flat result is the modal outcome and was predicted in advance: C1's −5.31%
+held-out is almost entirely endgame, and in the middlegame band the fit is
+very slightly *worse* than classic.
+
+### Cotenancy: the slot was not actually free, and the screen waited
+
+The coordinator's slot handoff said the box arena was idle. It was not:
+`elo-masked-cap-20260813` was **363 games into a 600-game `tc=30+1` TIMED
+match** at concurrency 10. A fixed-node screen is insensitive to load, but the
+match beside it is not, and this project has already voided one 200-game match
+to a shared-machine effect. The screen was **staged and held** rather than
+launched, and went out only after that match completed. Logged here because
+"the slot is yours" is a claim about the box, and the box is checkable.
 
 ---
 

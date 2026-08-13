@@ -26,10 +26,43 @@ import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 SRC = os.path.join(REPO, "nnue_4k", "pst_entry.py")
+sys.path.insert(0, os.path.join(REPO, "tools", "eval4k"))
+
+
+def _eval_mod(step, half, exact):
+    """An EVAL mod: swap the whole eval region for a fitted table set.
+
+    Every other mod here is a search change written as literal text. The eval
+    candidates cannot be, because their tables come from the fit -- so the
+    anchor is the entry's current eval region (unique by construction, and the
+    occurs-exactly-once check still applies) and the replacement is whatever
+    `codec.emit` produces at this encoding. Same single-source rule as the rest
+    of the file: the candidate is GENERATED at screen time from the committed
+    fit, never accumulated as a file that can go stale against the base.
+    """
+    import json
+
+    import codec
+    import splice
+    P = "PNBRQK"
+    T = json.load(open(os.path.join(REPO, "tools/tune/candidates/fits.json")))["flat"]["tables"]
+    vals = {p: int(T["_value_" + p]) for p in P}
+    raw = {p: [int(v) for v in T[p]] for p in P}
+    _, region, _ = splice.split(open(SRC).read())
+    return (region, "\n" + codec.emit(vals, raw, step, half, exact=exact).strip("\n") + "\n")
+
 
 # Each mod is (anchor, replacement), or a LIST of such pairs for a mod that
 # has to touch several places. Every anchor MUST appear exactly once.
 MODS = {
+    # ---- EVAL candidates (see nnue_4k/MEASUREMENTS.md, the fits entry) ------
+    # Same 384-parameter Texel refit of classic's tables, at two encodings.
+    # C1 mirrors and quantises to step 8 and holds the king table back exact,
+    # so the landed kend fix is bit-identical; C2 stores the same fit at full
+    # resolution. C1 vs C2 is therefore a clean measurement of what the
+    # compression costs IN PLAY, which loss cannot answer.
+    "c1": _eval_mod(8, True, "K"),
+    "c2": _eval_mod(1, False, ""),
     # Cap the null-move score at static eval plus one score bucket, exactly as
     # classic does. Ours has never capped it: the score is both a looser cutoff
     # trigger AND this node's returned value, so an inflated pass estimate
