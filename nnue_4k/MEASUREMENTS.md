@@ -46,6 +46,9 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **d1 SCREEN LAUNCHED** — the same arena, book slice and instrument that measured C1 and C2 | 20,000 nodes, SPRT elo0=0 elo1=10, 500 rounds, srand 20260815 so d1 sees **C2's own 500 openings**. Bar unrevised: LAND at LB > 0, DROP at UB < 0 |
+| 2026-08-13 | **The mate gate was scoring the OPENING POSITION**, and reported `MISS ILLEGAL` for the shipped entry | It feeds `position fen`, which only the driver understands; a variant in a scratch dir runs the builtin loop. base/d1/d8 are all **8/8** once the banner is demanded. Fourth incident of this class |
+| 2026-08-13 | The tracked training set carried the bench box's name; **scrubbed before the branch was ever pushed** | `set20260813.npz` `d792b420…` → **`2410786e…`**, arrays bit-identical, `host` the only key dropped |
 | 2026-08-13 | **THE DISTILLED STUDENT FITS EXACTLY AS WELL AS C2 — and is stably WORSE where it matters** | Same positions, same split: SF **−7.85 ± 0.81**, distilled **−7.70 ± 0.90**. But at phase 18-24 the distilled student is **+7.47 ± 3.14 WORSE than classic on every split**, where the SF student was −8.00 better |
 | 2026-08-13 | **The blocker is the POSITION MIX, not the teacher — and distillation is what makes that cheap to fix** | Classic's loss against our own search at phase 18-24 is **0.007962**, its best band: no headroom, and a global fit spends it to buy the endgame where **65.6%** of positions live |
 | 2026-08-13 | **d8 misses the first-yield gate by ELEVEN NODES** (2,059 vs a 2,048 window) | The margin case the measuring gate exists for. d1 passes at 1,896/2,048 — a 7% margin against the entry's 2.6×. **The 5-byte gamma seed fixes both** (537 and 478) |
@@ -212,6 +215,103 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-13 — d1 goes to the arena that measured C1 and C2; the mate gate was scoring the opening position; and the training set carried the box's name
+
+Three things: the screen is running, and two instrument/hygiene defects found by
+the ordinary discipline of running every gate on the **shipped entry** before
+running it on a candidate.
+
+### The screen, launched 21:42:43 UTC
+
+`base` (the landed 3350 B entry) vs **`d1`** (the distilled exact student,
+3421 B, +71). Instrument byte-for-byte the one that produced C1's −57.7 and
+C2's −93.8: `ab_fixednode.sh`, **20,000 nodes**, SPRT elo0=0 elo1=10,
+α=β=0.05, the 2,000-position book, 500 rounds, concurrency 8.
+
+It runs in **`eval-c1-20260813`, the same arena**, not a new one. Every
+instrument file there was checked md5-identical to the repo at launch —
+`ab_fixednode.sh`, `legality_gate.py`, `pair_elo.py`, and `sunfish_ui/` at
+`DRIVER_VERSION = 2` — and the arena's `bin/e_base.py` is byte-identical to a
+fresh `make_variants.py base` off the landed tree, so the incumbent arm is not a
+stale copy of anything. `e_d1.py` was rebuilt from that tree and its md5 checked
+after transfer. **srand is 20260815, C2's own seed**, so d1 plays the *same 500
+openings C2 played*.
+
+Gates before games, both arms, locally under CPython and on the box under the
+pypy3 that actually plays:
+
+| | base | d1 |
+|---|---|---|
+| packed | 3350 | **3421 (+71)** |
+| decode round trip | — | OK |
+| legality | 100/100 | 100/100 |
+| mate-in-1 | 8/8 | 8/8 |
+| first yield, max (window 2,048) | **780** | **1,896** |
+
+**The bar is not revised: LAND at 95% LB > 0, DROP at UB < 0.** Carried
+verbatim from the coordinator: *the phase-band evidence arrived after the bar
+was set and the bar is not revised; honest expectation is that d1 drops; the
+informative output is whether the band statistic predicts Elo (C2 is the
+control: it improved that band and lost 94).*
+
+`d8` is **not** in this screen. It fails first yield at 2,059 against a 2,048
+window and is not screenable until the search lane's 5-byte gamma seed lands.
+
+Cotenancy at launch: 96 cores, load 10.89. Ours: the formal lane's widening RR
+(7 engines, 840 games at 30+1, concurrency 8) — untouched. Other users: a root
+`cliosoft` service at 19.7% CPU and one `innovus` job systemd-capped at 4 cores.
+Fixed-node screening is node-counted, so this load cannot move the measurement,
+and C1 and C2 were screened under the same kind of load.
+
+### The mate gate was answering from the OPENING position
+
+`mate_gate.py` feeds `position fen`, which **only `sunfish_ui/uci.py`
+understands**. An entry whose grandparent directory has no `sunfish_ui/` — which
+is every variant a generator writes into a scratch directory — falls through to
+the builtin loop, which knows `position startpos` alone. It searched the opening
+position and answered an opening move.
+
+Run that way the gate reported **`MISS ILLEGAL g1f3` for the SHIPPED ENTRY** on
+three mates it in fact solves. Loud rather than silent, unlike the first-yield
+gate's first run, but still a chess verdict on a position the engine never
+saw — and the **fourth** incident of this exact class in this lane (`agree.py`,
+the stale driver that voided 425 games, the first-yield gate, now this).
+
+Fixed the same way the first-yield gate was: resolve a checkout that has a
+driver, set `PYTHONPATH`, **demand the banner by name**, and take source entries
+only, since `position fen` cannot reach a packed artifact at all. Re-run:
+base, d1, d8 all **8/8**, and a packed artifact is now refused instead of scored.
+
+### The tracked training set carried the bench box's name
+
+`distill_pack.py` copied the labeller's meta into the `.npz` verbatim, including
+the machine it ran on, and `set20260813.npz` — a **tracked file** — already
+carried `"host": "hardware"`.
+
+The branch has never been pushed, so this was still cheap. `distill_pack.py` now
+drops the key, and the committed set has been rewritten:
+
+| | |
+|---|---|
+| pre-scrub sha256 | `d792b42081f0adec10cbcb17ca72a7a96949cfac21fe1b97be1935b3cffc4c13` |
+| **post-scrub sha256** | **`2410786e14f09fecbcea8c94f74fd1378d04b0f1aa634cb27702f0890196ed4d`** |
+| arrays | `X`, `y`, `fens` **bit-identical**, verified against an untouched copy |
+| meta | dropped exactly `{host}`; every other field equal |
+
+**C1's and C2's provenance therefore refers to the pre-scrub sha of the same
+bytes minus one metadata key** — the training data behind those two verdicts is
+unchanged, and `fits.json` records no `data_sha256` to update. The pre-scrub
+blob exists only in this branch's history and must never be pushed.
+`distill160k.npz` (`b0ed8b6617a7…`) was built after the fix and was never
+affected.
+
+Verification note, because the first attempt was wrong: reading arrays back
+through the *same* `np.load` handle after overwriting the file compares the new
+file with itself — `numpy` reads lazily from disk offsets. The check above is
+against a copy taken before the write.
 
 ---
 
@@ -2306,7 +2406,7 @@ beside it. Sources stay at `~/repos/sunfish-data/`.
 | **positions kept** | **19,491** (198 dropped: mate scores or \|cp\| ≥ 1500) |
 | labeller | **Stockfish 18**, depth 8, Threads 2, Hash 64 MB |
 | engine sha256 | `0a119807d135b44f…` (built on the box, see below) |
-| npz sha256 | `d792b42081f0adec…`, byte-identical on box and laptop |
+| npz sha256 | `d792b42081f0adec…` as committed here; **`2410786e14f09fec…` after the 2026-08-13 host-field scrub** (see the scrub entry — same arrays, one metadata key dropped) |
 | source games | 4,482 (4,000 hole RR + 444 kend screen + 38 ladder snapshot) |
 | wall time | ~5.4 min at 61 pos/s |
 
