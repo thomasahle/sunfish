@@ -46,6 +46,8 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **ENGINE PROPERTY: pseudo-legal movegen, no notion of check** | Not an LMP bug — it will bite every count-triggered or tail-pruning rule. `best > -MATE_UPPER` is now the required preamble |
+| 2026-08-13 | Guards measured INERT on the PST entry | 0 probe-cap hits, 0 bracket crossings to depth 10 — bisection collapses to one arm, ~600 games saved |
 | 2026-08-13 | **LMP is BROKEN, not weak: it returned an illegal move** | Reproduced deterministically. Cause is NOT break-vs-skip (falsified) — it prunes the only legal escape when in check. Fixed and re-gated |
 | 2026-08-13 | **RFP REJECTED: −2.8 ± 17.9 at 1000 games** | Bar was +31 Elo for 31 bytes. Removed — entry **3517 → 3483, 613 spare** |
 | 2026-08-13 | **LEAD: LMR may be masking an ~85 Elo hole in the port** | LMR transfers (+127 ± 77 timed, prelim) — which implies entry-minus-LMR is ~85 BELOW classic. Being measured directly, not inferred |
@@ -118,6 +120,78 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — ENGINE PROPERTY: pseudo-legal movegen with no notion of check
+
+Recorded as a **property of the engine**, not as an LMP bug, because it will
+bite every rule that touches the tail of the move list.
+
+**This engine generates pseudo-legal moves and cannot detect check.** It is a
+king-capture engine: illegality is discovered by the opponent capturing the
+king, not prevented at generation. Consequences for any pruning rule:
+
+- In a check position the only legal reply is frequently a **low-value king
+  escape**, which sorts near the **end** of the move list.
+- Any rule that discards the tail — by move count, by depth, by anything not
+  keyed to legality — can therefore discard **the only legal move**, and the
+  node returns having committed nothing.
+- The symptom is `bestmove (none)`, an instant loss, and it is invisible to a
+  mate suite: LMP's mate gate **passed** (5 vs 5) on the very build that emitted
+  an illegal move. The gate tests whether mates are *found*, not whether a move
+  is *always produced*.
+
+**Required preamble for any future pruning rule:**
+
+    best > -MATE_UPPER    # something playable has already been found
+
+The next three items on the list — history ordering, IIR, move-count LMR — all
+touch ordering near the tail, so all three inherit this requirement. Move-count
+LMR is the most exposed of them: its trigger *is* a count.
+
+Also worth stating: a mate suite is not a legality gate. A cheap
+"never answers (none)" assertion over a few hundred positions would have caught
+this in seconds, and is a better gate for this class than mate-finding.
+
+## 2026-08-13 — The MTD guards are inert on the PST entry, and that is a finding
+
+Counted directly on `e_pstbase.py` in real search, guards printing loudly when
+they trip:
+
+| movetime | max depth | probe-cap hits | bracket crossings |
+|---|---|---|---|
+| 1.5 s × 8 positions | — | **0** | **0** |
+| 5 s × 3 positions | 8 | **0** | **0** |
+| 12 s × 3 positions | 10 | **0** | **0** |
+
+**Nothing fires to depth 10.** A guard that never trips cannot cost 60 Elo, and
+its branch cost is not showing up either — the entry is 1.10× *faster* than
+classic. Both guard arms are dropped from the bisection, which now has **one
+arm** and saves ~600 games.
+
+**Why zero here when the NNUE engine crossed 23 times in 120 positions:** the
+entry inherits **classic's eval**, a pure function of the position, and it sorts
+by the same quantity the futility break tests — precisely the premise the formal
+lane verified on classic across 7.7M break firings with zero non-futile skips.
+The NNUE engine crossed because a *learned* eval breaks that correspondence.
+
+So "does this engine cross?" is another property of the **(feature, eval)**
+pair, and **the PST entry inherits classic's good behaviour for free**. The
+entry is structurally *more stable* than the engine it was derived from — which
+is a real point in favour of the PST main line beyond its byte cost.
+
+### Bisection now, and its second split prepared
+
+One arm remains — **pre-KCX vs classic**, timed, on the laptop. Because
+`7f7d40a` predates more than the KCX port, a hit localises to "the KCX-era
+changes" and needs splitting. That second step is already queued rather than
+sequential: **`entry_nolmr` vs `prekcx` directly, our-vs-our at fixed nodes on
+the box** — both arms lack LMR, the guards are inert, so the difference is the
+KCX-era change itself, and comparing two of *our* engines means fixed nodes is
+legitimate and transitivity never enters.
+
+A contamination guard now sits at the head of the timed chain: it refuses to
+start if any fastchess is already running, rather than launching into a shared
+machine. That is the failure that cost 174 timed games tonight.
 
 ## 2026-08-13 — LMP emitted an illegal move: a correctness failure, diagnosed
 
