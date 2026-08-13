@@ -47,44 +47,68 @@ def dec(s):
 
 def mixed(vals, radix):
     """Little-endian mixed-radix pack -- no bits wasted rounding up to a power
-    of two, which is worth ~10% at 210 levels and more as levels shrink."""
+    of two, which is worth ~10% at 210 levels and more as levels shrink.
+
+    int() on every input is load-bearing, not defensive noise: this accumulator
+    is a 3000-bit Python integer, and a single numpy int64 anywhere in `vals`
+    makes the whole product numpy and SILENTLY WRAPS at 64 bits. A caller that
+    built its tables with numpy got a valid-looking source encoding garbage,
+    announced only by a RuntimeWarning nobody reads."""
     n = 0
     for x in reversed(vals):
-        n = n * radix + x
+        n = n * int(radix) + int(x)
     return n
 
 
-def emit(piece, raw, step=1, half=False):
-    """Source that rebuilds `piece`, `pst`, `K_MID`, `K_END`.
-
-    raw:  {piece: 64 ints}, rank-8-first, piece value NOT included
-    step: quantisation step (1 = exact)
-    half: store 4 files per rank and unfold by mirroring (192 values, not 384)
-    """
-    tabs = {k: list(v) for k, v in raw.items()}
+def _block(tabs, order, step, half, dest, init=False):
+    """One decode loop: `order`'s tables at one (step, half) setting."""
+    t2 = {k: list(tabs[k]) for k in order}
     if half:
-        tabs = {k: [(t[r * 8 + f] + t[r * 8 + 7 - f]) // 2 for r in range(8) for f in range(4)]
-                for k, t in tabs.items()}
-    lo = min(min(t) for t in tabs.values())
-    hi = max(max(t) for t in tabs.values())
+        t2 = {k: [(t[r * 8 + f] + t[r * 8 + 7 - f]) // 2 for r in range(8) for f in range(4)]
+              for k, t in t2.items()}
+    lo = min(min(t) for t in t2.values())
+    hi = max(max(t) for t in t2.values())
     off = (-lo + step - 1) // step * step if lo < 0 else 0
     lvl = (hi + off) // step + 1
     n_per = 32 if half else 64
-    vals = [max(0, min(lvl - 1, (x + off + step // 2) // step))
-            for k in ORDER for x in tabs[k]]
-    src = 'piece = {"P": 100, "N": 280, "B": 320, "R": 479, "Q": 929, "K": 60000}\n'
-    src += DEC % enc(mixed(vals, lvl))
-    src += "pst = {}\n"
-    src += 'for _k in "PNBRQK":\n'
+    vals = [max(0, min(lvl - 1, (x + off + step // 2) // step)) for k in order for x in t2[k]]
+    src = DEC % enc(mixed(vals, lvl))
+    if init:
+        src += "%s = {}\n" % dest
+    src += 'for _k in "%s":\n' % order
     src += " _t = [_v // %d ** _i %% %d * %d - %d + piece[_k] for _i in range(%d)]\n" % (
         lvl, lvl, step, off, n_per)
     src += " _v //= %d ** %d\n" % (lvl, n_per)
     if half:
         src += " _r = [_t[_i * 4:_i * 4 + 4] for _i in range(8)]\n"
-        src += " pst[_k] = tuple([0] * 20 + sum(([0] + _q + _q[::-1] + [0] for _q in _r), []) + [0] * 20)\n"
+        src += " %s[_k] = tuple([0] * 20 + sum(([0] + _q + _q[::-1] + [0] for _q in _r), []) + [0] * 20)\n" % dest
     else:
-        src += " pst[_k] = tuple([0] * 20 + sum(([0] + _t[_i * 8:_i * 8 + 8] + [0]"
+        src += " %s[_k] = tuple([0] * 20 + sum(([0] + _t[_i * 8:_i * 8 + 8] + [0]" % dest
         src += " for _i in range(8)), []) + [0] * 20)\n"
+    return src
+
+
+def emit(piece, raw, step=1, half=False, exact=""):
+    """Source that rebuilds `piece`, `pst`, `K_MID`, `K_END`.
+
+    raw:   {piece: 64 ints}, rank-8-first, piece value NOT included
+    step:  quantisation step (1 = exact)
+    half:  store 4 files per rank and unfold by mirroring (192 values, not 384)
+    exact: pieces held back at full resolution in a SECOND decode block.
+
+    `exact` exists for one specific reason. Mirroring is not lossless -- every
+    one of classic's tables is left-right asymmetric, the king by as much as
+    111 cp -- and the king's asymmetry is the castling-side preference that the
+    landed kend fix depends on. Compressing the OTHER five tables must not
+    silently perturb it, or a screen measures the fit and the perturbation
+    together and a negative result says nothing about either.
+    """
+    tabs = {k: list(v) for k, v in raw.items()}
+    order = "".join(k for k in ORDER if k not in exact)
+    src = 'piece = {"P": 100, "N": 280, "B": 320, "R": 479, "Q": 929, "K": 60000}\n'
+    src += _block(tabs, order, step, half, "pst", init=True)
+    if exact:
+        src += _block(tabs, "".join(k for k in ORDER if k in exact), 1, False, "pst")
     src += ('K_MID, K_END = pst["K"], tuple(piece["K"] + 70\n'
             "   - 10 * (abs(2 * (i // 10) - 11) + abs(2 * (i % 10) - 9)) for i in range(120))\n")
     return src
@@ -102,6 +126,15 @@ def _selftest():
     assert naive != 2 ** 400 + 7, "negative control did not fail"
     vals = [3, 0, 7, 209, 1]
     assert dec(enc(mixed(vals, 210))) == mixed(vals, 210)
+    # 64-bit wrap control: 384 values at radix 210 is a ~3000-bit integer, so
+    # a numpy-typed input must produce the SAME number as the Python one.
+    try:
+        import numpy as _np
+    except ImportError:
+        return
+    big = list(range(200)) * 2
+    assert mixed([_np.int64(v) for v in big], 210) == mixed(big, 210), \
+        "numpy inputs wrap the mixed-radix accumulator"
 
 
 _selftest()

@@ -74,6 +74,12 @@ how much effort it cost.
 | 2026-08-13 | corrhist byte price, `pack.sh` on real files | **+127 B** (entry 3475 -> **3602**, spare 621 -> 494). Golfing recovers 5 B -- lzma already had the repetition |
 | 2026-08-13 | corrhist keep/drop **PRE-REGISTERED** before the screen | Standing 1.0 Elo/byte bar => needs fixed-node **>= +135.5**. The budget-average rate the +400 goal implies (0.41 Elo/byte) would need only +60.5; both written down, decided on the strict one |
 | 2026-08-13 | corrhist correction table censused: not a feedback runaway | median +2...+8 cp, 1-5% at the +/-120 clamp, 4-7k entries per search. The screen measures the feature, not a degenerate one |
+| 2026-08-13 | **FITS DONE: two candidates, bars pre-registered, no Elo claimed** | **C1 3215 B (−163!), C2 3441 B (+63)**, both legality-green. Held-out −5.3%/−5.9%. Taper DROPPED on data, not price |
+| 2026-08-13 | **Quantisation is free in loss and SAVES bytes** | step 8 = −88 B for nothing; mirroring −159 more and held-out loss *improves* (regularisation). A refit is **not** byte-free: +63 B exact |
+| 2026-08-13 | **Continuous phase blend does not fit: 4157 bytes, 61 OVER** | Dead on price whatever its loss. The queens-seam taper is affordable (+74 B) but its data is not there |
+| 2026-08-13 | Mirroring silently perturbed the landed `kend` fix | Classic's king table is asymmetric by up to **111 cp**. `codec.emit(exact="K")` holds it back bit-identical for 84 B, so a screen tests the fit and not a bundle |
+| 2026-08-13 | **Training loss cannot compare models of different size** | The 768-param taper looks 2× better in-sample than held out. All candidate losses are now on a seeded 80/20 split |
+| 2026-08-13 | `codec.mixed` wrapped at 64 bits on numpy input | A ~3000-bit accumulator turned numpy and silently encoded garbage; symptom was a 10-min hang, not a wrong number. `int()` + a wrap control in the self-test |
 | 2026-08-13 | **TRAINING SET LABELLED: 19,491 positions, Stockfish 18 @ depth 8** | Committed at `tools/tune/data/set20260813.npz`. Material-vs-label corr **0.727**, sign agreement **92.7%**. **65.6% at ≤16 pieces** vs 47% in the lost set. No fit run |
 | 2026-08-13 | **Labels were slot-dependent: the TT carried across positions** | Same FEN, two slots, **−14 vs −22**; others 83→97 and −90→−149. Both modes run-to-run reproducible, which is why it was invisible. `ucinewgame` per position now makes the label a function of (fen, depth, version) |
 | 2026-08-13 | `X` is a difference feature — it cannot give you the phase | White Pe2 and black Pe7 cancel in the same cell. `\|X\|.sum()` reads 11.1 pieces where the board has 14.3; phase must come from `fens` |
@@ -1063,6 +1069,143 @@ because with no tc the `sunfish_ui` driver sets the in-search deadline to
 now + 600 s (the 1.5 s default belongs to the builtin loop, which only the
 packed artifact runs) — and both arms print which driver they resolved, which
 the script compares and refuses to proceed on.
+## 2026-08-13 — Fits done: quantisation is FREE and SAVES bytes, the taper is affordable but its data is not there, and two candidates go forward
+
+Fits are candidate generators. The last one improved the loss 10.1% and played
+−16.7 ± 31.2. **No Elo is claimed anywhere below**; the deliverable is tables,
+prices and a pre-registered bar.
+
+Every loss is **held out** — an 80/20 split by position, seeded, and no fit ever
+saw the 3,899 validation rows. That is not pedantry: `texel_tune.py` reported
+*training* loss, which cannot compare a 384-parameter table against a
+768-parameter tapered one, because the bigger model wins in-sample by
+construction. On training loss the taper looks twice as good as it is.
+
+### The fits
+
+| candidate | params | train | **held out** | vs classic |
+|---|---|---|---|---|
+| classic, no fit | — | 0.017916 | 0.017860 | — |
+| A flat refit | 384 | 0.015762 | **0.016800** | −5.9% |
+| B taper at the queens seam | 768 | 0.014774 | **0.016693** | −6.5% |
+| C continuous 24-point phase blend | 768 | 0.014308 | **0.016565** | −7.3% |
+
+**Every emit was verified.** Each candidate is re-scored from its own emitted
+integer tables, reconstructed exactly as the engine indexes them; all three
+matched their fitted loss. This is the check that was missing when an un-flipped
+king table cost −67 Elo while the fit looked 10% better — the fit never sees the
+emit, so the emit has to be scored separately.
+
+### The prices, built not composed — and quantisation is the whole story
+
+| candidate | bytes | vs 3378 | spare | held out |
+|---|---|---|---|---|
+| A flat, exact | 3441 | **+63** | 655 | −5.93% |
+| A flat, step 2 | 3385 | +7 | 711 | −6.02% |
+| A flat, step 8 | 3290 | −88 | 806 | −5.96% |
+| A flat, mirrored step 8 | 3131 | −247 | 965 | −6.27% |
+| **A flat, mirrored step 8, king exact** | **3215** | **−163** | **881** | **−5.31%** |
+| B queens-seam, 2nd set exact | 4048 | +670 | 48 | −6.52% |
+| B queens-seam, 2nd set mirrored step 8 | 3720 | +342 | 376 | −7.57% |
+| B queens-seam, both mirrored step 8 | 3391 | +13 | 705 | −7.19% |
+| **B queens-seam, both mirrored step 8, king exact** | **3452** | **+74** | 644 | −6.30% |
+| C continuous phase blend, exact | 4157 | **+779** | **−61** | −7.25% |
+
+Four things follow.
+
+1. **A refit is NOT free.** "The shape is unchanged so the bytes are unchanged"
+   is a composed claim and it is wrong: fitted values are less round than
+   classic's hand-made ones and cost **+63 bytes** at exact resolution. The
+   ledger's old "+13 bytes total" for a Texel candidate was measured on a
+   different base and must not be reused.
+2. **Quantisation is free in loss and pays in bytes.** step 8 costs nothing
+   measurable (−5.96% against −5.93% exact) and saves 88 bytes; mirroring saves
+   another 159. Held-out loss *improves* under mirroring — halving the
+   parameters regularises away per-square noise the fit had memorised.
+3. **The continuous phase blend does not fit in 4096 bytes.** 4157, sixty-one
+   over. Dead on price, whatever its loss. Recorded so nobody re-derives it.
+4. **The taper's shape is affordable** — +74 bytes with the king held exact,
+   against a ledger projection of ~134 and a naive exact build of +670. Two
+   mirrored table sets compress against each other.
+
+### Mirroring perturbs the landed kend fix, so the king is now held out of it
+
+`emit(half=True)` mirrored **all six** tables, and classic's tables are not
+symmetric: 28 of 32 file-pairs differ in the king table, by up to **111 cp**,
+and that asymmetry is the castling-side preference the `kend` fix depends on. A
+screen of a mirrored candidate would have measured the fit and an unmeasured
+perturbation of a landed +30.5 Elo fix as one bundle, and a negative result
+would have said nothing about either.
+
+`codec.emit` now takes an `exact=` set that holds named tables back into a
+second, full-resolution decode block. With `exact="K"` the king table and
+`K_MID` are **bit-identical** to the landed entry's, verified by assert. It
+costs 84 bytes (3131 → 3215) and it buys an interpretable screen.
+
+### The taper is dropped from screening: its data is not there
+
+`B` is cheap and it fits, but it does not go forward, and the reason is not
+price:
+
+- The queens-on subset is **22.6%** of an already endgame-heavy set — about
+  3,500 training positions for 320 free parameters, **11 per parameter**. Its
+  train/held-out gap is the widest of the three fits.
+- The packed artifact, on a real clock from the start position, plays
+  **a2a3** and reaches only **depth 5**, where the landed entry reaches depth 10
+  and candidate A reaches 8. An engine whose best opening move is a rook-pawn
+  push is not a screening candidate; it is a diagnosis.
+
+So the taper is **blocked on data, not on bytes** — the +74-byte price stands
+and is worth revisiting once the set is less endgame-skewed, or once the second
+set is fitted as a regularised delta from the first rather than independently.
+This is the phase-mix finding cashing out exactly where it was predicted to.
+
+### Going forward: two candidates, bars pre-registered
+
+Both pass the legality gate (40 FORCED / 30 in-check / 30 quiet, 0 no-move,
+0 illegal). Sources at `tools/tune/candidates/`.
+
+| | bytes | vs entry | held out | packed artifact from startpos |
+|---|---|---|---|---|
+| **C1** flat refit, mirrored step 8, king exact | **3215** | **−163** | −5.31% | e2e4, depth 8 |
+| **C2** flat refit, exact | **3441** | **+63** | −5.93% | b1c3, depth 9 |
+
+**Pre-registered, before any game is played:**
+
+- **C1 saves 163 bytes**, so it does not need to win, only not to lose: **LAND
+  if the 95% interval's lower bound is above −15 Elo** against the 3378-byte
+  entry. **DROP if the upper bound is below 0.**
+- **C2 costs 63 bytes**, so the project's standing 1.0 Elo/byte rule applies:
+  **LAND only at ≥ +63 Elo.** Its real job is to be the **control that isolates
+  mirroring** — C1 and C2 are the same fit, and the difference between them is
+  the compression, measured in play rather than in loss.
+- Both screens: fixed-node **our-vs-our on the box** against the current
+  3378-byte entry, legality gate and mate gate first, SPRT with these bars,
+  the A-vs-A driver control, 95% intervals, and a fixed-N confirmation for any
+  winner's Elo/byte number.
+
+One caveat carried forward rather than resolved: at a real clock C1 reached
+depth 8 where the landed entry reached 10. Node efficiency is not loss, and
+~100 Elo per doubling is this project's own estimate, so a better-fitting eval
+that searches shallower can still lose. The screen measures the sum; if C1
+comes back negative, that is the first place to look.
+
+### One more silent-corruption bug, in the codec
+
+`codec.mixed` accumulates a ~3000-bit Python integer. A single **numpy int64**
+anywhere in its input makes the whole product numpy and it **wraps at 64 bits**,
+producing a valid-looking source that encodes garbage — announced only by a
+`RuntimeWarning` in a log nobody reads. It reached the pricing harness through
+tables built with numpy, and the symptom was not a wrong number but a 10-minute
+hang: the garbage tables made the artifact miss `bestmove`, so every standalone
+check sat out its 120 s timeout.
+
+`int()` on every input now, and the codec self-test carries a **64-bit wrap
+control** that fails if numpy inputs ever disagree with Python ones. The landed
+entry is byte-identical after the fix (3378), verified.
+
+---
+
 ## 2026-08-13 — THE TRAINING SET IS LABELLED: 19,491 positions, Stockfish 18 @ depth 8, and the labels are a function of the position alone
 
 The set that gates every training candidate exists again, and it is

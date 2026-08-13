@@ -13,13 +13,18 @@ vintage and have never been fitted to anything this project measured.
 usage: texel_tune.py DATA.npz OUT.json
 """
 import json
+import pathlib
 import re
 import sys
 
 import numpy as np
 
 DATA, OUT = sys.argv[1], sys.argv[2]
-REPO = "/Users/ahle/repos/sunfish-packed"
+# Derive the repo from THIS file. The hard-coded path made the fit read
+# ANOTHER checkout's sunfish.py for its warm start -- the same defect PR
+# #176 fixed in the entry generator, and here it would silently warm-start
+# from tables that are not the ones being replaced.
+REPO = str(pathlib.Path(__file__).resolve().parents[2])
 PIECES = "PNBRQK"
 
 d = np.load(DATA, allow_pickle=True)
