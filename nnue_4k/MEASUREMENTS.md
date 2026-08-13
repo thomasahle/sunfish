@@ -46,6 +46,13 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **TEACHER CHOSEN: our own search at 160,000 nodes — and its value never converges** | 2.8× the measured 30+1 frontier (56,829 nodes), r **0.9919** with a 4× deeper teacher. From 40k up, 21% of positions still move >25 cp per 4× — that is tactics, not tolerance, and 384 parameters cannot hold it |
+| 2026-08-13 | **NEW GATE: first yield. The shipped entry passes at 780 nodes; ALL FOUR fits fail** | C1 32,640, m1 9,088, q8 3,707, C2 2,568 against a 2,048-node window. Measuring the count, not the `(none)` symptom, is what gave it power — the binary form caught only its own reproducer |
+| 2026-08-13 | **CORRECTION: C2's post-mortem MECHANISM does not survive a re-split** | Over 12 splits the middlegame band is **−2.96 ± 2.36 and its sign FLIPS** — it is the least-improved band, not a worse one. The anti-correlation stands; its explanation does not |
+| 2026-08-13 | The first-yield gate scored PASS for every arm until it checked its own driver | An entry resolving no `sunfish_ui/` runs the builtin loop, which ignores `position fen` and answers from the OPENING position. Third time this lane has paid for it |
+| 2026-08-13 | Torch trainer validated against C2 on four axes, incl. its failure mode | −5.93% held-out, bands −9.81/+0.56, **3412 bytes (+62)**, and first yield **2,568 on the same FEN** as the box's `e_c2.py` |
+| 2026-08-13 | **Quantisation-aware (STE) students are BYTE-NEGATIVE: q8 −53 B, q16 −93 B** | q8 keeps the whole fit (−5.91% vs −5.93%). Round-trip check caught the codec quantising the **king** table, silently rounding the landed `kend` fix |
+| 2026-08-13 | `torch.optim.LBFGS`'s default `tolerance_grad` is a silent no-op at this loss scale | Gradients ~1e-9 vs a 1e-7 default: the fit returns its warm start and every band reads 0.00%, which looks like a result |
 | 2026-08-13 | **BOTH CANDIDATES DROPPED — and held-out loss is ANTI-CORRELATED with strength** | C2, the clean unmirrored fit, is **−93.8 ± 32.7** over 405 games while its held-out loss was **5.9% better than classic**. The objective, not the bytes, is the blocker |
 | 2026-08-13 | **C1 DROPPED: −57.7 ± 25.5 over 651 games, and it answers `bestmove (none)`** | SPRT stopped early for base (339W/232L/79D). Bar was UB > 0; UB is **−32**. A-vs-A control exactly 50.00% |
 | 2026-08-13 | **THE CAUSE IS MIRRORING, not the fit and not the quantisation** | Four encodings, one position: exact and **step-8 unmirrored both play fine**; both MIRRORED arms return no move. Kills the mirrored 7-bucket design |
@@ -201,6 +208,248 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-13 — The distillation teacher, specified and priced; a new gate that all four old fits fail; and the C2 post-mortem's mechanism does NOT survive a re-split
+
+Thomas's reorder: distillation first, and the teacher is **our own search's
+converged value**, not a shallow Stockfish score. Static SF-depth-8 loss is on
+record as anti-correlated with strength (C2 fitted it 5.9% better and played
+−93.8), and the search's own value is the quantity the engine actually
+maximises. This entry is the teacher spec, the budget choice behind it, the
+instruments built to gate what comes out, and one correction. **No student is
+trained on it yet — labelling is in flight — and no Elo is claimed anywhere
+below.**
+
+### The frontier the teacher has to beat, measured not assumed
+
+A teacher at the student's own depth teaches nothing. So the budget is chosen
+against the budget the engine actually spends, measured on the bench box under
+its ordinary match load (load 24 of 96, two `tc=30+1` matches cotenant):
+
+| | median | min | max |
+|---|---|---|---|
+| depth at 30+1 | **9** | 7 | 15 |
+| nodes at 30+1 | **56,829** | 23,797 | 112,506 |
+
+16 positions, `wtime 30000 winc 1000`, so `think = wtime/12 + 0.9*inc = 3.40 s`
+at a median 42,473 nps. The fixed-node screens run at **20,000** nodes, well
+below this.
+
+### The teacher's value does NOT converge. It plateaus, and the plateau is tactics
+
+320 phase-stratified positions labelled at five budgets, every one labelled at
+every budget:
+
+| budget | mean depth | median \|Δ\| vs previous | mean \|Δ\| | >25cp | r with 640k |
+|---|---|---|---|---|---|
+| 2,500 | 4.27 | — | — | — | 0.9241 |
+| 10,000 | 5.54 | 8 | 15.8 | 13.4% | 0.9345 |
+| 40,000 | 7.61 | 12 | 24.9 | 22.5% | 0.9710 |
+| **160,000** | **9.74** | 10 | 22.8 | 21.2% | **0.9919** |
+| 640,000 | 11.91 | 10 | 21.0 | 21.6% | 1 |
+
+Read the middle columns first. **The label never stops moving**: from 40k
+upward, a 4× budget increase still shifts ~21% of positions by more than 25 cp,
+and the median shift sits flat at 10 cp. This is not a convergence tolerance
+that more nodes would close — it is tactical content entering and leaving the
+value, and **a 384-parameter piece-square table cannot represent it at any
+budget**. Buying more of it is buying label noise.
+
+What does keep improving is agreement with the deepest run, and it saturates:
+**r = 0.9919 at 160k**, so a 4× more expensive teacher would move 0.8% of the
+variance.
+
+**Chosen: N = 160,000 nodes.** Justified on four measured grounds — 2.8× the
+30+1 play frontier and 8× the screen budget; median completed depth 9.74
+against the frontier's 9; r = 0.9919 against 4× the cost; and 1.8 s/position,
+which is ~10 core-hours for the whole set and fits inside the cotenancy rule.
+640k would be 5× that for 0.008 of correlation.
+
+### Dataset spec
+
+| | |
+|---|---|
+| positions | the **same 19,491 FENs** as `set20260813.npz` |
+| teacher | `nnue_4k/pst_entry.py`, sha256 `f2f0bdc87cd1…`, the shipped entry |
+| budget | `go nodes 160000`, node cap only, no wall clock |
+| label | score of the **last completed depth**, MTD bracket midpoint, white POV |
+| features | 6×64 piece-square counts, white minus mirrored black — byte-identical construction to `texel_data.py` |
+| dropped | positions where the teacher saw a mate at the root, counted not coerced |
+
+The positions are deliberately **unchanged**. C2 differed from classic in the
+teacher AND could have differed in a dozen other ways; the distilled student
+differs from C2 in the label and in nothing else, so if it converts, the
+teacher is why and no other explanation is available. Re-sampling the position
+mix is a separate axis, and the teacher is free of Stockfish, so it can be run
+over any number of new positions later without a relabelling dependency.
+
+### Two controls on the labeller, both of which the SF labeller needed
+
+- **Order/TT control.** `Searcher.search` clears `tp_score` but *not*
+  `tp_move`, and move ordering changes the tree — the same carry-over that
+  made Stockfish score one FEN −14 in one slot and −22 in another. A fresh
+  `Searcher` is built per position, and 40 positions labelled forward and then
+  **reversed** produce **bit-identical records in every field**.
+- **Interpreter control.** The same 8 positions labelled under CPython 3.14.5
+  on the laptop and PyPy 3.11.13 on the box give **identical labels**. The
+  label is a function of (fen, budget, engine sha) alone.
+
+**Positive control on the extraction itself**: for the first sweep position the
+labeller reports 353 cp at depth 5, and the engine's own `info` stream on the
+same position converges to `lower 348 / upper 359` at depth 5 — midpoint 353.
+The number is the engine's, not a re-derivation of it.
+
+### How different is this teacher from Stockfish? Enough to matter
+
+On the 320 sweep positions, our 160k value against SF depth 8: **r = 0.884**,
+**median absolute difference 86 cp**, mean difference −3.7 cp, sd 324 vs 304.
+So the scale matches (no piece-value scale mismatch to absorb) while the
+per-position disagreement is large. This is a real change of target, not a
+relabelling that moves things a little.
+
+### NEW GATE: `tools/build/first_yield_gate.py`, and all four old fits fail it
+
+`main()` can only print a move the search handed it, and the search hands one
+over only on a **root fail-high with a move**. Both stop conditions are polled
+at `self.nodes % 2048 == 0`, so **the earliest an abort can land is node
+2,048**. A build whose first fail-high needs more than that has a budget — of
+nodes *or of time*, so this is not a fixed-node-only hazard — at which it
+prints `bestmove (none)`.
+
+The first version asked the binary question (`go nodes 1`, is it `(none)`) and
+over 505 positions caught C1 on **exactly one**: the position already known to
+fail. A gate whose power comes from carrying its own reproducer catches the bug
+it was written for and nothing else. It now **measures the node count**, which
+turns a 1-in-505 event into a distribution with a margin:
+
+| arm | median | p99 | **max** | verdict |
+|---|---|---|---|---|
+| **shipped entry** | 5 | 178 | **780** | PASS |
+| C2 (exact, unmirrored) | 5 | 369 | **2,568** | FAIL |
+| q8 (step 8, post-hoc rounded) | 5 | 361 | **3,707** | FAIL |
+| m1 (exact, mirrored) | 5 | 167 | **9,088** | FAIL |
+| C1 (step 8, mirrored) | 5 | 283 | **32,640** | FAIL |
+
+505 phase-stratified positions from our own games, plus the C1 reproducer.
+**Every fitted candidate this lane has produced fails; the shipped entry passes
+with a 2.6× margin.** The ordering by max reproduces the bisection's ordering
+exactly — mirroring is worst — from an instrument that knows nothing about
+mirroring.
+
+Two things this gate needed to be true rather than reassuring:
+
+- **A subprocess control.** The measured node count is checked against
+  `go nodes 1` through the real UCI surface on the worst positions plus a fixed
+  slice; a number that did not predict the played move would be a generator
+  nobody had validated.
+- **A driver assertion, which it needed on its first run.** An entry that
+  resolves no `sunfish_ui/` falls through to the **builtin loop, which knows
+  only `position startpos`** — it ignores the FEN, searches the opening
+  position, and answers a legal-looking move. The gate scored **PASS for every
+  arm including C1** until it started demanding the driver banner by name. Same
+  class as the `agree.py` incident; third time this lane has paid for it.
+
+### The C2 post-mortem's MECHANISM does not survive a re-split
+
+The recorded explanation for C2 was a band diagnostic: "the whole −5.31% lives
+in the endgame and the middlegame band is slightly worse than classic
+(+0.6% at phase 12-17)". That was read off **one** held-out split, and the band
+holds ~450 positions. Refitting the identical model on **12 splits**:
+
+| band | mean | sd | min | max | sign |
+|---|---|---|---|---|---|
+| OVERALL | −7.85 | 0.81 | −8.66 | −5.82 | stable |
+| phase 0-5 | −10.92 | 1.75 | −13.22 | −7.32 | stable |
+| phase 6-11 | −6.11 | 1.16 | −7.97 | −4.25 | stable |
+| **phase 12-17** | **−2.96** | **2.36** | **−6.36** | **+0.94** | **FLIPS** |
+| phase 18-24 | −8.00 | 1.95 | −12.16 | −5.20 | stable |
+
+**The middlegame band is the LEAST IMPROVED band, not a worse one**, and its
+sign is not determined at this sample size. The anti-correlation itself is
+untouched — the fit is reliably ~8% better on held-out loss and played −93.8
+Elo — but *why* is now unexplained, and the phase-reweighting programme that
+was justified by this mechanism was aimed at a statistic that flips sign.
+Recorded so that nothing further is built on it.
+
+### The torch trainer is validated against a fit whose Elo we already know
+
+`tools/tune/distill_train.py`, `torch.optim` only, seeded and deterministic,
+CPU, single-threaded (the laptop is running a timed league). Run on the **old
+SF-labelled set** it must reproduce C2, and it does — on four independent
+axes:
+
+| | recorded for C2 | torch harness |
+|---|---|---|
+| held-out vs classic | −5.9% | **−5.93%** |
+| phase 0-5 / 12-17 | −9.8% / +0.6% | **−9.81% / +0.56%** |
+| packed bytes | 3412 (+62) | **3412 (+62)** |
+| first yield, worst position | 2,568 nodes (box `e_c2.py`) | **2,568 nodes, same FEN** |
+
+The last row is the strongest one: an independently rebuilt candidate
+reproduces the incumbent's failure mode node for node.
+
+**The split is now keyed on `sha256(seed + fen)`, not on a row permutation.**
+The distilled set drops the positions where the teacher saw a mate, so an
+index-based split puts *different positions* in the two teachers' held-out
+sets and the single-variable comparison silently stops being true.
+
+### Quantisation-aware students are BYTE-NEGATIVE
+
+Straight-through rounding inside the forward pass, so the fit is over tables we
+can actually store rather than a float fit rounded afterwards. On the SF set
+(harness exercise, not a candidate):
+
+| arm | held-out | packed | vs entry |
+|---|---|---|---|
+| linear (exact) | −5.93% | 3412 | +62 |
+| **q8** | −5.91% | **3297** | **−53** |
+| **q16** | −5.11% | **3257** | **−93** |
+
+Step 8 keeps essentially the whole fit and gives **53 bytes back** against the
+shipped entry. Two defects were caught getting there, both by the round-trip
+check: the codec **quantises every table it is handed, including the king**, so
+a step-8 emit silently rounded the landed `kend` fix (`exact="K"` holds it, ~84
+B); and the piece value must be snapped to the same grid, or subtracting it
+shifts the whole table half a step off and the codec rounds a second time.
+
+### Instrument note: `torch.optim.LBFGS`'s default tolerance is a silent no-op here
+
+At this loss scale (~0.017) the gradients are ~1e-9 and the **default
+`tolerance_grad=1e-7` declares convergence before the first step**. The "fit"
+comes back exactly equal to its warm start and every band reads `0.00%`, which
+looks like a result rather than a failure. Caught by a run where *every* number
+was zero; `tolerance_grad=1e-12` is now set explicitly everywhere.
+
+### Pre-registered, before the labels finish
+
+Screen: fixed-node 20,000 our-vs-our, SPRT elo0=0 elo1=10, alpha=beta=0.05,
+2,000-position book — **identical to C1's and C2's screens**, so the numbers
+are directly comparable. Gates first: decode round trip, legality 100/100, mate
+8/8, **first yield**, and an A-vs-A control. Slot to be requested from the
+coordinator; this lane launches nothing itself.
+
+- **LAND** if the 95% lower bound is **> 0**. This is C1's *re-derived* bar, not
+  its original LB > −15: eval bytes stopped being scarce (746 under the
+  ceiling, and the directive is to fill it), so a byte credit is void. The
+  step-8 arm gives bytes back, which strengthens the case at the same bar but
+  does not lower it.
+- **DROP** if the upper bound is below 0.
+- **The informative comparison is against −93.8**, not against zero. If the
+  distilled student's point estimate is not materially above C2's, the teacher
+  swap is not what was wrong, and 384-parameter distillation on this position
+  set is closed.
+- **No band prediction is registered**, because the band statistic just failed
+  its own stability test.
+
+### Conditions
+
+Box: 8 `nice -n 15` pypy3 labellers, 0.55 pos/s each, alongside two of our own
+`tc=30+1` matches at concurrency 10. Load **22.5 → 26.5 of 96 cores**. Labelling
+never gates a match and this one could not have distorted one; no fastchess
+process was started by this lane. Laptop CPU used only for the 384-parameter
+fits (single-threaded) while the league ladder ran.
 
 ---
 
