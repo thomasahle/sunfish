@@ -382,6 +382,53 @@ cannot land before ply two whatever the engine plays.  The recursion hands each
 child these same hypotheses, so the same theorem applies at every node of the
 play whose remaining budget is at least three.
 
+### Can the frontier premise be dropped? No — `CexD`
+
+`NoMaskedMobility` is the model-side stand-in for the engine fix in PR #171
+(search the QS-filtered evasions before declaring mate).  The natural hope is
+that the distance machinery makes it unnecessary: a phantom mate is invented at
+the frontier, where almost no depth is left, so surely it can only claim the
+DEEPEST rungs, and a real mate in `k` with `k + 1 ≤ d` claims a higher one.
+
+That hope is false, and one number says why.  **A masked node does not report a
+shallow mate — it reports the sentinel.**  Its filtered fold has no admitted
+legal move left, so nothing displaces the initial accumulator
+`LOSS = -MATE_UPPER`, and the parent negates that to `MATE_UPPER`, which is not
+a rung at all: it is strictly above every value the ladder can produce
+(`mateFloor_lt_MATE_UPPER`).  A phantom outranks EVERY real mate, at every
+distance and every depth, and no rung argument can separate what is off the
+ladder.
+
+`CexD` is that hope refuted at the exact hypotheses of
+`leastMated_defence_resists`.  `Q` is genuinely lost in four plies; the correct
+defence `D` leads to a real mate in three, the fast loss `B` to mate in one, and
+one ply past the frontier of `D`'s line sits `M` — a defender node whose only
+legal reply is filtered by the depth-1 threshold (`-150 < -100`) while an
+illegal one survives it, the position class of the #171 report, one ply deeper.
+`D` is therefore priced at `MATE_UPPER = 69290` instead of its true rung 47938,
+the mate in one is priced honestly at 47968, and the engine prefers to be mated
+in two.  Every premise but `NoMaskedMobility` holds — including the move rule in
+its IDEALISED exact-argmax form, so the driver's tolerance is not what breaks it
+— and the conclusion is false:
+
+| fact | theorem | axioms |
+|---|---|---|
+| the masked node reports the sentinel | `cexD_M1` | `propext, Quot.sound` |
+| ... which outranks the true mate at the root | `cexD_D4`, `cexD_B4` | `propext, Quot.sound` |
+| the position really is lost in exactly four plies | `cexD_leastMated` | `propext, Quot.sound` |
+| the engine is mated in two | `cexD_not_resists` | `propext, Quot.sound` |
+| **the premise cannot be dropped** | `cexD_defence_needs_frontier` | `propext, Quot.sound` |
+
+Two things this settles.  **Acyclicity does not help**: `CexD` is a finite tree
+with no repetition in it, so no draw-by-repetition or well-founded-descent
+argument touches the failure.  **Depth does not help**: the masking sits one ply
+below the choice and stays there however large `d` grows, because the frontier
+travels with the search — `cexD_M4` values that very node honestly at remaining
+depth 4 while `cexD_M1` shows it lying at remaining depth 1.  What retires the
+premise is the engine change: land #171, and the sentinel never survives the
+fold.  Until then `NoMaskedMobility` is the honest name for the gap, and it is a
+*search-level* premise because the gap is in the search.
+
 ## Terminal positions and legality evidence
 
 The move fold maintains two independent facts:
@@ -460,8 +507,9 @@ transform is the identity, so the model and source are extensionally equal.
 - `TableSwap.lean`: table-update properties.
 - `Liveness.lean` and `Classification.lean`: mate visibility and search-result
   classification under their named fidelity premises.
-- `Shortest.lean`: mate-distance parity, value separation, and distance-to-mate
-  optimal play in both directions under the driver's own stopping tolerance.
+- `Shortest.lean`: mate-distance parity, value separation, distance-to-mate
+  optimal play in both directions under the driver's own stopping tolerance, and
+  the countermodel showing the frontier premise cannot be dropped from it.
 - `Pruning.lean` and `Tricks.lean`: proof envelopes for selective-search
   techniques.
 

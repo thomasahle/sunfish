@@ -882,4 +882,409 @@ theorem dtm_optimal (G : QSGame) (guard : G.Pos → Bool)
    fun hLMd hk hkd hcapq =>
       leastMated_defence_resists G guard ch d hF hQ hNM hZ hch hLMd hk hkd hspan hcapq⟩
 
+/-! ### The frontier premise is required HERE TOO, and not for the
+reason one would guess
+
+`Liveness.lean`'s `CexF` shows `NoMaskedMobility` is required for the
+no-false-mates converse.  The natural hope is that the defender half
+escapes it anyway: a phantom mate is invented at the QS frontier, where
+almost no depth is left, so surely it can only claim the DEEPEST rungs
+of the mate ladder -- and a real mate in `k` with `k + 1 <= d` claims a
+higher one, so the phantom could never outrank the truth in the
+engine's own ordering.
+
+That hope is false, and the countermodel below says why in one number.
+A masked node does not report a shallow mate.  Its filtered fold has no
+admitted legal move left, so nothing ever displaces the initial
+accumulator `LOSS = -MATE_UPPER`, and the node reports the exact
+king-capture SENTINEL.  Negated at the parent that is `MATE_UPPER`,
+which is not a rung at all: it is strictly above every value the mate
+ladder can produce (`mateFloor_lt_MATE_UPPER`).  A phantom therefore
+outranks EVERY real mate, at every distance and every depth, and the
+rung machinery of this file cannot separate what is off the ladder.
+
+`CexD` is that hope refuted at the exact hypotheses of
+`leastMated_defence_resists`.  `Q` is genuinely lost in four plies; the
+slow, correct defence `D` leads to a real mate in three, and the fast
+loss `B` walks into mate in one.  One ply past the frontier of `D`'s
+line sits `M`, a defender node whose only legal reply is filtered by
+the depth-1 threshold while an illegal one survives it -- the position
+class of the `#171` report, one ply deeper.  `D`'s subtree therefore
+reports the sentinel instead of its true rung, and
+`MATE_UPPER > MATE_LOWER + 3 * EVAL_ROUGHNESS` makes the correct
+defence look WORSE than the mate in one.  Every near-maximal choice
+must play `B`, and the engine is mated in two plies where the position
+permitted four.
+
+No acyclicity argument and no "eventually deep enough" argument can
+retire this: `CexD` is a finite tree with no repetition anywhere in it,
+and `d = 4` is as generous as the theorem allows.  The masking sits one
+ply below the choice, and it stays one ply below the choice however
+large `d` grows -- the frontier travels with the search.  What retires
+the premise is the engine change: search the filtered tail before
+declaring mate, and the sentinel never survives the fold. -/
+
+inductive DPos where
+  | Q | D | E | P | M | B | C | X | Z | S | W
+  deriving DecidableEq
+
+open DPos in
+/-- `Q` (defender) → `{D, B}`; the slow defence `D → E → P` with `P`
+mating on `C`, and the fast loss `B → C`.  `C` is checkmated: its only
+move `X` is refuted by the recapture `Z`, and passing lets `W` take the
+king.  `M` is the masked node -- `X` is illegal and admitted, `S` is
+legal and filtered at the depth-1 threshold (`-150 < -100`), and `S` is
+itself a stalemate. -/
+def CexD : QSGame where
+  Pos := DPos
+  moves := fun p => match p with
+    | Q => [D, B]
+    | D => [E]
+    | E => [P]
+    | P => [M, C]
+    | M => [X, S]
+    | B => [C]
+    | C => [X]
+    | X => [Z]
+    | W => [Z]
+    | Z => []
+    | S => []
+  eval := fun p => match p with
+    | Z => -MATE_UPPER
+    | _ => 0
+  pass := fun p => match p with
+    | C => W
+    | p => p
+  val := fun p m => match p, m with
+    | M, S => -150
+    | _, _ => 0
+
+instance : DecidableEq CexD.Pos := inferInstanceAs (DecidableEq DPos)
+
+theorem cexD_floor : ValFloor CexD 192 := by
+  intro p m _
+  cases p <;> cases m <;> decide
+
+theorem cexD_quiet : EvalQuiet CexD.toNullGame.toGame := by
+  intro p
+  cases p <;> decide
+
+/-- The null option is never taken, so the fold's accumulator is the
+bare `LOSS` sentinel -- which is the whole mechanism of the phantom. -/
+theorem cexD_term (d : Nat) (p : CexD.Pos) :
+    nullTermD2 CexD (fun _ => false) d p = LOSS := by
+  simp only [nullTermD2]
+  rw [if_neg (fun h => Bool.noConfusion h.1)]
+
+theorem cexD_nozug : NoZugzwang CexD (fun _ => false) := by
+  intro _ _ _ _ _ hg _
+  exact Bool.noConfusion hg
+
+/-! The declared values, bottom up. -/
+
+theorem cexD_Z (d : Nat) :
+    nullValueD2 CexD (fun _ => false) d DPos.Z = -MATE_UPPER :=
+  nullValueD2_kingGone CexD _ d DPos.Z (by decide)
+
+theorem cexD_X (d : Nat) :
+    nullValueD2 CexD (fun _ => false) d DPos.X = MATE_UPPER :=
+  nullValueD2_of_capture CexD _ d DPos.X (by decide) (by decide)
+
+theorem cexD_S (d : Nat) :
+    nullValueD2 CexD (fun _ => false) (d + 1) DPos.S = 0 := by
+  rw [nullValueD2_of_allIllegal CexD _ d DPos.S (by decide) (by decide) (by decide)]
+  simp only [terminalValue]
+  rw [if_neg (by decide)]
+
+theorem cexD_C (d : Nat) (hd : ((d : Int) + 1) * EVAL_ROUGHNESS ≤ 21366) :
+    nullValueD2 CexD (fun _ => false) (d + 1) DPos.C
+      = -MATE_LOWER - ((d : Int) + 1) * EVAL_ROUGHNESS := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  rw [nullValueD2_of_allIllegal CexD _ d DPos.C (by decide) (by decide) (by decide)]
+  simp only [terminalValue, EVAL_ROUGHNESS] at hd ⊢
+  rw [if_pos (by decide)]
+  have hc : ((d + 1 : Nat) : Int) = (d : Int) + 1 := by omega
+  rw [hc]
+  omega
+
+/-- **The phantom.**  `M`'s depth-1 fold admits only the illegal `X`
+(the legal `S` is filtered at `val_lower 1 = -100`), so the accumulator
+`LOSS` survives and the node reports the exact sentinel. -/
+theorem cexD_M1 : nullValueD2 CexD (fun _ => false) 1 DPos.M = -MATE_UPPER := by
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  have hMU : MATE_UPPER = 69290 := rfl
+  rw [nullValueD2_of_fold CexD _ 0 DPos.M (by decide) (by decide) (by decide)]
+  have hma : movesAbove CexD (val_lower 1) DPos.M = [DPos.X] := by decide
+  rw [hma, cexD_term]
+  simp only [foldMax]
+  rw [cexD_X]
+  omega
+
+/-- One ply up, the sentinel becomes a mate claim above every rung. -/
+theorem cexD_P2 : nullValueD2 CexD (fun _ => false) 2 DPos.P = MATE_UPPER := by
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  rw [nullValueD2_of_fold CexD _ 1 DPos.P (by decide) (by decide) (by decide)]
+  have hma : movesAbove CexD (val_lower 2) DPos.P = [DPos.M, DPos.C] := by decide
+  rw [hma, cexD_term]
+  simp only [foldMax]
+  rw [cexD_M1, cexD_C 0 (by decide)]
+  simp only [EVAL_ROUGHNESS]
+  omega
+
+theorem cexD_E3 : nullValueD2 CexD (fun _ => false) 3 DPos.E = -MATE_UPPER := by
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  have hMU : MATE_UPPER = 69290 := rfl
+  rw [nullValueD2_of_fold CexD _ 2 DPos.E (by decide) (by decide) (by decide)]
+  have hma : movesAbove CexD (val_lower 3) DPos.E = [DPos.P] := by decide
+  rw [hma, cexD_term]
+  simp only [foldMax]
+  rw [cexD_P2]
+  omega
+
+/-- **The correct defence, mispriced.**  `D` is a real mate in three
+and should be worth `MATE_LOWER + (4 - 3) * EVAL_ROUGHNESS = 47938`.
+The phantom hands it `MATE_UPPER` instead. -/
+theorem cexD_D4 : nullValueD2 CexD (fun _ => false) 4 DPos.D = MATE_UPPER := by
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  have hMU : MATE_UPPER = 69290 := rfl
+  rw [nullValueD2_of_fold CexD _ 3 DPos.D (by decide) (by decide) (by decide)]
+  have hma : movesAbove CexD (val_lower 4) DPos.D = [DPos.E] := by decide
+  rw [hma, cexD_term]
+  simp only [foldMax]
+  rw [cexD_E3]
+  omega
+
+/-- The fast loss is priced honestly: a real mate in one, three rungs
+above the floor -- and 21322 points BELOW the phantom. -/
+theorem cexD_B4 : nullValueD2 CexD (fun _ => false) 4 DPos.B = 47968 := by
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  rw [nullValueD2_of_fold CexD _ 3 DPos.B (by decide) (by decide) (by decide)]
+  have hma : movesAbove CexD (val_lower 4) DPos.B = [DPos.C] := by decide
+  rw [hma, cexD_term]
+  simp only [foldMax]
+  rw [cexD_C 2 (by decide)]
+  simp only [EVAL_ROUGHNESS]
+  omega
+
+/-- With four plies to spend the filter hides nothing and `M` is the
+honest draw it always was.  The masking lives at the frontier only --
+which is exactly why no amount of depth searches it away: the frontier
+travels with the search. -/
+theorem cexD_M4 : nullValueD2 CexD (fun _ => false) 4 DPos.M = 0 := by
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  have hMU : MATE_UPPER = 69290 := rfl
+  rw [nullValueD2_of_fold CexD _ 3 DPos.M (by decide) (by decide) (by decide)]
+  have hma : movesAbove CexD (val_lower 4) DPos.M = [DPos.X, DPos.S] := by decide
+  rw [hma, cexD_term]
+  simp only [foldMax]
+  rw [cexD_X, cexD_S 2]
+  omega
+
+/-! The engine's move rule, and what it is forced to play. -/
+
+open DPos in
+/-- The value-minimising choice at every node with a legal move.  At
+`Q` it is forced: `47968 < MATE_UPPER`, and near-maximality's tolerance
+of one `EVAL_ROUGHNESS` cannot bridge 21322 points. -/
+def chD : CexD.Pos → CexD.Pos := fun p => match p with
+  | Q => B
+  | D => E
+  | E => P
+  | P => C
+  | M => S
+  | B => C
+  | C => X
+  | X => Z
+  | W => Z
+  | Z => Z
+  | S => S
+
+/-- The choice is not merely near-maximal, it is the exact argmin. -/
+theorem cexD_maximal : MaximalChoice CexD (fun _ => false) 4 chD := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  intro p hai
+  cases p with
+  | Q =>
+    refine ⟨by decide, fun m hm => ?_⟩
+    have hma : movesAbove CexD (val_lower 5) DPos.Q = [DPos.D, DPos.B] := by decide
+    rw [hma] at hm
+    show nullValueD2 CexD (fun _ => false) 4 DPos.B
+      ≤ nullValueD2 CexD (fun _ => false) 4 m
+    rw [cexD_B4]
+    rcases List.mem_cons.mp hm with rfl | hm2
+    · rw [cexD_D4]; omega
+    · rw [List.mem_singleton.mp hm2, cexD_B4]; omega
+  | P =>
+    refine ⟨by decide, fun m hm => ?_⟩
+    have hma : movesAbove CexD (val_lower 5) DPos.P = [DPos.M, DPos.C] := by decide
+    rw [hma] at hm
+    show nullValueD2 CexD (fun _ => false) 4 DPos.C
+      ≤ nullValueD2 CexD (fun _ => false) 4 m
+    rw [cexD_C 3 (by decide)]
+    simp only [EVAL_ROUGHNESS]
+    rcases List.mem_cons.mp hm with rfl | hm2
+    · rw [cexD_M4]; omega
+    · rw [List.mem_singleton.mp hm2, cexD_C 3 (by decide)]
+      simp only [EVAL_ROUGHNESS]
+      omega
+  | M =>
+    refine ⟨by decide, fun m hm => ?_⟩
+    have hma : movesAbove CexD (val_lower 5) DPos.M = [DPos.X, DPos.S] := by decide
+    rw [hma] at hm
+    show nullValueD2 CexD (fun _ => false) 4 DPos.S
+      ≤ nullValueD2 CexD (fun _ => false) 4 m
+    rw [cexD_S 3]
+    rcases List.mem_cons.mp hm with rfl | hm2
+    · rw [cexD_X]; omega
+    · rw [List.mem_singleton.mp hm2, cexD_S 3]; omega
+  | D =>
+    refine ⟨by decide, fun m hm => ?_⟩
+    have hma : movesAbove CexD (val_lower 5) DPos.D = [DPos.E] := by decide
+    rw [hma] at hm
+    rw [List.mem_singleton.mp hm]
+    show nullValueD2 CexD (fun _ => false) 4 DPos.E
+      ≤ nullValueD2 CexD (fun _ => false) 4 DPos.E
+    omega
+  | E =>
+    refine ⟨by decide, fun m hm => ?_⟩
+    have hma : movesAbove CexD (val_lower 5) DPos.E = [DPos.P] := by decide
+    rw [hma] at hm
+    rw [List.mem_singleton.mp hm]
+    show nullValueD2 CexD (fun _ => false) 4 DPos.P
+      ≤ nullValueD2 CexD (fun _ => false) 4 DPos.P
+    omega
+  | B =>
+    refine ⟨by decide, fun m hm => ?_⟩
+    have hma : movesAbove CexD (val_lower 5) DPos.B = [DPos.C] := by decide
+    rw [hma] at hm
+    rw [List.mem_singleton.mp hm]
+    show nullValueD2 CexD (fun _ => false) 4 DPos.C
+      ≤ nullValueD2 CexD (fun _ => false) 4 DPos.C
+    omega
+  | X =>
+    refine ⟨by decide, fun m hm => ?_⟩
+    have hma : movesAbove CexD (val_lower 5) DPos.X = [DPos.Z] := by decide
+    rw [hma] at hm
+    rw [List.mem_singleton.mp hm]
+    show nullValueD2 CexD (fun _ => false) 4 DPos.Z
+      ≤ nullValueD2 CexD (fun _ => false) 4 DPos.Z
+    omega
+  | W =>
+    refine ⟨by decide, fun m hm => ?_⟩
+    have hma : movesAbove CexD (val_lower 5) DPos.W = [DPos.Z] := by decide
+    rw [hma] at hm
+    rw [List.mem_singleton.mp hm]
+    show nullValueD2 CexD (fun _ => false) 4 DPos.Z
+      ≤ nullValueD2 CexD (fun _ => false) 4 DPos.Z
+    omega
+  | C => exact absurd hai (by decide)
+  | Z => exact absurd hai (by decide)
+  | S => exact absurd hai (by decide)
+
+/-- ... and therefore under the driver's real, tolerant rule as well.
+The refutation does not lean on the `EVAL_ROUGHNESS` slack at all: it
+already defeats the exactly-converged bisection that `MaximalChoice`
+idealises. -/
+theorem cexD_nearMax : NearMaximalChoice CexD (fun _ => false) 4 chD :=
+  nearMaximalChoice_of_maximal CexD (fun _ => false) 4 chD cexD_maximal
+
+/-! The chess facts of the countermodel, from the spec side. -/
+
+theorem cexD_C_mated : Checkmated CexD DPos.C := ⟨by decide, by decide⟩
+
+theorem cexD_B_mate : ForcedMate CexD 1 DPos.B :=
+  ForcedMate.mate (k := 0) (by decide) (by decide) (by decide) cexD_C_mated
+
+theorem cexD_P_mate : ForcedMate CexD 1 DPos.P :=
+  ForcedMate.mate (k := 0) (by decide) (by decide) (by decide) cexD_C_mated
+
+/-- The slow defence really is a mate in three: `D → E`, and `E`'s only
+legal reply `P` mates in one. -/
+theorem cexD_D_mate3 : ForcedMate CexD 3 DPos.D := by
+  have hrep : ∀ m' ∈ CexD.moves DPos.E,
+      hasKingCapture CexD.toNullGame.toGame m' = false → ForcedMate CexD 1 m' := by
+    intro m' hm' _
+    rw [List.mem_singleton.mp hm']
+    exact cexD_P_mate
+  exact ForcedMate.step (k := 1) (by decide)
+    (show DPos.E ∈ CexD.moves DPos.D by decide) (by decide) (by decide) hrep
+
+/-- ... and no faster: `E` is not checkmated, and a two-ply budget
+would need its reply mated in zero. -/
+theorem cexD_D_not_fast : ∀ j, j ≤ 2 → ¬ ForcedMate CexD j DPos.D := by
+  intro j hj h
+  cases h with
+  | @mate k p m _ hm _ hmate =>
+    rw [List.mem_singleton.mp hm] at hmate
+    exact absurd hmate.1 (by decide)
+  | @step k p m _ hm _ _ hrep =>
+    rw [List.mem_singleton.mp hm] at hrep
+    obtain rfl : k = 0 := by omega
+    exact not_forcedMate_zero CexD DPos.P (hrep DPos.P (by decide) (by decide))
+
+/-- `Q`'s exact distance: mated with attacker budget three, so four
+plies of resistance are what the position permits. -/
+theorem cexD_leastMated : LeastMated CexD 3 DPos.Q := by
+  constructor
+  · refine Or.inr ⟨by decide, fun m hm _ => ?_⟩
+    rcases List.mem_cons.mp hm with rfl | hm2
+    · exact cexD_D_mate3
+    · rw [List.mem_singleton.mp hm2]
+      exact forcedMate_mono CexD cexD_B_mate 3 (by omega)
+  · intro j hj
+    cases hj with
+    | inl hcm => exact absurd hcm.1 (by decide)
+    | inr hrest =>
+      by_cases hle : 3 ≤ j
+      · exact hle
+      · exact absurd (hrest.2 DPos.D (by decide) (by decide))
+          (cexD_D_not_fast j (by omega))
+
+/-- **The engine is mated in two where the position permitted four.**
+Every near-maximal choice plays `B`, whose only legal reply is the
+checkmated `C`. -/
+theorem cexD_not_resists : ¬ ResistsFor CexD chD 4 DPos.Q := by
+  intro h
+  cases h with
+  | draw hterm _ => exact absurd hterm (by decide)
+  | step _ hrep =>
+    exact not_resistsFor_of_checkmated CexD chD cexD_C_mated (by omega)
+      (hrep DPos.C (by decide) (by decide))
+
+theorem cexD_masked_mobility : ¬ NoMaskedMobility CexD := by
+  intro h
+  exact absurd (h DPos.M (by decide) DPos.S (by decide)) (by decide)
+
+/-- **The finding, bundled: `NoMaskedMobility` cannot be dropped from
+the defender half.**  Every other premise of
+`leastMated_defence_resists` holds -- the fidelity premises, the
+zugzwang premise, the engine's move rule at `d = 4` in its IDEALISED
+exact-argmax form (so the tolerance is not what breaks it), the exact
+distance `LeastMated CexD 3 Q` with `3 + 1 ≤ 4`, root legality, and the
+span condition -- and the conclusion `ResistsFor CexD chD 4 Q` is
+FALSE.  The one premise that fails is `NoMaskedMobility`, at `M`.
+
+The theorem without it is therefore not merely unproven but false, and
+false for a reason no rung argument can repair, because the phantom's
+value is not on the ladder.  The attacker half goes the same way under
+the mirror construction: a phantom sibling valued `MATE_UPPER`
+outranks a real mate in one at every depth. -/
+theorem cexD_defence_needs_frontier :
+    ValFloor CexD 192 ∧ EvalQuiet CexD.toNullGame.toGame ∧
+      NoZugzwang CexD (fun _ => false) ∧
+      MaximalChoice CexD (fun _ => false) 4 chD ∧
+      NearMaximalChoice CexD (fun _ => false) 4 chD ∧
+      LeastMated CexD 3 DPos.Q ∧
+      hasKingCapture CexD.toNullGame.toGame DPos.Q = false ∧
+      ¬ NoMaskedMobility CexD ∧
+      ¬ ResistsFor CexD chD 4 DPos.Q :=
+  ⟨cexD_floor, cexD_quiet, cexD_nozug, cexD_maximal, cexD_nearMax,
+   cexD_leastMated, by decide, cexD_masked_mobility, cexD_not_resists⟩
+
 end Sunfish
