@@ -34,12 +34,16 @@ say "nodes $NODES  rounds $ROUNDS (cap $((ROUNDS*2)) games)  concurrency $CONC (
 say "book  $BOOK ($(wc -l < "$BOOK") positions, $ROUNDS consumed)"
 
 for e in "$EA" "$EB"; do
-    r=$("$PY" "$ARENA/legality_gate.py" "$ARENA/bin/$e" 300 2>&1)
+    # Gate at the budget this screen actually PLAYS at. The gate that cleared
+    # the mirrored build only ever sent `go movetime`, so the fixed-node path
+    # it was guarding was never exercised.
+    r=$("$PY" "$ARENA/legality_gate.py" "$ARENA/bin/$e" 300 --nodes="$NODES" 2>&1)
     if ! echo "$r" | grep -q "GATE PASSED"; then
         say "LEGALITY GATE FAILED: $e -- correctness bug, no games spent"
         echo "$r" | tail -12 | tee -a "$OUT"; exit 1
     fi
     say "  legality PASS  $e   $(echo "$r" | grep FORCED)"
+    say "  starvation     $e   $(echo "$r" | grep FIRST-YIELD)"
 done
 
 nice -n 5 "$FC" \

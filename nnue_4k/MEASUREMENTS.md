@@ -46,6 +46,11 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **`bestmove (none)` ROOT-CAUSED: budget starvation before the first yield** | The depth-1 gamma=0 probe costs **32,638 nodes against a 20,000-node budget**; `bound()` raises `Stop` before `search()` ever yields, so `go_loop` gets an empty stream. Shipped entry needs **23** on the same position |
+| 2026-08-13 | **REFUTED: "mirroring is the cause."** Mirroring is a slowdown, not a switch | Nodes to first yield: base **23**, c2 1,362, q8 1,745, m1 9,086, c1 32,638. c1 is simply the arm that crosses 20,000. **Unmirrored c2/q8 fail the new gate too** |
+| 2026-08-13 | **REFUTED: "fails at every depth including 1."** That was the repro harness | A piped `quit` races the search — run()'s quit branch sets `deadline = 0`. Driven without the race, **every arm answers at `go depth 1` and `go depth 3`** |
+| 2026-08-13 | **Gate hole closed: wrong POSITIONS, and the wrong QUESTION** | Random-playout positions cut off in ~2 nodes (unbalanced); quiet balanced openings are the expensive class. New **FIRST-YIELD arm**, 334 book positions: base **0 over, worst 582**; c1 **10 over, worst 10,359** |
+| 2026-08-13 | The gate only ever sent `go movetime`; the arena plays **fixed-node** | Both budget paths are gated now, and `ab_fixednode.sh` passes its own `--nodes`. Negative: the node arm alone caught nothing — the position class was the binding hole |
 | 2026-08-13 | **THE GOLF TARGET WAS THE WRONG NUMBER: eval already has 1132 B** | 4096 − 2942 = **1132 ≥ Thomas's "at least 1024"**. 2500 assumed the full 1500-byte eval. The eval lane's grid, not golf, is the binding constraint |
 | 2026-08-13 | Info/PV line cut: **−22 B, entry 3445, engine 2942** | Node counts bit-identical (2,342,657 both), gates green, artifact still streams bestmove LIVE to a pipe with stdin open |
 | 2026-08-13 | **Two of the three "safe" trims are NOT safe, with evidence** | `version` globals are in the driver's `ENGINE_API` — cutting them makes the entry **unmeasurable in every dev checkout**. `movetime` is a silent-forfeit hazard with a live consumer in `deploy.sh` |
@@ -165,6 +170,105 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-13 — `bestmove (none)` is BUDGET STARVATION, not mirroring; and the gate's hole was its positions
+
+The eval lane bisected a `(none)` to "mirroring alone, at full resolution".
+Mirroring is real but it is **not the mechanism**, and two of the three facts
+that framed the search were harness artifacts. Repro before theory:
+
+### The mechanism, named
+
+`search()` reaches its **first `yield` only after the depth-1, gamma=0 MTD
+probe completes**. `bound()` polls its budget at `nodes % 2048 == 0` and
+raises `Stop`. When the probe costs more nodes than the budget, `Stop` is
+raised *before the first yield*, `stop_softly` swallows it, and `go_loop`
+iterates an **empty** stream: `best_move` and `cand` stay `None`, the `pv()`
+walk finds nothing in `tp_move`, and it prints `bestmove (none)` — with no
+`info` line, because info lines are printed per yield.
+
+Nodes to first yield on the reported FEN
+(`rnbqkb1r/pp2pppp/3p4/2pnP3/3P4/2P2N2/PP3PPP/RNBQKB1R b KQkq d3 0 11`),
+read off each engine's own first `info` line:
+
+| arm | encoding | nodes to first yield | `go nodes 20000` |
+|---|---|---|---|
+| base | classic tables | **23** | `d6e5` |
+| C2 | fit, exact, unmirrored | 1,362 | `c5d4` |
+| q8 | fit, step 8, unmirrored | 1,745 | `d6e5` |
+| m1 | fit, exact, MIRRORED | 9,086 | `c5d4` |
+| **C1** | fit, step 8, MIRRORED | **32,638** | **`(none)`** |
+
+The budget is the whole story: **C1 at `go nodes 20000` → `(none)`; C1 at
+`go nodes 40000` → `c5d4`.** Same binary, same position, one number changed.
+
+### Two claims REFUTED
+
+- **"Mirroring alone breaks it."** Mirroring is a slowdown, not a switch. It
+  is a continuum — 23 → 1,362 → 1,745 → 9,086 → 32,638 — and C1 is merely the
+  arm that crosses 20,000. Mirroring is *not even the dominant term*: the
+  **unmirrored** C2 and q8 both fail the new gate. The 7-bucket mirrored
+  design was withdrawn on a cause that does not hold; what is actually
+  disqualifying is that every fitted arm is 60–1400× slower to a first move.
+- **"It fails at every depth including 1, with no info line."** That was the
+  repro harness. A piped heredoc delivers `quit` while the search is still
+  running, and `run()`'s quit branch sets `searcher.deadline = 0`, which trips
+  the same 2048-node poll. Driven so that `quit` is sent only *after*
+  `bestmove` arrives, **every arm answers at `go depth 1` and `go depth 3`**.
+  The `(none)` needs a *budget*, not a depth.
+
+Root, not eval: nothing here is specific to a table. Any engine whose first
+probe outruns its budget answers `(none)`, and `(none)` is scored as an
+illegal move — a forfeit. The shipped entry is safe only by margin (23 nodes),
+not by construction. **The fix belongs in the search or the driver: never
+return from `go` without a move while any pseudo-legal move exists.** Not
+taken here — it costs artifact bytes and needs its own match — but the gate
+below now measures the margin instead of trusting it.
+
+### Why the 100-position gate passed it
+
+Two independent holes, and only the second one mattered:
+
+- **Wrong budget (minor).** The gate only ever sent `go movetime 300`; the
+  arena plays fixed-node. Now both paths are gated and `ab_fixednode.sh`
+  passes its own `--nodes`. **Negative: this alone caught nothing** — C1
+  passed 100/100 at `go nodes 20000` too.
+- **Wrong positions (binding).** Random-playout positions are wildly
+  unbalanced, so the null-window probe at gamma=0 cuts off almost at once:
+  median **2 nodes**, and C1's worst over 120 was 4,542. The expensive class
+  is **quiet, balanced, dense** — real opening positions, where nothing
+  resolves the window. Also measured and rejected: WAC/Bratko-Kopec/CCR
+  (tactically sharp, so they cut off fast — C1 max 955 over 79), and
+  book-plus-random-plies (random moves destroy the balance: max 2,737).
+
+### The new arm, and why it needs no luck
+
+Asking "did a move come back" only catches starvation when the budget happens
+to land between 2048 and the first yield — a coin flip per position. The
+**FIRST-YIELD** arm asks the quantity itself, off the engine's own
+`info ... nodes` field, over 334 committed book positions
+(`tools/build/gate_openings.epd`), one process for the whole arm. It fails if
+any first yield exceeds **2048 nodes** — the poll granularity, hence the
+smallest budget any engine can observe, so exceeding it *proves* a starving
+budget exists.
+
+| build | worst first yield | over budget | verdict |
+|---|---|---|---|
+| **shipped entry** (`nnue_4k/pst_entry.py`) | **582** | **0 / 334** | **PASS** (3.5× margin) |
+| C2 (unmirrored, exact) | 4,870 | 8 / 334 | FAIL |
+| q8 (unmirrored, step 8) | 7,949 | 7 / 334 | FAIL |
+| m1 (mirrored, exact) | 7,779 | 2 / 334 | FAIL |
+| **C1** (mirrored, step 8) | **10,359** | **10 / 334** | **FAIL** |
+
+Positive-controlled both directions on the final file. The packed artifact
+emits no `info` lines, so the arm **SKIPs** there and the verdict says
+`GATE PASSED (LEGALITY ONLY)` — a skipped arm is never reported as a passed
+one. Instrument note: recording every info line instead of the first measured
+`stop` latency, not the probe, and inflated the shipped entry's worst position
+from 582 to 1,879 against a 2048 budget — a false failure was one position
+away.
 
 ---
 
