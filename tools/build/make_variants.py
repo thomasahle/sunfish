@@ -168,21 +168,23 @@ MODS = {
          "        self.tp_score.clear()\n"
          "        self.hh.clear()\n"),
     ],
-    # `iir`, `iirk` and `noiid` USED TO LIVE HERE. `iirk.noiid` won its
-    # confirmation (+22.3 +/- 16.0 over 1,000 games; entry 3475 -> 3472) and is
-    # now part of the baseline, applied by tools/build/make_pst_entry.py -- so
-    # per the rule this file learned from kend/fresh, a landed mod is DELETED
-    # rather than kept for provenance. Keeping them would be actively unsafe:
-    # `noiid`'s anchor no longer exists (that is the designed failure, and it
-    # would be safe), but `iirk`'s FIRST anchor -- `depth = max(depth, 0)` --
-    # still occurs exactly once in the new baseline, so re-applying it would
-    # insert a SECOND killer read and a SECOND reduction while the
-    # occurs-exactly-once check passed. A silently doubled mod on a variant
-    # that looks correctly generated is exactly what this file exists to stop.
-    #
-    # Provenance lives in git history and in the ledger entry "CONFIRMED:
-    # iirk.noiid is +22.3 +/- 16.0" (2026-08-13), which records the arm sha256
-    # and the packed sha of the artifact that played the 1,000 games.
+    # TOMBSTONE: `iir`, `iirk`, `noiid`  --  LANDED 2026-08-13.
+    #   what:      IIR (reduce a ply with no table move) replacing the IID
+    #              probe, killer read once at the top of bound().
+    #   measured:  +22.3 +/- 16.0 fixed-node, 1,000 games, raw 415-351.
+    #              Entry 3475 -> 3472.
+    #   now in:    tools/build/make_pst_entry.py
+    #   LIVE ANCHORS -- read this before re-creating any of them:
+    #     `noiid`  anchor GONE. Re-creating it raises. Safe.
+    #     `iirk`   FIRST ANCHOR STILL LIVE: `depth = max(depth, 0)` occurs
+    #              exactly once in the new baseline, so a re-created `iirk`
+    #              would insert a SECOND killer read and a SECOND reduction
+    #              and the occurs-exactly-once check would PASS. Silent
+    #              double. Do not re-create it; compose against the baseline.
+    #     `iir`    same hazard, same anchor.
+    #   ledger:    "CONFIRMED: iirk.noiid is +22.3 +/- 16.0" (2026-08-13),
+    #              which carries the arm sha256 and the packed sha of the
+    #              artifact that played the games.
     # THE FRONTIER FUTILITY MARGIN, which is what corrhist turned out to be
     # about once its sign was read correctly.
     #
@@ -275,11 +277,41 @@ MODS = {
     #     that looks correctly generated is precisely the failure this file
     #     was written to prevent.
     #
-    # A landed mod must therefore be DELETED from here, not left for
-    # provenance. Provenance lives in git history and in the ledger entry
-    # "THE HOLE ROUND-ROBIN, COMPLETE" (2026-08-13), which records the arm
-    # sha256s; tools/screens/rr_hole.sh is that finished run's record and
-    # names arms this generator can no longer build.
+    # ===================================================================
+    # CONVENTION FOR A LANDED MOD: RETIRE IN PLACE.
+    #
+    # An earlier version of this note said a landed mod must be DELETED.
+    # That is half right -- the executable entry must go, or it can be
+    # composed onto a baseline that already contains it -- but deleting
+    # every trace throws away the one thing that stops the next person
+    # re-creating it: the record of WHICH ANCHOR IS STILL LIVE.
+    #
+    # `iirk.noiid` made the case (landed 2026-08-13, +22.3 +/- 16.0).
+    # `noiid`'s anchor was gone afterwards, so re-applying it would have
+    # raised -- the designed failure, and safe. But `iirk`'s FIRST anchor,
+    # `depth = max(depth, 0)`, still occurs exactly once in the new
+    # baseline. Re-applying it would have inserted a second killer read and
+    # a second reduction WHILE THE OCCURS-EXACTLY-ONCE CHECK PASSED
+    # CLEANLY. A silently doubled mod on a variant that looks correctly
+    # generated is the exact failure this file exists to prevent, and no
+    # automated check catches it -- only a tombstone a human reads.
+    #
+    # So, when a mod lands:
+    #   1. delete its (anchor, replacement) entry -- it must not stay
+    #      composable onto a baseline that already contains it;
+    #   2. leave a NAMED tombstone comment where it stood, saying what
+    #      landed, what it measured, and -- the load-bearing part --
+    #      whether any of its anchors SURVIVE in the new baseline, so the
+    #      next reader knows whether re-creating it would raise loudly or
+    #      double silently;
+    #   3. point at the ledger entry holding the arm sha256 and the packed
+    #      sha of the artifact that played.
+    #
+    # `kend`/`fresh` above and the `iir`/`iirk`/`noiid` tombstone are both
+    # written in that form. Provenance also lives in git history and in
+    # tools/screens/rr_hole.sh, a finished run's record that names arms
+    # this generator can no longer build.
+    # ===================================================================
 }
 
 

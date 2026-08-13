@@ -829,7 +829,6 @@ def main():
                         if len(hist) % 2 == 0:
                             i, j = 119 - i, 119 - j
                         cand = render(i) + render(j) + move.prom.lower()
-                        print("info depth", depth, "score cp", score, "pv", cand)
                     if (best or cand) and time.time() - start > think * 0.8:
                         break
             except Stop:

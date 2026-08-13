@@ -275,6 +275,28 @@ for _anchor, _repl in _truth_edits:
         % (src.count(_anchor), _anchor[:60]))
     src = src.replace(_anchor, _repl, 1)
 
+# ---- golf: the artifact's info/PV line ------------------------------------
+# -22 packed bytes, and the only cut on the golf menu that costs no capability
+# anything in this repo uses. `info` is optional in UCI, `cand` is still
+# computed (it is what gets played), and the DEVELOPMENT path is untouched:
+# every screen runs through sunfish_ui/uci.py, which prints full info lines
+# with depth, time, nodes, nps and pv. What is lost is PV output from the
+# PACKED artifact in production, which no gate, no test and no harness reads.
+#
+# Verified after the cut rather than assumed: the artifact still streams its
+# handshake and its bestmove LIVE to a pipe with stdin held open. That check
+# matters more once these lines are gone, because they were the only output
+# between `go` and `bestmove` -- and the first version of the check was itself
+# wrong (select() on a buffered text stream reported a phantom stall), so it
+# was redone with a reader thread before anything was believed.
+_info_anchor = (
+    '                        cand = render(i) + render(j) + move.prom.lower()\n'
+    '                        print("info depth", depth, "score cp", score, "pv", cand)\n')
+assert src.count(_info_anchor) == 1, "info-print anchor not found verbatim"
+src = src.replace(
+    _info_anchor,
+    '                        cand = render(i) + render(j) + move.prom.lower()\n', 1)
+
 for _anchor, _repl in _iir_edits:
     assert src.count(_anchor) == 1, (
         "IIR anchor occurs %d times, expected 1 -- sunfish_nnue.py moved under "

@@ -46,6 +46,9 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **THE GOLF TARGET WAS THE WRONG NUMBER: eval already has 1132 B** | 4096 − 2942 = **1132 ≥ Thomas's "at least 1024"**. 2500 assumed the full 1500-byte eval. The eval lane's grid, not golf, is the binding constraint |
+| 2026-08-13 | Info/PV line cut: **−22 B, entry 3445, engine 2942** | Node counts bit-identical (2,342,657 both), gates green, artifact still streams bestmove LIVE to a pipe with stdin open |
+| 2026-08-13 | **Two of the three "safe" trims are NOT safe, with evidence** | `version` globals are in the driver's `ENGINE_API` — cutting them makes the entry **unmeasurable in every dev checkout**. `movetime` is a silent-forfeit hazard with a live consumer in `deploy.sh` |
 | 2026-08-13 | **ENGINE-SANS-EVAL MEASURED: 2964, not "~2980" — and the byte map is built** | `main()`'s UCI loop is **454 B**, `bound()` 560, the board layer 598. Instrument: `tools/build/price_engine.sh` |
 | 2026-08-13 | **The named golf candidates are worth ~115 B against a 464 B gap** | Every UCI-surface cut priced by building. `id name` 40, movetime 25, info-PV 22, quit 7. **Interface trimming cannot reach 2500** |
 | 2026-08-13 | Entry stopped describing a net it does not contain; dead `pf` removed | Section header, Position docstring (`ps`/`acc`/`pf`/`kb`) and a false table comment all corrected. **3472 → 3468**, node counts bit-identical |
@@ -164,6 +167,95 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — The golf target was the wrong number, and two of three "safe" trims are not safe
+
+### The arithmetic, re-run against the measured engine
+
+**4096 − 2942 = 1132 bytes for the eval, and Thomas's floor is "at least
+1024".** The 2500 target assumed the full 1500-byte eval; the engine already
+clears the 1024 case with 108 bytes to spare. So the binding constraint is not
+golf — it is **the eval lane's priced grid**: if their winner fits in ~1130 the
+golf mission is essentially done, and only if it wants the full 1500 does the
+remaining ~250-350 of expression surgery become real work.
+
+Bit-identical surgery on the search core is therefore **paused**, which is the
+right call for a reason beyond scheduling: that surgery operates on `bound()`,
+`gen_moves()` and `move()` — the code holding every feature this lane has
+earned — and spending that risk to hit a target nobody needs yet is how a byte
+diet turns into a strength regression.
+
+### Taken: the info/PV line, −22 bytes
+
+| | |
+|---|---|
+| entry | 3468 → **3445** (651 spare) |
+| engine-sans-eval | 2964 → **2942** |
+| node counts, depth 9 over 6 positions | **2,342,657 both builds — bit-identical** |
+| gates | legality 100/100, mate 5/8 parity, 312 passed / 2 skipped |
+
+`info` is optional in UCI, `cand` is still computed (it is what gets played),
+and the development path is untouched — every screen runs through
+`sunfish_ui/uci.py`, which prints depth, time, nodes, nps and pv. What is lost
+is PV output from the **packed artifact in production**, which no gate, no test
+and no harness reads.
+
+**Verified after the cut, because these lines were the only output between `go`
+and `bestmove`:** the artifact still streams its handshake and its bestmove
+**live** to a pipe with stdin held open. Worth recording that the *first*
+version of that check was wrong — `select()` on a buffered text stream reported
+a phantom stall and I nearly wrote up a buffering bug that does not exist. Redone
+with a reader thread: handshake at 0.46 s, `bestmove` at 3.59 s, both live.
+
+### Rejected: `version` globals. It would make the entry unmeasurable
+
+Cutting `id name` **and** the `version`/`__version__` globals prices at −40,
+the biggest item on the menu. It is not available:
+
+    sunfish_ui/uci.py:
+    ENGINE_API = ("MATE_LOWER", "Move", "Position", "Searcher", "Stop",
+                  "opt_ranges", "parse", "render", "version")
+
+`check_engine_module` raises `TypeError` on a missing member. The **packed**
+artifact never touches the driver, so the shipped thing would work perfectly —
+the breakage appears only when someone tries to **measure** the entry, i.e. in
+every screen, every legality gate run from a checkout, every A/B. Ship fine,
+measure impossible: the worst failure shape available.
+
+Cutting only the `print("id name", …)` and keeping the globals is ENGINE_API-safe
+and prices at **−8**, for a UCI-spec deviation (`id name` is a "should"). Not
+taken: 8 bytes is a bad trade for anonymity in a tournament we are entering.
+
+### Deferred: the `movetime` branch. −25 bytes for a silent forfeit
+
+Removing it does not make `go movetime 200` fail loudly. `times.get("movetime")`
+disappears, `wtime` defaults to 60000, and the engine thinks **5 seconds**
+against a 200 ms limit — a forfeit, with nothing in any log to say why. The
+branch exists because of a measured incident: *"425 local fixed-node games,
+every single one a forfeit."*
+
+And it has a live consumer: **`tools/deploy.sh:191` smoke-tests the packed
+artifact with `go movetime 200`** — the packed artifact, which is exactly the
+build that has no driver to fall back on.
+
+Deferred, not refused. If the eval lane's winner needs the full 1500, take it
+**together with** switching that smoke to a `wtime`/`btime` command, so the
+capability and its only consumer move in one commit.
+
+### The menu as it now stands
+
+| cut | saves | status |
+|---|---|---|
+| info/PV line | **22** | **TAKEN** |
+| `version` globals + `id name` | 40 | **REJECTED** — breaks `ENGINE_API` |
+| `movetime` branch | 25 | deferred — silent forfeit, `deploy.sh` consumer |
+| `id name` print only | 8 | not taken — spec deviation for 8 bytes |
+| `position` prefix → `args[0]` | 12 | not taken — misparses `position fen` |
+| `quit` branch | 7 | not taken — dies on EOF instead of exiting |
+| `__hash__`/`__eq__`/`__ne__` | 54 | **load-bearing**, see the previous entry |
+
+**Interface golf is now exhausted at 22 taken bytes.** Everything else on the
+menu costs a capability, and the arithmetic says we are not short of bytes.
 
 ## 2026-08-13 — THE GOLF BUDGET, MEASURED: 2964 engine bytes, and the named cuts are worth ~115
 
