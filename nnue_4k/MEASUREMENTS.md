@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **LMP is BROKEN, not weak: it returned an illegal move** | Reproduced deterministically. Cause is NOT break-vs-skip (falsified) — it prunes the only legal escape when in check. Fixed and re-gated |
 | 2026-08-13 | **RFP REJECTED: −2.8 ± 17.9 at 1000 games** | Bar was +31 Elo for 31 bytes. Removed — entry **3517 → 3483, 613 spare** |
 | 2026-08-13 | **LEAD: LMR may be masking an ~85 Elo hole in the port** | LMR transfers (+127 ± 77 timed, prelim) — which implies entry-minus-LMR is ~85 BELOW classic. Being measured directly, not inferred |
 | 2026-08-13 | **LMR-on-PST: outcomes PRE-REGISTERED before the result** | Three readings written down in advance, incl. the live possibility that LMR is *costing* the shipped entry Elo |
@@ -117,6 +118,79 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — LMP emitted an illegal move: a correctness failure, diagnosed
+
+`base vs lmp`, 300 games: **237-28-35, base +283.8 ± 54.2**, and one game
+terminated `illegal move`. **−284 Elo is not "a feature that does not
+transfer"** — RFP's −2.8 is what sound-but-worthless looks like. This is
+pruning something it must not prune, and the correctness failure outranks the
+score.
+
+### Reproduced deterministically
+
+The offending game ends `41. Qf8+ {Black makes an illegal move: (none)}`. The
+engine answered **`bestmove (none)`** — the builtin loop's fallback when the
+search commits nothing at any depth or any gamma. Replaying the pgn to that
+position and running both builds:
+
+    position: 5Q2/4P1kp/1p6/2pR2P1/p1n1p3/P6P/8/6K1 b - - 2 41
+    black to move, IN CHECK, exactly ONE legal move
+
+    LMP=3   best=None cand=None  -> bestmove (none)   <-- illegal
+    LMP=0   best=Move(82,72)     -> a legal move
+
+The MTD guards fire at every depth here (`lower -69289 upper -69290`), which is
+the mate band: the position is scored as lost, and with LMP the search finds
+nothing to play.
+
+### The break-vs-skip hypothesis was wrong
+
+The proposed cause was that *breaking* on a move count discards the tail, where
+a count-based rule has no sortedness argument to justify it. Tested directly —
+a `continue` variant behaves **identically**, still returning `(none)`. Good
+hypothesis, cheap test, falsified.
+
+**The actual cause is check.** This engine generates **pseudo-legal** moves and
+has no notion of being in check. In this position the single legal reply is a
+low-value king escape, so it sorts near the *end* of the move list — and a
+count-based rule discards the end of the list whether it breaks or skips. LMP
+pruned the only legal move.
+
+### The fix, and why it generalises
+
+    if LMP and best > -MATE_UPPER and depth < 4 and val < LMR and \
+            cnt > LMP + depth*depth*(2 if pos.score > pps else 1):
+
+`best > -MATE_UPPER` means some move has already produced a playable score;
+until that holds, prune nothing. Verified: the fixed build returns the same
+legal move as LMP=0 on the reproduction. The general rule — **a count-based
+pruning rule must never be able to discard the last playable move** — applies to
+anything else count-triggered we add, and it is *not* the sortedness argument
+that licenses the futility break, which is value-triggered.
+
+### Priced but not spent: never answer `(none)`
+
+`(none)` is an instant loss whatever produces it, and "a search that commits
+nothing" is always possible once pruning is licensed to be unsound. A fallback
+that plays any generated move rather than passing costs **3483 → 3511, +28
+bytes**. Not spent yet: the shipped entry has LMP=0 and does not reproduce, so
+this is insurance against future features rather than a fix for a live defect.
+Recorded with its price so the decision is one line when a feature needs it.
+
+### The transfer scoreboard needs a third category
+
+| feature | ice4 | ours |
+|---|---|---|
+| LMR | 81 | **+65…+127** — transfers |
+| RFP | 58 | **≈ 0** — sound but worthless |
+| LMP+improving | 123 | **broken as implemented** — illegal move, −284 |
+
+Three items, three outcomes, and the third is one neither of us had on the list:
+*the technique is fine, our implementation of it is wrong*. The operational
+consequence is a rule — **a bad screen result triggers a correctness check
+before a value judgement**, not after. A −284 with an illegal move should never
+have been read as an Elo measurement in the first place.
 
 ## 2026-08-13 — RFP rejected on its pre-registered bar, and the bytes came back
 
