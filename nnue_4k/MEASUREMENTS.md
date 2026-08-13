@@ -46,7 +46,8 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
-| 2026-08-13 | **THE KING TABLE: entry uses the wrong one in 62.1% of real positions** | Port defect in the EVAL, not the search. Fix **saves 11 bytes** (3483 -> 3472). Screen running, outcomes pre-registered |
+| 2026-08-13 | **THE KING TABLE: entry uses the wrong one in 62.1% of real positions** | Port defect in the EVAL, not the search. Fix **saves 11 bytes** (3483 -> 3472). Screen: **+51.3 ± 42.7 at 117g** and running |
+| 2026-08-13 | Stale carried score at the table swap (routed from the eval lane) | Reproduced. Bites the **transition ply only** -- 0.83 plies/game, mean 30cp, max 157cp. Fix priced: kend+fresh **3475, still 8 bytes UNDER the entry** |
 | 2026-08-13 | Null-cap census: binds 4.3% of nulls, flips 0.53% | Real but small. Cap RR **deferred behind the king table** -- the cap reads `pos.score` |
 | 2026-08-13 | Cap byte cost, built not composed | entry 3483, +cap 3494. **11 bytes** |
 | 2026-08-13 | pair_elo.py validated against fastchess | Reproduces +38.86 +/- 19.13 digit-for-digit on lmron.pgn |
@@ -231,6 +232,58 @@ The cap round-robin is **deferred behind this fix**. The null-move cap is
 heuristic whose trigger reads the eval must be re-measured per eval. Spending
 4,000 games pricing the cap against an eval we are about to correct would
 measure a configuration we are abandoning.
+
+## 2026-08-13 — The stale carried score at the table swap: reproduced, and sized
+
+Routed in from the eval lane, who found it and correctly did not land it —
+the line lives in `search()`, which is this lane's file. Reproduced here
+before being believed, per the standing rule.
+
+**The defect is real.** `pos.score` is carried incrementally by `value(move)`,
+and swapping `pst["K"]` changes what that accumulated number means. Nothing
+recomputes it. On a KRK position built under `K_MID` and then searched under
+`K_END`, `search()` leaves `root.score` at 448 where a fresh computation under
+the live table gives 437. The offset then **flips sign every ply** through
+`rotate()`, so within that search it behaves as an oscillating phantom tempo on
+every stand-pat and every futility margin.
+
+**But it is rarer than the report implies, and the reason is the driver.**
+`sunfish_ui/uci.py` rebuilds `hist` from scratch on every `position` command,
+recomputing the score under whatever table is live. So the carried score equals
+a fresh computation under the *previous* search's table, and the error is
+nonzero **only on the ply where the phase rule flips**. Replaying 120 real
+games, 11,362 plies:
+
+| phase rule | transition plies | per game | mean \|E\| | max \|E\| |
+|---|---|---|---|---|
+| `bare` (shipped entry) | 17 (0.15%) | 0.14 | 66.4 cp | 178 |
+| classic's (the kend fix) | 100 (0.88%) | 0.83 | 30.0 cp | 157 |
+
+So the eval lane's 134 cp is a fair **peak** — the max is 157 — but "applied to
+every stand-pat and futility decision" holds only *within* the one search per
+game where it fires, not across the game. One skewed search per game, at the
+moment the queens come off, which is a moment that often decides the game.
+
+**It interacts with the king-table fix, and not in the fix's favour.** Correcting
+the phase rule raises the firing rate from 0.14 to 0.83 plies per game — the
+expected per-game error exposure goes from `0.14 x 66.4 = 9.3` to
+`0.83 x 30.0 = 24.9`, about 2.7x. That is exactly pre-registered outcome 4 for
+the king table ("the phase switch interacts with the incremental score"),
+written down before this bug was routed in. So the two land together.
+
+**Priced, from `pack.sh` on real files:**
+
+| build | packed | vs entry |
+|---|---|---|
+| entry | 3483 | — |
+| + kend | 3472 | **−11** |
+| + kend + fresh | **3475** | **−8** |
+
+Both fixes together are still **8 bytes under the shipped entry**. A score that
+does not mean what the search thinks it means is a correctness problem, and
+this one is byte-negative, so it lands on correctness alone; the Elo is upside.
+Verified: with `fresh`, `root.score` after `search()` is 450 against a live-table
+computation of 450, where the unfixed build reports 465.
 
 ## 2026-08-13 — The null-move cap, censused before it was screened
 

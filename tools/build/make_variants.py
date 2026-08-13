@@ -54,6 +54,19 @@ MODS = {
         '        pst["K"] = K_END if bare else K_MID\n',
         '        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END\n',
     ),
+    # Swapping the king table invalidates the incrementally carried score:
+    # `pos.score` was accumulated under the OLD table and nothing recomputes
+    # it. The offset then flips sign every ply through rotate(), so it acts as
+    # an oscillating phantom tempo on every stand-pat and futility margin --
+    # for the whole of that one search. Measured on real games it bites on the
+    # transition ply only (the driver rebuilds hist each move): 0.83 plies per
+    # game under classic's rule, mean |E| 30cp, max 157cp.
+    # Must be applied AFTER `kend`, whose replacement supplies this anchor.
+    "fresh": (
+        '        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END\n',
+        '        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END\n'
+        '        pos = self.root = from_board(pos.board, pos.wc, pos.bc, pos.ep, pos.kp)\n',
+    ),
 }
 
 
