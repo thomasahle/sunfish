@@ -409,6 +409,19 @@ class Searcher:
         # depth, so so there is no reason to keep different depths in the transposition table.
         depth = max(depth, 0)
 
+        # The killer is read ONCE here, not again inside moves(): the reduction
+        # below needs to know whether this position has a table move, and
+        # hashing the position twice to ask one question cost 7% of nps.
+        killer = self.tp_move.get(pos)
+
+        # INTERNAL ITERATIVE REDUCTION. No table move means this node has never
+        # been searched from here, so its ordering is static value alone and
+        # full depth is the dearest possible way to discover that. Search it a
+        # ply shallower instead. This REPLACED the IID probe, which answered
+        # the same question by running a whole extra shallow search; keeping
+        # both would pay twice for one observation.
+        if depth > 2 and killer is None: depth -= 1
+
         # Sunfish is a king-capture engine, so we should always check if we
         # still have a king. Notice since this is the only termination check,
         # the remaining code has to be comfortable with being mated, stalemated
@@ -444,11 +457,10 @@ class Searcher:
         # Generator of moves to search in order.
         # This allows us to define the moves, but only calculate them if needed.
         def moves():
-            # Look for the strongest move from earlier searches of this position.
-            # See https://chessprogramming.org/Killer_Move for details.
-            # We read this "killer move" before null-move in case it would get
-            # evicted from the table or replaced with something else worse.
-            killer = self.tp_move.get(pos)
+            # `killer` comes from the enclosing scope, read once at the top of
+            # bound(). It is still read before null-move, which is the property
+            # that mattered: the entry could otherwise be evicted or overwritten
+            # with something worse while the null search runs.
 
             # First try not moving at all, i.e. the null move.
             # See https://chessprogramming.org/Null_Move for details.
@@ -499,16 +511,6 @@ class Searcher:
             if depth == 0:
                 yield None, pos.score
 
-            # Back to killer moves: This heuristic is so good, that if there
-            # is no registered move, it's worth it to run a shallow search to find one.
-            # See https://chessprogramming.org/Internal_Iterative_Deepening for detais.
-            # This is known as Internal Iterative Deepening (IID). The probe
-            # runs as a driver probe (root=True): no null cutoff that would
-            # end it without storing a move, no repetition truncation, and
-            # no table entry under deviant semantics.
-            if not killer and depth > 2:
-                self.bound(pos, gamma, depth - 3, root=True)
-                killer = self.tp_move.get(pos)
 
             # We only generate moves with an intrinsic score above some treshold
             # that decreases with depth. This is a generalization of Quiescent Search,

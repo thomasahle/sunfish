@@ -138,6 +138,77 @@ new = ('        # Classic\'s K_END is a centralization gradient, and classic key
 assert src.count(old) == 1, "king-table block not found verbatim in sunfish_nnue.py"
 src = src.replace(old, new, 1)
 
+# ---- IIR replaces IID ----------------------------------------------------
+# Measured on THIS entry: +22.3 +/- 16.0 fixed-node over 1,000 games against
+# the pre-IIR entry (raw 415-351, zero forfeits, zero illegal), and the entry
+# gets SMALLER -- 3475 -> 3472. Stronger and smaller, the first time this lane
+# has had both from one change.
+#
+# ENTRY-ONLY, deliberately. The trigger reads no evaluation, so the
+# (feature, eval) rule does not force a re-measure -- but sunfish_nnue.py is
+# the lichess bot's engine and another lane's artifact, and nothing here has
+# played a game with the net. It goes in the entry's transform list, where
+# kend/fresh live, and transfers to the NNUE engine only if someone measures
+# it there.
+#
+# Three edits, each anchored to text that must occur exactly once.
+_iir_edits = [
+    # 1. Read the killer ONCE, at the top, and reduce a ply when there is no
+    #    table move. Placed BEFORE the score-table probe and therefore before
+    #    the store, so the reduced depth is the key in both directions: the
+    #    node genuinely becomes a shallower node rather than filing a shallow
+    #    value under a deep key. Reading the killer here instead of inside
+    #    moves() is what keeps it to ONE hash of the position -- asking the
+    #    same dict twice cost 7% of nps (0.908x vs 0.950x) for no behaviour.
+    ("        depth = max(depth, 0)\n",
+     "        depth = max(depth, 0)\n"
+     "\n"
+     "        # The killer is read ONCE here, not again inside moves(): the reduction\n"
+     "        # below needs to know whether this position has a table move, and\n"
+     "        # hashing the position twice to ask one question cost 7% of nps.\n"
+     "        killer = self.tp_move.get(pos)\n"
+     "\n"
+     "        # INTERNAL ITERATIVE REDUCTION. No table move means this node has never\n"
+     "        # been searched from here, so its ordering is static value alone and\n"
+     "        # full depth is the dearest possible way to discover that. Search it a\n"
+     "        # ply shallower instead. This REPLACED the IID probe, which answered\n"
+     "        # the same question by running a whole extra shallow search; keeping\n"
+     "        # both would pay twice for one observation.\n"
+     "        if depth > 2 and killer is None: depth -= 1\n"),
+    # 2. moves() takes the killer from the enclosing scope. This is only legal
+    #    because edit 3 removes the IID block: that block ASSIGNED to `killer`,
+    #    which would make the name local to moves() and turn the outer read
+    #    into an UnboundLocalError. The two edits are one change.
+    ('            # Look for the strongest move from earlier searches of this position.\n'
+     '            # See https://chessprogramming.org/Killer_Move for details.\n'
+     '            # We read this "killer move" before null-move in case it would get\n'
+     '            # evicted from the table or replaced with something else worse.\n'
+     '            killer = self.tp_move.get(pos)\n',
+     "            # `killer` comes from the enclosing scope, read once at the top of\n"
+     "            # bound(). It is still read before null-move, which is the property\n"
+     "            # that mattered: the entry could otherwise be evicted or overwritten\n"
+     "            # with something worse while the null search runs.\n"),
+    # 3. The IID probe goes, and its comment goes with it. A comment describing
+    #    a probe the file no longer has is the same defect as the null-move
+    #    comment that claimed a cap this engine never had.
+    ("            # Back to killer moves: This heuristic is so good, that if there\n"
+     "            # is no registered move, it's worth it to run a shallow search to find one.\n"
+     "            # See https://chessprogramming.org/Internal_Iterative_Deepening for detais.\n"
+     "            # This is known as Internal Iterative Deepening (IID). The probe\n"
+     "            # runs as a driver probe (root=True): no null cutoff that would\n"
+     "            # end it without storing a move, no repetition truncation, and\n"
+     "            # no table entry under deviant semantics.\n"
+     "            if not killer and depth > 2:\n"
+     "                self.bound(pos, gamma, depth - 3, root=True)\n"
+     "                killer = self.tp_move.get(pos)\n",
+     ""),
+]
+for _anchor, _repl in _iir_edits:
+    assert src.count(_anchor) == 1, (
+        "IIR anchor occurs %d times, expected 1 -- sunfish_nnue.py moved under "
+        "this generator: %r" % (src.count(_anchor), _anchor[:60]))
+    src = src.replace(_anchor, _repl, 1)
+
 open(OUT, "w").write(src)
 try:
     compile(src, OUT, "exec")

@@ -168,105 +168,21 @@ MODS = {
          "        self.tp_score.clear()\n"
          "        self.hh.clear()\n"),
     ],
-    # INTERNAL ITERATIVE REDUCTION (ice4 prices it at 37). A node with no
-    # table move has never been searched from here, so its ordering is static
-    # value alone and searching it at full depth is the most expensive way to
-    # discover that. Search it a ply shallower instead.
+    # `iir`, `iirk` and `noiid` USED TO LIVE HERE. `iirk.noiid` won its
+    # confirmation (+22.3 +/- 16.0 over 1,000 games; entry 3475 -> 3472) and is
+    # now part of the baseline, applied by tools/build/make_pst_entry.py -- so
+    # per the rule this file learned from kend/fresh, a landed mod is DELETED
+    # rather than kept for provenance. Keeping them would be actively unsafe:
+    # `noiid`'s anchor no longer exists (that is the designed failure, and it
+    # would be safe), but `iirk`'s FIRST anchor -- `depth = max(depth, 0)` --
+    # still occurs exactly once in the new baseline, so re-applying it would
+    # insert a SECOND killer read and a SECOND reduction while the
+    # occurs-exactly-once check passed. A silently doubled mod on a variant
+    # that looks correctly generated is exactly what this file exists to stop.
     #
-    # Placed BEFORE the table probe and therefore before the store, so the
-    # reduced depth is the key in BOTH directions: the node genuinely becomes
-    # a depth-1-shallower node, rather than filing a shallow value under a
-    # deep key -- which is the version of IIR that would break
-    # one-value-per-key outright instead of merely bending it the way LMR
-    # already does.
-    #
-    # Not a pruning rule: no move is discarded and no tail is cut, so the
-    # pseudo-legal-movegen defect that killed LMP cannot reach it and the
-    # `best > -MATE_UPPER` preamble does not apply. It is legality-gated
-    # anyway -- that gate is cheap and the last three assumptions like this
-    # one were wrong.
-    "iir": ("        depth = max(depth, 0)\n",
-            "        depth = max(depth, 0)\n"
-            "\n"
-            "        # INTERNAL ITERATIVE REDUCTION. No table move means this node has\n"
-            "        # never been searched from here, so its ordering is static value\n"
-            "        # alone and full depth is the dearest possible way to find that\n"
-            "        # out. Search it a ply shallower. This sits BEFORE the table probe\n"
-            "        # and therefore before the store, so the reduced depth is the key\n"
-            "        # in both directions -- the node genuinely BECOMES a shallower\n"
-            "        # node instead of filing a shallow value under a deep key.\n"
-            "        if depth > 2 and pos not in self.tp_move: depth -= 1\n"),
-    # Drop the IID probe. IIR is its cheaper answer to the same question -- no
-    # table move, so do less work here -- and running both means paying for a
-    # whole extra shallow search AND a reduction at the same node. Compose as
-    # `iir.noiid`; on its own it prices what IID is currently worth.
-    # IIR, single-lookup form. `iir` asks the table for this position twice --
-    # once for `pos not in self.tp_move` and again for `killer =
-    # self.tp_move.get(pos)` inside moves() -- and the interleaved probe
-    # measured that duplicate hash at 7% of nps. This form reads the killer
-    # ONCE, at the top, and lets the closure carry it into moves().
-    #
-    # Compose as `iirk.noiid`. It requires `noiid`, and not by convention: the
-    # IID block ASSIGNS to `killer`, which would make the name local to
-    # moves() and shadow the outer read into an UnboundLocalError. Removing
-    # the IID block is what makes the closure legal, so the two mods travel
-    # together and the generator's occurs-exactly-once check enforces it (the
-    # assignment line is gone, so `iirk` alone still applies but the engine
-    # would be built with IID intact and the closure broken -- hence the
-    # explicit ordering note here rather than a silent trap).
-    #
-    # Behaviourally identical to `iir` by inspection: nothing mutates
-    # `self.tp_move` between the top of bound() and the first execution of the
-    # generator body. The one real difference is that the lookup is now paid
-    # on nodes that return early from the score table, where `iir` paid none
-    # -- so it trades one lookup on early-return nodes for one saved on every
-    # searched node. NOT YET MEASURED; built now so it is ready if the arm
-    # earns it, and it must be re-priced before it is believed.
-    "iirk": [
-        ("        depth = max(depth, 0)\n",
-         "        depth = max(depth, 0)\n"
-         "\n"
-         "        # The killer is read ONCE here, not again inside moves(): IIR needs\n"
-         "        # to know whether this position has a table move, and hashing the\n"
-         "        # position twice to ask one question cost 7% of nps.\n"
-         "        killer = self.tp_move.get(pos)\n"
-         "\n"
-         "        # INTERNAL ITERATIVE REDUCTION. No table move means this node has\n"
-         "        # never been searched from here, so its ordering is static value\n"
-         "        # alone and full depth is the dearest possible way to find that\n"
-         "        # out. Search it a ply shallower. This sits BEFORE the table probe\n"
-         "        # and therefore before the store, so the reduced depth is the key\n"
-         "        # in both directions -- the node genuinely BECOMES a shallower\n"
-         "        # node instead of filing a shallow value under a deep key.\n"
-         "        if depth > 2 and killer is None: depth -= 1\n"),
-        ("            # Look for the strongest move from earlier searches of this position.\n"
-         "            # See https://chessprogramming.org/Killer_Move for details.\n"
-         "            # We read this \"killer move\" before null-move in case it would get\n"
-         "            # evicted from the table or replaced with something else worse.\n"
-         "            killer = self.tp_move.get(pos)\n",
-         "            # `killer` comes from the enclosing scope, read once at the top of\n"
-         "            # bound(). It is still read before null-move, which is the property\n"
-         "            # that mattered here: the entry could otherwise be evicted or\n"
-         "            # overwritten with something worse while the null search runs.\n"),
-    ],
-    # The comment goes with the code: leaving eight lines describing an IID
-    # probe above a file that no longer has one is the same defect class as
-    # the null-move comment that claimed a cap this engine never had.
-    "noiid": (
-        "            # Back to killer moves: This heuristic is so good, that if there\n"
-        "            # is no registered move, it's worth it to run a shallow search to find one.\n"
-        "            # See https://chessprogramming.org/Internal_Iterative_Deepening for detais.\n"
-        "            # This is known as Internal Iterative Deepening (IID). The probe\n"
-        "            # runs as a driver probe (root=True): no null cutoff that would\n"
-        "            # end it without storing a move, no repetition truncation, and\n"
-        "            # no table entry under deviant semantics.\n"
-        "            if not killer and depth > 2:\n"
-        "                self.bound(pos, gamma, depth - 3, root=True)\n"
-        "                killer = self.tp_move.get(pos)\n",
-        "            # NO IID. The probe that used to stand here ran a whole extra\n"
-        "            # shallow search whenever there was no table move; `iir` answers\n"
-        "            # the same question by reducing this node instead, and the two\n"
-        "            # together would pay twice for one observation.\n"),
+    # Provenance lives in git history and in the ledger entry "CONFIRMED:
+    # iirk.noiid is +22.3 +/- 16.0" (2026-08-13), which records the arm sha256
+    # and the packed sha of the artifact that played the 1,000 games.
     # THE FRONTIER FUTILITY MARGIN, which is what corrhist turned out to be
     # about once its sign was read correctly.
     #

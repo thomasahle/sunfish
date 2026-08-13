@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **LANDED: IIR ships. Entry 3475 → 3472, 624 spare, +22.3 ± 16.0** | Packed sha `ce091e5e…` is **byte-identical to the binary that played the 1,000 games**. STRONGER AND SMALLER — the first such change in this lane |
 | 2026-08-13 | **CONFIRMED: `iirk.noiid` +22.3 ± 16.0, entry 3475 → 3472** | 1,000 games, 0 forfeits/illegal, raw 415–351. **Stronger AND smaller** — timed ≈ +15 Elo for −3 bytes. Ready to land, pending the coordinator's generator sequence |
 | 2026-08-13 | **The RR pairing read +41.3; the dedicated match reads +22.3** | Same search, measured twice, 19.0 ± 27.5 apart. Third pooled-vs-direct discrepancy today, all in the same direction. A round-robin pairing is not an effect size either |
 | 2026-08-13 | **The frontier futility margin is ALREADY TUNED — axis closed** | −40 costs **−110.3 ± 40.6** (largest single-parameter regression here), −15 is level, both positives lose. The zero-byte candidate packs to 3476 and plays 110 worse |
@@ -160,6 +161,61 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — LANDED: IIR ships, and the entry is stronger AND smaller
+
+**`iirk.noiid` is in `tools/build/make_pst_entry.py`.** Internal iterative
+reduction — reduce a ply when the position has no table move — **replacing**
+the IID probe, with the killer read once at the top of `bound()` so the
+position is hashed once instead of twice.
+
+| | before | after |
+|---|---|---|
+| entry, packed | 3475 | **3472** |
+| spare | 621 | **624** |
+| fixed-node vs the old entry | — | **+22.3 ± 16.0** (1,000 games) |
+| timed (speed term −7.5) | — | **≈ +15 Elo** |
+
+**We shipped exactly what we measured, and this time it is provable.** The
+generated entry differs from `e_iirknoiid.py` — the arm that played all 1,000
+confirmation games — only in comment wording, and comments are stripped by the
+packer, so:
+
+    packed sha256  ce091e5e4051add8703a896498711fdc8d7f6bc36a18461956799eadf629f99f
+    played arm     ce091e5e…   3472 bytes
+    shipped entry  ce091e5e…   3472 bytes   <- byte-identical
+
+**Landing gates, all green:**
+
+- `check_entry.sh` — source matches its generator, packs to **3472 (624 spare)**
+- **legality gate** on the generated file — 40 FORCED / 30 in-check / 30 quiet,
+  **0 no-move, 0 illegal**
+- **mate gate** — 5/8, parity with the pre-IIR entry
+- **284 passed, 2 skipped** in the full test suite
+- **plays alone in an empty directory** with `SF_NET` and `PYTHONPATH` unset —
+  one file, 3472 bytes, `bestmove g1f3` at depth 6
+
+**Entry-only, deliberately.** The transform lives beside `kend`/`fresh` rather
+than in `sunfish_nnue.py`. IIR's trigger reads no evaluation, so the
+(feature, eval) rule does not *force* a re-measure — but `sunfish_nnue.py` is
+the lichess bot's engine and another lane's artifact, and nothing here has
+played a game with the net. It transfers when someone measures it there.
+
+**The mods are DELETED from `make_variants.py`, not retired in place**, and the
+reason is sharper than tidiness this time. `noiid`'s anchor no longer exists —
+that is the designed failure and it would be safe. But **`iirk`'s first anchor,
+`depth = max(depth, 0)`, still occurs exactly once in the new baseline**, so
+re-applying it would insert a *second* killer read and a *second* reduction
+while the occurs-exactly-once check passed cleanly. That is the silently
+doubled mod the generator was written to prevent, and it was one composition
+away. The remaining mods (`cap`, `corr`, `hist`, `nolmr`, `wkey`, the `fut`
+family) were regenerated against the new baseline and all still apply.
+
+**Byte note for the next lander.** This is measured against **3475**, this
+branch's baseline. The eval lane's base-90 decode is a separate −97 on *their*
+baseline, and **the two do not add**: lzma shares one dictionary across the
+whole stream. Per the standing rule and the coordinator's sequencing, they
+rebase on this and regenerate.
 
 ## 2026-08-13 — CONFIRMED: `iirk.noiid` is +22.3 ± 16.0 and the entry SHRINKS to 3472
 
