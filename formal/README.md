@@ -55,9 +55,12 @@ The proof is generic in `C`; it does not depend on chess or mate constants.
 The production guard is:
 
 ```python
-not root and depth > 2 and abs(pos.score) < 500 \
+not root and 2 < depth < 6 and abs(pos.score) < 500 \
     and any(c in pos.board for c in "RBNQ")
 ```
+
+The upper bound is new: the pass is a score candidate only *below* depth 6.
+From depth 6 on it is a fuel oracle instead -- see the next section.
 
 With integer scores and `EVAL_ROUGHNESS = 15`, the score guard gives
 `C(pos) <= 514 < MATE_LOWER`. Theorems
@@ -75,6 +78,50 @@ min(C(pos), P) <= best legal real-move value
 It concerns the quality of the null approximation, not the fail-soft report
 transport. The non-pawn-piece guard excludes pawn-only zugzwangs; the score
 guard and cap make null pruning more conservative in unbalanced positions.
+It is confined to `depth < 6`; above that the fuel oracle removes it.
+
+## The deep-null fuel oracle
+
+From depth 6 on the pass is not a score candidate at all. One probe at a
+*fixed* target decides only how much depth the real moves spend:
+
+```python
+d = depth
+if depth >= 6 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
+    target = pos.score + NULL_MARGIN
+    if -self.bound(pos.rotate(nullmove=True), 1 - target, depth - 3) >= target:
+        d = depth - 1
+```
+
+The target depends on `(pos, depth)` alone -- `gamma` does not enter -- so the
+window is position-determined, the probe is table-cacheable, and the resulting
+"hot" bit is stable because a fail-soft report is side-exact at any fixed
+window (`WindowReport.side_exact`, `hot_bit_determined`, `hot_bit_stable`).
+Nominal `depth` still keys the tables and the QS admission; only the recursion
+is shortened. So a deep null *cut* becomes a *reduction*: every real edge costs
+1 or 2 plies (`fuel_edge_cost`), never infinity.
+
+That is what buys the premise: a null cutoff gives every real move unbounded
+pruning debt, and discharging it is exactly what `NoZugzwang` was for. A
+bounded edge cost discharges it instead, so the classification theorem needs no
+chess premise:
+
+```text
+eventual_classification_fuel :
+  ValFloor G 192 -> EvalQuiet G -> (root legality) ->
+    exists D0, forall D >= D0,  W / D / L read off the value, correctly
+```
+
+`NoZugzwang` appears nowhere in its premises, nor in those of
+`eventual_classification_fuel_arms` (which pins the arming depths at
+`D >= C*k + 4` for a win and `D >= C*k + C + 4` for a loss) or
+`driver_sees_trichotomy_fuel`. The draw arm needs no depth floor at all: with
+no forced mate for either side the value is strictly inside the band at *every*
+depth. `Repetition.lean` adds the game-history rule (`repetition_not_lost`,
+`draw_arm_strengthened`) on top.
+
+`FuelTailBracketSpec` -- the layer-1 bracket for the composed search -- is
+stated and flagged unproven; it is not used by the theorems above.
 
 ## Mate distance
 
@@ -621,7 +668,9 @@ at capturable nodes.
 |---|---|
 | recursive zero-window move search | `Bound.bound_spec` |
 | null child report negation | `WindowReport.negate` |
-| `min(pos.score + EVAL_ROUGHNESS, pass_report)` | `cappedNull_report` |
+| `min(pos.score + EVAL_ROUGHNESS, pass_report)` (depth < 6) | `cappedNull_report` |
+| `target = pos.score + NULL_MARGIN` fuel probe (depth >= 6) | `hot_bit_determined`, `hot_bit_stable`, `fuel_edge_cost` |
+| real-move recursion at the reduced `d - 1` | `fuelValueD2t`, `eventual_classification_fuel` |
 | score guard keeps the cap below positive mate | `guardedStaticCap_in_scoreBand`, `guardedCappedNull_below_positiveMate` |
 | full-width move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
 | sticky legality evidence and terminal override | terminal/finalizer results in `Stalemate.lean` |
@@ -662,6 +711,9 @@ transform is the identity, so the model and source are extensionally equal.
   the countermodel showing the frontier premise cannot be dropped from it.
 - `Pruning.lean` and `Tricks.lean`: proof envelopes for selective-search
   techniques.
+- `EventuallyWide.lean`: the fuel oracle -- bounded real-edge cost and the
+  W/D/L trichotomy with no chess premise.
+- `Repetition.lean`: the game-history draw rule on top of the fuel value.
 
 ## Rules for search changes
 

@@ -23,7 +23,7 @@ reformatting of surrounding code does not fire):
   - Position.gen_moves   (Game.moves, CaptureFirst's list)
   - Position.king_capture (the substitution/in-check scan, kp = 0 note)
   - constants            (MATE_LOWER, MATE_UPPER, QS, QS_A,
-                          EVAL_ROUGHNESS, TABLE_SIZE)
+                          EVAL_ROUGHNESS, NULL_MARGIN, TABLE_SIZE)
 
 Run from the repo root:  python formal/scripts/model_audit.py
 Refresh after a re-audit: python formal/scripts/model_audit.py --update
@@ -37,7 +37,8 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SUNFISH = ROOT / "sunfish.py"
 
-CONSTANTS = ["MATE_LOWER", "MATE_UPPER", "QS", "QS_A", "EVAL_ROUGHNESS", "TABLE_SIZE"]
+CONSTANTS = ["MATE_LOWER", "MATE_UPPER", "QS", "QS_A", "EVAL_ROUGHNESS", "NULL_MARGIN",
+             "TABLE_SIZE"]
 
 EXPECTED = {
     "Position.gen_moves": "3453dbe008109d3d",
@@ -45,9 +46,9 @@ EXPECTED = {
     "Position.move": "69bb2460cd611c9e",
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "11d52eaa8a661352",
-    "Searcher.bound": "41a402d756621824",
+    "Searcher.bound": "47e70ff167eeff41",
     "Searcher.search": "f9aa8c81b84ff44b",
-    "constants": "02227a9fd04eb181",
+    "constants": "9aaf6ed2785fecea",
 }
 
 
@@ -98,7 +99,10 @@ ANCHORS = [
     "killer = self.tp_move.get(pos)",
     "if not killer and depth > 3:",
     "if killer and pos.value(killer) >= val_lower:",
-    "yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)",
+    "yield killer, -self.bound(pos.move(killer), 1 - gamma, d - 1)",
+    "if not root and 2 < depth < 6 and",
+    "target = pos.score + NULL_MARGIN",
+    "if -self.bound(pos.rotate(nullmove=True), 1 - target, depth - 3) >= target:",
     "yield None, pos.score",
     "score = min(pos.score + EVAL_ROUGHNESS,",
     "if depth <= 1 and pos.score + val < gamma:",
@@ -114,7 +118,7 @@ ANCHORS = [
 
 # Raw "line N" citations in the Lean sources are fragile: they rot silently.
 # We ratchet rather than ban outright -- the count may fall, never rise.
-LINE_CITATION_BUDGET = 147
+LINE_CITATION_BUDGET = 146
 
 
 def check_anchors(src):
