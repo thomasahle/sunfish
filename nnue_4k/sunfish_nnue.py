@@ -625,12 +625,25 @@ class Searcher:
             # The idea is that "doing nothing" is a lower bound on the score
             # of the position, but we have to be careful with zugzwang, where
             # passing is better than any move - the piece test guards that
-            # (K+P endings). The score cap has a different role: in decided
-            # positions every pass fails high, sound but lazy bounds that
-            # crowd out the precision needed to convert (dropping the cap was
-            # Elo-neutral over 900 games yet cost a mate-in-3 at the CI
-            # fixed-depth floor). Both halves stay. No null at root, so we
-            # can always return a move.
+            # (K+P endings). No null at root, so we can always return a move.
+            #
+            # THE SCORE IS NOT CAPPED, and that is a real difference from
+            # classic, which clamps it to min(pos.score + EVAL_ROUGHNESS, ...).
+            # We never have capped it: git log -S finds no such line anywhere
+            # in this file's history. The comment that stood here until
+            # 2026-08-13 asserted the cap was present ("both halves stay") and
+            # cited a 900-game test of removing it - it had been adapted from
+            # classic and described a decision that was never implemented
+            # here, so it is deleted rather than corrected.
+            #
+            # Uncapped is looser in two ways, not one: `score >= gamma` fires
+            # more often AND the yielded score becomes this node's value, so
+            # an over-optimistic pass propagates into the tt and into the MTD
+            # bisection, which then trusts it. Whether the cap earns its bytes
+            # against a PST eval is UNDER MEASUREMENT (2026-08-13 round-robin;
+            # an older 300-game test on the NNUE eval was flat, which by the
+            # (feature, eval) rule does not settle it here). Until that lands,
+            # this comment describes the code as written.
             if not root and depth > 2 and abs(pos.ps) < 500 and any(c in pos.board for c in "RBNQ"):
                 score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
                 # A fail high is a virtual claim, and needs verification

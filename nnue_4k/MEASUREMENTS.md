@@ -46,6 +46,10 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | corrhist built, interior-only | 0.70x nodes AND 0.89x time to d8. Awaiting a quiet machine |
+| 2026-08-13 | **Transfer scoreboard: ice4's +421 is not our +421** | 3 measured, 3 outcomes. Mean transfer far below 1 |
+| 2026-08-13 | Lying null-cap comment removed | Entry regenerated, 3483 B, CI green. Comments are free |
+| 2026-08-13 | Auto-chaining disarmed in 4 scripts | Now require an explicit `GO_<stage>` marker |
 | 2026-08-13 | **Null-move cap: code contradicts its own comment** | Entry's null is UNCAPPED; `git log -S` finds the cap never existed here. RR in flight |
 | 2026-08-13 | **The hole is real and it is ~46, not ~85** | `entry_nolmr` **-46.3 +/- 30.0** vs classic, 322g timed, 0 time losses |
 | 2026-08-13 | LMP (legality-fixed), fixed nodes, on top of LMR | **-125.8 +/- 38.1**, 269g, H0. **DROPPED** -- bar was +56 |
@@ -125,6 +129,93 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — The transfer scoreboard: ice4's +421 is not our +421
+
+Three features from the ice4 catalogue have now been measured on our engine.
+**Three different outcomes**, and that is the finding.
+
+| feature | ice4 Elo | ours | outcome |
+|---|---|---|---|
+| LMR | 81 | **+38.9 +/- 19.1** fixed, ~+65 timed | transfers, at ~60% |
+| RFP | 58 | ~ 0 | sound, worthless here |
+| LMP | 123 | **-126** | structurally incompatible |
+| corrhist | 70 | built, unmeasured | — |
+
+The mean transfer coefficient across the measured three is **far below 1**, and
+the spread runs from 0.6 to *negative*. So:
+
+**Any remaining +400 arithmetic must use measured transfer, not ice4's
+published column.** Summing the catalogue and expecting its total is the
+error this table exists to prevent. The catalogue is still the right *queue* —
+it ranks what to try — but it is not a forecast, and each item has to be
+priced on our engine before it may appear in a plan.
+
+Two structural reasons the numbers do not carry, both now demonstrated rather
+than argued:
+1. **Our cost model is inverted.** Eval is O(1) incremental, so (piece,
+   square) terms are free and whole-position terms are expensive — the reverse
+   of ice4. Anything whose cost is "touch the whole board once per node" is
+   priced differently here (corrhist below is a live example: the same feature
+   is a loss or a win depending purely on which nodes pay for the key).
+2. **Our movegen is pseudo-legal with no notion of check** (see LMP).
+
+## 2026-08-13 — corrhist: the key, not the correction, is the whole question
+
+Built (`e_pstcorrhist.py`, `e_pstcorrhist2.py`), keyed on the pawn skeleton via
+`str.translate`, clamped to +/-120cp, updated at interior nodes only with a
+7/8 decay, mates excluded. Legality-gated, both variants pass.
+
+It was queued because it is the last large ice4 item with no prior negative,
+and because **its trigger is not a move count** — it shifts a static score, so
+the pseudo-legal-tail defect that killed LMP does not reach it.
+
+Depth-8 from the start position:
+
+| | nodes | nps | time to d8 |
+|---|---|---|---|
+| entry | 150,870 | 85,815 | 1758 ms |
+| corrhist, **every node** | 120,461 (0.80x) | 41,098 (**0.48x**) | 2931 ms (1.67x) |
+| corrhist, **interior only** | **105,307 (0.70x)** | 67,609 (0.79x) | **1558 ms (0.89x)** |
+
+The first version is a **predicted loss**: 0.48x nps is ~-104 Elo on the speed
+model against ~+32 for the node saving. The correction was working and the
+*key* was eating it — the inverted cost model, caught before spending a single
+game.
+
+Not computing the key in QS fixed both halves at once, and the second half was
+a surprise: the node count got **better** (0.70x vs 0.80x), so the QS
+corrections were not merely expensive, they were **noise**. A stand-pat score
+is largely the static eval itself, so correcting it teaches the table its own
+output. Interior-only reaches depth 8 **faster than the entry does**, which
+makes this the first queued feature that is plausibly free.
+
+**Not yet a strength claim.** These are single-position numbers taken while
+the cap RR had the laptop, so the nps column is measured under load; node
+counts are deterministic and unaffected. It needs a quiet machine and games
+before any Elo is attached to it.
+
+## 2026-08-13 — Process: a chain may no longer start itself
+
+`bisect.sh` fired unbidden a second time, when I stopped the hole test. The
+mechanism is now understood exactly, and it was never really about pgrep:
+
+    while [ ! -f hole_result.txt ]; do sleep 60; done
+
+The producer writes its result file on **any** exit, *including being killed*.
+So "the previous stage stopped" was silently read as "the next stage should
+start". A wait on a producer's output is a race by construction, and the
+contamination guard behind it could not help — by the time it ran, the machine
+genuinely was free, because I had just cleared it.
+
+**Four scripts had this shape** (`bisect.sh`, `followups.sh` — the one that
+corrupted 174 games — `ng_fn.sh`, `timescreen.sh`). All four now wait on a
+marker that only a deliberate act creates, consume it so it cannot re-fire,
+and give up after 12h rather than lingering armed:
+
+    GO=GO_bisect
+    while [ ! -f "$GO" ]; do ... done
+    rm -f "$GO"
 
 ## 2026-08-13 — The null-move cap: the code contradicts its own comment
 
@@ -241,6 +332,17 @@ discards the tail is discarding a different population in our engine than in a
 legal-movegen engine. **ice4's Elo/byte for LMP does not transfer, and the
 reason is structural rather than tuning.** Third entry in the transfer
 scoreboard: LMR transfers, RFP is ~0, LMP is negative.
+
+**This predicts a second casualty, and it is one we were counting on.** The
+defect is not specific to LMP; it belongs to *any* **count-triggered** rule
+that discards the tail. **Move-count LMR is exposed to exactly the same
+thing** -- and move-count LMR was our named fallback if threshold-LMR
+saturated (it saturates at 40). So the fallback is not a safe one, and it
+must be screened with the legality gate first rather than assumed sound.
+The general rule: a rule triggered by *how many* moves we have seen says
+nothing about what remains, because our sort orders by static value and our
+list contains moves no one has evaluated for legality. Only *value*-
+triggered rules inherit the sortedness argument.
 
 ## 2026-08-13 — The legality gate, and the fifth stale copy
 
