@@ -46,6 +46,8 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-14 | **PRE-REGISTERED: the phase-balanced set — flat 2,198/band, 8,792 positions, written before selection** | Mechanism check that can only CANCEL: `bal8792` must not be worse than classic at phase 18-24, where d1 was **+7.47 ± 3.14 worse on all 12 splits**. Size control `nat8792` separates mix from N |
+| 2026-08-14 | **THE CORPUS IS EXHAUSTED: 198 positions left in 4,482 games** | 19,491 + 198 = 19,689, exactly the recorded collection — a positive control on the census. So the experiment re-balances labels we ALREADY have and costs no machine time at all |
 | 2026-08-13 | **d1 DROPPED at −76.0 ± 28.3 over 462 games — and 384-parameter distillation on this position set is CLOSED** | UB **−47.7** against a bar of UB < 0. C2 was −93.8 ± 32.7 on the same openings; the intervals overlap, so the teacher swap is **not** what was wrong. Pre-registered closure condition, met |
 | 2026-08-13 | **The phase-band statistic does NOT predict Elo — it points the wrong way** | C2 was 8.00% BETTER at phase 18-24 and played −93.8; d1 is 7.47% WORSE there and played −76.0. The band that was stable across 12 splits carries no Elo signal |
 | 2026-08-13 | Held-out loss has now mis-ranked **twice**, on two different teachers | C2 −5.9% → −93.8 Elo; d1 −7.78% → −76.0 Elo. Fitting the search's own value 7.8% better still costs 76 Elo. A-vs-A control on the same book slice: **exactly 50.00%** (47/47/26) |
@@ -217,6 +219,152 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-14 — PRE-REGISTRATION: the phase-balanced set. The corpus is EXHAUSTED, so the experiment is a re-balance of labels we already have — and it costs nothing to run
+
+**Nothing is selected, fitted or labelled below. This entry is written first, on
+purpose.** Two programmes have now died on this instrument, and both times the
+explanation arrived after the number. This one states the mix, the arms, the
+mechanism check and the bar before a single position is drawn.
+
+### First, the finding that chooses the design: there are no new positions
+
+The plan was to sample a phase-balanced set from the existing corpora. Censused
+with the sampling rule byte-identical to `texel_data.py` (`ply>=10`, every 7th
+ply, not in check, `>=6` pieces), over every game in `~/repos/sunfish-data/pgn`
+— 4,482 games, walked to the end rather than stopped early:
+
+| | |
+|---|---|
+| unique positions the rule admits | 19,689 |
+| already spent in `set20260813` | 19,491 |
+| **left over** | **198** |
+
+| band | available |
+|---|---|
+| 0-5 | 34 |
+| 6-11 | 69 |
+| 12-17 | 74 |
+| 18-24 | 21 |
+
+**The corpus is exhausted.** 19,491 + 198 = 19,689, exactly the "positions
+collected" recorded when the set was built, which is also a positive control on
+the census: this walker reproduces the original sampler's yield to the position.
+No phase-balanced set of any useful size can be drawn from the games on this
+laptop. Enlarging the corpus means pulling PGNs off the box and labelling new
+positions, and that needs a machine.
+
+### So the experiment inverts: re-balance the labels we ALREADY have
+
+`distill160k` holds 19,434 positions **already labelled by our own search at
+160,000 nodes**. Its band structure:
+
+| band | count | share |
+|---|---|---|
+| 0-5 | 8,374 | 43.1% |
+| 6-11 | 5,952 | 30.6% |
+| **12-17** | **2,198** | **11.3%** |
+| 18-24 | 2,910 | 15.0% |
+
+A flat draw is capped by the thinnest band at **2,198 per band, 8,792 total**,
+and it fits entirely inside a set that is already labelled. So the whole
+experiment costs **one census and three CPU-minutes of fitting** — no teacher
+run, no box slot, nothing added to either machine tonight.
+
+It also buys the cleanest single variable this lane has ever had. d1 and the
+balanced fit share the same teacher, the same labels, the same feature
+construction, the same split rule, the same model, the same encoding, the same
+gates and the same screen. **They differ in which subset of the same labelled
+positions the fit sees, and in nothing else.**
+
+### PRE-REGISTERED TARGET MIX: flat, 2,198 per band, 8,792 positions
+
+Written before selection, with the alternatives that were considered and
+rejected, so nobody re-derives them later:
+
+- **FLAT (chosen).** The measured failure is a *trade*: the fit sells phase
+  18-24, where classic's loss against our teacher is already lowest
+  (0.007962, its best band), to buy phase 0-5, where 43.1% of the positions
+  live. Under a flat mix that trade has no payoff, because there is no majority
+  band to buy. It is the minimal intervention, it has **no free parameter**, and
+  it is legible: one number per band, all equal.
+- **Headroom-weighted** (weight ∝ classic's per-band loss) — **rejected**. It
+  would weight 12-17 and 0-5 up and 18-24 *down*, which is the direction that
+  just failed. It optimises the same quantity the loss already optimises.
+- **Play-frequency weighted** — **rejected**, because that is what the corpus
+  already is. Sampling every 7th ply of real games *is* the frequency with which
+  positions occur, and 43/31/11/15 is the mix that produced −93.8 and −76.0.
+
+### The arms, and the control that separates MIX from SIZE
+
+Halving the data is a confound. So three fits, not two:
+
+| arm | positions | mix | purpose |
+|---|---|---|---|
+| `d1` (measured) | 19,434 | natural 43/31/11/15 | the incumbent result, **−76.0 ± 28.3** |
+| **`nat8792`** | **8,792** | **natural** | **the size control.** Same N as the candidate, unbalanced. Anything the balanced arm gains must survive this |
+| **`bal8792`** | **8,792** | **flat 25/25/25/25** | the candidate |
+
+Without `nat8792` a difference between `d1` and `bal8792` could be the mix or
+could be having half the data, and there would be no way to tell.
+
+### PRE-REGISTERED MECHANISM CHECK — it can only CANCEL a screen, never justify one
+
+Held-out loss decides nothing about strength; that is on the record twice over.
+But it can say whether the intervention **did the thing it was designed to do**,
+and if it did not there is nothing worth spending games on:
+
+> **Condition to proceed:** on the 12-split band table, `bal8792` must not be
+> worse than classic at phase 18-24. d1 was **+7.47 ± 3.14 worse** there on all
+> 12 splits. If the balanced fit is still stably worse in that band, the mix was
+> not the mechanism, the diagnosis that survived d1 is wrong too, and this
+> closes **without a box slot**.
+
+This is a veto, not a trigger. Clearing it does not make the arm good — d1
+cleared every gate it had and lost 76 Elo.
+
+### Everything downstream is unchanged, deliberately
+
+| | |
+|---|---|
+| teacher | our own search @ 160,000 nodes, unchanged, labels reused verbatim |
+| split | 20% held out by `sha256(seed + fen)`, seed 20260813 — **FEN-keyed, so a position keeps its side of the split in every set it appears in** |
+| model | the same 384 parameters, king frozen at the landed `kend` fix |
+| encodings | exact (`b1`) and step-8 STE with `exact="K"` (`b8`), as d1/d8 |
+| gates | decode round trip, `check_entry.sh`, legality, mate, **first yield ≤ 2048**, A-vs-A |
+| screen | `ab_fixednode.sh`, 20,000 nodes, SPRT elo0=0 elo1=10, α=β=0.05, 2,000-position book, in the arena that measured C1, C2 and d1 |
+| **bar** | **LAND at 95% LB > 0, DROP at UB < 0** |
+
+Band predictions beyond the mechanism check are **not** registered: the band
+statistic failed its stability test once and its prediction test once, and it is
+being used here only to verify an intervention, never to forecast Elo.
+
+### What makes this different from the two programmes that died — and what does not
+
+**Different:** C2 and d1 were both free to spend the high-phase band to buy the
+majority, and d1 measurably did. Under a flat mix that trade has no payoff. This
+is the first intervention aimed at the mechanism that was actually measured
+rather than at the objective (C2 → d1 changed the teacher, and the teacher was
+not it).
+
+**Not different, and worth saying plainly:** it is the same 384-parameter linear
+model on the same features fitted by least squares, and the two dead programmes
+prove that a 6-8% held-out improvement on this model carries no Elo whatsoever.
+The mix could be the mechanism *and* the model still be too small to profit from
+fixing it. The honest expectation is that this is a coin flip, and the reason to
+spend the slot is that it is the last cheap hypothesis standing before the
+conclusion becomes "384 global parameters cannot be improved by fitting, at any
+mix, with any teacher" — which is itself a result worth having on the record.
+
+### Cost, and why it is being written tonight
+
+The box is running Thomas-side timed matches and the laptop is running the timed
+ladder. Nothing here adds sustained load to either: the census is one pass over
+19,434 FENs, and the fits are single-threaded, `nice -n 15`, ~1 minute each.
+The labelling recipe for *enlarging* the corpus is staged but **not armed** —
+it needs a machine, and it will be scheduled, not chained.
 
 ---
 
