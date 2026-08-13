@@ -266,10 +266,20 @@ constant is a change to this theorem.
 | the engine attains the optimal distance | `leastMate_play_shortest` | `+ Classical.choice` |
 | a mated node's own distance is even | `leastMated_odd_or_zero` | `propext, Quot.sound` |
 | the engine's defence is distance-maximal | `defence_maximal_resistance` | `+ Classical.choice` |
+| resistance is downward closed | `resistsFor_anti` | `propext, Quot.sound` |
+| a checkmated node resists for nothing | `not_resistsFor_of_checkmated` | `propext, Quot.sound` |
+| the defence gives nothing away | `defence_resistance_step` | `+ Classical.choice` |
+| the engine's defence is legal | `defence_move_legal` | `+ Classical.choice` |
+| the defence lasts the whole distance | `defence_resists` | `+ Classical.choice` |
+| the engine attains the optimal distance on the losing side | `leastMated_defence_resists` | `+ Classical.choice` |
+| both directions at once | `dtm_optimal` | `+ Classical.choice` |
 
-The parity spine is choice-free, like the distance spine it extends; the
-`Classical.choice` in the value results is inherited from
-`legal_of_allIllegalB_false`, unchanged.
+The parity spine is choice-free, like the distance spine it extends -- and so
+is the new play predicate's monotonicity; the `Classical.choice` in the value
+results is inherited from `legal_of_allIllegalB_false`, unchanged.  No new
+chess premise: the defender half spends `ValFloor`, `EvalQuiet`,
+`NoMaskedMobility` and `NoZugzwang` exactly as the attacker half does, and
+`defence_move_legal` does not need `NoZugzwang` at all.
 
 **The defender half.**  "The losing side drags the mate out as long as it can"
 is the same ordering read the other way, and it needs no second move rule to
@@ -335,12 +345,42 @@ and the engine attains it: it survives as long as the position permits.  With
 `leastMate_play_shortest` this is distance-to-mate optimality in both
 directions, bundled as `dtm_optimal`.
 
+The carrier of the recursion is the negative statement `∀ i, ForcedlyMated G i q
+→ N ≤ i + 1`, not a least distance, and deliberately so: it also covers the node
+the attacker has already spoiled, where no forced mate exists and the quantifier
+is vacuous.  The engine defends an escaped position as readily as a lost one and
+the induction needs no case split for it.  Each attacker reply inherits a budget
+two plies smaller, and the arithmetic closes with nothing to spare: the reply's
+own mate budget `i` makes `ch q` a mate in `i + 2` (or in ONE, if the reply
+mates at once), the local step turns that into `ForcedlyMated G j q` with `j`
+odd and `j ≤ i + 2`, and the carrier at `q` gives `N ≤ j + 1 ≤ i + 3`.
+
 Two honest notes.  The depth condition is `k + 1 ≤ d`, one ply stricter than
-the attacker half's `k ≤ d`: the defender's claim is about what the position
-does NOT permit, and refuting a faster mate needs the ply that would have shown
-it.  And neither play predicate asserts that `ch` returns a legal move --
-`MatesWithin` does not either; legality is supplied where the tree is built, by
-`NearMaximalChoice` (`ch q ∈ movesAbove ... ⊆ G.moves q`).
+the attacker half's `k ≤ d`: the attacker only has to FIND the mate it plays,
+while the defender has to outlast the faster mate that does not exist, and
+refuting that one needs the ply that would have shown it.  And `ResistsFor`
+does not assert that `ch q` is a legal move -- `MatesWithin` does not either --
+so the fact is proved separately rather than assumed:
+
+```text
+defence_move_legal :
+  NearMaximalChoice G guard d ch →
+  allIllegalB G q = false → hasKingCapture G q = false →
+  (∀ i, ForcedlyMated G i q → N ≤ i + 1) → 3 ≤ N → N ≤ d →
+  hasKingCapture G (ch q) = false
+```
+
+An illegal defence hands over the king, which the model prices at the exact
+`MATE_UPPER` sentinel -- the largest value there is -- and the engine minimises
+the value it moves to, so every legal alternative would have to score within
+`EVAL_ROUGHNESS` of the sentinel as well.  That is where the terminal clamp
+becomes quantitative: `hspan` caps the horizon at `d ≤ 1424` plies, so
+`forcedMate_of_value_dist` at `t = 1423` leaves room for a mate in ONE and
+nothing longer, every legal move at `q` would be mate in one, and the carrier
+says `q` is not mated in two.  Below three plies the question is empty: mate
+cannot land before ply two whatever the engine plays.  The recursion hands each
+child these same hypotheses, so the same theorem applies at every node of the
+play whose remaining budget is at least three.
 
 ## Terminal positions and legality evidence
 
@@ -420,8 +460,8 @@ transform is the identity, so the model and source are extensionally equal.
 - `TableSwap.lean`: table-update properties.
 - `Liveness.lean` and `Classification.lean`: mate visibility and search-result
   classification under their named fidelity premises.
-- `Shortest.lean`: mate-distance parity, value separation, and shortest-mate
-  play under the driver's own stopping tolerance.
+- `Shortest.lean`: mate-distance parity, value separation, and distance-to-mate
+  optimal play in both directions under the driver's own stopping tolerance.
 - `Pruning.lean` and `Tricks.lean`: proof envelopes for selective-search
   techniques.
 

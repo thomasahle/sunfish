@@ -598,4 +598,288 @@ theorem resistsFor_anti (G : QSGame) (ch : G.Pos → G.Pos) :
     · exact ResistsFor.safe hsafe
     · exact ResistsFor.step hsafe (fun m hm hleg => ih m hm hleg j' (by omega))
 
+/-- **A checkmated node resists for nothing.**  Every constructor but
+`zero` refuses the mate that has already landed, so the index cannot be
+read as vacuous: `ResistsFor G ch n q` at `n ≥ 1` really does deny that
+mate is here. -/
+theorem not_resistsFor_of_checkmated (G : QSGame) (ch : G.Pos → G.Pos)
+    {n : Nat} {q : G.Pos} (hcm : Checkmated G q) (hn : 1 ≤ n) :
+    ¬ ResistsFor G ch n q := by
+  intro h
+  cases h with
+  | zero => omega
+  | safe hsafe => exact hsafe hcm
+  | draw _ hsafe => exact hsafe hcm
+  | step hsafe _ => exact hsafe hcm
+
+/-! ### The local step, in spec form -/
+
+/-- **The engine's defence gives nothing away.**  If the move the
+engine plays at `q` lets the attacker mate in `n` plies, then EVERY
+legal move at `q` does: the position was already `ForcedlyMated G n q`.
+
+This is `defence_maximal_resistance` restated where the recursion can
+use it.  That one compares two exact distances through
+`leastMate_value_block`; this one carries a `ForcedMate` to a
+`ForcedlyMated` and so composes with itself.
+
+Three lines of value, and a ply of parity.  `forcedMate_complete` puts
+the chosen move's value at or above `MATE_LOWER + (d - n) * ER`.
+Near-maximality is a MINIMUM over the reached values, so every
+alternative -- and by `ValFloor` every legal move is admitted at this
+depth -- sits at or above one rung lower, `MATE_LOWER + (d - n - 1) *
+ER`.  `forcedMate_of_value_dist` reads that rung as a forced mate in
+`n + 1`: one ply too many, the rung the driver's tolerance costs.
+`forcedMate_odd_le` refunds it, because `n` is odd and so `n + 1` is an
+EVEN budget, which is never tight.
+
+Note what is NOT needed: nothing about `q`'s own value, its king, or
+its terminal status beyond `hai` naming a legal move.  The argument is
+entirely about the positions the engine can move to. -/
+theorem defence_resistance_step (G : QSGame) (guard : G.Pos → Bool)
+    (ch : G.Pos → G.Pos) (d : Nat)
+    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
+    (hch : NearMaximalChoice G guard d ch)
+    {n : Nat} {q : G.Pos}
+    (hai : allIllegalB G q = false)
+    (hnodd : n % 2 = 1) (hnd : n + 1 ≤ d)
+    (hspan : (d : Int) * EVAL_ROUGHNESS ≤ 21366)
+    (hFM : ForcedMate G n (ch q)) :
+    ForcedlyMated G n q := by
+  have hML : MATE_LOWER = 47923 := rfl
+  obtain ⟨_hmem, hnear⟩ := hch q hai
+  have hval := forcedMate_complete G guard hF hZ hFM d hnd
+  simp only [mateFloor, EVAL_ROUGHNESS] at hval
+  simp only [EVAL_ROUGHNESS] at hspan
+  have hvalv : MATE_LOWER + ((d : Int) - (n : Int)) * 15
+      ≤ nullValueD2 G guard d (ch q) := by omega
+  refine Or.inr ⟨hai, fun m hm hleg => ?_⟩
+  have hmem' : m ∈ movesAbove G (val_lower (d + 1)) q :=
+    mem_movesAbove_of_floor G hF (d := d + 1) (by omega) hm
+  have hnearm := hnear m hmem'
+  simp only [EVAL_ROUGHNESS] at hnearm
+  have hbound : MATE_LOWER + (((d - n - 1 : Nat)) : Int) * EVAL_ROUGHNESS
+      ≤ nullValueD2 G guard d m := by
+    simp only [EVAL_ROUGHNESS]
+    have hc : (((d - n - 1 : Nat)) : Int) = (d : Int) - (n : Int) - 1 := by omega
+    rw [hc]
+    omega
+  obtain ⟨n', _hn'1, hn'2, hn'3⟩ :=
+    forcedMate_of_value_dist G guard hF hQ hNM d (d - n - 1) m hleg hbound
+  obtain ⟨n'', hn''le, hn''odd, hn''FM⟩ := forcedMate_odd_le G hn'3
+  exact forcedMate_mono G hn''FM n (by omega)
+
+/-! ### The strong recursion -/
+
+/-- **The defender half's global induction.**  From a position no mate
+can reach in fewer than `N` plies, the engine's own defence survives
+`N` plies against EVERY attack.
+
+The carrier is the negative spec statement `∀ i, ForcedlyMated G i q →
+N ≤ i + 1` -- "no attacker budget below this one suffices" -- and not a
+least distance, deliberately: it also covers the node the attacker has
+already spoiled, where no forced mate exists at all and the quantifier
+is vacuous.  The engine defends a position it has escaped as readily as
+one it is still losing, and the induction should not need a case split
+for that.
+
+The recursion is `fuelMono`-shaped, descending two plies at a time.  At
+`q` with budget `n + 2`: `hsafe` rules out the mate that has already
+landed, a moveless `q` is the `draw` leaf, and otherwise every legal
+attacker reply `m` to `ch q` inherits budget `n`.  What the child needs
+is that no mate reaches IT in fewer than `n` plies, and that is two
+plies of bookkeeping on the local step:
+
+* `Checkmated m` makes `ch q` a mate in one (`ForcedMate.mate`);
+* otherwise `ForcedlyMated G i m` makes it a mate in `i + 2`
+  (`ForcedMate.step`, the constructor doing exactly what the play did);
+* `forcedMate_odd_le` then `defence_resistance_step` turn either into
+  `ForcedlyMated G j q` with `j` odd and `j ≤ i + 2`, and the carrier
+  at `q` gives `N ≤ j + 1 ≤ i + 3` -- that is `n ≤ i + 1`, the child's
+  carrier, with nothing to spare.
+
+The `by_cases` on `n ≤ i + 1` is not a case analysis on the chess: for
+a budget `i` already larger than the child needs there is nothing to
+prove, and it is what keeps `i` small enough for the local step to fit
+inside the horizon. -/
+theorem defence_resists (G : QSGame) (guard : G.Pos → Bool)
+    (ch : G.Pos → G.Pos) (d : Nat)
+    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
+    (hch : NearMaximalChoice G guard d ch)
+    (hspan : (d : Int) * EVAL_ROUGHNESS ≤ 21366) :
+    ∀ (N : Nat) (q : G.Pos),
+      N ≤ d →
+      hasKingCapture G.toNullGame.toGame q = false →
+      ¬ Checkmated G q →
+      (∀ i, ForcedlyMated G i q → N ≤ i + 1) →
+      ResistsFor G ch N q := by
+  intro N
+  induction N using Nat.strongRecOn with
+  | _ N ih =>
+    intro q hNd hcapq hsafe hres
+    rcases N with _ | _ | n
+    · exact ResistsFor.zero
+    · exact ResistsFor.safe hsafe
+    · cases hai : allIllegalB G q with
+      | true => exact ResistsFor.draw hai hsafe
+      | false =>
+        refine ResistsFor.step hsafe ?_
+        intro m hm hleg
+        -- the position the engine moved to is a real position with a king
+        obtain ⟨hmem, _⟩ := hch q hai
+        have hmq : ch q ∈ G.moves q := movesAbove_subset G _ q (ch q) hmem
+        have hcap : ¬ (hasKingCapture G.toNullGame.toGame q = true) := by simp [hcapq]
+        have hkgc : ¬ (G.eval (ch q) ≤ -MATE_LOWER) := fun hh =>
+          hcap ((hasKingCapture_iff G.toNullGame.toGame q).mpr ⟨ch q, hmq, hh⟩)
+        -- two plies of the play, read back as two plies of the spec
+        have key : ∀ i, ForcedlyMated G i m → i + 3 ≤ d →
+            ∃ j, j % 2 = 1 ∧ j ≤ i + 2 ∧ n + 2 ≤ j + 1 := by
+          intro i hFL hid
+          have hFMc : ForcedMate G (i + 2) (ch q) := by
+            cases hFL with
+            | inl hcm =>
+              exact forcedMate_mono G
+                (ForcedMate.mate (k := 0) hkgc hm hleg hcm) (i + 2) (by omega)
+            | inr hrest => exact ForcedMate.step hkgc hm hleg hrest.1 hrest.2
+          obtain ⟨j, hjle, hjodd, hjFM⟩ := forcedMate_odd_le G hFMc
+          have hFLq := defence_resistance_step G guard ch d hF hQ hNM hZ hch hai
+            hjodd (by omega) hspan hjFM
+          exact ⟨j, hjodd, hjle, hres j hFLq⟩
+        rcases n with _ | n'
+        · exact ResistsFor.zero
+        · refine ih (n' + 1) (by omega) m (by omega) hleg ?_ ?_
+          · -- the child is not mated ALREADY: that would be a mate in two here
+            intro hcm
+            obtain ⟨j, hjodd, hjle, hjN⟩ := key 0 (Or.inl hcm) (by omega)
+            omega
+          · -- and no mate reaches it sooner than the budget it inherits
+            intro i hFL
+            by_cases hbig : n' + 1 ≤ i + 1
+            · exact hbig
+            · obtain ⟨j, hjodd, hjle, hjN⟩ := key i hFL (by omega)
+              omega
+
+/-- **The engine's defence is a LEGAL move**, wherever the claim needs
+it to be.  `ResistsFor` does not demand this of `ch`, and neither does
+`MatesWithin`; this is the fact they would demand, and it is a theorem
+rather than a premise.
+
+An illegal defence hands the attacker the king, and the model prices
+that at the exact `MATE_UPPER` sentinel -- the largest value there is.
+The engine MINIMISES the value it moves to, so an illegal `ch q` would
+force every legal alternative to score within `EVAL_ROUGHNESS` of the
+sentinel too.  That is the step where the terminal clamp becomes
+quantitative: `hspan` caps the horizon at `d ≤ 1424` plies, so
+`forcedMate_of_value_dist` at `t = 1423` leaves room for a forced mate
+in ONE and nothing longer.  Every legal move at `q` would be mate in
+one, `q` would be mated in two plies, and the carrier says it is not.
+
+Three plies is exactly the range where this bites.  At a budget of two
+the mate cannot land before ply two whatever the engine plays, so the
+legality of the move is not part of the claim.  The recursion in
+`defence_resists` hands each child these same hypotheses, so the same
+theorem applies at every node of the play whose remaining budget is at
+least three. -/
+theorem defence_move_legal (G : QSGame) (guard : G.Pos → Bool)
+    (ch : G.Pos → G.Pos) (d : Nat)
+    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hNM : NoMaskedMobility G)
+    (hch : NearMaximalChoice G guard d ch)
+    (hspan : (d : Int) * EVAL_ROUGHNESS ≤ 21366)
+    {N : Nat} {q : G.Pos}
+    (hai : allIllegalB G q = false)
+    (hcapq : hasKingCapture G.toNullGame.toGame q = false)
+    (hres : ∀ i, ForcedlyMated G i q → N ≤ i + 1)
+    (hN : 3 ≤ N) (hNd : N ≤ d) :
+    hasKingCapture G.toNullGame.toGame (ch q) = false := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  simp only [EVAL_ROUGHNESS] at hspan
+  cases hc : hasKingCapture G.toNullGame.toGame (ch q) with
+  | false => rfl
+  | true =>
+    exfalso
+    obtain ⟨hmem, hnear⟩ := hch q hai
+    have hmq : ch q ∈ G.moves q := movesAbove_subset G _ q (ch q) hmem
+    have hcap : ¬ (hasKingCapture G.toNullGame.toGame q = true) := by simp [hcapq]
+    have hkgc : ¬ (G.eval (ch q) ≤ -MATE_LOWER) := fun hh =>
+      hcap ((hasKingCapture_iff G.toNullGame.toGame q).mpr ⟨ch q, hmq, hh⟩)
+    have hvc : nullValueD2 G guard d (ch q) = MATE_UPPER :=
+      nullValueD2_of_capture G guard d (ch q) hkgc hc
+    have hFL : ForcedlyMated G 1 q := by
+      refine Or.inr ⟨hai, fun m hm hleg => ?_⟩
+      have hmem' : m ∈ movesAbove G (val_lower (d + 1)) q :=
+        mem_movesAbove_of_floor G hF (d := d + 1) (by omega) hm
+      have hnearm := hnear m hmem'
+      simp only [EVAL_ROUGHNESS] at hnearm
+      have hbound : MATE_LOWER + ((1423 : Nat) : Int) * EVAL_ROUGHNESS
+          ≤ nullValueD2 G guard d m := by
+        simp only [EVAL_ROUGHNESS]
+        rw [hvc] at hnearm
+        omega
+      -- `hspan` caps the horizon at `d ≤ 1424`, so `n' ≤ 1`
+      obtain ⟨n', _hn'1, hn'2, hn'3⟩ :=
+        forcedMate_of_value_dist G guard hF hQ hNM d 1423 m hleg hbound
+      exact forcedMate_mono G hn'3 1 (by omega)
+    have := hres 1 hFL
+    omega
+
+/-- **DISTANCE-TO-MATE OPTIMALITY, defender half.**  From a root whose
+EXACT distance to mate is `k + 1` plies -- `k` is the least attacker
+budget the position permits, and `leastMated_odd_or_zero` makes `k + 1`
+even -- the engine's own move choice, required only to be within the
+driver's `EVAL_ROUGHNESS` stopping tolerance of the best, survives
+`k + 1` plies against EVERY attack.
+
+No defence whatsoever survives longer, so the engine attains the
+game-theoretic optimum on the losing side too: "the losing side drags
+the mate out as long as it can", proved rather than measured.
+
+`k ≠ 0` excludes the position that is already checkmated, where there
+is nothing left to defend and `ResistsFor G ch 0 q` is the whole
+claim. -/
+theorem leastMated_defence_resists (G : QSGame) (guard : G.Pos → Bool)
+    (ch : G.Pos → G.Pos) (d : Nat)
+    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
+    (hch : NearMaximalChoice G guard d ch)
+    {k : Nat} {q : G.Pos}
+    (hLMd : LeastMated G k q) (hk : k ≠ 0) (hkd : k + 1 ≤ d)
+    (hspan : (d : Int) * EVAL_ROUGHNESS ≤ 21366)
+    (hcapq : hasKingCapture G.toNullGame.toGame q = false) :
+    ResistsFor G ch (k + 1) q := by
+  refine defence_resists G guard ch d hF hQ hNM hZ hch hspan (k + 1) q hkd hcapq ?_ ?_
+  · exact fun hcm => hk (Nat.le_antisymm (hLMd.2 0 (Or.inl hcm)) (Nat.zero_le _))
+  · exact fun i hFL => by have := hLMd.2 i hFL; omega
+
+/-- **DISTANCE-TO-MATE OPTIMALITY, both directions.**  One engine, one
+move rule, one tolerance: from a won root it mates in exactly the
+number of plies the position permits, and from a lost root it survives
+exactly the number of plies the position permits.
+
+The two halves need the same premises and the same parity refund; they
+differ only in which quantifier is the engine's.  The defender's depth
+condition is one ply stricter (`k + 1 ≤ d` against `k + 1 ≤ d + 1`):
+the attacker only has to FIND the mate it plays, the defender has to
+outlast the faster mate that does not exist, and refuting it needs the
+ply that would have shown it. -/
+theorem dtm_optimal (G : QSGame) (guard : G.Pos → Bool)
+    (ch : G.Pos → G.Pos) (d : Nat)
+    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
+    (hch : NearMaximalChoice G guard d ch)
+    (hspan : (d : Int) * EVAL_ROUGHNESS ≤ 21366) :
+    (∀ {k : Nat} {p : G.Pos}, LeastMate G k p → k + 1 ≤ d + 1 →
+        hasKingCapture G.toNullGame.toGame p = false →
+        MatesWithin G ch k p) ∧
+      (∀ {k : Nat} {q : G.Pos}, LeastMated G k q → k ≠ 0 → k + 1 ≤ d →
+        hasKingCapture G.toNullGame.toGame q = false →
+        ResistsFor G ch (k + 1) q) :=
+  ⟨fun hLM hkd hcapf =>
+      leastMate_play_shortest G guard ch d hF hQ hNM hZ hch hLM hkd hspan hcapf,
+   fun hLMd hk hkd hcapq =>
+      leastMated_defence_resists G guard ch d hF hQ hNM hZ hch hLMd hk hkd hspan hcapq⟩
+
 end Sunfish
