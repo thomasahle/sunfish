@@ -46,6 +46,10 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **Null-move cap: code contradicts its own comment** | Entry's null is UNCAPPED; `git log -S` finds the cap never existed here. RR in flight |
+| 2026-08-13 | **The hole is real and it is ~46, not ~85** | `entry_nolmr` **-46.3 +/- 30.0** vs classic, 322g timed, 0 time losses |
+| 2026-08-13 | LMP (legality-fixed), fixed nodes, on top of LMR | **-125.8 +/- 38.1**, 269g, H0. **DROPPED** -- bar was +56 |
+| 2026-08-13 | LMR on/off, **PST entry**, fixed nodes | **+38.9 +/- 19.1**, 845g, H1. Transfers, at ~60% of its NNUE value |
 | 2026-08-13 | **Legality gate built, positive-controlled, wired in** | Fails the pre-fix LMP on 2/100, passes the fix and the shipped entry. Caught a **stale broken LMP copy** on the laptop |
 | 2026-08-13 | **ENGINE PROPERTY: pseudo-legal movegen, no notion of check** | Not an LMP bug — it will bite every count-triggered or tail-pruning rule. `best > -MATE_UPPER` is now the required preamble |
 | 2026-08-13 | Guards measured INERT on the PST entry | 0 probe-cap hits, 0 bracket crossings to depth 10 — bisection collapses to one arm, ~600 games saved |
@@ -121,6 +125,122 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — The null-move cap: the code contradicts its own comment
+
+Found by **diffing `bound()` against classic** rather than by bisecting eras —
+a much cheaper instrument than the era rollback I had queued, and it landed on
+one line.
+
+```python
+# classic
+score = min(pos.score + EVAL_ROUGHNESS,
+            -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
+# ours -- NO CAP
+score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
+```
+
+**The comment directly above our uncapped line says the cap is there.** It
+reads "*dropping the cap was Elo-neutral over 900 games yet cost a mate-in-3 at
+the CI fixed-depth floor. Both halves stay.*" Both halves did not stay.
+`git log -S "min(pos.score + EVAL_ROUGHNESS"` on `sunfish_nnue.py` returns
+**nothing** — the cap has never existed in this engine's history. The comment
+was adapted from classic and describes a decision that was never implemented
+here, so for an unknown length of time the file has documented behaviour it
+does not have. Per the standing rule that the model must match the code, this
+is a blocker in its own right, independent of the Elo.
+
+Uncapped null is wrong in **two** ways at once, and both bite hardest with a
+weak eval:
+1. `score` is larger, so `score >= gamma` fires more often — **more null
+   cutoffs, and more aggressive ones**.
+2. the yielded `score` becomes the node's returned value, so an inflated null
+   estimate **propagates into the TT and into the MTD bisection**. Classic's
+   cap bounds that inflation at `static + 15`.
+
+**Counter-evidence, stated with the same care as the lead:** this ledger
+already contains "capped-null decision match: -10.4 +/- 23.3 over 300g,
+statistically flat". That was measured **on the NNUE engine**. By the
+(feature, eval) rule — now confirmed four separate times this session (RFP's
+mate gate, LMR's transfer, the zero crossings, LMP) — a heuristic whose trigger
+reads the eval must be re-measured per eval. A cap that is inert against a
+learned eval can matter against piece-square tables precisely because the
+static score it clamps to means something different.
+
+Under test as one classic-anchored round-robin rather than four A/Bs
+(`rr_cap.sh`), answering the hole, the fix, the shipping question, and the
+timed LMR value together.
+
+## 2026-08-13 — The hole is real, and it is ~46 Elo, not ~85
+
+`entry_nolmr` vs classic, timed 10+0.1, **322 games, zero time losses,
+zero illegal moves**:
+
+| | Elo vs classic |
+|---|---|
+| entry (shipped) | **+19.1 +/- 24.5** |
+| entry **minus LMR** | **-46.3 +/- 30.0** |
+
+The interval excludes zero, so **the hole is confirmed**: strip LMR and our
+port is meaningfully *worse* than classic — while running **1.10x faster than
+classic at the same depth**, which rules out speed as the cause. It is a
+search-quality defect, not a cost.
+
+**But it is smaller than I claimed, and I should correct that on the record.**
+I advertised ~85 Elo, derived by subtracting a timed LMR estimate of
++104.6 +/- 90.9 from the entry's +19.1. That input was noise: the tight
+fixed-node measurement below puts LMR at +38.9 +/- 19.1, and the timed
+interval was wide enough to contain it. The consistent picture is
+**LMR timed ~ +65** (19.1 - (-46.3)), and a hole of ~46. Quoting an 85 built
+on a +/-91 input was overreach.
+
+## 2026-08-13 — LMR transfers to the PST entry: +38.9 +/- 19.1
+
+845 games fixed-node, SPRT H1 accepted, stopped early. The tightest LMR number
+we have, and it settles a question left open twice.
+
+| measurement | value |
+|---|---|
+| NNUE engine, fixed nodes | +65.0 +/- 43.3 |
+| **PST entry, fixed nodes** | **+38.9 +/- 19.1** |
+| PST entry, timed (77g, superseded) | +104.6 +/- 90.9 |
+
+So LMR **does** transfer across the eval swap, at roughly 60% of its NNUE
+value — the (feature, eval) rule predicts a change in magnitude, and that is
+what happened; it did not predict a sign flip, and there wasn't one. The
+headline lesson is methodological: the timed point estimate was **2.7x** the
+fixed-node one and its interval contained it. It was noise, and I built a lead
+on it.
+
+**Build-lineage note.** The baseline (`e_pstnc.py`) and the variant
+(`e_pstnolmr.py`) turned out to be from different build generations — only the
+variant carried the driver version stamp. I diffed them before trusting the
+result: the **only** search-relevant difference is `LMR = 60` vs `LMR = 0`, the
+rest being a startup assertion that cannot affect play. **The result stands.**
+Both are now one lineage. Unifying them, I briefly broke both files with a
+bad splice; the smoke test caught it before any game was played, which is the
+argument for smoke-testing every variant rather than only gating it.
+
+## 2026-08-13 — LMP is dead: -125.8 +/- 38.1
+
+269 games, fixed nodes, on top of LMR, SPRT H0 accepted, stopped early. The
+pre-registered bar was **+56 Elo** (1.0 Elo/byte for 56 bytes). It missed by
+180 Elo.
+
+This is the number that closes the LMP question, and the legality gate is what
+makes it *meaningful*: the previous LMP run was a **correctness** failure
+(`bestmove (none)`), so its loss measured a bug. This run is on the gated,
+legality-clean build, so **-125.8 is a genuine strength verdict** — the rule
+itself is bad here, not merely misimplemented.
+
+Worth stating why, since ice4 rates LMP highly (its Elo column is why this was
+queued at all): our movegen is **pseudo-legal with no notion of check**, so the
+move list's tail is not "obviously bad moves", it is "moves we never
+evaluated", including forced king escapes. A count-triggered rule that
+discards the tail is discarding a different population in our engine than in a
+legal-movegen engine. **ice4's Elo/byte for LMP does not transfer, and the
+reason is structural rather than tuning.** Third entry in the transfer
+scoreboard: LMR transfers, RFP is ~0, LMP is negative.
 
 ## 2026-08-13 — The legality gate, and the fifth stale copy
 
