@@ -349,6 +349,37 @@ shows the time control alone does not manufacture the failure. **This is a
 correctness count, not an Elo measurement**, and it is registered as such —
 1+0 on a shared box is far too noisy for a strength claim and none is made.
 
+### The kit, staged and UNARMED
+
+`tools/screens/seed_screen.sh`. Same discipline as `label_corpus.sh`: the GO
+marker is checked **once**, it never waits and never chains, and the producer
+writes `RESULT_seedscreen.txt` on **every** exit path including a crash or a
+kill. Controls run before staging: unarmed → refuses with a result file
+(exit 2); armed with an incomplete arena → refuses **before any games**
+(exit 3), naming the missing file.
+
+Two preflights inside the script that are not decoration:
+
+- **Legality and first yield on all four arms**, seconds rather than games.
+- **`b8` must STILL FAIL the node gate.** It is the positive control for
+  stage 2 — if a rebuild has quietly fixed it there is nothing left to catch,
+  and stage 2 would report a clean sheet that means nothing. The script aborts
+  (exit 7) rather than produce that.
+
+Staged into the arena that measured C1, C2 and d1, md5-verified after transfer,
+and probed one position each to confirm the real driver resolves (`v2 nodes
+fen`, all three answering `e1e8`):
+
+| in `eval-c1-20260813` | |
+|---|---|
+| arms | `bin/e_seed.py`, `bin/e_b8.py`, `bin/e_b8seed.py` (+ `e_base.py` already there) |
+| wrappers | `w_seed.sh`, `w_b8.sh`, `w_b8seed.sh` |
+| script | `seed_screen.sh` |
+| GO marker | **absent — UNARMED** |
+
+Nothing was launched: the box is owned by the Thomas-side systemd queue and the
+laptop by the ladder.
+
 ### Not pre-registered, deliberately
 
 No Elo prediction. The seed changes the bisection, so a stopped search can
