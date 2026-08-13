@@ -41,32 +41,27 @@ MODS = {
     # Late move reductions off. Threshold-triggered (val < LMR), so setting the
     # threshold to 0 disables it without touching the loop.
     "nolmr": ("\nLMR = 60\n", "\nLMR = 0\n"),
-    # Restore CLASSIC's king-table phase rule. The entry pastes classic's
-    # tables -- including classic's K_END, the centralisation table classic
-    # calls out as "important to win KRK/KQK endings" -- but kept the NNUE
-    # engine's trigger, which was written for a DIFFERENT K_END (a trained
-    # bare-king mop-up table, where "one side is a lone king" IS the right
-    # condition). Against classic's table the right condition is classic's:
-    # switch as soon as either queen leaves. Measured over 37,374 positions
-    # from real games, the two rules disagree on 62.1% of them.
-    "kend": (
-        '        bare = sum(c.isupper() for c in pos.board) == 1 or sum(c.islower() for c in pos.board) == 1\n'
-        '        pst["K"] = K_END if bare else K_MID\n',
-        '        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END\n',
-    ),
-    # Swapping the king table invalidates the incrementally carried score:
-    # `pos.score` was accumulated under the OLD table and nothing recomputes
-    # it. The offset then flips sign every ply through rotate(), so it acts as
-    # an oscillating phantom tempo on every stand-pat and futility margin --
-    # for the whole of that one search. Measured on real games it bites on the
-    # transition ply only (the driver rebuilds hist each move): 0.83 plies per
-    # game under classic's rule, mean |E| 30cp, max 157cp.
-    # Must be applied AFTER `kend`, whose replacement supplies this anchor.
-    "fresh": (
-        '        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END\n',
-        '        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END\n'
-        '        pos = self.root = from_board(pos.board, pos.wc, pos.bc, pos.ep, pos.kp)\n',
-    ),
+    # `kend` and `fresh` USED TO LIVE HERE. They won their round-robin
+    # (+107.5 +/- 31.6 vs classic over 4,000 games) and are now part of the
+    # baseline, applied by tools/build/make_pst_entry.py -- so they are
+    # deliberately NOT mods any more, and removing them was a correctness fix
+    # rather than tidying:
+    #
+    #   - `kend`'s anchor no longer exists in the source, so it would raise.
+    #     That is the designed failure and it would have been safe.
+    #   - `fresh`'s anchor DOES still exist -- it is the line `kend` used to
+    #     produce and the baseline now ships. Re-applying it would have
+    #     appended a SECOND from_board() rebuild and the generator's
+    #     occurs-exactly-once check would have passed, because the anchor
+    #     really does occur exactly once. A silently doubled mod on a variant
+    #     that looks correctly generated is precisely the failure this file
+    #     was written to prevent.
+    #
+    # A landed mod must therefore be DELETED from here, not left for
+    # provenance. Provenance lives in git history and in the ledger entry
+    # "THE HOLE ROUND-ROBIN, COMPLETE" (2026-08-13), which records the arm
+    # sha256s; tools/screens/rr_hole.sh is that finished run's record and
+    # names arms this generator can no longer build.
 }
 
 

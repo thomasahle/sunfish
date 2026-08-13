@@ -620,12 +620,12 @@ class Searcher:
         # cleared above), so every bound targets one value function.
         pos = self.root = history[-1]
 
-        # Bare-king endings: swap in the centralization gradient (packed's
-        # own measured condition; classic keys on queens-off instead).
-        # Both directions every search: table state must never outlive the
-        # condition.
-        bare = sum(c.isupper() for c in pos.board) == 1 or sum(c.islower() for c in pos.board) == 1
-        pst["K"] = K_END if bare else K_MID
+        # Classic's K_END is a centralization gradient, and classic keys it
+        # on queens-off. Both directions every search: table state must
+        # never outlive the condition.
+        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END
+        # The carried score was accumulated under the OTHER table.
+        pos = self.root = from_board(pos.board, pos.wc, pos.bc, pos.ep, pos.kp)
 
         gamma = 0
         # In finished games, we could potentially go far enough to cause a recursion

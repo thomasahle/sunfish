@@ -46,6 +46,9 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **HOLE RR COMPLETE: 4,000 games, and `entry_kf` SHIPS** | **+107.5 ± 31.6 vs classic**, 0 forfeits, 0 illegal. The hole reproduced at **−71.3** and the fix closes it to **+20.0**. Landed: entry **3483 → 3475, 621 spare** |
+| 2026-08-13 | LMR's timed value is the SAME with and without the eval bug | +65.9 ± 27.1 (unfixed) vs +72.3 ± 25.1 (fixed). LMR was never "masking" the hole — the defects were additive |
+| 2026-08-13 | Classic-anchored differences run ~50 Elo above the head-to-head ones | Both signs agree, magnitudes do not (1.5σ). Head-to-head is the paired instrument; the anchored spread is the one to distrust |
 | 2026-08-13 | **THE KING TABLE: entry uses the wrong one in 62.1% of real positions** | Port defect in the EVAL, not the search. **+52.3 ± 21.1**, 444g, SPRT stopped early, and the fix **saves 11 bytes** |
 | 2026-08-13 | Stale carried score at the table swap (routed from the eval lane) | Reproduced. Bites the **transition ply only** -- 0.83 plies/game, mean 30cp, max 157cp. Fix priced: kend+fresh **3475, still 8 bytes UNDER the entry** |
 | 2026-08-13 | Null-cap census: binds 4.3% of nulls, flips 0.53% | Real but small. Cap RR **deferred behind the king table** -- the cap reads `pos.score` |
@@ -136,6 +139,120 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — THE HOLE ROUND-ROBIN, COMPLETE: 4,000 games, and the fix ships
+
+The five-arm classic-anchored round-robin ran to its full length. **4,000 of
+4,000 games** (counted from `hole.pgn`, not from the driver's claim), **0 time
+forfeits, 0 illegal moves**, 200 complete colour-swapped pairs in every one of
+the ten pairings and **not a single unpaired game dropped**. 08:25:07 →
+11:13:54 UTC, 2h48m46s.
+
+Per-pairing, pentanomial 95% (`pair_elo.py`), stated as A-over-B:
+
+| A | B | pairs | games | score% | Elo(A) |
+|---|---|---|---|---|---|
+| entry_kf | classic | 200 | 400 | 65.00 | **+107.54 ± 31.64** |
+| entry | classic | 200 | 400 | 57.00 | +48.96 ± 32.51 |
+| entry_nolmr_kf | classic | 200 | 400 | 52.88 | **+20.00 ± 25.05** |
+| entry_nolmr | classic | 200 | 400 | 39.88 | **−71.34 ± 29.69** |
+| entry_kf | entry | 200 | 400 | 54.38 | **+30.48 ± 24.36** |
+| entry_kf | entry_nolmr_kf | 200 | 400 | 60.25 | +72.25 ± 25.08 |
+| entry | entry_nolmr | 200 | 400 | 59.38 | +65.92 ± 27.10 |
+| entry_nolmr_kf | entry_nolmr | 200 | 400 | 52.75 | +19.13 ± 28.62 |
+| entry_kf | entry_nolmr | 200 | 400 | 63.38 | +95.26 ± 29.64 |
+| entry | entry_nolmr_kf | 200 | 400 | 51.25 | +8.69 ± 29.75 |
+
+fastchess's own pooled ranking, for cross-reference (1,600 games each):
+
+    1 entry_kf        +75.9 ± 13.9   60.8%  draws 42.4%  [47, 73, 339, 171, 170]
+    2 entry           +18.7 ± 14.4   52.7%  draws 40.2%  [98, 110, 322, 148, 122]
+    3 entry_nolmr_kf   −5.9 ± 13.7   49.2%  draws 47.1%  [99, 129, 377, 90, 105]
+    4 classic         −25.7 ± 15.0   46.3%  draws 41.9%  [150, 122, 335, 82, 111]
+    5 entry_nolmr     −62.6 ± 14.4   41.1%  draws 42.6%  [176, 139, 341, 82, 62]
+
+**The three questions the tournament was launched to answer.**
+
+1. **The control reproduced.** `entry_nolmr` measures **−71.3 ± 29.7** below
+   classic here, against **−46.3 ± 30.0** on the laptop. Same sign, same order,
+   intervals overlapping (the difference is 25.0 ± 42.2). The hole is a
+   property of the engine, not of the laptop, so the rest of the table may be
+   compared to the ledger.
+2. **The hole is closed.** `entry_nolmr_kf` is **+20.0 ± 25.1** *above* classic
+   — a **+91.3 ± 38.8** swing from the unfixed arm, with the reduction removed
+   so nothing can be hiding behind it. An eval defect that cost ~70 Elo against
+   the very engine whose tables we pasted is now a small positive.
+3. **The shipping candidate confirms.** `entry_kf` is **+107.5 ± 31.6** over
+   classic, and **+30.5 ± 24.4** over the shipped entry head-to-head — the
+   latter excludes zero, so the fix pays on its own paired instrument and not
+   only by subtraction. It agrees in direction with the fixed-node +52.3 ± 21.1.
+
+**LMR was never masking the hole.** The lead that started this line supposed
+the reduction was propping up a broken eval. It was not: LMR is worth
+**+65.9 ± 27.1** on the unfixed engine and **+72.3 ± 25.1** on the fixed one —
+the same number within noise. The two defects were **additive**, not
+interacting. The original inference ("LMR transfers +127, therefore
+entry-minus-LMR is ~85 below classic") got the conclusion right for the wrong
+reason: there *was* a hole, but LMR's value was ~+70 all along, not +127.
+
+**The discrepancy worth distrusting.** Every classic-anchored *difference* runs
+above the corresponding head-to-head measurement of the same quantity:
+
+| the fix's value | via classic | head-to-head | gap |
+|---|---|---|---|
+| with LMR off | +91.3 ± 38.8 | +19.1 ± 28.6 | 72.2 ± 48.2 (1.5σ) |
+| with LMR on | +58.5 ± 45.4 | +30.5 ± 24.4 | 28.0 ± 51.6 (0.5σ) |
+
+Neither gap is significant and the signs never disagree, so this does not
+threaten the verdict. But the pattern is consistent across both rows and it has
+an obvious candidate cause: `kf` makes our king-table rule **identical to
+classic's**, so the arm and the anchor share a phase rule in a way our own
+sibling arms do not — exactly the setting where intransitivity appears. The
+methodological consequence is recorded rather than resolved: **where both are
+available, prefer the head-to-head number** — it is paired, it has the smaller
+interval, and it does not route the comparison through a third engine. Note
+that `entry_nolmr_kf` vs `entry_nolmr` (+19.1 ± 28.6) still **includes zero**;
+the claim "the fix is worth something with LMR off" rests on the anchored
+route, and only the LMR-on head-to-head is individually significant.
+
+**Launch conditions, from the sampler rather than from memory.** 10+0.1, 200
+rounds × 10 encounters, concurrency 10, `nice -n 5`, 2,000-position book
+consumed exactly once, anchor `classic` md5-identical to `sunfish.py@b49426b`.
+**Peak process count 36**, constant across all 252 samples. Box load ranged
+**19.56–23.75 on 96 cores** — no contention, and no cgroup quota or CPU
+affinity limit (checked, not assumed); each engine process averaged ~50% CPU,
+which is exactly right for alternating-turn play. Cotenants: two of our own
+fastchess matches (`elo-171-full-tail`, `elo-173-exact`, 30+1, concurrency 5
+each) from 09:01 UTC onward, i.e. for the last ~2/3 of the run; and another
+user (`zach-belateche`) above 5% CPU on **50 of 252 samples** in two windows
+(09:27–10:02, 10:41–11:05), never more than 2 processes. We did not yield: the
+box rule is to pause for a *resource-hungry* neighbour, and total load never
+moved outside its band. The mid-run arrival of the cotenants is a condition
+change, but pairings are interleaved uniformly across the schedule, so it
+enters every arm alike.
+
+**Landed.** `kend`+`fresh` are now transforms in `tools/build/make_pst_entry.py`
+rather than mods in `make_variants.py`. Entry **3483 → 3475 bytes, 621 spare**
+(`pack.sh` on the real file, not composed). The landed artifact's packed sha is
+`939506a5…` — **byte-identical to the `entry_kf` binary that played 1,600
+games**, which is the strongest form of "we shipped what we measured" available.
+`check_entry.sh` green, legality gate green (40 FORCED / 30 in-check / 30
+quiet, 0 no-move, 0 illegal), 28/28 unit tests, and the artifact plays alone in
+an empty directory with `SF_NET` and `PYTHONPATH` unset.
+
+Two caveats on the byte number. It was measured **before** the eval lane's
+base-90 table decode lands; that change is worth −94 bytes on its own but the
+two may not be added, because lzma shares one dictionary across the whole
+stream — the second lander regenerates and re-measures. And the classic anchor
+has since moved: master now carries mate-distance scoring (#172), so every
+classic-relative number above is pinned to **b49426b** and a future comparison
+is against a different opponent.
+
+**Next.** corrhist interior-only needs its nps re-measured on a quiet box (both
+builds in one session on one machine, cotenancy logged) before its screen; then
+the history revisit, whose old dismissal used a node-ratio proxy — the wrong
+instrument — and IIR. Fixed-node our-vs-our screens are box-tolerant; anything
+against classic needs a time control and a re-baselined anchor.
 
 ## 2026-08-13 — THE KING TABLE: the entry evaluates 62.1% of positions with the wrong one
 

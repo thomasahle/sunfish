@@ -110,8 +110,33 @@ src = src.replace('''def from_board(board, wc=(True, True), bc=(True, True), ep=
 
 # ps was the packed engine's clip-free score; with no net they are the same
 src = src.replace("pos.ps", "pos.score").replace("self.ps", "self.score")
-src = re.sub(r"\n *pst\[\"K\"\] = K_END if bare else K_MID",
-             "\n        pst[\"K\"] = K_END if bare else K_MID", src)
+# ---- classic's tables need classic's king-table phase rule ---------------
+# The packed engine switches to K_END on a bare king. That is right for ITS
+# K_END -- a trained bare-king mop-up table -- but this entry pastes CLASSIC's
+# K_END, the centralization gradient classic calls out as "important to win
+# KRK/KQK endings", and classic keys it on queens-off. Over 37,374 positions
+# from real games the two rules disagree on 62.1%. Measured +52.3 +/- 21.1
+# fixed-node, +30.5 +/- 24.4 timed head-to-head, and it SAVES 11 packed bytes.
+#
+# Swapping the table also invalidates the incrementally carried `pos.score`,
+# which was accumulated under the old table and which rotate() then sign-flips
+# every ply -- an oscillating phantom tempo on every stand-pat and futility
+# margin for the whole search. Rebuild the root under the table this search
+# will actually use (+3 bytes; net -8, entry 3483 -> 3475).
+old = ('        # Bare-king endings: swap in the centralization gradient (packed\'s\n'
+       '        # own measured condition; classic keys on queens-off instead).\n'
+       '        # Both directions every search: table state must never outlive the\n'
+       '        # condition.\n'
+       '        bare = sum(c.isupper() for c in pos.board) == 1 or sum(c.islower() for c in pos.board) == 1\n'
+       '        pst["K"] = K_END if bare else K_MID\n')
+new = ('        # Classic\'s K_END is a centralization gradient, and classic keys it\n'
+       '        # on queens-off. Both directions every search: table state must\n'
+       '        # never outlive the condition.\n'
+       '        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END\n'
+       '        # The carried score was accumulated under the OTHER table.\n'
+       '        pos = self.root = from_board(pos.board, pos.wc, pos.bc, pos.ep, pos.kp)\n')
+assert src.count(old) == 1, "king-table block not found verbatim in sunfish_nnue.py"
+src = src.replace(old, new, 1)
 
 open(OUT, "w").write(src)
 try:
