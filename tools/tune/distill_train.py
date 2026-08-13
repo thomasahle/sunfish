@@ -197,9 +197,13 @@ def unemit(out):
 
 
 def bands(w):
-    """Held-out loss per phase band. The C2 post-mortem was visible here
-    BEFORE the games: the whole gain sat in the endgame and the middlegame,
-    which is what decides games, was slightly worse."""
+    """Held-out loss per phase band -- DIAGNOSTIC, and a weak one.
+
+    C2's failure was explained on the record by this table ("the middlegame
+    band is slightly worse"). Refitting on 12 splits, that band reads
+    -2.96 +/- 2.36 and its SIGN FLIPS (`band_stability.py`): it is the least
+    improved band, not a worse one. Read these rows for shape, never as a
+    mechanism, and never as a prediction of Elo."""
     out = {}
     for lo, hi in ((0, 5), (6, 11), (12, 17), (18, 24)):
         idx = va[(ph[va] >= lo) & (ph[va] <= hi)]
@@ -213,9 +217,10 @@ def bands(w):
 base_tr, base_va = loss_of(W0, TR).item(), loss_of(W0, VA).item()
 print("\nclassic (no fit)      train %.6f   HELD-OUT %.6f" % (base_tr, base_va))
 
-# The closed-form check for the linear arm: same objective, solved by scipy,
-# so "torch agrees with the optimiser we already trusted" is a measurement and
-# not a hope.
+# The linear arm is the harness check: run on the Stockfish-labelled set it
+# has to reproduce the scipy fit that became C2 -- which it does, on held-out
+# loss, on the phase bands, on packed bytes, and on C2's own first-yield
+# failure node for node. See the ledger entry.
 results = {}
 for arm in ARMS:
     step = {"linear": None, "q8": 8, "q16": 16}[arm]
@@ -243,7 +248,7 @@ prov = {
     "data": os.path.basename(DATA),
     "data_sha256": hashlib.sha256(open(DATA, "rb").read()).hexdigest(),
     "data_meta": meta,
-    "split": "20%% held out by sha256(seed+fen), stable across datasets" ,
+    "split": "20% held out by sha256(seed+fen), stable across datasets",
     "objective": "MSE on sigmoid(cp/%g) -- the same form C1/C2 were fitted with" % K,
 }
 json.dump({"provenance": prov, "classic_heldout": base_va, "arms": results},
