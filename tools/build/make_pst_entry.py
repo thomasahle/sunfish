@@ -16,7 +16,13 @@ usage: build_pst_entry.py OUT.py
 import re
 import sys
 
-REPO = "/Users/ahle/repos/sunfish-packed"
+import pathlib
+
+# Derive the repo root from THIS file, never a hard-coded path: the
+# absolute one broke CI on every machine but the author's, and inside a
+# worktree it silently regenerated from the OTHER checkout -- so
+# check_entry.sh verified a file it had never read.
+REPO = str(pathlib.Path(__file__).resolve().parents[2])
 OUT = sys.argv[1]
 src = open(REPO + "/nnue_4k/sunfish_nnue.py").read()
 classic = open(REPO + "/sunfish.py").read()
