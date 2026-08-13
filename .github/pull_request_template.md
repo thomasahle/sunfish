@@ -1,58 +1,54 @@
 <!--
 Strength claims need numbers. Functional tests say the engine is CORRECT;
-they say nothing about whether it is STRONGER. Full methodology and the
-reasoning behind each rule: docs/TESTING.md
+they say nothing about whether it is STRONGER. Methodology: docs/TESTING.md
 -->
 
 ## What this changes
 
 <!-- One paragraph. What moved, and why. -->
 
-## Strength measurement
+## Strength
 
 <!--
 REQUIRED for any change to search, evaluation, tables, or time management.
 For docs / tooling / test-only changes, delete this section and say which.
 -->
 
-| | |
-|---|---|
-| Base | `<commit or branch>` |
-| Test | `<commit or branch>` |
-| Time control | `<e.g. 30+1>` |
-| Book | `<name>`, `<N>` positions |
-| Games | `<W>-<L>-<D>`, `<total>` |
-| **Elo** | **`+X ± Y`** (95%) |
-| nElo | `+X ± Y` |
-| SPRT | `elo0=0 elo1=10 alpha=0.05 beta=0.05` → accepted / rejected / undecided at cap |
-| Time losses | `0` |
-| Illegal moves / `(none)` | `0` |
-
-<details>
-<summary>Raw fastchess output</summary>
-
 ```
-<paste the final result block>
+LLR: <x> (<lower>,<upper>) <elo0,elo1>
+Total: <N> W: <w> L: <l> D: <d>
+Ptnml(0-2): <ll>, <ld>, <dd+wl>, <wd>, <ww>
+Elo: <+x.xx +/- y.yy> (95%)
 ```
-</details>
 
-### Measurement checklist
+<!-- fastchess prints all of this; run with `-repeat -games 2` for Ptnml. -->
 
-- [ ] **Both engines frozen** with `git archive`, including `sunfish_ui/` — no shared files
-- [ ] **Machine otherwise idle** for the whole match (a timed match measures thinking time; contention corrupts it)
-- [ ] **Book** has at least as many positions as the match has rounds, run with `-games 2` for colour-swapped pairs
-- [ ] **`-recover` passed**, and the finished game count verified **against the PGN**, not the log
-- [ ] **Zero time losses and zero illegal moves** — if not, the run measures a bug, not a change
-- [ ] Intervals quoted at **95%**, not 1σ
-- [ ] The **accept/reject bar was written down before the result was read**
+- [ ] Both engines frozen with `git archive`, including `sunfish_ui/`
+- [ ] Machine otherwise idle for the whole match — contention corrupts a timed result
+- [ ] Time control stated and appropriate: **30+1 minimum** for a decision
+- [ ] Book has at least as many positions as rounds, run `-repeat -games 2`
+- [ ] `-recover` passed, game count verified **against the PGN**, not the log
+- [ ] **Zero time losses, zero illegal moves** — otherwise the run measures a bug
+- [ ] Bounds written down **before** the result was read
 
-### Things that quietly invalidate a result
+## Size
 
-- **Fixed nodes is only valid between engines that honour the node cap the same way.** The cap is checked between completed depths, so an engine that prunes less overshoots further and silently gets more search. Against an engine without a mid-search cap, use a **time control**.
-- **An SPRT pass is not an effect size.** Stopping happens when the estimate wanders far enough, so the reported Elo is biased away from zero. If you need a number, confirm the winner at fixed N.
-- **A mate suite is not a legality gate.** "Finds mates" and "always returns a legal move" are different questions; a feature can pass the first while emitting `bestmove (none)`.
-- **Offline metrics validate models, never pipelines.** A better loss can ship a worse engine if the emit path is wrong.
-- **Elo is not additive across engines** that differ in more than one way. Measure the pair you care about rather than subtracting two other results.
+<!-- Both engines, both numbers. Measured, never estimated. -->
+
+|  | classic lines | classic bytes | nnue-4k lines | nnue-4k bytes |
+|---|---|---|---|---|
+| before | 138 | 3234 | 213 | 3882 |
+| after |  |  |  |  |
+
+```sh
+bash tools/build/clean.sh sunfish.py | wc -l          # minified lines
+bash tools/build/pack.sh  sunfish.py /tmp/out         # packed bytes
+bash tools/build/clean.sh nnue_4k/sunfish_nnue.py | wc -l
+bash tools/build/pack.sh  nnue_4k/sunfish_nnue.py /tmp/out
+```
+
+- [ ] Numbers from the commands above on a real file — never a sum of parts
+- [ ] 4k entry (if touched) runs **alone in an empty dir** with `SF_NET` unset, and `tools/build/check_entry.sh` is green
 
 ## Correctness
 
@@ -60,16 +56,12 @@ For docs / tooling / test-only changes, delete this section and say which.
 - [ ] `python3 formal/scripts/model_audit.py` green — if a modelled region changed, the Lean model and README were re-audited **in the same commit**
 - [ ] `lake build` green (if `formal/` changed), zero `sorry`
 
-## Size — packed / 4k entry only
+<details>
+<summary>Things that quietly invalidate a result</summary>
 
-<!-- Delete unless this touches the packed engine or the 4k entry. -->
-
-| | bytes | spare |
-|---|---|---|
-| entry before | | |
-| entry after | | |
-
-- [ ] Byte counts come from **`tools/build/pack.sh` on a real file** — never a sum of separately measured parts
-- [ ] Artifact runs **alone in an empty directory** with `SF_NET` unset, and leaves nothing behind
-- [ ] `tools/build/check_entry.sh` green (catches source drift that leaves the byte count unchanged)
-- [ ] Elo per byte stated, and the keep/drop bar pre-registered
+- **Fixed nodes only compares engines that honour the cap the same way.** It is checked between completed depths, so the engine that prunes less overshoots further and silently gets more search. Against an engine without a mid-search cap, use a time control.
+- **An SPRT pass is not an effect size.** Stopping happens when the estimate wanders far enough, so the reported Elo is biased away from zero. Confirm a winner at fixed N.
+- **A mate suite is not a legality gate.** "Finds mates" and "always returns a legal move" are different questions.
+- **Offline metrics validate models, never pipelines.** A better loss can ship a worse engine if the emit path is wrong.
+- **Elo is not additive** across engines that differ in more than one way. Measure the pair you care about.
+</details>
