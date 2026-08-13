@@ -46,7 +46,8 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
-| 2026-08-13 | **A ZERO-BYTE candidate falls out of corrhist's autopsy** | corrhist's only consumer was the frontier futility test and it won by pruning LESS. A flat margin on that test: `+QS` packs to **3475 — the entry exactly**. Pre-registered, screening |
+| 2026-08-13 | **A ZERO-BYTE candidate: the frontier futility margin** | corrhist's only consumer was that test and it LOST by pruning less, so the direction with upside is a NEGATIVE margin. `-QS` packs to **3475 — the entry exactly**. Screening `futm40`/`futm` |
+| 2026-08-13 | Positive-margin mirror, stopped at 215 games as a predicted loser | base 61 wins, fut40 52, fut 47. Reproduces corrhist's sign for 0-3 bytes instead of 127. Preliminary; the box moved to the negative direction |
 | 2026-08-13 | **CORRECTION: corrhist is −54.8, a REGRESSION. I read the sign backwards** | Raw PGN: base 290 wins, corr 192. The entry below stands as written and is WRONG in its direction; the correction entry above it is the one to read |
 | 2026-08-13 | ~~corrhist DROPPED: the mechanism works and is priced out~~ **(SIGN ERROR — see the correction)** | The number +54.8 ± 23.3 is right; it belongs to **base**, not to corrhist |
 | 2026-08-13 | **IIR replacing IID is BYTE-NEGATIVE: entry 3475 -> 3471** | −4 B, and dropping IID alone is −16 B and node-neutral (0.989x). The first queue item that gives bytes back; it only has to avoid losing |

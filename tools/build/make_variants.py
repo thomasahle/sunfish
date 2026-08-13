@@ -267,37 +267,35 @@ MODS = {
         "            # shallow search whenever there was no table move; `iir` answers\n"
         "            # the same question by reducing this node instead, and the two\n"
         "            # together would pay twice for one observation.\n"),
-    # THE CHEAP HYPOTHESIS CORRHIST HANDED US, and the reason it is worth a
-    # screen despite corrhist being dropped.
+    # THE FRONTIER FUTILITY MARGIN, which is what corrhist turned out to be
+    # about once its sign was read correctly.
     #
-    # corrhist won +54.8 at fixed nodes while searching MORE nodes (1.04-1.15x),
-    # and its only consumer is the depth<=1 futility test. So what it bought
-    # was "prune less at frontier nodes" -- and the censused table was
-    # systematically OPTIMISTIC (mean +10..+18 cp, median +2..+8, p90 about
-    # +85). If most of that +54.8 is the constant part of the correction
-    # rather than its position-specific part, a flat margin captures it for
-    # almost nothing, and corrhist's 127 bytes were buying the wrong half.
+    # corrhist LOST 54.8 at fixed nodes while searching MORE nodes (1.04x to
+    # depth 8, 1.15x to depth 9). Its only consumer is the depth<=1 futility
+    # test and its censused table was systematically OPTIMISTIC (mean +10..+18
+    # cp), so it made that test fire LESS. It searched more and played worse.
+    # The frontier rule is therefore not too aggressive -- if anything it is
+    # not aggressive enough -- and the direction with upside is a NEGATIVE
+    # margin, which prunes MORE.
     #
-    # EVAL_ROUGHNESS (15) is reused deliberately rather than introducing a
-    # new constant: the name is already in the stream, so lzma has it, and 15
-    # sits inside the censused table's own middle. The yielded estimate stays
-    # honest at pos.score + val -- the margin is a cushion on the DECISION to
-    # stop looking, not a claim about the position's value.
+    # The constants are reused rather than introduced: the names are already
+    # in the lzma stream, which is the entire reason these cost 0-3 bytes.
+    # The yielded estimate stays honest at pos.score + val -- the margin is a
+    # cushion on the DECISION to stop looking, not a claim about the value.
     #
-    # Soundness: a constant added to both sides of the break's test leaves it
-    # a constant threshold on the sort key, exactly as corrhist's per-node
-    # `corr` did. The break still tests the quantity it sorts by.
+    # Soundness: a constant inside the break's test leaves it a constant
+    # threshold on the sort key `val`, exactly as corrhist's per-node `corr`
+    # did. The break still tests the quantity it sorts by.
     #
-    # NOT SCREENED. Built and priced only; it is a lead for the next screen,
-    # and the ledger says so.
+    # `futm40` is the candidate. `fut40` is its mirror, kept as ONE
+    # confirmation arm: if the positive direction reproduces corrhist's loss
+    # for 0 bytes, the diagnosis is confirmed and corrhist is closed for good.
+    "futm40": ("                if depth <= 1 and pos.score + val < gamma:\n",
+               "                if depth <= 1 and pos.score + val - QS < gamma:\n"),
+    "futm": ("                if depth <= 1 and pos.score + val < gamma:\n",
+             "                if depth <= 1 and pos.score + val - EVAL_ROUGHNESS < gamma:\n"),
     "fut": ("                if depth <= 1 and pos.score + val < gamma:\n",
             "                if depth <= 1 and pos.score + val + EVAL_ROUGHNESS < gamma:\n"),
-    # The same lead at the other end of the censused distribution. The
-    # correction table's median was +2..+8 and its p90 about +85, so 15 is
-    # near the bottom of the range corrhist actually applied and a screen
-    # that only tries 15 cannot tell "the margin is wrong" from "the margin
-    # is too small". QS (40) is likewise a name already in the stream.
-    # Compose as `fut40` INSTEAD of `fut`, never with it.
     "fut40": ("                if depth <= 1 and pos.score + val < gamma:\n",
               "                if depth <= 1 and pos.score + val + QS < gamma:\n"),
     # Widen corrhist's key back to the whole board. Compose as `corr.wkey`:
