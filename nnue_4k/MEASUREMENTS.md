@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **corrhist DROPPED: the mechanism works and is priced out** | **+54.8 ± 23.3** fixed-node, 617g, SPRT H1 accepted, 0 forfeits/illegal/crossings. Timed ≈ **+46**, i.e. **0.36 Elo/byte** on 127 B against a 1.0 bar. Not disproven — too dear |
 | 2026-08-13 | **IIR replacing IID is BYTE-NEGATIVE: entry 3475 -> 3471** | −4 B, and dropping IID alone is −16 B and node-neutral (0.989x). The first queue item that gives bytes back; it only has to avoid losing |
 | 2026-08-13 | MTD guards censused on every new arm, incl. the ordering change | **0 bracket crossings, 0 probe-cap hits** to depth 9 on all six builds. Also: this counter can NOT be read out of a fastchess log |
 | 2026-08-13 | History ordering costs 28% more nodes at depth 9 (apples-to-apples) | 1.284x vs base. Not the verdict — node ratio is the wrong instrument, which is why it is being re-screened in games |
@@ -148,6 +149,68 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — corrhist DROPPED at +54.8: the first item that is priced out rather than disproven
+
+**The screen passed and the feature still does not ship.** That combination is
+new in this ledger and it is the whole entry.
+
+`base` vs `corr`, fixed nodes 20,000, SPRT elo0=0 elo1=10, α=β=0.05:
+
+| | |
+|---|---|
+| result | **+54.77 ± 23.28** (`pair_elo.py`, 307 complete pairs / 614 games) |
+| games | **617** in `corr.pgn`, counted from the file; SPRT **stopped early, H1 accepted** |
+| clean | **0 time forfeits, 0 illegal moves** |
+| stability | **0 bracket crossings, 0 probe-cap hits** (censused directly — fastchess logs do not carry engine `info string` lines) |
+| gates | driver control PASS (both arms on the same `uci.py` v2), mate gate 5/5 parity, legality gate 40 FORCED / 0 no-move / 0 illegal |
+
+**The arithmetic against the bar written down before the games:**
+
+| | |
+|---|---|
+| fixed-node (quality only) | **+54.8** |
+| speed term, from the interleaved probe (102·log₂ 0.944) | **−8.5** |
+| **timed value** | **≈ +46.3** |
+| byte cost, `pack.sh` on a real file | **127 B** |
+| **Elo/byte** | **0.36** |
+| standing bar | **1.0** ⇒ needed +127 timed |
+
+**DROP.** And it is a clean one: the pre-registration said a fixed-node result
+between +60.5 and +135.5 would be a drop *plus* a question for the coordinator
+about whether the 1.0 bar is calibrated to a goal that only needs 0.41. **+54.8
+is below +60.5, so there is no question to ask** — corrhist misses the standing
+bar and misses the budget-average rate too. The interval reaches +78, so the
+budget-average threshold is not excluded, but two things point the other way:
+SPRT's terminal Elo is **biased away from zero** by construction (this is why
+the script prints that warning), and the point estimate is the honest input to
+a keep/drop rule, not the interval's optimistic edge.
+
+**Priced out is not disproven, and the distinction matters for the queue.**
+The transfer scoreboard now reads:
+
+| feature | ice4 Elo | ours (fixed-node) | outcome |
+|---|---|---|---|
+| LMR | 81 | +38.9 ± 19.1 | **transfers**, ~1.8 Elo/byte, shipped |
+| RFP | 58 | ~ 0 | sound, worthless here |
+| LMP | 123 | −126 | structurally incompatible |
+| **corrhist** | **70** | **+54.8 ± 23.3** | **works, and costs 127 bytes** |
+
+corrhist is the **largest fixed-node effect this lane has ever measured** —
+bigger than LMR's. It fails on the exchange rate alone. That is the cost model
+this ledger has been describing from the other direction all along: our bytes
+are dear (Python source through lzma), so a feature that would be trivially
+worth 70 Elo in a hand-golfed C++ engine can be genuinely strong here and still
+be unaffordable.
+
+**What would change the verdict, stated so nobody re-runs this.** Not more
+games — the effect is established. Only the byte side: 127 B is the price after
+golfing (a walrus/`clear()` rewrite recovers 5), so corrhist returns to the
+queue only if the *key* gets structurally cheaper — an incremental pawn hash
+carried on `Position` rather than a `str.translate` per interior node would cost
+nodes-per-move instead of source bytes, and is the only version worth building.
+Shelved, not closed, and the mod stays in `make_variants.py` so it never has to
+be rebuilt from a spec again.
 
 ## 2026-08-13 — The ordering round-robin: pre-registered before it is launched
 
