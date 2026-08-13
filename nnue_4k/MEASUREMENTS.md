@@ -46,6 +46,8 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **CONFIRMED: `iirk.noiid` +22.3 ± 16.0, entry 3475 → 3472** | 1,000 games, 0 forfeits/illegal, raw 415–351. **Stronger AND smaller** — timed ≈ +15 Elo for −3 bytes. Ready to land, pending the coordinator's generator sequence |
+| 2026-08-13 | **The RR pairing read +41.3; the dedicated match reads +22.3** | Same search, measured twice, 19.0 ± 27.5 apart. Third pooled-vs-direct discrepancy today, all in the same direction. A round-robin pairing is not an effect size either |
 | 2026-08-13 | **The frontier futility margin is ALREADY TUNED — axis closed** | −40 costs **−110.3 ± 40.6** (largest single-parameter regression here), −15 is level, both positives lose. The zero-byte candidate packs to 3476 and plays 110 worse |
 | 2026-08-13 | **corrhist fully explained: it moved a constant that was already right** | Its correction was a variable +10…+18 cp margin, and a fixed margin in that range costs what corrhist cost. Closed, not shelved |
 | 2026-08-13 | **IIR LANDS: +41.3 ± 22.4 head-to-head, and the entry SHRINKS to 3471** | 3,960/3,960 games, 0 forfeits/illegal. Stronger AND smaller — a first for this lane. Shipping form `iirk.noiid` (3472) in fixed-N confirmation |
@@ -158,6 +160,66 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — CONFIRMED: `iirk.noiid` is +22.3 ± 16.0 and the entry SHRINKS to 3472
+
+**The shipping binary played its own match and won it.** `base` vs
+`iirknoiid`, fixed nodes 20,000, fixed N, no SPRT:
+
+| | |
+|---|---|
+| result | **+22.3 ± 16.0** for `iirknoiid` (`Elo(base) = −22.27`) |
+| raw | base **351** wins, `iirknoiid` **415** wins, 234 draws |
+| games | **1,000 of 1,000**, counted from `conf.pgn` |
+| clean | **0 time forfeits, 0 illegal moves** |
+| gates | driver control PASS, mate gate 5/8 parity, legality gate 40 FORCED / 0 no-move / 0 illegal |
+| arm | sha `a124a6b8…`, verified identical to a fresh generator build |
+| bytes | **3475 → 3472, −3**; spare 621 → **624** |
+| timed | +22.3 − 7.5 = **≈ +15 Elo** |
+
+**Stronger and smaller.** No Elo/byte bar applies to a byte-negative change; it
+had only to avoid losing, and it won by more than its interval.
+
+### The confirmation halved the round-robin's number, and that is the finding
+
+| instrument | arm | result |
+|---|---|---|
+| 4-arm round-robin, 660 g | `iirnoiid` | **+41.3 ± 22.4** |
+| 2-engine fixed-N, 1,000 g | `iirknoiid` | **+22.3 ± 16.0** |
+
+The two arms are the same search — node counts bit-identical on all seven probe
+lines — so this is one quantity measured twice, and the answers differ by
+**19.0 ± 27.5**. Not formally inconsistent, and the direction never wavered.
+But it is the third time today that a *pooled or selected* number came in high
+against a *direct, pre-sized* one:
+
+- classic-anchored differences ran ~50 above head-to-head (predecessor)
+- the round-robin's global fit ranked `hist` first at +15.8 while its direct
+  match with base was −3.2
+- and now a round-robin pairing reads +41.3 where a dedicated match reads +22.3
+
+**Prefer the dedicated fixed-N match on the actual artifact.** It is paired, it
+is pre-sized, it has the tighter interval, and the binary in it is the binary
+that ships. `+22.3 ± 16.0` is the number that goes in the ledger; `+41.3` is
+withdrawn as an over-estimate rather than averaged with it.
+
+This is also the standing "an SPRT pass is not an effect size" rule earning its
+keep in a new form: **a round-robin pairing is not an effect size either.**
+
+### What lands, and what has to happen first
+
+`iirk.noiid` = internal iterative reduction (reduce a ply when the position has
+no table move, decided *before* the table probe so the reduced depth is the key
+in both directions) **replacing** the IID probe, with the killer read once at
+the top so the position is hashed once instead of twice.
+
+**It is NOT landed in this session.** Landing means editing
+`tools/build/make_pst_entry.py`, which is coordinator-sequenced, and the eval
+lane's base-90 decode (`430c297`, `5b58a18`, entry 3378 / 718 spare) is ahead of
+this branch in the entry's history. The −3 bytes will not simply add to their
+−94: lzma shares one dictionary across the whole stream, so **the second lander
+regenerates and re-measures**. The mod is in `tools/build/make_variants.py` as
+`iirk.noiid` and reproduces byte-for-byte from the generator.
 
 ## 2026-08-13 — THE FRONTIER FUTILITY MARGIN IS ALREADY TUNED, and that explains corrhist
 
