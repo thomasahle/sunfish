@@ -549,8 +549,21 @@ coordinator; this lane launches nothing itself.
   distilled student's point estimate is not materially above C2's, the teacher
   swap is not what was wrong, and 384-parameter distillation on this position
   set is closed.
-- **No band prediction is registered**, because the band statistic just failed
-  its own stability test.
+- **No band prediction is registered**, because the band statistic had just
+  failed its own stability test on the SF set.
+
+**POST-HOC, and marked as such because it arrived after the bar was set:** the
+distilled student's phase 18-24 band then turned out to be stable *and* bad
+(+7.47 ± 3.14, every split). The bar above is **not** being revised — that is
+the whole point of writing it down first — but the honest expectation now is
+that this arm is more likely to drop than to land, and the thing worth learning
+from the screen is *whether the band statistic predicts Elo at all*. C2 gives
+the control: it improved that band and lost 94. If d1 degrades that band and
+loses about the same, the band is not the lever either, and the next candidate
+should change the POSITION MIX rather than the teacher or the encoding.
+
+**d8 is NOT screenable as it stands** — it fails the first-yield gate. Either
+it screens on top of the gamma-seed change, or it does not screen.
 
 ### LEAD FOR THE SEARCH LANE: the `(none)` class is removable for 5 bytes
 
