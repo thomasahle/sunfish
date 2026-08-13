@@ -415,6 +415,27 @@ A flat result is the modal outcome and was predicted in advance: C1's −5.31%
 held-out is almost entirely endgame, and in the middlegame band the fit is
 very slightly *worse* than classic.
 
+### Gates, on the box, before any game
+
+| arm | legality (40 FORCED / 30 check / 30 quiet) | mate-in-1 |
+|---|---|---|
+| `e_base.py` (the 3350 entry) | 0 no-move, 0 illegal — PASSED | 8/8 |
+| `e_c1.py` | 0 no-move, 0 illegal — PASSED | 8/8 |
+| `e_aa.py` (A-vs-A control arm) | 0 no-move, 0 illegal — PASSED | — |
+
+The mate gate is new (`tools/build/mate_gate.py`) and deliberately does not
+replace the legality gate — the standing warning is that a mate suite passed
+5-vs-5 on the very build that answered `bestmove (none)`. It verifies mate-in-1
+by PLAYING the move and asking python-chess whether the result is checkmate,
+never by reading a score: a score check would pass an engine that reports
+`mate 1` and then plays something else.
+
+`e_aa.py` is byte-identical to `e_base.py` (same sha256), staged in the same
+directory with the same `PYTHONPATH`, so both arms provably get the same UCI
+driver. That is the control the `agree.py` incident earned, where an engine
+outside the repo tree silently picked up the builtin `go` loop and a
+byte-identical copy of the entry "disagreed" with itself 39/60.
+
 ### Cotenancy: the slot was not actually free, and the screen waited
 
 The coordinator's slot handoff said the box arena was idle. It was not:
