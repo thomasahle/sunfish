@@ -155,10 +155,33 @@ costs no bytes.
 
 | # | suspect | why | status |
 |---|---|---|---|
-| 1 | **KCX port** | measured −15.7 ± 34.9 **on the NNUE engine**; by our own rule that number is a property of the (feature, eval) pair and does not transfer. Largest structural difference. Parent commit `7f7d40a` is pre-KCX | variant to build |
-| 2 | **MTD guards** | change driver behaviour; validated as "0 nodes", never as 0 Elo | **built** (`e_pstnoguards.py`) |
+| 1 | **KCX port** | measured −15.7 ± 34.9 **on the NNUE engine**; by our own rule that says nothing here. Largest structural difference | **built** from parent `7f7d40a` (`e_pstprekcx.py`, smoke-tested) |
+| 2 | **MTD guards** | change driver behaviour; validated at "0 nodes", never at 0 Elo — a guard that changes which move is committed costs Elo at zero node cost | **built** (`e_pstnoguards.py`) |
 | 3 | **PROBE_CAP** | a cap that trips changes the answer; never screened on this eval | **built** (`e_pstnocap.py`) |
 | 4 | node-cap machinery | should be inert in timed play — and "should be" is what this session has punished repeatedly | last |
+
+**Each arm is screened against CLASSIC, never against the entry.** Screening a
+variant against the entry would measure a feature's marginal value *inside a
+possibly-broken engine*; screening against classic asks the only question we
+have — **does removing this close the hole?** Every arm otherwise ships exactly
+as the entry does (LMR included), so each differs from the entry in one way
+only, and `classic` is first-named throughout so a PASS means classic is better.
+
+### `MATE_LOWER` cross-wiring: checked, cleared, recorded so it is not re-checked
+
+| quantity | value |
+|---|---|
+| max non-king material (9Q+2R+2B+2N, every pawn promoted) | 10,519 |
+| + PST bound ≈1,600 → max abs score in a non-mate position | 12,119 |
+| worst king-capture score = 60,000 − 12,119 | 47,881 |
+| **safe window** | **12,119 … 47,881** |
+
+Packed's **47,923** sits 42 above that ceiling, classic's **50,710** sits 2,829
+above — both technically outside, but the breaking case needs the opponent
+holding nine queens *and* a full complement *while you capture their king*.
+Under realistic material (max deficit 3,887 → floor 56,113) packed clears by
+8,190 and classic by 5,403, so **packed's is the tighter, better-chosen
+constant**. Not a bisection candidate.
 
 Same discipline throughout: mate gate first, SPRT to discard cheaply, fixed-N
 confirmation for survivors, 95% intervals.
