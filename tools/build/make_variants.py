@@ -84,6 +84,14 @@ MODS = {
     # handed, and the landed kend fix is not a fit's to round.
     "d1": _deferred(1, False, "", "tools/tune/candidates/students.json", "linear"),
     "d8": _deferred(8, False, "K", "tools/tune/candidates/students.json", "q8"),
+    # ---- PHASE-BALANCED candidates. Same teacher and the same LABELS as d1 --
+    # these are drawn from d1's own set -- but a flat 2,198-per-band mix instead
+    # of the natural 43/31/11/15. The size-matched natural-mix control
+    # (nat8792) is stably 13.3% WORSE than classic at phase 18-24 over 40
+    # splits while these are 3.5% better, so the mix is the mechanism and not
+    # the halved position count. See the pre-registration entry.
+    "b1": _deferred(1, False, "", "tools/tune/candidates/bal/students.json", "linear"),
+    "b8": _deferred(8, False, "K", "tools/tune/candidates/bal/students.json", "q8"),
     # Cap the null-move score at static eval plus one score bucket, exactly as
     # classic does. Ours has never capped it: the score is both a looser cutoff
     # trigger AND this node's returned value, so an inflated pass estimate

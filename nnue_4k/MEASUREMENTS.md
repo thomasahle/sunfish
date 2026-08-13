@@ -46,6 +46,9 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-14 | **THE MIX IS THE MECHANISM — a SIZE-MATCHED control swings phase 18-24 by 16.8 points** | At identical N=8,792: natural mix **+11.70 ± 7.58 worse** than classic (40/40 splits), flat mix **−4.95 ± 3.51 better**. Pre-registered check CLEARED. Not the halved data — the mix |
+| 2026-08-14 | **The gamma seed is a BLOCKER, not a lead: SIX fitted candidates, six times at the cliff** | b1 passes first yield by **37 nodes**, b8 fails at 2,433. The +5-byte root seed clears every arm ever fitted here (2.8–5.2× margin). The byte-negative arm cannot be screened until it lands |
+| 2026-08-14 | The trainer's single-split band row is an OUTLIER in the band the check turns on | Seed 20260813 reads +4.15% for `bal8792` against a 12-split range of [−12.06, +1.64], and +14.24% for d1 against [+2.12, +14.13] — extreme in both, because the FEN-keyed split makes the two sets inherit the same unlucky draw |
 | 2026-08-14 | **PRE-REGISTERED: the phase-balanced set — flat 2,198/band, 8,792 positions, written before selection** | Mechanism check that can only CANCEL: `bal8792` must not be worse than classic at phase 18-24, where d1 was **+7.47 ± 3.14 worse on all 12 splits**. Size control `nat8792` separates mix from N |
 | 2026-08-14 | **THE CORPUS IS EXHAUSTED: 198 positions left in 4,482 games** | 19,491 + 198 = 19,689, exactly the recorded collection — a positive control on the census. So the experiment re-balances labels we ALREADY have and costs no machine time at all |
 | 2026-08-13 | **d1 DROPPED at −76.0 ± 28.3 over 462 games — and 384-parameter distillation on this position set is CLOSED** | UB **−47.7** against a bar of UB < 0. C2 was −93.8 ± 32.7 on the same openings; the intervals overlap, so the teacher swap is **not** what was wrong. Pre-registered closure condition, met |
@@ -219,6 +222,125 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-14 — THE MIX IS THE MECHANISM: a size-matched control swings phase 18-24 by 16.8 points. The pre-registered check is CLEARED, and b8 fails first yield like every fit before it
+
+The pre-registration is the entry below; this is what came out of it. **No games
+have been played. Nothing here is an Elo claim** — the metric involved has now
+mis-ranked twice.
+
+### The mechanism check, and the control that makes it mean something
+
+Three fits, all on labels from the same teacher, differing only in which
+positions they see. 12 splits each, as registered (`band_stability.py`,
+`sha256(split + fen)`):
+
+| arm | N | mix | OVERALL | 0-5 | 6-11 | 12-17 | **18-24** |
+|---|---|---|---|---|---|---|---|
+| `d1` | 19,434 | natural | −7.70 ± 0.90 | −13.34 ± 1.37 | −7.32 ± 1.65 | +0.12 ± 1.35 | **+7.47 ± 3.14** |
+| `nat8792` | 8,792 | natural | −5.05 ± 1.27 | −11.20 ± 2.51 | −4.05 ± 2.97 | +4.23 ± 4.62 | **+11.70 ± 7.58** |
+| **`bal8792`** | **8,792** | **flat** | −3.89 ± 1.06 | −4.27 ± 2.98 | −2.80 ± 3.03 | −3.39 ± 2.57 | **−4.95 ± 3.51** |
+
+**The pre-registered condition was that `bal8792` must not be worse than classic
+at phase 18-24. It is 4.95% BETTER.** Check cleared.
+
+**The size control is what makes this a result rather than a coincidence.**
+`nat8792` has exactly the same number of positions as `bal8792` and the natural
+mix, and it is **+11.70% worse** in that band — worse than d1, not better. So
+halving the data does not produce the effect; **changing the mix does**, and the
+swing at identical N is **16.65 points**.
+
+Extended to 40 splits afterwards (post-hoc, reported as such — the registered
+number is the 12-split one above):
+
+| arm | 18-24 over 40 splits | splits worse than classic |
+|---|---|---|
+| `nat8792` | **+13.31 ± 6.12** | **40 of 40** |
+| `bal8792` | **−3.52 ± 3.98** | a minority (range −12.24 … +5.37) |
+
+The trade that was diagnosed after d1 is now demonstrated as a controlled
+intervention: with a majority endgame band to buy, the fit sells phase 18-24;
+with no majority band, it stops.
+
+**The honest caveat.** These 40 splits re-split the *same* 8,792 positions, so
+the spread measures split noise, not sampling error over positions. It says the
+band difference between the arms is not an artefact of which split you look at.
+It does not say the fit would behave this way on a fresh corpus.
+
+### Instrument note: the trainer's default split is an outlier in this band
+
+`distill_train.py` reports bands on one split (seed 20260813) and it reads
+**+4.15%** for `bal8792` at phase 18-24 — outside the entire 12-split range
+[−12.06, +1.64], and on the wrong side of the check. The same seed also gave
+d1 **+14.24%** against its 12-split range of [+2.12, +14.13]: **extreme in both
+sets, in the same band, because the split is FEN-keyed and the two sets share
+positions**, so an unlucky draw is inherited rather than re-rolled.
+
+This is not a bug and the pre-registration is what protected the result: the
+check was put on the 12-split table before any of it was run. **No band number
+from the trainer's single split should be read as a mechanism** — that is the
+error that produced C2's post-mortem in the first place.
+
+### The candidates, priced and gated
+
+| | b1 (exact) | b8 (step 8, K exact) |
+|---|---|---|
+| packed | **3431 B (+81)** | **3316 B (−34)** |
+| held-out (single split) | −2.53% | −2.25% |
+| decode round trip | OK | OK |
+| standalone | `d2d4` | `b1c3` |
+| legality | 100/100 | 100/100 |
+| mate-in-1 | 8/8 | 8/8 |
+| **first yield, max** | **2,011 — PASS by 37 nodes** | **2,433 — FAIL** |
+
+`b1` passes with a **1.8% margin**. That is the thinnest pass this gate has ever
+recorded, and the gate exists precisely because a build one ordering change from
+failing is not safe.
+
+### SIX fitted candidates, six times at the cliff. The gamma seed is a BLOCKER, not a lead
+
+| build | shipped seed | `gamma = pos.score - 150` |
+|---|---|---|
+| entry | 780 | **171** |
+| C2 | 2,568 FAIL | 453 |
+| m1 | 9,088 FAIL | 250 |
+| C1 | 32,640 FAIL | 396 |
+| d1 | 1,896 | 537 |
+| d8 | 2,059 FAIL | 478 |
+| **b1** | **2,011** | **728** |
+| **b8** | **2,433 FAIL** | **394** |
+
+Every fitted eval this lane has produced lands within a factor of ~1.2 of the
+2,048-node cliff or over it; the two that "pass" do so by 37 and 152 nodes. The
++5-byte root seed clears **all of them** with 2.8–5.2× margin. This was routed
+to the search lane as a lead. On this evidence it is a **prerequisite for
+shipping any fitted eval at all**, and the step-8 arm — the one that gives bytes
+back — cannot be screened until it lands.
+
+### What is staged, and what is not
+
+`tools/tune/label_corpus.sh` enlarges the corpus and labels at 160k. It is
+**STAGED, NOT ARMED**: it checks a GO marker **once** and exits if it is absent,
+never waits, and never chains. Its producer writes `RESULT.txt` on **every**
+exit path including crashes, so a consumer can never poll forever on a job that
+died. Controls run: unarmed → refuses with a result file; wrong teacher sha →
+refuses **before** labelling; missing teacher file → reports *not found* rather
+than *changed* (the first version conflated them, which would have sent a reader
+hunting for a commit that never happened).
+
+Sizing for when a slot exists, measured from the census: a flat draw at d1's N
+needs 4,858 per band, so the shortfall is **2,660 at phase 12-17 and 1,948 at
+18-24** — about 23,500 fresh sampled positions, on the order of 5,000 games,
+which the box arenas hold. At the measured 0.58 pos/s per worker that is ~17
+minutes on 8 workers.
+
+### Cost of everything above
+
+One census pass, five fits and two band-stability sweeps, all single-threaded at
+`nice -n 15` on the laptop: **under four minutes of CPU in total**, nothing on
+the box, no labelling, no games.
 
 ---
 
