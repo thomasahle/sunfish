@@ -46,6 +46,11 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **THE KING TABLE: entry uses the wrong one in 62.1% of real positions** | Port defect in the EVAL, not the search. Fix **saves 11 bytes** (3483 -> 3472). Screen running, outcomes pre-registered |
+| 2026-08-13 | Null-cap census: binds 4.3% of nulls, flips 0.53% | Real but small. Cap RR **deferred behind the king table** -- the cap reads `pos.score` |
+| 2026-08-13 | Cap byte cost, built not composed | entry 3483, +cap 3494. **11 bytes** |
+| 2026-08-13 | pair_elo.py validated against fastchess | Reproduces +38.86 +/- 19.13 digit-for-digit on lmron.pgn |
+| 2026-08-13 | Time management eliminated as the hole | Both arms run the SAME `sunfish_ui/uci.py` budget in every screen |
 | 2026-08-13 | corrhist built, interior-only | 0.70x nodes AND 0.89x time to d8. Awaiting a quiet machine |
 | 2026-08-13 | **Transfer scoreboard: ice4's +421 is not our +421** | 3 measured, 3 outcomes. Mean transfer far below 1 |
 | 2026-08-13 | Lying null-cap comment removed | Entry regenerated, 3483 B, CI green. Comments are free |
@@ -130,6 +135,143 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — THE KING TABLE: the entry evaluates 62.1% of positions with the wrong one
+
+**The entry does not inherit classic's eval.** That premise is stated all over
+this ledger — it is the reason the MTD guards were expected to be inert, and it
+is the reason "same eval both sides, so this is our SEARCH" was written next to
+the baseline. It is false, and it is false in the majority of positions.
+
+`make_pst_entry.py` pastes classic's tables into the NNUE engine's search. It
+pastes `K_MID, K_END` verbatim, so the entry has classic's **endgame
+centralisation** table — the one classic annotates *"important to win KRK/KQK
+endings"*. But it kept the **NNUE engine's trigger**:
+
+```python
+# classic
+pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END
+# entry -- the NNUE engine's rule, on classic's table
+bare = sum(c.isupper() for c in pos.board) == 1 or sum(c.islower() for c in pos.board) == 1
+pst["K"] = K_END if bare else K_MID
+```
+
+The trigger is correct **for the engine it came from**: the NNUE engine's
+`K_END` is a trained *bare-king mop-up* table (its own comment says so), and
+"one side is down to a lone king" is exactly when a mop-up table applies.
+Against classic's endgame table the right condition is classic's — switch as
+soon as either queen leaves the board.
+
+Measured over **37,374 positions from 400 real games** (last night's
+`lmron.pgn`):
+
+| | uses K_END |
+|---|---|
+| classic's rule | 23,665 (**63.3%**) |
+| the entry's rule | 448 (**1.2%**) |
+| **disagree** | **23,217 (62.1%)** |
+
+So for essentially every position after the queens come off, the entry judges
+king placement with the **middlegame** table — it keeps its king hiding in the
+corner through the whole endgame, and it does so while holding a table
+explicitly built to stop that.
+
+**This is the sibling of a bug already in this ledger.** 2026-08-12: *"A better
+fit that played 67 Elo worse: the king table was mirrored"* — also the EMIT
+path, also a king table, also invisible to every gate. The king table is now
+twice-burned; anything that touches it gets a positional check, not just a
+compile.
+
+### Why it fits the hole, and why it hid
+
+- It is an **eval** defect, so it is present with LMR and without it. The hole
+  (`entry_nolmr` **−46.3 ± 30.0** vs classic) is present in exactly that shape.
+- It is an **endgame** defect, so a fixed-depth or fixed-node screen from
+  opening positions barely sees it. Every screen that pronounced the entry
+  healthy was one of those.
+- It cost nothing in speed, so the "1.10× faster than classic at equal depth"
+  observation — used to argue the hole is quality, not cost — is untouched and
+  still correct. It just points at the eval rather than the search.
+
+### Pre-registered, before the screen reports
+
+Byte delta measured by `pack.sh` on real files, never composed:
+
+| build | packed | spare |
+|---|---|---|
+| entry | 3483 | 613 |
+| **entry + kend fix** | **3472** | **624** |
+
+The fix is **byte-negative**, so the standing 1.0 Elo/byte rule cannot bind on
+it. Bar: **keep unless it measurably loses** — point estimate ≥ 0 and the 95%
+lower bound above −10.
+
+1. **≥ +40** — the hole is a port defect in the EVAL, not a search-quality
+   defect. The +400 decomposition then needs redoing: it currently bills
+   +232…+344 to search on the strength of a gap that was partly this.
+2. **+10 … +40** — a real but partial cause; at least one more component
+   remains and the bisection stays open.
+3. **≈ 0** — the king table does not matter at these depths despite 62.1%
+   disagreement. Surprising given classic's own annotation; would be recorded
+   as such and the fix kept anyway for its 11 bytes.
+4. **< 0** — something is wrong with the premise (the tables are not classic's,
+   or the phase switch interacts with the incremental score). Do not ship;
+   investigate.
+
+Screened **fixed-node, our-vs-our** — legitimate between two of our engines and
+tolerant of a shared box, which is what is available. **A fixed-node PASS earns
+a timed confirmation, not a ship**: this is an eval change, and TESTING.md rule
+12 records two sign flips between fixed-effort and wall-clock.
+
+### This reorders the queue, and the reason is a rule already in the ledger
+
+The cap round-robin is **deferred behind this fix**. The null-move cap is
+`min(pos.score + EVAL_ROUGHNESS, ...)` — **it reads the static eval**. The
+(feature, eval) rule, confirmed four separate times this session, says a
+heuristic whose trigger reads the eval must be re-measured per eval. Spending
+4,000 games pricing the cap against an eval we are about to correct would
+measure a configuration we are abandoning.
+
+## 2026-08-13 — The null-move cap, censused before it was screened
+
+Zero games, and it sets expectations the RR would otherwise have set expensively.
+Instrumented build, 40 book positions to depth 7, 6,179,827 nodes:
+
+| | count | rate |
+|---|---|---|
+| null attempts | 71,561 | 1.2% of nodes |
+| cap **binds** (min actually changes the value) | 3,090 | **4.3% of null attempts** |
+| cap **flips the cutoff** (raw ≥ gamma, capped < gamma) | 376 | **0.53% of null attempts** |
+| mean inflation removed when it binds | | **55.6 cp** |
+
+So the cap is **real but rare**: one null in 23 is over-optimistic by ~56 cp,
+and one in 190 is cutting when it should not. Node counts confirm the same
+picture from the other side — at fixed depth 6 the capped build differs from
+the entry on 1 of 3 positions and by 0.09%.
+
+**What this buys:** the RR was sized expecting an effect that might be worth
+~46 Elo. The census says not to expect that, and an undecided result must
+therefore be read as "small", not as "the mechanism is not real". Recorded now
+so the reading is fixed before the games are played.
+
+## 2026-08-13 — Two eliminations, both free
+
+**Time management is not the hole.** The entry carries its own `think` formula,
+and it differs from classic's — an obvious suspect for a defect that appears in
+TIMED play and not at fixed nodes. It is not, because **neither engine uses it
+in a screen**: in a development checkout the entry's `main()` hands off to
+`sunfish_ui/uci.py`, the same driver classic imports, so both arms compute their
+budget from the same line. The entry's own formula is only ever exercised in the
+**packed artifact**, which no screen measures. That is worth flagging separately
+— we measure the unpacked engine and ship a packed one with a different time
+manager — but it is not this hole.
+
+**`pair_elo.py` is validated, not assumed.** A round-robin needs per-pairing
+numbers and fastchess prints one ranking table, so the PGN has to be split and
+re-scored. Scored against last night's `lmron.pgn` the new analyzer returns
+**+38.86 ± 19.13**, digit-for-digit what fastchess printed. It also shows that
+figure belongs to **422 complete pairs (844 games)** with 1 game unpaired — the
+ledger records it as 845.
 
 ## 2026-08-13 — The transfer scoreboard: ice4's +421 is not our +421
 
