@@ -46,6 +46,10 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **IIR replacing IID is BYTE-NEGATIVE: entry 3475 -> 3471** | −4 B, and dropping IID alone is −16 B and node-neutral (0.989x). The first queue item that gives bytes back; it only has to avoid losing |
+| 2026-08-13 | MTD guards censused on every new arm, incl. the ordering change | **0 bracket crossings, 0 probe-cap hits** to depth 9 on all six builds. Also: this counter can NOT be read out of a fastchess log |
+| 2026-08-13 | History ordering costs 28% more nodes at depth 9 (apples-to-apples) | 1.284x vs base. Not the verdict — node ratio is the wrong instrument, which is why it is being re-screened in games |
+| 2026-08-13 | Ordering RR keep/drop **PRE-REGISTERED** | hist (+61 B) needs +61 timed; byte-negative arms land only on a non-negative point estimate, and are otherwise HELD, not shipped |
 | 2026-08-13 | **corrhist re-measured on the box: the node saving does not exist** | Interleaved, 7 lines, 3 rounds. nodes **1.042x**, nps **0.944x**, time-to-d8 **1.048x**. The "0.70x / 0.89x, plausibly free" reading was one position on a contended laptop |
 | 2026-08-13 | corrhist's key priced: slicing to ranks 2-7 buys 5.6pp of nps | 0.944x sliced vs **0.888x** full-board, node counts bit-identical. The key, not the correction, is still the whole cost |
 | 2026-08-13 | corrhist byte price, `pack.sh` on real files | **+127 B** (entry 3475 -> **3602**, spare 621 -> 494). Golfing recovers 5 B -- lzma already had the repetition |
@@ -144,6 +148,62 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — The ordering round-robin: pre-registered before it is launched
+
+Queue items 2 (history revisit) and 3 (IIR) run as **one round-robin with a
+baseline anchor**, not as three A/Bs — the anchor occurs exactly once, every
+arm meets every other arm on the same book in the same conditions, and the
+pairing that prices IIR by itself (`noiid` vs `iirnoiid`) costs no extra games.
+
+| arm | mod | entry bytes | Δ |
+|---|---|---|---|
+| `base` | — | 3475 | anchor |
+| `hist` | history heuristic, restored verbatim from 438ac49 | 3536 | **+61** |
+| `noiid` | drop the IID probe | 3459 | **−16** |
+| `iirnoiid` | IIR *instead of* the IID probe | 3471 | **−4** |
+
+**`iirnoiid` is byte-negative, and that changes the question being asked.**
+Every previous item in this queue had to earn its bytes; this one hands 4 back.
+It does not have to win. It has to avoid losing.
+
+### Keep/drop, fixed before the games
+
+- **`hist` (+61 B).** Standing 1.0 Elo/byte bar ⇒ **KEEP at ≥ +61 timed**,
+  where timed = fixed-node + 102·log₂(nps_hist/nps_base), the speed term
+  measured separately by the interleaved probe. Below that the 61 bytes come
+  back out, as RFP's 31 and LMP's 56 did.
+- **`noiid` (−16 B) and `iirnoiid` (−4 B).** An Elo/byte rule is untestable on
+  a byte-negative arm: 4 bytes buys 4 Elo of tolerance at the standing rate,
+  and this RR resolves to about ±27. So the rule is about strength, not rate:
+  **LAND on a non-negative point estimate** (free bytes, no measurable cost).
+  **HELD, not landed,** if the point estimate is negative but the interval
+  covers zero — recorded as "bytes available if the budget binds", because
+  "not significant" at ±27 is not the same as "not −25", and a silent −25 is
+  how a byte win becomes an Elo loss. **DROP** if the interval excludes zero
+  below.
+- If both byte-negative arms qualify, the **`noiid` vs `iirnoiid` head-to-head**
+  picks between them — a paired number, per the rule that head-to-head beats
+  anchored differences where both exist.
+
+**Power, stated in advance.** 330 rounds × 12 = 3,960 games, 660 per pairing,
+≈ ±27 Elo. An undecided result at that size means the effect is **small**, not
+that the mechanism is absent — the same reading the null-cap census forced.
+
+**What the node counts already say, and why they are not the verdict.**
+Nodes to depth 9 over 6 positions: `hist` **1.284×**, `noiid` 0.989×, `iir`
+0.752×, `iirnoiid` **0.693×**. Two different readings, and the difference is
+the point:
+
+- For **`hist`** the comparison is apples-to-apples — ordering changes which
+  move is searched first, never what "depth 9" means — so 1.284× is a genuine
+  negative signal: the history-credit order is *costing* 28% more nodes for the
+  same tree. It is still not the verdict, because the node-ratio proxy is
+  precisely the instrument this revisit exists to replace.
+- For **`iirnoiid`** the 0.693× is **not** an efficiency claim. A reduction
+  changes what depth 9 means, so "fewer nodes to depth 9" is the same confound
+  that made classic look efficient at a fixed node cap. Only fixed-node games
+  price it, which is what this RR is.
 
 ## 2026-08-13 — corrhist re-measured: the node saving was one position, and it is gone
 
