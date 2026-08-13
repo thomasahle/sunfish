@@ -46,7 +46,9 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
-| 2026-08-13 | **d1 SCREEN LAUNCHED** — the same arena, book slice and instrument that measured C1 and C2 | 20,000 nodes, SPRT elo0=0 elo1=10, 500 rounds, srand 20260815 so d1 sees **C2's own 500 openings**. Bar unrevised: LAND at LB > 0, DROP at UB < 0 |
+| 2026-08-13 | **d1 DROPPED at −76.0 ± 28.3 over 462 games — and 384-parameter distillation on this position set is CLOSED** | UB **−47.7** against a bar of UB < 0. C2 was −93.8 ± 32.7 on the same openings; the intervals overlap, so the teacher swap is **not** what was wrong. Pre-registered closure condition, met |
+| 2026-08-13 | **The phase-band statistic does NOT predict Elo — it points the wrong way** | C2 was 8.00% BETTER at phase 18-24 and played −93.8; d1 is 7.47% WORSE there and played −76.0. The band that was stable across 12 splits carries no Elo signal |
+| 2026-08-13 | Held-out loss has now mis-ranked **twice**, on two different teachers | C2 −5.9% → −93.8 Elo; d1 −7.78% → −76.0 Elo. Fitting the search's own value 7.8% better still costs 76 Elo. A-vs-A control on the same book slice: **exactly 50.00%** (47/47/26) |
 | 2026-08-13 | **The mate gate was scoring the OPENING POSITION**, and reported `MISS ILLEGAL` for the shipped entry | It feeds `position fen`, which only the driver understands; a variant in a scratch dir runs the builtin loop. base/d1/d8 are all **8/8** once the banner is demanded. Fourth incident of this class |
 | 2026-08-13 | The tracked training set carried the bench box's name; **scrubbed before the branch was ever pushed** | `set20260813.npz` `d792b420…` → **`2410786e…`**, arrays bit-identical, `host` the only key dropped |
 | 2026-08-13 | **THE DISTILLED STUDENT FITS EXACTLY AS WELL AS C2 — and is stably WORSE where it matters** | Same positions, same split: SF **−7.85 ± 0.81**, distilled **−7.70 ± 0.90**. But at phase 18-24 the distilled student is **+7.47 ± 3.14 WORSE than classic on every split**, where the SF student was −8.00 better |
@@ -218,13 +220,88 @@ how much effort it cost.
 
 ---
 
-## 2026-08-13 — d1 goes to the arena that measured C1 and C2; the mate gate was scoring the opening position; and the training set carried the box's name
+## 2026-08-13 — d1 DROPPED at −76.0: the teacher was not the problem, the band statistic does not predict Elo, and 384-parameter distillation on this set is CLOSED
 
-Three things: the screen is running, and two instrument/hygiene defects found by
-the ordinary discipline of running every gate on the **shipped entry** before
-running it on a candidate.
+The screen ran in the arena that measured C1 and C2, on C2's own openings, and
+it resolved against the candidate. Below: the verdict, the pre-registered
+closure it triggers, and two instrument/hygiene defects found on the way by the
+ordinary discipline of running every gate on the **shipped entry** first.
 
-### The screen, launched 21:42:43 UTC
+### THE VERDICT
+
+| | |
+|---|---|
+| games | **462** raw `[Result]` lines (460 paired; 2 unpaired dropped by `pair_elo`) |
+| **d1, raw PGN** | **W 146 · L 247 · D 69 — 39.07%** |
+| **Elo** | **−75.96 ± 28.29** (95%), i.e. **[−104.3, −47.7]** |
+| SPRT | stopped early, H1 accepted **for base** |
+| time forfeits / illegal / `(none)` | **0 / 0 / 0** |
+| A-vs-A control, same book slice | **exactly 50.00%** — 47 W / 47 L / 26 D over 120 raw games, 0 forfeits |
+
+**DROP.** The bar was UB < 0 and the upper bound is −47.7. It is not close.
+
+### The pre-registered closure condition is MET
+
+The registered wording: *"the informative comparison is against −93.8, not
+against zero. If the distilled student's point estimate is not materially above
+C2's, the teacher swap is not what was wrong, and 384-parameter distillation on
+this position set is closed."*
+
+| | teacher | held-out vs classic | Elo (95%) |
+|---|---|---|---|
+| C2 | Stockfish 18 @ depth 8 | −5.9% | **−93.8 ± 32.7** |
+| **d1** | **our own search @ 160,000 nodes** | **−7.78%** | **−76.0 ± 28.3** |
+
+Both screened on the same instrument, the same book, and — since d1 reused
+C2's srand — **the same 500 openings**. The point estimate moved **+17.9 Elo**
+and the intervals overlap over most of their length ([−104, −48] against
+[−126, −61]). That is not materially above C2.
+
+**So the teacher is not what was wrong, and 384-parameter distillation on this
+position set is CLOSED** by the rule written before the labels finished. The
+teacher itself is not discredited — it is Stockfish-free, reproducible, and
+cost 10 core-hours — but it does not rescue a 384-parameter global fit, and
+nothing further should be spent testing teachers on this position mix.
+
+### The phase-band statistic does not predict Elo. It points the WRONG WAY
+
+This was the one thing the coordinator asked the screen to answer, and the
+answer is clean:
+
+| | phase 18-24 held-out | Elo |
+|---|---|---|
+| C2 | **−8.00% (BETTER than classic)** | −93.8 |
+| d1 | **+7.47% (WORSE than classic, on all 12 splits)** | **−76.0** |
+
+The student that is stably *worse* in the band played *better*. Carried
+verbatim from the coordinator, and it stands: *the phase-band evidence arrived
+after the bar was set and the bar is not revised; honest expectation is that d1
+drops; the informative output is whether the band statistic predicts Elo (C2 is
+the control: it improved that band and lost 94).* It does not. The band
+programme has now failed twice — once on stability (its sign flipped across
+splits) and now on prediction — and nothing further should be built on it.
+
+### Held-out loss has now mis-ranked on BOTH teachers
+
+C2 fitted Stockfish 5.9% better than classic and lost 94. d1 fits **our own
+search's converged value 7.78% better than classic** — the quantity the engine
+literally maximises, on labels the engine itself produced — and loses 76.
+Two teachers, two objectives, same direction. The 384-parameter model does not
+have an objective problem that a better label fixes.
+
+What is left standing from the whole distillation pass is the measured
+diagnosis, not the candidate: **65.6% of the positions are endgame, classic
+already predicts our own search best at phase 18-24 (0.007962, its best band),
+and a global least-squares fit spends that band to buy the majority.** The
+position mix is the open axis, and this teacher makes it cheap to re-sample.
+
+### The screen, as run
+
+`base` (the landed 3350 B entry) vs **`d1`** (the distilled exact student,
+3421 B, +71). Instrument byte-for-byte the one that produced C1's −57.7 and
+C2's −93.8: `ab_fixednode.sh`, **20,000 nodes**, SPRT elo0=0 elo1=10,
+α=β=0.05, the 2,000-position book, 500 rounds, concurrency 8. Launched
+21:42:43 UTC, complete 22:03:13 UTC; the A-vs-A control ran 22:05:05–22:12:38.
 
 `base` (the landed 3350 B entry) vs **`d1`** (the distilled exact student,
 3421 B, +71). Instrument byte-for-byte the one that produced C1's −57.7 and
@@ -251,20 +328,38 @@ pypy3 that actually plays:
 | mate-in-1 | 8/8 | 8/8 |
 | first yield, max (window 2,048) | **780** | **1,896** |
 
-**The bar is not revised: LAND at 95% LB > 0, DROP at UB < 0.** Carried
-verbatim from the coordinator: *the phase-band evidence arrived after the bar
-was set and the bar is not revised; honest expectation is that d1 drops; the
-informative output is whether the band statistic predicts Elo (C2 is the
-control: it improved that band and lost 94).*
+The bar was **not revised**: LAND at 95% LB > 0, DROP at UB < 0.
 
-`d8` is **not** in this screen. It fails first yield at 2,059 against a 2,048
+`d8` was **not** in this screen. It fails first yield at 2,059 against a 2,048
 window and is not screenable until the search lane's 5-byte gamma seed lands.
 
-Cotenancy at launch: 96 cores, load 10.89. Ours: the formal lane's widening RR
-(7 engines, 840 games at 30+1, concurrency 8) — untouched. Other users: a root
-`cliosoft` service at 19.7% CPU and one `innovus` job systemd-capped at 4 cores.
-Fixed-node screening is node-counted, so this load cannot move the measurement,
-and C1 and C2 were screened under the same kind of load.
+### COTENANCY INCIDENT: a timed RR voided itself six minutes after this launch
+
+Reported because it is not mine to interpret and the timing is short.
+
+At launch (21:42:08 UTC) the box was 96 cores at load 10.89, running the formal
+lane's widening RR — 7 engines, 840 games at **30+1**, concurrency 8 — plus a
+root `cliosoft` service at 19.7% CPU and one `innovus` job systemd-capped at 4
+cores. This screen added 16 `nice -n 5` pypy3 processes at 21:42:43.
+
+At **21:48 UTC** the widening lane voided its own run, renaming its output to
+`VOID_process_leak_20260813T2148Z`. Its log stops at game ~115 of 840.
+
+I did not touch that lane's arena, processes or files, and I cannot establish
+causation from here. What is on the record and relevant: **that runner had
+deliberately waited from Aug 12 18:00 until 21:13 for a "10-min fastchess-quiet
+window" before launching**, so it was built on the premise of an otherwise
+quiet box; its matches are **timed**, and `ab_fixednode.sh`'s own header says
+timed comparisons need a quiet machine while fixed-node ones do not. The
+cotenancy that provably cannot corrupt *this* screen is not the same claim as
+cotenancy being harmless to a *timed* neighbour. Flagged for the coordinator;
+the correlation is 6 minutes and the mechanism is plausible in at least two
+ways (load on a timed match, or my pypy3 processes tripping their leak
+detector).
+
+The d1 numbers themselves are unaffected: fixed-node play is node-counted, the
+A-vs-A control on the same book slice returned exactly 50.00%, and there were
+no time forfeits in either match.
 
 ### The mate gate was answering from the OPENING position
 
