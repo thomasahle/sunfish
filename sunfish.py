@@ -390,7 +390,7 @@ class Searcher:
             # runs as a driver probe (root=True): no null cutoff that would
             # end it without storing a move, no repetition truncation, and
             # no table entry under deviant semantics.
-            if not killer and depth > 2:
+            if not killer and depth > 3:
                 self.bound(pos, gamma, depth - 3, root=True)
                 killer = self.tp_move.get(pos)
 
