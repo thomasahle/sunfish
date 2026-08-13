@@ -22,6 +22,7 @@ reformatting of surrounding code does not fire):
   - Position.value       (KingCaptureValHigh / HighValIsKingCapture)
   - Position.gen_moves   (Game.moves, CaptureFirst's list)
   - Position.king_capture (the substitution/in-check scan, kp = 0 note)
+  - evaluate              (full board-to-score refresh after a king-table swap)
   - constants            (MATE_LOWER, MATE_UPPER, QS, QS_A,
                           EVAL_ROUGHNESS, TABLE_SIZE)
 
@@ -46,8 +47,9 @@ EXPECTED = {
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "11d52eaa8a661352",
     "Searcher.bound": "41a402d756621824",
-    "Searcher.search": "f9aa8c81b84ff44b",
+    "Searcher.search": "c5f91ec0e9e598d6",
     "constants": "02227a9fd04eb181",
+    "evaluate": "ab9646670c2bb8f5",
 }
 
 
@@ -74,6 +76,8 @@ def extract_regions():
                         regions[key] = ast.get_source_segment(src, item)
     consts = []
     for node in tree.body:
+        if isinstance(node, ast.FunctionDef) and node.name == "evaluate":
+            regions["evaluate"] = ast.get_source_segment(src, node)
         if isinstance(node, ast.Assign):
             names = [t.id for t in node.targets if isinstance(t, ast.Name)]
             if any(n in CONSTANTS for n in names):
@@ -81,7 +85,7 @@ def extract_regions():
     regions["constants"] = "\n".join(consts)
     missing = {"Searcher.bound", "Searcher.search", "Position.rotate", "Position.move",
                "Position.value", "Position.gen_moves", "Position.king_capture",
-               "constants"} - set(regions)
+               "evaluate", "constants"} - set(regions)
     if missing:
         raise SystemExit(f"model_audit: audited region(s) not found in sunfish.py: {sorted(missing)}")
     return regions
@@ -110,6 +114,7 @@ ANCHORS = [
     "self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)",
     "lower, upper = 1 - MATE_UPPER, MATE_UPPER",
     "if depth > 0 and pos in self.history:",
+    'history[:] = [pos._replace(score=evaluate(pos.board)) for pos in history]',
 ]
 
 # Raw "line N" citations in the Lean sources are fragile: they rot silently.

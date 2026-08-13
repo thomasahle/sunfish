@@ -253,6 +253,7 @@ at capturable nodes.
 | legal killer lifecycle and eviction | `Killer.lean` |
 | root versus interior null behavior | `CanNull.lean` |
 | transposition-table interval updates | `TableSwap.lean` and table results in `Stalemate.lean` |
+| king-table selection and cached-score refresh | `refreshHistory_coherent` in `TableSwap.lean` |
 | MTD-bi bracket range and convergence | `Driver.lean` |
 
 The model abstracts Python's board representation, move generation, sorting,
@@ -273,7 +274,7 @@ transform is the identity, so the model and source are extensionally equal.
 - `Killer.lean`: move-table legality and lifecycle.
 - `CanNull.lean`: root/interior null and table-key conditions.
 - `Driver.lean`: MTD-bi bracket invariants and convergence.
-- `TableSwap.lean`: table-update properties.
+- `TableSwap.lean`: evaluation swaps, cached-score normalization, and table-update properties.
 - `Liveness.lean` and `Classification.lean`: mate visibility and search-result
   classification under their named fidelity premises.
 - `Pruning.lean` and `Tricks.lean`: proof envelopes for selective-search

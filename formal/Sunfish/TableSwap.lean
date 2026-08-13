@@ -2,7 +2,15 @@
 pst-swap soundness (milestone 2, part D): why `search` may retarget the
 evaluation between searches -- `pst["K"] = K_MID if "Q" in pos.board and
 "q" in pos.board else K_END`, assigned in BOTH directions on every
-search -- while keeping `tp_move` and clearing `tp_score`.
+search -- while keeping `tp_move`, clearing `tp_score`, and refreshing the
+scores cached in the supplied history.
+
+The refresh is load-bearing.  `Position.score` is incrementally accumulated
+before `search` selects its king table.  Merely changing `pst["K"]` therefore
+leaves the root and repetition-history keys carrying the old evaluation.
+`refreshHistory_coherent` below proves the generic repair: replacing every
+cached score with the newly selected evaluation makes the complete history
+coherent before either hashing or recursive move generation.
 
 Two tables, two fates:
 
@@ -45,6 +53,52 @@ import Sunfish.Stalemate
 import Sunfish.CanNull
 
 namespace Sunfish
+
+/-! ### Cached-position scores across an evaluation swap -/
+
+/-- The part of Python's `Position` relevant to a table swap: an immutable
+position identity together with its incrementally cached score. -/
+structure ScoredPos (Pos : Type _) where
+  pos : Pos
+  score : Int
+
+/-- Re-evaluate one cached position under the newly selected table. -/
+def refreshScore (eval' : Pos → Int) (p : ScoredPos Pos) : ScoredPos Pos :=
+  { p with score := eval' p.pos }
+
+/-- Every cached score in a history agrees with the evaluation currently in
+force.  This is the executable invariant restored by `history[:] = ...` in
+`Searcher.search`. -/
+def HistoryCoherent (eval' : Pos → Int) (history : List (ScoredPos Pos)) : Prop :=
+  ∀ p ∈ history, p.score = eval' p.pos
+
+/-- Refreshing a history establishes score coherence unconditionally; no
+premise about the table under which the incoming scores were accumulated is
+needed. -/
+theorem refreshHistory_coherent (eval' : Pos → Int) (history : List (ScoredPos Pos)) :
+    HistoryCoherent eval' (history.map (refreshScore eval')) := by
+  intro p hp
+  simp only [List.mem_map] at hp
+  obtain ⟨q, _hq, rfl⟩ := hp
+  rfl
+
+/-- Refreshing changes only the score, never the chess-position identity. -/
+@[simp] theorem refreshScore_pos (eval' : Pos → Int) (p : ScoredPos Pos) :
+    (refreshScore eval' p).pos = p.pos := rfl
+
+/-- Once refreshed for a selected table, repeating the refresh is inert. -/
+@[simp] theorem refreshScore_idempotent (eval' : Pos → Int) (p : ScoredPos Pos) :
+    refreshScore eval' (refreshScore eval' p) = refreshScore eval' p := rfl
+
+/-- A concrete stale root: switching the evaluation from 5 to 7 without a
+refresh violates coherence; the generic refresh theorem repairs it. -/
+theorem staleScore_requires_refresh :
+    ¬ HistoryCoherent (fun _ : Unit => 7) [{ pos := (), score := 5 }] ∧
+      HistoryCoherent (fun _ : Unit => 7)
+        ([{ pos := (), score := 5 }].map (refreshScore (fun _ => 7))) := by
+  constructor
+  · simp [HistoryCoherent]
+  · exact refreshHistory_coherent _ _
 
 /-- The same game under a new evaluation: `Pos`, `moves` and `pass`
 (the board and the rules) unchanged; `eval` (`pos.score`) and `val`
