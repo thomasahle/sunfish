@@ -199,6 +199,142 @@ how much effort it cost.
 
 ---
 
+## 2026-08-13 — The 1024-1500 byte eval, priced by building: the BYTES are there and the DATA is not
+
+Thomas's allocation — eval 1024-1500 B, engine ~2500 — flips this lane from
+byte-minimising to capacity-maximising. Below is the whole grid, every row a
+real entry source through `tools/build/pack.sh`, size off disk, run alone in an
+empty directory. **No Elo is claimed and nothing here is fitted yet**; the
+deliverable is prices and one recommendation.
+
+### First, what "eval bytes" even means
+
+lzma carries one dictionary across the file, so no region has an intrinsic
+size. The only honest definition is differential, against a build identical
+except that it holds no table data:
+
+> eval bytes(X) = packed(entry with X) − packed(entry with a ZERO stub)
+
+The stub still defines `piece`, `pst`, `K_MID`, `K_END` — the same engine with a
+flat evaluation. On the rebased base that is **2886 B**, so the eval today
+occupies **464** and its **ceiling is 1210**.
+
+### The grid (classic-derived filler, K exact throughout)
+
+| partition | encoding | sets | params | packed | eval B |
+|---|---|---|---|---|---|
+| 1 flat | step 8, mirrored | 1 | 160 | 3167 | 281 |
+| 2 seam | step 8, mirrored | 2 | 320 | 3323 | 437 |
+| 4 wings | step 8, mirrored | 4 | 640 | 3573 | 687 |
+| 4 wings | step 8 | 4 | 1280 | 3988 | **1102** |
+| 8 seam × wings4 | step 8, mirrored | 8 | 1280 | 4021 | **1135** |
+| 8 seam × wings4 | step 2, mirrored | 8 | 1280 | 4379 | over 4096 |
+| 4 wings | exact | 4 | 1280 | 4478 | over 4096 |
+
+Machinery is sublinear and nearly free — the 4-bucket selector plus three extra
+decode loops costs **97 B** when the data is identical, ~32 per bucket, because
+the loops compress against each other. **Exact resolution is dead at every set
+count above two.**
+
+### How many sets actually fit, on fitted-SHAPED data
+
+Correcting filler by the measured "+60-75 B per fitted set" would be composed
+arithmetic. Instead, a better build: permute the **real fitted tables** per set,
+which preserves the fitted value multiset — the roundness that makes fitted data
+expensive — while making the sets distinct, and needs no new fit.
+
+| sets | step 8 mirr | step 4 mirr | step 2 mirr |
+|---|---|---|---|
+| 1 | 301 | 319 | 340 |
+| 4 | 746 | 832 | 922 |
+| 6 | 992 | **1125 (in budget)** | over 4096 |
+| 7 | **1111 (in budget)** | over 4096 | over 4096 |
+| 8 | over 4096 | over 4096 | over 4096 |
+
+Marginal cost settles at **~125-135 B per extra set** at mirrored step 8. Note
+this brackets from the *other* side: permuted sets share a value distribution
+that lzma exploits, where the one genuinely independent fit we have (the qseam
+second set) cost **+224**. A real candidate sits between, and the way to push it
+to the cheap end is to fit extra sets as **regularised deltas from the base
+set**, sharing piece values — which is also the fix for the data problem below.
+
+### The recommended partition is PHASE quantiles, not king wings
+
+King-wing buckets were the straw man. They are unusable on our data: **80.4% of
+positions have the white king on the king side**, so the wing product has a
+nearly empty corner. Phase quantiles are far better balanced. Both priced:
+
+| partition | sets | params | packed | spare | eval B |
+|---|---|---|---|---|---|
+| phase quantiles | 4 | 640 | 3648 | 448 | 762 |
+| phase quantiles | 6 | 960 | 3899 | 197 | 1013 |
+| **phase quantiles** | **7** | **1120** | **4033** | **63** | **1147 — IN BUDGET** |
+| phase quantiles | 8 | 1280 | 4144 | −48 | over 4096 |
+
+The selector is a 25-character phase→bucket string indexed by the piece-count
+phase, read once at the root — the same mechanism as the queens-off swap, so no
+per-node cost and no second accumulator. Decode of the largest build: **0.96 ms**
+against a 60 s startup budget.
+
+**So the bytes reach the budget: 7 phase buckets, 1120 free parameters,
+1147 eval B, 63 spare.**
+
+### And the data does not. This is the finding.
+
+Every bucket is fitted from its own positions, so what matters is the WORST
+bucket's positions-per-parameter. The reference is measured, not assumed: the
+queens-seam taper was dropped at **11 pos/param**, where it played a2a3 to
+depth 5.
+
+| partition | sets | worst bucket | pos/param | |
+|---|---|---|---|---|
+| 1 flat | 1 | 15,592 | 97.5 | OK |
+| 2 seam (queens-off) | 2 | 3,544 | 22.1 | thin |
+| 4 wings (wk × bk) | 4 | 981 | **6.1** | below the failure point |
+| **8 seam × wings4 (the straw man)** | 8 | **48** | **0.3** | **37× worse than known-bad** |
+| 4 phase quantiles | 4 | 3,024 | 18.9 | thin |
+| 6 phase quantiles | 6 | 2,044 | 12.8 | marginal |
+| **7 phase quantiles (the in-budget row)** | 7 | 1,406 | **8.8** | **below the failure point** |
+| 8 phase quantiles | 8 | 1,035 | 6.5 | below the failure point |
+
+**The straw man's worst bucket holds 48 training positions for 160 parameters.**
+It is not close, and no encoding choice fixes it — buckets buy capacity by
+*dividing the data*.
+
+A correction to my own instrument, recorded because it flattered the answer:
+the first version cut *ranks* into equal parts and reported 12.0 pos/param at 8
+buckets. That partition cannot ship. Phase is a coarse integer with a lumpy
+histogram (2,300 of 15,592 training positions sit at phase 4 alone), so a rank
+cut splits a phase value between two buckets and the root, which sees only the
+phase, cannot reproduce it. The shippable number is **6.5**.
+
+### Recommendation
+
+1. **Do not fit the budget-filling candidate yet.** At 7 buckets it is 8.8
+   pos/param — below the point where this lane has already watched a bucketed
+   fit fail. Filling 1024-1500 B with the current generator would be buying
+   memorisation and paying bytes for it.
+2. **The honest maximum on today's data is ~4-6 phase buckets** (18.9 → 12.8
+   pos/param, 762 → 1013 eval B) — which lands just under Thomas's 1024 floor.
+   That is the gap, stated in the currency that binds: **not bytes, positions.**
+3. **The generator is the unlock, and there are two.** Distilling from a trained
+   teacher removes the labelling budget from the equation entirely — it can
+   label as many positions as we sample, so pos/param stops being a function of
+   Stockfish time. That is what makes the ternary N=16 net (−14.7% val)
+   interesting now: with 1120 parameters to decode INTO, it finally has a
+   student worth its capacity. The cheaper route in parallel is simply more
+   games (caprr's 4,000 plus the ladder), which the set already knows how to
+   consume.
+4. **Fit extra sets as regularised deltas from a shared base**, not
+   independently. It halves the effective parameter count at the same nominal
+   capacity, and it is also what moves the byte cost from the +224 end of the
+   bracket to the +130 end. Both problems, one change.
+5. **Mirroring stays** until C1 vs C2 says otherwise — that screen is the only
+   measurement of what compression costs in play, and it gates whether the
+   budget buys 7 mirrored sets or 3 unmirrored ones.
+
+---
+
 ## 2026-08-13 — Rebased onto the moved base, C1/C2 re-measured, and C1's bar re-derived because its byte credit no longer exists
 
 The eval lane's work was sitting on a base two landings behind. Rebased
