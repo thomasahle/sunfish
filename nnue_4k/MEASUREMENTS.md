@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-14 | **H1 candidates BUILT AND PRICED: `pend` +42 B, `kact` +1 B, `pend.kact` +43 B against 739 spare** | Order-independent composition (kact.pend byte-identical); shared tables round-trip tuple-identical, kend fix unperturbed; standalone packed smoke green. No Elo claimed — screen staged, not armed |
 | 2026-08-14 | **PRE-REGISTERED: H1 tapered endgame terms — `pend` (endgame pawn-advance table) and `kact` (steeper K_END), both ZERO hot-loop cost on the landed queens-off seam** | Hand-designed with mechanisms, per the ledger's fits-play-worse record; passer delta-rule DESIGNED and priced out (score/ps split returns + scan class); screen = fixed-node 20k SPRT 0/10 vs base, LAND at 95% LB > 0 on fixed-N confirm; scan-class terms need timed confirmation, rule written in |
 | 2026-08-14 | **PRE-REGISTERED: the gamma seed goes to a NON-INFERIORITY screen — and it lands in the SEARCH lane, not here** | +5 B on every base; **every arm passes first yield with it**, including both that fail without; 1.0000× nodes and the **same move 40/40** at completed depth 8. H1 = engine1 = seed; LAND if the 95% LB excludes −10 |
 | 2026-08-14 | **The obvious timed spot-check is VACUOUS, by arithmetic** | No abort can land before node 2,048, so any build with max first yield ≤2,048 is immune at *every* TC — and at 10+0.1 the `0.9·winc` term floors `think` at ~3,800 nodes. Re-specified to **1+0, b8 vs b8seed**, with a base-vs-seed control pair |
@@ -230,6 +231,49 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-14 — H1 candidates BUILT AND PRICED: pend +42 B, kact +1 B, pend.kact +43 B — order-independent, tables round-trip exact, standalone smoke green
+
+Implementation of the H1 pre-registration below (same night, separate commit —
+rules first). `make_variants.py` gains mods `pend` and `kact`; the SHIPPED
+entry is untouched and regenerates byte-identical.
+
+### Prices, every row one real file through pack.sh
+
+| arm | packed | vs base (3357) | spare |
+|---|---|---|---|
+| base | **3357** | — | 739 |
+| pend | 3399 | **+42** | 697 |
+| kact | 3358 | **+1** | 738 |
+| pend.kact | 3400 | **+43** | 696 |
+| kact.pend | 3400 | +43 | (order-independence control: byte-identical composition) |
+
+The pre-registration estimated pend at +30…60; measured +42. kact is one digit
+(10 → 14) and costs exactly +1. Both fit trivially inside 739 spare; the
+combined H1 bundle spends 5.8% of the headroom.
+
+### Verification (no codec re-encode was needed, and that is checked, not assumed)
+
+Both candidates are startup FORMULAS over the decoded base tables — the base-90
+stream is untouched. `check_tables.py` (scratch instrument) execs the eval
+region of every built variant, no engine process:
+
+- `pst[P..K]` and `piece` tuple-identical to base in all three arms;
+- pend's `K_MID`/`K_END` bit-identical to base's (the landed kend fix is not
+  perturbed — the mirrored-kend lesson, applied in advance this time);
+- `P_END` exactly `x and x + 2·(8 − rank)²` with padding zeros preserved,
+  per-rank deltas {2, 6, 10, 14, 18, 22}, max 22 < QS = 40;
+- kact's `K_END` reproduces the 14/step formula in both `kact` and `pend.kact`.
+
+Standalone smoke (the one engine run spent on this): packed `pend.kact` alone
+in an empty dir, `SF_NET`/`PYTHONPATH` unset — `uciok`, `bestmove g1f3` at
+`go movetime 200`, the base's known standalone answer.
+
+**No Elo is claimed.** The screen, its gates, the seed dependency and the
+LAND bar are in the pre-registration entry below; nothing is armed while the
+ladder runs.
 
 ---
 

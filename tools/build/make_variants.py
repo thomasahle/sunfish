@@ -92,6 +92,44 @@ MODS = {
     # the halved position count. See the pre-registration entry.
     "b1": _deferred(1, False, "", "tools/tune/candidates/bal/students.json", "linear"),
     "b8": _deferred(8, False, "K", "tools/tune/candidates/bal/students.json", "q8"),
+    # ---- H1 TAPERED ENDGAME TERMS (nnue_4k/MEASUREMENTS.md, the H1 -------
+    # pre-registration). Both are HAND-DESIGNED, not fitted -- every fitted
+    # table this lane produced played worse than its loss promised -- and both
+    # are cost-class ZERO in the hot loop: they ride the queens-off root seam
+    # the landed kend+fresh fix already pays for (one boolean per search, and
+    # the from_board rebuild line after the swap handles the carried score).
+    #
+    # `pend`: endgame pawn-advance table. At queens-off, every pawn's value
+    # grows quadratically with advancement -- 0,2,8,18,32,50 by rank 2..7
+    # (72 on the promotion row, consistently discounting the promotion
+    # delta). BOTH colours read it: the mover prices the opponent's runner
+    # through the 119-i mirror, which is the taxonomy's pawn-race blindness
+    # (41.h3?? c3!) mechanism. The quadratic is search-coupling discipline,
+    # not numerology: per-move deltas are 2,6,10,14,18,22 -- all below
+    # QS=40 and LMR=60, so the QS admission gate, the futility break and
+    # the reduction trigger keep their measured tuning. `x and` keeps the
+    # padding zeros zero.
+    "pend": [
+        ("K_MID, K_END = pst[\"K\"], tuple(piece[\"K\"] + 70\n",
+         "P_MID, P_END = pst[\"P\"], tuple(x and x + (8 - i // 10) ** 2 * 2\n"
+         "   for i, x in enumerate(pst[\"P\"]))\n"
+         "K_MID, K_END = pst[\"K\"], tuple(piece[\"K\"] + 70\n"),
+        ('        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END\n',
+         '        end = "Q" not in pos.board or "q" not in pos.board\n'
+         '        pst["K"] = K_END if end else K_MID\n'
+         '        pst["P"] = P_END if end else P_MID\n'),
+    ],
+    # `kact`: steeper K_END centralization. The gradient (10 cp per step of
+    # centre manhattan distance) was inherited from classic and never swept
+    # on this engine; 14/step makes an active king worth up to +126 across
+    # the board instead of +90. Known tree-shape effect, accepted and
+    # pre-registered: a diagonal centralizing king step's delta goes 40->56,
+    # crossing QS=40, so those steps are firmly admitted at depth 0.
+    # Composes with pend in either order (disjoint anchors).
+    "kact": (
+        "   - 10 * (abs(2 * (i // 10) - 11) + abs(2 * (i % 10) - 9)) for i in range(120))\n",
+        "   - 14 * (abs(2 * (i // 10) - 11) + abs(2 * (i % 10) - 9)) for i in range(120))\n",
+    ),
     # ---- SEARCH: the root gamma seed. THIS IS NOT AN EVAL MOD -------------
     # `search()` starts every search at gamma = 0 and bisects. The root stores a
     # move ONLY on a fail-high, so the node count of the first root fail-high --
