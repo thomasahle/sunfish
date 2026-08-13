@@ -268,6 +268,19 @@ not a claim about the position's value.
   residual. If it recovers none of it, corrhist's value really was
   position-specific and the shelved entry keeps its note.
 
+**Speed terms, measured before the games** (interleaved, base anchored, 7 lines
+× 2 rounds, under both RRs' load): `fut` **nps 1.021×**, `fut40` **nps 1.073×**.
+Neither is slower — one integer add cannot be — and the reading above 1.0 is
+almost certainly a **node-mix** effect rather than a real speedup: pruning less
+at frontier nodes means more cheap nodes per second, not faster nodes. So the
+timed conversion is treated as **≈ 0 to +10 Elo, not the +3.1/+10.4 the model
+prints**, and the keep/drop rules above are stated on the fixed-node number
+alone, where that ambiguity cannot flatter either arm.
+
+Launched 13:27 UTC: 300 rounds, 1,800 games, 600 per pairing (≈ ±28),
+concurrency 12, alongside the ordering RR — legitimate because both are
+fixed-node, where results do not depend on load.
+
 ## 2026-08-13 — The ordering round-robin: pre-registered before it is launched
 
 Queue items 2 (history revisit) and 3 (IIR) run as **one round-robin with a
