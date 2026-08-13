@@ -304,16 +304,6 @@ PROBE_CAP = 40
 # Late move reduction: reduce quiet moves whose static value is below this,
 # once past the first few in the sorted list. 0 disables (classic parity).
 LMR = 60
-# Reverse futility pruning margin per ply. 0 disables.
-# HELD AT 0: implemented and gated, but it INTERACTS with LMR. On the
-# mate-in-1 suite, baseline finds 5/8, LMR alone 5/8, RFP alone 5/8 --
-# and LMR+RFP together only 3/8, with the guards reporting brackets like
-# "lower 47923 upper -143" (a mate-band claim against a negative upper).
-# Each is harmless alone and the pair is not, which is exactly why these
-# land one at a time with their own screen. RFP gets enabled and screened
-# on top of LMR once LMR's own screen reports, with the mate suite as an
-# acceptance gate rather than an afterthought.
-RFP = 0
 # Max entries kept in each transposition table, roughly 1GB per million.
 # Python dicts keep insertion order, so we cheaply evict the oldest entry
 # when full (see issue #95).
@@ -620,28 +610,6 @@ class Searcher:
             # - at depth=0, since it would be expensive and break "futility pruning".
             if depth > 0 and pos in self.history: return 0
 
-            # REVERSE FUTILITY PRUNING (packed only). If the static score is
-            # already a margin above gamma, assume no reply drags it below and
-            # fail high without searching. This is a GAMMA-DEPENDENT cutoff --
-            # gamma selects the value being bounded, which the stable contract
-            # forbids outright -- so it lives here and never in classic.
-            #
-            # It also returns a fail-high with NO move stored, so this node
-            # breaks the "gamma <= r implies tp_move holds a legal move"
-            # promise. That is survivable because the promise's consumers
-            # degrade safely: the parent stores the move that reached here (so
-            # ITS promise holds), and the null-move verifier finding no
-            # tp_move falls through to its boundary probe, i.e. it declines to
-            # cut rather than cutting unsoundly.
-            #
-            # Guards, borrowed from the null move because they encode the same
-            # assumption -- that passing is not better than moving: non-pawn
-            # material on the board (zugzwang), and a score well inside the
-            # mate band so the exact mate/stalemate promises are not the thing
-            # being pruned away.
-            if RFP and 0 < depth < 5 and pos.score - RFP * depth >= gamma \
-                    and abs(pos.ps) < 500 and any(c in pos.board for c in "RBNQ"):
-                return pos.score - RFP * depth
 
         # Generator of moves to search in order.
         # This allows us to define the moves, but only calculate them if needed.

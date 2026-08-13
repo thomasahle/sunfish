@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **RFP REJECTED: −2.8 ± 17.9 at 1000 games** | Bar was +31 Elo for 31 bytes. Removed — entry **3517 → 3483, 613 spare** |
 | 2026-08-13 | **LEAD: LMR may be masking an ~85 Elo hole in the port** | LMR transfers (+127 ± 77 timed, prelim) — which implies entry-minus-LMR is ~85 BELOW classic. Being measured directly, not inferred |
 | 2026-08-13 | **LMR-on-PST: outcomes PRE-REGISTERED before the result** | Three readings written down in advance, incl. the live possibility that LMR is *costing* the shipped entry Elo |
 | 2026-08-13 | **Screens switched to SPRT mid-flight** | 300-game fixed-N resolves to ±40 while candidates are +18…+90 — the bottom half was under the noise floor of its own test |
@@ -116,6 +117,41 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — RFP rejected on its pre-registered bar, and the bytes came back
+
+**Reverse futility pruning, on top of LMR, PST entry, fixed nodes, SPRT run to
+its 1000-game cap: −2.78 ± 17.93 (95%)** — RFP first-named, so marginally
+*worse* than base. Zero bad terminations.
+
+The bar was fixed before the screen reported: **≥ +31 Elo to justify 31 bytes**
+(1.0 Elo/byte). The measured interval spans −20.7 … +15.1 and excludes the bar
+by a wide margin, so the decision needed no judgement:
+
+| | |
+|---|---|
+| entry before | 3517 bytes, 579 spare |
+| **entry after removing RFP** | **3483 bytes, 613 spare** |
+| reclaimed | **34** (I had estimated 31 — measured again, estimated again wrong) |
+
+Bench unchanged at 94442 (RFP shipped disabled, so no behavioural change), 28
+tests green, CI entry guard green, and the artifact still plays standalone in an
+empty directory with `SF_NET` unset.
+
+**Two things worth keeping from this.** First, the SPRT ran to its cap without
+resolving either bound — which is exactly what an SPRT *should* do for a true
+effect near zero, and the cap did its job of stopping an undecidable test rather
+than letting it run forever. The value of the run is the tight interval, not the
+verdict letter.
+
+Second, RFP's **mate gate passed** (5 vs 5) on this eval while the same feature
+pair failed it 5/8 → 3/8 on the NNUE engine. So RFP is *safe* here and simply
+*worthless* here — the two failure modes are independent, and a feature can
+clear the correctness gate and still not earn a byte.
+
+Running score for the transfer question: ice4 prices RFP at 58 Elo; we measure
+**≈ 0**. That is the second data point on how their catalogue converts to a
+Python engine with a weak eval, and it is much worse than LMR's.
 
 ## 2026-08-13 — LEAD (not a finding): LMR transfers, and may be masking a hole
 
