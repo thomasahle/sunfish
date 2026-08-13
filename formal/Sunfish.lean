@@ -4,6 +4,7 @@ import Sunfish.Stalemate
 import Sunfish.Liveness
 import Sunfish.Shortest
 import Sunfish.Classification
+import Sunfish.Eventual
 import Sunfish.Killer
 import Sunfish.Tricks
 import Sunfish.CanNull
