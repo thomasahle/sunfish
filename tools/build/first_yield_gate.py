@@ -51,7 +51,23 @@ import subprocess
 import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
-REPO = str(HERE.parents[1])
+
+
+def _find_ui(*starts):
+    """The nearest ancestor directory that actually contains a sunfish_ui/.
+
+    Not `HERE.parents[1]`. This gate has to run in two places -- the dev
+    checkout, where it sits in tools/build/, and a box arena, where it is
+    copied next to bin/ alongside the driver. A hard-coded ancestor is right
+    in one of them and silently picks up nothing in the other, which for this
+    gate means the builtin loop and a PASS for every build.
+    """
+    for start in starts:
+        for d in [start] + list(start.parents):
+            if (d / "sunfish_ui" / "uci.py").exists():
+                return str(d)
+    raise SystemExit("no sunfish_ui/ found above %s -- stage the gate beside one"
+                     % " or ".join(str(s) for s in starts))
 ENGINE = os.path.abspath(sys.argv[1])
 # .fen, not .txt: the repo's .gitignore carries a blanket `*.txt`, which is
 # how this project already lost a 15,328-position training set. A gate whose
@@ -61,6 +77,7 @@ WINDOW = 2048            # the engine's own stop-poll granularity
 CONTROL_N = 12           # positions re-checked end to end through real UCI
 assert ENGINE.endswith(".py"), "source entries only: `go nodes` is stripped from the packed artifact"
 
+REPO = _find_ui(HERE, pathlib.Path(ENGINE).resolve().parent)
 sys.path.insert(0, REPO)
 import sunfish_ui.uci as uci                                       # noqa: E402
 
