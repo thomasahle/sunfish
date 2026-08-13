@@ -1,0 +1,46 @@
+games: box_caprr_hole.pgn (11.1 MB), box_caprr_kend.pgn (1.2 MB), laptop_pyleague_20260813_123259_snapshot.pgn (0.1 MB)
+collected 19689 unique positions
+labeller: Stockfish 18 | threads 2 | depth 8
+  labelled 2000/19689  (60 pos/s, ETA 4.9 min)
+  labelled 4000/19689  (61 pos/s, ETA 4.3 min)
+  labelled 6000/19689  (61 pos/s, ETA 3.8 min)
+  labelled 8000/19689  (61 pos/s, ETA 3.2 min)
+  labelled 10000/19689  (60 pos/s, ETA 2.7 min)
+  labelled 12000/19689  (61 pos/s, ETA 2.1 min)
+  labelled 14000/19689  (61 pos/s, ETA 1.6 min)
+  labelled 16000/19689  (61 pos/s, ETA 1.0 min)
+  labelled 18000/19689  (61 pos/s, ETA 0.5 min)
+kept 19491 labelled positions
+wrote out/set20260813.npz: X (19491, 384), y 19491
+{
+ "engine": "Stockfish 18",
+ "engine_sha256": "0a119807d135b44f427d1e0e31b87076152a3c83ca0e34a37a25207e471d5534",
+ "depth": 8,
+ "threads": 2,
+ "hash_cleared_per_position": true,
+ "pgn_dir": "/home/thomas-ahle/sunfish-data/pgn",
+ "pgns": [
+  [
+   "box_caprr_hole.pgn",
+   11067603,
+   "60f31b8ce34fa1d5"
+  ],
+  [
+   "box_caprr_kend.pgn",
+   1238169,
+   "51fc5398f004b776"
+  ],
+  [
+   "laptop_pyleague_20260813_123259_snapshot.pgn",
+   98162,
+   "239301b16d9de261"
+  ]
+ ],
+ "sampling": "ply>=10, every 7th ply, not in check, >=6 pieces, dedup by FEN",
+ "filter": "|cp| < 1500, mate scores dropped",
+ "pov": "white",
+ "collected": 19689,
+ "kept": 19491,
+ "built": "2026-08-13T12:01:37+0000",
+ "host": "hardware"
+}

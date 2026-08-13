@@ -14,6 +14,9 @@ engines.json
 # tools/tune/data/ instead -- a few MB of int8 that gates a track is not a
 # throwaway. Fitted models stay ignored; they are re-derivable from the data.
 model.pkl
+# A dataset's run log is provenance, not a log -- `*.log` above ate the first
+# one silently and left the ledger claiming a file that was not there.
+!tools/tune/data/*.log
 
 # Test files
 cute.sh

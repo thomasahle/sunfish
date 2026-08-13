@@ -74,6 +74,10 @@ how much effort it cost.
 | 2026-08-13 | corrhist byte price, `pack.sh` on real files | **+127 B** (entry 3475 -> **3602**, spare 621 -> 494). Golfing recovers 5 B -- lzma already had the repetition |
 | 2026-08-13 | corrhist keep/drop **PRE-REGISTERED** before the screen | Standing 1.0 Elo/byte bar => needs fixed-node **>= +135.5**. The budget-average rate the +400 goal implies (0.41 Elo/byte) would need only +60.5; both written down, decided on the strict one |
 | 2026-08-13 | corrhist correction table censused: not a feedback runaway | median +2...+8 cp, 1-5% at the +/-120 clamp, 4-7k entries per search. The screen measures the feature, not a degenerate one |
+| 2026-08-13 | **TRAINING SET LABELLED: 19,491 positions, Stockfish 18 @ depth 8** | Committed at `tools/tune/data/set20260813.npz`. Material-vs-label corr **0.727**, sign agreement **92.7%**. **65.6% at ≤16 pieces** vs 47% in the lost set. No fit run |
+| 2026-08-13 | **Labels were slot-dependent: the TT carried across positions** | Same FEN, two slots, **−14 vs −22**; others 83→97 and −90→−149. Both modes run-to-run reproducible, which is why it was invisible. `ucinewgame` per position now makes the label a function of (fen, depth, version) |
+| 2026-08-13 | `X` is a difference feature — it cannot give you the phase | White Pe2 and black Pe7 cancel in the same cell. `\|X\|.sum()` reads 11.1 pieces where the board has 14.3; phase must come from `fens` |
+| 2026-08-13 | Stockfish 18 built from source on the box (no root) | Official binaries need `GLIBCXX_3.4.30`, box has 3.4.29. gcc 11.5, `ARCH=x86-64-avx512icl`. A pinned source build is the more portable recipe anyway |
 | 2026-08-13 | **Training set: durable home, 19,689 positions ready, labelling NOT started** | Games under `~/repos/sunfish-data/pgn/` (4,482 games). New mix is **65.7% at ≤16 pieces** vs 47% in the lost set. Box has no Stockfish; laptop is owned by the ladder — needs a call |
 | 2026-08-13 | **LANDED on top of kend+fresh: the entry is 3378 bytes, 718 spare** | Rebuilt, not composed: −97 on this base, not the −94 of the last one. All gates green, 60/60 same move AND same score |
 | 2026-08-13 | **`agree.py` was comparing two different UCI DRIVERS** | An engine outside the repo tree silently uses the builtin `go` loop. A byte-identical copy of the entry "disagreed" with itself 39/60 on score. Both arms now STAGED into one directory, and an A-vs-A positive control is wired in |
@@ -1059,6 +1063,120 @@ because with no tc the `sunfish_ui` driver sets the in-search deadline to
 now + 600 s (the 1.5 s default belongs to the builtin loop, which only the
 packed artifact runs) — and both arms print which driver they resolved, which
 the script compares and refuses to proceed on.
+## 2026-08-13 — THE TRAINING SET IS LABELLED: 19,491 positions, Stockfish 18 @ depth 8, and the labels are a function of the position alone
+
+The set that gates every training candidate exists again, and it is
+**committed** at `tools/tune/data/set20260813.npz` (995 KB) with its run log
+beside it. Sources stay at `~/repos/sunfish-data/`.
+
+| | |
+|---|---|
+| positions collected | 19,689 |
+| **positions kept** | **19,491** (198 dropped: mate scores or \|cp\| ≥ 1500) |
+| labeller | **Stockfish 18**, depth 8, Threads 2, Hash 64 MB |
+| engine sha256 | `0a119807d135b44f…` (built on the box, see below) |
+| npz sha256 | `d792b42081f0adec…`, byte-identical on box and laptop |
+| source games | 4,482 (4,000 hole RR + 444 kend screen + 38 ladder snapshot) |
+| wall time | ~5.4 min at 61 pos/s |
+
+### The binary: built, not downloaded, and it took two tries to get right
+
+The official `sf_18` Linux binaries need `GLIBCXX_3.4.30`; the box tops out at
+`3.4.29`, so `stockfish-ubuntu-x86-64-avx512icl` would not start at all. Built
+from the pinned `sf_18` source tarball instead (src sha256 `22a19556…`) with
+the box's own gcc 11.5.0, `ARCH=x86-64-avx512icl` — the matching target for its
+Ice Lake-SP Xeon 8375C (`avx512_vnni`, `avx512_vbmi2`). Nets `nn-c288c895ea92`
+and `nn-37f18f62d772` fetched and validated by `make net`. Binary lives at
+`~/sunfish-bench/bin/stockfish`; user-space, no root, no system change.
+**Building against the box's own libstdc++ is also the more reproducible
+choice** — the recipe is (source tag, compiler, arch), which does not depend on
+someone else's build host.
+
+**One instrument failure on the way, mine:** the first smoke test was
+`printf "position startpos\ngo depth 12\nquit\n" | stockfish`, which returned
+`bestmove a2a3` and looked like a broken build. It was a broken *test* — `quit`
+arrives before the search finishes and aborts it. A driver that waits for
+`bestmove` gets `e2e4` at +48 cp, `Bc5` in the Italian, and `Ra8#` found as
+`mate 1`. Piping a whole UCI session into an engine's stdin only works if the
+engine is allowed to finish.
+
+### The labels are a property of the position, not of their slot in the list
+
+`texel_data.py` reused one Stockfish process across all positions without
+clearing the hash, so the transposition table carried over and **the same FEN
+got a different label depending on what preceded it**. Measured at depth 8 on
+the box: one FEN scored **−14 in one slot and −22 in another**, and two other
+positions moved **83 → 97** and **−90 → −149**. Both modes are perfectly
+run-to-run reproducible, which is exactly why this was invisible — a re-run
+agrees with itself and the bias stays.
+
+`ucinewgame` + `isready` now runs before every position, and Hash dropped
+256 → 64 MB because the table is cleared anyway and a bigger one only makes the
+clear slower. Cost: nothing measurable (61 pos/s). The label is now a function
+of **(fen, depth, engine version)** alone.
+
+### Checks that the data is what it claims
+
+- **Sign convention, the one that would poison everything silently**:
+  correlation between raw material balance and label **0.727**, and where
+  material is ≥ 300 cp the signs agree **92.7%** of the time (n=4,465). A
+  white/black POV or mirror error would destroy both numbers.
+- **Feature encoding**: `X` rebuilt straight from the FEN on 300 random rows,
+  **0 mismatches**.
+- Distribution: median **+3 cp**, mean +21, σ 320, 52.0% white-better, 23.8%
+  inside ±50. No duplicate FENs.
+- Provenance travels **inside** the npz (`meta`): engine name and sha256,
+  depth, threads, hash-clear flag, per-PGN name/size/sha, the sampling and
+  filter rules, POV, counts, build time and host.
+
+### `X` cannot tell you the phase — use `fens`
+
+`X` is a *difference* feature: a white pawn on e2 and a black pawn on e7 land
+on the same `(piece, mirrored square)` cell and **cancel**. So `|X|.sum()` is
+a material *imbalance* count, not a piece count — it reads 11.1 pieces where
+the board has 14.3. Phase must be recomputed from `fens`, which is one more
+reason they are stored. The first read of the labelled set got this wrong and
+reported a 0.1% opening bucket.
+
+True phase mix of the 19,491, from the boards:
+
+| phase (pieces) | share | n | mean \|cp\| |
+|---|---|---|---|
+| opening 25-32 | 9.5% | 1,856 | 161 |
+| middle 17-24 | 24.8% | 4,840 | 228 |
+| late-middle 9-16 | 40.5% | 7,885 | 289 |
+| endgame 6-8 | 25.2% | 4,910 | 239 |
+
+**65.6% of the set sits at ≤ 16 pieces, against 47% in the lost set.** Recorded
+as a property, not corrected. It may be *better* for the eg tables and the king
+table — those terms live exactly here — or it may simply be a different bias
+than the one the old opening-heavy set carried. The honest position: the last
+Texel fit's non-conversion (10.1% better fit, −16.7 ± 31.2 in play) now has two
+candidate explanations and this set discriminates neither on its own. `fens` is
+in the file, so **any future fit can reweight by phase without relabelling** —
+noted as an option, deliberately not built.
+
+### Conditions
+
+Box, throughout: load 12.3 → 14.2 on 96 cores, **20-22 of our own pypy3 match
+processes cotenant** the whole time plus another user's npm work; our labeller
+was one `nice -n 10` Stockfish at Threads 2, ~196% CPU. Labelling never gates a
+match and this one could not have distorted one. No laptop CPU was used; the
+league ladder was untouched.
+
+### Reproduce
+
+    python3 tools/tune/texel_data.py OUT.npz 30000 8 \
+        ~/repos/sunfish-data/pgn <stockfish> 2
+
+Arguments are `OUT.npz [NPOS] [DEPTH] [PGNDIR] [STOCKFISH] [THREADS]`. An empty
+games directory or a missing Stockfish now **asserts** instead of quietly
+writing a valid empty `.npz`.
+
+**Next, and not started: no fit has been run.**
+
+---
+
 ## 2026-08-13 — The training set has a durable home and 19,689 positions waiting; labelling is the only step left and it is NOT started
 
 The 15,328 Stockfish-labelled positions that gate every training candidate
