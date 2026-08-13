@@ -184,7 +184,8 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             if p not in "PNBRQK":
                 continue
             for d in directions[p]:
-                for j in count(i + d, d):
+                j = i + d
+                while True:
                     q = self.board[j]
                     # Stay inside the board, and off friendly pieces
                     if q in " \nPNBRQK": break
@@ -204,6 +205,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                     # Castling, by sliding the rook next to the king
                     if i == A1 and self.board[j + E] == "K" and self.wc[0]: yield Move(j + E, j + W, "")
                     if i == H1 and self.board[j + W] == "K" and self.wc[1]: yield Move(j + W, j + E, "")
+                    j += d
 
     def rotate(self, nullmove=False):
         """Rotates the board, preserving enpassant, unless nullmove"""

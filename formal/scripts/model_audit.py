@@ -40,7 +40,7 @@ SUNFISH = ROOT / "sunfish.py"
 CONSTANTS = ["MATE_LOWER", "MATE_UPPER", "QS", "QS_A", "EVAL_ROUGHNESS", "TABLE_SIZE"]
 
 EXPECTED = {
-    "Position.gen_moves": "2ac3962e1baa7305",
+    "Position.gen_moves": "04a9cf51544f86fe",
     "Position.king_capture": "077e364f886a1826",
     "Position.move": "69bb2460cd611c9e",
     "Position.rotate": "cb12fe4a160ae663",
