@@ -290,6 +290,45 @@ MODS = {
     # `futm40` is the candidate. `fut40` is its mirror, kept as ONE
     # confirmation arm: if the positive direction reproduces corrhist's loss
     # for 0 bytes, the diagnosis is confirmed and corrhist is closed for good.
+    # THE NEGATIVE MARGIN MUST BE IN THE YIELD TOO, and the first version was
+    # not. The legality gate caught it on 7 of 100 positions -- three of them
+    # QUIET, with a full board of legal replies -- all answering `bestmove
+    # (none)`, and no games were spent.
+    #
+    # The mechanism, exactly. The futility branch tests one quantity and
+    # yields another:
+    #
+    #     if pos.score + val - QS < gamma:      # the TEST
+    #         yield (None, pos.score + val)     # the YIELD
+    #
+    # With a POSITIVE margin the test is stricter than the yield, so a yielded
+    # value is always below gamma and the virtual move can never fail high.
+    # With a NEGATIVE margin the test is LOOSER, so `pos.score + val` can be
+    # >= gamma while the branch fires -- a FAIL HIGH ON A VIRTUAL MOVE. That
+    # breaks bound()'s contract that a root fail-high without a move is a
+    # verified terminal, and go_loop believes the contract: it prints the
+    # score and stops, with nothing in tp_move to play. Hence (none).
+    #
+    # This is the same lesson as the -449 futility-break bug and the LMP
+    # tail-pruning defect, in a third costume: THE TEST AND THE THING IT
+    # LICENSES MUST BE THE SAME QUANTITY. Here that means the margin belongs
+    # in both places, so the yielded estimate is below gamma by construction.
+    #
+    # `-y` names the corrected form. The uncorrected ones are kept, unused,
+    # as the positive control the legality gate is known to fail.
+    "futm40y": [
+        ("                if depth <= 1 and pos.score + val < gamma:\n",
+         "                if depth <= 1 and pos.score + val - QS < gamma:\n"),
+        ("                    yield (move, MATE_UPPER) if val >= MATE_LOWER else (None, pos.score + val)\n",
+         "                    yield (move, MATE_UPPER) if val >= MATE_LOWER else (None, pos.score + val - QS)\n"),
+    ],
+    "futmy": [
+        ("                if depth <= 1 and pos.score + val < gamma:\n",
+         "                if depth <= 1 and pos.score + val - EVAL_ROUGHNESS < gamma:\n"),
+        ("                    yield (move, MATE_UPPER) if val >= MATE_LOWER else (None, pos.score + val)\n",
+         "                    yield (move, MATE_UPPER) if val >= MATE_LOWER else (None, pos.score + val - EVAL_ROUGHNESS)\n"),
+    ],
+    # BROKEN, kept as the gate's positive control -- 7/100 `bestmove (none)`.
     "futm40": ("                if depth <= 1 and pos.score + val < gamma:\n",
                "                if depth <= 1 and pos.score + val - QS < gamma:\n"),
     "futm": ("                if depth <= 1 and pos.score + val < gamma:\n",
