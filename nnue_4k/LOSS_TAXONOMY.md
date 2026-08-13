@@ -230,3 +230,60 @@ depth-k vs baseline positions — clockless and loadless, it separates bushy-tre
 machine-noise directly and costs a few minutes of the same box slot. (3) The coordinator's
 full-harvest H4 confirmation should record the ladder's fastchess concurrency setting;
 if a future ladder can run concurrency 1, the co-tenancy guard becomes unnecessary.
+
+## Appendix: P0 fix — sudden-death TM ships in the artifact (2026-08-14, pre-registered)
+
+The P0 divergence is closed at the build level: the budget line is now ONE TC-conditional
+line, outside minifier-hide, in `nnue_4k/sunfish_nnue.py` and therefore in the generated
+entry and the packed artifact —
+`think = min(wtime / (12 if winc else 40) + 0.9 * winc, wtime / 2 - 1000)`.
+The hide block was DELIBERATE (commit 478c9f4, 2026-08-12: "TCEC is 1800+3 ... the branch
+would be dead code"), not a build defect — but its premise ("the artifact never sees
+winc == 0") is exactly what this report's P0 falsified, so the pattern is eliminated
+rather than patched. `tests/test_time_budget.py` now asserts the line is unique, outside
+any hide block, and byte-identical to the old /12 policy for every winc > 0.
+
+Bytes (verified through `pack.sh`/`check_entry.sh` only): pre-fix baseline 3445 B
+(reproduced tonight from the committed entry; the "3350 B" above was not reproducible
+through pack.sh and is superseded), fixed entry **3451 B** — **+6 packed bytes, 645
+spare** of 4096. Artifact-alone smoke (empty dir, SF_NET and PYTHONPATH unset): `uci` →
+`uciok`, legal bestmove at both `winc 100` and `winc 0`.
+
+Pre-registered validation, to run when the laptop frees (NOTHING armed tonight):
+
+- **(a) Gates first**, on the packed artifact: legality gate 100/100 (seed 20260813
+  sample, 0 no-move / 0 illegal), mate gate 8/8 (parity bar — no position lost vs the
+  pre-fix entry), and the first-yield window under the driver. Expected gamma-seed
+  interaction: NONE — the fix touches only the budget line, and the first-yield metric
+  counts nodes of the depth-1 gamma=0 probe on the seed-fixed position sample, which
+  reads no clock; any first-yield drift therefore means the build changed something
+  besides TM and FAILS the fix.
+- **(b) Confirmation match** (shared-tournament methodology, one round-robin, classic as
+  anchor): entry_tmfix vs entry (pre-fix shipped artifact) vs classic at **300+0**, on
+  the laptop AFTER the ladder harvest, ≥200 games per pairing, ladder opening book,
+  fastchess concurrency recorded (1 if feasible). KEEP bars, exact numbers fixed now:
+  1. **Increment non-inferiority**: established analytically — the winc > 0 budget is
+     byte-identical to the old policy and test-asserted, so no 30+1 match is required.
+     If one is run anyway, the 95% CI of (tmfix − entry) at 30+1 must not lie entirely
+     below **−20 Elo**.
+  2. **Sudden-death improvement (required)**: direct (tmfix − entry) at 300+0 point
+     estimate **≥ +40 Elo** with 95% CI lower bound **> 0**, and anchored
+     (tmfix − classic) − (entry − classic) **≥ +40 Elo** in the same tournament.
+  3. Revert rule: the fix is reverted only if (tmfix − entry) at 300+0 has its 95% CI
+     entirely below 0; failing bar 2 without that keeps the fix un-shipped for ladder
+     claims and sends H4 back for a TM-constant sweep.
+- **(c)** The ladder's fastchess concurrency setting MUST be recorded at harvest — the
+  H3 rerun's co-tenancy guard needs it, and concurrency 1 would retire the guard.
+
+Staged gate commands (run from repo root when the laptop frees; artifact built fresh via
+`bash tools/build/check_entry.sh` first):
+
+```sh
+bash tools/build/pack.sh nnue_4k/pst_entry.py /tmp/entry_tmfix.packed
+nice -n 15 python3 tools/build/legality_gate.py /tmp/entry_tmfix.packed 300 \
+    --nodes=20000 --first-yield=2048        # bar: GATE PASSED, 0 no-move / 0 illegal
+nice -n 15 python3 "$ARENA/mate_gate.py" /tmp/entry_tmfix.packed tests/files/mate1.fen 4
+                                            # bar: 8/8 (mate_gate.py rides with the
+                                            # screen arena; suite is the 8-position
+                                            # tests/files/mate1.fen)
+```

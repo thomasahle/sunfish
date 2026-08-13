@@ -767,27 +767,29 @@ def main():
             times = dict(zip(args[1::2], map(int, args[2::2])))
             side = "wb"[len(hist) % 2 == 0]
             wtime, winc = times.get(side + "time", 60000), times.get(side + "inc", 0)
-            # increment-aware budget; see sunfish_ui/uci.py for the audit
-            # numbers and the safety argument
-            think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1000)
-            # minifier-hide start
-            # SUDDEN DEATH needs a flatter divisor. With winc == 0, /12 spends
-            # 7% of the whole budget on one early move (12.8s of 180s on ply 9
-            # in lichess.org/EAThUL0P) and the game is lost on time at move 73
-            # without a single move overrunning: below 2s the wtime/2 - 1000
-            # cap goes negative, the budget collapses to the 0.05s floor, and
-            # ~200ms/move of unavoidable lag drains the rest.
-            # /40 is what classic uses and classic does not flag, so this is a
-            # constant with production evidence rather than a fit to one game.
+            # TC-conditional budget; see sunfish_ui/uci.py for the increment
+            # audit numbers and the safety argument.
+            # INCREMENT (winc > 0): /12 + 0.9*inc front-loads the middlegame
+            # where depth buys Elo; measured fine at 30+1 and on lichess.
+            # SUDDEN DEATH (winc == 0) needs a flatter divisor: /12 spends 7%
+            # of the whole budget on one early move (12.8s of 180s on ply 9
+            # in lichess.org/EAThUL0P) and the game is lost on time at move
+            # 73 without a single move overrunning: below 2s the
+            # wtime/2 - 1000 cap goes negative, the budget collapses to the
+            # 0.05s floor, and ~200ms/move of unavoidable lag drains the rest.
+            # /40 is what classic uses and classic does not flag -- a constant
+            # with production evidence rather than a fit to one game.
             # Movecount-aware divisors were simulated and are WORSE: a
             # shrinking "moves remaining" divisor spends MORE per move as the
             # game lengthens, which is backwards for sudden death.
-            # TCEC is 1800+3, so winc is always non-zero there and this line
-            # is dead code in the artifact -- which is why it is hidden, and
-            # why the artifact stays byte-for-byte unchanged. The increment
-            # case is identical to the line above by construction.
+            # This branch used to hide behind minifier-hide on the theory that
+            # the artifact only ever plays 1800+3 (TCEC) and winc == 0 was
+            # dead code there. The 300+0 python-league ladder falsified that:
+            # the packed artifact played /12 on 97.2% of 4,158 matched moves
+            # (LOSS_TAXONOMY.md P0) while this source carried the fix. The
+            # branch now SHIPS: a fix that exists in source but not in the
+            # artifact is a defect class, not a byte saving.
             think = min(wtime / (12 if winc else 40) + 0.9 * winc, wtime / 2 - 1000)
-            # minifier-hide end
             # A GUI-supplied movetime is a HARD limit that the GUI itself
             # enforces, so spending all of it forfeits: the node counter is
             # only checked every 2048 nodes, so the search returns at

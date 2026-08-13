@@ -23,17 +23,28 @@ ENGINE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))
                       "sunfish_nnue.py")
 SRC = open(ENGINE).read()
 
-# the dev-build budget line (the artifact keeps the plain /12 line above it)
+# THE budget line. There is exactly one, and it is NOT inside minifier-hide:
+# source and artifact run the same formula. The old layout kept a plain /12
+# line for the artifact and hid the sudden-death branch behind minifier-hide
+# -- and the 300+0 ladder then played the known-bad /12 branch on 97.2% of
+# 4,158 matched moves while the fix sat dead in source (LOSS_TAXONOMY.md P0).
 DEV = re.search(r"^\s+think = min\(wtime / \(12 if winc else 40\) \+ 0\.9 \* winc,"
                 r" wtime / 2 - 1000\)\s*$", SRC, re.M)
-ART = re.search(r"^\s+think = min\(wtime / 12 \+ 0\.9 \* winc,"
-                r" wtime / 2 - 1000\)\s*$", SRC, re.M)
+# the OLD artifact-only /12 policy, kept here as a literal reference so the
+# winc > 0 path is provably unchanged by the unification
+OLD_ART_LINE = "think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1000)"
 
 
-def test_both_budget_lines_present():
-    """dev build gets the sudden-death divisor; the artifact keeps /12."""
-    assert ART, "artifact budget line missing or reshaped"
-    assert DEV, "sudden-death budget line missing or reshaped"
+def test_budget_line_ships_in_the_artifact():
+    """One budget line, outside minifier-hide, so the artifact gets the fix."""
+    assert DEV, "budget line missing or reshaped"
+    assert SRC.count("think = min(wtime") == 1, (
+        "more than one budget line -- the hide-block split is back")
+    # the line must not sit inside a minifier-hide region, or the artifact
+    # silently loses the sudden-death branch again
+    stripped = re.sub(r"# minifier-hide start.*?# minifier-hide end", "", SRC, flags=re.S)
+    assert re.search(r"12 if winc else 40", stripped), (
+        "budget line is inside minifier-hide: artifact would drop the fix")
 
 
 def budget(wtime_ms, winc_ms):
@@ -49,9 +60,10 @@ def budget(wtime_ms, winc_ms):
     return ns["think"] / 1000.0
 
 
-def artifact_budget(wtime_ms, winc_ms):
+def old_artifact_budget(wtime_ms, winc_ms):
+    """the pre-fix artifact policy (/12 unconditionally), from the literal above"""
     ns = {"wtime": wtime_ms, "winc": winc_ms, "min": min}
-    exec(ART.group(0).strip(), ns)
+    exec(OLD_ART_LINE, ns)
     return ns["think"] / 1000.0
 
 
@@ -81,12 +93,14 @@ def test_the_lost_game_would_now_be_survived():
     assert left > 5_000, "only %.1fs left after the lost game's length" % (left / 1000)
 
 
-def test_increment_behaviour_is_byte_identical():
-    """The winc branch must not move: TCEC is 1800+3 and only sees this path."""
+def test_increment_behaviour_unchanged_by_unification():
+    """winc > 0 must budget exactly what the old /12 policy did: that path
+    measured fine at 30+1 and on lichess, so the unification may only change
+    winc == 0."""
     for wtime in (1_000, 30_000, 180_000, 1_800_000):
         for winc in (1, 100, 3_000):
-            assert budget(wtime, winc) == artifact_budget(wtime, winc), (
-                "dev and artifact budgets diverge at wtime=%d winc=%d" % (wtime, winc))
+            assert budget(wtime, winc) == old_artifact_budget(wtime, winc), (
+                "winc > 0 budget moved at wtime=%d winc=%d" % (wtime, winc))
 
 
 def test_tournament_control_unaffected():
