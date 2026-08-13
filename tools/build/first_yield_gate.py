@@ -53,7 +53,10 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = str(HERE.parents[1])
 ENGINE = os.path.abspath(sys.argv[1])
-FENS = sys.argv[2] if len(sys.argv) > 2 else str(HERE / "first_yield_fens.txt")
+# .fen, not .txt: the repo's .gitignore carries a blanket `*.txt`, which is
+# how this project already lost a 15,328-position training set. A gate whose
+# positions are untracked is a gate nobody else can run.
+FENS = sys.argv[2] if len(sys.argv) > 2 else str(HERE / "first_yield_fens.fen")
 WINDOW = 2048            # the engine's own stop-poll granularity
 CONTROL_N = 12           # positions re-checked end to end through real UCI
 assert ENGINE.endswith(".py"), "source entries only: `go nodes` is stripped from the packed artifact"
