@@ -46,6 +46,9 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **THE DISTILLED STUDENT FITS EXACTLY AS WELL AS C2 — and is stably WORSE where it matters** | Same positions, same split: SF **−7.85 ± 0.81**, distilled **−7.70 ± 0.90**. But at phase 18-24 the distilled student is **+7.47 ± 3.14 WORSE than classic on every split**, where the SF student was −8.00 better |
+| 2026-08-13 | **The blocker is the POSITION MIX, not the teacher — and distillation is what makes that cheap to fix** | Classic's loss against our own search at phase 18-24 is **0.007962**, its best band: no headroom, and a global fit spends it to buy the endgame where **65.6%** of positions live |
+| 2026-08-13 | **d8 misses the first-yield gate by ELEVEN NODES** (2,059 vs a 2,048 window) | The margin case the measuring gate exists for. d1 passes at 1,896/2,048 — a 7% margin against the entry's 2.6×. **The 5-byte gamma seed fixes both** (537 and 478) |
 | 2026-08-13 | **TEACHER CHOSEN: our own search at 160,000 nodes — and its value never converges** | 2.8× the measured 30+1 frontier (56,829 nodes), r **0.9919** with a 4× deeper teacher. From 40k up, 21% of positions still move >25 cp per 4× — that is tactics, not tolerance, and 384 parameters cannot hold it |
 | 2026-08-13 | **NEW GATE: first yield. The shipped entry passes at 780 nodes; ALL FOUR fits fail** | C1 32,640, m1 9,088, q8 3,707, C2 2,568 against a 2,048-node window. Measuring the count, not the `(none)` symptom, is what gave it power — the binary form caught only its own reproducer |
 | 2026-08-13 | **LEAD: the `bestmove (none)` class is removable for 5 BYTES at the root's gamma seed** | `gamma = pos.score - 150` takes the worst first yield from 780 to **171** on the entry and from 32,640 to **396** on C1 — every arm passes. 1.0001× nodes to depth 8. Un-suspends mirroring if it screens clean |
@@ -219,9 +222,8 @@ converged value**, not a shallow Stockfish score. Static SF-depth-8 loss is on
 record as anti-correlated with strength (C2 fitted it 5.9% better and played
 −93.8), and the search's own value is the quantity the engine actually
 maximises. This entry is the teacher spec, the budget choice behind it, the
-instruments built to gate what comes out, and one correction. **No student is
-trained on it yet — labelling is in flight — and no Elo is claimed anywhere
-below.**
+instruments built to gate what comes out, one correction, and the students.
+**No Elo is claimed anywhere below.**
 
 ### The frontier the teacher has to beat, measured not assumed
 
@@ -455,6 +457,79 @@ At this loss scale (~0.017) the gradients are ~1e-9 and the **default
 comes back exactly equal to its warm start and every band reads `0.00%`, which
 looks like a result rather than a failure. Caught by a run where *every* number
 was zero; `tolerance_grad=1e-12` is now set explicitly everywhere.
+
+### THE STUDENTS: on the metric, the teacher swap changes NOTHING
+
+19,491 positions labelled (66.6 min, 8 workers), 19,434 kept, 57 dropped as
+mates at the root, mean completed depth 10.10, label sd 366 cp. Both teachers
+trained on **the identical 19,434 positions with the identical FEN-keyed
+split**, each measured against its own classic baseline (the baselines differ
+because the labels differ — 0.017804 for SF, 0.014239 for ours: **the incumbent
+already predicts its own search far better than it predicts Stockfish**, so
+there is less headroom to win).
+
+| | classic | student | improvement |
+|---|---|---|---|
+| SF depth 8, exact | 0.017804 | 0.016443 | **−7.65%** |
+| **our search @160k, exact** | 0.014239 | 0.013131 | **−7.78%** |
+
+Over 12 splits: SF **−7.85 ± 0.81**, distilled **−7.70 ± 0.90**. **They are the
+same number.** Distilling the search's own value does not make the 384-parameter
+model fit better *or* worse in aggregate — which is neither good news nor bad,
+because this is the metric that ranked C2 above classic while C2 played −93.8.
+
+### And on the band structure it is stably WORSE where it matters most
+
+This is the finding. 12 splits, distilled student:
+
+| band | mean | sd | min | max | sign | SF student, same test |
+|---|---|---|---|---|---|---|
+| OVERALL | −7.70 | 0.90 | −9.33 | −6.38 | stable | −7.85 |
+| phase 0-5 | −13.34 | 1.37 | −15.09 | −10.65 | stable | −10.92 |
+| phase 6-11 | −7.32 | 1.65 | −10.73 | −4.70 | stable | −6.11 |
+| phase 12-17 | +0.12 | 1.35 | −1.68 | +3.11 | FLIPS | −2.96 (flips) |
+| **phase 18-24** | **+7.47** | **3.14** | **+2.12** | **+14.13** | **stable** | **−8.00 (stable)** |
+
+**The distilled student is reliably worse than classic in the highest-phase
+band** — every split, by 2 to 14% — where the SF student was reliably *better*.
+Unlike C2's post-mortem, this one does not flip: it is a real property of this
+generator.
+
+The cause is visible in the baselines. Against our own teacher, classic's
+held-out loss at phase 18-24 is **0.007962**, by far its best band: with most
+of the material still on, our own search's value is nearly what classic's table
+already says. There is almost no headroom there, and a global least-squares fit
+spends that band to buy the endgame band, where the loss is large and **65.6%
+of the positions live**.
+
+So the diagnosis that was wrongly attached to C2 turns out to be *true of the
+distilled student*, stably, and for a reason that is now measured rather than
+guessed: **it is the POSITION MIX, not the teacher.** And the position mix is
+exactly what distillation makes cheap to fix — this teacher needs no Stockfish,
+so any number of high-phase positions can be labelled without an external
+dependency. That is the axis the evidence points at, and it is not the axis
+that was just tested.
+
+### Prices and gates
+
+| arm | held-out | packed | vs entry | first yield (max) | legality | mate |
+|---|---|---|---|---|---|---|
+| **d1** (exact) | −7.78% | **3421** | **+71** | 1,896 | 100/100 | 8/8 |
+| **d8** (step 8, K exact) | −7.50% | **3306** | **−44** | **2,059 FAIL** | 100/100 | 8/8 |
+| q16 (step 16) | −6.91% | 3267 | −83 | not gated | — | — |
+
+Decode round trip OK and standalone-in-an-empty-directory OK on all three.
+
+**d8 misses the gate by 11 nodes.** That is the margin case the measuring form
+of the gate exists to catch: one position in 505 needs 2,059 nodes where the
+window is 2,048, so this build emits `bestmove (none)` at some budget. d1
+passes but at **1,896 of 2,048** — a 7% margin against the shipped entry's 2.6×.
+
+**And the search lane's 5-byte seed fixes both**: with
+`gamma = pos.score - 150`, d1's worst goes 1,896 → **537** and d8's 2,059 →
+**478**, both passing comfortably. Every fitted table this lane has produced
+sits near this cliff; the seed is what moves them off it. **The search change is
+a prerequisite for shipping any fitted eval, quantised or not.**
 
 ### Pre-registered, before the labels finish
 
