@@ -195,7 +195,7 @@ theorem nullValue_rep (G : NullGame) (hist : G.Pos → Bool) (p : G.Pos)
   | d + 2 => simp only [nullValue]; rw [if_neg hkg, if_pos hr]
 
 /-- Under `Bounded`, `nullValue` stays in the score band (what validates
-the fresh `Entry(-MATE_UPPER, MATE_UPPER)` default of line 334). -/
+the fresh `(-MATE_UPPER, MATE_UPPER)` default). -/
 theorem nullValue_bounded (G : NullGame) (hist : G.Pos → Bool)
     (hb : Bounded G.toGame) :
     ∀ (d : Nat) (p : G.Pos),
@@ -403,9 +403,9 @@ theorem searchMovesSt_spec {σ α : Type _} (gamma : Int)
         (fun _ => by omega)
 
 /-- The store step on the keyed table: `tablePart2` of Tricks.lean (the
-PLAIN stores of master, `Entry(best, entry.upper)` / `Entry(entry.lower,
-best)`, lines 481-485) re-proved against `nullValue`.  Interior exits
-only: driver probes never reach a store. -/
+PLAIN stores of master, `(best, upper)` / `(lower, best)`) re-proved
+against `nullValue`.  Interior exits only: driver probes never reach a
+store. -/
 theorem cTablePart2_ok (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos]
     (D : Nat) (p : G.Pos) (gamma : Int) (e : Int × Int)
     (r : Int × Table G.toGame)

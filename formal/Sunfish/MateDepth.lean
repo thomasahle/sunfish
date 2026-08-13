@@ -665,7 +665,7 @@ SEARCHED branch while the cap's fail-low branch
 (`if cap < gamma: move, score = None, cap`) still claims the static
 estimate for the SAME `(pos, depth)` key, so `bound()` becomes
 gamma-dependent and the table stores a contradiction: measured,
-`Entry(lower = 47938, upper = 1204)` on one key at depth 2, with twelve
+`(lower = 47938, upper = 1204)` on one key at depth 2, with twelve
 terminal-bench positions and a tt-consistency fortress failing on "ladder
 crossing".  (The mates do arrive -- `mate1.fen` 0/8 to 6/8 at depths 2 and
 3, node battery byte-identical -- so the price is exactly the invariant.)

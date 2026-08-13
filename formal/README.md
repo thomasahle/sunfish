@@ -329,7 +329,7 @@ else: score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
 and the exemption lifts the clamp off the second while the first still claims
 the move is worth at most its static estimate. Both write the same
 `(pos, depth)` table key, so the entry holds both claims at once. The measured
-witness is one key at depth 2 with `Entry(lower=47938, upper=1204)`:
+witness is one key at depth 2 holding `(lower=47938, upper=1204)`:
 `47938 = MATE_LOWER + EVAL_ROUGHNESS` is the exempted mate returning from a
 child checkmated one ply down, `1204` is the same key's static estimate from
 the fail-low branch, and `lower > upper` by 46,734. Twelve
@@ -531,7 +531,7 @@ point is load-bearing in both directions and it is exact:
   move" (`-69290`, not live);
 * `r = MATE_UPPER` at a king-capturable node stays unambiguous, since no mate
   value reaches it;
-* the table's default `Entry(-MATE_UPPER, MATE_UPPER)` still contains every
+* the table's default `(-MATE_UPPER, MATE_UPPER)` still contains every
   value, and the driver's reset `lower = 1 - MATE_UPPER` coincides with the
   deepest value -- the wrinkle `BracketOK`'s `max V (1 - MATE_UPPER)` already
   records;
@@ -1058,7 +1058,7 @@ compared for equality: `score > -MATE_UPPER` and `bound(child, MATE_UPPER, 0)
 below `MATE_LOWER`, never in the gap; searched scores stay strictly below the
 token because the finalizer floors the child at `1 - MATE_UPPER`
 (`searched_score_below_MU`), so reaching the token has king-capture provenance
-(`MU_provenance`); and the seed entry `Entry(-MATE_UPPER, MATE_UPPER)` is
+(`MU_provenance`); and the seed entry `(-MATE_UPPER, MATE_UPPER)` is
 unreturnable at every window the driver uses
 (`tt_sentinel_defaults_never_returned`).
 
@@ -1196,6 +1196,10 @@ King-capture substitution uses the position predicate directly, so its exact
 The model abstracts Python's board representation, move generation, sorting,
 and table implementation. The audit pins the corresponding source regions;
 tests and chess corpora validate those executable primitives.
+
+The Python table interval is now the same plain `(lower, upper)` product used
+by the Lean `Table`; unpacking it by name changes neither the stored pair nor
+the interval-update recurrence.
 
 ## Module guide
 

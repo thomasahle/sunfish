@@ -510,7 +510,7 @@ construction, and we say so again in Section~\ref{sec:lessons}.
     -1.15/{pos.score (QS collapsed)}/{Game.eval : Pos $\to$ $\mathbb{Z}$}/{GameTree.lean},%
     -2.3/{docstring: ``true score s*''}/{negamax : Nat $\to$ Pos $\to$ Int}/{GameTree.lean},%
     -3.45/{bound(): fail-soft best loop,\\ cutoff on best >= gamma}/{bound, searchMoves, BoundSpec}/{Bound.lean},%
-    -4.6/{tp\_score : (pos, depth)\\ $\to$ Entry(lower, upper)}/{Table, TableOK; CTable, CTableOK}/{Tricks, CanNull},%
+    -4.6/{tp\_score : (pos, depth)\\ $\to$ (lower, upper)}/{Table, TableOK; CTable, CTableOK}/{Tricks, CanNull},%
     -5.75/{tp\_move killer, stored only\\ on proven moves}/{KillTable, KillerInv, KillerLegal}/{Killer, Stalemate},%
     -6.9/{null move, repetition, IID\\ (IID/root probes unstored)}/{nullValue, boundNullTT, rootProbe}/{CanNull.lean},%
     -8.05/{futility: yield pos.score + val\\ at depth <= 1 (virtual)}/{futileAt, searchedAt, futTerm}/{Tricks, Stalemate},%
@@ -1002,7 +1002,7 @@ $\ML = 50710$ are sunfish's \texttt{MATE\_UPPER} and
     \fill[blue!70!black] (5.9,0) circle (2.4pt);
     \node[blue!70!black, below] at (5.9,-0.14) {$r$};
     \node[lbl, blue!70!black, anchor=west] at (2.9,-0.78)
-      {$s^* \le r < \gamma$ \quad (stored as \texttt{Entry.upper};
+      {$s^* \le r < \gamma$ \quad (stored as the pair's \texttt{upper};
        MTD-bi sets $\mathit{upper} := r$)};
   \end{scope}
   % ---- Case 2: fail high ----
@@ -1022,7 +1022,7 @@ $\ML = 50710$ are sunfish's \texttt{MATE\_UPPER} and
     \fill[blue!70!black] (5.9,0) circle (2.4pt);
     \node[blue!70!black, below] at (5.9,-0.14) {$r$};
     \node[lbl, blue!70!black, anchor=west] at (2.9,-0.78)
-      {$\gamma \le r \le s^*$ \quad (stored as \texttt{Entry.lower};
+      {$\gamma \le r \le s^*$ \quad (stored as the pair's \texttt{lower};
        MTD-bi sets $\mathit{lower} := r$)};
   \end{scope}
 \end{tikzpicture}
@@ -1762,7 +1762,7 @@ mechanism at \texttt{7fdd741} --- in git history at
   \node[notebox, draw=red!60!black, text width=6.1cm, anchor=north west]
     (res) at (6.6,-3.5)
     {Same table slot $(X, 2)$:\;
-     \texttt{Entry(lower = +10, upper = -50)} ---
+     \texttt{(lower = +10, upper = -50)} ---
      $\mathit{lower} > \mathit{upper}$.  Provably impossible without
      reductions (\texttt{bound\_no\_crossing}).};
 \end{tikzpicture}
@@ -1991,14 +1991,14 @@ At a genuine stalemate the null-move pass cannot score positive, so it
 cannot outbid the exact draw. &
 \texttt{8/8/8/5k1p/3b1P1P/1p1P1P1P/pN1P1P2/K7 w}, static score $+175$:
 the pass honestly consumed $+11$ at a genuine stalemate.  The engine
-stored \texttt{Entry(lower=11, upper=0)}.  Mechanism: at null-depth 1 a
+stored \texttt{(lower=11, upper=0)}.  Mechanism: at null-depth 1 a
 re-frozen stalemate evaluates as \emph{stand-pat}, not as $0$.\\
 \addlinespace
 \texttt{StandPatAtTerminal} &
 At a terminal node the quiescence stand-pat cannot be the fold's
 winner. &
 \texttt{6Rk/6QP/8/8/8/8/8/K7 b} --- every pseudo-move a defended
-capture.  Stored \texttt{Entry(lower=-1711, upper=-47923)}.  A
+capture.  Stored \texttt{(lower=-1711, upper=-47923)}.  A
 dedicated search script found 100+ further natural corner mates with
 the same shape.\\
 \addlinespace
@@ -2064,7 +2064,7 @@ out of the real accumulator).
 This was documentation before it was a mechanism, and the gap between
 those two states cost a real bug: sub-mate futility estimates used to
 be emitted as real yields, which produced the crossed entry
-\texttt{Entry(lower=0, upper=-1054)}.  Making them virtual fixed it.
+\texttt{(lower=0, upper=-1054)}.  Making them virtual fixed it.
 
 \paragraph{2. The fold carries a certificate.}
 Alongside the value accumulator the loop maintains one boolean,

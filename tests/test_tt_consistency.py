@@ -12,7 +12,7 @@ verify-on-suspicion arc.  The doctrine's sharpest lesson:
 Witness 1 (fail-low arm / stand-pat masking): a bare king mated by
 defended pieces - every pseudo-move is a valuable-but-illegal capture,
 so stand-pat carries a normal score while the exact terminal value is
-mate.  Historically produced Entry(lower=-1711, upper=-47923).
+mate.  Historically produced the crossed interval (-1711, -47923).
 
 Witness 2 (fail-high arm / positive null at stalemate): the +175
 "ahead-stalemate" - a king-defended pinned knight, a promotion-blocked
@@ -61,7 +61,7 @@ def load_sunfish():
 
 
 def crossed(searcher):
-    return [(k, e) for k, e in searcher.tp_score.items() if e.lower > e.upper]
+    return [(k, e) for k, e in searcher.tp_score.items() if e[0] > e[1]]
 
 
 @pytest.mark.parametrize("order", ["lower_first", "upper_first"])

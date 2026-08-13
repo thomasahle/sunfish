@@ -316,10 +316,6 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
 class Stop(Exception): pass
 
 
-# lower <= s(pos) <= upper
-Entry = namedtuple("Entry", "lower upper")
-
-
 class Searcher:
     def __init__(self):
         self.tp_score, self.tp_move, self.history = {}, {}, set()
@@ -392,12 +388,13 @@ class Searcher:
         # ONE value function, determined by (pos, depth) alone, and the key
         # needs no flag. (The root's own entry was provably dead weight: the
         # driver picks each gamma strictly inside its bracket, which is the
-        # same two numbers the entry held.) At the root 'entry' stays
-        # unbound - its only other reader is the store below, also skipped.
+        # same two numbers the entry held.) At the root the bounds stay
+        # unbound - their only other reader is the store below, also skipped.
         if not root:
-            entry = self.tp_score.get((pos, depth), Entry(-MATE_UPPER, MATE_UPPER))
-            if entry.lower >= gamma: return entry.lower
-            if entry.upper < gamma: return entry.upper
+            # lower <= s(pos) <= upper
+            lower, upper = self.tp_score.get((pos, depth), (-MATE_UPPER, MATE_UPPER))
+            if lower >= gamma: return lower
+            if upper < gamma: return upper
 
             # Let's not repeat positions. We don't chat
             # - at the root (a driver probe) since it is in history, but not a draw.
@@ -511,7 +508,7 @@ class Searcher:
         # incomparable evaluations of a move breaks this - that is a bug,
         # not a configuration; see formal/README.md.
         if not root:
-            self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)
+            self.tp_score[pos, depth] = (best, upper) if best >= gamma else (lower, best)
         if len(self.tp_score) > TABLE_SIZE:
             del self.tp_score[next(iter(self.tp_score))]
 

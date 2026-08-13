@@ -42,7 +42,7 @@ import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 import sunfish as S
-from sunfish import Entry, MATE_LOWER, MATE_UPPER, Searcher, Stop
+from sunfish import MATE_LOWER, MATE_UPPER, Searcher, Stop
 
 _PINNED = {
     # fuel-oracle null (classic null bounded 2<depth<6,
@@ -186,9 +186,9 @@ class VariantSearcher(Searcher):
             return -MATE_UPPER
 
         if not root:
-            entry = self.tp_score.get((pos, depth), Entry(-MATE_UPPER, MATE_UPPER))
-            if entry.lower >= gamma: return entry.lower
-            if entry.upper < gamma: return entry.upper
+            lower, upper = self.tp_score.get((pos, depth), (-MATE_UPPER, MATE_UPPER))
+            if lower >= gamma: return lower
+            if upper < gamma: return upper
             if depth > 0 and pos in self.history: return 0
 
         def moves():
@@ -241,7 +241,7 @@ class VariantSearcher(Searcher):
             best = mate if pos.rotate(nullmove=True).king_capture() else 0
 
         if not root:
-            self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)
+            self.tp_score[pos, depth] = (best, upper) if best >= gamma else (lower, best)
         if len(self.tp_score) > S.TABLE_SIZE:
             del self.tp_score[next(iter(self.tp_score))]
 

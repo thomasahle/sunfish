@@ -290,7 +290,7 @@ theorem razorVerified_not_sound (R : Int) (hR : R < 2 * MATE_LOWER - 1) :
 window `MATE_LOWER`, the honest search fails HIGH at `MATE_LOWER`
 (a sound lower bound: the mate is real, `cexRz_value_rz`/`cexRz_real`)
 while the razored probe serves a fail-low upper bound below it --
-`Entry(lower, upper)` with `upper < lower`, the exact shape of
+an interval `(lower, upper)` with `upper < lower`, the exact shape of
 `lmr_tt_crossing` that ended re-search LMR. -/
 theorem razor_tt_crossing (R : Int) (hR : R < 2 * MATE_LOWER - 1) :
     MATE_LOWER ≤ boundD2'' (CexRz (razorV R)) gF

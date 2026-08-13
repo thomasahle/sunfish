@@ -100,7 +100,7 @@ def test_terminal_invariants(parts, cls):
             for g in order:
                 if -sf.MATE_UPPER < g <= sf.MATE_UPPER:
                     s.bound(pos, g, d)
-        assert not any(e.lower > e.upper for e in s.tp_score.values()), "ladder crossing"
+        assert not any(lower > upper for lower, upper in s.tp_score.values()), "ladder crossing"
 
     # 2. Driver run: ordered table, converged bracket, legal root move.
     sf.pst["K"] = sf.K_MID
@@ -116,7 +116,7 @@ def test_terminal_invariants(parts, cls):
         last = depth
         if depth > 4 or s.nodes > 250_000:
             break
-    assert not any(e.lower > e.upper for e in s.tp_score.values()), "driver crossing"
+    assert not any(lower > upper for lower, upper in s.tp_score.values()), "driver crossing"
     lo, up = brackets.get(min(last, 4), brackets[last])
     root_move = s.tp_move.get(pos)
     if root_move is not None:

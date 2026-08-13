@@ -208,7 +208,7 @@ theorem negamaxDraw_kingGone (G : NullGame) (d : Nat) (p : G.Pos)
   | succ d => simp only [negamaxDraw]; rw [if_pos h]
 
 /-- With a band-bounded evaluation, the draw-aware value stays in the band
-(the fact that makes `Entry(-MATE_UPPER, MATE_UPPER)` a valid fresh table
+(the fact that makes `(-MATE_UPPER, MATE_UPPER)` a valid fresh table
 entry, cf. `TableOK`). -/
 theorem negamaxDraw_bounded (G : NullGame) (hB : Bounded G.toGame) :
     ∀ (d : Nat) (p : G.Pos),
@@ -2639,7 +2639,7 @@ the `live`/fold path and is the next arc's target.  The futility-yield
 caution recorded here in earlier revisions -- a truthy `Move` on an
 unsearched child letting the `live` bit claim mobility the search never
 earned -- turned out to be a LIVE BUG (three bench witnesses; crossed
-entry `Entry(lower=0, upper=-1054)` at a stalemated child) and is now
+interval `(lower=0, upper=-1054)` at a stalemated child) and is now
 resolved IN CODE: the kcx landing makes sub-mate futility yields
 VIRTUAL (line 417), so every truthy yield is a searched real result or
 the mate-case futility yield, itself a real king capture.  The model
@@ -2814,7 +2814,7 @@ prices an UNSEARCHED child and goes out with `move = None`.  Only the
 first may feed the legality evidence bit; a futility estimate must
 raise `best` without ever raising `live`.  (That distinction was once
 recorded here as a caution, then turned out to be a live engine bug --
-the crossed `Entry(lower=0, upper=-1054)` -- so the model keeps the
+the crossed interval `(lower=0, upper=-1054)` -- so the model keeps the
 three species apart by construction.)
 
 `futileAt` is the engine's futility test read through
@@ -4296,7 +4296,7 @@ if val >= MATE_LOWER else (None, pos.score + val)`): a sub-mate
 futility estimate prices an UNSEARCHED (possibly illegal) move, so its
 truthy `Move` existed only to lie to the `live` bit -- the yield-species
 typing caution was a live bug (three bench witnesses; crossed entry
-`Entry(lower=0, upper=-1054)` at a stalemated child), now resolved in
+interval `(lower=0, upper=-1054)` at a stalemated child), now resolved in
 code: every truthy yield is a searched real result (or the mate-case
 futility yield, a real king capture that can cut).
 

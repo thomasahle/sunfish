@@ -92,21 +92,21 @@ the former `boundNull`/`boundNull_spec` here are superseded by
 
 /-! ### (c) The transposition-table invariant  (STATED)
 
-sunfish.py lines 288-289, 324-336, 481-485.  An `Entry(lower, upper)` stored
+The `tp_score` lookup and store use a `(lower, upper)` pair.  A pair stored
 under key `(pos, depth)` promises `lower ≤ s* ≤ upper` for the
-negamax value `s*` of that position at that depth; the comment at line 288
-(`# lower <= s(pos) <= upper`) *is* `TableOK`.  Lookups may then answer a
-query without searching (lines 309-310), and every exit of `bound` tightens
-one side of the entry (lines 415-418).
+negamax value `s*` of that position at that depth; the comment above the
+table probe (`# lower <= s(pos) <= upper`) *is* `TableOK`.  Lookups may
+then answer a query without searching (lines 309-310), and every exit of
+`bound` tightens one side of the entry (lines 415-418).
 
 `Bounded` is needed because a fresh entry starts as
-`Entry(-MATE_UPPER, MATE_UPPER)` (line 308): that is only a valid bracket if
+`(-MATE_UPPER, MATE_UPPER)`: that is only a valid bracket if
 all scores actually live in `[-MATE_UPPER, MATE_UPPER]`, which sunfish
 guarantees by construction of the evaluation.
 -/
 
 /-- A transposition table, abstracted as a partial map from (depth,
-position) to an `Entry (lower, upper)` pair.  (Sunfish clamps QS depths
+position) to a `(lower, upper)` pair.  (Sunfish clamps QS depths
 to 0, line 315 -- a refinement of the same invariant.  Since `eda66ee`
 the key is exactly `(pos, depth)`: the only deviant-semantics calls, the
 driver probes, never touch the table -- see `Sunfish/CanNull.lean`,
@@ -115,7 +115,7 @@ structure Table (G : Game) where
   find : Nat → G.Pos → Option (Int × Int)
 
 /-- **The table invariant**: every stored entry brackets the true negamax
-value at its depth.  This is sunfish.py line 275: `# lower <= s(pos) <= upper`. -/
+value at its depth.  This is the table probe's `# lower <= s(pos) <= upper`. -/
 def TableOK (G : Game) (t : Table G) : Prop :=
   ∀ (d : Nat) (p : G.Pos) (lo hi : Int),
     t.find d p = some (lo, hi) → lo ≤ negamax G d p ∧ negamax G d p ≤ hi
@@ -144,7 +144,7 @@ theorem tableOK_store {G : Game} [DecidableEq G.Pos] {t : Table G} {d : Nat}
     exact ht d' p' lo' hi' hfind
 
 /-- Under `Bounded`, negamax values live in the band -- what makes the
-fresh entry `Entry(-MATE_UPPER, MATE_UPPER)` of line 308 a valid bracket. -/
+fresh pair `(-MATE_UPPER, MATE_UPPER)` a valid bracket. -/
 theorem negamax_bounded (G : Game) (hb : Bounded G) :
     ∀ (d : Nat) (p : G.Pos),
       -MATE_UPPER ≤ negamax G d p ∧ negamax G d p ≤ MATE_UPPER := by
@@ -192,7 +192,7 @@ def boundTT (G : Game) [DecidableEq G.Pos] :
     Nat → G.Pos → Int → Table G → Int × Table G
   | 0, p, _gamma, t => (G.eval p, t)
   | d + 1, p, gamma, t =>
-    -- entry = tp_score.get(..., Entry(-MATE_UPPER, MATE_UPPER))  (line 308)
+    -- entry = tp_score.get(..., (-MATE_UPPER, MATE_UPPER))
     if gamma ≤ ((t.find (d + 1) p).getD (LOSS, MATE_UPPER)).1 then
       (((t.find (d + 1) p).getD (LOSS, MATE_UPPER)).1, t)   -- line 309
     else if ((t.find (d + 1) p).getD (LOSS, MATE_UPPER)).2 < gamma then
@@ -311,14 +311,14 @@ theorem boundTT_spec (G : Game) [DecidableEq G.Pos] (hb : Bounded G) :
         exact ht (d + 1) p e.1 e.2 (by rw [hfind])
     simp only [boundTT]
     by_cases hlo : gamma ≤ ((t.find (d + 1) p).getD (LOSS, MATE_UPPER)).1
-    · -- Entry lower already answers (line 309): a valid lower bound.
+    · -- The stored lower already answers: a valid lower bound.
       rw [if_pos hlo]
       refine ⟨⟨fun _ => ?_, fun hlt => ?_⟩, ht⟩
       · exact hE.1
       · omega
     · rw [if_neg hlo]
       by_cases hhi : ((t.find (d + 1) p).getD (LOSS, MATE_UPPER)).2 < gamma
-      · -- Entry upper already answers (line 310): a valid upper bound.
+      · -- The stored upper already answers: a valid upper bound.
         rw [if_pos hhi]
         refine ⟨⟨fun hge => ?_, fun _ => ?_⟩, ht⟩
         · omega

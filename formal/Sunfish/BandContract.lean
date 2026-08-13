@@ -45,7 +45,7 @@ Measured on the shipped engine, both branches of the same experiment:
 `yield move, val` alone fails 104 of the 149 `tests/test_terminal_bench.py`
 cases (the stalemate witness `8/3p4/3P4/3P4/3P4/1pb5/1Nk5/K7 w` returns -59977
 instead of 0, gamma-dependently, leaving the crossed entry
-`Entry(lower=0, upper=-200)`); with the live test relaxed to `score >
+`(lower=0, upper=-200)`); with the live test relaxed to `score >
 -MATE_LOWER` all 149 pass again, but `test_qs_stratified_contract`,
 `test_legality_oracle_vs_python_chess` and
 `test_king_capture_keeps_exact_sentinel` still fail, and soundness then rests
@@ -732,7 +732,7 @@ places rather than numeric in one.
   `(pos, depth)` and capture-ness is a function of `pos` alone, so an entry
   holding `MATE_UPPER` belongs to a capturable position permanently;
   `tp_score` is cleared at the top of every `search()`; and the seed entry
-  `Entry(-MATE_UPPER, MATE_UPPER)` can never be RETURNED, because the
+  `(-MATE_UPPER, MATE_UPPER)` can never be RETURNED, because the
   driver's window range excludes both comparisons
   (`tt_sentinel_defaults_never_returned`). -/
 
@@ -751,9 +751,9 @@ theorem MU_provenance {α : Type _} (gamma : Int) (f : α → Int) (ms : List α
   have hLOSS : LOSS = -MATE_UPPER := rfl
   exact searchMoves_exists_ge gamma f ms LOSS MATE_UPPER (by omega) h
 
-/-- **The seed entry is unreturnable.**  `Entry(-MATE_UPPER, MATE_UPPER)` is
-the table's default, and the two probe tests are `entry.lower >= gamma` and
-`entry.upper < gamma`; the driver's own window range refutes both, so a
+/-- **The seed entry is unreturnable.**  `(-MATE_UPPER, MATE_UPPER)` is
+the table's default, and the two probe tests are `lower >= gamma` and
+`upper < gamma`; the driver's own window range refutes both, so a
 sentinel can never leave the table it never entered. -/
 theorem tt_sentinel_defaults_never_returned {gamma : Int}
     (h1 : -MATE_UPPER < gamma) (h2 : gamma ≤ MATE_UPPER) :
