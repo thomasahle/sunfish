@@ -259,9 +259,11 @@ The model abstracts Python's board representation, move generation, sorting,
 and table implementation. The audit pins the corresponding source regions;
 tests and chess corpora validate those executable primitives.
 
-IID starts at depth 4 because quiescence cannot write `tp_move`.
-`CanNull.lean` keeps a uniform recurrence at depth 3; its depth-zero root
-transform is the identity, so the model and source are extensionally equal.
+Internal iterative deepening is gone from the source: an interior node no
+longer runs a shallow driver probe to seed `tp_move`. `CanNull.lean` drops
+the table transform that modelled it, so `boundNullTT` is no longer mutual
+-- a `root = true` node is reachable only from `search`, and `rootProbe_spec`
+now describes the search root alone.
 
 ## Module guide
 

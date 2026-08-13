@@ -17,7 +17,7 @@ The proven model keeps exactly the skeleton of sunfish's move loop
 (line 376: `-self.bound(pos.move(move), 1 - gamma, depth - 1)`).
 Everything else -- the transposition table (the `tp_score` lookup and
 the table-part-2 store), the repetition check, the null move, the QS
-stand-pat and futility pruning, killer/IID, and the stalemate
+stand-pat and futility pruning, the killer yield, and the stalemate
 correction -- is deliberately absent here; the interesting ones are
 stated (with the hypotheses they need) in `Sunfish/Tricks.lean` and
 `Sunfish/Stalemate.lean`.  (Anchors, not line numbers: this file's

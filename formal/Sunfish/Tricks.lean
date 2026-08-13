@@ -81,10 +81,10 @@ the former `boundNull`/`boundNull_spec` here are superseded by
   -- ONE function, no flag -- with a point spec, and the
   `(pos, depth)`-keyed table stays consistent.  Zugzwang cannot break
   self-consistency.
-* `rootProbe_spec` (PROVEN, unconditional): the driver probes (the
-  search root and IID, `root=True`) skip the table in both directions
-  and store nothing; they bracket their own `rootValue` and cannot
-  disturb the table invariant.
+* `rootProbe_spec` (PROVEN, unconditional): the driver probe (the
+  search root, `root=True`) skips the table in both directions and
+  stores nothing; it brackets its own `rootValue` and cannot disturb
+  the table invariant.
 * `nullValue_plain` (PROVEN under `NullBetOK`): relating `nullValue` to
   the null-free `plainValue` is where the zugzwang bet lives -- `NullOK`
   above is its same-depth core, `NullBetOK` its code-exact form with the
@@ -375,7 +375,7 @@ sunfish sidesteps this by having no recapture extension: its QS (depth 0
 region, lines 369-406) re-derives capture information from `pos` itself via
 `pos.value(move)`, so its value IS a function of `pos` alone, and
 `(pos, depth)` is an honest key.  `can_null` was the same phenomenon in
-miniature: while root/IID calls could store, their no-null,
+miniature: while driver probes could store, their no-null,
 no-repetition semantics changed the value, so the flag had to be part of
 the key; at `eda66ee` those calls became table-invisible (unstored in
 both directions) and the flag left the key with them

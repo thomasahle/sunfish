@@ -45,9 +45,10 @@ Store discipline (sunfish.py lines 382-387): `tp_move[pos] = move` happens
 only on a fail-high cutoff and only when `move is not None`; the null-move
 and stand-pat yields carry `None` and store nothing, and deletions
 (eviction, line 386-387, or a new game) only forget entries, which
-trivially preserves the invariant.  sunfish's IID (lines 344-346) stores
-through a recursive `bound` call at the same position and smaller depth,
-so it is covered by the same induction and not modeled separately.
+trivially preserves the invariant.  (sunfish used to seed the killer
+with an IID probe -- a recursive `bound` at the same position and
+smaller depth, covered by the same induction; it was deleted, so the
+only writer left is the cutoff store above.)
 
 The model omits the TT-score table and the null move (simplification 5 of
 the proof architecture); the null-move residual exception is stated as its
@@ -173,8 +174,7 @@ def killLoop (G : Game) [DecidableEq G.Pos] (gamma : Int)
 
 Not modeled: the TT-score table, null move (stores nothing; residual
 exception below), QS/futility (the depth ≤ 1 `MATE_UPPER` shortcut of line
-371 reports the same sentinel our capture-first head does), IID (a
-recursive call at the same position, covered by the depth induction). -/
+371 reports the same sentinel our capture-first head does). -/
 def boundKill (G : Game) [DecidableEq G.Pos] :
     Nat → G.Pos → Int → KTable G → Int × KTable G
   | 0, p, _gamma, t => ((if G.eval p ≤ -MATE_LOWER then -MATE_UPPER else G.eval p), t)

@@ -15,9 +15,10 @@ audit of sunfish.py lines 285-518 at that commit.
   (`depth > 0 and pos in self.history`, line 341) is always on; lookups
   (334-336) and stores (481-485) go through the table under the key
   `(pos, depth)` -- no flag.
-* DRIVER probes (`root=True`: the search root, line 512, and IID, line
-  381): skip the table in BOTH directions, skip the repetition-0 and
-  the null option, and store nothing.  Every entry in the table
+* The DRIVER probe (`root=True`: the search root, the sole caller
+  since IID was deleted -- see below): skips the table in BOTH
+  directions, skips the repetition-0 and the null option, and stores
+  nothing.  Every entry in the table
   therefore describes ONE value function -- `nullValue` below,
   determined by (pos, depth) and the per-search `history` -- and the
   doctrine's invariant ("every stored bound describes one value
@@ -42,16 +43,15 @@ THE COLLAPSED STORY (was: a two-function layering keyed by
   optional: the root position sits in `history`, so interior semantics
   would answer the root probe with the repetition 0 -- "it is in
   history, but not a draw".)
-* IID (line 381) is the same rootProbe shape at `depth - 3`, and stores
-  nothing under its own key; its purpose -- killer arrival via
-  `tp_move` fail-highs inside the probe -- is `Sunfish/Killer.lean`'s
-  territory, unchanged here.  The source guard is now
-  `not killer and depth > 3`, since a depth-3 probe would enter
-  quiescence and cannot store a killer.  This model collapses depth-zero
-  quiescence to `eval`, so the corresponding transform in its uniform
-  recurrence is definitionally the identity on the table.  At greater
-  depths the probe's table effect is its children's interior stores,
-  modeled as the table component of the root recursion.
+* IID IS GONE.  The source used to run a second rootProbe at
+  `depth - 3` from inside `moves()` whenever no killer was registered,
+  purely for its table effect (killer arrival via `tp_move`
+  fail-highs).  It was deleted -- measured, see the PR -- so an
+  interior node now runs null yield then move loop with NO table
+  transform in between, and a driver probe goes straight to its move
+  loop.  `boundNullTT` is correspondingly non-mutual: `root = true`
+  nodes are reachable only from `search`, never from an interior node.
+  `rootProbe_spec` stays because the search root still needs it.
 * `nullValue_plain` (PROVEN under `NullBetOK`): relating `nullValue` to
   the null-free `plainValue` is where the null-move BET lives.
   Zugzwang only ever threatens this bridge, never self-consistency: a
@@ -66,12 +66,12 @@ Exactness notes from the audit (those that survive the collapse):
   exits store through Table part 2 (481-485, the plain stores =
   `tablePart2` of `Sunfish/Tricks.lean`, reused here); driver probes
   return without storing (the store sits under `if not root`).
-* The generator's LAZINESS is semantically load-bearing (a surprise of
-  the original audit, still true): the null yield is pulled first, and
-  if it cuts off, the IID recursion never runs -- so the table state
-  differs depending on the cutoff.  `cNodeTail` therefore applies the
-  IID table-effect only on the no-cutoff path.  A model that ran all
-  yields eagerly would mis-model `tp_score`.
+* The generator's LAZINESS was semantically load-bearing while IID
+  existed: the null yield is pulled first, and a cutoff there skipped
+  the IID recursion, so the table state depended on the cutoff.  With
+  IID deleted the only thing a null cutoff skips is the move loop,
+  which `cNodeTail` already models by branching on the cutoff.  A model
+  that ran all yields eagerly would still mis-model `tp_score`.
 * `history` is a FIXED per-search parameter here (`hist`);
   `ctableOK_empty` below is the invariant fact that justifies sunfish
   clearing `tp_score` whenever `history` changes -- the table invariant
@@ -433,39 +433,35 @@ theorem cTablePart2_ok (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos
 
 /-- The tail of a searched INTERIOR node: optional null yield first
 (whose cutoff skips everything else -- the generator's laziness), then
-the IID table effect, then the move loop; plain keyed store on every
-exit. -/
+the move loop; plain keyed store on every exit. -/
 def cNodeTail (G : NullGame) [DecidableEq G.Pos] (gamma : Int) (D : Nat)
     (p : G.Pos) (e : Int × Int)
-    (iid : Table G.toGame → Table G.toGame)
     (f : G.Pos → Table G.toGame → Int × Table G.toGame)
     (pass? : Option (Table G.toGame → Int × Table G.toGame))
     (t : Table G.toGame) : Int × Table G.toGame :=
   match pass? with
   | some pf =>
     if gamma ≤ max LOSS (-(pf t).1) then
-      -- Null cutoff: the loop breaks before pulling another yield, so
-      -- the IID recursion never runs (laziness, see module comment).
+      -- Null cutoff: the loop breaks before pulling another yield
+      -- (the generator's laziness, see module comment).
       tablePart2 G.toGame D p gamma e (max LOSS (-(pf t).1), (pf t).2)
     else
       tablePart2 G.toGame D p gamma e
-        (searchMovesSt gamma f (G.moves p) (max LOSS (-(pf t).1)) (iid (pf t).2))
+        (searchMovesSt gamma f (G.moves p) (max LOSS (-(pf t).1)) (pf t).2)
   | none =>
     tablePart2 G.toGame D p gamma e
-      (searchMovesSt gamma f (G.moves p) LOSS (iid t))
+      (searchMovesSt gamma f (G.moves p) LOSS t)
 
 /-- The node-tail lemma: given a valid old entry, the value-shape
-equation for this node, spec/preservation of children and IID, and the
+equation for this node, spec/preservation of the children, and the
 null-yield clauses when present, the tail satisfies the point spec
 against `nullValue` and preserves the invariant. -/
 theorem cNodeTail_spec (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos]
     (gamma : Int) (D : Nat) (p : G.Pos) (e : Int × Int)
-    (iid : Table G.toGame → Table G.toGame)
     (f : G.Pos → Table G.toGame → Int × Table G.toGame)
     (pass? : Option (Table G.toGame → Int × Table G.toGame))
     (t : Table G.toGame) (w : G.Pos → Int) (acc0 : Int)
     (ht : CTableOK G hist t)
-    (hiid : ∀ s, CTableOK G hist s → CTableOK G hist (iid s))
     (hf : ∀ (m : G.Pos) (s : Table G.toGame), CTableOK G hist s →
       CTableOK G hist (f m s).2 ∧
       (gamma ≤ (f m s).1 → (f m s).1 ≤ w m) ∧
@@ -478,21 +474,21 @@ theorem cNodeTail_spec (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos
       (gamma ≤ max LOSS (-(pf t).1) → max LOSS (-(pf t).1) ≤ acc0) ∧
       (max LOSS (-(pf t).1) < gamma → acc0 ≤ max LOSS (-(pf t).1)))
     (hnone : pass? = none → acc0 = LOSS) :
-    ((gamma ≤ (cNodeTail G gamma D p e iid f pass? t).1 →
-      (cNodeTail G gamma D p e iid f pass? t).1 ≤ nullValue G hist D p) ∧
-     ((cNodeTail G gamma D p e iid f pass? t).1 < gamma →
-      nullValue G hist D p ≤ (cNodeTail G gamma D p e iid f pass? t).1)) ∧
-    CTableOK G hist (cNodeTail G gamma D p e iid f pass? t).2 := by
+    ((gamma ≤ (cNodeTail G gamma D p e f pass? t).1 →
+      (cNodeTail G gamma D p e f pass? t).1 ≤ nullValue G hist D p) ∧
+     ((cNodeTail G gamma D p e f pass? t).1 < gamma →
+      nullValue G hist D p ≤ (cNodeTail G gamma D p e f pass? t).1)) ∧
+    CTableOK G hist (cNodeTail G gamma D p e f pass? t).2 := by
   cases pass? with
   | none =>
     have hacc := hnone rfl
     subst hacc
     have hloop := searchMovesSt_spec gamma f w (CTableOK G hist) hf
-      (G.moves p) LOSS LOSS (iid t) (hiid t ht)
+      (G.moves p) LOSS LOSS t ht
       (fun _ => Int.le_refl _) (fun _ => Int.le_refl _)
     simp only [cNodeTail]
     have htp := cTablePart2_ok G hist D p gamma e
-      (searchMovesSt gamma f (G.moves p) LOSS (iid t))
+      (searchMovesSt gamma f (G.moves p) LOSS t)
       hloop.1 he1 he2
       (fun hge => by rw [hV]; exact hloop.2.1 hge)
       (fun hlt => by rw [hV]; exact hloop.2.2 hlt)
@@ -527,10 +523,10 @@ theorem cNodeTail_spec (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos
         omega
     · rw [if_neg hcut]
       have hloop := searchMovesSt_spec gamma f w (CTableOK G hist) hf
-        (G.moves p) (max LOSS (-(pf t).1)) acc0 (iid (pf t).2)
-        (hiid _ hp.1) hp.2.1 hp.2.2
+        (G.moves p) (max LOSS (-(pf t).1)) acc0 (pf t).2
+        hp.1 hp.2.1 hp.2.2
       have htp := cTablePart2_ok G hist D p gamma e
-        (searchMovesSt gamma f (G.moves p) (max LOSS (-(pf t).1)) (iid (pf t).2))
+        (searchMovesSt gamma f (G.moves p) (max LOSS (-(pf t).1)) (pf t).2)
         hloop.1 he1 he2
         (fun hge => by rw [hV]; exact hloop.2.1 hge)
         (fun hlt => by rw [hV]; exact hloop.2.2 hlt)
@@ -544,13 +540,10 @@ theorem cNodeTail_spec (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos
 
 /-- `bound` with the full flagless mechanics.  Interior calls
 (`root = false`): king-gone (321), keyed lookup (334-336), repetition
-(341), null move (364-365), IID as an unstored driver probe (381,
-result discarded, table kept), move loop, plain keyed store (481-485).
-Driver probes (`root = true`, the search root and IID): king-gone, then
+(341), null move (364-365), move loop, plain keyed store (481-485).
+The driver probe (`root = true`, the search root): king-gone, then
 straight to the move loop over ordinary interior children -- no lookup,
-no repetition-0, no null yield, no store. Above depth 3 the probe still
-runs its own nested IID (table effect only); at depth 3 the model's
-depth-zero transform is the identity noted above. -/
+no repetition-0, no null yield, no store. -/
 def boundNullTT (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos] :
     Nat → Bool → G.Pos → Int → Table G.toGame → Int × Table G.toGame
   | 0, _, p, _gamma, t =>
@@ -564,7 +557,6 @@ def boundNullTT (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos] :
     else if hist p = true then (0, t)
     else
       cNodeTail G gamma 1 p ((t.find 1 p).getD (LOSS, MATE_UPPER))
-        (fun s => s)
         (fun m t' => (-(boundNullTT G hist 0 false m (1 - gamma) t').1,
           (boundNullTT G hist 0 false m (1 - gamma) t').2))
         none t
@@ -584,7 +576,6 @@ def boundNullTT (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos] :
     else if hist p = true then (0, t)
     else
       cNodeTail G gamma 2 p ((t.find 2 p).getD (LOSS, MATE_UPPER))
-        (fun s => s)
         (fun m t' => (-(boundNullTT G hist 1 false m (1 - gamma) t').1,
           (boundNullTT G hist 1 false m (1 - gamma) t').2))
         none t
@@ -604,7 +595,6 @@ def boundNullTT (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos] :
     else if hist p = true then (0, t)
     else
       cNodeTail G gamma (d + 3) p ((t.find (d + 3) p).getD (LOSS, MATE_UPPER))
-        (fun t' => (boundNullTT G hist d true p gamma t').2)
         (fun m t' => (-(boundNullTT G hist (d + 2) false m (1 - gamma) t').1,
           (boundNullTT G hist (d + 2) false m (1 - gamma) t').2))
         (if nullGuard G.toGame p then
@@ -617,13 +607,12 @@ def boundNullTT (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos] :
       searchMovesSt gamma
         (fun m t' => (-(boundNullTT G hist (d + 2) false m (1 - gamma) t').1,
           (boundNullTT G hist (d + 2) false m (1 - gamma) t').2))
-        (G.moves p) LOSS ((boundNullTT G hist d true p gamma t).2)
+        (G.moves p) LOSS t
 
 /-- The master induction: interior calls bracket `nullValue`, driver
 probes bracket `rootValue`, and BOTH preserve the `(pos, depth)`-keyed
-invariant.  One induction because the two paths interleave: a driver
-probe's children are interior searches, and an interior node's IID is a
-driver probe. -/
+invariant.  One induction because a driver probe's children are
+interior searches at the depth below. -/
 theorem boundNullTT_spec_all (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos]
     (hb : Bounded G.toGame) :
     ∀ (d : Nat) (p : G.Pos) (gamma : Int) (t : Table G.toGame),
@@ -696,7 +685,6 @@ theorem boundNullTT_spec_all (G : NullGame) (hist : G.Pos → Bool) [DecidableEq
               else if hist p = true then (0, t)
               else
                 cNodeTail G gamma 1 p ((t.find 1 p).getD (LOSS, MATE_UPPER))
-                  (fun s => s)
                   (fun m t' => (-(boundNullTT G hist 0 false m (1 - gamma) t').1,
                     (boundNullTT G hist 0 false m (1 - gamma) t').2))
                   none t) := rfl
@@ -727,12 +715,11 @@ theorem boundNullTT_spec_all (G : NullGame) (hist : G.Pos → Bool) [DecidableEq
                   rw [if_neg hkg, if_neg hrep]
                 exact cNodeTail_spec G hist gamma 1 p
                   ((t.find 1 p).getD (LOSS, MATE_UPPER))
-                  (fun s => s)
                   (fun m t' => (-(boundNullTT G hist 0 false m (1 - gamma) t').1,
                     (boundNullTT G hist 0 false m (1 - gamma) t').2))
                   none t
                   (fun m => -(nullValue G hist 0 m)) LOSS
-                  ht (fun s hs => hs) hchild hE.1 hE.2 hV
+                  ht hchild hE.1 hE.2 hV
                   (fun pf hpf => Option.noConfusion hpf)
                   (fun _ => rfl)
       · -- Driver probe (root = true).
@@ -795,7 +782,6 @@ theorem boundNullTT_spec_all (G : NullGame) (hist : G.Pos → Bool) [DecidableEq
               else if hist p = true then (0, t)
               else
                 cNodeTail G gamma 2 p ((t.find 2 p).getD (LOSS, MATE_UPPER))
-                  (fun s => s)
                   (fun m t' => (-(boundNullTT G hist 1 false m (1 - gamma) t').1,
                     (boundNullTT G hist 1 false m (1 - gamma) t').2))
                   none t) := rfl
@@ -826,12 +812,11 @@ theorem boundNullTT_spec_all (G : NullGame) (hist : G.Pos → Bool) [DecidableEq
                   rw [if_neg hkg, if_neg hrep]
                 exact cNodeTail_spec G hist gamma 2 p
                   ((t.find 2 p).getD (LOSS, MATE_UPPER))
-                  (fun s => s)
                   (fun m t' => (-(boundNullTT G hist 1 false m (1 - gamma) t').1,
                     (boundNullTT G hist 1 false m (1 - gamma) t').2))
                   none t
                   (fun m => -(nullValue G hist 1 m)) LOSS
-                  ht (fun s hs => hs) hchild hE.1 hE.2 hV
+                  ht hchild hE.1 hE.2 hV
                   (fun pf hpf => Option.noConfusion hpf)
                   (fun _ => rfl)
       · -- Driver probe (root = true).
@@ -883,9 +868,6 @@ theorem boundNullTT_spec_all (G : NullGame) (hist : G.Pos → Bool) [DecidableEq
         refine ⟨hih.2, fun hge => ?_, fun hlt => ?_⟩
         · have := h2 (by omega); omega
         · have := h1 (by omega); omega
-      have hiid : ∀ s, CTableOK G hist s →
-          CTableOK G hist ((boundNullTT G hist d true p gamma s).2) :=
-        fun s hs => ((ihn d (by omega) p gamma s hs).2).2
       constructor
       · -- Interior (root = false).
         simp only [boundNullTT]
@@ -918,14 +900,13 @@ theorem boundNullTT_spec_all (G : NullGame) (hist : G.Pos → Bool) [DecidableEq
                     rw [if_neg hkg, if_neg hrep, if_pos hg]
                   refine cNodeTail_spec G hist gamma (d + 3) p
                     ((t.find (d + 3) p).getD (LOSS, MATE_UPPER))
-                    (fun t' => (boundNullTT G hist d true p gamma t').2)
                     (fun m t' => (-(boundNullTT G hist (d + 2) false m (1 - gamma) t').1,
                       (boundNullTT G hist (d + 2) false m (1 - gamma) t').2))
                     (some (fun t' => boundNullTT G hist d false (G.pass p) (1 - gamma) t'))
                     t
                     (fun m => -(nullValue G hist (d + 2) m))
                     (max LOSS (-(nullValue G hist d (G.pass p))))
-                    ht hiid hchild hE.1 hE.2 hV ?_ ?_
+                    ht hchild hE.1 hE.2 hV ?_ ?_
                   · intro pf hpf
                     injection hpf with hpf
                     subst hpf
@@ -954,17 +935,15 @@ theorem boundNullTT_spec_all (G : NullGame) (hist : G.Pos → Bool) [DecidableEq
                     rw [if_neg hkg, if_neg hrep, if_neg hg]
                   exact cNodeTail_spec G hist gamma (d + 3) p
                     ((t.find (d + 3) p).getD (LOSS, MATE_UPPER))
-                    (fun t' => (boundNullTT G hist d true p gamma t').2)
                     (fun m t' => (-(boundNullTT G hist (d + 2) false m (1 - gamma) t').1,
                       (boundNullTT G hist (d + 2) false m (1 - gamma) t').2))
                     none t
                     (fun m => -(nullValue G hist (d + 2) m)) LOSS
-                    ht hiid hchild hE.1 hE.2 hV
+                    ht hchild hE.1 hE.2 hV
                     (fun pf hpf => Option.noConfusion hpf)
                     (fun _ => rfl)
       · -- Driver probe (root = true): no lookup, no repetition, no null,
-        -- no store; the nested IID's interior children are the only
-        -- table effect.
+        -- no store; its interior children are the only table effect.
         simp only [boundNullTT]
         by_cases hkg : G.eval p ≤ -MATE_LOWER
         · rw [if_pos hkg]
@@ -987,8 +966,7 @@ theorem boundNullTT_spec_all (G : NullGame) (hist : G.Pos → Bool) [DecidableEq
             (fun m t' => (-(boundNullTT G hist (d + 2) false m (1 - gamma) t').1,
               (boundNullTT G hist (d + 2) false m (1 - gamma) t').2))
             (fun m => -(nullValue G hist (d + 2) m)) (CTableOK G hist) hchild
-            (G.moves p) LOSS LOSS ((boundNullTT G hist d true p gamma t).2)
-            (hiid t ht)
+            (G.moves p) LOSS LOSS t ht
             (fun _ => Int.le_refl _) (fun _ => Int.le_refl _)
           refine ⟨⟨fun hge => ?_, fun hlt => ?_⟩, hloop.1⟩
           · rw [hV]; exact hloop.2.1 hge
@@ -1013,9 +991,9 @@ theorem boundNullTT_spec (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.P
 /-! ### The driver probe -/
 
 /-- The driver probe -- `bound(pos, gamma, depth, root=True)`, used by
-the MTD-bi driver (line 512) and by IID (line 381, at `depth - 3`): the
-same move-loop recursion with no table access, no repetition-0 and no
-null yield; its children are ordinary interior searches. -/
+the MTD-bi driver (line 512), its only caller: the same move-loop
+recursion with no table access, no repetition-0 and no null yield; its
+children are ordinary interior searches. -/
 def rootProbe (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos]
     (gamma : Int) (d : Nat) (p : G.Pos) (t : Table G.toGame) :
     Int × Table G.toGame :=
@@ -1026,8 +1004,7 @@ returns fail-soft bounds on `rootValue` -- the max over real moves of
 the interior `nullValue` of the children -- and preserves the
 `(pos, depth)`-keyed invariant (its only table effect is through its
 interior children; it stores nothing itself).  This is the honest spec
-of what `search`'s binary loop consumes, and of what an IID probe
-computes at `depth - 3` before its result is discarded. -/
+of what `search`'s binary loop consumes. -/
 theorem rootProbe_spec (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos]
     (hb : Bounded G.toGame) :
     ∀ (gamma : Int) (d : Nat) (p : G.Pos) (t : Table G.toGame),

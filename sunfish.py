@@ -341,9 +341,9 @@ class Searcher:
             return -MATE_UPPER
 
         # Look in the table if we have already searched this position before.
-        # Driver probes (the search root, and IID below) are UNSTORED: they
-        # skip the table in both directions, the repetition-0 and the null
-        # option, and store nothing - so every entry in the table describes
+        # The driver probe (the search root) is UNSTORED: it skips the table
+        # in both directions, the repetition-0 and the null option, and
+        # stores nothing - so every entry in the table describes
         # ONE value function, determined by (pos, depth) alone, and the key
         # needs no flag. (The root's own entry was provably dead weight: the
         # driver picks each gamma strictly inside its bracket, which is the
@@ -389,17 +389,6 @@ class Searcher:
             # and not capture anything else. (Note depth at root is always > 0.)
             if depth == 0:
                 yield None, pos.score
-
-            # Back to killer moves: This heuristic is so good, that if there
-            # is no registered move, it's worth it to run a shallow search to find one.
-            # See https://chessprogramming.org/Internal_Iterative_Deepening for detais.
-            # This is known as Internal Iterative Deepening (IID). The probe
-            # runs as a driver probe (root=True): no null cutoff that would
-            # end it without storing a move, no repetition truncation, and
-            # no table entry under deviant semantics.
-            if not killer and depth > 3:
-                self.bound(pos, gamma, depth - 3, root=True)
-                killer = self.tp_move.get(pos)
 
             # We only generate moves with an intrinsic score above some treshold
             # that decreases with depth. This is a generalization of Quiescent Search,
