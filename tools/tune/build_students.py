@@ -80,9 +80,13 @@ for arm, r in STUDENTS["arms"].items():
     bad = [p for p in PIECES if tuple(got[p]) != tuple(ref[p])]
     packed, size = measure.pack(src, "student_" + arm)
     mv = measure.standalone(packed)
-    print("%-7s %5d bytes  %+5d vs entry  %4d spare  eval %+d  decode %s  standalone %s"
+    # Only the MEASURED delta is printed. An "eval bytes" column here would be
+    # `size - BASESIZE + 464`, i.e. a measured delta added to a remembered
+    # constant -- composition, which is the one arithmetic this lane does not
+    # do. Eval bytes are defined differentially against a zero-stub build, so
+    # if that number is wanted it has to be packed, not added.
+    print("%-7s %5d bytes  %+5d vs entry  %4d spare  decode %s  standalone %s"
           % (arm, size, size - BASESIZE, 4096 - size,
-             size - BASESIZE + 464,                       # entry's own eval is 464 B
              "ROUND TRIP OK" if not bad else "MISMATCH " + ",".join(bad), mv))
     print("        held-out %.6f (%+.2f%% vs classic)  emit %s  -> %s"
           % (r["heldout"], 100 * (r["heldout"] - STUDENTS["classic_heldout"]) / STUDENTS["classic_heldout"],
