@@ -263,10 +263,44 @@ with no LMR and a corrected king table should sit at or above classic, where
 `entry_nolmr` sat at −46.3.
 
 `entry_nolmr` is carried as a **control, not a question**. The −46.3 was
-measured on the laptop and this runs on the box with someone else's tournament
-resident on ~10 of its 96 cores. If the control does not reproduce near −46,
-the environments differ and nothing in this tournament may be compared against
-the ledger.
+measured on the laptop and this runs on the box. If the control does not
+reproduce near −46, the environments differ and nothing in this tournament may
+be compared against the ledger.
+
+### Box conditions, logged at launch and sampled while running
+
+The box rule is **yield-based, not a fixed process cap**: size to the machine
+when it is ours, and *pause* rather than shrink when another user's job needs
+the juice — `-recover` makes a stopped-and-relaunched match cost wall time
+rather than games.
+
+Measured rather than assumed, because the obvious instruments lie:
+
+- **`ps` truncates usernames to `thomas-+`**, so an `$1 != "thomas-ahle"`
+  filter counts *our own* processes as foreign. The first version of the
+  sampler reported `other_user_busy=53`; the true answer is **0**. Any box
+  etiquette check must use `ps -eo user:24` and match the full name — and
+  `pgrep` on a command string matches the poller itself.
+- **Process count is not CPU demand.** All of our engine processes sit in state
+  `SNl`; only ~2 are runnable at any instant, because in a timed game only one
+  side thinks at a time. Zero zombies, zero defunct.
+
+| | |
+|---|---|
+| our engine processes (`caprr`) | **peak 35** at concurrency 10 |
+| why 35, not 20 | 5 arms x 10 game slots; fastchess reuses engine processes across pairings rather than restarting, so the pool is bounded by `slots x arms`, not `2 x slots` |
+| other lanes of ours on the box | `elo-171-full-tail` (12), `elo-173-exact` (12) |
+| **other users** with any process > 5% CPU | **0** (`nick-lehrter`'s 16h `innovus` session idles at ~3.3%) |
+| load / cores | ~22 of **96** |
+
+No yield was owed and none was taken. **Sizing data for the next launch:** at
+concurrency 10 a 5-arm round-robin holds ~35 processes and ~11 busy cores, with
+~74 idle — so concurrency 30 is available when the box is ours alone, and the
+pool would then be ~105, which is a number to state up front rather than
+discover.
+
+The `threat-cap-match` resident at launch has since finished; the two
+tournaments that replaced it are **ours**, not another user's.
 
 ### This reorders the queue, and the reason is a rule already in the ledger
 
