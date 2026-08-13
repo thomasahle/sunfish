@@ -46,7 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
-| 2026-08-13 | **THE KING TABLE: entry uses the wrong one in 62.1% of real positions** | Port defect in the EVAL, not the search. Fix **saves 11 bytes** (3483 -> 3472). Screen: **+51.3 ± 42.7 at 117g** and running |
+| 2026-08-13 | **THE KING TABLE: entry uses the wrong one in 62.1% of real positions** | Port defect in the EVAL, not the search. **+52.3 ± 21.1**, 444g, SPRT stopped early, and the fix **saves 11 bytes** |
 | 2026-08-13 | Stale carried score at the table swap (routed from the eval lane) | Reproduced. Bites the **transition ply only** -- 0.83 plies/game, mean 30cp, max 157cp. Fix priced: kend+fresh **3475, still 8 bytes UNDER the entry** |
 | 2026-08-13 | Null-cap census: binds 4.3% of nulls, flips 0.53% | Real but small. Cap RR **deferred behind the king table** -- the cap reads `pos.score` |
 | 2026-08-13 | Cap byte cost, built not composed | entry 3483, +cap 3494. **11 bytes** |
@@ -223,6 +223,50 @@ Screened **fixed-node, our-vs-our** — legitimate between two of our engines an
 tolerant of a shared box, which is what is available. **A fixed-node PASS earns
 a timed confirmation, not a ship**: this is an eval change, and TESTING.md rule
 12 records two sign flips between fixed-effort and wall-clock.
+
+### RESULT: +52.3 ± 21.1, and it is outcome 1
+
+444 games, fixed nodes (20k), our-vs-our, **zero time forfeits and zero illegal
+moves**, SPRT stopped early:
+
+| | Elo |
+|---|---|
+| shipped entry vs the fix | **−52.27 ± 21.07** |
+| i.e. **the king-table fix** | **+52.3 ± 21.1** |
+
+The interval is well clear of zero and it clears the pre-registered
+**≥ +40** band, so this reads as outcome 1: **the ~46 Elo hole is a port defect
+in the EVAL, not a search-quality defect.** The two numbers are strikingly close
+— the hole was −46.3 ± 30.0 and the fix is worth +52.3 ± 21.1, measured
+independently.
+
+Two honest qualifications, both pre-registered:
+- **SPRT's terminal estimate is biased away from zero.** +52.3 is an upper-ish
+  read, not a settled effect size. The fixed-N confirmation is the timed
+  round-robin now running.
+- This is **fixed nodes from opening positions**, the setting that *understates*
+  an endgame defect. It is not obvious which way the bias nets out; the timed
+  number decides.
+
+A note on reading fastchess here: the log says *"SPRT completed - H0 was
+accepted"*, which looks like a rejection and is not. fastchess reports on the
+**first-named** engine, and the first-named engine is the unfixed `base`. H0 for
+base is the win for the fix. `pair_elo.py` prints both names against the sign,
+which is why it exists.
+
+### What now runs, and what it must show
+
+`tools/screens/rr_hole.sh`, timed 10+0.1, 4,000 games, classic-anchored, five
+arms: entry, entry_nolmr, entry_kf, entry_nolmr_kf, classic. The arm that
+matters is **entry_nolmr_kf vs classic**: if the hole is this defect, a build
+with no LMR and a corrected king table should sit at or above classic, where
+`entry_nolmr` sat at −46.3.
+
+`entry_nolmr` is carried as a **control, not a question**. The −46.3 was
+measured on the laptop and this runs on the box with someone else's tournament
+resident on ~10 of its 96 cores. If the control does not reproduce near −46,
+the environments differ and nothing in this tournament may be compared against
+the ledger.
 
 ### This reorders the queue, and the reason is a rule already in the ledger
 
