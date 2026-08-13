@@ -203,6 +203,78 @@ _iir_edits = [
      "                killer = self.tp_move.get(pos)\n",
      ""),
 ]
+# ---- the entry must not describe a net it does not contain ----------------
+# Found by the golf survey, and it is the Position-docstring sibling of the
+# null-move comment that claimed a cap this engine never had: the shipped
+# entry opened with a section header called "Packed big-integer NNUE residual"
+# and a Position docstring listing `ps`, `acc`, `pf` and `kb` -- four fields
+# this class does not have. Comments are stripped by the packer so none of
+# this costs a byte, but the standing rule is that the model matches the code,
+# and a reader of the artifact's source was being told it evaluates with a net.
+#
+# The dead `pf=0` parameter on from_board() is the same defect in executable
+# form: it is the NNUE perspective flag, no caller in this entry or in
+# sunfish_ui/uci.py passes it, and unlike the comments it is not free.
+_truth_edits = [
+    ("###############################################################################\n"
+     "# Packed big-integer NNUE residual\n"
+     "###############################################################################\n"
+     "# The evaluation is\n"
+     "#     score = pst(pos)  +  clip(nn(pos), -CLAMP, CLAMP)\n"
+     "# where pst() is classic sunfish's exact incremental piece-square score (so\n"
+     "# `value(move)` stays exact for move ordering, the QS gate and futility) and\n"
+     "# nn() is a 768 -> N -> 1 net whose whole accumulator and whole head live in\n"
+     "# ONE Python int.  See packed/pnet.py for the lane layout and why the head\n"
+     "# needs no per-lane multiply.\n",
+     "###############################################################################\n"
+     "# Evaluation: classic sunfish's piece-square tables, and nothing else\n"
+     "###############################################################################\n"
+     "# THERE IS NO NET HERE. This file is generated from the packed-NNUE engine by\n"
+     "# tools/build/make_pst_entry.py, which excises the loader, the accumulator and\n"
+     "# the residual, and pastes classic's tables in their place. The evaluation is\n"
+     "#     score = pst(pos)\n"
+     "# kept exactly incremental, so `value(move)` stays an exact delta of it for\n"
+     "# move ordering, the QS admission gate and the futility test.\n"),
+    ("    score -- the board evaluation: ps + the clipped net residual\n"
+     "    ps -- the piece-square part of the score alone, kept exactly incremental\n"
+     "          so that value(move) below stays an exact delta of it\n",
+     "    score -- the piece-square evaluation, kept exactly incremental so that\n"
+     "             value(move) below stays an exact delta of it\n"),
+    ("    ep - the en passant square\n"
+     "    kp - the king passant square\n"
+     "    acc -- the packed NNUE accumulator (one big int, 2N + 2*nb lanes)\n"
+     "    pf -- perspective flag: which of the two lane blocks is the mover's\n"
+     "    kb -- combined king-bucket index B*bucket(white) + bucket(black), in\n"
+     "          ABSOLUTE colours (0 for plain B == 1 nets)\n"
+     "\n"
+     "    score/ps/acc/pf/kb are all functions of the other fields, so\n"
+     "    identity -- what the transposition table, the killer table and the\n"
+     "    repetition set key on -- deliberately ignores them.  Keeping the\n"
+     "    accumulator out of __hash__ also keeps hashing off the big int, which\n"
+     "    would otherwise cost more than the evaluation it feeds.\n",
+     "    ep - the en passant square\n"
+     "    kp - the king passant square\n"
+     "\n"
+     "    `score` is a function of the other fields, so identity -- what the\n"
+     "    transposition table, the killer table and the repetition set key on --\n"
+     "    deliberately ignores it. That is LOAD-BEARING, not tidiness: pst[\"K\"]\n"
+     "    is swapped between K_MID and K_END per search, so the same board can\n"
+     "    carry two different scores across a table change, and a repetition set\n"
+     "    or a killer table that compared scores would stop recognising it.\n"),
+    ("# MATE values derive from the classic piece values (K=60000, Q=929);\n"
+     "# the tables themselves ride in the net file (see the loader above).\n",
+     "# MATE values derive from the classic piece values (K=60000, Q=929).\n"),
+    # The dead NNUE perspective flag. No caller passes it -- not in this file,
+    # not in sunfish_ui/uci.py, which calls from_board(board, wc, bc, ep, 0).
+    ("def from_board(board, wc=(True, True), bc=(True, True), ep=0, kp=0, pf=0):\n",
+     "def from_board(board, wc=(True, True), bc=(True, True), ep=0, kp=0):\n"),
+]
+for _anchor, _repl in _truth_edits:
+    assert src.count(_anchor) == 1, (
+        "truth-edit anchor occurs %d times, expected 1: %r"
+        % (src.count(_anchor), _anchor[:60]))
+    src = src.replace(_anchor, _repl, 1)
+
 for _anchor, _repl in _iir_edits:
     assert src.count(_anchor) == 1, (
         "IIR anchor occurs %d times, expected 1 -- sunfish_nnue.py moved under "

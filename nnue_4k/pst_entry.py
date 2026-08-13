@@ -18,15 +18,14 @@ __version__ = "2026-packed"
 version = "sunfish " + __version__
 
 ###############################################################################
-# Packed big-integer NNUE residual
+# Evaluation: classic sunfish's piece-square tables, and nothing else
 ###############################################################################
-# The evaluation is
-#     score = pst(pos)  +  clip(nn(pos), -CLAMP, CLAMP)
-# where pst() is classic sunfish's exact incremental piece-square score (so
-# `value(move)` stays exact for move ordering, the QS gate and futility) and
-# nn() is a 768 -> N -> 1 net whose whole accumulator and whole head live in
-# ONE Python int.  See packed/pnet.py for the lane layout and why the head
-# needs no per-lane multiply.
+# THERE IS NO NET HERE. This file is generated from the packed-NNUE engine by
+# tools/build/make_pst_entry.py, which excises the loader, the accumulator and
+# the residual, and pastes classic's tables in their place. The evaluation is
+#     score = pst(pos)
+# kept exactly incremental, so `value(move)` stays an exact delta of it for
+# move ordering, the QS admission gate and the futility test.
 
 piece = {"P": 100, "N": 280, "B": 320, "R": 479, "Q": 929, "K": 60000}
 pst = {
@@ -101,8 +100,7 @@ K_MID, K_END = pst["K"], tuple(piece["K"] + 70
 # That's pretty good given we have 64*6 = 384 values.
 # Though probably we could do better...
 # For one thing, they could easily all fit into int8.
-# MATE values derive from the classic piece values (K=60000, Q=929);
-# the tables themselves ride in the net file (see the loader above).
+# MATE values derive from the classic piece values (K=60000, Q=929).
 MATE_LOWER = 60000 - 13 * 929
 MATE_UPPER = 60000 + 10 * 929
 
@@ -191,23 +189,19 @@ Move = namedtuple("Move", "i j prom")
 class Position(namedtuple("Position", "board score wc bc ep kp")):
     """A state of a chess game
     board -- a 120 char representation of the board
-    score -- the board evaluation: ps + the clipped net residual
-    ps -- the piece-square part of the score alone, kept exactly incremental
-          so that value(move) below stays an exact delta of it
+    score -- the piece-square evaluation, kept exactly incremental so that
+             value(move) below stays an exact delta of it
     wc -- the castling rights, [west/queen side, east/king side]
     bc -- the opponent castling rights, [west/king side, east/queen side]
     ep - the en passant square
     kp - the king passant square
-    acc -- the packed NNUE accumulator (one big int, 2N + 2*nb lanes)
-    pf -- perspective flag: which of the two lane blocks is the mover's
-    kb -- combined king-bucket index B*bucket(white) + bucket(black), in
-          ABSOLUTE colours (0 for plain B == 1 nets)
 
-    score/ps/acc/pf/kb are all functions of the other fields, so
-    identity -- what the transposition table, the killer table and the
-    repetition set key on -- deliberately ignores them.  Keeping the
-    accumulator out of __hash__ also keeps hashing off the big int, which
-    would otherwise cost more than the evaluation it feeds.
+    `score` is a function of the other fields, so identity -- what the
+    transposition table, the killer table and the repetition set key on --
+    deliberately ignores it. That is LOAD-BEARING, not tidiness: pst["K"]
+    is swapped between K_MID and K_END per search, so the same board can
+    carry two different scores across a table change, and a repetition set
+    or a killer table that compared scores would stop recognising it.
     """
 
     def __hash__(self):
@@ -684,7 +678,7 @@ class Searcher:
 def parse(c): return A1 + ord(c[0]) - ord("a") - 10 * (int(c[1]) - 1)
 def render(i): return chr((i - A1) % 10 + ord("a")) + str(1 - (i - A1) // 10)
 
-def from_board(board, wc=(True, True), bc=(True, True), ep=0, kp=0, pf=0):
+def from_board(board, wc=(True, True), bc=(True, True), ep=0, kp=0):
     """Build a position from scratch; `board` is in the mover's orientation."""
     score = sum(pst[p][i] if p.isupper() else -pst[p.upper()][119 - i]
                 for i, p in enumerate(board) if p.isalpha())

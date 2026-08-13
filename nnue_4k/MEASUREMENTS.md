@@ -46,6 +46,9 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **ENGINE-SANS-EVAL MEASURED: 2964, not "~2980" — and the byte map is built** | `main()`'s UCI loop is **454 B**, `bound()` 560, the board layer 598. Instrument: `tools/build/price_engine.sh` |
+| 2026-08-13 | **The named golf candidates are worth ~115 B against a 464 B gap** | Every UCI-surface cut priced by building. `id name` 40, movetime 25, info-PV 22, quit 7. **Interface trimming cannot reach 2500** |
+| 2026-08-13 | Entry stopped describing a net it does not contain; dead `pf` removed | Section header, Position docstring (`ps`/`acc`/`pf`/`kb`) and a false table comment all corrected. **3472 → 3468**, node counts bit-identical |
 | 2026-08-13 | **LANDED: IIR ships. Entry 3475 → 3472, 624 spare, +22.3 ± 16.0** | Packed sha `ce091e5e…` is **byte-identical to the binary that played the 1,000 games**. STRONGER AND SMALLER — the first such change in this lane |
 | 2026-08-13 | **CONFIRMED: `iirk.noiid` +22.3 ± 16.0, entry 3475 → 3472** | 1,000 games, 0 forfeits/illegal, raw 415–351. **Stronger AND smaller** — timed ≈ +15 Elo for −3 bytes. Ready to land, pending the coordinator's generator sequence |
 | 2026-08-13 | **The RR pairing read +41.3; the dedicated match reads +22.3** | Same search, measured twice, 19.0 ± 27.5 apart. Third pooled-vs-direct discrepancy today, all in the same direction. A round-robin pairing is not an effect size either |
@@ -161,6 +164,111 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — THE GOLF BUDGET, MEASURED: 2964 engine bytes, and the named cuts are worth ~115
+
+New mission: the eval lane takes 1024-1500 bytes, leaving **~2500 for the
+engine itself**. First job is to stop estimating that number.
+
+### The instrument, and the baseline
+
+`tools/build/price_engine.sh` takes the real entry, zeroes only the *values*
+inside the `pst` literal, and packs it with the real packer. That is not "the
+tables in isolation" — lzma shares one dictionary across the stream and this
+ledger has been wrong every time it composed a byte figure. It is the honest
+quantity: **what the entry would cost if its eval data were free**, which is
+exactly the budget the golf mission spends against.
+
+| | bytes |
+|---|---|
+| entry as shipped | **3468** |
+| same file, `pst` values zeroed | **2964** |
+| eval data, incremental | 504 |
+| **ENGINE-SANS-EVAL** | **2964** |
+| target | 2500 |
+| **still to find** | **464** |
+
+The handoff's "~2980" was close, and it is now measured.
+
+### The byte map, built by deletion
+
+Each region deleted from a real file, re-packed, difference reported. Most of
+these builds cannot run — this instrument prices, it does not propose.
+
+| region | packed cost |
+|---|---|
+| `Searcher.bound` | **560** |
+| **`main()` UCI loop** | **454** |
+| `Position.gen_moves` | 207 |
+| `Position.move` | 196 |
+| `Searcher.search` | 156 |
+| `parse`/`render`/`from_board`/`hist` | 138 |
+| `Position.value` | 113 |
+| `__hash__`/`__eq__`/`__ne__` | 54 |
+| `Position.rotate` | 46 |
+| `Position.king_capture` | 36 |
+| sum | 1960 |
+
+The ~1000 unattributed is module constants, `initial`, `directions`, imports,
+the packer's own 74-byte head, and shared-dictionary residue.
+
+### The named candidates, priced — and the answer is no
+
+Every cut on the handoff's list, built as a real file and packed inside the
+engine frame:
+
+| cut | saves | what it costs |
+|---|---|---|
+| `id name` + the `version` globals | **40** | GUIs show a blank engine name |
+| `movetime` branch | **25** | the artifact can no longer be driven by `go movetime` |
+| info/PV print | **22** | no PV in any log, ever |
+| `position` prefix test → `args[0]` | 12 | a `position fen …` command misparses |
+| `__ne__` (control) | 9 | **load-bearing — see below** |
+| `quit` branch | 7 | dies on `EOFError` instead of exiting |
+| **total (not additive)** | **~115** | |
+
+**Interface trimming cannot reach 2500.** `main()` costs 454 bytes, but almost
+none of that is command parsing — it is the *search driver*: the deadline, the
+committed-vs-candidate logic that stops the Qxc6 giveaway class, and the
+iteration loop. The parseable surface is ~115 bytes and every byte of it costs
+a capability. **The remaining ~350 has to come out of `bound()`, `gen_moves()`
+and `move()` as bit-identical expression rewrites**, which is delicate work
+against the hard constraint that every strength feature stays.
+
+**And one candidate is a trap.** Deleting `__hash__`/`__eq__`/`__ne__` and
+letting namedtuple's defaults apply looks like 54 free bytes, because `score`
+is a pure function of the board. It is not free: **`pst["K"]` is swapped
+between `K_MID` and `K_END` per search**, so the same board legitimately
+carries two different scores across a table change. Default equality compares
+`score`, so the repetition set would stop recognising repetitions and the
+"never evict the root" guard (`k != self.root`, the only `!=` on a Position in
+the file) would stop firing. The custom identity is load-bearing; this is now
+written in the docstring rather than left for the next golfer to discover.
+
+### Free while we were looking: the entry stopped describing a net
+
+The survey found the shipped entry opening with a section header called
+*"Packed big-integer NNUE residual"*, an evaluation formula containing
+`clip(nn(pos), -CLAMP, CLAMP)`, a `Position` docstring listing **`ps`, `acc`,
+`pf` and `kb`** — four fields the class does not have — and a comment claiming
+*"the tables themselves ride in the net file (see the loader above)"* when
+there is no loader and no net file. Same defect class as the null-move comment
+that claimed a cap this engine never had, and the same rule applies: the model
+matches the code.
+
+Corrected in the generator. Comments are stripped by the packer so the prose
+was free, but the dead **`pf=0` parameter on `from_board()`** was not — no
+caller passes it, in this file or in `sunfish_ui/uci.py`.
+
+**Entry 3472 → 3468, spare 628.** Verified **bit-identical**: node counts to
+depth 9 over 6 positions are **2,342,657 for both builds**, exactly, which is
+the pre-registered standard for a pure-golf cut. Legality gate 100/100, mate
+gate 5/8 parity, 312 passed / 2 skipped, plays alone in an empty directory.
+
+**First 4 of the 464 found. The other 460 are in the search core**, and the
+budget arithmetic deserves a look before that work starts: interface is
+exhausted at ~115, and the rest is bit-identical surgery on the code that
+holds every feature this lane has earned.
 
 ## 2026-08-13 — LANDED: IIR ships, and the entry is stronger AND smaller
 
