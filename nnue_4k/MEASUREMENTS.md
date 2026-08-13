@@ -47,7 +47,8 @@ how much effort it cost.
 | Date | Experiment | Verdict |
 |---|---|---|
 | 2026-08-13 | **A ZERO-BYTE candidate falls out of corrhist's autopsy** | corrhist's only consumer was the frontier futility test and it won by pruning LESS. A flat margin on that test: `+QS` packs to **3475 — the entry exactly**. Pre-registered, screening |
-| 2026-08-13 | **corrhist DROPPED: the mechanism works and is priced out** | **+54.8 ± 23.3** fixed-node, 617g, SPRT H1 accepted, 0 forfeits/illegal/crossings. Timed ≈ **+46**, i.e. **0.36 Elo/byte** on 127 B against a 1.0 bar. Not disproven — too dear |
+| 2026-08-13 | **CORRECTION: corrhist is −54.8, a REGRESSION. I read the sign backwards** | Raw PGN: base 290 wins, corr 192. The entry below stands as written and is WRONG in its direction; the correction entry above it is the one to read |
+| 2026-08-13 | ~~corrhist DROPPED: the mechanism works and is priced out~~ **(SIGN ERROR — see the correction)** | The number +54.8 ± 23.3 is right; it belongs to **base**, not to corrhist |
 | 2026-08-13 | **IIR replacing IID is BYTE-NEGATIVE: entry 3475 -> 3471** | −4 B, and dropping IID alone is −16 B and node-neutral (0.989x). The first queue item that gives bytes back; it only has to avoid losing |
 | 2026-08-13 | MTD guards censused on every new arm, incl. the ordering change | **0 bracket crossings, 0 probe-cap hits** to depth 9 on all six builds. Also: this counter can NOT be read out of a fastchess log |
 | 2026-08-13 | History ordering costs 28% more nodes at depth 9 (apples-to-apples) | 1.284x vs base. Not the verdict — node ratio is the wrong instrument, which is why it is being re-screened in games |
@@ -151,7 +152,80 @@ how much effort it cost.
 
 ---
 
-## 2026-08-13 — corrhist DROPPED at +54.8: the first item that is priced out rather than disproven
+## 2026-08-13 — CORRECTION: corrhist is −54.8. It is a REGRESSION, and I read the sign backwards
+
+**The entry below is wrong in its direction and I am not editing it away.** It
+says corrhist won +54.8 and was "priced out rather than disproven". The +54.8
+is real and it belongs to **`base`**. corrhist **lost**.
+
+Counted straight out of the PGN, no analyzer in the way:
+
+| | wins | draws |
+|---|---|---|
+| **base** | **290** | 135 |
+| **corr** | **192** | 135 |
+
+base scores 57.94% over 617 games. `pair_elo.py` prints `Elo(A) = +54.77 ±
+23.28` where **A is the alphabetically-first engine name**, which is `base`;
+fastchess's own line prints `Elo: 54.77` for **engine1**, which is also `base`,
+under `Wins: 281, Losses: 192` — engine1's wins. Every instrument agreed and
+said so plainly. I read "SPRT H1 accepted" as "the candidate passed", when what
+it means is "**engine1** is better by ≥ elo1", and engine1 was the baseline.
+
+**The verdict, restated correctly:**
+
+| | |
+|---|---|
+| corrhist, fixed nodes | **−54.8 ± 23.3** |
+| games | 617, SPRT stopped early, H1 accepted **for base** |
+| speed term | −8.5 |
+| timed | **≈ −63** |
+| bytes | +127 |
+
+**corrhist is DROPPED as a regression, not as an expense.** It is not "the
+largest fixed-node effect this lane has measured"; it is the second-largest
+*negative*, after LMP's −126. The transfer scoreboard's real state:
+
+| feature | ice4 Elo | ours (fixed-node) | outcome |
+|---|---|---|---|
+| LMR | 81 | +38.9 ± 19.1 | transfers, shipped |
+| RFP | 58 | ~ 0 | sound, worthless here |
+| **corrhist** | **70** | **−54.8 ± 23.3** | **harmful** |
+| LMP | 123 | −126 | structurally incompatible |
+
+**Three of four ice4 items are now negative or worthless on this engine.** The
+mean transfer coefficient is not "far below 1", it is **below zero**. Anyone
+planning +400 out of the ice4 catalogue should read that column again.
+
+**And the mechanism is legible, which is the useful part.** corrhist's only
+consumer is the `depth <= 1` futility test; its censused table was
+systematically **optimistic** (mean +10…+18 cp); adding an optimistic
+correction there makes `pos.score + corr + val < gamma` fire **less**, so the
+search prunes less — which is exactly what the node counts said (1.04× to depth
+8, 1.15× to depth 9). **It searched more and played worse.** The frontier
+futility rule is not too aggressive. If anything it is not aggressive enough.
+
+**What this does to the zero-byte lead below: it inverts it.** The
+futility-margin entry was written from the wrong sign and reasoned that
+"pruning less wins, so a flat positive margin is a cheap version of it". The
+truth is the opposite — pruning less **loses** — so the arm with upside is a
+**negative** margin, and `fut`/`fut40` are now *predicted losers*, worth one
+confirmation rather than two. The first 28 pairs of that RR already read `base
++53.9` over `fut`: the same sign and roughly the same magnitude as corrhist,
+i.e. the mechanism reproducing itself for 3 bytes instead of 127. The RR is
+relaunched around the negative margin.
+
+**Process note, because the labelling makes this error easy to repeat.**
+`pair_elo.py` sorts the two names alphabetically and calls the first one "A",
+so which arm is "A" depends on what the variant was *named*. `base` sorts
+before `corr`, `fut`, `hist`, `iir*` and `noiid` — the anchor is "A" in every
+pairing of every screen this lane runs, which is exactly the arrangement that
+makes a positive number look like a candidate's win. From here: **every verdict
+is checked against raw win counts from the PGN before it is written down.** It
+is a two-second `awk` and it would have caught this before it reached a commit
+message.
+
+## 2026-08-13 — corrhist DROPPED at +54.8 (THIS ENTRY HAS THE SIGN BACKWARDS — see the correction above)
 
 **The screen passed and the feature still does not ship.** That combination is
 new in this ledger and it is the whole entry.
