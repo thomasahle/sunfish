@@ -272,20 +272,75 @@ The parity spine is choice-free, like the distance spine it extends; the
 `legal_of_allIllegalB_false`, unchanged.
 
 **The defender half.**  "The losing side drags the mate out as long as it can"
-is the same ordering read the other way.  At a lost node the reached positions
-are attacker-to-move and their values are positive mate values
-`MATE_LOWER + (d - n) * EVAL_ROUGHNESS`, and `MaximalChoice` MINIMISES the
-reached value -- so minimising the value is maximising `n`.
-`defence_maximal_resistance` proves the local step: no legal reply leaves the
-attacker a nearer mate than the engine's own move does.  Parity refunds the
-tolerance in exactly the same place as on the attacker side -- the block bounds
-plus one `EVAL_ROUGHNESS` of slack give `i <= j + 1`, and both are odd.
+is the same ordering read the other way, and it needs no second move rule to
+model.  At a lost node the reached positions are attacker-to-move and their
+values are positive mate values `MATE_LOWER + (d - n) * EVAL_ROUGHNESS`, and
+the engine's one rule MINIMISES the reached value -- so minimising the value is
+maximising `n`.  There is no `NearMinimalChoice`: in negamax the defender's
+rule is literally the attacker's rule, and the duality lives in the theorem.
+`defence_maximal_resistance` proves the local step in distance form: no legal
+reply leaves the attacker a nearer mate than the engine's own move does.
+Parity refunds the tolerance in exactly the same place as on the attacker side
+-- the block bounds plus one `EVAL_ROUGHNESS` of slack give `i <= j + 1`, and
+both are odd.
 
-What is NOT yet proven is the global defender induction: that the resulting
-play lasts the full distance, which needs an inductive `ResistsFor` dual to
-`MatesWithin` and the corresponding strong recursion.  It is recorded here as
-outstanding work and is admitted nowhere: `Shortest.lean` contains no `sorry`
-and no unproven declaration.
+### The global induction (`ResistsFor`)
+
+`ResistsFor G ch n q` is the inductive dual of `MatesWithin G ch n p`: the two
+quantifiers swapped and the bound turned around.  There the attacker plays `ch`
+and mate ARRIVES within `n` plies against every legal defence; here the
+DEFENDER plays `ch` and mate does NOT arrive before `n` plies against every
+legal attack.  `MatesWithin.mate` is stated at every index `n + 1` -- once mate
+has landed, any remaining budget is met -- and its mirror image is the pair
+`zero` / `safe`: while mate has not landed, any budget of at most one ply is
+met.  Resistance is downward closed (`resistsFor_anti`) where `matesWithin_mono`
+is upward.
+
+One constructor has no mirror image, and the asymmetry is the point.
+`MatesWithin.step` carries `hnt` so a moveless defender cannot satisfy its reply
+quantifier vacuously -- a stalemate is a draw, not a mate.  The same corner is a
+WIN for resistance, so it appears here as the leaf `draw`: a defender with no
+legal move who is not in check is never mated at all.  One guard, one leaf, one
+reason -- a draw refutes the attacker's claim and establishes the defender's.
+
+The recursion runs on a SPEC-form local step rather than the distance form:
+
+```text
+defence_resistance_step :
+  NearMaximalChoice G guard d ch →
+  allIllegalB G q = false → n % 2 = 1 → n + 1 ≤ d →
+  ForcedMate G n (ch q) →
+  ForcedlyMated G n q
+```
+
+If the engine's own defence lets the attacker mate in `n`, the position was
+already mated within `n` against EVERY defence -- the engine gave nothing away.
+This is where the driver's tolerance is paid for, and parity refunds it: an
+alternative defence one rung worse is read by `forcedMate_of_value_dist` as a
+mate in `n + 1`, and `n + 1` is even because `n` is odd, so `forcedMate_odd_le`
+hands the ply straight back.  Same refund, same place, as the attacker half.
+
+```text
+leastMated_defence_resists :
+  NearMaximalChoice G guard d ch →
+  LeastMated G k q → k ≠ 0 → k + 1 ≤ d →
+  (d : Int) * EVAL_ROUGHNESS ≤ 21366 →
+  hasKingCapture G q = false →
+  ResistsFor G ch (k + 1) q
+```
+
+`k` is the least attacker budget the position permits, so `k + 1` is the exact
+distance to mate for the side to move (`leastMated_odd_or_zero` makes it even),
+and the engine attains it: it survives as long as the position permits.  With
+`leastMate_play_shortest` this is distance-to-mate optimality in both
+directions, bundled as `dtm_optimal`.
+
+Two honest notes.  The depth condition is `k + 1 ≤ d`, one ply stricter than
+the attacker half's `k ≤ d`: the defender's claim is about what the position
+does NOT permit, and refuting a faster mate needs the ply that would have shown
+it.  And neither play predicate asserts that `ch` returns a legal move --
+`MatesWithin` does not either; legality is supplied where the tree is built, by
+`NearMaximalChoice` (`ch q ∈ movesAbove ... ⊆ G.moves q`).
 
 ## Terminal positions and legality evidence
 

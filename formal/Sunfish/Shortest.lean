@@ -58,6 +58,29 @@ it is true only because the achievable distances have a fixed parity.
 At one point per ply (the pre-#172 alternative) the gap would be 2 and
 the tolerance 15, and the shipped driver could take the slower mate.
 
+**The defender half, step 5.**  "The losing side drags the mate out as
+long as it can" is the same ordering read the other way, and it needs
+no second move rule to model.  The engine minimises the value of the
+position it moves to, always; at a lost node the positions it moves to
+are attacker-to-move and their values are the attacker's POSITIVE mate
+values `MATE_LOWER + (d - n) * EVAL_ROUGHNESS`, so minimising the value
+IS maximising the attacker's remaining distance.  There is no
+`NearMinimalChoice`: in negamax the defender's rule is literally the
+attacker's rule, and the duality lives in the theorem rather than in
+the choice.
+
+`defence_resistance_step` is the local step, in SPEC form rather than
+the distance form of `defence_maximal_resistance`: if the engine's own
+defence lets the attacker mate in `n`, then the position was ALREADY
+mated within `n` against every defence, so the engine gave nothing
+away.  `defence_resists` iterates it by strong recursion into
+`ResistsFor`, the inductive dual of `MatesWithin`.  Parity pays for the
+driver's tolerance once, inside the local step: near-maximality admits
+alternatives one rung worse, `forcedMate_of_value_dist` reads that rung
+as a mate in `n + 1`, and `n + 1` is EVEN because `n` is odd -- so
+`forcedMate_odd_le` hands the ply straight back, exactly as it does on
+the attacker side.
+
 **The `3` in the null reduction is load-bearing here.**  Parity is
 preserved along every path because both of the search's depth steps are
 odd: a real move spends one ply of depth per negation, and the null
@@ -498,5 +521,81 @@ theorem defence_maximal_resistance (G : QSGame) (guard : G.Pos → Bool)
   have hid' : (i : Int) + 1 ≤ (d : Int) := by exact_mod_cast hid
   simp only [hER] at hlo hhi h1
   omega
+
+/-! ### The defender half: the game the engine defends -/
+
+/-- **`ResistsFor G ch n q`.**  The inductive dual of `MatesWithin`,
+with the two quantifiers swapped and the bound turned around.
+
+In `MatesWithin G ch n p` the ATTACKER plays `ch`, the defender answers
+with any legal move, and mate ARRIVES within `n` plies.  Here the
+DEFENDER plays `ch`, the attacker answers with any legal move, and mate
+does NOT arrive before `n` plies have been spent.  Mate lands on a
+defender-to-move node in both, so the index counts plies from the same
+places: `p` and `m` are attacker-to-move in `MatesWithin`, `q` and `m`
+are defender-to-move here.
+
+The leaves are dual too.  `MatesWithin.mate` is stated at every index
+`n + 1`, which is the "at most" reading: once the mate has landed, any
+remaining budget is met.  `zero` and `safe` are the mirror image, the
+"at least" reading: while the mate has NOT landed, any budget of at
+most one ply is met -- `zero` because nothing is claimed, `safe`
+because one ply of survival is exactly "not mated now".
+
+`draw` is the one constructor with no mirror image, and the asymmetry
+is real rather than cosmetic.  `MatesWithin.step` carries `hnt` to stop
+a moveless defender from satisfying its reply quantifier vacuously: a
+stalemate is a draw and must not be counted as a mate.  That same
+corner is a WIN for resistance -- a defender with no legal move who is
+not in check is never mated at all -- so here it is a leaf that meets
+every budget.  A guard on one side and a leaf on the other, for one
+reason: a draw refutes the attacker's claim and establishes the
+defender's.
+
+What `ResistsFor` does NOT say, exactly as `MatesWithin` does not, is
+that `ch q` is a legal move.  Both are statements about a play tree
+relative to a given `ch`; legality is supplied where the tree is built,
+by `NearMaximalChoice` (`ch q ∈ movesAbove ... ⊆ G.moves q`). -/
+inductive ResistsFor (G : QSGame) (ch : G.Pos → G.Pos) : Nat → G.Pos → Prop where
+  | zero {q : G.Pos} : ResistsFor G ch 0 q
+  | safe {q : G.Pos} (hsafe : ¬ Checkmated G q) : ResistsFor G ch 1 q
+  | draw {n : Nat} {q : G.Pos}
+      (hterm : allIllegalB G q = true) (hsafe : ¬ Checkmated G q) :
+      ResistsFor G ch n q
+  | step {n : Nat} {q : G.Pos}
+      (hsafe : ¬ Checkmated G q)
+      (hrep : ∀ m ∈ G.moves (ch q),
+        hasKingCapture G.toNullGame.toGame m = false → ResistsFor G ch n m) :
+      ResistsFor G ch (n + 2) q
+
+/-- Resistance is DOWNWARD closed where `matesWithin_mono` is upward:
+a lower bound that holds for `n` plies holds for fewer.  The two leaves
+are what make the odd indices reachable, so the "at least `n` plies"
+reading is honest at every `n`, not only the even ones the theorem
+produces. -/
+theorem resistsFor_anti (G : QSGame) (ch : G.Pos → G.Pos) :
+    ∀ {n : Nat} {q : G.Pos}, ResistsFor G ch n q →
+      ∀ j, j ≤ n → ResistsFor G ch j q := by
+  intro n q h
+  induction h with
+  | @zero q =>
+    intro j hj
+    obtain rfl : j = 0 := by omega
+    exact ResistsFor.zero
+  | @safe q hsafe =>
+    intro j hj
+    rcases j with _ | _ | j'
+    · exact ResistsFor.zero
+    · exact ResistsFor.safe hsafe
+    · exact absurd hj (by omega)
+  | @draw n q hterm hsafe =>
+    intro j _
+    exact ResistsFor.draw hterm hsafe
+  | @step n q hsafe _hrep ih =>
+    intro j hj
+    rcases j with _ | _ | j'
+    · exact ResistsFor.zero
+    · exact ResistsFor.safe hsafe
+    · exact ResistsFor.step hsafe (fun m hm hleg => ih m hm hleg j' (by omega))
 
 end Sunfish
