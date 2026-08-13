@@ -142,6 +142,28 @@ fastchess \
    to +34 [−34, +105] by 92. Time-to-depth is the hidden variable. Screen
    with fixed depth if you like, but only a wall-clock match decides.
 
+13. **Never queue `quit` behind `go` — read until `bestmove`.** The UCI loop
+   drains stdin eagerly, so a one-shot
+   `printf 'uci\n...\ngo depth 8\nquit\n' | ./sunfish.py` sets the stop event
+   while depth 1 is still running. `go_loop` then breaks at the next
+   completed depth and the harness gets a **depth-2 search** — with a normal
+   `info depth 2 ... nodes ...` line and a normal `bestmove`, indistinguishable
+   from a finished depth-8 run unless you look at the depth field. The tell is
+   the *result*, not an error: node counts come back identical between two
+   engines on every position, because both were stopped before the diff could
+   matter. (Observed 2026-08 screening the IID deletion: 10 positions,
+   3,537 nodes total, ratio exactly 1.000 on all ten. Driven properly the same
+   battery searched 776,830 nodes and differed on every position.) So spawn
+   the engine, write the commands *without* `quit`, read stdout until the
+   `bestmove` line, and only then quit — and assert the `info depth` you
+   actually reached equals the one you asked for. `python-chess`
+   (`chess.engine.Limit(depth=N)`) already does this, which is why
+   `tools/tester.py` and the CI depth floors are unaffected and a hand-rolled
+   heredoc harness is not. Adding a clock does *not* fix it: `go` already
+   defaults to an effectively unbounded think budget, so `go depth N movetime
+   3600000` behind a queued `quit` stops at depth 2 exactly as before. The
+   `quit` is doing all the work.
+
 ## Testing the packed artifact
 
 `tools/build/pack.sh` inlines a minimal UCI loop that handles `position startpos
