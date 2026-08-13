@@ -198,6 +198,89 @@ Premises: `ValFloor G 192` + `EvalQuiet` (fidelity, tables),
 case split in `legal_of_allIllegalB_false`); the distance spine
 `forcedMate_negamaxD2` itself stays choice-free at `propext, Quot.sound`.
 
+## Distance-to-mate optimality (`Shortest.lean`)
+
+`forcedMate_play_mates` mates within *the `k` the spec handed it*.
+`Shortest.lean` replaces that `k` with the LEAST one, which is the shortest-PV
+half of the claim sunfish.py's constant block has made since 2014.
+
+**Parity is the hinge, and it is not a chess fact.**  `ForcedMate`'s `mate`
+constructor costs one ply and `step` costs two, and `step`'s reply quantifier
+is non-vacuous (`hnt` names a legal reply through `legal_of_allIllegalB_false`),
+so an EVEN budget always has a spare ply: `forcedMate_pred_of_even` hands it
+back.  Hence the least distance is ODD (`leastMate_odd`) and two distinct
+achievable distances are at least TWO plies apart (`leastMate_gap`).
+
+That is what prices a ply at a whole `EVAL_ROUGHNESS` rather than two.  The
+declared value's rung index is exactly `D - k` (`leastMate_value_block`: the
+forward spine gives the lower edge, leastness gives the upper -- one rung
+higher would exhibit a mate in `k - 1`).  Two plies is two rungs, so distinct
+distances leave a full rung of clear air:
+
+```text
+leastMate_value_separation :
+  EVAL_ROUGHNESS < nullValueD2 G guard D p - nullValueD2 G guard D q
+```
+
+STRICTLY more than `EVAL_ROUGHNESS`, and `search` stops at
+`upper - lower <= EVAL_ROUGHNESS`, so no final bracket can hold two distinct
+mate values.  **This retires an idealisation.**  `MaximalChoice` assumes an
+exactly-converged bisection, which the shipped driver does not give;
+`NearMaximalChoice` weakens it by exactly the driver's own stopping tolerance,
+and `forcedMate_play_shortest_odd` proves the same conclusion under it.  Where
+near-maximality loses a rung, parity refunds it: the slack budget is even, and
+an even budget is never tight.
+
+```text
+leastMate_play_shortest :
+  NearMaximalChoice G guard d ch →
+  LeastMate G k p → k + 1 ≤ d + 1 →
+  (d : Int) * EVAL_ROUGHNESS ≤ 21366 →
+  hasKingCapture G p = false →
+  MatesWithin G ch k p
+```
+
+So `EVAL_ROUGHNESS`-per-ply is the smallest step for which the theorem is
+true, and it is true only because achievable distances have a fixed parity.
+At one point per ply the gap is 2 against a tolerance of 15 and the shipped
+driver can take the slower mate.
+
+**The `3` in the null reduction is load-bearing for this.**  Parity survives
+along every path because both depth steps are odd: a real move spends one ply
+per negation, the null option spends three (`nullValueD2`'s `d + 1 - 3`).
+Writing `d + 1 - 2` or `d + 1 - 4` would let one line reach a mate value of the
+wrong rung parity, collapsing the separation gap to `EVAL_ROUGHNESS` -- exactly
+the width the driver cannot resolve.  No proof here mentions the null term (the
+parity lives in `ForcedMate`, whose `step` is two plies), but a change to that
+constant is a change to this theorem.
+
+| fact | theorem | axioms |
+|---|---|---|
+| no forced mate in zero plies | `not_forcedMate_zero` | `propext, Quot.sound` |
+| an even budget is never tight | `forcedMate_pred_of_even` | `propext, Quot.sound` |
+| the least distance is odd | `leastMate_odd` | `propext, Quot.sound` |
+| distinct distances are two plies apart | `leastMate_gap` | `propext, Quot.sound` |
+| the value's rung index is exactly `D - k` | `leastMate_value_block` | `+ Classical.choice` |
+| a faster mate outscores a slower one by more than `EVAL_ROUGHNESS` | `leastMate_value_separation` | `+ Classical.choice` |
+| the driver's own tolerance suffices | `forcedMate_play_shortest_odd` | `+ Classical.choice` |
+| the engine attains the optimal distance | `leastMate_play_shortest` | `+ Classical.choice` |
+
+The parity spine is choice-free, like the distance spine it extends; the
+`Classical.choice` in the value results is inherited from
+`legal_of_allIllegalB_false`, unchanged.
+
+**Not yet proven: the defender half.**  "The losing side drags the mate out as
+long as it can" is the mirror statement and is not in this file.  Its shape:
+at a `ForcedlyMated` node the children are attacker-to-move nodes whose values
+are positive mate values, `MaximalChoice` MINIMISES the child value, and
+minimising `MATE_LOWER + (D - n) * EVAL_ROUGHNESS` is maximising `n` -- so the
+local step is the same block/separation argument read in the other direction.
+The missing pieces are a `LeastMated` predicate with its own parity lemma (a
+mated node's distance is EVEN, dual to `leastMate_odd`) and the global
+induction that the play lasts the full distance.  It is stated here as
+outstanding work, not admitted anywhere: `Shortest.lean` contains no `sorry`
+and no unproven declaration.
+
 ## Terminal positions and legality evidence
 
 The move fold maintains two independent facts:
@@ -276,6 +359,8 @@ transform is the identity, so the model and source are extensionally equal.
 - `TableSwap.lean`: table-update properties.
 - `Liveness.lean` and `Classification.lean`: mate visibility and search-result
   classification under their named fidelity premises.
+- `Shortest.lean`: mate-distance parity, value separation, and shortest-mate
+  play under the driver's own stopping tolerance.
 - `Pruning.lean` and `Tricks.lean`: proof envelopes for selective-search
   techniques.
 

@@ -1,0 +1,425 @@
+/-
+Distance-to-mate optimality: the search does not merely find a mate, it
+finds the SHORTEST one -- and the constant that makes that true is
+`EVAL_ROUGHNESS`, for a reason that is pure parity.
+
+`Liveness.lean` ends at `forcedMate_play_mates`: from a root with a
+forced mate in `k` plies, the engine's own iterated choice reaches a
+checkmated position within `k` plies -- **the `k` the spec handed it**.
+Nothing there says `k` was the best available.  This file replaces that
+`k` with the LEAST one, which is the claim sunfish.py's constant block
+has made since 2014:
+
+    among winning lines the search takes the SHORTEST, and the losing
+    side drags the mate out as long as it can (issue #11)
+
+Four steps, of which the second is the one worth reading.
+
+1. **`LeastMate`** -- the least `k` with `ForcedMate G k p`.  It exists
+   because `ForcedMate` is upward closed (`forcedMate_mono`) and `Nat`
+   is well ordered; the file takes it as a predicate so no choice
+   principle is spent.
+
+2. **Parity** (`leastMate_odd`).  The least mate budget is ODD.  This is
+   not a chess fact and not an arithmetic accident: it is the shape of
+   `ForcedMate` itself.  `mate` costs one ply, `step` costs two, and
+   `step`'s reply quantifier is non-vacuous (`hnt` names a legal reply
+   via `legal_of_allIllegalB_false`), so an EVEN budget always has one
+   ply of slack -- `forcedMate_pred_of_even` hands it back.  Hence two
+   distinct achievable mate distances differ by at least TWO plies.
+
+3. **Block exactness** (`leastMate_value_block`).  No new induction: the
+   forward spine `forcedMate_complete` puts the declared value at or
+   above `MATE_LOWER + (D - k) * EVAL_ROUGHNESS`, and the
+   distance-carrying converse `forcedMate_of_value_dist` puts it
+   STRICTLY BELOW the next rung, because a value one rung higher would
+   exhibit a mate in `k - 1` and contradict leastness.  So the value's
+   rung index is exactly `D - k`.
+
+4. **Separation** (`leastMate_value_separation`).  Two positions whose
+   least mate distances differ have declared values more than
+   `EVAL_ROUGHNESS` apart.  Steps 2 and 3 compose: distinct distances
+   are two plies apart, two plies are two rungs, and two rungs leave a
+   full rung of clear air between the blocks.
+
+Why that last number is the whole point.  `search` stops bisecting at
+`upper - lower <= EVAL_ROUGHNESS`, so the shipped root is only ever
+guaranteed a move within `EVAL_ROUGHNESS` of the maximum -- the
+idealisation `MaximalChoice` records and `formal/README.md` flags.
+Separation says the gap between a faster and a slower mate is STRICTLY
+MORE than `EVAL_ROUGHNESS`, so that tolerance cannot cross it:
+`NearMaximalChoice` below is `MaximalChoice` weakened by exactly the
+driver's own stopping tolerance, and `forcedMate_play_mates` still
+holds under it (`forcedMate_play_shortest`).
+
+So `EVAL_ROUGHNESS`-per-ply is not a margin someone measured and
+rounded up.  It is the smallest step for which the theorem is true, and
+it is true only because the achievable distances have a fixed parity.
+At one point per ply (the pre-#172 alternative) the gap would be 2 and
+the tolerance 15, and the shipped driver could take the slower mate.
+
+**The `3` in the null reduction is load-bearing here.**  Parity is
+preserved along every path because both of the search's depth steps are
+odd: a real move spends one ply of depth per negation, and the null
+option spends three (`nullValueD2`'s `d + 1 - 3`) per negation.  An even
+null reduction would let a single line reach a mate value of the wrong
+rung parity and the separation argument would collapse to a gap of
+`EVAL_ROUGHNESS`, exactly the width the driver cannot resolve.  Nothing
+in this file mentions the null term -- the parity lives in `ForcedMate`,
+whose `step` constructor is two plies -- but a change to that constant
+is a change to this theorem.
+-/
+
+import Sunfish.Liveness
+
+namespace Sunfish
+
+/-! ### Leastness -/
+
+/-- There is no forced mate in zero plies: `mate` costs one ply and
+`step` costs two, so every derivation has a positive index. -/
+theorem not_forcedMate_zero (G : QSGame) (p : G.Pos) : ¬ ForcedMate G 0 p := by
+  intro h
+  cases h
+
+/-- **Parity, the load-bearing lemma.**  An EVEN mate budget is never
+tight: one ply can always be handed back.
+
+`mate` is stated at every index, so it re-derives one lower for free.
+`step` is the interesting case: its budget is `k + 2` with every legal
+reply mating in `k`, and `hnt : allIllegalB G m = false` NAMES a legal
+reply (`legal_of_allIllegalB_false`), so `ForcedMate G k` is actually
+inhabited and `k ≠ 0`.  An even `k` is therefore at least `2`, the
+induction hypothesis tightens every reply to `k - 1`, and `step`
+re-applies at `k - 1 + 2 = k + 1`. -/
+theorem forcedMate_pred_of_even (G : QSGame) :
+    ∀ {n : Nat} {p : G.Pos}, ForcedMate G n p → n % 2 = 0 →
+      ForcedMate G (n - 1) p := by
+  intro n p h
+  induction h with
+  | @mate k p m hkg hm hleg hmate =>
+    intro hev
+    obtain ⟨k', rfl⟩ : ∃ k', k = k' + 1 := ⟨k - 1, by omega⟩
+    have : ForcedMate G (k' + 1) p := ForcedMate.mate hkg hm hleg hmate
+    simpa using this
+  | @step k p m hkg hm hleg hnt hrep ih =>
+    intro hev
+    obtain ⟨m0, hm0, hleg0⟩ := legal_of_allIllegalB_false hnt
+    have hk0 : ForcedMate G k m0 := hrep m0 hm0 hleg0
+    have hkne : k ≠ 0 := by
+      intro h0
+      exact not_forcedMate_zero G m0 (h0 ▸ hk0)
+    have hkev : k % 2 = 0 := by omega
+    obtain ⟨k', rfl⟩ : ∃ k', k = k' + 1 := ⟨k - 1, by omega⟩
+    have : ForcedMate G (k' + 2) p :=
+      ForcedMate.step hkg hm hleg hnt
+        (fun m' hm' hl' => by simpa using ih m' hm' hl' hkev)
+    simpa using this
+
+/-- **`LeastMate G k p`**: `k` is the exact distance to mate for the
+side to move at `p`.  Stated as a predicate rather than a function so
+that no well-ordering instance and no choice principle is spent; it is
+unique where it holds. -/
+def LeastMate (G : QSGame) (k : Nat) (p : G.Pos) : Prop :=
+  ForcedMate G k p ∧ ∀ j, ForcedMate G j p → k ≤ j
+
+theorem leastMate_unique (G : QSGame) {j k : Nat} {p : G.Pos}
+    (hj : LeastMate G j p) (hk : LeastMate G k p) : j = k :=
+  Nat.le_antisymm (hj.2 k hk.1) (hk.2 j hj.1)
+
+/-- The least distance is at least one ply. -/
+theorem leastMate_pos (G : QSGame) {k : Nat} {p : G.Pos}
+    (h : LeastMate G k p) : 1 ≤ k := by
+  rcases Nat.eq_zero_or_pos k with hk | hk
+  · exact absurd (hk ▸ h.1) (not_forcedMate_zero G p)
+  · exact hk
+
+/-- **The least mate distance is odd.**  Immediate from
+`forcedMate_pred_of_even`: an even least budget would admit a strictly
+smaller one. -/
+theorem leastMate_odd (G : QSGame) {k : Nat} {p : G.Pos}
+    (h : LeastMate G k p) : k % 2 = 1 := by
+  have hk1 := leastMate_pos G h
+  by_cases hev : k % 2 = 0
+  · exact absurd (h.2 (k - 1) (forcedMate_pred_of_even G h.1 hev)) (by omega)
+  · omega
+
+/-- **Distinct mate distances are two plies apart.**  Parity, spent.
+This is the whole reason a ply may be priced at one `EVAL_ROUGHNESS`
+rather than two. -/
+theorem leastMate_gap (G : QSGame) {j k : Nat} {p q : G.Pos}
+    (hj : LeastMate G j p) (hk : LeastMate G k q) (hlt : j < k) :
+    j + 2 ≤ k := by
+  have hjo := leastMate_odd G hj
+  have hko := leastMate_odd G hk
+  omega
+
+/-! ### Block exactness -/
+
+/-- **The declared value's rung index is exactly `D - k`.**
+
+Lower bound: the forward spine (`forcedMate_complete`) at the least
+`k`.  Upper bound: leastness.  If the value reached the NEXT rung,
+`MATE_LOWER + (D - k + 1) * EVAL_ROUGHNESS`, then
+`forcedMate_of_value_dist` would exhibit some `n` with
+`n + (D - k + 1) <= D`, i.e. `n <= k - 1`, a forced mate strictly
+nearer than the least one.
+
+Both bounds together say the value lies in the half-open rung
+`[MATE_LOWER + (D-k)*ER, MATE_LOWER + (D-k+1)*ER)`.  Note what is NOT
+claimed: the value is not asserted to sit exactly ON a rung.  It does
+not have to.  Everything downstream only needs the rung index, and
+proving the block is free -- it is two existing theorems and leastness,
+with no new induction over the tree. -/
+theorem leastMate_value_block (G : QSGame) (guard : G.Pos → Bool)
+    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
+    {k D : Nat} {p : G.Pos}
+    (hcapf : hasKingCapture G.toNullGame.toGame p = false)
+    (hLM : LeastMate G k p) (hkD : k + 1 ≤ D)
+    (hspan : (D : Int) * EVAL_ROUGHNESS ≤ 21366) :
+    MATE_LOWER + ((D : Int) - (k : Int)) * EVAL_ROUGHNESS
+        ≤ nullValueD2 G guard D p ∧
+      nullValueD2 G guard D p
+        < MATE_LOWER + ((D : Int) - (k : Int) + 1) * EVAL_ROUGHNESS := by
+  have hML : MATE_LOWER = 47923 := rfl
+  have hER : EVAL_ROUGHNESS = 15 := rfl
+  have hkD' : (k : Int) + 1 ≤ (D : Int) := by exact_mod_cast hkD
+  constructor
+  · have h := forcedMate_complete G guard hF hZ hLM.1 D hkD
+    simp only [mateFloor] at h
+    simp only [hER] at hspan ⊢
+    simp only [hER] at h
+    have hnn : 0 ≤ ((D : Int) - (k : Int)) * 15 := by
+      have : (0 : Int) ≤ (D : Int) - (k : Int) := by omega
+      omega
+    omega
+  · by_cases hge : nullValueD2 G guard D p
+        < MATE_LOWER + ((D : Int) - (k : Int) + 1) * EVAL_ROUGHNESS
+    · exact hge
+    · exfalso
+      -- the value reaches rung `D - k + 1`, so that is a legal `t`
+      have ht : MATE_LOWER + ((D + 1 - k : Nat) : Int) * EVAL_ROUGHNESS
+          ≤ nullValueD2 G guard D p := by
+        have hc : ((D + 1 - k : Nat) : Int) = (D : Int) - (k : Int) + 1 := by omega
+        rw [hc]
+        simp only [hML, hER] at hge ⊢
+        omega
+      obtain ⟨n, hn1, hn2, hn3⟩ :=
+        forcedMate_of_value_dist G guard hF hQ hNM D (D + 1 - k) p hcapf ht
+      have := hLM.2 n hn3
+      omega
+
+/-- **Separation: a faster mate outscores a slower one by MORE than the
+driver's stopping tolerance.**
+
+`j < k` are two least mate distances at the same remaining depth `D`.
+Parity makes them two plies apart (`leastMate_gap`), so their rung
+indices `D - j` and `D - k` are two apart, so the block of `p` starts a
+full rung above where the block of `q` ends.
+
+The conclusion is stated as a STRICT `EVAL_ROUGHNESS <` gap because
+that is exactly the shape the driver needs: `search` stops at
+`upper - lower <= EVAL_ROUGHNESS`, and a difference strictly greater
+than `EVAL_ROUGHNESS` cannot fit inside such a window.  Halve the
+per-ply price and this theorem is false. -/
+theorem leastMate_value_separation (G : QSGame) (guard : G.Pos → Bool)
+    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
+    {j k D : Nat} {p q : G.Pos}
+    (hcapp : hasKingCapture G.toNullGame.toGame p = false)
+    (hcapq : hasKingCapture G.toNullGame.toGame q = false)
+    (hjp : LeastMate G j p) (hkq : LeastMate G k q) (hlt : j < k)
+    (hjD : j + 1 ≤ D) (hkD : k + 1 ≤ D)
+    (hspan : (D : Int) * EVAL_ROUGHNESS ≤ 21366) :
+    EVAL_ROUGHNESS
+      < nullValueD2 G guard D p - nullValueD2 G guard D q := by
+  have hER : EVAL_ROUGHNESS = 15 := rfl
+  have hgap := leastMate_gap G hjp hkq hlt
+  have hgap' : (j : Int) + 2 ≤ (k : Int) := by exact_mod_cast hgap
+  have hlo := (leastMate_value_block G guard hF hQ hNM hZ hcapp hjp hjD hspan).1
+  have hhi := (leastMate_value_block G guard hF hQ hNM hZ hcapq hkq hkD hspan).2
+  simp only [hER] at hlo hhi ⊢
+  omega
+
+/-! ### The driver's own tolerance is enough -/
+
+/-- **`MaximalChoice`, weakened by exactly the driver's stopping
+tolerance.**  `search` bisects only until
+`upper - lower <= EVAL_ROUGHNESS`, so the move left in `tp_move` is
+guaranteed only to be within `EVAL_ROUGHNESS` of the best -- which is
+what `MaximalChoice` idealises away and `formal/README.md` flags as an
+idealisation.  This is the honest version: `ch p` minimises the child's
+declared value up to `EVAL_ROUGHNESS`.
+
+`MaximalChoice` implies it (`nearMaximalChoice_of_maximal`), and every
+theorem below is stated for the weak form. -/
+def NearMaximalChoice (G : QSGame) (guard : G.Pos → Bool) (d : Nat)
+    (ch : G.Pos → G.Pos) : Prop :=
+  ∀ p, allIllegalB G p = false →
+    ch p ∈ movesAbove G (val_lower (d + 1)) p ∧
+      ∀ m ∈ movesAbove G (val_lower (d + 1)) p,
+        nullValueD2 G guard d (ch p) ≤ nullValueD2 G guard d m + EVAL_ROUGHNESS
+
+theorem nearMaximalChoice_of_maximal (G : QSGame) (guard : G.Pos → Bool)
+    (d : Nat) (ch : G.Pos → G.Pos) (h : MaximalChoice G guard d ch) :
+    NearMaximalChoice G guard d ch := by
+  intro p hai
+  obtain ⟨hmem, hmax⟩ := h p hai
+  refine ⟨hmem, fun m hm => ?_⟩
+  have := hmax m hm
+  have hER : (0 : Int) ≤ EVAL_ROUGHNESS := by decide
+  omega
+
+/-- Every forced mate has an ODD witness no larger than itself: the
+tightening step, `forcedMate_pred_of_even` packaged for the recursion. -/
+theorem forcedMate_odd_le (G : QSGame) {n : Nat} {p : G.Pos}
+    (h : ForcedMate G n p) :
+    ∃ n', n' ≤ n ∧ n' % 2 = 1 ∧ ForcedMate G n' p := by
+  by_cases hev : n % 2 = 0
+  · have hne : n ≠ 0 := fun h0 => not_forcedMate_zero G p (h0 ▸ h)
+    exact ⟨n - 1, by omega, by omega, forcedMate_pred_of_even G h hev⟩
+  · exact ⟨n, Nat.le_refl _, by omega, h⟩
+
+/-! ### The attacker half, under the driver's real stopping rule -/
+
+/-- **`forcedMate_play_mates`, with `MaximalChoice` replaced by
+`NearMaximalChoice`.**  The engine's own move choice -- now only
+required to be within `EVAL_ROUGHNESS` of the best, which is all the
+shipped bisection guarantees -- still mates within `k` plies.
+
+The proof is `forcedMate_play_mates`'s, with one slack ply everywhere
+and parity to pay for it.  Near-maximality loses exactly one rung:
+where the exact argmax hands the reached position a value at or below
+`-(MATE_LOWER + (D-k)*ER)`, the tolerant choice can only be pinned at
+`-(MATE_LOWER + (D-k-1)*ER)`.  Pushed through
+`forcedlyMated_of_value_dist` that yields replies with a forced mate in
+`n <= k - 1` rather than `n <= k - 2`, one ply too many.
+
+`forcedMate_odd_le` recovers it.  `k` is odd, so `k - 1` is EVEN, so an
+even budget is never tight and every reply's odd witness is at most
+`k - 2` after all.  The lost rung was never reachable.
+
+This is what the separation lemma buys, in the place it matters:
+`EVAL_ROUGHNESS` of tolerance is precisely affordable, and it is
+affordable only because achievable distances have a fixed parity. -/
+theorem forcedMate_play_shortest_odd (G : QSGame) (guard : G.Pos → Bool)
+    (ch : G.Pos → G.Pos) (d : Nat)
+    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
+    (hch : NearMaximalChoice G guard d ch) :
+    ∀ (k : Nat) (p : G.Pos),
+      k % 2 = 1 → k + 1 ≤ d + 1 → (d : Int) * EVAL_ROUGHNESS ≤ 21366 →
+      hasKingCapture G.toNullGame.toGame p = false →
+      ForcedMate G k p →
+      MatesWithin G ch k p := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  intro k
+  induction k using Nat.strongRecOn with
+  | _ k ih =>
+    intro p hkodd hkd hspan hcapf hFM
+    have hk1 : 1 ≤ k := by omega
+    have hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true) := by simp [hcapf]
+    -- 1. the root's declared value carries the distance
+    have hval := forcedMate_complete G guard hF hZ hFM (d + 1) hkd
+    simp only [EVAL_ROUGHNESS] at hspan
+    have hvalv : MATE_LOWER + (((d + 1 - k : Nat)) : Int) * 15
+        ≤ nullValueD2 G guard (d + 1) p := by
+      simp only [mateFloor, EVAL_ROUGHNESS] at hval
+      have hc : (((d + 1 - k : Nat)) : Int) = (d : Int) + 1 - (k : Int) := by omega
+      rw [hc]
+      omega
+    have hnn : (0 : Int) ≤ (((d + 1 - k : Nat)) : Int) := Int.ofNat_nonneg _
+    -- 2. the root is neither kingless nor terminal
+    have hkg : ¬ (G.eval p ≤ -MATE_LOWER) := by
+      intro hh
+      rw [nullValueD2_kingGone G guard (d + 1) p hh] at hvalv
+      omega
+    have hai : allIllegalB G p = false := by
+      cases hb : allIllegalB G p with
+      | false => rfl
+      | true =>
+        exfalso
+        rw [nullValueD2_of_allIllegal G guard d p hkg hcap hb] at hvalv
+        have h2 := (terminalValue_bounds G (d + 1) p).2
+        omega
+    -- 3. the chosen move is within one bracket of the fold's witness
+    obtain ⟨hmem, hnear⟩ := hch p hai
+    have hvfold := hvalv
+    rw [nullValueD2_of_fold G guard d p hkg hcap hai] at hvfold
+    have hnn15 : (0 : Int) ≤ (((d + 1 - k : Nat)) : Int) * 15 := by omega
+    obtain ⟨mw, hmw, hmwv⟩ :=
+      foldMax_failHigh_witness (fun x => -(nullValueD2 G guard d x))
+        (movesAbove G (val_lower (d + 1)) p) (nullTermD2 G guard d p)
+        (by have := nullTermD2_lt_ML G guard d p; omega) hvfold
+    -- ONE RUNG of slack: this is where the tolerance is spent.
+    have hchv : nullValueD2 G guard d (ch p)
+        ≤ -(MATE_LOWER + (((d - k : Nat)) : Int) * 15) := by
+      have h1 := hnear mw hmw
+      simp only [EVAL_ROUGHNESS] at h1
+      have hc : (((d + 1 - k : Nat)) : Int) = (((d - k : Nat)) : Int) + 1 := by omega
+      omega
+    have hnn2 : (0 : Int) ≤ (((d - k : Nat)) : Int) := Int.ofNat_nonneg _
+    -- 4. the reached position is legal, with its king on the board
+    have hmm : ch p ∈ G.moves p := movesAbove_subset G _ p (ch p) hmem
+    have hkgc : ¬ (G.eval (ch p) ≤ -MATE_LOWER) := fun hh =>
+      hcap ((hasKingCapture_iff G.toNullGame.toGame p).mpr ⟨ch p, hmm, hh⟩)
+    have hcapc : hasKingCapture G.toNullGame.toGame (ch p) = false := by
+      cases hc : hasKingCapture G.toNullGame.toGame (ch p) with
+      | false => rfl
+      | true =>
+        exfalso
+        rw [nullValueD2_of_capture G guard d (ch p) hkgc hc] at hchv
+        omega
+    -- 5. the distance-carrying converse at the reached position
+    obtain ⟨d0, rfl⟩ : ∃ d0, d = d0 + 1 := ⟨d - 1, by omega⟩
+    have hcv : nullValueD2 G guard (d0 + 1) (ch p)
+        ≤ -(MATE_LOWER + (((d0 + 1 - k : Nat)) : Int) * EVAL_ROUGHNESS) := by
+      simp only [EVAL_ROUGHNESS]
+      exact hchv
+    have hFL := forcedlyMated_of_value_dist G guard hF hQ hNM d0
+      (d0 + 1 - k) (ch p) hcapc hkgc hcv
+    -- 6. read off the play
+    cases hFL with
+    | inl hcm =>
+      obtain ⟨n, hn⟩ : ∃ n, k = n + 1 := ⟨k - 1, by omega⟩
+      rw [hn]
+      exact MatesWithin.mate hcm
+    | inr hrest =>
+      obtain ⟨hnt, n, hn1, hn2, hall⟩ := hrest
+      -- `n <= k - 1` is one ply too many; PARITY tightens it to `k - 2`.
+      have hnk : n + 1 ≤ k := by omega
+      refine matesWithin_mono G ch (MatesWithin.step (n := k - 2) hnt ?_) k (by omega)
+      intro m hm hleg
+      obtain ⟨n', hn'le, hn'odd, hn'FM⟩ := forcedMate_odd_le G (hall m hm hleg)
+      have hn'k : n' + 2 ≤ k := by omega
+      have := ih n' (by omega) m hn'odd (by omega)
+        (by simp only [EVAL_ROUGHNESS]; omega) hleg hn'FM
+      exact matesWithin_mono G ch this (k - 2) (by omega)
+
+/-- **DISTANCE-TO-MATE OPTIMALITY, attacker half.**  From a root whose
+EXACT distance to mate is `k`, the engine's own move choice -- required
+only to be within the driver's own `EVAL_ROUGHNESS` stopping tolerance
+of the best -- mates within `k` plies against every legal defence.
+
+`k` is the least forced-mate distance, so no strategy whatsoever mates
+faster against best defence: the engine attains the game-theoretic
+optimum, which is the "shortest PV" half of sunfish.py's constant-block
+claim.  Parity (`leastMate_odd`) is what connects the two statements --
+it is what makes a least distance an ODD one, and the odd distances are
+exactly the ones the driver's final bracket can tell apart. -/
+theorem leastMate_play_shortest (G : QSGame) (guard : G.Pos → Bool)
+    (ch : G.Pos → G.Pos) (d : Nat)
+    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
+    (hch : NearMaximalChoice G guard d ch)
+    {k : Nat} {p : G.Pos}
+    (hLM : LeastMate G k p) (hkd : k + 1 ≤ d + 1)
+    (hspan : (d : Int) * EVAL_ROUGHNESS ≤ 21366)
+    (hcapf : hasKingCapture G.toNullGame.toGame p = false) :
+    MatesWithin G ch k p :=
+  forcedMate_play_shortest_odd G guard ch d hF hQ hNM hZ hch k p
+    (leastMate_odd G hLM) hkd hspan hcapf hLM.1
+
+end Sunfish
