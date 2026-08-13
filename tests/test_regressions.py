@@ -68,6 +68,29 @@ def render(hist, move):
     return uci.render_move(move, white_pov=len(hist) % 2 == 1)
 
 
+class TestKingTableFreshness:
+    @pytest.mark.parametrize(
+        "fen, stale_table, selected_table",
+        [
+            ("3qk3/8/8/8/8/8/4KQ2/8 w - - 0 1", "end", "mid"),
+            ("8/8/8/8/8/8/8/K2k4 w - - 0 1", "mid", "end"),
+        ],
+    )
+    def test_search_refreshes_history_after_selecting_king_table(
+            self, fen, stale_table, selected_table):
+        tables = {"mid": sf.K_MID, "end": sf.K_END}
+        sf.pst["K"] = tables[stale_table]
+        uci.sunfish = sf
+        hist = hist_from_fen(fen)
+        stale = hist[-1].score
+
+        next(sf.Searcher().search(hist))
+
+        assert sf.pst["K"] == tables[selected_table]
+        assert hist[-1].score == sf.evaluate(hist[-1].board)
+        assert hist[-1].score != stale
+
+
 class TestStalemateBlindness:
     """lichess SSPx1Gr0 (2026-08-05): with Q+R vs bare K and mate-in-2 on
     the board, the deployed engine played Qc4?? stalemate. Root cause: a

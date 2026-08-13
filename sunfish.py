@@ -163,6 +163,11 @@ opt_ranges = dict(
 Move = namedtuple("Move", "i j prom")
 
 
+def evaluate(board):
+    score = sum(pst[p][i] for i, p in enumerate(board) if p in "PNBRQK")
+    return score - sum(pst[p.upper()][119 - i] for i, p in enumerate(board) if p in "pnbrqk")
+
+
 class Position(namedtuple("Position", "board score wc bc ep kp")):
     """A state of a chess game
     board -- a 120 char representation of the board
@@ -491,17 +496,21 @@ class Searcher:
 
     def search(self, history):
         """Iterative deepening MTD-bi search"""
+        # When queens come off, the kings can start to move to the center.
+        # This is important to win KRK/KQK endings. Both directions every
+        # search: table state must never outlive the condition (reused
+        # processes start new games with this module state).
+        king = K_MID if all(q in history[-1].board for q in "Qq") else K_END
+        if pst["K"] is not king:
+            pst["K"] = king
+            # Scores were accumulated under the previous king table. Refresh
+            # them before hashing or generating incremental descendants.
+            history[:] = [pos._replace(score=evaluate(pos.board)) for pos in history]
         self.nodes, self.history = 0, set(history)
         self.tp_score.clear()
         # Table choice is fixed for the whole search (and tp_score is
         # cleared above), so every bound targets one value function.
         pos = self.root = history[-1]
-
-        # When queens come off, the kings can start to move to the center.
-        # This is important to win KRK/KQK endings. Both directions every
-        # search: table state must never outlive the condition (reused
-        # processes start new games with this module state).
-        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END
 
         gamma = 0
         # In finished games, we could potentially go far enough to cause a recursion
