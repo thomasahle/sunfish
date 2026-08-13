@@ -46,6 +46,8 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-13 | **The frontier futility margin is ALREADY TUNED — axis closed** | −40 costs **−110.3 ± 40.6** (largest single-parameter regression here), −15 is level, both positives lose. The zero-byte candidate packs to 3476 and plays 110 worse |
+| 2026-08-13 | **corrhist fully explained: it moved a constant that was already right** | Its correction was a variable +10…+18 cp margin, and a fixed margin in that range costs what corrhist cost. Closed, not shelved |
 | 2026-08-13 | **IIR LANDS: +41.3 ± 22.4 head-to-head, and the entry SHRINKS to 3471** | 3,960/3,960 games, 0 forfeits/illegal. Stronger AND smaller — a first for this lane. Shipping form `iirk.noiid` (3472) in fixed-N confirmation |
 | 2026-08-13 | **History DROPPED a second time, now by the right instrument** | −3.2 ± 21.6 over 660 games against a +62 bar. The node-ratio dismissal was right after all; the depth-9 caveat is closed (28% MORE nodes) |
 | 2026-08-13 | **The 4-arm pool is NON-TRANSITIVE, and the pooled ranking misleads** | fastchess ranks `hist` FIRST at +15.8 while its head-to-head with base is −3.2. Raw win counts confirm the intransitivity is real, not an analyzer bug |
@@ -156,6 +158,50 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-13 — THE FRONTIER FUTILITY MARGIN IS ALREADY TUNED, and that explains corrhist
+
+**The axis is closed in both directions, and the zero-byte candidate is dead.**
+
+The frontier futility test is `pos.score + val < gamma`, i.e. a margin of
+**zero**, and it has never been tuned — QS/QS_A were swept, this constant was
+not. corrhist's autopsy said the margin was the mechanism, so it was measured
+directly. Five points now exist on that axis, all fixed-node, all our-vs-our:
+
+| margin at depth ≤ 1 | measurement | Elo vs base |
+|---|---|---|
+| **−40** (`futm40y`) | 256 g, raw 64–141 | **−110.3 ± 40.6** |
+| **−15** (`futmy`) | 258 g, raw 93–99 | **−4.0 ± 38.9** |
+| **0** | the entry | — |
+| **+15** (`fut`) | 71 g, stopped, preliminary | ≈ −54 |
+| **+40** (`fut40`) | 72 g, stopped, preliminary | ≈ −25 |
+| variable, mean +10…+18 (corrhist) | 617 g | **−54.8 ± 23.3** |
+
+**Zero is at or next to a local optimum, and the well is steep on the pruning
+side.** −40 costs **110 Elo** — the largest single-parameter regression in this
+ledger. −15 is level. Both positive margins lose. There is no free Elo here and
+no zero-byte win: `futm40y` packs to 3476 and plays 110 Elo worse.
+
+**This closes corrhist completely.** Its correction was a *variable positive*
+margin averaging +10 to +18 cp, and a fixed positive margin in that range costs
+roughly what corrhist cost. corrhist did not fail because a pawn-skeleton key
+is a bad idea or because 127 bytes is dear; **it failed because the thing it
+moved was already in the right place**, and every cp it added to that test was
+spent making a well-tuned rule worse. The mechanism is understood end to end,
+which is the standard for closing an item rather than shelving it.
+
+**Stopped deliberately at 772 of 1,800 games** to give the box to the
+`iirk.noiid` confirmation, which gates a landing. The direction was established
+far outside noise by then (−110 ± 41 and −4 ± 39), and the remaining games would
+have refined a negative at the cost of delaying a decision. The `fut`/`fut40`
+rows are flagged preliminary and stay preliminary — they are the mirror of a
+result that is not in doubt, not evidence in their own right.
+
+**Method note that generalises.** The zero-byte claim was real (`+QS` packed to
+3475 exactly) and the arm was still worthless. Byte price and Elo are
+independent, and a cheap candidate deserves the same screen as a dear one —
+"free" is a reason to *test* something, never a reason to ship it. Two of
+today's four candidates were byte-negative and only one of them was any good.
 
 ## 2026-08-13 — THE ORDERING RR: history is dead a second time, and IIR lands
 
