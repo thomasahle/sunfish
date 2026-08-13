@@ -74,6 +74,13 @@ how much effort it cost.
 | 2026-08-13 | corrhist byte price, `pack.sh` on real files | **+127 B** (entry 3475 -> **3602**, spare 621 -> 494). Golfing recovers 5 B -- lzma already had the repetition |
 | 2026-08-13 | corrhist keep/drop **PRE-REGISTERED** before the screen | Standing 1.0 Elo/byte bar => needs fixed-node **>= +135.5**. The budget-average rate the +400 goal implies (0.41 Elo/byte) would need only +60.5; both written down, decided on the strict one |
 | 2026-08-13 | corrhist correction table censused: not a feedback runaway | median +2...+8 cp, 1-5% at the +/-120 clamp, 4-7k entries per search. The screen measures the feature, not a degenerate one |
+| 2026-08-13 | **LANDED on top of kend+fresh: the entry is 3378 bytes, 718 spare** | Rebuilt, not composed: −97 on this base, not the −94 of the last one. All gates green, 60/60 same move AND same score |
+| 2026-08-13 | **`agree.py` was comparing two different UCI DRIVERS** | An engine outside the repo tree silently uses the builtin `go` loop. A byte-identical copy of the entry "disagreed" with itself 39/60 on score. Both arms now STAGED into one directory, and an A-vs-A positive control is wired in |
+| 2026-08-13 | **Eval tables decode at startup: entry 3483 → 3389, 707 spare** | Tables bit-identical; 60/60 same move AND same score at fixed nodes. Decoder costs **13 B**, decode 1.07 ms. *(Measured on the pre-kend/fresh base; superseded by the 3378 row above)* |
+| 2026-08-13 | Eval-data price list, one build per row | Literal 1.31 B/value → base-90 exact 1.03 → step-8 0.65 → mirrored step-8 0.70 (192 values). Codec within 10% of the entropy bound |
+| 2026-08-13 | **Tapering re-priced: −77 bytes, not +400** | Two mirrored step-8 tables + root blend = **3312 B, 784 spare**. No second accumulator: the root already rebuilds a table. **No Elo claimed** |
+| 2026-08-13 | Historical 1207-byte net re-decoded (correction) | 944 B of factors (not 816) → 7680 values, but they feed an **18→10→1 MLP per node** — it is a runtime net, not a PST |
+| 2026-08-13 | **Stale-score bug in the shipped entry: 134 cp** | The bare-king `K_MID`/`K_END` swap invalidates the carried incremental score. Pre-existing; fix is in `search()` |
 | 2026-08-13 | **HOLE RR COMPLETE: 4,000 games, and `entry_kf` SHIPS** | **+107.5 ± 31.6 vs classic**, 0 forfeits, 0 illegal. The hole reproduced at **−71.3** and the fix closes it to **+20.0**. Landed: entry **3483 → 3475, 621 spare** |
 | 2026-08-13 | LMR's timed value is the SAME with and without the eval bug | +65.9 ± 27.1 (unfixed) vs +72.3 ± 25.1 (fixed). LMR was never "masking" the hole — the defects were additive |
 | 2026-08-13 | Classic-anchored differences run ~50 Elo above the head-to-head ones | Both signs agree, magnitudes do not (1.5σ). Head-to-head is the paired instrument; the anchored spread is the one to distrust |
@@ -1051,6 +1058,305 @@ because with no tc the `sunfish_ui` driver sets the in-search deadline to
 now + 600 s (the 1.5 s default belongs to the builtin loop, which only the
 packed artifact runs) — and both arms print which driver they resolved, which
 the script compares and refuses to proceed on.
+## 2026-08-13 — Base-90 lands on the moved base: 3378 bytes, 718 spare, and the agreement instrument was comparing two different drivers
+
+The startup decode was measured on the pre-`kend`/`fresh` entry (the entry
+below). The search lane then landed `kend`+`fresh` at 3475. **The two numbers
+were never allowed to be added**, and they don't add: lzma carries one
+dictionary across the whole stream, so the second lander rebuilds. Rebuilt, on
+the real file, through `tools/build/pack.sh`:
+
+| | bytes | spare |
+|---|---|---|
+| entry, `kend`+`fresh`, decimal-literal tables | 3475 | 621 |
+| **entry, `kend`+`fresh`, startup-decoded tables** | **3378** | **718** |
+
+**−97, not −94.** The composed guess (3475 − 94 = 3381) would have been wrong
+by 3 bytes in the safe direction this time; it is the sixth composed byte
+figure in this project to miss, and the first one nobody acted on.
+
+Rebased rather than cherry-picked: the eval commit is a single commit whose
+only overlap with the search lane is textual (the generator's head vs its
+tail), so a rebase keeps one linear history and one commit to review. Three
+conflicts, all resolved by keeping master's version where it had landed
+independently: master's `pathlib`-derived `REPO` (PR #176) supersedes the
+identical `os.path`-derived fix this lane wrote in parallel — the `os` import
+it added is gone with it.
+
+### The instrument failure: a byte-identical engine disagreed with itself
+
+The pre-registered gate was "same move and same score over ~60 positions
+against the pre-decode build". The first run came back **60/60 moves but
+21/60 scores**, which reads exactly like a decoder that is not exact. It was
+not. Two harness defects, found by asking the instrument to compare the
+candidate against *a copy of itself*:
+
+1. **`go nodes N` is not fixed effort.** The node cap is an *additional* stop
+   on top of the clock, and with no time fields the engine defaults to
+   `wtime=60000` → a 1.5 s deadline with a 1.2 s soft break. Under the league
+   ladder's load that break can fire first. Fixed by sending an hour on both
+   clocks so only the cap binds. *(This was not the cause here — 8000 nodes
+   takes ~90 ms — but it was a live trap for any slower budget.)*
+2. **The engine picks its UCI driver from its own path.** `main()` does
+   `sys.path.insert(0, grandparent(__file__))` and imports `sunfish_ui`. An
+   engine at `REPO/nnue_4k/x.py` gets the full driver; the *same bytes* copied
+   to `/var/folders/...` find nothing and fall into the builtin `go` loop,
+   which parses `go` differently. `agree.py` compared an in-repo file against
+   a scratchpad file — **two different programs**. That is the whole 39-score
+   gap, and it is reproducible: byte-identical copy, 39/60 scores differ.
+
+Both are fixed in `tools/eval4k/agree.py`. Every arm is now **staged into one
+directory under the repo** before it is run, `ask()` returns the engine's own
+`info string driver` line, and `compare()` **raises** if the two arms did not
+resolve the same driver. The script now runs a **positive** control (A against
+a byte-identical copy, which must agree everywhere) as well as the negative
+one, and fails loudly if either misbehaves.
+
+The lesson generalises past this lane: *where an engine file sits changes what
+engine it is*. Any harness in this repo that copies an engine somewhere before
+running it is comparing something other than what it thinks.
+
+### The gates, after the fix
+
+    A vs B     positions 60  nodes 8000   same move 60/60   same score 60/60
+    self       positions 60  nodes 8000   same move 60/60   same score 60/60
+    control    positions 60  nodes 8000   same move 33/60   same score  1/60
+
+- **Tables bit-identical**, asserted inside the generator on every build, and
+  re-checked independently at runtime: `piece`, `pst` (all six, padded),
+  `K_MID` and `K_END` all compare equal against the literal build.
+- `check_entry.sh`: source matches generator, packs to **3378 (718 spare)**.
+- `legality_gate.py`: **40 FORCED / 30 in-check / 30 quiet, 0 no-move,
+  0 illegal**.
+- Artifact **alone in an empty directory with `SF_NET` and `PYTHONPATH`
+  unset**: `uciok` → `readyok` → `bestmove g1f3`, **no files left behind**.
+- `nnue_4k/tests`: 28 passed.
+
+**No Elo is claimed and no match should be spent.** The engine is behaviourally
+identical to the one that measured +107.5 ± 31.6 vs classic; this buys 97 bytes
+of headroom for the eval work that follows, nothing else.
+
+By the same rule that produced the −97: **the tapering price below (3312 B,
+−77) is now stale too, and it cannot simply be re-run.** `price_taper.py`
+splices the phase blend in at the bare-king swap, and `kend` deleted that
+line — the script now fails its own anchor assert (`bare-king swap not
+found`) rather than pricing something else, which is the correct behaviour.
+Re-anchoring it is part of the taper candidate, not of this landing, because
+the new king rule (`K_MID` iff both queens are on) is *itself* a phase rule
+and the two have to be reconciled before there is a shape to price. Its
+*shape* argument — mirrored step-8 eg table at 134 B, no second accumulator
+because the root already rebuilds — is unaffected; only the number is, and
+the eg data behind it was filler in the first place.
+
+One number recorded rather than resolved: our locally packed 3475-byte
+baseline hashes to `823cb35c…`, while the search lane's ledger records
+`939506a5…` for the same 3475 bytes. Both are internally consistent and
+size-identical — the lane packed on the bench box, we pack on the laptop, and
+`pyminify`/`xz` versions differ. **A packed sha is only comparable within one
+toolchain**; the size is the portable number.
+
+Conditions: laptop, timed league ladder cotenant throughout (load ~5.4 on
+12 cores, 3 pypy3 + 1 python at ~100%). No matches, screens or nps figures
+were taken. Every figure above is either a byte count or a deterministic
+fixed-node comparison, and the positive control certifies that the
+determinism actually held.
+
+---
+
+## 2026-08-13 — The eval decodes at startup: 94 bytes free and EXACT, and tapering now costs LESS than the table it replaces
+
+*(Pointer added on landing, no number below altered: every byte figure in this
+entry is measured on the **pre-`kend`/`fresh`** entry, which no longer exists.
+The shipped figures are in the 3378-byte entry above; the price-list ratios and
+the shape arguments here still hold.)*
+
+The reframe under test: **the net is a compression scheme for tables, not a
+runtime evaluator.** TCEC 4k gives 60 s of startup, so evaluation data should
+be stored in whatever form is smallest and expanded once at load time into the
+plain 120-square tables the search already reads. Nothing enters the hot loop;
+`value(move)` still does two lookups and the score stays O(1) incremental.
+
+Every number below is **built, not composed** — one real file per row through
+`tools/build/pack.sh`, size read off disk.
+
+### Landed: the entry is 3389 bytes with 707 spare, and it plays identically
+
+| | bytes | spare |
+|---|---|---|
+| entry, decimal-literal tables (previous) | 3483 | 613 |
+| **entry, startup-decoded tables** | **3389** | **707** |
+
+The 384 numbers are unchanged — the decoder reproduces classic's tables
+**bit-identically**, asserted inside the generator on every build. Gates:
+
+- `check_entry.sh`: source matches generator, packs to 3389.
+- `legality_gate.py`: 100/100, **0 no-move, 0 illegal**, including the 40 forced
+  (in check, ≤2 legal replies) positions.
+- Standalone in an empty directory with `SF_NET` unset: `uciok` → `readyok` →
+  `bestmove d2d4`, **no files left behind**.
+- `nnue_4k/tests`: 28 passed.
+- **Behavioural identity, 60 positions at 8000 fixed nodes: 60/60 same move,
+  60/60 same score.** No match is needed to justify this change and none should
+  be spent on it.
+
+### The decoder
+
+Nine lines. All six tables are one big integer in mixed radix, written as a
+base-90 string over ASCII 35..126 minus the apostrophe and the backslash:
+
+    _v=0
+    for _c in "...": _d=ord(_c)-35;_v=_v*90+_d-(_d>4)-(_d>56)
+
+**No numpy.** (Aside: the ledger's "our pypy3 has no numpy" note is stale —
+this laptop's pypy3 has numpy 2.4.6 — but a decoder that needs nothing beats a
+decoder that needs a wheel, and integer arithmetic is fast enough that the
+question never arises.) Decode cost **1.07 ms** against a 60 000 ms budget.
+
+### The price list, one build per row
+
+Measured against `b90_null` = 2994 B (the decode machinery with a 1-value
+payload), so the third column is the marginal cost of the DATA alone.
+
+| scheme | entry bytes | data bytes | B/value | tables |
+|---|---|---|---|---|
+| decimal literal (what we shipped) | 3483 | **502** | 1.31 | exact |
+| **base-90, exact (210 levels)** | **3389** | **395** | **1.03** | **exact** |
+| base-90, step 2 | 3337 | 343 | 0.89 | max abs err 1 |
+| base-90, step 4 | 3291 | 297 | 0.77 | 2 |
+| base-90, step 8 | 3242 | 248 | 0.65 | 4 |
+| base-90, step 16 | 3195 | 201 | 0.52 | 8 |
+| file-mirrored, exact (192 values) | 3200 | 206 | 1.07 | 87 |
+| file-mirrored, step 4 | 3152 | 158 | 0.82 | 88 |
+| file-mirrored, step 8 | 3128 | 134 | 0.70 | 88 |
+| *the decoder machinery itself* | 2994 | **13** | — | — |
+
+Three things follow.
+
+1. **The decoder is free (13 bytes).** Its cost is a rounding error against any
+   payload, so the question is only ever how few values you need and how
+   coarsely you can round them.
+2. **Exact re-encoding buys 94 bytes and nothing else** — the entropy of 384
+   int8 values is the floor and lzma on decimal text was only 27% above it.
+   Anyone hoping for a 300-byte win from *encoding* should stop here.
+3. **The wins are in fewer values and fewer levels.** step 8 costs 0.65 B/value
+   against an entropy bound of 0.59 — the codec is within 10% of optimal, so
+   further work on the *codec* is worth at most ~10%. Work on the *shape*.
+
+### What the historical 1207-byte net actually is (correcting an earlier entry)
+
+The 2026-08-12 entry read `models/color2.pickle` @ `0c0a33a` as "a trained
+rank-6 factorisation, 816 int8 → 4608 PST values, exact by construction". Two
+corrections after decoding it against its own engine (`sunfish_nnue_color.py`
+@ the same commit):
+
+| array | bytes | what it is |
+|---|---|---|
+| `ars[0]` | 384 | 64 squares × 6 latent dims |
+| `ars[1]` | 360 | 10 outputs × 6 dims × 6 piece types |
+| `ars[2]` | 6 | **never referenced by the engine — 6 dead bytes** |
+| `ars[3]` | 200 | 10 × 10 × 2 colour combiner |
+| `ars[4]` | 180 | layer1, 10 × 18 |
+| `ars[5]` | 10 | layer2, 10 × 1 |
+| | 1140 | + 67 bytes of pickle framing = the 1207 |
+
+1. The factorisation is **944 bytes, not 816**, and it produces
+   2 × 6 × 64 × **10** = 7680 values (the earlier read dropped the colour
+   einsum). 8.1 values per byte.
+2. **It is not a PST.** Those 10 dims are an *accumulator*, and the engine runs
+   an 18 → 10 → 1 MLP on them at every node. The historical artifact is exactly
+   the thing this project has proven cannot pay for itself — a net in the hot
+   loop — and its 4008-byte artifact was weak.
+
+So it is the floor to beat in *packing density*, and an anti-pattern in
+architecture. The transferable half is the shape: a rank-r factorisation of
+(square × piece). For a **scalar** table that is 64r + 6r values against 384,
+which beats the codec only below r≈5 — i.e. the factorisation is *dominated* by
+plain mirroring plus quantisation at the precision a PST actually needs. That
+is why the ladder above stores values and not factors.
+
+### A 134 cp stale-score bug in the shipped entry
+
+Found while looking for somewhere to hang a phase blend. `search()` swaps
+`pst["K"]` between `K_MID` and `K_END` at the root, but the artifact's UCI loop
+accumulates `score` incrementally from the initial position for the whole game.
+Everything banked before the swap used the other table.
+
+    KRK, white Ke4 Rd1, black Kg7
+    carried score (accumulated under K_MID)   399
+    consistent with K_END                     533
+    STALE BY                                 -134 cp
+
+The offset is fixed at the moment of the swap and then flips sign every ply as
+the score rotates, so it acts like a ±134 cp tempo bonus on stand-pat and
+futility — in bare-king endings, which is precisely what `K_END` was added to
+win. This is **pre-existing, not introduced by the decoder**, and the fix is one
+line inside the swap block (rebuild the root from `from_board`). It sits in
+`search()`, so it is being handed to the search lane rather than landed here.
+
+### The candidate: tapering is now cheaper than the table it replaces
+
+The ledger declined tapering at "~300-400 B for the second table plus ~100 B of
+accumulator threading" for 1.8 loss-points. Both halves of that price are wrong
+now:
+
+- the second table costs **134-248 B** through the codec, not 300-400;
+- **no second accumulator is needed.** The engine already rebuilds a table at
+  the root once per search (the `K_MID`/`K_END` swap), and tapering is that same
+  mechanism with a phase instead of a boolean. Tables stay fixed for the whole
+  search, which is what the comment there already requires.
+
+Built and packed, with the root-score rebuild included and the eg table filled
+with *uncorrelated* perturbed data (so the data figure is an upper bound — a
+real eg table shares structure with mg and lzma would find some of it):
+
+| build | bytes | spare | vs today |
+|---|---|---|---|
+| entry today (single table, exact) | 3389 | 707 | — |
+| tapered, two full 384-value tables, step 8 | 3544 | 552 | **+155** |
+| **tapered, two mirrored 192-value tables, step 8** | **3312** | **784** | **−77** |
+
+Both play standalone in an empty directory; decode 2.12 ms and 0.80 ms.
+
+**A tapered eval fits in 77 bytes LESS than the untapered one we ship.** That
+is the whole point of the reframe, and it is measured.
+
+### What is NOT claimed, and what would have to be true
+
+No Elo is claimed for tapering. The honest state of the evidence is hostile:
+Texel tuning improved the fit 10.1% and measured **−16.7 ± 31.2** in play, and
+tapering added only 1.8 points on top of that same fit on that same data. **A
+static-loss argument for this candidate would be the third time this lane
+believed one.** What has changed is the price, not the evidence.
+
+The candidate is also **not trainable today**: the 15 328-position labelled set
+lived in a session scratchpad and was purged, so `tools/tune/texel_taper.py`
+has no input. Rebuilding it needs game pgns plus local Stockfish and is the
+gating step, not the byte budget.
+
+Two other things the price list makes affordable, recorded so they are not
+re-derived: **file mirroring** costs 283 B to *save* and changes the tables by
+up to 87 cp (classic's hand tables are not symmetric — the asymmetries look
+like 2014 noise, e.g. N c7=+100 against d7=−36), and **king-bucketed tables**
+now cost ~134 B per bucket, which puts a 4-bucket table inside the 707 spare
+for the first time. Both change the eval and neither may skip a screen.
+
+### Harness failures found tonight (all the same shape as the other eight)
+
+- `tools/build/make_pst_entry.py` had **`REPO` hard-coded to an absolute
+  path**, so running it inside a git worktree regenerated the entry from the
+  *other* checkout's sources and `check_entry.sh` cheerfully verified a file it
+  had never read. Fixed to derive the root from `__file__`.
+- The first version of `agree.py` drove the **packed artifact** with
+  `position fen` and `go depth 5`. The artifact's built-in UCI loop supports
+  neither: it ignores `position fen` outright and parses `go depth 5` as "60 s
+  on the clock". It would have reported agreement figures for the wrong
+  positions at a nondeterministic budget. Rewritten to drive the *source*
+  through the `sunfish_ui` driver at fixed nodes.
+- `legality_gate.py` takes the engine **source**, not the artifact — it runs
+  `[sys.executable, ENGINE]`. Handed the packed file it reports 100 bad answers
+  that read exactly like an engine bug.
+- `agree.py` ships its own negative control and it fires: perturb one table
+  value and agreement drops to **34/60 moves and 1/60 scores**.
 
 ## 2026-08-13 — THE HOLE ROUND-ROBIN, COMPLETE: 4,000 games, and the fix ships
 

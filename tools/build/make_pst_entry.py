@@ -23,6 +23,9 @@ import pathlib
 # worktree it silently regenerated from the OTHER checkout -- so
 # check_entry.sh verified a file it had never read.
 REPO = str(pathlib.Path(__file__).resolve().parents[2])
+sys.path.insert(0, REPO + "/tools/eval4k")
+import codec  # noqa: E402
+
 OUT = sys.argv[1]
 src = open(REPO + "/nnue_4k/sunfish_nnue.py").read()
 classic = open(REPO + "/sunfish.py").read()
@@ -36,6 +39,22 @@ tables = m.group(0)
 # classic pads its tables at import; keep whatever padding code follows
 pad = re.search(r"\npst = \{.*?\n\}", classic, re.S)
 assert pad, "pst literal not found"
+
+# ---- store the tables through the startup decoder ------------------------
+# Same 384 numbers, bit-identical after decode, 97 fewer bytes in the packed
+# artifact (3475 -> 3378) measured by pack.sh on the real file. Not 94: that
+# was the saving on the pre-kend/fresh entry, and lzma shares one dictionary
+# across the stream, so byte deltas do not compose across landings.
+_ns = {}
+exec(tables[: tables.index("# Pad tables")], _ns)
+tables = codec.emit(_ns["piece"], _ns["pst"])
+_chk = {}
+exec(tables, _chk)
+_ref = {}
+exec(m.group(0), _ref)
+assert all(tuple(_chk["pst"][k]) == tuple(_ref["pst"][k]) for k in "PNBRQK"), \
+    "decoder does not reproduce classic's tables"
+assert _chk["K_MID"] == _ref["K_MID"] and _chk["K_END"] == _ref["K_END"]
 
 # ---- excise the NNUE region ---------------------------------------------
 i = src.find("import json as _json")
