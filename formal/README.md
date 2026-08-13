@@ -264,21 +264,27 @@ constant is a change to this theorem.
 | a faster mate outscores a slower one by more than `EVAL_ROUGHNESS` | `leastMate_value_separation` | `+ Classical.choice` |
 | the driver's own tolerance suffices | `forcedMate_play_shortest_odd` | `+ Classical.choice` |
 | the engine attains the optimal distance | `leastMate_play_shortest` | `+ Classical.choice` |
+| a mated node's own distance is even | `leastMated_odd_or_zero` | `propext, Quot.sound` |
+| the engine's defence is distance-maximal | `defence_maximal_resistance` | `+ Classical.choice` |
 
 The parity spine is choice-free, like the distance spine it extends; the
 `Classical.choice` in the value results is inherited from
 `legal_of_allIllegalB_false`, unchanged.
 
-**Not yet proven: the defender half.**  "The losing side drags the mate out as
-long as it can" is the mirror statement and is not in this file.  Its shape:
-at a `ForcedlyMated` node the children are attacker-to-move nodes whose values
-are positive mate values, `MaximalChoice` MINIMISES the child value, and
-minimising `MATE_LOWER + (D - n) * EVAL_ROUGHNESS` is maximising `n` -- so the
-local step is the same block/separation argument read in the other direction.
-The missing pieces are a `LeastMated` predicate with its own parity lemma (a
-mated node's distance is EVEN, dual to `leastMate_odd`) and the global
-induction that the play lasts the full distance.  It is stated here as
-outstanding work, not admitted anywhere: `Shortest.lean` contains no `sorry`
+**The defender half.**  "The losing side drags the mate out as long as it can"
+is the same ordering read the other way.  At a lost node the reached positions
+are attacker-to-move and their values are positive mate values
+`MATE_LOWER + (d - n) * EVAL_ROUGHNESS`, and `MaximalChoice` MINIMISES the
+reached value -- so minimising the value is maximising `n`.
+`defence_maximal_resistance` proves the local step: no legal reply leaves the
+attacker a nearer mate than the engine's own move does.  Parity refunds the
+tolerance in exactly the same place as on the attacker side -- the block bounds
+plus one `EVAL_ROUGHNESS` of slack give `i <= j + 1`, and both are odd.
+
+What is NOT yet proven is the global defender induction: that the resulting
+play lasts the full distance, which needs an inductive `ResistsFor` dual to
+`MatesWithin` and the corresponding strong recursion.  It is recorded here as
+outstanding work and is admitted nowhere: `Shortest.lean` contains no `sorry`
 and no unproven declaration.
 
 ## Terminal positions and legality evidence

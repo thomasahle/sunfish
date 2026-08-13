@@ -422,4 +422,81 @@ theorem leastMate_play_shortest (G : QSGame) (guard : G.Pos → Bool)
   forcedMate_play_shortest_odd G guard ch d hF hQ hNM hZ hch k p
     (leastMate_odd G hLM) hkd hspan hcapf hLM.1
 
+/-! ### The defender half: maximal resistance -/
+
+/-- The mated side's dual parity step.  `ForcedlyMated`'s budget is the
+ATTACKER's, one ply past the defender's reply, so the two disjuncts read
+`0` (mate is here) and `k + 1` plies.  An even attacker budget is never
+tight, for the same reason as `forcedMate_pred_of_even` and by direct
+appeal to it at every legal reply. -/
+theorem forcedlyMated_pred_of_even (G : QSGame) {k : Nat} {q : G.Pos}
+    (h : ForcedlyMated G k q) (hev : k % 2 = 0) :
+    ForcedlyMated G (k - 1) q := by
+  cases h with
+  | inl hcm => exact Or.inl hcm
+  | inr hrest =>
+    obtain ⟨hai, hall⟩ := hrest
+    exact Or.inr ⟨hai, fun m hm hleg =>
+      forcedMate_pred_of_even G (hall m hm hleg) hev⟩
+
+/-- The least attacker budget at a mated node, dual to `LeastMate`. -/
+def LeastMated (G : QSGame) (k : Nat) (q : G.Pos) : Prop :=
+  ForcedlyMated G k q ∧ ∀ j, ForcedlyMated G j q → k ≤ j
+
+/-- **A mated node's distance is EVEN.**  Either mate is here (`k = 0`,
+zero plies) or the attacker's least remaining budget is odd, so the
+defender's own distance `k + 1` is even.  The dual of `leastMate_odd`,
+and the reason the same two-rung separation holds on the losing side. -/
+theorem leastMated_odd_or_zero (G : QSGame) {k : Nat} {q : G.Pos}
+    (h : LeastMated G k q) : k = 0 ∨ k % 2 = 1 := by
+  by_cases hz : k = 0
+  · exact Or.inl hz
+  · refine Or.inr ?_
+    by_cases hev : k % 2 = 0
+    · exact absurd (h.2 (k - 1) (forcedlyMated_pred_of_even G h.1 hev)) (by omega)
+    · omega
+
+/-- **MAXIMAL RESISTANCE, the defender half's local step.**  At a lost
+position the engine's own choice is a distance-MAXIMAL defence: no legal
+reply `m` leaves the attacker a mate nearer than the one the engine's
+move `ch q` leaves.
+
+`MaximalChoice` minimises the reached position's declared value, and at
+a lost node those values are the attacker's positive mate values
+`MATE_LOWER + (d - n) * EVAL_ROUGHNESS` -- so minimising the value is
+MAXIMISING `n`.  That is the whole of "the losing side drags the mate
+out as long as it can", read off the same ordering the attacker half
+reads the other way.
+
+Parity refunds the tolerance here too, and in exactly the same place:
+the block bounds plus one `EVAL_ROUGHNESS` of slack give `i <= j + 1`,
+and `i` and `j` are both odd (`leastMate_odd`), so `i <= j`.  The
+engine may be one rung short of the true argmax and still cannot be
+talked into a faster loss. -/
+theorem defence_maximal_resistance (G : QSGame) (guard : G.Pos → Bool)
+    (ch : G.Pos → G.Pos) (d : Nat)
+    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
+    (hch : NearMaximalChoice G guard d ch)
+    {q m : G.Pos} {i j : Nat}
+    (hai : allIllegalB G q = false)
+    (hm : m ∈ movesAbove G (val_lower (d + 1)) q)
+    (hcapc : hasKingCapture G.toNullGame.toGame (ch q) = false)
+    (hcapm : hasKingCapture G.toNullGame.toGame m = false)
+    (hLMj : LeastMate G j (ch q)) (hLMi : LeastMate G i m)
+    (hjd : j + 1 ≤ d) (hid : i + 1 ≤ d)
+    (hspan : (d : Int) * EVAL_ROUGHNESS ≤ 21366) :
+    i ≤ j := by
+  have hER : EVAL_ROUGHNESS = 15 := rfl
+  obtain ⟨_, hnear⟩ := hch q hai
+  have h1 := hnear m hm
+  have hlo := (leastMate_value_block G guard hF hQ hNM hZ hcapc hLMj hjd hspan).1
+  have hhi := (leastMate_value_block G guard hF hQ hNM hZ hcapm hLMi hid hspan).2
+  have hjo := leastMate_odd G hLMj
+  have hio := leastMate_odd G hLMi
+  have hjd' : (j : Int) + 1 ≤ (d : Int) := by exact_mod_cast hjd
+  have hid' : (i : Int) + 1 ≤ (d : Int) := by exact_mod_cast hid
+  simp only [hER] at hlo hhi h1
+  omega
+
 end Sunfish
