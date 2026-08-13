@@ -114,6 +114,10 @@ class TestCappedNullMove:
     The monotone replacement declares the null option to be the smaller of
     the pass value and static evaluation plus one MTD score bucket, so the
     first child report is sufficient and the result is the static cap.
+
+    Probed at depth 5: the pass is a score candidate only on `2 < depth < 6`.
+    From depth 6 it is a fuel oracle that never contributes a score, so the
+    cap has nothing to cap there (see TestFuelOracle).
     """
 
     FEN = "8/6p1/6R1/k7/2K5/8/8/8 w - - 0 1"
@@ -134,10 +138,78 @@ class TestCappedNullMove:
             return bound(pos, gamma, depth, root)
 
         searcher.bound = observed
-        score = bound(pos, 0, 6)
+        score = bound(pos, 0, 5)
 
         assert score == pos.score + sf.EVAL_ROUGHNESS == 409
         assert not any(gamma == 1 - sf.MATE_LOWER for gamma, _, _ in calls)
+
+
+class TestFuelOracle:
+    """From depth 6 the pass is a fuel oracle, not a score candidate.
+
+    The probe runs at ONE fixed target, `pos.score + NULL_MARGIN`, which
+    depends on `(pos, depth)` and not on the caller's `gamma`. That is what
+    makes the "hot" bit position-determined -- and so table-cacheable and
+    stable across the driver's windows -- and it is the premise the Lean
+    proof leans on (`hot_bit_determined`, `hot_bit_stable`). If the window
+    ever picks up a `gamma`, the bit stops being a function of the position
+    and the trichotomy loses its footing, so it is pinned here.
+    """
+
+    FEN = "3k4/8/3K4/8/8/8/8/7R w - - 0 1"
+
+    def probe_windows(self, gamma):
+        pos = hist_from_fen(self.FEN)[-1]
+        passed = pos.rotate(nullmove=True)
+        searcher = sf.Searcher()
+        searcher.root, searcher.history = pos, set()
+        seen, bound = [], searcher.bound
+
+        def observed(p, g, depth, root=False):
+            if p == passed:
+                seen.append((g, depth))
+            return bound(p, g, depth, root)
+
+        searcher.bound = observed
+        bound(pos, gamma, 6)
+        return seen
+
+    def test_probe_window_is_gamma_free(self):
+        pos = hist_from_fen(self.FEN)[-1]
+        target = pos.score + sf.NULL_MARGIN
+        windows = [self.probe_windows(g) for g in (0, 200, -200, sf.MATE_LOWER)]
+        for gamma, seen in zip((0, 200, -200, sf.MATE_LOWER), windows):
+            assert seen, f"gamma {gamma}: the fuel probe never ran"
+            assert all(g == 1 - target and d == 3 for g, d in seen), (
+                f"gamma {gamma}: probe windows {seen} - expected only "
+                f"({1 - target}, 3), the gamma-free fixed target"
+            )
+        assert len({tuple(w) for w in windows}) == 1, (
+            f"the probe window moved with gamma: {windows}"
+        )
+
+    def test_no_pass_score_candidate_above_the_horizon(self):
+        # Below 6 the capped pass yields a score; from 6 it never does, so
+        # the deep null can no longer fail high on its own.
+        pos = hist_from_fen("8/6p1/6R1/k7/2K5/8/8/8 w - - 0 1")[-1]
+        passed = pos.rotate(nullmove=True)
+        for depth, want in ((5, True), (6, False), (7, False)):
+            searcher = sf.Searcher()
+            searcher.root, searcher.history = pos, set()
+            seen, bound = [], searcher.bound
+
+            def observed(p, g, d, root=False, _b=bound, _s=seen):
+                if p == passed:
+                    _s.append(g)
+                return _b(p, g, d, root)
+
+            searcher.bound = observed
+            bound(pos, 0, depth)
+            scored = any(g == 1 - 0 for g in seen)
+            assert scored == want, (
+                f"depth {depth}: pass probed at the caller's window "
+                f"{'unexpectedly' if scored else 'never'} ({seen})"
+            )
 
 
 class TestNullSentinelMasking:
@@ -248,14 +320,23 @@ class TestMateDistance:
             f"same distance, different score: {fast} / {slow}"
         )
 
-    @pytest.mark.parametrize("depth", [2, 3, 4, 5, 6])
+    @pytest.mark.parametrize("depth", [2, 3, 4, 5, 6, 7, 8, 9, 10])
     def test_mate_in_one_score_carries_the_distance(self, depth):
         # Ra8# from a bare-rook mate: the score is the band floor plus the
         # depth the search still had in hand.
+        #
+        # From depth 6 the deep-null fuel oracle is live, and in this
+        # position it is hot (White is a rook up), so every real edge costs
+        # TWO plies instead of one and the mate arrives with one ply less in
+        # hand. That is the whole trade -- a bounded, uniform cost per edge
+        # instead of a null cutoff -- and pinning it here is what stops the
+        # cost from silently growing: `fuel_edge_cost` proves it is in
+        # {1, 2}, and this is the {2} branch, measured.
         hist = hist_from_fen("3k4/8/3K4/8/8/8/8/7R w - - 0 1")
         searcher = sf.Searcher()
         score = searcher.bound(hist[-1], sf.MATE_LOWER, depth, root=True)
-        want = sf.MATE_LOWER + (depth - 1) * sf.EVAL_ROUGHNESS
+        fuel = 1 if depth >= 6 else 0
+        want = sf.MATE_LOWER + (depth - 1 - fuel) * sf.EVAL_ROUGHNESS
         assert score == want, (
             f"depth {depth}: mate in 1 scored {score}, expected {want}"
         )
