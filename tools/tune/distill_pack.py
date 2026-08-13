@@ -70,6 +70,11 @@ for i, fen in enumerate(fens):
 meta = dict(metas[0])
 meta.pop("shard", None)
 meta.pop("positions", None)
+# The .npz is a TRACKED file and the labeller's meta carries the machine it ran
+# on. The bench box's hostname does not go into public artifacts, and a dataset
+# committed to the repo is one -- `set20260813.npz` already carries a `host`
+# field, which is how this was noticed.
+meta.pop("host", None)
 meta.update({
     "nodes": N,
     "kept": len(fens),
