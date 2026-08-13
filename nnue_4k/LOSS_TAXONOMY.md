@@ -179,3 +179,54 @@ disambiguation probe, for a later bench-box slot:
 - Budget: ~500 positions x ~8 fixed-depth probes, pure Python, well under one box slot,
   nice -n 15. To be queued only when Thomas's match queue is idle; nothing armed by this
   report.
+
+## H3 follow-up: explosion vs TM-allocation from the existing logs (2026-08-14)
+
+Rules pre-registered in `tools/analysis/h3_rules.md` (committed before computing);
+`tools/analysis/h3_log_mining.py` implements them, gated on an instrument-sanity control.
+Telemetry audit first (ledgered in the rules file): the entry emits no node counts and
+flushes all UCI output in one burst, so only per-move wall time, exact `go wtime`, and
+final depth are recoverable for it; classic's full nodes/nps lines serve as a machine-load
+instrument; the bench-box fixed-node and 30+1 logs carry no usable telemetry (warning-echo
+/ driver-stdout only) — the planned fixed-node nodes-per-depth test is impossible from
+existing logs.
+
+**Formal verdict: LOGS-INSUFFICIENT — by two independent routes.** (1) The pre-registered
+co-tenancy guard tripped: 74/164 (45%, limit 33%) of collapse-window moves fall in
+wall-clock buckets where classic's median nps is < 0.8x its global median — the ladder
+runs concurrent games, and machine load is a live confound for exactly the depth/time
+statistics that separate (a) from (b). (2) Independently, the selection-matched control
+(SM) barely exists — only 2 of 38 non-loss games have a d:LOW pseudo-window at all — so
+the frozen (a)/(b) criteria had no valid comparison set and neither fired. The rules set
+no minimum SM size; that is a pre-registration defect, recorded here rather than patched
+silently.
+
+What the run did establish (numbers from the single pre-registered compute):
+
+- **P0**: the /12 policy is confirmed live on the ladder — 97.2% of 4158 matched entry
+  moves have F = t/(wtime/12) inside [0.75, 1.10], median 0.919. The artifact's own
+  source ships a /40 sudden-death fix in a minifier-hide block (dead in the artifact);
+  the ladder is playing the known-bad branch its comments warn about.
+- **R0 (PGN-only, and the SM emptiness restates it)**: d:LOW windows are collapse-
+  SPECIFIC, not policy-wide — pseudo-windows at move 32 in non-loss games are d:LOW at
+  7.4% (2/27; 3/29 at move 28, 0/22 at move 36) vs 36.2% before middlegame collapses.
+  A pure "the TM curve craters every game equally" version of (b) is REJECTED.
+- **Stop-mode descriptives (confounded, labeled as such)**: window moves slam the hard
+  deadline — median F 0.985 in W vs 0.936 baseline / 0.913 in the unselected control;
+  hard-abort rate 54% vs 39% control. Median think in windows is 4.7 s vs 7.4 s baseline:
+  by the collapse region the /12 front-load has drained the clock, and what is left is
+  being spent to the hard limit mid-iteration. Leans (a)-in-the-small (iterations not
+  fitting) sitting on top of a (b) allocation slope — but the load confound means this
+  is descriptive, not a verdict.
+
+**Consequence for H3's screen design.** The load confound and the R0 result reorder the
+queue: (1) FIRST screen is the TM change, because it is verdict-independent — every
+reading (a, b, or load) is improved by more late-game slack, the /40 line already exists
+in-source (zero new bytes for the dev/ladder build; H4 wants the same screen), and it is
+the only candidate that cannot be invalidated by the confound. (2) The qsearch/pruning
+screen is DEFERRED until the offline probe (above) is extended with one cheap block:
+re-search the 34 windows' positions at fixed depth offline and record nodes-to-complete-
+depth-k vs baseline positions — clockless and loadless, it separates bushy-tree from
+machine-noise directly and costs a few minutes of the same box slot. (3) The coordinator's
+full-harvest H4 confirmation should record the ladder's fastchess concurrency setting;
+if a future ladder can run concurrency 1, the co-tenancy guard becomes unnecessary.
