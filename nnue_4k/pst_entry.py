@@ -28,212 +28,73 @@ version = "sunfish " + __version__
 # ONE Python int.  See packed/pnet.py for the lane layout and why the head
 # needs no per-lane multiply.
 
-import json as _json
-from base64 import b64decode as _b64
+piece = {"P": 100, "N": 280, "B": 320, "R": 479, "Q": 929, "K": 60000}
+pst = {
+    'P': (   0,   0,   0,   0,   0,   0,   0,   0,
+            78,  83,  86,  73, 102,  82,  85,  90,
+             7,  29,  21,  44,  40,  31,  44,   7,
+           -17,  16,  -2,  15,  14,   0,  15, -13,
+           -26,   3,  10,   9,   6,   1,   0, -23,
+           -22,   9,   5, -11, -10,  -2,   3, -19,
+           -31,   8,  -7, -37, -36, -14,   3, -31,
+             0,   0,   0,   0,   0,   0,   0,   0),
+    'N': ( -66, -53, -75, -75, -10, -55, -58, -70,
+            -3,  -6, 100, -36,   4,  62,  -4, -14,
+            10,  67,   1,  74,  73,  27,  62,  -2,
+            24,  24,  45,  37,  33,  41,  25,  17,
+            -1,   5,  31,  21,  22,  35,   2,   0,
+           -18,  10,  13,  22,  18,  15,  11, -14,
+           -23, -15,   2,   0,   2,   0, -23, -20,
+           -74, -23, -26, -24, -19, -35, -22, -69),
+    'B': ( -59, -78, -82, -76, -23,-107, -37, -50,
+           -11,  20,  35, -42, -39,  31,   2, -22,
+            -9,  39, -32,  41,  52, -10,  28, -14,
+            25,  17,  20,  34,  26,  25,  15,  10,
+            13,  10,  17,  23,  17,  16,   0,   7,
+            14,  25,  24,  15,   8,  25,  20,  15,
+            19,  20,  11,   6,   7,   6,  20,  16,
+            -7,   2, -15, -12, -14, -15, -10, -10),
+    'R': (  35,  29,  33,   4,  37,  33,  56,  50,
+            55,  29,  56,  67,  55,  62,  34,  60,
+            19,  35,  28,  33,  45,  27,  25,  15,
+             0,   5,  16,  13,  18,  -4,  -9,  -6,
+           -28, -35, -16, -21, -13, -29, -46, -30,
+           -42, -28, -42, -25, -25, -35, -26, -46,
+           -53, -38, -31, -26, -29, -43, -44, -53,
+           -30, -24, -18,   5,  -2, -18, -31, -32),
+    'Q': (   6,   1,  -8,-104,  69,  24,  88,  26,
+            14,  32,  60, -10,  20,  76,  57,  24,
+            -2,  43,  32,  60,  72,  63,  43,   2,
+             1, -16,  22,  17,  25,  20, -13,  -6,
+           -14, -15,  -2,  -5,  -1, -10, -20, -22,
+           -30,  -6, -13, -11, -16, -11, -16, -27,
+           -36, -18,   0, -19, -15, -15, -21, -38,
+           -39, -30, -31, -13, -31, -36, -34, -42),
+    'K': (   4,  54,  47, -99, -99,  60,  83, -62,
+           -32,  10,  55,  56,  56,  55,  10,   3,
+           -62,  12, -57,  44, -67,  28,  37, -31,
+           -55,  50,  11,  -4, -19,  13,   0, -49,
+           -55, -43, -52, -28, -51, -47,  -8, -50,
+           -47, -42, -43, -79, -64, -32, -29, -32,
+            -4,   3, -14, -50, -57, -18,  13,   4,
+            17,  30,  -3, -14,   6,  -1,  40,  18),
+}
+# Pad tables and join piece and pst dictionaries
+for k, table in pst.items():
+    padrow = lambda row: (0,) + tuple(x + piece[k] for x in row) + (0,)
+    pst[k] = sum((padrow(table[i * 8 : i * 8 + 8]) for i in range(8)), ())
+    pst[k] = (0,) * 20 + pst[k] + (0,) * 20
 
-# The .sfnn net format: one JSON header line (no code execution -- pickles
-# never ship), then base64 tokens, one per big int, in canonical order:
-# base, gp, ts, then the piece rows ("PNBRQKpnbrqk" x 120 squares; kb nets
-# store rowsW buckets then rowsB buckets).
-NET_PATH = os.environ.get("SF_NET", os.path.join(os.path.dirname(
-    os.path.abspath(__file__)), "net128kb8.sfnn"))
-_h, _r = open(NET_PATH).read().split("\n", 1)
-_d = _json.loads(_h)
-_it = (int.from_bytes(_b64(t), "little", signed=True) for t in _r.split())
-_PIECES = "PNBRQKpnbrqk"
-_row = lambda: {p: [next(_it) for _ in range(120)] for p in _PIECES}
-ACC_BASE, MGP = next(_it), next(_it)
-MTS = tuple(next(_it) for _ in range(_d.pop("nts", 0)))
-B = _d.get("B", 1)
-assert B in (1, 4, 8, 16), "unknown king-bucket scheme B=%r" % B
-# All B*B absolute bucket pairs combined once (a single entry for B == 1);
-# the pf==1 view relabels the very same int objects.
-if B == 1:
-    _r0 = [_row()]
-else:
-    _w = [_row() for _ in range(B)]
-    _b = [_row() for _ in range(B)]
-    _r0 = [{p: [_w[bw][p][s] + _b[bb][p][s] for s in range(120)]
-            for p in _PIECES} for bw in range(B) for bb in range(B)]
-ROWS = (_r0, [{p: [c[p.swapcase()][119 - s] for s in range(120)]
-               for p in _PIECES} for c in _r0])
+# We make a special table for the king in the end game, which encourages
+# central positioning. This is sufficient to play KRK and KQK endgames correctly.
+# -70 -50 ... -50 -70
+# -50 -30 ... -30 -50
+# ...     ...     ...
+# -50 -30 ... -30 -50
+# -70 -50 ... -50 -70
+K_MID, K_END = pst["K"], tuple(piece["K"] + 70
+   - 10 * (abs(2 * (i // 10) - 11) + abs(2 * (i % 10) - 9)) for i in range(120))
 
-NLANE = 2 * _d["N"] + 2 * _d.get("nb", 0)
-LBITS = 16
-VBITS = 15
-ONES = (1 << VBITS) - 1
-HALF = _d["N"] * LBITS            # bit offset of the second lane block
-SHIFT = _d["shift"]
-CLAMP = _d["clampcp"]
-BASE = _d.get("base_kind", "pst")   # score base: pst | mat (mat = dev only)
-
-
-MH = sum(1 << (VBITS + LBITS * i) for i in range(NLANE))   # guard bits
-MLO = MH >> 1                     # offset-binary zero, the bit-14 probe
-MVAL = MH - (MH >> VBITS)         # value bits (each lane 2^15 - 1)
-MGH = MGP | MH                    # per-lane activation ceilings, guard set
-MASKLO = (1 << HALF) - 1
-M16 = (1 << LBITS) - 1
-
-# ---- extensions: bilinear lanes, narrow odd tail, phase output scale.
-# Their read-out runs in floats; exact antisymmetry survives because every
-# float input is exactly negated or exactly invariant under perspective
-# swap, IEEE arithmetic is sign-symmetric, and the final truncation rounds
-# toward zero (packed/pnet.py ext_cp is the verified reference).
-NB = _d.get("nb", 0)              # bilinear lanes per perspective
-BM = _d.get("m", 4)               # bilinear groups
-PHASE_S = tuple(_d.get("phase_s") or ()) or None
-RFF = _d.get("rff", 0)            # phase-sketch (angle) lanes per perspective
-# rff angle fields are 32-BIT, above the 16-bit lane grid: present-piece
-# quanta sums stay < 2^21 (no overflow), removals subtract exactly what
-# was added (never negative) -- plain adds, no wrap machinery, and the
-# mod-2^15 circle is the read-out mask.
-EXT = bool(NB or PHASE_S or RFF)
-# minifier-hide start
-# The extension machinery is DEV-BUILD ONLY: the 4k artifact ships the
-# pure-int family (its net is pure-int too) and refuses ext nets loudly
-# below.  One source file, two shapes -- the same pattern as tools/.
-_FULL = 1
-if NB:
-    NBG = NB // BM                # lanes per group (contiguous runs)
-    BGMASK = (1 << (NBG * LBITS)) - 1
-    BOFFX = tuple((2 * _d["N"] + s * NBG) * LBITS for s in range(BM))
-    BOFFY = tuple(o + NB * LBITS for o in BOFFX)
-    CB2 = float(1 << (2 * _d["bshift"]))
-    BU = _d["u"]
-    BTAIL = _d.get("tail")
-    if BTAIL:
-        T1W, T1B = BTAIL["t1w"], BTAIL["t1b"]
-        T2W, T2B = BTAIL["t2w"][0], BTAIL["t2b"][0]
-if RFF:
-    _FB = (2 * _d["N"] + 2 * NB) * LBITS
-    ROFFX = tuple(_FB + 32 * k for k in range(RFF))
-    ROFFY = tuple(_FB + 32 * (RFF + k) for k in range(RFF))
-    RW = tuple(_d["rw"])
-# minifier-hide end
-if (EXT or MTS) and "_FULL" not in dir():
-    raise SystemExit("extended/segmented net: use the repo engine")
-# The base tables ship IN the net file: they are eval data exactly like
-# the packed rows (classic pst incl. piece values, padded 120-wide, plus
-# the bare-king mop-up table; material-base nets simply carry flat
-# tables -- no engine branch needed).
-pst = {p: tuple(v) for p, v in _d["pst"].items()}
-K_MID, K_END = pst["K"], tuple(_d["kend"])
-
-# Own-king buckets per perspective.  B == 1 is the plain net; B > 1 nets
-# condition the first-layer rows on each side's own king bucket, and a king
-# move that crosses a bucket boundary rebuilds the accumulator from scratch
-# (rare, ~32 adds).  ROWS[pf][kb][piece][square] is combined at load above.
-def kbucket(s):
-    """Bucket of a perspective's OWN king on its OWN-frame square.  The
-    scheme is selected by B and must match packed/pnet.py (verify.py checks
-    the composition): B == 4 is back-two-ranks vs advanced times queenside
-    vs kingside; B == 8 refines the file split to pairs (ab/cd/ef/gh)."""
-    r, f = divmod(s, 10)
-    if B == 16:
-        return (9 - r) // 2 * 4 + (f - 1) // 2
-    return (r <= 7) * (B >> 1) + ((f - 1) // 2 if B == 8 else (f >= 5))
-
-
-del _d
-
-
-def nn_cp(acc, pf, bd=""):
-    """Clipped centipawn output of the packed net, mover's point of view:
-    SWAR clamp, two modular horizontal sums, and -- for extended nets only,
-    dev builds only -- the float tail via _ext (pnet is the verified
-    reference; antisymmetry is exact on both paths: integers by symmetric
-    shift-rounding, floats by IEEE sign-symmetry and truncation)."""
-    m = ((acc & MLO) >> 14) * ONES              # lane >= 0 ?
-    y = ((acc & m) | MLO) - MLO                 # relu
-    # minifier-hide start
-    for T in MTS:                               # convex piecewise-linear:
-        x = acc - T                             #   y = sum_i relu(a - t_i)
-        m = ((x & MLO) >> 14) * ONES
-        y += ((x & m) | MLO) - MLO
-    # minifier-hide end
-    m = (((MGH - y) & MH) >> VBITS) * ONES      # lane <= G_k ?
-    y = (y & m) | (MGP & (m ^ MVAL))            # ...capped at G_k
-    # 2^16 == 1 (mod 2^16-1), so each block's residue IS its lane sum
-    v = (y & MASKLO) % M16 - ((y >> HALF) & MASKLO) % M16
-    if pf:
-        v = -v
-    # minifier-hide start
-    if EXT:
-        return _ext(y, v, pf, bd, acc)
-    # minifier-hide end
-    # round TOWARDS ZERO: floor does not commute with negation, and the
-    # search reaches a position both by rotate() (negates) and move()
-    # (recomputes) -- symmetric rounding keeps them in exact agreement
-    v = (v >> SHIFT) if v >= 0 else -((-v) >> SHIFT)
-    return -CLAMP if v < -CLAMP else (CLAMP if v > CLAMP else v)
-
-
-# minifier-hide start
-from math import tanh as _tanh
-
-
-def _mlp(z):
-    # term order matches pnet._mlp exactly: float addition is not
-    # associative and engine == pnet must hold to the last bit
-    acc = 0.0
-    for b1, row, w2 in zip(T1B, T1W, T2W):
-        for wk, zk in zip(row, z):
-            b1 += wk * zk
-        acc += w2 * _tanh(b1)
-    return acc + T2B
-
-
-def _rff_term(acc, pf):
-    from math import cos
-    TAU = 6.283185307179586 / 32768.0
-    offA, offB = (ROFFX, ROFFY) if pf == 0 else (ROFFY, ROFFX)
-    return sum(w * (cos(TAU * ((acc >> oa) & 32767))
-                    - cos(TAU * ((acc >> ob) & 32767)))
-               for w, oa, ob in zip(RW, offA, offB))
-
-
-def _ext(y, v, pf, bd, acc):
-    """Extended evaluation tail (dev builds; the 4k artifact refuses ext
-    nets at load).  v is already mover-signed; the phase piece count is
-    derived from the board -- dev-only cost, no state to drift."""
-    d = float(v) / (1 << SHIFT)
-    if NB:
-        A = [((y >> o) & BGMASK) % M16 for o in BOFFX]
-        Bv = [((y >> o) & BGMASK) % M16 for o in BOFFY]
-        if pf:
-            A, Bv = Bv, A
-        h = [0] * BM
-        f = [0] * BM
-        for s in range(BM):
-            a, b = A[s], Bv[s]
-            for t in range(BM):
-                g = (s + t) % BM
-                h[g] += A[t] * a - Bv[t] * b
-                f[g] += a * Bv[t]
-        for g in range(BM):
-            h[g] /= CB2
-            d += BU[g] * h[g]
-        if BTAIL:
-            z = [d / 300.0] + [x / 100.0 for x in h] + [x / 100.0 / CB2 for x in f]
-            zn = [-x for x in z[:1 + BM]] + z[1 + BM:]
-            d += 150.0 * (_mlp(z) - _mlp(zn))
-    if RFF:
-        d += _rff_term(acc, pf)
-    if PHASE_S:
-        # 64 squares minus the empties: one C-level count instead of a
-        # 120-step genexpr, and only for nets that actually have phase
-        # buckets (it used to run unconditionally -- a third of _ext's
-        # cost, spent on nothing, for every phase-less ext net).
-        cnt = 64 - bd.count(".")
-        b = (cnt - 1) * len(PHASE_S) // 32
-        d *= PHASE_S[min(max(b, 0), len(PHASE_S) - 1)]
-    d = -CLAMP if d < -CLAMP else (CLAMP if d > CLAMP else d)
-    return int(d)                       # trunc toward zero: symmetric
-# minifier-hide end
-
-###############################################################################
-# Piece-Square tables. Tune these to change sunfish's behaviour
 ###############################################################################
 
 # With xz compression this whole section takes 652 bytes.
@@ -327,7 +188,7 @@ opt_ranges = dict(
 Move = namedtuple("Move", "i j prom")
 
 
-class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb")):
+class Position(namedtuple("Position", "board score wc bc ep kp")):
     """A state of a chess game
     board -- a 120 char representation of the board
     score -- the board evaluation: ps + the clipped net residual
@@ -407,10 +268,9 @@ class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb")):
         The accumulator is unchanged; only which block is "ours" flips, and
         that flips the sign of the net residual exactly as it flips ps."""
         return Position(
-            self.board[::-1].swapcase(), -self.score, -self.ps, self.bc, self.wc,
+            self.board[::-1].swapcase(), -self.score, self.bc, self.wc,
             119 - self.ep if self.ep and not nullmove else 0,
             119 - self.kp if self.kp and not nullmove else 0,
-            self.acc, self.pf ^ 1, self.kb,
         )
 
     def move(self, move):
@@ -420,15 +280,7 @@ class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb")):
         # Copy variables and reset ep and kp
         board = self.board
         wc, bc, ep, kp = self.wc, self.bc, 0, 0
-        ps = self.ps + self.value(move)
-        # Every board mutation below is mirrored by a packed row delta. The
-        # rows are exact per-lane integers, so the order does not matter:
-        # only the final accumulator has to sit inside the lane range.
-        kb = self.kb
-        row = ROWS[self.pf][kb]
-        acc = self.acc + row[p][j] - row[p][i]
-        if q != ".":
-            acc -= row[q][j]
+        score = self.score + self.value(move)
         # Actual move
         board = put(board, j, board[i])
         board = put(board, i, ".")
@@ -443,39 +295,17 @@ class Position(namedtuple("Position", "board score ps wc bc ep kp acc pf kb")):
                 r = A1 if j < i else H1
                 board = put(board, r, ".")
                 board = put(board, kp, "R")
-                acc += row["R"][kp] - row["R"][r]
-            if B > 1:
-                # Mover's own bucket may change; the frame is the mover's
-                # own, so kbucket(j) IS the own-frame bucket.  The mover is
-                # absolute white iff pf == 0.
-                nb = kbucket(j)
-                ob = kb // B if self.pf == 0 else kb % B
-                if nb != ob:
-                    kb = nb * B + kb % B if self.pf == 0 else kb - ob + nb
         # Pawn promotion, double move and en passant capture
         if p == "P":
             if A8 <= j <= H8:
                 board = put(board, j, prom)
-                acc += row[prom][j] - row["P"][j]
             if j - i == 2 * N:
                 ep = i + N
             if j == self.ep:
                 board = put(board, j + S, ".")
-                acc -= row["p"][j + S]
-        # A king move across a bucket boundary invalidates every one of our
-        # own-perspective lanes at once: rebuild from the (still mover-
-        # oriented) final board with the new bucket's table.  Rare, ~32 adds.
-        if kb != self.kb:
-            row = ROWS[self.pf][kb]
-            acc = ACC_BASE
-            for s, c in enumerate(board):
-                if c in _PIECES:
-                    acc += row[c][s]
         # We rotate the returned position, so it's ready for the next player
-        pf = self.pf ^ 1
-        return Position(board[::-1].swapcase(), -ps + nn_cp(acc, pf, board), -ps,
-                        bc, wc, 119 - ep if ep else 0, 119 - kp if kp else 0,
-                        acc, pf, kb)
+        return Position(board[::-1].swapcase(), -score, bc, wc,
+                        119 - ep if ep else 0, 119 - kp if kp else 0)
 
     def value(self, move):
         i, j, prom = move
@@ -588,7 +418,7 @@ class Searcher:
         # of up to CLAMP could otherwise lift a kingless position back over
         # the threshold and hide the capture. On ps the test is bit-for-bit
         # classic's.
-        if pos.ps <= -MATE_LOWER:
+        if pos.score <= -MATE_LOWER:
             return -MATE_UPPER
 
         # Look in the table if we have already searched this position before.
@@ -644,7 +474,7 @@ class Searcher:
             # an older 300-game test on the NNUE eval was flat, which by the
             # (feature, eval) rule does not settle it here). Until that lands,
             # this comment describes the code as written.
-            if not root and depth > 2 and abs(pos.ps) < 500 and any(c in pos.board for c in "RBNQ"):
+            if not root and depth > 2 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
                 score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
                 # A fail high is a virtual claim, and needs verification
                 # before it may cut: if the king is capturable the capture is
@@ -853,21 +683,10 @@ def parse(c): return A1 + ord(c[0]) - ord("a") - 10 * (int(c[1]) - 1)
 def render(i): return chr((i - A1) % 10 + ord("a")) + str(1 - (i - A1) // 10)
 
 def from_board(board, wc=(True, True), bc=(True, True), ep=0, kp=0, pf=0):
-    """Build a position (and its accumulator) from scratch. `board` is
-    already in the side-to-move's orientation."""
-    ps = sum(pst[p][i] if p.isupper() else -pst[p.upper()][119 - i]
-             for i, p in enumerate(board) if p.isalpha())
-    kb = 0
-    if B > 1:
-        own, opp = kbucket(board.index("K")), kbucket(119 - board.index("k"))
-        kb = own * B + opp if pf == 0 else opp * B + own
-    acc = ACC_BASE
-    row = ROWS[pf][kb]
-    for i, p in enumerate(board):
-        if p in _PIECES:
-            acc += row[p][i]
-    return Position(board, ps + nn_cp(acc, pf, board), ps, wc, bc, ep, kp,
-                    acc, pf, kb)
+    """Build a position from scratch; `board` is in the mover's orientation."""
+    score = sum(pst[p][i] if p.isupper() else -pst[p.upper()][119 - i]
+                for i, p in enumerate(board) if p.isalpha())
+    return Position(board, score, wc, bc, ep, kp)
 
 
 hist = [from_board(initial)]

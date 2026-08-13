@@ -4,7 +4,8 @@ A sunfish variant whose evaluation is classic's exact piece-square score
 plus a trained neural residual — with the entire accumulator *and* the
 evaluation head living in **one Python integer**, so a wide net costs a
 handful of big-int operations per node instead of a Python-level loop.
-The engine still packs to a few kilobytes (see *The 4k build*).
+The engine code packs to a few kilobytes, but the net it loads does not —
+see *The 4k build* for where that leaves the 4096-byte goal.
 
 ## Architecture
 
@@ -42,19 +43,80 @@ The packed representation (`packed/pnet.py` documents every invariant):
   tail, a material-phase output scale) are implemented end-to-end and
   verified, but currently *not* deployed: see the lesson below.
 
+## Testing the artifact: PGN books only, never EPD/FEN
+
+The artifact implements exactly the UCI subset the rules mandate —
+`position startpos (moves ...)` — and has **no FEN support**: `from_fen` lives
+in `sunfish_ui/`, which the packer strips.
+
+So **the artifact can only be tested against PGN (move-sequence) opening
+books.** Point an EPD/FEN book at it and every game silently starts from the
+*standard* position while the GUI believes the opening was set — the engine
+answers `d2d4` as Black and the match measures nothing. Observed exactly that
+way here; the games ended as "illegal move" only because the wrong-position
+moves happened to be illegal, and a book sharing a legal move with the start
+position would have produced a plausible, entirely meaningless result instead.
+
+```
+fastchess ... -openings file=book.pgn format=pgn order=random   # correct
+fastchess ... -openings file=book.epd format=epd order=random   # WRONG
+```
+
+Screens of *search or eval* changes may use EPD books, because those run the dev
+build through `sunfish_ui/`, which does parse FEN. The rule is about the packed
+artifact specifically. When in doubt, check the first game's moves against the
+book position before trusting the run.
+
 ## The 4k build
 
 ```
-tools/build/pack.sh nnue_4k/sunfish_nnue.py out.packed
+tools/build/pack.sh   nnue_4k/sunfish_nnue.py out.packed   # engine only (needs SF_NET)
+tools/build/pack_entry.sh engine.py weights out.packed     # the competition artifact
 ```
 
 pyminify + xz + a 74-byte self-extracting header (bash process
 substitution: the payload decompresses straight into a `/dev/fd` path,
-so there is no temp file, no cleanup subshell, and no chmod). Current
-state: the engine packs to **3851 bytes** against the 4096-byte budget
-— the base eval tables ship inside the net file, where data belongs.
-The v1 engine (92c4746) packed to 3952 bytes; nets are external
-(`SF_NET`) and not part of the budget.
+so there is no temp file, no cleanup subshell, and no chmod).
+
+**The net counts toward the 4096 bytes.** An earlier version of this
+file claimed nets were external and outside the budget. That was wrong:
+under the TCEC 4k rules the entry is one file of at most 4096 bytes, and
+the evaluation data is part of the engine — which is why rival 4k
+engines such as ice4 and 4ku carry their entire evaluation as packed
+constants inside the limit. Moving the base tables out of the source and
+into the net file therefore saved nothing; it moved counted bytes from
+one counted place to another.
+
+Current state, stated honestly: the engine code packs to **~3800 bytes**
+and the smallest shipped net is **7.5 MB**, so the total is roughly
+three orders of magnitude over the limit. The 4k goal is open, not
+nearly met. With the engine at its present size there would be under
+300 bytes left for weights; reaching 4096 in total needs both a much
+smaller engine and a net compressed to the low kilobytes — extreme
+quantisation, weight sharing, or procedurally generated tables. The
+classic engine, by contrast, packs to 3196 bytes *including* its
+piece-square tables and is already within the limit.
+
+The v1 engine (92c4746) packed to 3952 bytes.
+
+### What the rules actually say
+
+From the [TCEC 4k rules](https://wiki.chessdom.org/TCEC_4k_Rules), the clauses
+that bind this engine:
+
+- One file, 4096 bytes, and nothing exempts evaluation data.
+- "Startup should be within 60s and not leave itself any files lying around."
+  So arbitrary load-time preprocessing is affordable — but a packer should use
+  process substitution rather than `mktemp`, to leave nothing behind.
+- **numpy is explicitly allowed** for Python entries. `pypy3`, `xz`, `tail`,
+  `sh`, `chmod` are all on the allowed-commands list, and "a self decompressing
+  shell script" is explicitly permitted — the packing approach here is
+  legitimate. python-chess, if ever used, would count toward the size.
+- The required UCI subset is only `uci`, `uciok`, `isready`, `readyok`,
+  `position startpos (moves ..)`, `go [wtime .. btime .. winc .. binc ..]`,
+  `bestmove`, `quit` — **FEN parsing is not required**, though unsupported
+  commands such as `stop` and `ucinewgame` must be tolerated.
+- The tournament time control is **30 min + 3 s**, and pondering is disabled.
 
 ## Net format (`.sfnn`)
 

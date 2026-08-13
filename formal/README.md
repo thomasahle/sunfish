@@ -259,6 +259,10 @@ The model abstracts Python's board representation, move generation, sorting,
 and table implementation. The audit pins the corresponding source regions;
 tests and chess corpora validate those executable primitives.
 
+IID starts at depth 4 because quiescence cannot write `tp_move`.
+`CanNull.lean` keeps a uniform recurrence at depth 3; its depth-zero root
+transform is the identity, so the model and source are extensionally equal.
+
 ## Module guide
 
 - `GameTree.lean`: chess-free negamax game model.

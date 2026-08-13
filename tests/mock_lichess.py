@@ -91,8 +91,13 @@ class Game:
 
     def __init__(self, server: "MockLichess", game_id: str, bot_color: chess.Color,
                  clock_limit: int, clock_increment: int,
-                 opponent_delay, move_cap: int, rated: bool, seed=None):
+                 opponent_delay, move_cap: int, rated: bool, seed=None,
+                 refuse_abort: bool = False):
         self.server = server
+        # lila refuses an abort for any game past its abortable window, and the window closes for
+        # reasons the client cannot see (moves made by another client on the same account, an
+        # import, a game already ended). This forces the 400 without needing moves on the board.
+        self.refuse_abort = refuse_abort
         self.id = game_id
         self.bot_color = bot_color
         self.clock_initial_ms = clock_limit * 1000
@@ -178,6 +183,12 @@ class Game:
             "state": self.state_json(),
         }
 
+    def bot_has_moved(self) -> bool:
+        """lila's Pov.hasMoved: whether *this account* has moved, not either player."""
+        with self.lock:
+            first_bot_ply = 0 if self.bot_color == chess.WHITE else 1
+            return len(self.board.move_stack) > first_bot_ply
+
     def event_info_json(self) -> dict:
         """GameEventInfo (GameEventInfo.yaml), used in gameStart/gameFinish."""
         with self.lock:
@@ -196,7 +207,7 @@ class Game:
                 "speed": self.speed,
                 "perf": self.speed,
                 "rated": self.rated,
-                "hasMoved": bool(self.board.move_stack),
+                "hasMoved": self.bot_has_moved(),
                 "opponent": {"id": self.server.opponent_id,
                              "username": self.server.opponent_name,
                              "rating": 1800},
@@ -330,8 +341,8 @@ class Game:
         with self.lock:
             if self.status != "started":
                 return 400, {"error": f"Game already over: {self.status}"}
-            if len(self.board.move_stack) >= 2:
-                return 400, {"error": "Cannot abort: too many moves played"}
+            if self.refuse_abort or len(self.board.move_stack) >= 2:
+                return 400, {"error": "This game can no longer be aborted: it has already started"}
             self._end_locked("aborted", None)
             return 200, {"ok": True}
 
@@ -404,6 +415,9 @@ class MockLichess:
         # port identifies which OS process holds the stream (lichess-bot
         # reads it from a child process).
         self.event_stream_clients: list[tuple] = []
+        # game id -> number of /api/bot/game/stream/{id} connections. One live handler opens
+        # exactly one, so a count above one means the game is being served twice.
+        self.game_stream_connections: dict[str, int] = {}
         self._game_counter = 0
         self._closing = threading.Event()
 
@@ -482,10 +496,16 @@ class MockLichess:
                          "compat": {"bot": True, "board": False}})
         return challenge_id
 
+    def replay_game_start(self, game_id: str) -> None:
+        """Re-emit gameStart for a game already under way, as lila does on every event-stream
+        (re)connect -- and as it did in bursts during the 2026-08-12 double-serving incident."""
+        self.push_event({"type": "gameStart",
+                         "game": self.games[game_id].event_info_json()})
+
     def start_direct_game(self, bot_plays_white: bool = True, clock_limit: int = 60,
                           clock_increment: int = 0, opponent_delay=0.0,
                           move_cap: int = 200, rated: bool = False, seed=None,
-                          initial_moves: tuple = ()) -> str:
+                          initial_moves: tuple = (), refuse_abort: bool = False) -> str:
         """Start a game without any challenge/accept exchange; returns the game id.
 
         This is legitimate wire behavior: lichess emits a bare gameStart when
@@ -497,7 +517,8 @@ class MockLichess:
         `initial_moves` (UCI strings) are on the board before the gameStart is
         emitted.  Two or more make the game unabortable -- lila answers the
         abort with 400, like a mid-game gameStart for a game that already has
-        moves.
+        moves.  `refuse_abort` 400s the abort of an untouched game, which is
+        how the window can close for reasons the client cannot see.
         """
         self._game_counter += 1
         game_id = f"dirGam{self._game_counter:02d}"
@@ -505,7 +526,7 @@ class MockLichess:
                     bot_color=chess.WHITE if bot_plays_white else chess.BLACK,
                     clock_limit=clock_limit, clock_increment=clock_increment,
                     opponent_delay=opponent_delay, move_cap=move_cap,
-                    rated=rated, seed=seed)
+                    rated=rated, seed=seed, refuse_abort=refuse_abort)
         for uci in initial_moves:
             game.board.push(chess.Move.from_uci(uci))
         self.games[game_id] = game
@@ -651,6 +672,8 @@ def _make_handler(server: MockLichess):
                 self.close_connection = True
 
         def _serve_game_stream(self, game: Game) -> None:
+            server.game_stream_connections[game.id] = \
+                server.game_stream_connections.get(game.id, 0) + 1
             q = game.subscribe()
             self._start_ndjson()
             try:

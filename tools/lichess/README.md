@@ -61,7 +61,11 @@ Notes:
   production fixes: overflow games beyond `challenge.concurrency` are
   aborted promptly instead of silently starved; a dead event stream
   restarts the bot instead of leaving it deaf-but-online; a failed chat
-  POST can no longer cancel the engine's move). `watchdog.sh` +
+  POST can no longer cancel the engine's move — plus the 2026-08-12 fix:
+  a replayed `gameStart` for a game already being served is ignored, and
+  an overflow game the bot cannot abort is named in an ERROR and left
+  alone, never resigned — a game we are not playing is not ours to end).
+  `watchdog.sh` +
   `sunfish-watchdog.timer` restart the service if lichess says a move is
   pending for us while the journal sits silent for 90 s.
 - On a 1GB VM keep `TABLE_SIZE` at `50000` (~120MB peak RSS); setup.sh also

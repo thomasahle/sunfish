@@ -21,11 +21,15 @@ here:
   beyond ``challenge.concurrency`` (e.g. an outgoing matchmaking challenge
   accepted at the same time as an incoming one) must be aborted promptly, not
   queued behind the busy game process where it would sit until lichess
-  abandons it (production: game ZbT4vfAs, 2026-08-11).  An overflow game past
-  its abortable window (lichess answers the abort with 400) must be resigned,
-  never played alongside the served game (production: game 9ZfJoFj2,
-  2026-08-12, whose "Playing it" fallback starved tF7hJY7T into a time
-  forfeit).
+  abandons it (production: game ZbT4vfAs, 2026-08-11).  An overflow game whose
+  abort lichess refuses must be neither played nor ended: it is named in an
+  ERROR and left strictly alone (production: games x4E0Q6js and bQQnPWSb,
+  2026-08-12, which a resign fallback ended while a second bridge was playing
+  them).
+* ``test_duplicate_game_start_is_not_double_served``: the shape of that same
+  incident.  gameStart is replayed for live games on every event-stream
+  reconnect; a replay must be ignored, not turned into a second handler
+  racing the first (nor into an overflow game to be disposed of).
 * ``test_event_stream_death_is_loud``: if the process reading the event
   stream dies, the bot must notice the silence, say so in the log, and
   restart -- never idle deaf-but-online for an hour (production: 2026-08-11
@@ -54,6 +58,7 @@ network-free.  Environment overrides:
 
 import contextlib
 import os
+import re
 import shutil
 import signal
 import subprocess
@@ -110,6 +115,22 @@ MAX_LATER_MOVE_SECONDS = 7.0  # stall detector, not a budget: the think
 # engine shows as 30s+, so 7s separates the regimes cleanly
 ABORT_WINDOW = 30.0  # a game the bot cannot play must be aborted this fast
 # (lichess abandons an unserved game after 1-2 minutes; production T ~ 15 s)
+RESTART_MAX_MOVE_SECONDS = 22.0  # the restart test plays a 180 s clock, on
+# which wtime/12 entitles the engine to a full 15 s per move -- MAX_MOVE_SECONDS
+# exactly, with nothing left for IO, so it flags healthy searches. A hung engine
+# still shows as 30 s+ against this clock, so 22 keeps the regimes apart
+
+
+# lichess-bot logs through rich, which wraps a long message over several lines
+# and right-aligns a "source.py:123" column onto the first of them -- landing in
+# the middle of the message text. Drop that column and collapse the wrapping so
+# a log assertion can just look for the sentence it expects.
+_LOG_LOCATION = re.compile(r"\S+\.py:\d+")
+
+
+def _log_text(log_path: Path) -> str:
+    return " ".join(_LOG_LOCATION.sub(
+        " ", log_path.read_text(errors="replace")).split())
 
 
 def _run(cmd, **kwargs):
@@ -343,7 +364,7 @@ def test_bot_plays_three_games(lichess_bot, tmp_path):
 
 
 def test_overflow_games_are_aborted_not_starved(lichess_bot, tmp_path):
-    """K games at challenge.concurrency=1: one served, the rest aborted fast.
+    """K games at challenge.concurrency=1: one served, the abortable rest aborted fast.
 
     Reproduces the 2026-08-11 production race: while one accepted game is
     being played, lichess starts more games via bare gameStart events (an
@@ -351,13 +372,16 @@ def test_overflow_games_are_aborted_not_starved(lichess_bot, tmp_path):
     this; so does reconnecting with several games live).  Unpatched
     lichess-bot gives one such game the pool's reserve process and quietly
     queues the rest forever -- game ZbT4vfAs never saw a move until lichess
-    abandoned it.  Also covers the 2026-08-12 production incident: an
-    overflow game that already has moves is past its abortable window, so
-    lichess answers the abort with 400 -- game 9ZfJoFj2 was then "played"
-    with the busy game's core and starved tF7hJY7T into a time forfeit.
-    Such a game must be resigned instead.  The invariant: every started game
-    is either played at full strength or promptly, explicitly ended (aborted
-    if abortable, resigned otherwise) -- never slow-served.
+    abandoned it.
+
+    Two overflow games here are abortable and must be aborted promptly.  Two
+    are not: lichess answers their abort with 400.  A refused abort means the
+    game holds moves this process never made, so the bot is not the client
+    playing it -- the 2026-08-12 shape, where a second undocumented bridge had
+    been playing x4E0Q6js and bQQnPWSb all along.  Such a game must be left
+    strictly alone: not played (which would split the one core and starve the
+    served game) and above all not resigned (the resign fallback withdrawn
+    with this test ended two live games, one of them a drawn R+K vs R+K).
     """
     mock = MockLichess()
     mock.start()
@@ -379,43 +403,130 @@ def test_overflow_games_are_aborted_not_starved(lichess_bot, tmp_path):
                                            opponent_delay=999.0, seed=5 + i)
                     for i in range(2)]
 
-        # A third overflow game arrives already mid-game (it has moves), so
-        # it is past its abortable window and the mock -- like lila -- answers
-        # the abort with 400.  Production 2026-08-12: bare gameStart for
-        # 9ZfJoFj2 while tF7hJY7T was being served.  The bot must resign it,
-        # never play it with the served game's core.
-        unabortable_id = mock.start_direct_game(bot_plays_white=True,
-                                                clock_limit=60,
-                                                opponent_delay=999.0, seed=9,
-                                                initial_moves=("e2e4", "e7e5"))
+        # Two unabortable overflow games, one for each way the bot can find
+        # out.  The first arrives already mid-game, so the bot can see from
+        # `hasMoved` that the account has moved in it and must not touch it at
+        # all.  The second looks untouched but lichess refuses the abort
+        # anyway, which is the only signal available for a game another client
+        # holds.  Their clocks are long enough that neither can flag during
+        # the test: a game left alone must still be alive at the end.
+        moved_in_id = mock.start_direct_game(bot_plays_white=True,
+                                             clock_limit=3600,
+                                             opponent_delay=999.0, seed=9,
+                                             initial_moves=("e2e4", "e7e5"))
+        refused_id = mock.start_direct_game(bot_plays_white=True,
+                                            clock_limit=3600,
+                                            opponent_delay=999.0, seed=10,
+                                            refuse_abort=True)
+        unabortable = [moved_in_id, refused_id]
 
         deadline = time.monotonic() + ABORT_WINDOW
-        for game_id, expected in [(g, "aborted") for g in overflow] + \
-                                 [(unabortable_id, "resign")]:
+        for game_id in overflow:
             game = mock.games[game_id]
             _wait_for(lambda g=game: g.status != "started",
                       max(0.1, deadline - time.monotonic()),
-                      f"overflow game {game_id} was never ended: it would "
+                      f"overflow game {game_id} was never aborted: it would "
                       "sit unserved until lichess abandoned it (or starve "
                       "the served game if played)", proc)
-            assert game.status == expected, \
-                f"overflow game {game_id} ended {game.status}, expected a " \
-                f"prompt {expected}"
-            assert not game.bot_move_latencies, \
-                f"overflow game {game_id} received engine moves: the one " \
-                "game slot must keep full strength (concurrency stays 1)"
+            assert game.status == "aborted", \
+                f"overflow game {game_id} ended {game.status}, expected a prompt abort"
 
-        # The served game is unaffected and finishes cleanly.
+        # The served game is unaffected and finishes cleanly, every move on time.
         game1 = mock.games[challenge_id]
         _wait_for(game1.finished.is_set, GAME_TIMEOUT,
                   f"game {challenge_id} did not finish", proc)
         _check_game(game1, "served game")
 
-        # The resign fallback must be loud in the log (whitespace collapsed:
-        # the bot's console handler wraps long lines).
-        log_flat = " ".join(log_path.read_text(errors="replace").split())
-        assert "Resigning overflow game: abort refused" in log_flat, \
-            "the abort-refused resign was not logged loudly"
+        # The unabortable games are untouched: still running, no moves from us,
+        # and above all not resigned.
+        for game_id in unabortable:
+            game = mock.games[game_id]
+            assert game.status == "started", \
+                f"unabortable overflow game {game_id} was ended ({game.status}): a game we are " \
+                "not playing is not ours to end"
+            assert game.winner is None, f"game {game_id} has a result: {game.winner} won"
+            assert not game.bot_move_latencies, \
+                f"unabortable overflow game {game_id} received engine moves: the one " \
+                "game slot must keep full strength (concurrency stays 1)"
+        for game_id in overflow + unabortable:
+            assert mock.games[game_id].status != "resign", \
+                f"overflow game {game_id} was resigned"
+
+        # Both refusals must be loud.
+        log_flat = _log_text(log_path)
+        assert f"overflow handling refused for game {moved_in_id}" in log_flat, \
+            "a game the account had already moved in was not refused loudly"
+        assert f"abort refused for game {refused_id}" in log_flat, \
+            "the refused abort was not logged loudly"
+        assert "Resigning overflow game" not in log_flat, \
+            "the withdrawn resign fallback is back"
+
+
+def test_duplicate_game_start_is_not_double_served(lichess_bot, tmp_path):
+    """A burst of gameStart replays for a live game must change nothing at all.
+
+    This is the exact 2026-08-12 production shape.  lichess replays gameStart
+    for every ongoing game on each event-stream (re)connect, so a game being
+    served can be announced again at any time.  Unguarded, each replay starts a
+    second handler for the same game -- two engines on one core, every second
+    move POST answered 400 -- and, once the pool is full, the replays are
+    classified as overflow and disposed of, which is how live games x4E0Q6js
+    and bQQnPWSb were resigned out from under the engine playing them.
+
+    The invariant: one handler per game, no served game ever ended by us, and
+    the bookkeeping intact afterwards (a later game still gets its slot).
+    """
+    burst = 6
+    mock = MockLichess()
+    mock.start()
+    with _running_bot(lichess_bot, tmp_path, mock) as (holder, log_path):
+        proc = holder[0]
+
+        game_id = mock.send_challenge(bot_plays_white=True, clock_limit=60,
+                                      clock_increment=0,
+                                      opponent_delay=(0.05, 0.15),
+                                      move_cap=24, seed=11)
+        _wait_for(lambda: game_id in mock.games, ACCEPT_TIMEOUT,
+                  f"challenge {game_id} was not accepted", proc)
+        game = mock.games[game_id]
+        # Well under way: the handler is live and the account has moved, so a
+        # replay is unambiguously a duplicate rather than a new game.
+        _wait_for(lambda: len(game.board.move_stack) >= 4, 90,
+                  "the game never got going", proc)
+
+        for _ in range(burst):
+            mock.replay_game_start(game_id)
+
+        # Every replay must be recognised and dropped while the handler is
+        # still live -- checked before the game can end, so the count is not a
+        # race with a genuinely new game reusing the id.
+        marker = f"duplicate gameStart for {game_id} ignored (handler already live)"
+        _wait_for(lambda: _log_text(log_path).count(marker) >= burst, 60,
+                  f"the {burst} replayed gameStart events for {game_id} were "
+                  "not all recognised as duplicates of the live handler", proc)
+
+        _wait_for(game.finished.is_set, GAME_TIMEOUT,
+                  f"game {game_id} did not finish", proc)
+        _check_game(game, "game served through the gameStart burst")
+
+        # A second game afterwards proves the slot was not leaked and that the
+        # burst left the concurrency bookkeeping intact.
+        game2 = _play_game(mock, proc, bot_plays_white=False, clock_limit=60,
+                           clock_increment=0, opponent_delay=(0.05, 0.15),
+                           move_cap=16, seed=12)
+        _check_game(game2, "game after the burst")
+
+    # Exactly one handler each: a handler opens exactly one game stream, so a
+    # second connection is a second engine racing the first.
+    for label, gid in (("burst game", game_id), ("later game", game2.id)):
+        assert mock.game_stream_connections.get(gid) == 1, \
+            f"{label} {gid} was served by " \
+            f"{mock.game_stream_connections.get(gid)} handlers, expected 1"
+    for gid, played in mock.games.items():
+        assert played.status != "resign", \
+            f"game {gid} was resigned; no served game may ever be ended by us"
+    assert "Resigning overflow game" not in _log_text(log_path), \
+        "the withdrawn resign fallback is back"
 
 
 @pytest.mark.skipif(shutil.which("lsof") is None, reason="needs lsof")
@@ -453,8 +564,7 @@ def test_event_stream_death_is_loud(lichess_bot, tmp_path):
         _wait_for(lambda: mock.event_stream_connections > connections_before,
                   150, "the bot never noticed its event stream was dead: "
                   "it is deaf but looks online", proc)
-        # Collapse whitespace: the bot's console handler wraps long lines.
-        log_flat = " ".join(log_path.read_text(errors="replace").split())
+        log_flat = _log_text(log_path)
         assert "event stream is assumed dead" in log_flat, \
             "stream death was not logged loudly"
 
@@ -513,5 +623,5 @@ def test_restart_resumes_live_game(lichess_bot, tmp_path):
         # may include the whole restart in its latency).
         settled = game.bot_move_latencies[moves_before + 1:]
         if settled:
-            assert max(settled) < MAX_MOVE_SECONDS, \
+            assert max(settled) < RESTART_MAX_MOVE_SECONDS, \
                 f"post-restart engine moves too slow: {max(settled):.1f}s"
