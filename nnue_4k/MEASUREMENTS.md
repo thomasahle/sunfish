@@ -235,8 +235,21 @@ its ordinary match load (load 24 of 96, two `tc=30+1` matches cotenant):
 | nodes at 30+1 | **56,829** | 23,797 | 112,506 |
 
 16 positions, `wtime 30000 winc 1000`, so `think = wtime/12 + 0.9*inc = 3.40 s`
-at a median 42,473 nps. The fixed-node screens run at **20,000** nodes, well
-below this.
+at a median 42,473 nps. Re-measured after the cotenant matches finished (load
+10.75): median **67,642 nodes, depth 10**, 54,638 nps. So the frontier is
+**57k–68k nodes** depending on what else the box is doing. The fixed-node
+screens run at **20,000**, which from the sweep below is ~6.5 ply.
+
+**The honest tension, stated rather than glossed.** At 160,000 nodes the
+teacher's mean *completed* depth is 9.74. Against the **screen** budget where
+the candidate is actually judged that is 8× the nodes and ~3 plies — a real
+teacher. Against a **30+1 game move** it is only 2.4–2.8× the nodes and about
+one ply, so this teacher is not teaching the student to see deeper than the
+engine plays; it is teaching it to agree with a slightly better version of
+itself. Buying the extra plies is what 640k would do, and the sweep below says
+that buys 0.008 of correlation while 21% of positions still churn >25 cp. If
+the distilled student converts at all, raising the budget is the first axis to
+re-open.
 
 ### The teacher's value does NOT converge. It plateaus, and the plateau is tactics
 
@@ -301,6 +314,26 @@ over any number of new positions later without a relabelling dependency.
 labeller reports 353 cp at depth 5, and the engine's own `info` stream on the
 same position converges to `lower 348 / upper 359` at depth 5 — midpoint 353.
 The number is the engine's, not a re-derivation of it.
+
+### What the 384-parameter model can actually express, measured
+
+Two numbers that frame every fit this lane has run, on the SF-labelled set:
+
+- Adding classic's piece-square terms to **pure material** moves the
+  correlation with either teacher by **~0.000-0.004** (0.7364 → 0.7368 ours,
+  0.7298 → 0.7284 SF). Material is essentially the whole raw signal.
+- Yet refitting **only the 5 free piece values** buys **−1.31%** held-out,
+  against **−7.63%** for all 384 parameters. So the square terms carry ~83% of
+  the loss improvement while contributing almost nothing to raw correlation.
+
+The fit's gain therefore lives entirely in a component that is small next to
+material. Stated as an observation, not a mechanism — the last mechanism this
+lane asserted from a single split is the one being corrected below.
+
+For the record, the SF fit's piece values: P 100, N 280→**265**, B 320→**295**,
+R 479→**473**, Q 929→**839**. Overall eval scale is unchanged (sd ratio 1.014
+on 5,074 real positions), so this is a change in the *relative* piece values —
+the queen down 10% against a near-unchanged rook — not a rescaling.
 
 ### How different is this teacher from Stockfish? Enough to matter
 
