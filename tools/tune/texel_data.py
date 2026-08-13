@@ -9,7 +9,16 @@ actually plays), sampled sparsely to decorrelate, and are labelled with
 local Stockfish. Shallow labels are fine for Texel tuning: the fit is
 dominated by having many positions, not by per-position depth.
 
-usage: texel_data.py OUT.npz [NPOS] [DEPTH]
+The games directory is an ARGUMENT, not a fixed path inside the repo. The
+first version globbed `tools/tune/arena/*.pgn`, which was never committed and
+was gitignored along with the .npz, so the 15,328-position set and the games
+behind it were purged together with a scratchpad and the whole training track
+stalled on it. Source games and labelled sets now live under
+`~/repos/sunfish-data/` and are passed in, so the recipe outlives its
+workspace. Stockfish is an argument for the same reason: the labeller must be
+runnable somewhere other than one laptop.
+
+usage: texel_data.py OUT.npz [NPOS] [DEPTH] [PGNDIR] [STOCKFISH]
 """
 import glob
 import os
@@ -25,13 +34,21 @@ import numpy as np
 OUT = sys.argv[1]
 NPOS = int(sys.argv[2]) if len(sys.argv) > 2 else 30000
 DEPTH = int(sys.argv[3]) if len(sys.argv) > 3 else 8
-ARENA = os.path.dirname(os.path.abspath(__file__)) + "/arena"
-SF = "/opt/homebrew/bin/stockfish"
+ARENA = sys.argv[4] if len(sys.argv) > 4 else os.path.expanduser("~/repos/sunfish-data/pgn")
+SF = sys.argv[5] if len(sys.argv) > 5 else "/opt/homebrew/bin/stockfish"
+
+pgns = sorted(glob.glob(os.path.join(ARENA, "*.pgn")))
+# An empty games directory used to mean "0 positions collected" and a valid
+# but empty .npz. Say so and stop instead.
+assert pgns, "no *.pgn in %s -- pass the games directory as argv[4]" % ARENA
+assert os.path.exists(SF), "no stockfish at %s -- pass its path as argv[5]" % SF
+print("games: " + ", ".join("%s (%.1f MB)" % (os.path.basename(p), os.path.getsize(p) / 1e6)
+                            for p in pgns), flush=True)
 
 # ---- collect FENs -----------------------------------------------------------
 rng = random.Random(20260812)
 fens = set()
-for path in sorted(glob.glob(ARENA + "/*.pgn")):
+for path in pgns:
     with open(path) as f:
         while len(fens) < NPOS * 3:
             g = chess.pgn.read_game(f)

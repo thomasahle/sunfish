@@ -74,6 +74,7 @@ how much effort it cost.
 | 2026-08-13 | corrhist byte price, `pack.sh` on real files | **+127 B** (entry 3475 -> **3602**, spare 621 -> 494). Golfing recovers 5 B -- lzma already had the repetition |
 | 2026-08-13 | corrhist keep/drop **PRE-REGISTERED** before the screen | Standing 1.0 Elo/byte bar => needs fixed-node **>= +135.5**. The budget-average rate the +400 goal implies (0.41 Elo/byte) would need only +60.5; both written down, decided on the strict one |
 | 2026-08-13 | corrhist correction table censused: not a feedback runaway | median +2...+8 cp, 1-5% at the +/-120 clamp, 4-7k entries per search. The screen measures the feature, not a degenerate one |
+| 2026-08-13 | **Training set: durable home, 19,689 positions ready, labelling NOT started** | Games under `~/repos/sunfish-data/pgn/` (4,482 games). New mix is **65.7% at ≤16 pieces** vs 47% in the lost set. Box has no Stockfish; laptop is owned by the ladder — needs a call |
 | 2026-08-13 | **LANDED on top of kend+fresh: the entry is 3378 bytes, 718 spare** | Rebuilt, not composed: −97 on this base, not the −94 of the last one. All gates green, 60/60 same move AND same score |
 | 2026-08-13 | **`agree.py` was comparing two different UCI DRIVERS** | An engine outside the repo tree silently uses the builtin `go` loop. A byte-identical copy of the entry "disagreed" with itself 39/60 on score. Both arms now STAGED into one directory, and an A-vs-A positive control is wired in |
 | 2026-08-13 | **Eval tables decode at startup: entry 3483 → 3389, 707 spare** | Tables bit-identical; 60/60 same move AND same score at fixed nodes. Decoder costs **13 B**, decode 1.07 ms. *(Measured on the pre-kend/fresh base; superseded by the 3378 row above)* |
@@ -1058,6 +1059,76 @@ because with no tc the `sunfish_ui` driver sets the in-search deadline to
 now + 600 s (the 1.5 s default belongs to the builtin loop, which only the
 packed artifact runs) — and both arms print which driver they resolved, which
 the script compares and refuses to proceed on.
+## 2026-08-13 — The training set has a durable home and 19,689 positions waiting; labelling is the only step left and it is NOT started
+
+The 15,328 Stockfish-labelled positions that gate every training candidate
+died with a session scratchpad. Two causes, and only one of them was the
+purge: `tools/tune/texel_data.py` globbed `tools/tune/arena/*.pgn`, a
+directory that was **never committed**, and `tools/tune/.gitignore` ignored
+`data.npz`. Both the inputs and the output were, by construction, things git
+would not keep. **Regeneration, not restoration** — the original set is gone.
+
+### The durable store
+
+Source games now live at **`~/repos/sunfish-data/pgn/`** — outside every
+worktree, outside every scratchpad:
+
+| file | games | source |
+|---|---|---|
+| `box_caprr_hole.pgn` | 4000 | the hole round-robin, 10+0.1, five arms incl. classic |
+| `box_caprr_kend.pgn` | 444 | the king-table screen |
+| `laptop_pyleague_20260813_123259_snapshot.pgn` | 38 | league ladder snapshot at 13:44, taken as a **copy** of a growing file |
+
+4,482 games. `texel_data.py` no longer hard-codes where games or Stockfish
+live: both are arguments (`OUT.npz [NPOS] [DEPTH] [PGNDIR] [STOCKFISH]`,
+defaulting to the store above), and an empty games directory now **asserts**
+instead of quietly writing a valid empty `.npz`.
+
+### The yield, dry-run without spending a single Stockfish node
+
+Sampling only — `ply >= 10`, every 7th ply, not in check, ≥ 6 pieces, dedup
+by FEN — over the 4,482 games:
+
+    box_caprr_hole.pgn      4000 games ->  15760 new unique
+    box_caprr_kend.pgn       444 games ->   3538 new unique
+    pyleague snapshot          38 games ->    391 new unique
+    TOTAL unique positions available: 19689
+
+**19,689 available against the 15,328 that were lost**, and the phase mix is
+not the old one:
+
+| phase (pieces) | new set | the lost set |
+|---|---|---|
+| opening 25-32 | **9.4%** | 21% |
+| middle 17-24 | **24.9%** | 32% |
+| late-middle 9-16 | **40.6%** | 32% |
+| endgame 6-8 | **25.1%** | 15% |
+
+The new set is **far more endgame-weighted** — 65.7% at or below 16 pieces
+against 47%. That is not a defect to correct before it is understood: the
+eg half of the tapered candidate and the king table are exactly the terms
+this material informs, and the old set's opening-heavy mix is one plausible
+reason Texel tuning fitted 10.1% better and then played −16.7 ± 31.2. It is
+recorded here so that whatever the next fit does, nobody attributes it to the
+tuner when the data distribution moved underneath it.
+
+### Not started, and why
+
+**No labelling has run.** ~20k positions at depth 8 on 2 threads is real CPU,
+and this laptop's timed league ladder owns it for about a day; Stockfish
+would show up in the ladder's own cotenancy sampler. The box is the
+alternative and it is **not ready**: `which stockfish` finds nothing there
+(numpy 2.0.2 and python-chess are present, 96 cores, load ~12.6 with 2 pypy3
+at ~50%). So the open decision is *install Stockfish on the box and label
+there*, or *wait for the ladder and label here* — it needs a call, not a
+default. Everything up to that line is done and durable.
+
+One rule adopted from the loss: the labelled `.npz` gets **committed to the
+branch**, not gitignored. A few MB of int8 that gates an entire track is not
+a throwaway artifact.
+
+---
+
 ## 2026-08-13 — Base-90 lands on the moved base: 3378 bytes, 718 spare, and the agreement instrument was comparing two different drivers
 
 The startup decode was measured on the pre-`kend`/`fresh` entry (the entry

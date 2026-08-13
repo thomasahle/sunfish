@@ -8,8 +8,11 @@ engines.json
 *.txt
 *.err
 
-# Tuning
-data.npz
+# Tuning. NOT the labelled dataset: `data.npz` here is what purged the
+# 15,328-position Stockfish-labelled set along with its scratchpad and
+# stalled the whole training track. Labelled sets are committed under
+# tools/tune/data/ instead -- a few MB of int8 that gates a track is not a
+# throwaway. Fitted models stay ignored; they are re-derivable from the data.
 model.pkl
 
 # Test files
