@@ -76,8 +76,11 @@ def _block(tabs, order, step, half, dest, init=False):
     if init:
         src += "%s = {}\n" % dest
     src += 'for _k in "%s":\n' % order
-    src += " _t = [_v // %d ** _i %% %d * %d - %d + piece[_k] for _i in range(%d)]\n" % (
-        lvl, lvl, step, off, n_per)
+    # `* 1` at step == 1 is four dead bytes in every emitted decode loop; the
+    # entry's round-trip assert in make_pst_entry.py guards the algebra.
+    _mul = "" if step == 1 else " * %d" % step
+    src += " _t = [_v // %d ** _i %% %d%s - %d + piece[_k] for _i in range(%d)]\n" % (
+        lvl, lvl, _mul, off, n_per)
     src += " _v //= %d ** %d\n" % (lvl, n_per)
     if half:
         src += " _r = [_t[_i * 4:_i * 4 + 4] for _i in range(8)]\n"

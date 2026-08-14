@@ -32,7 +32,7 @@ for _c in "%E?&Hx<oRTp~2m@6+@~l]sSlRTuQ.6)vPkJX&]rh}J(</a7jD9^9SB@NH+(H`),o_%o^&
  _d=ord(_c)-35;_v=_v*90+_d-(_d>4)-(_d>56)
 pst = {}
 for _k in "PNBRQK":
- _t = [_v // 210 ** _i % 210 * 1 - 107 + piece[_k] for _i in range(64)]
+ _t = [_v // 210 ** _i % 210 - 107 + piece[_k] for _i in range(64)]
  _v //= 210 ** 64
  pst[_k] = tuple([0] * 20 + sum(([0] + _t[_i * 8:_i * 8 + 8] + [0] for _i in range(8)), []) + [0] * 20)
 K_MID, K_END = pst["K"], tuple(piece["K"] + 70
