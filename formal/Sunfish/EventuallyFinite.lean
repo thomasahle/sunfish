@@ -90,6 +90,28 @@ it, by countermodel.  The four design items:
    answers instead.  The induction is on the `EndsWithin` budget
    (remaining distance to terminal), not on depth.
 
+   WHY THE FUEL SHAPE IS WHAT MAKES THIS PROVABLE (the decomposition
+   that dissolves the reduced-depth trap).  A probe that runs at
+   reduced depth can bottom out at the frontier at a NON-terminal
+   position however large `D` is -- if its result were a score, that
+   would be a masking channel `hFiniteDiameter` cannot bound, because
+   the pass child is NOT a legal move: `EndsWithin` bounds no play
+   through it, and the budget never decreases across a pass.  The
+   fuel oracle removes exactly that channel.  Above the horizon the
+   pass never returns a score -- it only selects how much depth the
+   real moves spend -- and `fuelValueD2` models it as the abstract
+   selector `spend`, over which every theorem here quantifies
+   UNIVERSALLY.  Frontier masking inside the engine's probe subtree
+   can therefore only change WHICH selector the code computes, never
+   what any selector's fold is worth; it is absorbed by the
+   quantifier, and its worst case is already priced into the bound as
+   the `C` of `D0 = C*N + C + 6` (every edge at full spend).  The
+   sub-horizon pass (depths 3..5, probing at depth <= 2) IS a score
+   candidate, and sits strictly below the invariant's floor,
+   unreachable.  So the value-correctness argument needs
+   frontier-freedom only on the real-move tree, which is precisely
+   what the budget buys.
+
    Lemma ledger: no existing lemma gains the new hypothesis and no
    existing induction is restructured -- the layer-1 machinery is
    untouched, and both new inductions mirror existing patterns (the
