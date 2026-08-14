@@ -49,6 +49,7 @@ how much effort it cost.
 | 2026-08-14 | **AMENDMENT: pool ladder arms (c) 30+1 and (d) phase-M are HELD for the virtual-clock surrogate — held, NOT cancelled** | Owner ruling on real-clock economy. Arm (b) 60+1 PROCEEDS on real clocks (it is both the decisive question and calibration data for the surrogate); (c) and (d) move to the twin's virtual clock once it calibrates against stage 1, the +40.6 with-park run and arm (a), with only the final composite getting one real-clock confirmation. Bounds, book, seed, cap and readings for (c)/(d) stand as pre-registered; the arena scripts are renamed `HELD_*` with the ruling in their headers so the operational state cannot drift from the ledger |
 | 2026-08-14 | **ARM (a) VERDICT: the POOL time manager is +119.94 ± 36.44 at 60+0 — H1 accepted in 274 games on a NON-INFERIORITY screen, 144W-53L-77D (66.61%), LOS 100%, 0 forfeits, 0 illegal** | The arm that was only asked not to give back the +235.5 ± 65.4 sudden-death fix instead added to it, against that winner's own binary (`14b69a606b743a37`). Mechanism is the allocation SHAPE, measured off the PGN: the pool spends **0.79× the median move and 3.3× the maximum** (0.512/5.534 s vs 0.645/1.664 s) — cheap routine moves, a wall that lets a hard one run to 5× soft, which one number that is both target and wall cannot do. Drain: pool's minimum end-clock is **8.4 s = (M+2)·O exactly**, it never fell below 2.4 s in 274/274 games, and 0 games ended under 2 s, against the incumbent's 4 under 2 s and 5 crossings. Blind moves 1,057 (6.0%) vs 117 — same metric, different mechanism: these are deliberate floor moves with 8–12 s still banked, not a collapsed budget, and the arm won 66.6% while playing 14× more of them. `tm_smoke`'s cold-table prediction of 1.5× MORE routine spend over-read it; the pre-registered honest note was too pessimistic. **Arm (b) 60+1 (elo0=0 elo1=10) launched; (c) and (d) gated; v1.1 dynamic still unscreened** |
 | 2026-08-14 | **PRE-REGISTERED: the POOL time manager (soft/hard) goes to a four-arm ladder — (a) 60+0 NON-INFERIORITY pool vs the shipped entry, elo0=−10 elo1=0, cap 600; then (b) 60+1 elo0=0 elo1=10; (c) 30+1 NON-INFERIORITY; (d) phase-M vs pool** | Thomas's v2 architecture, separate from the smooth budget (#188, the conservative acute fix): a whole-game pool `P = T + (M−1)·I − (M+2)·O` split into a soft limit `min(P/M, A/4)` that stops STARTING iterations and a wall `min(5·soft, A/2)` that cannot go negative. `pooltm` mod, **+57 B all-in** (3308 → 3365, 731 spare — the curve's bytes come out with it), sha `cddf392e21449054` against the in-flight #188 baseline `14b69a606b743a37`. **Recorded before the games and against the design's own premise:** budgets are not spends — iterations are discrete, the pool stops at the first one that ENDS past its limit, and the realized spend measures 1.3–2.3× the soft limit (60+0: 2.26 s vs the incumbent's 1.50 s on the laptop; more than the incumbent at every probed TC on the loaded box). v1 is STATIC; the dynamic target is v1.1 and is not screened until v1 survives (a) and (c) |
+| 2026-08-14 | **CORRECTION + AMENDMENT: the sudden-death identity boundary is 40/19 ≈ 2.105 s, NOT 2.667 s — and Match 1's acceptance does not survive a retune** | 8/3 belongs to `max(wtime/2−1, wtime/8)`, a cap designed and **abandoned**; the shipped `wtime²/(2·wtime+4)` has two different boundaries, **2/19 ≈ 0.105 s** (cap stops binding) and **40/19 ≈ 2.105 s** (identical to step). Wrong in the SAFE direction: the identity region is **wider by 0.561 s**, so stage 1's 2.4 s minimum clears it by 0.295 s and every argument that leaned on it — including the skipped 60+0 sanity match, and the pool lane's two entries that inherited the figure — is strengthened. Bit-equality verified over **every integer-ms clock 2106–400000, zero exceptions**. Also: cap difference is `2/(t+2)` **absolute** / `4/(t²−4)` **relative**; increment claims partitioned (direct evidence at winc=0.1 only); `∂B/∂I = 560T/(40+240I)²+0.9 > 0` so the allocation is **continuous** (kink at the clip — "smooth" is informal); **the parking fixed point `T* = 2+2I`** predicts both runs' plateaus (2.0 s at 60+0, 2.2 s vs 2.1 s observed at 60+0.1) and explains the zero forfeits. **AMENDMENT:** if match 2's remedy retunes any of {20, 240, 0.9, cap}, match 1 does NOT carry — rerun both, or prove the 60+0.1 allocation unchanged |
 | 2026-08-14 | **MATCH 1 VERDICT: the smooth budget is +40.64 ± 25.61 over the step at 60+0.1 — H1 accepted in 438 games (168W-117L-153D, LOS 99.92%), in 1h53m** | The positive branch: **the step form was leaving Elo on the table at tiny increments**, so this is not a change that falls back on aesthetics. Mechanism is stage 1's again — **zero forfeits on either arm**, all 438 games `normal`, and the step arm's clock **parks at 2.1 s in every single game** (min 2.0 across 438; a 2.2 s clock buys exactly 0.1 s of budget, which is exactly the increment) and pays one increment per move from there: **34.3% of its moves starved vs smooth's 4.0%**, median last-20-move time **0.115 s vs 0.391 s**. **The pre-registered ≤0.06 s metric MISSED it** (0 vs 19) because a capped budget settles where spend == income, not on the floor — logged as a pre-registration defect with a DESCRIPTIVE companion validated against the stage-1 PGN, not silently patched. Zero illegal. **Match 2 (30+1 non-inferiority) launched in the same action** |
 | 2026-08-14 | **PRE-REGISTERED: the step budget becomes a SMOOTH one, and the price of that is two matches — (1) 60+0.1 smooth vs step, elo0=0 elo1=20, cap 600; (2) 30+1 NON-INFERIORITY smooth vs step, elo0=-10 elo1=0, cap 400** | The step form is discontinuous at `winc == 0`: one millisecond of increment moved the divisor 40 → 12, so 60+0.1 was paced at /12 — the exact drain the /40 branch exists to close. Replacement is one rational base (divisor slides 40 → 12) under one cap that cannot go negative. **What carries for free:** `winc == 0` is bit-for-bit `wtime/40` and, above a 2.667 s clock, bit-for-bit the stage-1 `tmfix` arm — so +235.5 ± 65.4 transfers untouched. **What must be bought:** increment TCs are now /12 + 0.9·inc *asymptotically* (−7.4% at 30+1, −8.5% at 60+1, −3.3% at 300+3), so match 2 prices that. Arms are one expression apart from one generator; the step arm packs to **3295 B, sha `fe22791b409b1fba`** — byte-identical to the stage-1 winner. Entry **3295 → 3308 B** (+13, 788 spare). Honest note recorded in advance: if match 1 reads ≈ 0 the change lands as continuity-plus-safety, not as Elo |
 | 2026-08-14 | **C-TWIN PR SERVICE + EVICT BATTERY: calibration PASSED at 49.83% (300g, -1.16 ± 12.23, after a voided -54 run whose root-cause fixed the twin's go-nodes driver); #184 +0.52 ± 6.37 (668g, Ptnml [4,5,313,10,2]); #182 +1.04 ± 12.74 (668g, mechanism-active, nets neutral); #171 exactly 0.00 (all 334 pairs identical)** | Eviction battery: unguarded simplification is a **no-op at production TABLE_SIZE** and **-15.09 ± 19.57 under TABLE_SIZE=500 churn** (the root guard earns its keep where it was built); hash-slot two-tier +6.24 ± 20.96 is the guardless alternative; k2/k3 killers +1% nodes, screen-pruned. All fixed-node 20k, twin-grade, zero illegal moves in ~3,640 games |
@@ -605,6 +606,162 @@ calibration_VOID_old_driver.log, calib/calibration2.{log,pgn},
 pr_pr184_derive / pr_pr182_fuel / pr_pr171_qstail .{log,pgn},
 evict_default / evict_churn / pr_evict_p3churn .{log,pgn},
 gate_*.log (identity suites), ledger.md, consumer_audit.md.
+
+## 2026-08-14 — CORRECTION + AMENDMENT: the sudden-death identity boundary is 40/19 s, not 8/3 s; and Match 1's acceptance does not survive a retune
+
+Per this file's own rule, the entries below are **not rewritten**. This entry
+says what was wrong in them and what replaces it. External review of PR #188's
+write-up raised every item here; all were re-derived independently before
+being accepted.
+
+### 1. The boundary figure was wrong — and wrong in the safe direction
+
+Entries below state that at `winc == 0` the smooth budget is bit-for-bit the
+step arm "above a 2.667 s clock". **2.667 s = 8/3 is not a boundary of the
+shipped policy at all.** It is the crossover of `max(wtime/2 − 1, wtime/8)`, a
+cap that was designed, considered and **abandoned** before anything was built.
+The shipped cap is `wtime²/(2·wtime + 4)`, and its arithmetic is different.
+
+The two real boundaries at `winc == 0`, both exact rationals:
+
+| boundary | equation | value |
+|---|---|---|
+| new cap stops binding | `T/40 = T²/(2T+4)` ⟺ `40T = 2T+4` | **T = 2/19 ≈ 0.1053 s** |
+| new policy == step policy | `T/40 = T/2 − 1` ⟺ `19T/40 = 1` | **T = 40/19 ≈ 2.1053 s** |
+
+giving three regimes rather than two:
+
+| clock at `winc == 0` | shipped allocation | step allocation | relationship |
+|---|---|---|---|
+| **T ≥ 40/19 ≈ 2.105 s** | `T/40` | `T/40` | **IDENTICAL** |
+| 2/19 ≤ T < 40/19 | `T/40` | `T/2 − 1`, **nonpositive at T ≤ 2 s** | differ; ours strictly larger and always positive |
+| T < 2/19 ≈ 0.105 s | `T²/(2T+4)` | `T/2 − 1` (deeply negative) | differ; ours the only positive one |
+
+**Every conclusion drawn from the old figure survives, with more margin, not
+less.** 40/19 < 8/3, so the identity region is **wider by 0.561 s** than
+claimed. Stage 1's minimum measured clock was 2.4 s, which sits inside the
+identity region with **0.295 s to spare** — so "the +235.5 ± 65.4 arm and the
+smooth arm are the same engine everywhere that run went" is not merely still
+true, it was understated. The decision to skip a 60+0 sanity match rests on
+that identity and is therefore also unaffected.
+
+Verified exhaustively rather than argued: over **every integer-millisecond
+clock from 2106 to 400 000 the two allocations are bit-equal, with zero
+exceptions**. Integer milliseconds is the whole reachable domain — UCI parses
+`int(next(tokens))`. At real-valued clocks the two agree to ~1e-16 s, from two
+float effects that are not policy differences: `wtime*1000/40000` and
+`wtime/40` are different expressions of one number, and `wtime/2 − 1000`
+suffers cancellation at the boundary (1052.63 − 1000 keeps ~13 digits).
+
+**Propagation, named.** The pool-time-manager lane's entries above
+(`ARM (a) VERDICT` and the ladder pre-registration) cite the 2.667 s figure
+because they took it from this lane's write-up. Their argument is
+strengthened, not weakened: the baseline they measured against is identical to
+the stage-1 winner over a wider band than they claimed. No number of theirs
+changes.
+
+Tests pin both boundaries exactly, with values immediately either side, in
+both repos — plus a named regression test asserting that **nothing happens at
+2.667 s**, so the abandoned figure cannot creep back.
+
+### 2. Cap wording: absolute vs relative
+
+The entries say the new cap "differs from the old by exactly 4/(t²−4)". That
+conflates two quantities. Correctly:
+
+- **absolute** difference: `2/(t + 2)` seconds
+- **relative** difference: `4/(t² − 4)`
+
+The percentages quoted (4.2% at 10 s, 0.11% at 60 s, 0.004% at 300 s) were
+relative and are correct; only the label was wrong.
+
+"The same cap everywhere it was ever measured" is also too strong and is
+withdrawn. Correct statement: the two caps are **numerically near-identical in
+the measured high-clock region**, and the complete allocation is frequently
+**exactly** equal there for a different reason — the `T/40` base binds first
+for both policies, so neither cap is consulted.
+
+### 3. Increment partition: the three claims are not the same claim
+
+The entries' `winc` rows overlap and over-claim. Replaced by a partition:
+
+| band | status | evidence |
+|---|---|---|
+| `winc == 0` | preserved exactly, except for low-clock safety below 40/19 s | stage 1's +235.5 ± 65.4, carried |
+| `0 < winc < 1 s` | **materially changed** — this is the transition band | **direct evidence at winc = 0.1 s only**: +40.6 ± 25.6 at 60+0.1. No claim is made about other points in the band |
+| `winc ≥ 1 s` | within 10% of the audited policy, always spending **less** | analytic: `r(I) = 1 − 28/(40 + 240·I)`, monotone, `r(1) = 0.9` exactly. Match 2 tests the boundary of this band |
+
+### 4. Continuity and monotonicity, as results rather than adjectives
+
+$$\\frac{\\partial B}{\\partial I} = \\frac{560\\,T}{(40 + 240 I)^2} + 0.9 > 0$$
+
+for all `T ≥ 0` — so the base is **strictly increasing** in the increment, and
+since the cap does not depend on `winc` at all, the complete allocation is
+nondecreasing in both arguments. It is **continuous** everywhere, with a kink
+where the cap begins to bind. From here on, formal claims say *continuous*;
+*smooth* is used only informally, because the allocation is not
+differentiable at the clip.
+
+The missing test is added: monotonicity in **winc**, on a grid, in both repos.
+Monotonicity in `wtime` was already tested — but `winc` was the dimension the
+defect was in, which makes its absence the more embarrassing gap of the two.
+
+### 5. The parking fixed point — why the losing arm plateaus instead of flagging
+
+Match 1's most striking observation was that the step arm's clock settles at
+2.1 s in every one of 438 games. That is not an empirical curiosity, it is a
+one-line consequence of the old cap. Once `wtime/2 − 1` binds, the arm spends
+exactly that and banks one increment:
+
+$$T_{n+1} = T_n - \\left(\\tfrac{T_n}{2} - 1\\right) + I = \\tfrac{T_n}{2} + 1 + I
+\\qquad\\Longrightarrow\\qquad T^{*} = 2 + 2I$$
+
+a contraction with slope ½, so the fixed point is attracting from any starting
+clock. **It predicts both runs from one expression**: `I = 0` gives 2.0 s and
+stage 1 measured the pre-fix arm asymptoting at exactly 2.0 s; `I = 0.1` gives
+2.2 s and match 1 measured a 2.1 s median with a 2.0 s minimum — the fixed
+point less per-move overhead. It also explains the zero forfeits directly: at
+the fixed point spend equals income, so the arm can starve indefinitely
+without ever losing on time.
+
+The shipped cap has no such fixed point: it is positive for every positive
+clock and never stops paying out.
+
+### 6. Nominal allocation vs observed move time
+
+The divisor tables in the entries below give the **nominal allocated budget**,
+which is not what a stopwatch sees. Observed times are shorter and vary,
+because the search breaks at the first iteration boundary after 0.8 × the
+budget, and because the reported figures are **single runs on one fixture**
+(startpos, or a fixed 8-ply opening), not medians over repetitions. So
+`2.90 s` nominal at 60+0.1 against `2.39 s` / `2.34 s` observed on the packed
+artifact and `2.17 s` through `uci.py` is the soft break working as designed
+(0.8 × 2.90 = 2.32), not an inconsistency; likewise `5.40 s` nominal at 60+1
+against `4.50 s` packed and `3.85 s` through `uci.py`. Tables are relabelled
+accordingly and every runtime figure is annotated with its fixture.
+
+### 7. AMENDMENT to the pre-registration: Match 1 does not survive a retune
+
+The pre-registration below permits one remedy if match 2 fails: retune the
+rate constant 20 → 30, rerun match 2 once. **That is under-specified, and this
+amendment closes it before match 2 reports.**
+
+If the remedy changes **any** of `{20, 240, 0.9, the cap}`, it changes the
+allocation at 60+0.1 as well — the rate constant is shared by the whole curve,
+not local to increment TCs. Match 1's H1 acceptance was earned by one specific
+expression, and a retuned expression is a different arm that has never played
+that TC.
+
+**So: if the retune touches any of those four, Match 1's acceptance does NOT
+carry.** The retuned expression must either
+
+1. rerun **both** matches, or
+2. ship with a **proof** that its 60+0.1 allocation is unchanged from the arm
+   that won match 1 — which, since 60+0.1 sits in the transition band the rate
+   constant controls, is only available to a remedy that leaves the band alone.
+
+Recorded now, before match 2's result is known, so the result cannot pick the
+rule.
 
 ## 2026-08-14 — MATCH 1 VERDICT: the smooth budget is +40.6 ± 25.6 over the step at 60+0.1, H1 accepted in 438 games
 

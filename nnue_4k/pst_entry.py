@@ -736,23 +736,46 @@ def main():
             # 60+0 (MEASUREMENTS.md stage 1). Those PGNs also show the loss
             # mechanism is not the flag but BLIND PLAY: a median 16 moves at
             # the 0.05s floor.
+            # and the two policies are BIT-IDENTICAL for every integer-ms
+            # clock at or above 40000/19 = 2105.26ms, where wtime/40 finally
+            # overtakes wtime/2 - 1000. Stage 1's arm never went under 2.4s,
+            # so that whole +235 run sits inside the identity region with
+            # ~295ms to spare. (2667ms is NOT this boundary -- that belongs to
+            # an abandoned max(wtime/2 - 1000, wtime/8) cap.)
             # INCREMENT is /12 + 0.9*inc ASYMPTOTICALLY, within 10% of the
             # audited policy at every winc >= 1s (the base ratio
-            # (12 + 240i)/(40 + 240i) is 0.900 at i=1s and rises to 1), so the
-            # 30+1..300+5 audit carries. It is an approximation, not an
-            # identity, and that price is measured rather than assumed.
+            # r = 1 - 28/(40 + 240i) is 0.900 at i=1s and rises to 1), always
+            # on the spend-LESS side, so the 30+1..300+5 audit carries as a
+            # bound. It is an approximation, not an identity, and that price
+            # is measured rather than assumed. Between 0 and 1s of increment
+            # the band is materially changed and only i=0.1s has direct
+            # evidence (+40.6 +/- 25.6 at 60+0.1).
             # WHY NOT A STEP at winc == 0: the input is continuous and the
             # policy was not. 60+0.1 is a sudden-death clock in all but name
             # -- 0.1s/move of income against ~0.9s/move of spend -- and the
             # step paced it at /12, i.e. the exact drain the winc == 0 branch
-            # exists to close. The ramp paces it at /21.3.
+            # exists to close. The ramp paces it at /21.3. The base is
+            # strictly increasing in the increment,
+            # dB/dwinc = 560000*wtime/(40000 + 240*winc)**2 + 0.9 > 0, and the
+            # cap does not depend on winc, so the allocation is CONTINUOUS and
+            # nondecreasing in both arguments (it has a kink where the cap
+            # starts binding, so "continuous", not "differentiable").
             # THE ONE min IS THE SAFETY CAP, and wtime**2/(2*wtime + 4000)
             # replaces wtime/2 - 1000 because that cap goes NEGATIVE under 2s
             # and a negative cap is the doorway into the 0.05s blind floor.
+            # It is also what makes the old policy PARK rather than flag: once
+            # the cap binds, the clock follows T <- T/2 + 1 + inc, whose
+            # attracting fixed point is T* = 2 + 2*inc seconds. Measured
+            # exactly there twice -- 2.0s at 60+0 (stage 1) and a 2.1s median
+            # at 60+0.1 (match 1), fixed point less per-move overhead -- with
+            # the arm paying one increment per move and never losing on time.
             # Identically (wtime/2 - 1000) + 2e6/(wtime + 2000): strictly
             # positive for every positive clock, never above wtime/2, and
-            # within 5% of the old cap for wtime >= 10s, so the regime the
-            # audit measured does not move.
+            # within 5% RELATIVE of the old cap for wtime >= 10s (the relative
+            # gap is 4/(t^2 - 4) in seconds; the absolute one is 2/(t + 2)).
+            # The new cap only ever binds below 2000/19 = 105.3ms of clock, so
+            # in the measured region the allocation is usually EXACTLY equal
+            # to the old policy's -- the wtime/40 base binds first for both.
             # Movecount-aware divisors were simulated and are WORSE: a
             # shrinking "moves remaining" divisor spends MORE per move as the
             # game lengthens, which is backwards for sudden death.

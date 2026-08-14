@@ -100,6 +100,21 @@ CLOCKS = (1, 10, 100, 500, 1_000, 1_900, 2_667, 5_000, 30_000, 60_000,
           180_000, 300_000, 1_800_000)
 INCS = (0, 1, 10, 50, 100, 250, 500, 1_000, 3_000, 5_000)
 
+# THE TWO BOUNDARIES AT winc == 0, both exact rationals. Everything the
+# sudden-death argument rests on is a statement about which side of these a
+# clock sits, so they are pinned rather than described.
+#
+#   B_CAP = 2000/19 ms: below it the NEW cap binds. wtime/40 == wtime^2 /
+#           (2*wtime + 4000)  <=>  40*wtime == 2*wtime + 4000.
+#   B_ID  = 40000/19 ms: at or above it the new policy and STEP are
+#           IDENTICAL, because both reduce to wtime/40. wtime/40 ==
+#           wtime/2 - 1000  <=>  wtime * 19/40 == 1000.
+#
+# Between them the base wtime/40 binds for the new policy while STEP is still
+# clipped by wtime/2 - 1000 -- which is nonpositive for wtime <= 2000 ms.
+B_CAP = 2000 / 19          # 105.263 ms
+B_ID = 40000 / 19          # 2105.263 ms
+
 
 # ---- the line actually ships --------------------------------------------
 
@@ -143,17 +158,80 @@ def test_sudden_death_is_exactly_wtime_over_40():
         assert base(W, 0) == W / 40 / 1000.0, "winc == 0 is not wtime/40 at %d ms" % W
 
 
-def test_sudden_death_matches_the_validated_step_arm_above_2667ms():
-    """Above 2.667 s of clock, the shipped budget == STEP at winc == 0.
+def test_sudden_death_matches_the_validated_step_arm_above_40000_over_19():
+    """At or above 40000/19 ms of clock, the shipped budget == STEP at
+    winc == 0, exactly. The whole 60+0 validation lives above that.
 
-    2.667 s is where wtime/2 - 1000 overtakes the new clip, i.e. exactly
-    where the two caps swap; the whole 60+0 validation lives above it.
+    THE BOUNDARY IS 40000/19 = 2105.26 ms, NOT 2667 ms. 2667 (= 8000/3) was
+    carried over from an ABANDONED cap, max(wtime/2 - 1000, wtime/8), whose
+    two branches cross there. This cap is wtime**2/(2*wtime + 4000) and the
+    relevant crossing is a different equation -- see the boundary tests
+    below. The mistake was conservative in the useful direction: the true
+    identity region is WIDER by 562 ms, so every argument that leaned on it
+    survives with more margin, not less.
     """
-    for W in CLOCKS:
-        if W <= 2_667:
+    for W in CLOCKS + (2_106, 2_400, 2_667):
+        if W < B_ID:
             continue
-        assert abs(budget(W, 0) - step(W, 0)) < 1e-9, (
-            "sudden-death budget moved off the validated arm at %d ms" % W)
+        assert budget(W, 0) == step(W, 0), (
+            "sudden-death budget moved off the validated arm at %s ms" % W)
+
+
+def test_the_three_regimes_at_winc_zero_and_their_exact_boundaries():
+    """The complete sudden-death picture, pinned at both crossings.
+
+        wtime >= 40000/19   : new == STEP, both = wtime/40   (IDENTICAL)
+        2000/19 .. 40000/19 : new = wtime/40; STEP = wtime/2 - 1000, which is
+                              SMALLER, and nonpositive at wtime <= 2000 ms
+        wtime <  2000/19    : new = wtime^2/(2*wtime + 4000) (the cap binds)
+
+    Only the first regime carries the +235.5 +/- 65.4 validation, and it is
+    the one every clock in that run actually occupied.
+    """
+    # UCI clocks are integer milliseconds (`int(next(tokens))`), and over
+    # that whole domain above the boundary the two policies are BIT-EQUAL:
+    # every integer from 2106 to 400000 ms, no exceptions.
+    assert all(budget(W, 0) == step(W, 0) for W in range(2_106, 400_001))
+    # At real-valued clocks they agree to ~1e-16 s rather than exactly. Two
+    # separate float effects, neither of them a policy difference:
+    #   * `wtime*1000/40000` (ours) and `wtime/40` (STEP's) are different
+    #     expressions of the same number and can round apart in the last bit;
+    #   * `wtime/2 - 1000` CANCELS at this boundary -- 1052.63 - 1000 keeps
+    #     only ~13 significant digits -- so STEP's own cap is the less
+    #     accurate of the two there.
+    # Both are unreachable through UCI, which parses integer milliseconds.
+    assert abs(budget(B_ID, 0) - step(B_ID, 0)) < 1e-15
+    assert abs(budget(B_ID * 1.000001, 0) - step(B_ID * 1.000001, 0)) < 1e-15
+    # Below the boundary the difference is real and large, not an ulp: the
+    # new policy is the strictly more generous one.
+    assert budget(B_ID * 0.999999, 0) > step(B_ID * 0.999999, 0), (
+        "below 40000/19 the new policy must be the more generous one")
+    assert budget(2_000, 0) - step(2_000, 0) == 0.05
+    # exactly at the cap boundary: base and cap coincide, either side swaps
+    assert abs(base(B_CAP, 0) - cap(B_CAP)) < 1e-15
+    assert cap(B_CAP * 0.99) < base(B_CAP * 0.99, 0)      # cap binds below
+    assert cap(B_CAP * 1.01) > base(B_CAP * 1.01, 0)      # base binds above
+    # the middle regime: base binds for us, the old cap bites STEP
+    for W in (200, 500, 1_000, 1_900, 2_000, 2_100):
+        assert budget(W, 0) == W / 40 / 1000.0, "base should bind at %d ms" % W
+        assert step(W, 0) < budget(W, 0)
+    assert step(2_000, 0) <= 0, "the old cap must be nonpositive at a 2 s clock"
+
+
+def test_the_2667ms_figure_is_not_a_boundary_of_this_policy():
+    """A regression test against the specific error this file once carried.
+
+    2667 ms belongs to max(wtime/2 - 1000, wtime/8), a cap that was designed
+    and abandoned. Nothing happens at 2667 ms in the shipped policy: it is an
+    interior point of the identity region, and the identity already holds
+    562 ms below it.
+    """
+    assert B_ID < 2_667
+    assert budget(2_667, 0) == step(2_667, 0)          # identity, unremarkably
+    assert budget(2_400, 0) == step(2_400, 0)          # and already 267 ms lower
+    # stage 1's measured minimum clock was 2.4 s, so the run never left the
+    # identity region -- with 295 ms of margin, not the 0 the old figure implied
+    assert 2_400 - B_ID > 250
 
 
 # ---- (b) the clip ---------------------------------------------------------
@@ -218,6 +296,48 @@ def test_the_step_form_fails_the_continuity_bound():
 
 
 # ---- (d) monotone in wtime ------------------------------------------------
+
+@pytest.mark.parametrize("W", (100, 1_000, 30_000, 60_000, 300_000, 1_800_000))
+def test_monotone_nondecreasing_in_winc(W):
+    """More increment may never buy less thinking -- and winc is the
+    dimension the defect was in, so it is the one that most needed a test.
+
+    Analytically the base is STRICTLY increasing in winc:
+
+        dB/dI = 560*wtime/(40000 + 240*I)^2 + 0.9  >  0
+
+    and the cap does not depend on winc at all, so the clipped allocation is
+    nondecreasing. Walked here anyway, at 0.1 ms resolution.
+    """
+    prev = -1.0
+    for k in range(0, 20_001):
+        I = k * 0.1
+        cur = budget(W, I)
+        assert cur >= prev - 1e-12, "budget fell at wtime=%d winc=%.1f" % (W, I)
+        prev = cur
+
+
+def test_the_base_derivative_in_winc_is_the_analytic_one():
+    """dB/dI = 560*wtime/(40000 + 240*winc)^2 + 0.9, checked numerically.
+
+    Positive everywhere for wtime >= 0, which is what makes the monotonicity
+    above a theorem rather than a grid observation.
+    """
+    h = 1e-4
+    for W in (0, 60_000, 1_800_000):
+        for I in (0, 100, 1_000, 5_000):
+            # 560_000, not 560: that constant is the SECONDS-domain one
+            # (dB/dI = 560*T/(40 + 240*I)^2 + 0.9). Rescaling T -> W/1000 and
+            # I -> J/1000 turns it into 560_000. Both evaluate to the same
+            # dimensionless 21.9 at a 60 s clock with no increment, which is
+            # the arithmetic that catches the slip.
+            analytic = 560_000 * W / (40_000 + 240 * I) ** 2 + 0.9
+            numeric = (base(W, I + h) - base(W, I)) / h * 1000.0
+            assert analytic > 0
+            assert abs(analytic - numeric) < 1e-3 * max(1.0, abs(analytic)), (
+                "dB/dI mismatch at wtime=%d winc=%d: %.6f vs %.6f"
+                % (W, I, analytic, numeric))
+
 
 @pytest.mark.parametrize("I", (0, 1, 50, 100, 500, 1_000, 3_000))
 def test_monotone_nondecreasing_in_wtime(I):
@@ -325,6 +445,37 @@ def test_tiny_increment_no_longer_drains():
     assert smooth_floor * 2 < step_floor, (
         "no blind-play margin at 60+0.1: smooth %d floored moves vs step %d"
         % (smooth_floor, step_floor))
+
+
+def test_the_old_cap_has_a_parking_fixed_point_at_2_plus_2_inc():
+    """WHY the losing arm's clock plateaus instead of falling to zero.
+
+    Once `wtime/2 - 1000` is the binding term, the arm spends exactly that
+    and banks one increment, so its clock obeys
+
+        T_{n+1} = T_n - (T_n/2 - 1) + I  =  T_n/2 + 1 + I
+
+    a contraction (slope 1/2) with the attracting fixed point
+
+        T* = 2 + 2*I   seconds
+
+    That single expression predicts BOTH runs. At I = 0 it gives 2.0 s, and
+    stage 1 measured the pre-fix arm asymptoting at exactly 2.0 s. At
+    I = 0.1 it gives 2.2 s, and match 1 measured the step arm at a 2.1 s
+    median with a 2.0 s minimum across all 438 games -- the fixed point less
+    per-move overhead. It is also why the arm never flags: at the fixed point
+    its spend equals its income exactly.
+
+    The shipped cap has no such fixed point in the starving regime, because
+    it never goes nonpositive and never stops paying out.
+    """
+    for I in (0.0, 0.1, 1.0):
+        T = 60.0
+        for _ in range(200):
+            T = T / 2 + 1 + I
+        assert abs(T - (2 + 2 * I)) < 1e-9, "fixed point moved at inc=%.1f" % I
+    assert abs((2 + 2 * 0.0) - 2.0) < 1e-12      # stage 1 observed 2.0 s
+    assert abs((2 + 2 * 0.1) - 2.2) < 1e-12      # match 1 observed 2.1 s median
 
 
 def test_tournament_control_unaffected():
