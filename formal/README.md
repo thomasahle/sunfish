@@ -247,6 +247,7 @@ at capturable nodes.
 | `min(pos.score + EVAL_ROUGHNESS, pass_report)` | `cappedNull_report` |
 | score guard excludes positive mate | `guardedStaticCap_in_scoreBand`, `guardedCappedNull_below_positiveMate` |
 | full-width move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
+| cached value passed to `Position.move` | `ValGame.score_identity`; both call paths are tested equal |
 | sticky legality evidence and terminal override | terminal/finalizer results in `Stalemate.lean` |
 | king-capture evaluation margins and ordering | `EvalBounds.lean` |
 | `mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)` | `terminalValue`, `terminalValue_exact` |
@@ -258,6 +259,12 @@ at capturable nodes.
 The model abstracts Python's board representation, move generation, sorting,
 and table implementation. The audit pins the corresponding source regions;
 tests and chess corpora validate those executable primitives.
+
+`Position.move(move, value)` is a representation optimization, not a second
+evaluation rule. The hot loop passes the `val` it has just obtained from
+`pos.value(move)`; other callers omit it and compute that same value inside
+the method. Thus both paths satisfy the score identity modeled by `ValGame`.
+Executable tests compare them over random positions and the special-move corpus.
 
 The source iterates only `board[A8:H1 + 1]`; every reachable board has immutable
 padding outside that slice, so this preserves the generated move sequence. It

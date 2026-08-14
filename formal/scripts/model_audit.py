@@ -42,10 +42,10 @@ CONSTANTS = ["MATE_LOWER", "MATE_UPPER", "QS", "QS_A", "EVAL_ROUGHNESS", "TABLE_
 EXPECTED = {
     "Position.gen_moves": "04a9cf51544f86fe",
     "Position.king_capture": "077e364f886a1826",
-    "Position.move": "69bb2460cd611c9e",
+    "Position.move": "a0a8f70421fc0690",
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "11d52eaa8a661352",
-    "Searcher.bound": "058910852c75bba1",
+    "Searcher.bound": "b399707d97eef309",
     "Searcher.search": "f9aa8c81b84ff44b",
     "constants": "02227a9fd04eb181",
 }
@@ -97,8 +97,8 @@ ANCHORS = [
     "def king_capture",
     "killer = self.tp_move.get(pos)",
     "if not killer and depth > 3:",
-    "if killer and pos.value(killer) >= val_lower:",
-    "yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)",
+    "if killer and (val := pos.value(killer)) >= val_lower:",
+    "yield killer, -self.bound(pos.move(killer, val), 1 - gamma, depth - 1)",
     "yield None, pos.score",
     "score = min(pos.score + EVAL_ROUGHNESS,",
     "if depth <= 1 and pos.score + val < gamma:",
@@ -114,7 +114,7 @@ ANCHORS = [
 
 # Raw "line N" citations in the Lean sources are fragile: they rot silently.
 # We ratchet rather than ban outright -- the count may fall, never rise.
-LINE_CITATION_BUDGET = 147
+LINE_CITATION_BUDGET = 144
 
 
 def check_anchors(src):

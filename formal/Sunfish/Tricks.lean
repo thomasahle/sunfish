@@ -513,9 +513,10 @@ positions.  `pos.move(move)` computes the child's score *incrementally*:
 
     child.score = -(pos.score + pos.value(move))        (score identity)
 
-This is literal in sunfish (`Position.move` ends with
-`Position(...).rotate()`, negating the accumulated `score + value`), and
-the comment at lines 365-367 -- `pos.score + val < gamma  ===
+This is literal in sunfish: `Position.move` ends with `Position(...).rotate()`,
+negating the accumulated `score + value`; the hot loop passes the value it
+just computed, while other callers compute it inside the method. The comment
+-- `pos.score + val < gamma  ===
 -(pos.score + val) >= 1 - gamma` -- is exactly this identity applied to
 the futility test.  `ValGame` adds the identity as a structural property:
 model-faithful, not an assumption.
