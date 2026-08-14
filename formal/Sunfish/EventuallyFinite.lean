@@ -163,4 +163,233 @@ theorem EndsWithin.children {G : QSGame} {n : Nat} {p : G.Pos}
   | terminal ht => rw [ht] at hnt; exact Bool.noConfusion hnt
   | step hch => exact ⟨_, rfl, hch⟩
 
+/-! # Countermodel dispositions
+
+The two countermodels of the frontier premise, and where they stand
+against `EndsWithin`.  The game definitions are VERBATIM PORTS from
+the #178/#181 stack (`Shortest.lean`'s `CexD`, `Eventual.lean`'s
+`CexE`), which this branch predates; on a rebase past those merges
+this port section is deleted wholesale in favour of the originals.
+Only the definitions and the facts the dispositions consume are
+ported -- the stacks' value-level lemmas stay where they are. -/
+
+/-- Port of `Eventual.lean`'s chain: `C n` is the masked defender at
+every ply, `X` the admitted illegal move, `K` the captured king that
+makes `X` illegal. -/
+inductive EPos where
+  | C : Nat → EPos
+  | X : EPos
+  | K : EPos
+  deriving DecidableEq
+
+open EPos in
+/-- `C n -> {X, C (n+1)}` with `val (C n) X = 0` and
+`val (C n) (C (n+1)) = -150`: the legal continuation is masked at
+remaining depth 1 and admitted from remaining depth 2 on, repeated at
+every ply.  Verbatim from the #181 branch. -/
+def CexE : QSGame where
+  Pos := EPos
+  moves := fun p => match p with
+    | C n => [X, C (n + 1)]
+    | X => [K]
+    | K => []
+  eval := fun p => match p with
+    | K => -MATE_UPPER
+    | _ => 0
+  pass := fun p => p
+  val := fun p m => match p, m with
+    | C _, C _ => -150
+    | X, K => MATE_LOWER
+    | _, _ => 0
+
+instance : DecidableEq CexE.Pos := inferInstanceAs (DecidableEq EPos)
+
+theorem cexE_moves_C (n : Nat) : CexE.moves (EPos.C n) = [EPos.X, EPos.C (n + 1)] := rfl
+
+theorem cexE_cap_C (n : Nat) :
+    hasKingCapture CexE.toNullGame.toGame (EPos.C n) = false := rfl
+
+theorem cexE_ai_C (n : Nat) : allIllegalB CexE (EPos.C n) = false := rfl
+
+/-- **`CexE` violates the premise, at every node and every budget.**
+The only legal move from `C n` is `C (n + 1)` and no `C i` is
+terminal, so no finite budget can be spent down.  #181's
+eventual-classification countermodel is thereby EXCLUDED by
+`hFiniteDiameter`.  (This is the formal shape of "the frontier renews
+the phantom at every horizon": renewal needs an infinite legal
+nonterminal chain, and the premise is exactly its negation.) -/
+theorem cexE_not_endsWithin : ∀ N n : Nat, ¬ EndsWithin CexE N (EPos.C n) := by
+  intro N
+  induction N with
+  | zero =>
+    intro n h
+    have h0 := h.terminal_of_zero
+    rw [cexE_ai_C] at h0
+    exact Bool.noConfusion h0
+  | succ N ih =>
+    intro n h
+    cases h with
+    | terminal ht =>
+      rw [cexE_ai_C] at ht
+      exact Bool.noConfusion ht
+    | step hch =>
+      exact ih (n + 1)
+        (hch (EPos.C (n + 1)) (by rw [cexE_moves_C]; simp) (cexE_cap_C (n + 1)))
+
+/-- The named disposition: `CexE` is NOT a finite game -- `hFinite`
+fails on it outright. -/
+theorem cexE_not_finite : ¬ ∃ N, EndsWithin CexE N (EPos.C 0) :=
+  fun ⟨N, h⟩ => cexE_not_endsWithin N 0 h
+
+/-- Port of `Shortest.lean`'s finite tree. -/
+inductive DPos where
+  | Q | D | E | P | M | B | C | X | Z | S | W
+  deriving DecidableEq
+
+open DPos in
+/-- `Q` (defender) → `{D, B}`; the slow defence `D → E → P` with `P`
+mating on `C`, the fast loss `B → C`; `M` is the masked node (`X`
+illegal and admitted, `S` legal, filtered at the depth-1 threshold,
+and itself a stalemate).  Verbatim from the #178 branch. -/
+def CexD : QSGame where
+  Pos := DPos
+  moves := fun p => match p with
+    | Q => [D, B]
+    | D => [E]
+    | E => [P]
+    | P => [M, C]
+    | M => [X, S]
+    | B => [C]
+    | C => [X]
+    | X => [Z]
+    | W => [Z]
+    | Z => []
+    | S => []
+  eval := fun p => match p with
+    | Z => -MATE_UPPER
+    | _ => 0
+  pass := fun p => match p with
+    | C => W
+    | p => p
+  val := fun p m => match p, m with
+    | M, S => -150
+    | _, _ => 0
+
+instance : DecidableEq CexD.Pos := inferInstanceAs (DecidableEq DPos)
+
+theorem cexD_floor : ValFloor CexD 192 := by
+  intro p m _
+  cases p <;> cases m <;> decide
+
+/-- The masked node itself has budget 1: its one legal move is the
+stalemate `S`. -/
+theorem cexD_M_endsWithin : EndsWithin CexD 1 DPos.M := by
+  refine EndsWithin.step (fun m hm hleg => ?_)
+  have hmv : CexD.moves DPos.M = [DPos.X, DPos.S] := rfl
+  rw [hmv] at hm
+  have hm' : m = DPos.X ∨ m = DPos.S := by simpa using hm
+  rcases hm' with rfl | rfl
+  · exact absurd hleg (by decide)
+  · exact EndsWithin.terminal (by decide)
+
+/-- **`CexD` satisfies the premise** (budget 5 at the root): the
+finite fixed-depth countermodel SURVIVES `hFiniteDiameter`, so the
+premise cannot rescue any fixed-depth claim -- see `cexD_fuel_M1`. -/
+theorem cexD_endsWithin : EndsWithin CexD 5 DPos.Q := by
+  have hCn : ∀ n, EndsWithin CexD n DPos.C := fun _ => EndsWithin.terminal (by decide)
+  have hP : EndsWithin CexD 2 DPos.P := by
+    refine EndsWithin.step (fun m hm _ => ?_)
+    have hmv : CexD.moves DPos.P = [DPos.M, DPos.C] := rfl
+    rw [hmv] at hm
+    have hm' : m = DPos.M ∨ m = DPos.C := by simpa using hm
+    rcases hm' with rfl | rfl
+    · exact cexD_M_endsWithin
+    · exact hCn 1
+  have hE : EndsWithin CexD 3 DPos.E := by
+    refine EndsWithin.step (fun m hm _ => ?_)
+    have hmv : CexD.moves DPos.E = [DPos.P] := rfl
+    rw [hmv] at hm
+    have hm' : m = DPos.P := by simpa using hm
+    subst hm'; exact hP
+  have hD : EndsWithin CexD 4 DPos.D := by
+    refine EndsWithin.step (fun m hm _ => ?_)
+    have hmv : CexD.moves DPos.D = [DPos.E] := rfl
+    rw [hmv] at hm
+    have hm' : m = DPos.E := by simpa using hm
+    subst hm'; exact hE
+  have hB : EndsWithin CexD 4 DPos.B := by
+    refine EndsWithin.step (fun m hm _ => ?_)
+    have hmv : CexD.moves DPos.B = [DPos.C] := rfl
+    rw [hmv] at hm
+    have hm' : m = DPos.C := by simpa using hm
+    subst hm'; exact hCn 3
+  refine EndsWithin.step (fun m hm _ => ?_)
+  have hmv : CexD.moves DPos.Q = [DPos.D, DPos.B] := rfl
+  rw [hmv] at hm
+  have hm' : m = DPos.D ∨ m = DPos.B := by simpa using hm
+  rcases hm' with rfl | rfl
+  · exact hD
+  · exact hB
+
+/-- **The fixed-depth lie survives the premise.**  At remaining depth
+1 the masked node `M` -- whose only legal move is the stalemate escape
+`S`, filtered at the depth-1 threshold while the illegal `X` is
+admitted -- is priced at the sentinel `-MATE_UPPER`, squarely in the
+mated band, for EVERY edge-cost selector.  (`guard` off, matching the
+stacks' countermodels; depth 1 is below the fuel horizon, so this is
+the shipped sub-horizon shape.)  Together with `cexD_endsWithin`:
+`hFiniteDiameter` holds and the depth-1 report is still dishonest, so
+the finiteness variant buys the EVENTUAL claim only, and fixed-depth
+honesty still needs `NoMaskedMobility` or the #171 tail. -/
+theorem cexD_fuel_M1 (spend : CexD.Pos → Nat → Nat) :
+    fuelValueD2 CexD (fun _ => false) 2 spend 1 DPos.M = -MATE_UPPER := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  rw [fuelValueD2_of_fold_sub CexD (fun _ => false) 2 spend 0 DPos.M
+    (by decide) (by decide) (by decide) (by omega)]
+  have hma : movesAbove CexD (val_lower 1) DPos.M = [DPos.X] := by decide
+  rw [hma, if_neg (by simp)]
+  simp only [foldMax]
+  rw [fuelValueD2_of_capture CexD (fun _ => false) 2 spend 0 DPos.X
+    (by decide) (by decide)]
+  omega
+
+/-- No mate can be launched FROM the moveless stalemate `S`. -/
+theorem cexD_S_not_mating (k : Nat) : ¬ ForcedMate CexD k DPos.S := by
+  intro h
+  cases h with
+  | mate hkg hm hleg hmate =>
+    rw [show CexD.moves DPos.S = [] from rfl] at hm
+    cases hm
+  | step hkg hm hleg hnt hreply =>
+    rw [show CexD.moves DPos.S = [] from rfl] at hm
+    cases hm
+
+/-- The masked node is not mating at any index either: `X` is illegal,
+and `S` is neither checkmated nor nonterminal. -/
+theorem cexD_M_not_mating (k : Nat) : ¬ ForcedMate CexD k DPos.M := by
+  intro h
+  cases h with
+  | @mate _ _ m hkg hm hleg hmate =>
+    rw [show CexD.moves DPos.M = [DPos.X, DPos.S] from rfl] at hm
+    have hm' : m = DPos.X ∨ m = DPos.S := by simpa using hm
+    rcases hm' with rfl | rfl
+    · exact absurd hleg (by decide)
+    · exact absurd hmate.2 (by decide)
+  | @step _ _ m hkg hm hleg hnt hreply =>
+    rw [show CexD.moves DPos.M = [DPos.X, DPos.S] from rfl] at hm
+    have hm' : m = DPos.X ∨ m = DPos.S := by simpa using hm
+    rcases hm' with rfl | rfl
+    · exact absurd hleg (by decide)
+    · exact absurd hnt (by decide)
+
+/-- ...nor mated at any index: the stalemate escape is a legal reply
+from which no mate exists.  `M` is a DRAW of the ruleless game, and
+`cexD_fuel_M1` prices it in the mated band at depth 1. -/
+theorem cexD_M_not_mated (k : Nat) : ¬ ForcedlyMated CexD k DPos.M := by
+  intro h
+  cases h with
+  | inl hcm => exact absurd hcm.1 (by decide)
+  | inr h' => exact cexD_S_not_mating k (h'.2 DPos.S (by decide) (by decide))
+
 end Sunfish
