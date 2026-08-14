@@ -7723,3 +7723,45 @@ DEPTH-QUALITY only — the illegal class it was reducing is closed by
 construction. Staged confirmation: tools/screens/hammer_1p0.sh, self-play
 at 1+0 (the regime that produced the 19), 100 games, REQUIRED zero illegal
 — stage it when an arena is free; PENDING until run.
+
+## 2026-08-14 — REPLACEMENT net priced: N=4 packed big-int FITS at 4075 B
+
+The packed128-revival audit closed the RESIDUAL lane (machinery over PST:
+4512 B, 416 over, kill-condition fired). Thomas's steer — a small net that
+REPLACES the tables — re-prices the same golfed G12 machinery against
+ENGINE-SANS-EVAL instead of the full entry, and the verdict flips.
+
+**Measured, not composed** (all via tools/build/pack.sh on 71c9ba1):
+
+| quantity | B |
+|---|---|
+| entry as shipped | 3341 |
+| ENGINE-SANS-EVAL (price_engine.sh; flat-material stub) | **2871** |
+| replacement machinery (G12 hot loop, payload elided) | **578** |
+| N=4 payload in-context @55% zeros | 626 |
+| **composed total @55% zeros** | **4075 (21 spare)** |
+| @60% / @66% zeros | 4062 / 4025 |
+| @42% zeros | 4105 — **9 OVER** |
+
+Payload budget = 4096 − 2871 − 578 − 30 (margin) = **617 B**, so the
+trained ternary net (768×4, 3,072 trits, one char per feature through the
+entry's own base-90 codec) must land **≥ ~58% zeros** — inside the
+ledger's measured real-weight range (42/55/66%, 4850894), but it must be
+trained for (sparsity pressure is a mandatory loss term, like satpen).
+
+**The design** (nnue_4k/replnet_proto.py, loudly NOT AN ENTRY): score =
+mat(pos) + clip(nn, ±600). The base is price_engine.sh's exact flat-material
+stub — `value(move)` stays an exact material delta for ordering/QS/futility,
+the king-gone sentinel reads `ps` and keeps a 1558 cp margin over the
+9Q+2R+2B+2N kingless army (> CLAMP 600, so the net can never mask a king
+capture), and MATE arithmetic is untouched: same score scale, no
+MTD/EVAL_ROUGHNESS change. K_MID/K_END formula table kept. This sits the
+net in the exact `BASE = "mat"` seam sunfish_nnue.py already documents.
+
+**Verification without games**: packed/replnet_check.py (mirror identity,
+40-ply incremental==from-scratch acc/ps/score walk, exact antisymmetry,
+net-fires, sentinel margin) PASS; packed artifact answers UCI and plays
+under pypy3 (movetime smokes at start/after e2e4). Weights are the
+real-shaped random payload (packed/make_proto_payload.py) — pricing only,
+no Elo claim. Next: architecture pre-registration, then the ternary
+retrain; play is the only acceptance metric.
