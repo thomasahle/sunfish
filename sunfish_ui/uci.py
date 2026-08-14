@@ -451,28 +451,51 @@ def run(sunfish_module, startpos):
                             # an explicit movestogo is a real constraint
                             think = min(wtime / movestogo + winc, wtime / 2 - 1)
                         else:
-                            # Increment-aware budget (11-game production
-                            # audit): t/40+inc structurally underspent the
-                            # clock -- 2.9s of a 35s clock at +2s, median
-                            # depth 7 at EVERY TC from 60+1 to 300+5, zero
-                            # time-pressure blunders, and 57% of rating
-                            # bleed was sub-150cp depth-ceiling drift.
-                            # /12 + 0.9*inc front-loads the middlegame
-                            # where depth buys Elo; worst-case spend sims
-                            # keep >=4s of clock at all tested TCs, the
-                            # wtime/2 cap floors tiny clocks, and the
-                            # armed in-search deadline guards the hard
-                            # edge.  Validated per TESTING.md rule 5
-                            # (multi-TC + per-move curves).
+                            # One smooth spend, clipped once. The base is
+                            # wtime/d(winc) + 0.9*winc with an effective
+                            # divisor d = (40 + 240*winc)/(1 + 20*winc)
+                            # sliding 40 -> 12 as the increment grows:
+                            #  winc 0  .05  .1   .2   .5   1s   3s   inf
+                            #  d    40  26  21.3 17.6 14.5 13.3 12.5  12
                             #
-                            # At sudden death (winc == 0) /12 flags long
-                            # games with no single move overrunning:
-                            # lichess EAThUL0P (3+0) spent 12.8s on ply 9
-                            # and lost on time at move 73 once per-move
-                            # lag drained the wtime/2-capped remainder.
-                            # The audit above only covered increment TCs,
-                            # so winc == 0 paces at /40 instead.
-                            think = min(wtime / (12 if winc else 40) + 0.9 * winc, wtime / 2 - 1)
+                            # Increment (11-game production audit): t/40+inc
+                            # structurally underspent the clock -- 2.9s of a
+                            # 35s clock at +2s, median depth 7 at EVERY TC
+                            # from 60+1 to 300+5, zero time-pressure
+                            # blunders, 57% of rating bleed sub-150cp
+                            # depth-ceiling drift. /12 + 0.9*inc front-loads
+                            # the middlegame where depth buys Elo. This
+                            # reaches that ASYMPTOTICALLY: within 10% of it
+                            # for every winc >= 1s, and always on the
+                            # spend-less side.
+                            #
+                            # Sudden death (winc == 0) is EXACTLY wtime/40.
+                            # /12 flags long games with no single move
+                            # overrunning: lichess EAThUL0P (3+0) spent
+                            # 12.8s on ply 9 and lost on time at move 73
+                            # once per-move lag drained the wtime/2-capped
+                            # remainder. /40 is what the classic loop uses,
+                            # and it is worth +235.5 +/- 65.4 head-to-head
+                            # at 60+0 in the packed engine's twin.
+                            #
+                            # A STEP at winc == 0 would be a discontinuity
+                            # in a policy whose input is continuous: 60+0.1
+                            # is a sudden-death clock in all but name, and a
+                            # step paces it at /12, the exact drain the
+                            # winc == 0 case exists to close.
+                            #
+                            # The single min is the safety cap, and
+                            # wtime**2/(2*wtime + 4) replaces wtime/2 - 1
+                            # because that one goes NEGATIVE under a 2s
+                            # clock -- a negative cap collapses the budget
+                            # to the floor and the engine plays on blind.
+                            # It equals (wtime/2 - 1) + 2/(wtime + 2):
+                            # strictly positive for every positive clock,
+                            # never above wtime/2, within 5% of the old cap
+                            # from a 10s clock up. Validated per TESTING.md
+                            # rule 5 (multi-TC + per-move curves).
+                            think = min(wtime * (1 + 20 * winc) / (40 + 240 * winc) + 0.9 * winc,
+                                        wtime * wtime / (2 * wtime + 4))
                         # Play the opening quickly: early moves benefit
                         # least from deep search, and banked time is worth
                         # more in the middlegame. Opening ONLY (an unscoped
