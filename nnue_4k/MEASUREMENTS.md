@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-14 | **H2 candidates BUILT AND PRICED: `kmid` +22 B, `khold` +1 B, `kmid.khold` +23 B against 739 spare** | Order-independent both in-lane (khold.kmid) and CROSS-LANE (kact.kmid ≡ kmid.kact, both 3381, sha-identical); khold.pend raises loudly in both orders as pre-registered; tables round-trip exact, K_END/kend untouched by both; standalone packed smoke green. No Elo claimed — screen staged, not armed |
 | 2026-08-14 | **PRE-REGISTERED: H2 king-safety terms — `kmid` (steeper K_MID edge gradient, ±36 cp zero-centred) and `khold` (K_END only when BOTH queens are off), both ZERO hot-loop cost** | The base engine centralizes its king at 10/step while the opponent's queen is still on — kact's mate-feed pre-mortem is live in the baseline TODAY and `khold` is the one-word guard; measured tonight: the entry's 49 mated losses split **23 both-queens / 17 exactly-one / 9 queenless** (classic: 11/13/3), partitioning the evidence between kmid and khold; pawn-shield DEFERRED (mechanism overlap with kmid; the claimed classic PAWN_SHIELD=12 prior does NOT exist in this ledger); QS king-ring admission PRICED OUT (scan class + QS retuning); `khold.pend` composition FORBIDDEN (same seam line, loud by construction); screen = H1's instrument verbatim, mated-share pre-registered as the secondary reading |
 | 2026-08-14 | **H1 candidates BUILT AND PRICED: `pend` +42 B, `kact` +1 B, `pend.kact` +43 B against 739 spare** | Order-independent composition (kact.pend byte-identical); shared tables round-trip tuple-identical, kend fix unperturbed; standalone packed smoke green. No Elo claimed — screen staged, not armed |
 | 2026-08-14 | **PRE-REGISTERED: H1 tapered endgame terms — `pend` (endgame pawn-advance table) and `kact` (steeper K_END), both ZERO hot-loop cost on the landed queens-off seam** | Hand-designed with mechanisms, per the ledger's fits-play-worse record; passer delta-rule DESIGNED and priced out (score/ps split returns + scan class); screen = fixed-node 20k SPRT 0/10 vs base, LAND at 95% LB > 0 on fixed-N confirm; scan-class terms need timed confirmation, rule written in |
@@ -232,6 +233,65 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-14 — H2 candidates BUILT AND PRICED: kmid +22 B, khold +1 B, kmid.khold +23 B — order-independent in-lane and cross-lane, forbidden composition raises as designed, smoke green
+
+Implementation of the H2 pre-registration below (same night, separate commit —
+rules first, the H1 pattern). `make_variants.py` gains mods `kmid` and
+`khold`; the SHIPPED entry is untouched.
+
+### Prices, every row one real file through pack.sh
+
+| arm | packed | vs base (3357) | spare |
+|---|---|---|---|
+| base | **3357** | — | 739 |
+| kmid | 3379 | **+22** | 717 |
+| khold | 3358 | **+1** | 738 |
+| kmid.khold | 3380 | **+23** | 716 |
+| khold.kmid | 3380 | +23 | (in-lane order control: packed sha256-identical) |
+| kmid.kact | 3381 | +24 | (CROSS-LANE pricing: H2's kmid on H1's kact) |
+| kact.kmid | 3381 | +24 | (cross-lane order control: packed sha256-identical) |
+
+Base reproduces the recorded 3357 exactly — the instrument sanity check.
+kmid was estimated +15…+45, measured +22 (the abs-expression really is
+nearly free the third time — kact's whole formula line cost +1 for the same
+reason). khold was estimated ±2, measured +1. The full H2 bundle spends
+3.1% of the headroom; H1+H2 together (pend.kact + kmid.khold ≈ +66 B if all
+four ever land) would spend 8.9%.
+
+### Verification (checked, not assumed; no engine except the one smoke)
+
+`check_tables_h2.py` (scratch instrument, scratchpad) execs the eval region
+of every built arm plus the committed base entry — 7 arms verified:
+
+- `piece` and `pst[P..K]` tuple-identical to base in ALL arms (the base-90
+  stream is untouched by construction, and now by measurement);
+- `K_END` bit-identical to base in every non-kact arm — kmid/khold do not
+  perturb the landed kend fix (the mirrored-kend lesson, applied in advance
+  again);
+- kmid arms: `K_MID` exactly `x and x + 6*grad(i) - 48` over base's K_MID,
+  delta range exactly [−36, +36], padding zeros preserved, minimum still
+  above MATE_LOWER (the kingless-sentinel margin holds); spot values
+  g1 +24, e1 0, a1 +36, e4 −36;
+- khold arms: `K_MID` bit-identical to base; the seam line carries `or`
+  exactly once and the `and` form is gone;
+- kmid.kact / kact.kmid: K_END reproduces the 14/step kact formula AND
+  K_MID the kmid formula — order-independence at the table level, on top of
+  the packed-sha identity above;
+- **the pre-registered FORBIDDEN composition fails loudly**: `khold.pend`
+  and `pend.khold` both raise "anchor occurs 0 times" at generation — the
+  seam-line collision is a designed hard error in either order, verified
+  tonight, so it can never silently screen as a half-applied arm.
+
+Standalone smoke (the one engine run spent on this): packed `kmid.khold`
+alone in an empty dir, `SF_NET`/`PYTHONPATH` unset — `uciok`, legal
+`bestmove g1f3` at `go movetime 200`, the base's known standalone answer.
+
+**No Elo is claimed.** The screen, its gates, the secondary mated-share and
+endgame-share readings, and the LAND bar are in the pre-registration entry
+below; nothing is armed while the ladder runs.
 
 ---
 

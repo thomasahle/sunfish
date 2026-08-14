@@ -130,6 +130,48 @@ MODS = {
         "   - 10 * (abs(2 * (i // 10) - 11) + abs(2 * (i % 10) - 9)) for i in range(120))\n",
         "   - 14 * (abs(2 * (i // 10) - 11) + abs(2 * (i % 10) - 9)) for i in range(120))\n",
     ),
+    # ---- H2 KING-SAFETY TERMS (nnue_4k/MEASUREMENTS.md, the H2 -----------
+    # pre-registration). The entry is MATED in a third of its losses
+    # (classic: a fifth; control: a tenth), and the measured queen-regime
+    # split of those mates -- 23 both-queens-on / 17 exactly-one / 9
+    # queenless -- partitions the evidence between these two. Both are
+    # cost-class ZERO like the H1 pair: a startup formula and the same
+    # root-seam boolean the landed kend+fresh fix already pays for.
+    #
+    # `kmid`: steeper K_MID edge-vs-centre gradient. Classic's fitted
+    # K_MID slopes ~60-100 cp home-vs-centre; at median depth 10 with no
+    # king-ring term and no check concept that demonstrably does not keep
+    # the king out of assembling attacks. Add a linear centre-manhattan
+    # gradient, ZERO-CENTRED at the middle ring (sum runs 2..14, so
+    # 6*sum - 48 gives corner +36, e1 0, g1 +24, centre -36): the material
+    # mean is untouched, only the slope steepens, roughly doubling
+    # classic's. Both kings read it via the 119-i mirror (the kend
+    # symmetry argument). K_END is NOT touched -- this is kact's exact
+    # mirror, and the two compose in either order (disjoint anchors: the
+    # anchor here is the MATE_LOWER line, deliberately outside the
+    # K_MID/K_END definition that pend and kact rewrite).
+    "kmid": (
+        "MATE_LOWER = 60000 - 13 * 929\n",
+        "K_MID = tuple(x and x + 6 * (abs(2 * (i // 10) - 11) + abs(2 * (i % 10) - 9)) - 48\n"
+        "   for i, x in enumerate(K_MID))\n"
+        "MATE_LOWER = 60000 - 13 * 929\n",
+    ),
+    # `khold`: hold K_MID until BOTH queens are off. The base seam flips
+    # to K_END -- a table that actively pulls the king centre-ward at
+    # 10/step -- as soon as EITHER queen leaves, so trading our queen
+    # while theirs stays on sends our king marching toward the mating
+    # attack. That is H1 kact's recorded pre-mortem as a property of the
+    # baseline, and 17 of the 49 mated losses live in exactly that
+    # regime. One word: `and` -> `or`. Composes with kact (khold gates
+    # WHEN kact's steeper table applies) and with kmid (disjoint
+    # anchors). It does NOT dot-compose with pend -- both rewrite this
+    # seam line, and the generator raises loudly in either order; if both
+    # land, a combined `pendkhold` mod must be written and screened as
+    # its own arm (pre-registered as FORBIDDEN until then).
+    "khold": (
+        '        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END\n',
+        '        pst["K"] = K_MID if "Q" in pos.board or "q" in pos.board else K_END\n',
+    ),
     # ---- SEARCH: the root gamma seed. THIS IS NOT AN EVAL MOD -------------
     # `search()` starts every search at gamma = 0 and bisects. The root stores a
     # move ONLY on a fail-high, so the node count of the first root fail-high --
