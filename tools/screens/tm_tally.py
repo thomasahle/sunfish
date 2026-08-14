@@ -96,6 +96,8 @@ tclass = collections.Counter()         # termination -> n
 left = collections.defaultdict(list)   # arm -> clock remaining at game end
 cross = collections.defaultdict(list)  # arm -> (move it first went under NEGCAP, moves)
 blind = collections.defaultdict(list)  # arm -> blind moves in that game
+starved = collections.defaultdict(list)  # arm -> starved moves (descriptive, see below)
+tail = collections.defaultdict(list)   # arm -> move times over its last 20 moves
 moves = collections.Counter()          # arm -> total moves played
 plies = []
 illegal = []
@@ -123,6 +125,8 @@ for tags, body in gs:
     for arm, ts in ((W, wt), (B, bt)):
         left[arm].append(CLOCK - sum(ts) + INC * len(ts))
         blind[arm].append(sum(1 for dt in ts if dt <= 0.06))
+        tail[arm].extend(ts[-20:])
+        starved[arm].append(sum(1 for dt in ts if dt <= max(0.06, 1.5 * INC)))
         moves[arm] += len(ts)
         c, first = CLOCK, 0
         for k, dt in enumerate(ts, 1):
@@ -164,6 +168,24 @@ for a in ARMS:
     print("  %-10s %10d %10.2f %10.0f %12d   (%.1f%% of its %d moves)"
           % (a, sum(xs), sum(xs) / len(xs), median(xs), sum(1 for x in xs if x == 0),
              100.0 * sum(xs) / max(moves[a], 1), moves[a]))
+print()
+print("STARVATION PROFILE. **DESCRIPTIVE, added at analysis time** -- the")
+print("PRE-REGISTERED mechanism number is the 0.06 s count above, and it stays")
+print("as it was written. It is reported here because at an INCREMENT TC it can")
+print("read 0 for a starved arm and thereby miss the effect: a capped budget")
+print("does not settle at the 0.05 s floor, it settles wherever spend == income.")
+print("An arm whose cap has collapsed plays at ~1 increment per move forever, so")
+print("the starved band here is <= %.2f s (= max(0.06, 1.5 x %g s of increment);"
+      % (max(0.06, 1.5 * INC), INC))
+print("at a sudden-death TC that is 0.06 s and this reading reduces to the one")
+print("above, which is how it was checked against the stage-1 run).")
+print("  %-10s %12s %13s %18s" % ("arm", "starved mv", "% of its mv", "median last-20 mv"))
+for a in ARMS:
+    xs = starved.get(a, [])
+    if not xs:
+        continue
+    print("  %-10s %12d %13.1f%% %18.3f s"
+          % (a, sum(xs), 100.0 * sum(xs) / max(moves[a], 1), median(tail.get(a, []))))
 print()
 print("DRAIN PROFILE  (clock remaining at game end, seconds, reconstructed)")
 print("  %-10s %8s %8s %8s %8s" % ("arm", "median", "mean", "min", "<2s games"))
