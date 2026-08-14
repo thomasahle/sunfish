@@ -158,6 +158,23 @@ fastchess \
    are screening signals, subject to rule 12 like every fixed-effort
    number.
 
+14. **Long/realistic time controls are expensive; spend them on exactly two
+   things.** Timed games at 300+0 or 30+1-at-scale are reserved for (1)
+   validating **time-management changes** — nothing substitutes for a real
+   clock, and note that a faster engine does *not* make timed games
+   cheaper (the game still burns the same wall clock), which is why the C
+   twin excludes TM by design — and (2) periodic **league-placement
+   measurement**. Everything else — search shape, eval terms,
+   hyperparameters — runs fixed-node or on the C twin (see below).
+   For TM validation itself, order the spend by stress per game-minute:
+   sudden-death drain is an *absolute-clock* pathology, so short sudden
+   death (60+0, or a 1+0 hammer) stresses the mechanism harder per minute
+   than a long TC does. Mechanism checks go short-TC first; a single
+   confirmation at the real TC is bought only for a candidate that already
+   passed. Worked example: the restructured TM-fix plan — a 60+0 SPRT
+   mechanism check, then one 300+0 SPRT confirmation, with the full-field
+   round-robin dropped entirely.
+
 ## Screening with the C twin (`tools/ctwin/`)
 
 `tools/ctwin/` holds a C transcription of classic `sunfish.py` that searches
