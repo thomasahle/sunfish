@@ -205,51 +205,78 @@ static Pos domove(const Pos *p, Move m) {
 }
 
 /* gen_moves as a callback walk, preserving Python's exact yield order.
- * cb returning nonzero stops the walk (Python generator early exit). */
+ * cb returning nonzero stops the walk (Python generator early exit).
+ *
+ * The yield ORDER is contractual (board scan 0..119, direction-list
+ * order, ray order, NBRQ promotions); the TESTS are not, so they run on
+ * precomputed tables: CLS classifies a square char in one load, PC_DIRS/
+ * PC_ND replace the per-piece switch, and pawns get a specialized block
+ * that emits the identical sequence for DIR_P = {N, N+N, N+W, N+E}. */
+enum { CL_STOP = 1, CL_LOWER = 2, CL_SINGLE = 4 };  /* ' ','\n',upper | a-z | P,N,K */
+static unsigned char CLS[128];
+static const int *PC_DIRS[128];
+static unsigned char PC_ND[128];
+static void gen_init(void) {
+    CLS[' '] = CLS['\n'] = CL_STOP;
+    for (int c = 'A'; c <= 'Z'; c++) CLS[c] = CL_STOP;
+    for (int c = 'a'; c <= 'z'; c++) CLS[c] = CL_LOWER;
+    CLS['P'] |= CL_SINGLE; CLS['N'] |= CL_SINGLE; CLS['K'] |= CL_SINGLE;
+    PC_DIRS['P'] = DIR_P; PC_ND['P'] = 4;
+    PC_DIRS['N'] = DIR_N; PC_ND['N'] = 8;
+    PC_DIRS['B'] = DIR_B; PC_ND['B'] = 4;
+    PC_DIRS['R'] = DIR_R; PC_ND['R'] = 4;
+    PC_DIRS['Q'] = DIR_Q; PC_ND['Q'] = 8;
+    PC_DIRS['K'] = DIR_Q; PC_ND['K'] = 8;
+}
 typedef int (*movecb)(Move, void *);
+#define YIELD(mi, mj, mp) do {                                          \
+        Move _m = { (mi), (mj), (mp) };                                 \
+        if (cb(_m, ctx)) return 1;                                      \
+    } while (0)
+#define YIELD_PAWN(mi, mj) do {                                         \
+        if (A8 <= (mj) && (mj) <= H8) {                                 \
+            YIELD(mi, mj, 'N'); YIELD(mi, mj, 'B');                     \
+            YIELD(mi, mj, 'R'); YIELD(mi, mj, 'Q');                     \
+        } else YIELD(mi, mj, 0);                                        \
+    } while (0)
 static int gen_moves(const Pos *p, movecb cb, void *ctx) {
     for (int i = 0; i < 120; i++) {
         char P = p->b[i];
         if (!isup(P)) continue;
-        const int *ds; int nd;
-        switch (P) {
-        case 'P': ds = DIR_P; nd = 4; break;
-        case 'N': ds = DIR_N; nd = 8; break;
-        case 'B': ds = DIR_B; nd = 4; break;
-        case 'R': ds = DIR_R; nd = 4; break;
-        case 'Q': ds = DIR_Q; nd = 8; break;
-        default:  ds = DIR_Q; nd = 8; break;   /* K: same rays as Q */
+        if (P == 'P') {
+            /* d = N: push, only onto '.' (lower/upper/pad all break). */
+            int j = i + Nd;
+            if (p->b[j] == '.') YIELD_PAWN(i, j);
+            /* d = N+N: from the home rank through an empty square onto
+             * '.'; a double push can never reach the last rank. */
+            j = i + Nd + Nd;
+            if (p->b[j] == '.' && i >= A1 + Nd && p->b[i + Nd] == '.')
+                YIELD(i, j, 0);
+            /* d = N+W then N+E: capture, or en passant / king-passant. */
+            j = i + Nd + Wd;
+            if ((CLS[(int)p->b[j]] & CL_LOWER)
+                || (p->b[j] == '.' && (j == p->ep || iabs(j - p->kp) <= 1)))
+                YIELD_PAWN(i, j);
+            j = i + Nd + Ed;
+            if ((CLS[(int)p->b[j]] & CL_LOWER)
+                || (p->b[j] == '.' && (j == p->ep || iabs(j - p->kp) <= 1)))
+                YIELD_PAWN(i, j);
+            continue;
         }
+        const int *ds = PC_DIRS[(int)P];
+        int nd = PC_ND[(int)P];
+        int single = CLS[(int)P] & CL_SINGLE;
         for (int di = 0; di < nd; di++) {
             int d = ds[di];
             for (int j = i + d;; j += d) {
-                char q = p->b[j];
-                if (q == ' ' || q == '\n' || isup(q)) break;
-                if (P == 'P') {
-                    if ((d == Nd || d == Nd + Nd) && q != '.') break;
-                    if (d == Nd + Nd && (i < A1 + Nd || p->b[i + Nd] != '.')) break;
-                    if ((d == Nd + Wd || d == Nd + Ed) && q == '.'
-                        && j != p->ep && iabs(j - p->kp) > 1) break;
-                    if (A8 <= j && j <= H8) {
-                        static const char proms[] = "NBRQ";
-                        for (int k = 0; k < 4; k++) {
-                            Move m = { i, j, proms[k] };
-                            if (cb(m, ctx)) return 1;
-                        }
-                        break;
-                    }
-                }
-                Move m = { i, j, 0 };
-                if (cb(m, ctx)) return 1;
-                if (P == 'P' || P == 'N' || P == 'K' || islo(q)) break;
-                if (i == A1 && p->b[j + Ed] == 'K' && p->wc0) {
-                    Move c = { j + Ed, j + Wd, 0 };
-                    if (cb(c, ctx)) return 1;
-                }
-                if (i == H1 && p->b[j + Wd] == 'K' && p->wc1) {
-                    Move c = { j + Wd, j + Ed, 0 };
-                    if (cb(c, ctx)) return 1;
-                }
+                unsigned char cq = CLS[(int)p->b[j]];
+                if (cq & CL_STOP) break;
+                YIELD(i, j, 0);
+                if (single || (cq & CL_LOWER)) break;
+                if (i == A1 && p->b[j + Ed] == 'K' && p->wc0)
+                    YIELD(j + Ed, j + Wd, 0);
+                if (i == H1 && p->b[j + Wd] == 'K' && p->wc1)
+                    YIELD(j + Wd, j + Ed, 0);
             }
         }
     }
@@ -422,29 +449,40 @@ static void tpm_store(const Pos *p, Move m) {
 }
 
 /* Sorted move list for the main loop.  Python sorts (val, Move) tuples
- * descending; keys are unique so any sort algorithm yields one order. */
-typedef struct { int val; Move m; } VMove;
-struct collectctx { const Pos *p; int val_lower; VMove *v; int n, cap; };
+ * descending; keys are unique so any sort algorithm yields one order.
+ * The tuple is packed into one uint64 -- biased val in the high half,
+ * then i, j, prom -- so unsigned uint64 order IS the tuple order
+ * (fields are disjoint and compared most-significant first, and prom
+ * compares as a byte: '\0' < 'B' < 'N' < 'Q' < 'R').  A descending
+ * insertion sort on 8-byte keys beats qsort's indirect calls at these
+ * sizes (typically < 64 moves). */
+#define MAXMOVES 512                 /* > any pseudo-legal move count */
+#define PACK_VM(val, m) (((uint64_t)((uint32_t)(val) ^ 0x80000000u) << 32) \
+        | ((uint64_t)(m).i << 16) | ((uint64_t)(m).j << 8)                 \
+        | (uint8_t)(m).prom)
+#define VM_VAL(k)  ((int)((uint32_t)((k) >> 32) ^ 0x80000000u))
+#define VM_MOVE(k) ((Move){ (int)((k) >> 16 & 0xff), (int)((k) >> 8 & 0xff), \
+                            (char)((k) & 0xff) })
+struct collectctx { const Pos *p; int val_lower; uint64_t *v; int n; };
 static int collect_cb(Move m, void *vc) {
     struct collectctx *c = vc;
     int val = value(c->p, m);
     if (val >= c->val_lower) {
-        if (c->n >= c->cap) {
-            c->cap *= 2;
-            c->v = realloc(c->v, sizeof(VMove) * c->cap);
+        if (c->n >= MAXMOVES) {                 /* never hide errors */
+            fprintf(stderr, "ctwin: move list overflow\n");
+            abort();
         }
-        c->v[c->n].val = val;
-        c->v[c->n].m = m;
-        c->n++;
+        c->v[c->n++] = PACK_VM(val, m);
     }
     return 0;
 }
-static int vm_cmp(const void *pa, const void *pb) {
-    const VMove *a = pa, *b = pb;               /* descending */
-    if (a->val != b->val) return b->val - a->val;
-    if (a->m.i != b->m.i) return b->m.i - a->m.i;
-    if (a->m.j != b->m.j) return b->m.j - a->m.j;
-    return (unsigned char)b->m.prom - (unsigned char)a->m.prom;
+static void vm_sort(uint64_t *v, int n) {       /* descending */
+    for (int i = 1; i < n; i++) {
+        uint64_t k = v[i];
+        int j = i - 1;
+        while (j >= 0 && v[j] < k) { v[j + 1] = v[j]; j--; }
+        v[j + 1] = k;
+    }
 }
 
 struct termctx { const Pos *p; int all; };
@@ -546,13 +584,13 @@ static int bound(const Pos *pos, int gamma, int depth, int root) {
 
     /* Then all moves above the threshold, sorted by descending value. */
     {
-        struct collectctx c = { pos, val_lower, NULL, 0, 64 };
-        c.v = malloc(sizeof(VMove) * c.cap);
+        uint64_t vbuf[MAXMOVES];             /* stack: longjmp-safe, no malloc */
+        struct collectctx c = { pos, val_lower, vbuf, 0 };
         gen_moves(pos, collect_cb, &c);
-        qsort(c.v, c.n, sizeof(VMove), vm_cmp);
+        vm_sort(vbuf, c.n);
         for (int k = 0; k < c.n; k++) {
-            int val = c.v[k].val;
-            Move m = c.v[k].m;
+            int val = VM_VAL(vbuf[k]);
+            Move m = VM_MOVE(vbuf[k]);
             if (depth <= FUT_MAX && pos->score + val < gamma) {
                 /* Futility: value evidence only, except the mate special
                  * case, which is a real (cutting) witness. */
@@ -561,13 +599,9 @@ static int bound(const Pos *pos, int gamma, int depth, int root) {
                 break;                       /* Python breaks either way */
             }
             Pos np = domove(pos, m);
-            /* NB: the recursion can longjmp; c.v leaks then.  Bounded: the
-             * jump unwinds to the driver which frees nothing mid-search
-             * anyway (same lifetime as Python's abandoned generators). */
             PROCESS(1, m, -bound(&np, 1 - gamma, depth - 1, 0));
             if (done) break;
         }
-        free(c.v);
     }
 
 after_moves:
@@ -854,6 +888,7 @@ static int list_cb(Move m, void *vc) {
 }
 
 int main(int argc, char **argv) {
+    gen_init();
     const char *tpath = argc > 1 ? argv[1] : getenv("SF_TABLES");
     if (tpath && !load_tables(tpath)) {
         fprintf(stderr, "ctwin: cannot load tables from %s\n", tpath);
