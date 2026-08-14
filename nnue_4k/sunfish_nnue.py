@@ -792,8 +792,14 @@ class Searcher:
 
         # Bare-king endings: swap in the centralization gradient (packed's
         # own measured condition; classic keys on queens-off instead).
-        # Both directions every search: table state must never outlive the
-        # condition.
+        # Both directions every search because a game reaches bare-king
+        # DURING play with one Searcher at the wheel (a new game gets a
+        # new Searcher via ucinewgame; this was never about state outliving
+        # a game). The history scores this search inherits were accumulated
+        # under the previous table -- off by a constant after a swap, which
+        # classic measured harmless on the C twin at fixed nodes (668 games,
+        # +0.52 +/- 6.37; nnue_4k/MEASUREMENTS.md 2026-08-14, PR #184). The
+        # 4k entry re-derives instead (pst_entry.py's kend+fresh pair).
         bare = sum(c.isupper() for c in pos.board) == 1 or sum(c.islower() for c in pos.board) == 1
         pst["K"] = K_END if bare else K_MID
 

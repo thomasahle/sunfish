@@ -561,10 +561,16 @@ class Searcher:
         pos = self.r = history[-1]
 
         # Classic's K_END is a centralization gradient, and classic keys it
-        # on queens-off. Both directions every search: table state must
-        # never outlive the condition.
+        # on queens-off. Both directions every search because the queens
+        # leave DURING a game and one Searcher plays every move of it (a
+        # new game gets a new Searcher; this was never about state
+        # outliving a game).
         pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END
-        # The carried score was accumulated under the OTHER table.
+        # The carried score was accumulated under the OTHER table: re-derive
+        # it fresh so the swap leaves no stale constant behind (the entry's
+        # kend+fresh pair; classic measured the constant harmless on the C
+        # twin, +0.52 +/- 6.37 over 668 fixed-node games -- see
+        # nnue_4k/MEASUREMENTS.md 2026-08-14, PR #184).
         pos = self.r = from_board(pos.board, pos.wc, pos.bc, pos.ep, pos.kp)
 
         gamma = 0
