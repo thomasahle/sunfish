@@ -12,9 +12,10 @@ sunfish.py, `Searcher.bound` (lines 300-304):
 
 Here `s*` is `negamax G depth p` and the two clauses are `BoundSpec` below.
 
-The proven model keeps exactly the skeleton of sunfish's move loop
-(sunfish.py lines 378-388) and the null-window recursion on children
-(line 376: `-self.bound(pos.move(move), 1 - gamma, depth - 1)`).
+The proven model keeps exactly the skeleton of sunfish's move loop and the
+null-window recursion on children (the hot loop's
+`-self.bound(pos.move(move, val), 1 - gamma, depth - 1)`, where `val` is
+`pos.value(move)`).
 Everything else -- the transposition table (the `tp_score` lookup and
 the table-part-2 store), the repetition check, the null move, the QS
 stand-pat and futility pruning, killer/IID, and the stalemate

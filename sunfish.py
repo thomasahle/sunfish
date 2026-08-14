@@ -214,14 +214,14 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             119 - self.kp if self.kp and not nullmove else 0,
         )
 
-    def move(self, move):
+    def move(self, move, value=None):
         i, j, prom = move
         p, q = self.board[i], self.board[j]
         put = lambda board, i, p: board[:i] + p + board[i + 1 :]
         # Copy variables and reset ep and kp
         board = self.board
         wc, bc, ep, kp = self.wc, self.bc, 0, 0
-        score = self.score + self.value(move)
+        score = self.score + (self.value(move) if value is None else value)
         # Actual move
         board = put(board, j, board[i])
         board = put(board, i, ".")
@@ -411,8 +411,8 @@ class Searcher:
             # the QS lower bound, otherwise we would get search instability.
             # We will search it again in the main loop below, but the tp will
             # make this mostly free.
-            if killer and pos.value(killer) >= val_lower:
-                yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)
+            if killer and (val := pos.value(killer)) >= val_lower:
+                yield killer, -self.bound(pos.move(killer, val), 1 - gamma, depth - 1)
 
             # Then all the other moves
             # Quiescent search: only moves above the val-limit are admitted -
@@ -438,7 +438,7 @@ class Searcher:
                     # so it can't get any better than this.
                     break
 
-                yield move, -self.bound(pos.move(move), 1 - gamma, depth - 1)
+                yield move, -self.bound(pos.move(move, val), 1 - gamma, depth - 1)
 
         # Run through the moves, shortcutting when score >= gamma.
         # live is True if we saw a legal (not null, score > -MATE_UPPER) move

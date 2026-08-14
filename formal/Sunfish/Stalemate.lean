@@ -5208,8 +5208,9 @@ theorem futility_iff_child_standpat (pscore val gamma : Int) :
   omega
 
 /-- **ScoreIdentity** (structural, as in `ValGame.score_identity`):
-`pos.move(m)` builds the child with `score = -(pos.score + pos.value(m))`
--- literal in the code, and what turns the arithmetic identity above
+`pos.move(m, val)` builds the child with `score = -(pos.score + val)`, where
+the hot loop has just computed `val = pos.value(m)`; other callers omit `val`
+and compute the same value inside the method. This turns the identity above
 into a statement about the child's stand-pat. -/
 def ScoreIdentity (G : QSGame) : Prop :=
   ∀ (p : G.Pos), ∀ m ∈ G.moves p, G.eval m = -(G.eval p + G.val p m)

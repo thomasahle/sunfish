@@ -182,6 +182,7 @@ def test_legality_oracle_vs_python_chess():
             if b.piece_at(cm.from_square) is None or not b.is_pseudo_legal(cm):
                 continue
             child = pos.move(mv)
+            assert pos.move(mv, pos.value(mv)) == child, (b.fen(), u, "cached value")
             assert (child.king_capture() is not None) == (not b.is_legal(cm)), \
                 (b.fen(), u, "direct")
             assert (s.bound(child, sf.MATE_UPPER, 0, root=True) == sf.MATE_UPPER) \
@@ -229,7 +230,9 @@ def special_case(fen, u):
     pos = uci.from_fen(parts[0], parts[1], parts[2], parts[3], "0", "1")
     mv = uci.parse_move(u, white_pov=(parts[1] == "w"))
     assert mv in set(pos.gen_moves()), (fen, u, "not pseudo-legal in sunfish")
-    return pos, mv, pos.move(mv)
+    child = pos.move(mv)
+    assert pos.move(mv, pos.value(mv)) == child, (fen, u, "cached value")
+    return pos, mv, child
 
 
 @pytest.mark.parametrize("fen,u,legal,label", SPECIAL_RULES)
