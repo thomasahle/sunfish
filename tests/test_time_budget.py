@@ -98,6 +98,21 @@ def base(wtime_s, winc_s):
 CLOCKS = (0.001, 0.01, 0.1, 0.5, 1, 1.9, 2.667, 5, 30, 60, 180, 300, 1800)
 INCS = (0, 0.001, 0.01, 0.05, 0.1, 0.25, 0.5, 1, 3, 5)
 
+# THE TWO BOUNDARIES AT winc == 0, both exact rationals. Everything the
+# sudden-death argument rests on is a statement about which side of these a
+# clock sits, so they are pinned rather than described.
+#
+#   B_CAP = 2/19 s: below it the NEW cap binds.
+#           wtime/40 == wtime**2/(2*wtime + 4)  <=>  40*wtime == 2*wtime + 4
+#   B_ID  = 40/19 s: at or above it the new policy and STEP are IDENTICAL,
+#           because both reduce to wtime/40.
+#           wtime/40 == wtime/2 - 1  <=>  wtime * 19/40 == 1
+#
+# Between them the base wtime/40 binds for the new policy while STEP is still
+# clipped by wtime/2 - 1 -- which is nonpositive for wtime <= 2 s.
+B_CAP = 2 / 19             # 0.10526 s
+B_ID = 40 / 19             # 2.10526 s
+
 
 def test_budget_statement_present():
     assert DEV, "smooth budget statement missing or reshaped in sunfish_ui/uci.py"
@@ -129,19 +144,70 @@ def test_sudden_death_is_exactly_wtime_over_40():
         assert base(w, 0) == w / 40, "winc == 0 is not wtime/40 at %s s" % w
 
 
-def test_sudden_death_matches_the_step_policy_above_2667ms():
-    """Above 2.667 s of clock the shipped budget == STEP at winc == 0.
+def test_sudden_death_matches_the_step_policy_above_40_over_19():
+    """At or above 40/19 s of clock the shipped budget == STEP at winc == 0.
 
-    2.667 s is where wtime/2 - 1 overtakes the new clip, i.e. exactly where
-    the two caps swap. Everything the sudden-death fix was argued from -- the
-    EAThUL0P reconstruction, the packed twin's +235 at 60+0 -- lives above it,
-    so all of it carries to this form unchanged.
+    THE BOUNDARY IS 40/19 = 2.10526 s, NOT 2.667 s. 8/3 was carried over from
+    an ABANDONED cap, max(wtime/2 - 1, wtime/8), whose branches cross there.
+    This cap is wtime**2/(2*wtime + 4) and the crossing solves a different
+    equation. The error was conservative in the useful direction: the true
+    identity region is WIDER by 0.56 s, so every argument that leaned on it
+    survives with more margin.
+
+    Everything the sudden-death fix was argued from -- the EAThUL0P
+    reconstruction, the packed twin's +235 at 60+0 -- lives above 40/19, so
+    all of it carries to this form unchanged.
     """
-    for w in CLOCKS:
-        if w <= 2.667:
+    for w in CLOCKS + (2.106, 2.4, 2.667):
+        if w < B_ID:
             continue
-        assert abs(budget(w, 0) - step(w, 0)) < 1e-12, (
+        assert budget(w, 0) == step(w, 0), (
             "sudden-death budget moved off the validated policy at %s s" % w)
+
+
+def test_the_three_regimes_at_winc_zero_and_their_exact_boundaries():
+    """The complete sudden-death picture, pinned at both crossings.
+
+        wtime >= 40/19  : new == STEP, both = wtime/40      (IDENTICAL)
+        2/19 .. 40/19   : new = wtime/40; STEP = wtime/2 - 1, which is
+                          SMALLER, and nonpositive at wtime <= 2 s
+        wtime <  2/19   : new = wtime**2/(2*wtime + 4)  (the cap binds)
+
+    Only the first regime carries the validation, and it is the one every
+    clock in that run actually occupied.
+    """
+    # UCI clocks arrive as integer milliseconds and are divided by 1000, so
+    # that is the reachable domain. Over all of it above the boundary the two
+    # policies are BIT-EQUAL: every integer ms from 2106 to 400000.
+    assert all(budget(W / 1000, 0) == step(W / 1000, 0)
+               for W in range(2_106, 400_001))
+    # At real-valued clocks they agree to ~1e-16 rather than exactly, because
+    # `wtime*1/40` and `wtime/40` can round apart and because `wtime/2 - 1`
+    # CANCELS at this boundary. Neither is a policy difference, and neither is
+    # reachable through UCI.
+    assert abs(budget(B_ID, 0) - step(B_ID, 0)) < 1e-15
+    # exactly at the cap boundary base and cap coincide; either side swaps
+    assert abs(base(B_CAP, 0) - cap(B_CAP)) < 1e-17
+    assert cap(B_CAP * 0.99) < base(B_CAP * 0.99, 0)
+    assert cap(B_CAP * 1.01) > base(B_CAP * 1.01, 0)
+    # the middle regime: our base binds, the old cap bites STEP
+    for w in (0.2, 0.5, 1.0, 1.9, 2.0, 2.1):
+        assert budget(w, 0) == w / 40, "base should bind at %s s" % w
+        assert step(w, 0) < budget(w, 0)
+    assert step(2.0, 0) <= 0, "the old cap must be nonpositive at a 2 s clock"
+
+
+def test_the_2667_figure_is_not_a_boundary_of_this_policy():
+    """A regression test against the specific error this file once carried.
+
+    2.667 s belongs to max(wtime/2 - 1, wtime/8), designed and abandoned.
+    Nothing happens at 2.667 s here: it is an interior point of the identity
+    region, which already holds 0.56 s lower.
+    """
+    assert B_ID < 2.667
+    assert budget(2.667, 0) == step(2.667, 0)
+    assert budget(2.4, 0) == step(2.4, 0)
+    assert 2.4 - B_ID > 0.25
 
 
 # ---- (b) the clip ---------------------------------------------------------
@@ -206,6 +272,44 @@ def test_the_step_form_fails_the_continuity_bound():
 
 
 # ---- (d) monotone in wtime ------------------------------------------------
+
+@pytest.mark.parametrize("w", (0.1, 1, 30, 60, 300, 1800))
+def test_monotone_nondecreasing_in_winc(w):
+    """More increment may never buy less thinking -- and winc is the
+    dimension the defect was in, so it is the one that most needed a test.
+
+    Analytically the base is STRICTLY increasing in winc:
+
+        dB/dI = 560*wtime/(40 + 240*winc)**2 + 0.9  >  0
+
+    and the cap does not depend on winc, so the clipped allocation is
+    nondecreasing. Walked here anyway, at 0.1 ms resolution.
+    """
+    prev = -1.0
+    for k in range(0, 20_001):
+        i = k * 0.0001
+        cur = budget(w, i)
+        assert cur >= prev - 1e-12, "budget fell at wtime=%s winc=%.4f" % (w, i)
+        prev = cur
+
+
+def test_the_base_derivative_in_winc_is_the_analytic_one():
+    """dB/dI = 560*wtime/(40 + 240*winc)**2 + 0.9, checked numerically.
+
+    Positive for every wtime >= 0, which is what makes the monotonicity above
+    a theorem rather than a grid observation, and what makes the allocation
+    continuous in the dimension the step form broke.
+    """
+    h = 1e-7
+    for w in (0, 60, 1800):
+        for i in (0, 0.1, 1, 5):
+            analytic = 560 * w / (40 + 240 * i) ** 2 + 0.9
+            numeric = (base(w, i + h) - base(w, i)) / h
+            assert analytic > 0
+            assert abs(analytic - numeric) < 1e-3 * max(1.0, abs(analytic)), (
+                "dB/dI mismatch at wtime=%s winc=%s: %.6f vs %.6f"
+                % (w, i, analytic, numeric))
+
 
 @pytest.mark.parametrize("i", (0, 0.001, 0.05, 0.1, 0.5, 1, 3))
 def test_monotone_nondecreasing_in_wtime(i):
@@ -313,6 +417,34 @@ def test_tiny_increment_no_longer_drains():
     assert smooth_floor * 2 < step_floor, (
         "no blind-play margin at 60+0.1: smooth %d floored moves vs step %d"
         % (smooth_floor, step_floor))
+
+
+def test_the_old_cap_has_a_parking_fixed_point_at_2_plus_2_inc():
+    """WHY the losing arm's clock plateaus instead of falling to zero.
+
+    Once `wtime/2 - 1` is the binding term, the arm spends exactly that and
+    banks one increment, so its clock obeys
+
+        T_next = T - (T/2 - 1) + inc  =  T/2 + 1 + inc
+
+    a contraction (slope 1/2) with the attracting fixed point
+
+        T* = 2 + 2*inc   seconds
+
+    One expression, two confirmations: at inc = 0 it gives 2.0 s and the
+    packed twin's 60+0 run measured the pre-fix arm asymptoting at exactly
+    2.0 s; at inc = 0.1 it gives 2.2 s and the 60+0.1 run measured the step
+    arm at a 2.1 s median with a 2.0 s minimum over 438 games. It is also why
+    that arm never flags: at the fixed point its spend equals its income.
+
+    The shipped cap has no such fixed point -- it never goes nonpositive and
+    never stops paying out.
+    """
+    for inc in (0.0, 0.1, 1.0):
+        T = 60.0
+        for _ in range(200):
+            T = T / 2 + 1 + inc
+        assert abs(T - (2 + 2 * inc)) < 1e-9, "fixed point moved at inc=%.1f" % inc
 
 
 def test_tournament_control_unaffected():

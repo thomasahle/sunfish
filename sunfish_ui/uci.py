@@ -465,11 +465,19 @@ def run(sunfish_module, startpos):
                             # blunders, 57% of rating bleed sub-150cp
                             # depth-ceiling drift. /12 + 0.9*inc front-loads
                             # the middlegame where depth buys Elo. This
-                            # reaches that ASYMPTOTICALLY: within 10% of it
-                            # for every winc >= 1s, and always on the
-                            # spend-less side.
+                            # reaches that ASYMPTOTICALLY: the base ratio
+                            # r = 1 - 28/(40 + 240*inc) is 0.900 at inc = 1s
+                            # and rises to 1, so within 10% for every
+                            # winc >= 1s and always on the spend-less side.
+                            # Below 1s the band is materially changed, and
+                            # only inc = 0.1s has direct evidence.
                             #
-                            # Sudden death (winc == 0) is EXACTLY wtime/40.
+                            # Sudden death (winc == 0) is EXACTLY wtime/40,
+                            # and the whole allocation is bit-identical to
+                            # the old policy for every integer-ms clock at
+                            # or above 40/19 = 2.105s, where wtime/40
+                            # overtakes wtime/2 - 1. (Not 2.667s -- that was
+                            # an abandoned max(wtime/2 - 1, wtime/8) cap.)
                             # /12 flags long games with no single move
                             # overrunning: lichess EAThUL0P (3+0) spent
                             # 12.8s on ply 9 and lost on time at move 73
@@ -482,18 +490,37 @@ def run(sunfish_module, startpos):
                             # in a policy whose input is continuous: 60+0.1
                             # is a sudden-death clock in all but name, and a
                             # step paces it at /12, the exact drain the
-                            # winc == 0 case exists to close.
+                            # winc == 0 case exists to close -- measured at
+                            # +40.6 +/- 25.6 for the ramp over the step at
+                            # exactly that TC. The base is strictly rising
+                            # in the increment (dB/dinc = 560*wtime/
+                            # (40 + 240*inc)**2 + 0.9 > 0) and the cap does
+                            # not depend on it, so the allocation is
+                            # CONTINUOUS and nondecreasing in both arguments
+                            # -- with a kink where the cap starts binding,
+                            # so continuous, not differentiable.
                             #
                             # The single min is the safety cap, and
                             # wtime**2/(2*wtime + 4) replaces wtime/2 - 1
                             # because that one goes NEGATIVE under a 2s
                             # clock -- a negative cap collapses the budget
                             # to the floor and the engine plays on blind.
-                            # It equals (wtime/2 - 1) + 2/(wtime + 2):
+                            # It is also why the old cap PARKS rather than
+                            # flags: once it binds, the clock follows
+                            # T <- T/2 + 1 + inc, fixed point T* = 2 + 2*inc
+                            # seconds, where spend equals income exactly.
+                            # Measured there twice: 2.0s at 60+0 and a 2.1s
+                            # median at 60+0.1.
+                            # The new cap equals (wtime/2 - 1) + 2/(wtime+2):
                             # strictly positive for every positive clock,
-                            # never above wtime/2, within 5% of the old cap
-                            # from a 10s clock up. Validated per TESTING.md
-                            # rule 5 (multi-TC + per-move curves).
+                            # never above wtime/2, within 5% RELATIVE of the
+                            # old cap from a 10s clock up (relative gap
+                            # 4/(t**2 - 4); absolute gap 2/(t + 2)). It only
+                            # binds below 2/19 = 0.105s of clock, so in the
+                            # measured region the allocation is usually
+                            # EXACTLY the old one -- wtime/40 binds first for
+                            # both. Validated per TESTING.md rule 5
+                            # (multi-TC + per-move curves).
                             think = min(wtime * (1 + 20 * winc) / (40 + 240 * winc) + 0.9 * winc,
                                         wtime * wtime / (2 * wtime + 4))
                         # Play the opening quickly: early moves benefit
