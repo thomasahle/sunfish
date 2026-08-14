@@ -8347,3 +8347,24 @@ baseline's moat; and every split-B cell still loses (b81 B +319).  The
 two standing crossover projections (dense payload at ~42% zeros; raw
 tail at ~1.1 kB incompressible payload) are unchanged in kind and carry
 to the c1024 exports, where the zoo re-runs as one command.
+
+## 2026-08-14 — Bake-off addendum: denominators at the LANDED packer
+
+eb8897c landed --no-hoist-literals + shebang-strip in pack.sh minutes
+after the re-seam entry above was written, so those denominators aged one
+packer generation on arrival.  Full zoo re-run (one command) at HEAD =
+eb8897c, entry blob be154478, all instrument checks green, 60 cells
+bit-exact, all artifacts boot:
+
+| net | baseline (b81, A) | spare | payload in-ctx | closest arm |
+|---|---|---|---|---|
+| v1 (59.6% zeros) | **3567** | 529 | 381 | b81_rle A +48 |
+| v1c (65.2% zeros) | **3519** | 577 | 333 | b81_rle A +55 |
+
+Both baselines reproduce eb8897c's independently measured spliced
+candidates (3567 / 3519) exactly — two lanes, two instruments, one
+number.  Rank order is unchanged (baseline, rle, fixed square orders,
+lanesplit, cb8, control, …); layout B still loses everywhere (pack_entry
+.sh did not take the lever and its cells are byte-identical to the
+re-seam run).  THESE are the current denominators for the c1024 family;
+the two crossover projections above carry unchanged.
