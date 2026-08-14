@@ -113,6 +113,23 @@ p.add_argument("--base", choices=("pst", "mat"), default="pst",
                     "so every existing cache works unchanged.  Val stays "
                     "comparable across bases: the prediction target is the "
                     "same total eval")
+p.add_argument("--ternary", type=float, default=0.0,
+               help="REPLNET quantization-aware path: first-layer weights are "
+                    "ternarized by straight-through estimator with this "
+                    "threshold tau (in units of the raw init scale 0.05; "
+                    "|u| <= tau snaps to 0, tau ~0.85 targets ~60%% zeros at "
+                    "init).  Effective weight per lane is {-1,0,+1}/32 of "
+                    "lane saturation (the packed payload's exact grid: row = "
+                    "g_k*t, cap = 32*g_k), output gains v are constrained "
+                    "positive (relu caps are not sign-symmetric), and export "
+                    "writes the base-90 payload string for replnet_proto.py "
+                    "next to --out.  kb=1, no ext, N=4 only")
+p.add_argument("--l1", type=float, default=0.0,
+               help="sparsity pressure for --ternary: loss adds l1 * "
+                    "mean|u| on the pre-ternarization magnitudes.  The "
+                    "payload budget is a HARD gate at >= ~58%% zeros "
+                    "(MEASUREMENTS.md 2026-08-14): this is the loss term "
+                    "that buys the bytes")
 p.add_argument("--satpen", type=float, default=0.0,
                help="saturation penalty weight: training loss adds "
                     "satpen * mean(relu(|pre-clip residual| - satthresh)/100)^2. "
@@ -159,6 +176,12 @@ if args.threads:
 
 PIECES = pnet.PIECES
 PIDX = {c: i for i, c in enumerate(PIECES)}
+if args.ternary and (args.kb > 1 or args.nb or args.rff or args.phase
+                     or args.segs != 1):
+    raise SystemExit("--ternary is the packed replnet path: kb=1, plain "
+                     "crelu, no extensions -- the payload codec carries "
+                     "none of that machinery")
+WSCALE = 0.05     # raw init std: u = raw/WSCALE is ~N(0,1) at init
 # king-bucket scheme; the multiplier packs (own, opp) into one byte
 KBF = {16: pnet.kbucket16, 8: pnet.kbucket8}.get(args.kb, pnet.kbucket)
 KBMUL = args.kb if args.kb > 1 else 4
@@ -375,6 +398,14 @@ class Net(nn.Module):
         self.typ = nn.Parameter(torch.zeros(12, N)) if factor else None
         self.bias = nn.Parameter(torch.zeros(N) + 0.1)
         self.v = nn.Parameter(torch.randn(N) * (25.0 / N ** 0.5))
+        if args.ternary:
+            # v_k is the cp value of a SATURATED lane (cap = 32*g_k,
+            # g <= 89, SHIFT ~3-4), so the usable range is ~100-180 cp;
+            # the default ~12 cp init is a dead net that AdamW takes
+            # thousands of steps to wake.  Bias starts inside its
+            # exportable band.
+            self.v = nn.Parameter(120.0 + torch.randn(N).abs() * 15.0)
+            self.bias = nn.Parameter(torch.zeros(N) + 0.02)
         # ---- dedicated bilinear lanes (packed: extra 2*nb lanes, group =
         # lane index mod m; one cropped square per perspective block reads
         # out conv(A,A) and conv(B,B) via the mod 2^(16m)-1 fold)
@@ -421,9 +452,19 @@ class Net(nn.Module):
     def weight(self):
         v = self.virt()
         if isinstance(v, int):
-            return self.raw
-        N = self.raw.shape[1]
-        return (self.raw.view(self.B, 768, N) + v).view(self.B * 768, N)
+            w = self.raw
+        else:
+            N = self.raw.shape[1]
+            w = (self.raw.view(self.B, 768, N) + v).view(self.B * 768, N)
+        if args.ternary:
+            # straight-through ternary on the EFFECTIVE weight: forward
+            # sees {-1,0,+1}/32 of lane saturation (the payload's exact
+            # grid), backward passes through u.  self._u feeds --l1.
+            u = w / WSCALE
+            hard = torch.sign(u) * (u.abs() > args.ternary).float()
+            self._u = u
+            w = (u + (hard - u).detach()) / 32.0
+        return w
 
     def clamp_weights(self, w):
         # enforce the clip on the EFFECTIVE weight, which is what is exported
@@ -437,12 +478,20 @@ class Net(nn.Module):
                 r.copy_((r + v).clamp(-w, w) - v)
             if self.nb:
                 self.rawb.clamp_(-w, w)
+            if args.ternary:
+                # exportable bias range is +/-44 lane units of a 32*g_k
+                # cap: +/-0.019 normalized covers every g <= 72 (the
+                # trained gains sit in the 60-80s); export clips louder
+                # for larger gains
+                self.bias.clamp_(-0.019, 0.019)
 
     def forward(self, fi, mi, fo, ps):
         E = self.weight()
         au = act(nn.functional.embedding_bag(fi, E, fo, mode="sum") + self.bias)
         at = act(nn.functional.embedding_bag(mi, E, fo, mode="sum") + self.bias)
-        d = ((au - at) * self.v).sum(-1)
+        # ternary: folded gains are activation CAPS, [0, 32*g_k] -- not
+        # sign-symmetric, so the output weight must be positive
+        d = ((au - at) * (self.v.abs() if args.ternary else self.v)).sum(-1)
         if self.rff:
             # phase sketch: angles sum over present features; cos read-out.
             # Antisymmetric the same way as the head: us minus them under
@@ -551,11 +600,66 @@ def batches(ids, bs, shuffle=True):
         yield fi, mi, o, pstc[c], ys[c]
 
 
+def export_replnet(path, E, b, v):
+    """Ternary payload export, in replnet_proto.py's exact extraction order
+    (LSB first: shift, NN gains, NN bias digits, 768 chars of 4 trits each).
+    Writes the base-90 string to <path>.payload and the float/meta pickle to
+    <path>.  Nothing is hidden: bias clips and dead lanes print loudly."""
+    v = [abs(x) for x in v]
+    trits = (E * 32).round().long().clamp(-1, 1)           # (768, N)
+    zeros = float((trits == 0).float().mean())
+    # the largest SHIFT keeping every gain digit <= 89 buys the finest cp
+    # resolution; overflow is safe by construction (32 pieces * 89 + 44
+    # << the bit-14 offset)
+    shift = 0
+    for s in range(8, -1, -1):
+        if max(v) * (1 << s) / 32.0 <= 89.49:
+            shift = s
+            break
+    g = [max(0, min(89, round(x * (1 << shift) / 32.0))) for x in v]
+    if 0 in g:
+        print("export_replnet: DEAD LANES (gain rounded to 0): g=%s" % g,
+              flush=True)
+    bd, clip = [], 0
+    for k in range(len(g)):
+        d = round(b[k] * 32 * g[k])
+        clip += not -44 <= d <= 45
+        bd.append(max(-44, min(45, d)) + 44)
+    if clip:
+        print("export_replnet: %d/%d bias digits CLIPPED to the payload "
+              "range" % (clip, len(g)), flush=True)
+    digits = [shift] + g + bd
+    for f in range(768):
+        digits.append(sum((int(trits[f, k]) + 1) * 3 ** k
+                          for k in range(len(g))))
+
+    def enc(e):                    # inverse codec digit map (skips \\ and ")
+        d = e + (e >= 5)
+        d += d >= 57
+        return chr(35 + d)
+
+    s90 = "".join(enc(d) for d in reversed(digits))
+    assert "\\" not in s90 and '"' not in s90
+    with open(path + ".payload", "w") as f:
+        f.write(s90 + "\n")
+    exc = 32 * max(g) + 44
+    pnet.save(path, {"kind": "replnet-ternary", "B": 1, "N": len(g),
+                     "shift": shift, "g": g, "bias_digits": bd,
+                     "zeros": zeros, "clampcp": args.clampcp,
+                     "base_kind": args.base, "train": vars(args),
+                     "E": E.tolist(), "bias": b, "v": v})
+    print("export_replnet: zeros %.1f%%  shift %d  gains %s  bias %s  -> "
+          "%s.payload" % (100 * zeros, shift, g, bd, path), flush=True)
+    return shift, 0.0, sum(g) * 32.0 / (1 << shift), {"excursion": exc}
+
+
 def export(path):
     with torch.no_grad():
         E = model.weight().detach()                        # (B*768, N)
         b = model.bias.detach().tolist()
         v = model.v.detach().tolist()
+        if args.ternary:
+            return export_replnet(path, E, b, v)
         phs = ({"phase": args.phase, "phase_s": model.s.detach().tolist()}
                if args.phase else {})
         bil = {}
@@ -621,6 +725,8 @@ for epoch in range(args.epochs):
         if args.satpen:
             loss = loss + args.satpen * (
                 torch.relu(model.pre.abs() - args.satthresh) / 100).pow(2).mean()
+        if args.l1:
+            loss = loss + args.l1 * model._u.abs().mean()
         opt.zero_grad()
         loss.backward()
         opt.step()
