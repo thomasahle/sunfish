@@ -172,6 +172,31 @@ MODS = {
         '        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END\n',
         '        pst["K"] = K_MID if "Q" in pos.board or "q" in pos.board else K_END\n',
     ),
+    # `khold2`: khold with a lone-queen escape hatch (pre-registered
+    # 2026-08-14, Thomas's KQK directive). Pure khold holds K_MID while
+    # EITHER queen is on -- which in KQK keeps the ATTACKING king passive
+    # at home, and the king is a mating piece there: no depth of search
+    # mates a bare king without it. khold2 keeps khold's guard in queenful
+    # middlegames but re-engages K_END when there is no attack left to
+    # hide from: K_END iff (both queens off) OR (root non-pawn, non-king
+    # material across BOTH sides <= piece["Q"] = 929). Given a queen on
+    # the board, heavy >= 929, so the material clause holds EXACTLY when
+    # the queen is the lone non-pawn piece -- KQK and its pawn-dressed
+    # forms (pawns deliberately uncounted: promotion races want the king
+    # out too, and a pawn is not a mating attack to hide from). Queen plus
+    # even the lightest minor (929 + 280 = 1209) stays K_MID. Root-only
+    # scan on the seam the kend+fresh fix already rebuilds -- one
+    # comprehension per SEARCH, hot-loop cost class ZERO. Composition:
+    # SUBSUMES khold (shared anchor, `khold2.khold` raises loudly);
+    # `khold2.pend` FORBIDDEN exactly as khold.pend (same seam line);
+    # composes with kmid/kact (disjoint anchors). The mate-conversion
+    # gate (tools/build/mate_conversion_gate.py) is the arbiter between
+    # khold and khold2 -- see the ledger's pre-registered expectation.
+    "khold2": (
+        '        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END\n',
+        '        heavy = sum(piece[c] for c in pos.board.upper() if c in "NBRQ")\n'
+        '        pst["K"] = K_MID if heavy > piece["Q"] and ("Q" in pos.board or "q" in pos.board) else K_END\n',
+    ),
     # ---- SEARCH: the root gamma seed. THIS IS NOT AN EVAL MOD -------------
     # `search()` starts every search at gamma = 0 and bisects. The root stores a
     # move ONLY on a fail-high, so the node count of the first root fail-high --

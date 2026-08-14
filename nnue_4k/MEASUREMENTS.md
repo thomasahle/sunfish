@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-14 | **`khold2` BUILT, PRICED +27 B (3326 vs 3299), and the mate-conversion suite SPLIT the arms exactly as pre-registered: entry 8/8, khold2 8/8 (move-for-move = base), khold 7/8 — FAILS `kqk-approach`, king a1→b1 then 18 moves of shuffle at halfmove-clock 36** | Thomas's KQK objection is now a measurement, not an argument; **khold2 REPLACES khold in every composition row and khold's screen priority drops to mechanism control**; tables round-trip exact all arms, forbidden compositions raise in all four orders (khold2.pend, pend.khold2, khold2.khold, khold.khold2), standalone packed smoke green. No Elo claimed — screen staged, not armed |
 | 2026-08-14 | **PRE-REGISTERED: `khold2` (khold + lone-queen escape hatch, K_END iff both queens off OR root non-pawn material ≤ 929) and a MATE-CONVERSION gate** — Thomas's KQK concern made measurable | Pure khold would hold the ATTACKING king home in KQK — the king is a mating piece there; khold2's material clause re-engages K_END exactly on lone-queen boards. New instrument `mate_conversion_gate.py` + 8-position KQK/KRK suite, driver-checked, fixed deterministic defender; **expectation pre-registered: entry 8/8, khold2 8/8, khold FAILS kqk-approach** — if it does, khold's screen priority drops and khold2 replaces it in every composition. Screen = H2's instrument verbatim, both secondary readings carried |
 | 2026-08-14 | **H2 candidates BUILT AND PRICED: `kmid` +22 B, `khold` +1 B, `kmid.khold` +23 B against 739 spare** | Order-independent both in-lane (khold.kmid) and CROSS-LANE (kact.kmid ≡ kmid.kact, both 3381, sha-identical); khold.pend raises loudly in both orders as pre-registered; tables round-trip exact, K_END/kend untouched by both; standalone packed smoke green. No Elo claimed — screen staged, not armed |
 | 2026-08-14 | **PRE-REGISTERED: H2 king-safety terms — `kmid` (steeper K_MID edge gradient, ±36 cp zero-centred) and `khold` (K_END only when BOTH queens are off), both ZERO hot-loop cost** | The base engine centralizes its king at 10/step while the opponent's queen is still on — kact's mate-feed pre-mortem is live in the baseline TODAY and `khold` is the one-word guard; measured tonight: the entry's 49 mated losses split **23 both-queens / 17 exactly-one / 9 queenless** (classic: 11/13/3), partitioning the evidence between kmid and khold; pawn-shield DEFERRED (mechanism overlap with kmid; the claimed classic PAWN_SHIELD=12 prior does NOT exist in this ledger); QS king-ring admission PRICED OUT (scan class + QS retuning); `khold.pend` composition FORBIDDEN (same seam line, loud by construction); screen = H1's instrument verbatim, mated-share pre-registered as the secondary reading |
@@ -234,6 +235,93 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-14 — khold2 BUILT AND PRICED +27 B; the mate-conversion suite splits khold from khold2 EXACTLY on the pre-registered position
+
+Implementation of the khold2 pre-registration below (same day, separate
+commit — rules first, the H1/H2 pattern). `make_variants.py` gains `khold2`;
+`khold` stays untouched as the mechanism control; the SHIPPED entry is
+untouched.
+
+### Prices, every row one real file through pack.sh
+
+| arm | packed | vs base (3299) | spare |
+|---|---|---|---|
+| base | **3299** | — | 797 |
+| khold | 3299 | **+0** | 797 |
+| khold2 | 3326 | **+27** | 770 |
+
+Base reproduces the post-golf 3299 exactly (instrument sanity; the H2 table's
+3357 base predates the golf commits). khold repriced +0 on today's stream —
+the golf moved its lzma neighborhood, previously +1. khold2 was estimated
++30…+70, measured +27: the comprehension's vocabulary (`sum`, `piece`,
+`pos.board`, `"NBRQ"`-adjacent strings) is already in the stream; only
+`heavy`, `.upper()` and the clause structure are new.
+
+### The MATE-CONVERSION suite — the arms split exactly as pre-registered
+
+Movetime 700 ms, niced, ladder running (fixed suite, comparative verdict,
+same defender for all arms). ~75 s of engine time total.
+
+| position | base | khold | khold2 |
+|---|---|---|---|
+| kqk-m1 | 1 | 1 | 1 |
+| kqk-near | 2 | 2 | 2 |
+| kqk-mid | 6 | **9** | 6 |
+| kqk-approach | 8 | **FAIL — budget 18 exhausted** | 8 |
+| krk-m1 | 1 | 1 | 1 |
+| krk-m1b | 1 | 1 | 1 |
+| krk-mid | 8 | 8 | 8 |
+| krk-approach | 10 | 10 | 10 |
+| **total** | **8/8** | **7/8** | **8/8** |
+
+(cells = attacker moves to mate.) Every cell of the expectation table hit:
+
+- **khold fails `kqk-approach` precisely as Thomas predicted**: final
+  position `8/8/8/4k3/Q7/8/8/1K6 w - - 36 19` — in 18 moves the attacking
+  king went a1→b1 and then SHUFFLED, halfmove clock 36, a 50-move draw in
+  the making with a queen up. K_MID (own queen on) holds the mating piece
+  home; no depth of search compensates. The objection is now a measurement.
+- khold also converts `kqk-mid` SLOWER (9 vs 6) — the passivity tax is
+  visible even where the king starts close; KRK untouched (queenless, the
+  or-clause is false, K_END as pre-registered).
+- **khold2 is move-for-move IDENTICAL to base on all 8** — the lone-queen
+  escape hatch restores exactly the base's conversion play, while differing
+  from base only in the ≥ 929 queen-on regimes the screen will measure.
+
+### Verification (checked, not assumed)
+
+- `piece`, `pst[P..K]`, `K_MID`, `K_END` tuple-identical to base in khold
+  and khold2 (and the committed entry) — seam-only mods by construction and
+  now by measurement;
+- seam census: base carries the `and`-seam once, khold the `or`-seam once,
+  khold2 neither (its two-line replacement, `heavy` twice);
+- the khold2 condition unit-checked against python-chess on 8 board classes
+  (KQK, KQ+P K, KQN K, KQ KR, KRK, KRB K, KQQ K, one-queen middlegame) —
+  all match the pre-registered rule, including the accepted KQQ-vs-K wart;
+- forbidden/meaningless compositions raise loudly in ALL FOUR orders:
+  `khold2.pend`, `pend.khold2` (seam-line collision), `khold2.khold`,
+  `khold.khold2` (subsumption — shared anchor);
+- standalone smoke: packed khold2 alone in an empty dir, `PYTHONPATH`/
+  `SF_NET` unset — `uciok`, legal `bestmove g1f3` at `go movetime 200`,
+  the base's known standalone answer.
+
+### Screen-queue consequence (the pre-registered rule, now triggered)
+
+The suite split the arms, so per the pre-registration: **khold2 REPLACES
+khold in every composition-matrix row** (kmid.khold → kmid.khold2,
+khold.kact → khold2.kact; the pend prohibition transfers as khold2.pend,
+verified loud above), **khold's screen priority drops to mechanism
+control** — it runs only if khold2's reading needs the lone-queen clause
+isolated, and it must never LAND (it cannot convert KQK). khold2 takes
+khold's SPRT slot: `ab_fixednode.sh`, 20k fixed nodes, khold2 = engine1 vs
+base, elo0 = 0, elo1 = 10, LAND at 95% LB > 0 on fixed-N confirmation,
+got-MATED share and ENDGAME loss share as the secondary readings. All four
+gates (first-yield, legality, mate-in-1 parity, mate-conversion per the
+expectation table) rerun on the arm the screen actually plays, at screen
+time. Nothing armed tonight; the ladder runs.
 
 ---
 
