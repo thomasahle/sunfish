@@ -58,7 +58,7 @@ EVAL_ROUGHNESS = 15
 # Managers that no shipped engine carries yet.  A missing pin is news, not a
 # failure, for exactly these -- and the moment one lands, the same grep starts
 # reporting where, with no edit here.
-CANDIDATES = {"min40_4"}
+CANDIDATES = {"min40_4", "onemax"}
 
 PINNED = {
     # sunfish_ui/uci.py:467 (master f95f49c) -- classic's incumbent, SECONDS.
@@ -98,6 +98,11 @@ PINNED = {
     # deadline, `(best or cand) and elapsed > think * 0.8` at every yield,
     # and no opening ramp -- which is what FAMILY says about it below.
     "min40_4": ("sunfish.py", "min(wtime / 40 + 0.9 * winc, wtime / 4)"),
+    # CANDIDATE, the classic lane's sibling to min40_4 competing for the same
+    # line: branch classic/tm-one-max-pool, sunfish.py:601 at 3a48984.
+    # MILLISECONDS, and unlike min40_4 that matters -- the 8000 and the 50
+    # are absolute, so this literal is grid-checked in the ms domain only.
+    "onemax": ("sunfish.py", "max((wtime - 8000) / 40 + winc, 50)"),
     # make_variants.py "pooltm" replacement text, commit 629cba2.
     # MILLISECONDS; packed sha cddf392e21449054.  This one is a STATEMENT
     # block, not an expression, and it is checked by exec-ing the literal
@@ -190,6 +195,31 @@ def min40_4(wtime, winc, movestogo=None, ply=0, **kw):
     return Budget(0.8 * think, think, "yield_frac", 0.8)
 
 
+def onemax(wtime, winc, movestogo=None, ply=0, **kw):
+    """CANDIDATE (classic lane, branch classic/tm-one-max-pool at 3a48984,
+    sunfish.py:601).  MILLISECONDS -- the 8000 and the 50 are ms.
+
+        think = max((wtime - 8000) / 40 + winc, 50)
+
+    The pool manager's arithmetic collapsed to one line: P/M at M = 40 and
+    O = 200 ms is wtime/40 + 0.975*winc - 210 ms, and rounding the increment
+    coefficient to 1 and the overhead reserve to a flat 8 s gives this.
+
+    THE min BECAME A max, which is the whole idea.  There is no cap to park
+    on, so the budget FLOORS instead of collapsing: it reaches the 50 ms
+    floor at wtime = 10 - 40*winc seconds, i.e. still holding 10 s at sudden
+    death -- 40 further moves at 0.05 + 0.2 each -- where the step form
+    reached its floor holding 2.1 s, which is eight.
+
+    NOT unit-independent (the 8000 and 50 are absolute), unlike min40_4.
+    That is a real difference between the two classic candidates and the
+    grid check below only passes in the millisecond domain.
+    """
+    wtime, winc = 1000 * wtime, 1000 * winc
+    think = max((wtime - 8000) / 40 + winc, 50) / 1000
+    return Budget(0.8 * think, think, "yield_frac", 0.8)
+
+
 def pool(wtime, winc, movestogo=None, ply=0, overhead=0.2, moves=40,
          scale=1.0, phase_m=False, **kw):
     """The pool manager.  Transcribed from sunfish_ui/uci.py's `pool_budget`
@@ -277,6 +307,10 @@ def cap_binds(manager, wtime, winc, ply=40, **knobs):
         return wtime / 2 - 1 < wtime / 12 + 0.9 * winc
     if manager == "min40_4":
         return wtime / 4 < wtime / 40 + 0.9 * winc      # binds below T = 4*I
+    if manager == "onemax":
+        # No cap exists; the only shape change is the FLOOR, which the max()
+        # applies at wtime == 10 - 40*winc seconds.
+        return (t - 8000) / 40 + i < 50
     if manager == "pool":
         overhead = knobs.get("overhead", 0.2)
         if knobs.get("phase_m"):
@@ -288,7 +322,8 @@ def cap_binds(manager, wtime, winc, ply=40, **knobs):
 
 
 MANAGERS = {"legacy12": legacy12, "oldtm": oldtm, "steptm": steptm,
-            "smooth": smooth, "pool": pool, "min40_4": min40_4}
+            "smooth": smooth, "pool": pool, "min40_4": min40_4,
+            "onemax": onemax}
 # Which DRIVER each manager was measured in.  It selects exactly one thing:
 # classic's opening ramp (`if len(hist) < 8: think = min(think, len(hist) +
 # random())`, uci.py:474), which the packed artifact does not have.
@@ -301,7 +336,10 @@ MANAGERS = {"legacy12": legacy12, "oldtm": oldtm, "steptm": steptm,
 # clamps the soft limit to the ramped value), so classic's pool and the
 # measured pool differ for the first eight plies of every game.
 FAMILY = {"legacy12": "classic", "oldtm": "packed", "steptm": "packed",
-          "smooth": "packed", "pool": "packed", "min40_4": "packed"}
+          "smooth": "packed", "pool": "packed", "min40_4": "packed",
+          # Same classic-builtin driver as min40_4: max(think, .05) deadline,
+          # `(best or cand) and elapsed > think * 0.8` at every yield, no ramp.
+          "onemax": "packed"}
 
 
 # ----------------------------------------------------------------- verify ---
@@ -380,6 +418,9 @@ def verify(roots=(), verbose=True):
     grid("min40_4", min40_4, PINNED["min40_4"][1], 1, lambda v: max(v, TM_FLOOR))
     grid("min40_4/ms", min40_4, PINNED["min40_4"][1], 1000,
          lambda v: max(v / 1000, TM_FLOOR))
+    # one-max carries its own floor inside the pinned expression (the 50), so
+    # nothing is re-applied after it.
+    grid("onemax", onemax, PINNED["onemax"][1], 1000, lambda v: v / 1000)
 
     # movestogo branch of the classic manager.
     for t in GRID_T:

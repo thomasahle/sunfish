@@ -211,6 +211,77 @@ def test_the_incumbents_land_near_their_wall_not_near_their_target():
     assert b.frac * b.hard < spend <= b.hard
 
 
+# ------------------------------------- the one-max candidate's promises
+def test_onemax_floors_instead_of_collapsing():
+    """The classic lane's sibling candidate.  Turning the min into a max
+    means the budget FLOORS instead of going negative: it reaches the 50 ms
+    floor at wtime = 10 - 40*winc seconds, i.e. still holding 10 s at sudden
+    death, where the step form reached its floor holding 2.1 s."""
+    assert tmlib.onemax(10.0, 0).hard == pytest.approx(tmlib.TM_FLOOR)
+    assert tmlib.onemax(10.1, 0).hard > tmlib.TM_FLOOR
+    assert tmsim.knee("onemax", 0.0, what="cap") == pytest.approx(10.0, abs=1e-3)
+    for t in (0.05, 0.5, 2.0, 8.0, 60.0):
+        assert tmlib.onemax(t, 0).hard >= tmlib.TM_FLOOR
+
+
+def test_a_park_is_universal_at_increment_tcs_and_only_its_CLOCK_differs():
+    """CORRECTION to the "no cap to park on" claim, recorded because the
+    classic PR rests on it.
+
+    A park is not caused by a cap.  At any increment TC the clock MUST come
+    to rest where `spend + overhead == increment`, whatever the budget's
+    shape -- so every manager here parks, one-max included (6.17 s at 60+0.1
+    against the step's 2.11 s).  What the cap decides is not *whether* the
+    clock settles but *how much clock is still in hand when it does*, and
+    that is the whole of the safety argument:
+
+      * at 60+1 all three settle at the same SPEND (~1.06 s, i.e. I - O),
+        and differ only in the reserve they hold while spending it:
+        one-max 10.4 s, min40_4 6.4 s, the step 4.1 s.
+      * at 60+0.1 the settle point is at the floor for all three, so all
+        three are blind there -- at 6.17 s, 0.22 s and 2.11 s respectively.
+        one-max is the safest and also wastes the most clock; min40_4 wastes
+        almost none and has the thinnest flag margin.
+
+    Neither is "no park".  Both are better than the step for the reason the
+    step's park is bad, which is the flag, and one-max pays for it in unspent
+    clock.
+    """
+    parks = {m: tmsim.fixed_point(m, 1.0, 0.05) for m in ("onemax", "min40_4", "steptm")}
+    assert parks["onemax"] > parks["min40_4"] > parks["steptm"]
+    for m, p in parks.items():
+        spend = tmlib.MANAGERS[m](p, 1.0).hard
+        assert spend == pytest.approx(1.06, abs=0.1), (m, p, spend)
+    tiny = {m: tmsim.fixed_point(m, 0.1, 0.05) for m in ("onemax", "min40_4", "steptm")}
+    assert tiny["onemax"] > tiny["steptm"] > tiny["min40_4"]
+    for m, p in tiny.items():                    # all three settle blind
+        assert tmlib.MANAGERS[m](p, 0.1).hard == pytest.approx(tmlib.TM_FLOOR, abs=0.02)
+
+
+def test_onemax_banks_eight_seconds_and_never_spends_them():
+    """The reserve is the candidate's cost as well as its safety: 8 s that
+    the arm will not spend at any clock.  Trivial at 300+3, a tenth of the
+    clock at 60+anything, and 27% of the initial clock at 30+1."""
+    for t in (12.0, 30.0, 60.0, 300.0):
+        assert tmlib.onemax(t, 0).hard == pytest.approx((t - 8) / 40, abs=1e-9)
+    assert tmsim.knee("onemax", 0.0, what="cap") == pytest.approx(10.0, abs=1e-3)
+
+
+def test_the_two_classic_candidates_differ_where_it_matters():
+    """Same driver, same family, one line apart -- so the ranking is a
+    question about the expression and nothing else."""
+    assert tmlib.FAMILY["onemax"] == tmlib.FAMILY["min40_4"] == "packed"
+    assert tmlib.onemax(60, 0).rule == tmlib.min40_4(60, 0).rule == "yield_frac"
+    # one-max is uniformly the tighter of the two at every TC we rank at...
+    for t, i in ((60, 0), (60, 0.1), (30, 1), (60, 1)):
+        assert tmlib.onemax(t, i).hard < tmlib.min40_4(t, i).hard, (t, i)
+    # ...except at 300+3, where the flat 8 s reserve stops mattering and the
+    # quarter-clock cap has long since stopped binding.
+    assert tmlib.onemax(300, 3).hard > tmlib.min40_4(300, 3).hard
+    # Only one of them is unit-independent, and that is a real difference.
+    assert tmlib.onemax(120, 2).hard != pytest.approx(2 * tmlib.onemax(60, 1).hard)
+
+
 def test_the_signatures_do_not_depend_on_the_spend_model():
     """The reason the three calibration signatures are worth anything: they
     are BUDGET arithmetic, so no modelled quantity can move them.  The
