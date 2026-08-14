@@ -112,8 +112,8 @@ make gate       # the FULL fidelity gate: wide sweep + walk, depth 7,
 make bench      # C-vs-PyPy wall-time ratio at identical nodes
 ```
 
-Tuning knobs (no recompile): `set NAME VALUE` on stdin, `SF_NAME=` env, or
-`NAME=VALUE` argv after the table path (for match harnesses) —
+Tuning knobs (no recompile): UCI `setoption name NAME value VALUE`, lab
+`set NAME VALUE`, `SF_NAME=` env, or `NAME=VALUE` argv after the table path —
 `QS QS_A LMR THREAT_MARGIN EVAL_ROUGHNESS TABLE_SIZE NULL_MARGIN NULL_MIN_DEPTH NULL_LIMIT
 NULL_RED IID_MIN_DEPTH IID_RED FUT_MAX MATE_DIST FUEL_NULL
 FUEL_MIN_DEPTH` (`NULL_MARGIN` is the fuel-probe target margin, master's
@@ -127,7 +127,8 @@ in C). Unknown or out-of-range knobs are hard errors on every input path.
 
 Game use: `position startpos moves …` / `position fen …`, then
 `go nodes N` (primary — clock-free surrogate games), `go depth D`,
-`go movetime T`. The `go nodes` consumer transcribes `sunfish_ui/uci.py`'s
+`go movetime T`, or the standard `wtime` / `btime` / increment controls.
+The `go nodes` consumer transcribes `sunfish_ui/uci.py`'s
 `go_loop`: the probe that crosses the cap always finishes and its yield
 counts, the cap is checked between probes at depth > 1, candidates commit
 when their depth completes, and bestmove has the structural floor (never
@@ -163,9 +164,10 @@ wall-clock claim.
 
 ## Caveats (deliberate, documented)
 
-- The clock-management branch of classic's `main()` (wtime/winc budgets)
-  is *not* cloned — the twin is for clock-free games. `go` without
-  limits runs to depth 999; always pass `nodes`, `depth` or `movetime`.
+- Standard clock games use classic's `time/12 + 0.9*increment` budget and
+  half-clock cap. The randomized opening ramp is omitted; it is inactive
+  at the twin's intended `3+0.1` calibration control. `go` without limits
+  runs to depth 999, so always pass a search limit or clock.
 - `go nodes` semantics transcribe `sunfish_ui/uci.py`'s go_loop (see Game
   use above); node-identity claims are made at fixed depth, where both
   sides are exactly classic. The twin-vs-pypy sanity match at fixed nodes

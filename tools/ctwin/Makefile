@@ -14,6 +14,10 @@ tables_classic.txt: gen_tables.py ../../sunfish.py
 # small position set.  `make test-full` is the wide sweep.
 test: all
 	python3 difftest.py --quick
+	printf 'uci\nsetoption name LMR value 75\nuci\nquit\n' | \
+	    ./sunfish_c tables_classic.txt | grep -q 'option name LMR type spin default 75'
+	printf 'position startpos\ngo wtime 300 btime 300 winc 30 binc 30\nquit\n' | \
+	    ./sunfish_c tables_classic.txt | grep -q '^bestmove '
 
 test-full: all
 	python3 difftest.py --n 40 --depth 6
