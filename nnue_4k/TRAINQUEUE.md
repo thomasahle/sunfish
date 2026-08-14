@@ -20,16 +20,16 @@ val 0.01385 @59.6% zeros (winner, thin margin); l1=0.002 → 0.01404
    export step, small). kb multiplies FLOAT rows, not shipped bytes, iff
    folded; the factorizer may find better shared rows than kb=1 training
    does. If folding needs new code time, swap with 3.
-3. **replnet_tau — threshold sweep** (τ ∈ {0.6, 1.1} at the winner's l1).
+2. **replnet_tau — threshold sweep** (τ ∈ {0.6, 1.1} at the winner's l1).
    τ and l1 are two knobs on one sparsity mechanism; v1 only moved l1.
-5. **replnet_bilt — bilinear m=4 + odd tail, PRICE-FIRST** (--nb 4 --bm 4
+3. **replnet_bilt — bilinear m=4 + odd tail, PRICE-FIRST** (--nb 4 --bm 4
    [--tailw 4]). Bilt history says the tail carries signal, but the ext
    machinery is float/dev-only: this run is a VAL probe; shipping needs
    ≥66% zeros (71 B spare) plus new priced machinery. Train, price, then
    decide.
-6. **replnet_rff — rff64 at tiny width, VAL probe only** (--rff 64).
+4. **replnet_rff — rff64 at tiny width, VAL probe only** (--rff 64).
    Proven −3.9% val at width 128; unknown at N=4, machinery unpriced.
-7. **replnet_clamp — CLAMP/satpen interaction** (clampcp 400 vs 600 at
+5. **replnet_clamp — CLAMP/satpen interaction** (clampcp 400 vs 600 at
    the winner's sparsity). In replacement mode the clip bounds ALL
    positional signal; 600 was inherited from the residual era, never
    measured here. Byte-neutral.
