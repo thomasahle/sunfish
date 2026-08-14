@@ -14,3 +14,4 @@ import Sunfish.CappedNull
 import Sunfish.Pruning
 import Sunfish.EventuallyWide
 import Sunfish.Repetition
+import Sunfish.EventuallyFinite
