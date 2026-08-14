@@ -154,6 +154,8 @@ def run_diff(args):
         for name, poscmd in specs:
             for e in (py, cc):
                 e.cmd_ok("reset")
+                for kv in args.set:
+                    e.cmd_ok("set " + kv.replace("=", " "))
                 e.cmd_ok(poscmd)
             err, checked = movegen_phase(py, cc, name, args.walk)
             gencmp += checked
@@ -218,6 +220,9 @@ def main():
     ap.add_argument("--walk", action="store_true", help="depth-2 movegen walk")
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--bench", action="store_true")
+    ap.add_argument("--set", action="append", default=[], metavar="NAME=V",
+                    help="tuning knob applied to BOTH engines (repeatable); "
+                         "shared knobs only: QS QS_A EVAL_ROUGHNESS TABLE_SIZE")
     ap.add_argument("--verbose", "-v", action="store_true")
     args = ap.parse_args()
     if args.quick:

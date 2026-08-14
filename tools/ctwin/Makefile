@@ -1,6 +1,6 @@
 # ctwin: C twin of classic sunfish.py, node-identity lab instrument.
 CC ?= cc
-CFLAGS ?= -O2 -Wall -Wextra
+CFLAGS ?= -O3 -march=native -Wall -Wextra
 
 all: sunfish_c tables_classic.txt
 
