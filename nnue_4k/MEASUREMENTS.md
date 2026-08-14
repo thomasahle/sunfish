@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-14 | **ARM (a) VERDICT: the POOL time manager is +119.94 ± 36.44 at 60+0 — H1 accepted in 274 games on a NON-INFERIORITY screen, 144W-53L-77D (66.61%), LOS 100%, 0 forfeits, 0 illegal** | The arm that was only asked not to give back the +235.5 ± 65.4 sudden-death fix instead added to it, against that winner's own binary (`14b69a606b743a37`). Mechanism is the allocation SHAPE, measured off the PGN: the pool spends **0.79× the median move and 3.3× the maximum** (0.512/5.534 s vs 0.645/1.664 s) — cheap routine moves, a wall that lets a hard one run to 5× soft, which one number that is both target and wall cannot do. Drain: pool's minimum end-clock is **8.4 s = (M+2)·O exactly**, it never fell below 2.4 s in 274/274 games, and 0 games ended under 2 s, against the incumbent's 4 under 2 s and 5 crossings. Blind moves 1,057 (6.0%) vs 117 — same metric, different mechanism: these are deliberate floor moves with 8–12 s still banked, not a collapsed budget, and the arm won 66.6% while playing 14× more of them. `tm_smoke`'s cold-table prediction of 1.5× MORE routine spend over-read it; the pre-registered honest note was too pessimistic. **Arm (b) 60+1 (elo0=0 elo1=10) launched; (c) and (d) gated; v1.1 dynamic still unscreened** |
 | 2026-08-14 | **PRE-REGISTERED: the POOL time manager (soft/hard) goes to a four-arm ladder — (a) 60+0 NON-INFERIORITY pool vs the shipped entry, elo0=−10 elo1=0, cap 600; then (b) 60+1 elo0=0 elo1=10; (c) 30+1 NON-INFERIORITY; (d) phase-M vs pool** | Thomas's v2 architecture, separate from the smooth budget (#188, the conservative acute fix): a whole-game pool `P = T + (M−1)·I − (M+2)·O` split into a soft limit `min(P/M, A/4)` that stops STARTING iterations and a wall `min(5·soft, A/2)` that cannot go negative. `pooltm` mod, **+57 B all-in** (3308 → 3365, 731 spare — the curve's bytes come out with it), sha `cddf392e21449054` against the in-flight #188 baseline `14b69a606b743a37`. **Recorded before the games and against the design's own premise:** budgets are not spends — iterations are discrete, the pool stops at the first one that ENDS past its limit, and the realized spend measures 1.3–2.3× the soft limit (60+0: 2.26 s vs the incumbent's 1.50 s on the laptop; more than the incumbent at every probed TC on the loaded box). v1 is STATIC; the dynamic target is v1.1 and is not screened until v1 survives (a) and (c) |
 | 2026-08-14 | **MATCH 1 VERDICT: the smooth budget is +40.64 ± 25.61 over the step at 60+0.1 — H1 accepted in 438 games (168W-117L-153D, LOS 99.92%), in 1h53m** | The positive branch: **the step form was leaving Elo on the table at tiny increments**, so this is not a change that falls back on aesthetics. Mechanism is stage 1's again — **zero forfeits on either arm**, all 438 games `normal`, and the step arm's clock **parks at 2.1 s in every single game** (min 2.0 across 438; a 2.2 s clock buys exactly 0.1 s of budget, which is exactly the increment) and pays one increment per move from there: **34.3% of its moves starved vs smooth's 4.0%**, median last-20-move time **0.115 s vs 0.391 s**. **The pre-registered ≤0.06 s metric MISSED it** (0 vs 19) because a capped budget settles where spend == income, not on the floor — logged as a pre-registration defect with a DESCRIPTIVE companion validated against the stage-1 PGN, not silently patched. Zero illegal. **Match 2 (30+1 non-inferiority) launched in the same action** |
 | 2026-08-14 | **PRE-REGISTERED: the step budget becomes a SMOOTH one, and the price of that is two matches — (1) 60+0.1 smooth vs step, elo0=0 elo1=20, cap 600; (2) 30+1 NON-INFERIORITY smooth vs step, elo0=-10 elo1=0, cap 400** | The step form is discontinuous at `winc == 0`: one millisecond of increment moved the divisor 40 → 12, so 60+0.1 was paced at /12 — the exact drain the /40 branch exists to close. Replacement is one rational base (divisor slides 40 → 12) under one cap that cannot go negative. **What carries for free:** `winc == 0` is bit-for-bit `wtime/40` and, above a 2.667 s clock, bit-for-bit the stage-1 `tmfix` arm — so +235.5 ± 65.4 transfers untouched. **What must be bought:** increment TCs are now /12 + 0.9·inc *asymptotically* (−7.4% at 30+1, −8.5% at 60+1, −3.3% at 300+3), so match 2 prices that. Arms are one expression apart from one generator; the step arm packs to **3295 B, sha `fe22791b409b1fba`** — byte-identical to the stage-1 winner. Entry **3295 → 3308 B** (+13, 788 spare). Honest note recorded in advance: if match 1 reads ≈ 0 the change lands as continuity-plus-safety, not as Elo |
@@ -246,6 +247,91 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-14 — ARM (a) VERDICT: the POOL manager is +119.9 ± 36.4 at 60+0, H1 in 274 games — and it parks the clock at exactly (M+2)·O
+
+The arm that was only asked **not to regress** won it. Pre-registered above
+(commit 629cba2) as a NON-INFERIORITY screen against the shipped entry — the
+sudden-death fix is worth +235.5 ± 65.4 and the question was whether the pool
+gives any of it back. It gives none back; it adds.
+
+| | |
+|---|---|
+| arms | `pool` (`pooltm`, `cddf392e21449054`, 3365 B) vs `smooth` (base = HEAD entry, `14b69a606b743a37`, 3308 B) |
+| TC / book | 60+0, `book3k.pgn`, order=random, srand 20260816, no adjudication |
+| result | **144W 53L 77D of 274**, 66.61% |
+| Elo | **+119.94 ± 36.44** (nElo +147.12 ± 41.14), LOS 100.00% |
+| pentanomial | [4, 18, 37, 39, 39], PairsRatio 3.55, WL/DD 2.70, draw ratio 27.0% |
+| SPRT | **LLR 2.99 > 2.94 — H1 accepted for [−10, 0]** at the 274-game mark of a 600 cap |
+| tripwires | **0 time forfeits, 0 illegal moves, 274/274 terminations `normal`** |
+| median plies | 139 |
+
+The baseline is not a rebuild: `14b69a60…` is the same binary playing #188's
+match 1, and at `winc == 0` it is the stage-1 `tmfix` winner's behaviour above a
+2.667 s clock. So this is measured against the +235 arm itself.
+
+### Realized spend — the shape is the mechanism
+
+| arm | moves | median | mean | p90 | max |
+|---|---|---|---|---|---|
+| pool | 17,511 | **0.512 s** | 0.718 s | **1.623 s** | **5.534 s** |
+| smooth | 17,468 | 0.645 s | 0.687 s | 1.183 s | 1.664 s |
+
+The pool spends **0.79x the median move** and **3.3x the maximum**. That is the
+whole architecture in one table: the soft limit makes routine moves cheap, the
+wall lets a hard one run to 5x soft, and the incumbent — one number that is both
+target and wall — cannot do either. The pre-registered prediction from
+`tm_smoke` was 1.5x MORE at 60+0 on a cold table from the start position; in
+games with a warm table it is 0.79x on the median, so **the assay over-read the
+routine spend and the honest note in the pre-registration was too pessimistic,
+not too kind**.
+
+### Drain and floor telemetry (pre-registered readings)
+
+| arm | end clock median | mean | min | games ending < 2 s | first fall below 2.4 s | moves played after |
+|---|---|---|---|---|---|---|
+| pool | 12.5 s | 14.1 s | **8.4 s** | **0** | **never, in 274/274** | — |
+| smooth | 14.8 s | 16.2 s | 0.9 s | 4 | move 142 (5 of 274 games) | 20 |
+
+**The minimum end-clock is 8.4 s = (M+2)·O exactly.** The pool empties its pool
+at that point by construction and parks there, so the sub-2·O regime is not
+merely avoided in these games, it is unreachable while `M` and `O` stand. The
+incumbent, which has no such term, put 4 games under 2 s and 5 games through the
+old cap's collapse threshold.
+
+| arm | blind moves (≤0.06 s) | per game | games with none |
+|---|---|---|---|
+| pool | 1,057 (6.0%) | 3.86 | 227 of 274 |
+| smooth | 117 (0.7%) | 0.43 | 269 of 274 |
+
+**Read this one carefully — same metric, two different mechanisms.** The metric
+was calibrated on the drain (a collapsed budget with no clock behind it: stage
+1's 22.3% and a median 16 blind moves before being mated). The pool's 1,057 are
+not that: they are **deliberate floor moves played with 8–12 s still on the
+clock**, taken because `P` is genuinely empty at that point — 8.4 s does not
+contain 40 more moves at 200 ms of overhead each. The pool played 14x more of
+them than the incumbent and still won 66.6%, which is the evidence that this
+class of blind move is not the losing class. It is nonetheless the one number
+here that argues for a knob: `M` is a constant where a real horizon estimate
+would let the tail spend down further, and that is the phase-M arm (d).
+
+### What this does and does not settle
+
+Settled: the pool does not cost the sudden-death fix anything, the wall never
+fired as a forfeit, and the allocation shape is worth ~120 Elo at 60+0 against a
+manager that is already the validated one. **Not settled: 60+1**, where the
+budget ratio is 2.4x rather than 1.16x and the extensions have to pay for a much
+larger cut in routine spend. Arm (b) launched at 21:08 UTC on the same arena,
+same book, srand 20260817, elo0=0 elo1=10, cap 600 — it has to WIN something,
+not merely not lose. Arms (c) 30+1 and (d) phase-M stay gated behind it, and the
+dynamic target (v1.1) stays unscreened until (a) and (c) are both in.
+
+Cotenancy: launched cotenant at load ~22 on 96 cores, concurrency 8, nice 10,
+finished in 52 minutes at load ~33 with three other lanes' tournaments live; no
+other lane's processes or files were touched, and no `.boxlock` was claimed.
+(Record note: `m2/RESULT.txt`'s first line is mislabelled "ARM (a) 60+0" by an
+inherited `say` line — the `config`/`sprt` lines under it are correct and the
+match is 60+1; the staged (c) and (d) scripts were corrected.)
 
 ## 2026-08-14 — PRE-REGISTRATION: the POOL time manager (soft/hard), and the ladder that prices it
 
