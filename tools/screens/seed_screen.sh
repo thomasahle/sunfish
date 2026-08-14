@@ -38,8 +38,12 @@
 # So: 1+0, and the arm under test is b8 (max first yield 2,433, ABOVE the
 # cliff) against b8seed, with base-vs-seed as the control pair that shows the
 # time control alone does not manufacture the failure.
-# This is a CORRECTNESS COUNT. 1+0 on a shared box is far too noisy for a
-# strength claim and none is made.
+# This was a CORRECTNESS COUNT until 2026-08-14 (it measured b8 15/200 and
+# b8seed 4/200 illegal-move forfeits, all `bestmove (none)` after an abort
+# beat the first root fail-high). The structural bestmove floor closed that
+# class by construction, so stage 2 is now a LEGALITY STRESS with a zero-
+# tolerance verdict: any illegal move from any arm fails the whole screen.
+# 1+0 on a shared box is far too noisy for a strength claim and none is made.
 #
 # usage: seed_screen.sh GOFILE ARENA [ROUNDS] [CONC] [SRAND] [TIMED_GAMES]
 set -u
@@ -77,6 +81,25 @@ mkdir -p "$ARENA"
 say() { echo "$@" | tee -a "$RESULT"; }
 say "SEED SCREEN  started $(date -u +%FT%TZ)"
 
+# ---- ZERO TOLERANCE ---------------------------------------------------------
+# "We should never accept illegal moves. 15 is too much, so is 4." Any illegal
+# move by any of our arms, in any run of this screen, is a FAIL that names the
+# game -- never a count to be reported. The structural bestmove floor (driver
+# v3 / the entry's builtin fallback) makes the known "(none)" class impossible
+# by construction; this gate is what notices if any class, known or new, ever
+# comes back.
+require_zero_illegal() {
+    pgn=$1
+    n_ill=$(grep -ci 'illegal move' "$pgn" 2>/dev/null || true)
+    if [ "${n_ill:-0}" -gt 0 ]; then
+        say "ZERO-TOLERANCE FAIL: illegal move(s) in $pgn -- the offending games:"
+        awk '/^\[Round /{r=$0} /^\[White /{w=$0} /^\[Black /{b=$0} /^\[FEN /{f=$0}
+             /makes an illegal move/{printf "    %s %s %s %s :: %s\n", r, w, b, f, $0}' \
+            "$pgn" | tee -a "$RESULT"
+        exit 8
+    fi
+}
+
 # ---- the GO gate: checked ONCE, never waited on -----------------------------
 if [ ! -f "$GOFILE" ]; then
     say "NOT ARMED: no GO marker at $GOFILE"
@@ -105,9 +128,11 @@ for e in e_base e_seed e_b8 e_b8seed; do
         | grep -oE "MAX [0-9]+" | grep -oE "[0-9]+")
     say "  gate PASS  $e   legality 100/100   first-yield max ${y:-?}"
 done
-# b8 MUST still fail the node gate -- it is the positive control for stage 2.
-# If a rebuild has silently fixed it, stage 2 measures nothing and must not be
-# reported as a clean result.
+# b8 MUST still sit above the 2048-node first-yield cliff -- it is the stress
+# control for stage 2: the arm guaranteed to hit aborts before its first root
+# fail-high, i.e. the arm that actually exercises the structural bestmove
+# floor. If a rebuild silently lowers it under the cliff, stage 2 stresses
+# nothing and must not be reported as a clean result.
 y8=$("$PY" "$ARENA/first_yield_gate.py" "$ARENA/bin/e_b8.py" "$ARENA/first_yield_fens.fen" 2>&1 \
      | grep -oE "MAX [0-9]+" | grep -oE "[0-9]+")
 [ "${y8:-0}" -gt 2048 ] || { say "STAGE-2 CONTROL VOID: e_b8 first yield ${y8:-?} <= 2048, nothing to catch"; exit 7; }
@@ -128,14 +153,19 @@ nice -n 5 "$FC" \
   -pgnout file="$ARENA/seedscreen.pgn" > "$ARENA/seedscreen.log" 2>&1
 n=$(grep -c '^\[Result' "$ARENA/seedscreen.pgn")
 say "  games $n  $([ "$n" -ge $((ROUNDS*2)) ] && echo 'UNDECIDED-AT-CAP (report as undecided)' || echo 'stopped early by SPRT')"
-say "  time forfeits $(grep -ci 'time forfeit' "$ARENA/seedscreen.pgn")   illegal $(grep -ci 'illegal move' "$ARENA/seedscreen.pgn")"
+say "  time forfeits $(grep -ci 'time forfeit' "$ARENA/seedscreen.pgn")"
+require_zero_illegal "$ARENA/seedscreen.pgn"
 "$PY" "$ARENA/pair_elo.py" "$ARENA/seedscreen.pgn" 2>&1 | tee -a "$RESULT"
 grep -E "^Elo|^Games|SPRT" "$ARENA/seedscreen.log" | tail -4 | tee -a "$RESULT"
 
-# ---- STAGE 2: the timed correctness count -----------------------------------
-# Runs regardless of stage 1's verdict: "does the seed remove the (none) class"
-# is a different question from "does the seed cost Elo", and a DROP on stage 1
-# would make the answer to this one more interesting, not less.
+# ---- STAGE 2: the timed legality stress -------------------------------------
+# Runs regardless of stage 1's verdict. This used to be a CORRECTNESS COUNT
+# ("does the seed reduce the (none) class") -- that class is now closed by
+# construction (the structural bestmove floor), so the count question is dead:
+# the only acceptable count is zero, enforced by require_zero_illegal, and the
+# seed's pair rule is DEPTH-QUALITY only. What stage 2 still buys is the
+# stress itself: 1+0 is the regime that produced 19 forfeits in 400 games, and
+# the floor's claim of impossibility is checked here on every run.
 timed() {
     tag=$1; a=$2; b=$3
     nice -n 5 "$FC" \
@@ -147,12 +177,14 @@ timed() {
       -pgnout file="$ARENA/$tag.pgn" > "$ARENA/$tag.log" 2>&1
     say "  $tag ($a vs $b, 1+0): games $(grep -c '^\[Result' "$ARENA/$tag.pgn")" \
         " none=$(grep -c '(none)' "$ARENA/$tag.log")" \
-        " illegal=$(grep -ci 'illegal move' "$ARENA/$tag.pgn")" \
         " forfeit=$(grep -ci 'time forfeit' "$ARENA/$tag.pgn")"
+    require_zero_illegal "$ARENA/$tag.pgn"
 }
 say ""
-say "STAGE 2  timed correctness count at 1+0 -- NOT an Elo measurement"
-say "         prediction: b8 > 0 ; b8seed = 0 ; base = 0 ; seed = 0"
+say "STAGE 2  timed legality stress at 1+0 -- NOT an Elo measurement"
+say "         REQUIRED: zero illegal moves from EVERY arm. b8 sits above the"
+say "         2048-node first-yield cliff on purpose: it is the arm that MUST"
+say "         exercise the structural bestmove floor, and it must survive it."
 timed seedtimed b8 b8seed
 timed seedctl   base seed
 say ""

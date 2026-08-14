@@ -60,7 +60,14 @@ n=$(grep -c '^\[Result' "$ARENA/$TAG.pgn")
 say ""
 say "games played  $n  $([ "$n" -ge $((ROUNDS*2)) ] && echo 'UNDECIDED-AT-CAP (report as undecided, NOT as a point estimate)' || echo 'stopped early by SPRT')"
 say "time forfeits $(grep -ci 'time forfeit' "$ARENA/$TAG.pgn")"
-say "illegal moves $(grep -ci 'illegal move' "$ARENA/$TAG.pgn")"
+# ZERO TOLERANCE: any illegal move by any arm is a FAIL naming the game.
+if [ "$(grep -ci 'illegal move' "$ARENA/$TAG.pgn")" -gt 0 ]; then
+    say "ZERO-TOLERANCE FAIL: illegal move(s) in $TAG.pgn -- the offending games:"
+    awk '/^\[Round /{r=$0} /^\[White /{w=$0} /^\[Black /{b=$0} /^\[FEN /{f=$0}
+         /makes an illegal move/{printf "    %s %s %s %s :: %s\n", r, w, b, f, $0}' \
+        "$ARENA/$TAG.pgn" | tee -a "$OUT"
+    exit 8
+fi
 "$PY" "$ARENA/pair_elo.py" "$ARENA/$TAG.pgn" 2>&1 | tee -a "$OUT"
 grep -E "^Elo|^Games|SPRT" "$ARENA/$TAG.log" | tail -4 | tee -a "$OUT"
 say "NOTE: SPRT's terminal Elo is biased away from zero. A PASS means positive,"

@@ -78,7 +78,15 @@ n=$(grep -c '^\[Result' "$ARENA/hole.pgn")
 say ""
 say "--- finished $(date -u)"
 say "games $n of $((ROUNDS*20))  $([ "$n" -ge $((ROUNDS*20)) ] && echo COMPLETE || echo 'SHORT -- explain before reading any Elo')"
-say "time forfeits $(grep -ci 'time forfeit' "$ARENA/hole.pgn")   illegal $(grep -ci 'illegal move' "$ARENA/hole.pgn")"
+say "time forfeits $(grep -ci 'time forfeit' "$ARENA/hole.pgn")"
+# ZERO TOLERANCE: any illegal move by any arm is a FAIL naming the game.
+if [ "$(grep -ci 'illegal move' "$ARENA/hole.pgn")" -gt 0 ]; then
+    say "ZERO-TOLERANCE FAIL: illegal move(s) in hole.pgn -- the offending games:"
+    awk '/^\[Round /{r=$0} /^\[White /{w=$0} /^\[Black /{b=$0} /^\[FEN /{f=$0}
+         /makes an illegal move/{printf "    %s %s %s %s :: %s\n", r, w, b, f, $0}' \
+        "$ARENA/hole.pgn" | tee -a "$OUT"
+    exit 8
+fi
 say ""
 "$PY" "$ARENA/pair_elo.py" "$ARENA/hole.pgn" 2>&1 | tee -a "$OUT"
 say ""

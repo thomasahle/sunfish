@@ -109,8 +109,17 @@ say ""
 say "--- finished $(date -u)"
 say "games played  $n  of $((ROUNDS*20)) scheduled  $([ "$n" -ge $((ROUNDS*20)) ] && echo COMPLETE || echo "SHORT -- do NOT read the Elo until this is explained")"
 say "time forfeits $(grep -ci 'time forfeit' "$ARENA/caprr.pgn")"
-say "illegal moves $(grep -ci 'illegal move' "$ARENA/caprr.pgn")"
 say "disconnects   $(grep -ci 'disconnect\|stall' "$ARENA/caprr.pgn")"
+# ZERO TOLERANCE: any illegal move by any arm is a FAIL naming the game, never
+# a count. The structural bestmove floor makes the known class impossible;
+# this notices any class, known or new, coming back.
+if [ "$(grep -ci 'illegal move' "$ARENA/caprr.pgn")" -gt 0 ]; then
+    say "ZERO-TOLERANCE FAIL: illegal move(s) in caprr.pgn -- the offending games:"
+    awk '/^\[Round /{r=$0} /^\[White /{w=$0} /^\[Black /{b=$0} /^\[FEN /{f=$0}
+         /makes an illegal move/{printf "    %s %s %s %s :: %s\n", r, w, b, f, $0}' \
+        "$ARENA/caprr.pgn" | tee -a "$OUT"
+    exit 8
+fi
 say ""
 say "--- pairwise Elo, 95% pentanomial intervals (analyzer reproduces fastchess exactly)"
 "$PY" "$ARENA/pair_elo.py" "$ARENA/caprr.pgn" 2>&1 | tee -a "$OUT"
