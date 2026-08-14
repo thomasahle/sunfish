@@ -7895,3 +7895,130 @@ F2=32 certifies with margin 4.26e9 and a legal hsum read-out; with
 renorm-to-12-bits between layers, 16+ conv layers certify at F=32 — depth
 is structural, not lucky. First multi-layer experiment queued as
 replnet_ml2 (TRAINQUEUE #6, PRICE-FIRST, certificate beside the run).
+
+## 2026-08-14 — Compression bake-off: 15 encoders x 2 container layouts, measured; the shipped codec survives everything
+
+Thomas: "This is genuinely a unique compression problem, and you should
+try many approaches," plus the coordinator amendment (Thomas: "I still
+think you probably don't want to lzma compress the trained weights. But
+you decide what works best") — resolved by measurement, per arm, in BOTH
+container layouts.  `nnue_4k/train/compress/` is the standing harness:
+one command runs every encoder against a net, gates each (arm, layout)
+cell BIT-EXACT against an independent mirror of the trainer quantization
+(anchored per net by verify_export's torch triangle — both nets PASS on
+200 fens x 3 views + 60-ply walk), packs through the REAL paths only
+(pack.sh joint; pack_entry.sh split raw-tail with the 4850894/ffead53
+SF_A self-read), boots every artifact (`uci` → `uciok`), and ranks.
+`export.py --bakeoff` runs the same zoo, so the per-net export winner is
+chosen by measurement (TRAINQUEUE names this lane the encoder owner for
+the c1024 family).
+
+**Instrument first.**  The entry is PINNED to a git blob (HEAD =
+fb717214c3e2 here): the working-tree entry was being golfed by another
+lane DURING the first run, and three same-morning reads of "the entry"
+measured 3831/3728/3733 B — a ranked table needs one denominator, so
+unpinned working-tree measurement is now a loud NOTE in the harness.
+Against the pin: baseline layout A reproduces the recorded **3831 B (v1)**
+and **3834 B (repro_arm1)** EXACTLY, its payload string equals the
+exporter's own .payload byte-for-byte, and payload-elided reproduces the
+recorded 3449 (= 2871 engine-sans-eval + 578 machinery).  The negative
+control (ctrl_shuffle: same symbols, seeded random order, storage-free
+unshuffle) measures WORSE in both layouts on both nets (+161/+155 A) —
+the axis can fail.  Decoder cost and payload-in-context below are deltas
+of measured artifacts (the proto's elided convention), never composed.
+
+**v1 winner (l1=0.001, 59.6% zeros), pinned entry fb717214c3e2, ranked
+(A = joint lzma stream, B = split raw tail; bytes = whole artifact):**
+
+| arm | lay | bytes | Δ | payload | decoder | boot s |
+|---|---|---|---|---|---|---|
+| **b81 (shipped)** | **A** | **3831** | +0 | 382 | 0 | 0.10 |
+| b81_rle | A | 3847 | +16 | 377 | 21 | 1.23 |
+| b81_filemajor | A | 3888 | +57 | 382 | 57 | 0.26 |
+| b81_boustro | A | 3901 | +70 | 382 | 70 | 0.11 |
+| b81_lanesplit | A | 3923 | +92 | 424 | 50 | 0.19 |
+| cb8 | A | 3972 | +141 | 455 | 68 | 0.08 |
+| b81_rle | B | 3988 | +157 | 448 | 91 | 0.22 |
+| ctrl_shuffle | A | 3992 | +161 | 461 | 82 | 0.48 |
+| cb4 | A | 4054 | +223 | 534 | 71 | 0.14 |
+| b81_pieceperm | A | 4073 | +242 | 554 | 70 | 0.57 |
+| mr3 | A | 4127 | +296 | 656 | 22 | 0.13 |
+| rc_run | A | 4143 | +312 | 550 | 144 | 0.30 |
+| b81 | B | 4145 | +314 | 633 | 63 | 0.15 |
+| rc_o0 | A | 4149 | +318 | 573 | 127 | 0.09 |
+| mr3 | B | 4153 | +322 | 618 | 86 | 0.10 |
+| lr_svd | A | 4157 | +326 | 554 | 154 | 0.17 |
+| rc_o0 | B | 4171 | +340 | 541 | 181 | 0.19 |
+| rc_run | B | 4173 | +342 | 523 | 201 | 0.16 |
+| lr_svd | B | 4182 | +351 | 520 | 213 | 0.48 |
+| cb8 | B | 4189 | +358 | 604 | 136 | 0.76 |
+| b81_lanesplit | B | 4194 | +363 | 633 | 112 | 0.11 |
+| b81_filemajor | B | 4201 | +370 | 633 | 119 | 0.09 |
+| b81_boustro | B | 4216 | +385 | 633 | 134 | 0.07 |
+| cb4 | B | 4220 | +389 | 635 | 136 | 0.12 |
+| b81_pieceperm | B | 4221 | +390 | 636 | 136 | 0.09 |
+| ctrl_shuffle | B | 4226 | +395 | 633 | 144 | 0.19 |
+| sparse_gap | A | 4524 | +693 | 1009 | 66 | 0.51 |
+| sparse_gap | B | 4540 | +709 | 957 | 134 | 0.20 |
+| reorder_stored | A | 5000 | +1169 | 1483 | 68 | 0.09 |
+| reorder_stored | B | 5002 | +1171 | 1416 | 137 | 0.13 |
+
+**v1c (l1=0.0013, 65.2% zeros): baseline A = 3779 B (payload 330), same
+order at the top:** b81_rle A +27 (payload 336, decoder 21), filemajor
++58, boustro +72, lanesplit +91, cb8 +140, ctrl +155 … b81 B +366.
+Full tables in the per-net bakeoff json (runs are gitignored; this entry
+is the record).  All 60 cells bit-exact, all boot; decode 0.005-0.027 s
+in-process, worst artifact boot 1.23 s — the 60 s budget is a non-issue.
+
+**Findings, measured:**
+
+- **Joint-vs-split settles AGAINST the raw tail everywhere at these
+  sizes** — even for the entropy-coded arms whose output is
+  incompressible by construction.  Decomposed on v1's rc_run: the raw
+  tail IS ~27 B cheaper per payload (523 raw vs 550 through lzma), but
+  the SF_A/SF_N head + self-read machinery costs ~57-63 B more than the
+  in-source string prologue, so A wins by ~30.  The tax is fixed and the
+  saving scales with payload size: linear projection puts the B
+  crossover for incompressible payloads at ~1.1 kB — right at the new
+  1024 B capacity target, so RE-MEASURE when c1024 exports exist.
+- **lzma's match modeling beats every fitted prior we brought.**  The
+  (lane, zero-run-bucket) rANS coder — a *static ternary-run prior*, 16
+  contexts fitted on the net, params stored and counted — needs 461 B of
+  state on v1 where the shipped path's payload-in-context is 382; at
+  65.2% zeros the gap widens (407 vs 330).  Order-0 per-lane is worse
+  still (519/476).  The redundant char-aligned encoding plus lzma's
+  match finder captures structure none of our explicit models did.
+- **Sparsity helps the shipped codec MORE than it helps the
+  challengers**: b81_rle (char-aligned zero-RLE, runs capped at 10 by
+  the 90-alphabet) closed to +16 at 59.6% zeros but fell to +27 at
+  65.2% — lzma's unbounded matches price long zero runs better than RLE
+  tokens.  The dense mr3 payload is nearly flat across sparsity
+  (656/650), and the proto's random-payload record (626 B @55%, in-ctx
+  656 @42%) puts the dense-vs-baseline crossover at ~42% zeros —
+  INSIDE c1024-cal's 35-50% target band.  The winner may genuinely flip
+  at the new operating point; the zoo is one command on each export.
+- **Reordering is a dead end at every honesty level**: fixed square
+  orders (no stored perm) lose exactly their decoder cost (+57/+70);
+  the greedy 12-plane chain HURTS the payload itself (554 vs 382 — the
+  chain breaks cross-plane matches lzma was using, same mechanism as
+  the shuffle control); the full stored 768-perm costs its Lehmer code,
+  +1169.  sparse_gap loses at both sparsities (crossover is far above
+  66%); lossless-VQ codebooks (cb4/cb8) pay more in dict+indices than
+  lzma's own matcher; lr_svd's rank-1 ternary predictor leaves an 8.6-
+  10.1% residual whose factor cost never pays.
+- **Rate-aware hook, calibrated against its own arm**: constraints
+  .rate_penalty (differentiable per-lane order-0 expected bytes, soft
+  occupancy of the STE grid) reads 518.3 B on v1's hard quantization vs
+  the rc_o0 coder's measured 519 B state — the estimator IS its arm to
+  within a byte, and it tracks direction across nets (476 est / 330
+  measured on v1c: an upper bound that moves the right way).  Wired as
+  loss.rate/loss.rate_T next to l1; queued as replnet_ratecal
+  (TRAINQUEUE #9, rate ∈ {2e-6, 4e-6} bracketing v1's l1 pressure,
+  valn-pinned VAL probe beside c1024-cal).
+
+**Verdict:** the shipped base-3^4 + joint lzma stands on both existing
+nets — now against 15 measured challengers in two container layouts
+instead of by construction.  The standing value is the harness + the two
+projected crossovers (dense payload at low sparsity; raw tail at ~1.1 kB
+incompressible payload), both of which the c1024 family will cross;
+re-run the zoo per export and let the table pick.

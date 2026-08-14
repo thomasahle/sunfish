@@ -136,6 +136,9 @@ def run_net(netpath, entry=DEFAULT_ENTRY, arms=None, outdir=None,
         os.path.dirname(os.path.abspath(netpath.rstrip("/"))), "bakeoff_" + q.name)
     os.makedirs(outdir, exist_ok=True)
     zoo = [a for a in all_arms() if arms is None or a.name in arms]
+    if not any(getattr(a, "native_a", False) for a in zoo):
+        # the baseline is the table's denominator; measure it regardless
+        zoo.insert(0, next(a for a in all_arms() if getattr(a, "native_a", False)))
     baseline = next(a for a in zoo if getattr(a, "native_a", False))
 
     # ---- instrument first: the exporter's own string, the house triangle
