@@ -76,6 +76,36 @@ It concerns the quality of the null approximation, not the fail-soft report
 transport. The non-pawn-piece guard excludes pawn-only zugzwangs; the score
 guard and cap make null pruning more conservative in unbalanced positions.
 
+## Intrinsic late-move reduction
+
+At non-root depths above four, a quiet move by `N`, `B`, `R`, or `Q` whose
+intrinsic `Position.value` is negative consumes two depth units instead of
+one. The predicate is fixed by the position, nominal depth, and move. The
+killer can reorder an eligible move, but it receives exactly the same child
+depth in the killer path and the ordinary sorted path.
+
+The declared real-move recurrence is therefore
+
+```text
+childDepth(pos, depth, move) = depth - 2  if intrinsically reducible
+                               depth - 1  otherwise
+S(pos, depth) = max_move -S(child, childDepth(pos, depth, move))
+```
+
+`IntrinsicReduction.lean` models the classifier as an arbitrary fixed
+function that cannot inspect `gamma`, table contents, or iteration order.
+`boundIntrinsic_spec` proves by strong induction that the corresponding
+zero-window search satisfies the ordinary fail-soft contract for this one
+value function. `intrinsicChildDepth_lt` proves termination, and
+`intrinsicChildDepth_ge_sub_two` proves that a real edge consumes at most two
+units of fuel. Thus any fixed finite line is eventually searched with
+unbounded residual depth; the reduction delays widening but does not impose a
+permanent horizon.
+
+This establishes search consistency, not that the selective value is a
+better chess approximation. That is measured separately by deterministic
+node screens and game matches.
+
 ## Mate distance
 
 Checkmate is not one number.  The terminal correction assigns
@@ -245,8 +275,9 @@ at capturable nodes.
 | recursive zero-window move search | `Bound.bound_spec` |
 | null child report negation | `WindowReport.negate` |
 | `min(pos.score + EVAL_ROUGHNESS, pass_report)` | `cappedNull_report` |
-| score guard keeps the cap below positive mate | `guardedStaticCap_in_scoreBand`, `guardedCappedNull_below_positiveMate` |
+| null cap stays below positive mate | `guardedStaticCap_in_scoreBand`, `guardedCappedNull_below_positiveMate` |
 | full-width move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
+| intrinsic one-ply reduction for a fixed quiet-move class | `boundIntrinsic_spec`, `intrinsicChildDepth_lt` |
 | sticky legality evidence and terminal override | terminal/finalizer results in `Stalemate.lean` |
 | king-capture evaluation margins and ordering | `EvalBounds.lean` |
 | `mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)` | `terminalValue`, `terminalValue_exact` |
@@ -268,6 +299,7 @@ transform is the identity, so the model and source are extensionally equal.
 - `GameTree.lean`: chess-free negamax game model.
 - `Bound.lean`: core fail-soft search proof.
 - `CappedNull.lean`: capped-null report transport and score-band facts.
+- `IntrinsicReduction.lean`: fixed edge-cost recurrence and fail-soft proof.
 - `Stalemate.lean`: selective-search fold, legality, and terminal finalizer.
 - `EvalBounds.lean`: numeric bounds induced by the piece-square tables.
 - `Killer.lean`: move-table legality and lifecycle.
