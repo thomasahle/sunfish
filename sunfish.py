@@ -596,11 +596,9 @@ def main():
             times = dict(zip(args[1::2], map(int, args[2::2])))
             side = "wb"[len(hist) % 2 == 0]
             wtime, winc = times.get(side + "time", 60000), times.get(side + "inc", 0)
-            # Increment-aware budget + hard in-search deadline, exactly as
-            # sunfish_ui/uci.py and the nnue loop: t/40+inc structurally
-            # underspent (+91/+46 Elo measured), and iteration boundaries
-            # alone can overrun arbitrarily at deep depths.
-            think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1000)
+            # Pool accounting over an M=40 move horizon, the increment spent
+            # once, clipped to a quarter clock: a reserve of four increments.
+            think = min(wtime / 40 + 0.9 * winc, wtime / 4)
             think = times.get("movetime", think) / 1000
 
             start = time.time()
