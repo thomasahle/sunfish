@@ -349,6 +349,11 @@ _golf_renames = [
     (r"entry\.lower\b", "entry.l", 3),
     (r"entry\.upper\b", "entry.u", 3),
     (r'"lower upper"', '"l u"', 1),
+    # namedtuple TYPENAME strings only feed repr(); the module globals the
+    # driver's ENGINE_API checks (Move, Position) are untouched.
+    (r'namedtuple\("Move"', 'namedtuple("M"', 1),
+    (r'namedtuple\("Position"', 'namedtuple("P"', 1),
+    (r'namedtuple\("Entry"', 'namedtuple("E"', 1),
 ]
 for _pat, _repl, _n in _golf_renames:
     src, _c = re.subn(_pat, _repl, src)

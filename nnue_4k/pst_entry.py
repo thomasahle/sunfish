@@ -127,10 +127,10 @@ opt_ranges = dict(
 ###############################################################################
 
 
-Move = namedtuple("Move", "i j prom")
+Move = namedtuple("M", "i j prom")
 
 
-class Position(namedtuple("Position", "board score wc bc ep kp")):
+class Position(namedtuple("P", "board score wc bc ep kp")):
     """A state of a chess game
     board -- a 120 char representation of the board
     score -- the piece-square evaluation, kept exactly incremental so that
@@ -289,7 +289,7 @@ class Stop(Exception): pass
 
 
 # lower <= s(pos) <= upper
-Entry = namedtuple("Entry", "l u")
+Entry = namedtuple("E", "l u")
 
 
 class Searcher:
