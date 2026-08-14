@@ -156,6 +156,9 @@ def run_diff(args):
                 e.cmd_ok("reset")
                 for kv in args.set:
                     e.cmd_ok("set " + kv.replace("=", " "))
+                if e is cc:
+                    for kv in args.cset:
+                        e.cmd_ok("set " + kv.replace("=", " "))
                 e.cmd_ok(poscmd)
             err, checked = movegen_phase(py, cc, name, args.walk)
             gencmp += checked
@@ -223,6 +226,14 @@ def main():
     ap.add_argument("--set", action="append", default=[], metavar="NAME=V",
                     help="tuning knob applied to BOTH engines (repeatable); "
                          "shared knobs only: QS QS_A EVAL_ROUGHNESS TABLE_SIZE")
+    ap.add_argument("--cset", action="append", default=[], metavar="NAME=V",
+                    help="knob applied to the C SIDE ONLY (repeatable). For "
+                         "PR-service knobs where the Python side IS the "
+                         "checked-out reference (its behavior is not a knob), "
+                         "e.g. QS_TAIL=1 against a pr171 worktree, plus any "
+                         "flavor knobs the PR base needs (IID_MIN_DEPTH, "
+                         "MATE_DIST). pyref stays strict: an unknown --set "
+                         "still fails loudly.")
     ap.add_argument("--verbose", "-v", action="store_true")
     args = ap.parse_args()
     if args.quick:

@@ -120,11 +120,15 @@ in C). Unknown or out-of-range knobs are hard errors on every input path.
 
 Game use: `position startpos moves …` / `position fen …`, then
 `go nodes N` (primary — clock-free surrogate games), `go depth D`,
-`go movetime T`. The `go nodes` loop mirrors the packed dev build: cap
-checked every 2048 nodes inside the search, candidates committed only
-when their depth completes.
+`go movetime T`. The `go nodes` consumer transcribes `sunfish_ui/uci.py`'s
+`go_loop`: the probe that crosses the cap always finishes and its yield
+counts, the cap is checked between probes at depth > 1, candidates commit
+when their depth completes, and bestmove has the structural floor (never
+"(none)" while a legal move exists). This matters: an earlier mid-probe
+abort made the twin play one depth staler than pypy at stop points — the
+calibration match caught it at -54 ± 43 and the run was voided.
 
-## Calibration plan (staged, not yet run)
+## Calibration plan (stage 1 PASSED 2026-08-14; stages 2-3 staged)
 
 Node-identity proves the twin searches classic's tree; it does not yet
 prove that *match results* from the twin transfer. Before any twin number
@@ -132,10 +136,12 @@ feeds a merge/decline decision (docs/TESTING.md rule 14), run, in order:
 
 1. **Sanity match:** ctwin vs `sunfish.py` under pypy3, both at the same
    fixed node budget, standard book, 200+ paired games. Expected ~50%
-   (they play identical moves at identical depths; residual noise comes
-   only from the node-cap landing mid-iteration at different wall times —
-   it must not, since the cap is counted in nodes, not seconds). Any
-   significant deviation is a harness bug, not a result.
+   (they play identical moves at identical depths). Any significant
+   deviation is a harness bug, not a result — and the first run proved
+   the point: it measured -54 ± 43 and caught the go_game mid-probe abort
+   (see Game use above); that run was voided, the driver fixed.
+   **Result (fixed driver): 300 games, 124W-125L-51D = 49.83%, Elo
+   -1.16 ± 12.23, 92.7% of pairs move-identical, 0 illegal moves.**
 2. **Known-Elo pair A (search flavor):** branch flavor vs master flavor
    (`IID_MIN_DEPTH 2`, `MATE_DIST 0`), both sides ctwin, fixed nodes.
    Must reproduce the sign and rough magnitude of the pypy-measured gap
@@ -153,9 +159,10 @@ wall-clock claim.
 - The clock-management branch of classic's `main()` (wtime/winc budgets)
   is *not* cloned — the twin is for clock-free games. `go` without
   limits runs to depth 999; always pass `nodes`, `depth` or `movetime`.
-- `go nodes` semantics match the packed dev build's node cap, which the
-  classic *reference* does not have; node-identity claims are made at
-  fixed depth, where both sides are exactly classic.
+- `go nodes` semantics transcribe `sunfish_ui/uci.py`'s go_loop (see Game
+  use above); node-identity claims are made at fixed depth, where both
+  sides are exactly classic. The twin-vs-pypy sanity match at fixed nodes
+  is the driver's regression test.
 - Repetition handling equals classic's: `history` = positions of the
   game line only, compared with score included; the known classic quirk
   that a K-table swap hides old history entries is reproduced, not fixed.
