@@ -8022,3 +8022,30 @@ instead of by construction.  The standing value is the harness + the two
 projected crossovers (dense payload at low sparsity; raw tail at ~1.1 kB
 incompressible payload), both of which the c1024 family will cross;
 re-run the zoo per export and let the table pick.
+
+## 2026-08-14 — The family objective, the subsumption rule, and probes
+
+Thomas (via coordinator): the nnue should LEARN endgames, king
+protection, midgame, pawn structure and mobility — "if we have to write
+custom code for all these different cases and weaknesses, we'll end up
+using too many bytes on code." TRAINQUEUE.md now carries the objective,
+the knowledge-class → capacity-axis mapping, and the c1024-phase +
+c1024-general arms (phase forms priced before training; the composed arm
+gated on its axes).
+
+**SUBSUMPTION RULE (standing):** every landed hand term (pend, +37 B,
+screened in today) carries an ablation obligation — when a phase-capable
+net reaches screening, the matrix includes net-vs-net+term, and a
+subsumed term is deleted with its bytes refunded. Hand terms are
+stopgaps, not accumulation.
+
+**Instrument: train/probes.py**, wired into train/export.py — nine
+material-identical contrasts (base cancels; output is pure net signal)
+across the objective's classes: passed-vs-opposed, split-vs-doubled,
+pawn-advance×phase, king-activity×phase, centralization penalty,
+shelter, knight rim, rook file, bishop-pair marker. Ledgered per export
+as .probes.json; compact line per epoch-best. DIAGNOSTICS, never gates
+(val does not gate; play does). Wiring smoke (1 epoch, 27k corpus) read
+exactly as a newborn net should: mobility arriving (+16), phase absent
+(+1/+0), passers wrong-signed (−5) — the scoreboard the phase arms will
+be read against.

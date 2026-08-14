@@ -5,54 +5,111 @@ moment a run finishes, the top entry starts (labeller-class on the box:
 nice 19, ≤8 workers/threads, forfeit tripwire on live matches). Gates,
 screens, and landings stay coordinator-dispatched and play-gated — this
 queue is about TRAINING only. Re-order freely as results land; never
-empty. Provenance pinned on every run (commit, seed, data sha in
-PROVENANCE.txt beside the run).
+empty. Provenance pinned on every run.
 
-Context (2026-08-14, updated ~11:1x UTC): **Thomas directive — payload
-target is now 1024 B** (was 617; a golf lane is opening the code side to
-keep total ≤4096, exact capacity confirmation pending). The ≥58%-zeros
-hard gate applied to the 617 budget; at 1024 the 3,072-trit ps768 payload
-fits at ANY sparsity, so sparsity becomes a capacity dial, not a fit
-gate. Coordinate: golf lane owns generator/machinery; the bake-off lane
-(nnue_4k/train/compress/) owns the encoder — when its table lands, the
-best encoder becomes the export default and arms re-size to the WEIGHT
-capacity it buys. v1 arms: l1=0.001 →
-val 0.01385 @59.6% zeros (winner, thin margin); l1=0.002 → 0.01404
-@73.7%. Sparsity is nearly free (~+0.0002 val per +14% zeros).
+## THE FAMILY OBJECTIVE (Thomas, 2026-08-14)
+
+"The goal is to have an nnue that's general enough that it can capture
+and learn all the things we need: end games, king protection, midgame,
+pawn structure, mobility, etc." — and NOT to write custom code per
+weakness: hand terms spend bytes on code that weights should learn.
+
+Knowledge-class → capacity-axis mapping (probes.py scores every export
+by these classes):
+
+| knowledge class | capacity axis | queue arm |
+|---|---|---|
+| endgames / phase | phase axis | c1024-phase |
+| king safety | king buckets + count nonlinearity | c1024-kb4, replnet_ml2 |
+| pawn structure, mobility | second-order capacity — a LINEAR net over ps768 cannot represent pairwise relations (passer-vs-blocker, shelter-vs-attacker, mobility) AT ALL; they need products | replnet_ml2, bilt, rff |
+| midgame | base + all axes | c1024-cal onward |
+
+Affordability thesis: generality at 1024 B comes from STRUCTURED SHARING
+(low-rank + trained-codebook parametrizations, in-loop — the extension
+lane is building them in train/structures.py) + RUNTIME PRODUCTS (ml2
+certified lanes) — never from enumerated feature crosses.
+
+**SUBSUMPTION RULE (standing):** every hand term that lands (pend passed
+its screen 2026-08-14, +37 B) carries a standing ablation obligation —
+when a phase-capable net candidate reaches screening, the screen matrix
+includes net-vs-net+term; a term the net subsumes is DELETED and its
+bytes refunded. Hand terms are stopgaps, not accumulation.
+
+## Context
+
+2026-08-14: payload target 1024 B (Thomas; golf lane opening the code
+side, exact capacity confirmation pending). Budget-617-era numbers: v1
+winner l1=0.001 val 0.01385 @59.6% zeros; v1c 0.01389 @65.2%. At 1024
+the 3,072-trit ps768 payload fits at any sparsity — sparsity is a
+capacity dial now. Encoder: compress/ bake-off winner becomes export
+default when its table lands; arms re-size to the weight capacity it
+buys. Probe suite (train/probes.py) runs at every export; scores are
+ledgered per net (.probes.json), diagnostics never gates.
 
 ## Queue
 
 1. **c1024-cal — capacity calibration at the new budget** (winner recipe,
-   N=4 ps768, sparsity pressure released: l1 ∈ {0, 0.0003}, τ 0.6; target
-   ~35-50% zeros ≈ 1.6-2.0k nonzeros through the same codec). Cheapest
-   capacity arm and the calibration point for everything below. PRICE the
-   payload through pack.sh at each sparsity as it trains.
-2. **c1024-kb4 — king buckets at 1024, PRICE-FIRST** (kb4 × 3,072 trits =
-   12,288 raw ≈ mid-2k B by the old rates — likely still over even at
-   1024; recheck the arithmetic with real exports, incl. the ternshared
-   route: shared ternary rows + small ternary per-bucket DELTAS, which
-   the 567e4ef fold makes buildable. Train only what prices.)
-3. **c1024-n8 — wider hidden N=8 at ps768** (~6.1k trits, two chars per
-   feature = 4+4 trits — a small decode change the GOLF LANE owns; agree
-   the codec seam before training. 8-9k-weight family target.)
-4. **replnet_kb8fold — in-flight** (chained after 8Mv; runs to completion
-   — its fold quality is direct evidence for c1024-kb4's pricing call).
-5. **replnet_tau — threshold sweep** (τ ∈ {0.6, 1.1} at the winner's l1)
-   — subsumed partly by c1024-cal's τ 0.6; keep for the high-τ side.
-6. **replnet_bilt — bilinear m=4 + odd tail, PRICE-FIRST, behind the
-   capacity family** (--nb 4 --bm 4 [--tailw 4]; ext machinery unpriced).
-7. **replnet_rff — rff64 at tiny width, VAL probe only** (--rff 64).
-8. **replnet_clamp — CLAMP/satpen interaction** (clampcp 400 vs 600).
-9. **replnet_ratecal — rate-aware retrain of the winner recipe**
-   (`train/queue/85_replnet_ratecal.yaml`; APPENDED BY THE COMPRESSION
-   LANE, re-order freely — natural slot is beside c1024-cal since both
-   turn the capacity dial). Swaps l1 for `loss.rate`: the differentiable
-   order-0 payload-BYTE estimator (constraints.rate_penalty), which
-   matched the zoo's rc_o0 coder 518.3 vs 519 B on v1. Two arms, rate ∈
-   {2e-6, 4e-6} (calibrated to v1's l1 pressure in the yaml). VAL PROBE;
-   export prices per-net through compress/bakeoff.py's measured winner.
+   N=4 ps768, sparsity released: l1 ∈ {0, 0.0003}, τ 0.6; ~35-50% zeros
+   ≈ 1.6-2.0k nonzeros). Cheapest capacity arm, calibration point for
+   everything below. PRICE per export (pack.sh + bake-off winner).
+2. **c1024-phase — phase capacity IN WEIGHTS** — the arm that can SUBSUME
+   the hand phase terms (K_END swap, khold2, pend-class knowledge): if
+   phase×feature products are representable, the net can learn "passers
+   grow with phase" and "king activity flips sign" on its own — the
+   probes' phase class is its scoreboard. Three candidate forms, pick by
+   CERTIFIED PRICE at the 1024 target before training the winner:
+   (a) tapered two-phase tables — every feature gets MID/END trits,
+       root-phase blend (K_MID/K_END generalized): ~2× table ≈ ~1.2 KB
+       at v1 sparsity — likely over; price via a real-shaped double
+       payload through the bake-off before dismissing;
+   (b) phase-bucketed features — 2-3 phase buckets × ps768 through the
+       ternshared shared+delta fold (buckets keyed on root piece count,
+       not king square); price the delta sparsity the fold buys;
+   (c) phase-as-input through the ml2 certified line — products learned
+       at runtime, no table doubling; likely the byte-efficient form;
+       coordinate with replnet_ml2 (its certificate prices the machinery).
+3. **c1024-kb4 — king buckets at 1024, PRICE-FIRST** (kb4 × 3,072 trits
+   ≈ mid-2k B at old rates — likely still over at 1024; the ternshared
+   route — shared rows + ternary per-bucket DELTAS — is the form to
+   price. kb8fold's fold quality feeds this call.)
+4. **replnet_ml2 — certified multi-layer, PRICE-FIRST** (packed_layers
+   line; certificate.json beside the run). Carries the second-order
+   burden for pawn structure/mobility AND is c1024-phase form (c)'s
+   machinery. Val probe + field-budget certificate before any packed
+   build.
+5. **c1024-n8 — wider hidden N=8 at ps768** (~6.1k trits, two chars per
+   feature — codec seam is the GOLF LANE's; agree it before training).
+6. **replnet_kb8fold — in-flight** (chained after 8Mv; fold quality =
+   evidence for #3).
+7. **replnet_ratecal — rate-aware retrain** (compression lane's yaml,
+   `train/queue/85_replnet_ratecal.yaml`; natural slot beside #1 — the
+   rate term is the capacity family's native loss once calibrated).
+8. **replnet_tau — threshold sweep** (τ ∈ {0.6, 1.1}; low side subsumed
+   by #1).
+9. **replnet_bilt — bilinear m=4 + odd tail, PRICE-FIRST, behind the
+   capacity family.**
+10. **replnet_rff — rff64 at tiny width, VAL probe only.**
+11. **replnet_clamp — CLAMP/satpen interaction** (400 vs 600, byte-free).
+12. **c1024-general — THE TERMINAL ARM: the composed net** (king buckets
+    × phase × second-order, through whichever sharing structures price
+    in). Explicitly GATED on the individual axes landing first: cal →
+    phase → kb4 → ml2/lowrank/codebook results all feed its form.
+    PRICE-FIRST, certified, probe-suite-scored per knowledge class at
+    export. This is where the subsumption rule points: when c1024-general
+    screens, the matrix includes it vs entry+hand-terms — the goal state
+    is the net winning that comparison INCLUDING its nps tax.
 
 ## Log (newest first)
+
+- 2026-08-14 ~11:3x UTC: Thomas objective + phase directive via
+  coordinator — header rewritten around THE FAMILY OBJECTIVE, c1024-phase
+  added (#2, three forms, price-first), replnet_ml2 given its explicit
+  entry (#4), c1024-general terminal arm added (#12), subsumption rule
+  recorded (pend's +37 B carries the first ablation obligation).
+  probes.py landed and wired into export.py: every export now ledgers
+  per-class knowledge scores (.probes.json). 1-epoch wiring smoke showed
+  exactly the expected signature: mobility arriving (+16 knight
+  centralization), phase absent (+1/+0), passers still wrong-signed (−5).
 
 - 2026-08-14 ~11:1x UTC: Thomas directive via coordinator — payload
   budget 1024 B. CAPACITY-1024 family added at the top (calibration arm
