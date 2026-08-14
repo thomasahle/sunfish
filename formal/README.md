@@ -82,29 +82,43 @@ It is confined to `depth < 8`; above that the fuel oracle removes it.
 
 ## The deep-null fuel oracle
 
-From depth 8 on the pass is not a score candidate at all. One probe at a
-*fixed* target decides only how much depth the real moves spend:
+From depth 8 on the pass is not a score candidate at all. Two fixed targets
+shape only how much depth the real moves spend:
 
 ```python
 d = depth
+safe = False
 if depth >= 8 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
-    target = pos.score + NULL_MARGIN
-    if -self.bound(pos.rotate(nullmove=True), 1 - target, depth - 5) >= target:
-        d = depth - 1
+    nullpos = pos.rotate(nullmove=True)
+    hot_target, safe_target = pos.score + NULL_MARGIN, pos.score - THREAT_MARGIN
+    d -= -self.bound(nullpos, 1 - hot_target, depth - 5) >= hot_target
+    safe = d < depth or -self.bound(nullpos, 1 - safe_target, depth - 5) >= safe_target
+
+move_depth = d - 1 - (safe and val < LMR)
 ```
 
-The target depends on `(pos, depth)` alone -- `gamma` does not enter -- so the
-window is position-determined, the probe is table-cacheable, and the resulting
-"hot" bit is stable because a fail-soft report is side-exact at any fixed
-window (`WindowReport.side_exact`, `hot_bit_determined`, `hot_bit_stable`).
-Nominal `depth` still keys the tables and the QS admission; only the recursion
-is shortened. So a deep null *cut* becomes a *reduction*: every real edge costs
-1 or 2 plies (`fuel_edge_cost`), never infinity.
+Both targets depend on `(pos, depth)` alone -- `gamma` does not enter. Table
+state may still change the numeric report. Stability therefore uses the normal
+TT invariant: every reused interval reports on the same null-child value.
+Given valid reports, side-exactness makes the hot and hot-or-safe classifications
+stable under different caller windows and table states (`hot_bit_stable`,
+`threat_safe_bit_stable`). Fixed targets alone would not repair an invalid or
+cross-semantics TT entry. The high target implies the low one, which justifies
+short-circuiting the second probe when hot (`hot_implies_safe`).
+
+Nominal `depth` still keys the tables and QS admission; intrinsic move value
+only selects the recursion depth. Every real edge spends one to three plies,
+exactly matching the two code subtractions (`intrinsic_child_depth`,
+`intrinsic_edge_cost`). Thus the killer can reorder a move but cannot change
+its edge cost, and no MTD window changes the declared tree.
 
 That is what buys the premise: a null cutoff gives every real move unbounded
 pruning debt, and discharging it is exactly what `NoZugzwang` was for. A
-bounded edge cost discharges it instead, so the classification theorem needs no
-chess premise:
+bounded edge cost discharges it instead. `EventuallyWide.lean` proves the
+node-uniform fuel theorem below; `IntrinsicLMR.lean` proves the new
+move-dependent classifier and edge bound. Generalizing the declared fold's
+selector from nodes to edges remains the mechanical global proof obligation
+before this candidate may merge:
 
 ```text
 eventual_classification_fuel :
@@ -750,6 +764,7 @@ at capturable nodes.
 | null child report negation | `WindowReport.negate` |
 | `min(pos.score + EVAL_ROUGHNESS, pass_report)` (depth < 8) | `cappedNull_report` |
 | `target = pos.score + NULL_MARGIN` fuel probe (depth >= 8) | `hot_bit_determined`, `hot_bit_stable`, `fuel_edge_cost` |
+| fixed lower threat target and intrinsic move reduction | `threat_safe_bit_stable`, `intrinsic_edge_cost` |
 | real-move recursion at the reduced `d - 1` | `fuelValueD2t`, `eventual_classification_fuel` |
 | score guard keeps the cap below positive mate | `guardedStaticCap_in_scoreBand`, `guardedCappedNull_below_positiveMate` |
 | shallow static move cap and lazy fail-low | `cappedMove_failLow`, `cappedMove_report` |
@@ -797,6 +812,8 @@ transform is the identity, so the model and source are extensionally equal.
   techniques.
 - `EventuallyWide.lean`: the fuel oracle -- bounded real-edge cost and the
   W/D/L trichotomy with no chess premise.
+- `IntrinsicLMR.lean`: fixed-target threat classification and the bounded,
+  move-dependent edge cost used by intrinsic LMR.
 - `Repetition.lean`: the game-history draw rule on top of the fuel value.
 - `EventuallyFinite.lean`: the finiteness variant -- the trichotomy for the
   untailed fuel value under `EndsWithin`, with an effective depth bound.
