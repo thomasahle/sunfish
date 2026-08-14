@@ -137,6 +137,7 @@ MATE_UPPER = piece["K"] + 10 * piece["Q"]
 
 # Constants for tuning search
 QS = 40
+QS_A = 140
 EVAL_ROUGHNESS = 15
 # Target margin of the deep-null fuel probe (depth >= 6): the pass must
 # beat pos.score + NULL_MARGIN for real moves to burn two plies. Its own
@@ -152,6 +153,7 @@ TABLE_SIZE = 10**6
 # minifier-hide start
 opt_ranges = dict(
     QS = (0, 300),
+    QS_A = (0, 300),
     EVAL_ROUGHNESS = (0, 50),
     NULL_MARGIN = (0, 200),
     TABLE_SIZE = (10**4, 10**8),
@@ -420,16 +422,17 @@ class Searcher:
                 self.bound(pos, gamma, depth - 3, root=True)
                 killer = self.tp_move.get(pos)
 
-            # QSearch keeps forcing moves only. At greater depth every move is
-            # admitted, but intrinsically bad moves consume an extra ply.
-            val_lower = QS if not depth else -MATE_UPPER
+            # We only generate moves with an intrinsic score above some treshold
+            # that decreases with depth. This is a generalization of Quiescent Search,
+            # See https://chessprogramming.org/Quiescence_Search for details.
+            val_lower = QS - depth * QS_A
 
             # Now finally play the killer move. But note that we have to respect
             # the QS lower bound, otherwise we would get search instability.
             # We will search it again in the main loop below, but the tp will
             # make this mostly free.
-            if killer and (val := pos.value(killer)) >= val_lower:
-                yield killer, -self.bound(pos.move(killer), 1 - gamma, d - 1 - (val < 0))
+            if killer and pos.value(killer) >= val_lower:
+                yield killer, -self.bound(pos.move(killer), 1 - gamma, d - 1)
 
             # Then all the other moves
             # Quiescent search: only moves above the val-limit are admitted -
@@ -440,7 +443,7 @@ class Searcher:
                 # If the new score is less than gamma, the opponent will for sure just
                 # stand pat, since ""pos.score + val < gamma === -(pos.score + val) >= 1-gamma""
                 # This is known as futility pruning.
-                if depth == 0 and pos.score + val < gamma:
+                if depth <= 1 and pos.score + val < gamma:
                     # Need special case for MATE, since it would normally be caught
                     # before standing pat. A sub-mate futility yield estimates
                     # the child's stand-pat without searching it, so it is
@@ -453,7 +456,7 @@ class Searcher:
                     # so it can't get any better than this.
                     break
 
-                yield move, -self.bound(pos.move(move), 1 - gamma, d - 1 - (val < 0))
+                yield move, -self.bound(pos.move(move), 1 - gamma, d - 1)
 
         # Run through the moves, shortcutting when score >= gamma.
         # live is True if we saw a legal (not null, score > -MATE_UPPER) move
