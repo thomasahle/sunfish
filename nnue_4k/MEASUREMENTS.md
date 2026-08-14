@@ -272,8 +272,10 @@ others. This entry is that verification. Both levers are now in `pack.sh`.
 | variant `cap` | make_variants | 3352 | 3308 (−44) | 3343 (−9) | **3300 (−52)** |
 | variant `nolmr` | make_variants | 3341 | 3300 (−41) | 3332 (−9) | **3294 (−47)** |
 | variant `khold2` | make_variants | 3365 | 3327 (−38) | 3357 (−8) | **3318 (−47)** |
+| replnet TRAINED v1 | `l1=0.001` spliced | 3594 | — | — | **3567 (−27)** |
+| replnet trained v1c | `v1c` spliced | 3543 | — | — | **3519 (−24)** |
 
-**The combined column is a win in all nine rows, and that is the only column
+**The combined column is a win in all eleven rows, and that is the only column
 that ships.** The shebang strip ALONE is **+4 on classic** — it lands the
 stream in a worse lzma neighbourhood — so the two levers are one indivisible
 change. Landing them one at a time, in the wrong order, would have shipped a

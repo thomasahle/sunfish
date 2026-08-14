@@ -10,7 +10,13 @@
 #
 # Checks BOTH, because they can disagree:
 #   1. source: regenerating must reproduce the committed file
-#   2. artifact: packing must reproduce the committed byte count and sha
+#   2. artifact: packing must stay under the 4096-byte ceiling
+#
+# Deliberately a CEILING, not a pinned size: the packed byte count moves with
+# the local pyminify and xz versions (2026-08-14: --no-hoist-literals plus the
+# payload shebang strip took the entry 3341 -> 3295), and a pin would turn a
+# toolchain bump into a red CI with nothing wrong. Sizes are tracked in
+# nnue_4k/MEASUREMENTS.md, where a number can carry the context a pin cannot.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
