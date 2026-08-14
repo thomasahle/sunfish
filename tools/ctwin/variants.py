@@ -45,9 +45,9 @@ import sunfish as S
 from sunfish import Entry, MATE_LOWER, MATE_UPPER, Searcher, Stop
 
 _PINNED = {
-    # post-#192 master: fuel-oracle null (classic null bounded 2<depth<6,
-    # fuel probe from depth 6 at pos.score + NULL_MARGIN, real moves at d-1)
-    "bound": "fa52e0701c8e3f1f405915ed0a8079bc21ebd65d66ebfb02c1ac74b993dfe528",
+    # Intrinsic-LMR candidate: forcing-only qsearch; every positive-depth
+    # move is admitted and negative-valued moves consume an extra ply.
+    "bound": "593997395e10a8ad99bb66176379fc3103af760a92f7e3558f93a33b60ef45a4",
     "search": "ffae8dfd56348310dd38a86126a2291b7111870b8bc66bced4b2d724ed1ee721",
 }
 for _name, _want in _PINNED.items():
@@ -215,18 +215,20 @@ class VariantSearcher(Searcher):
                 self.bound(pos, gamma, depth - 3, root=True)
                 killers = self.tp_move.get_all(pos)
 
-            val_lower = S.QS - depth * S.QS_A
+            val_lower = S.QS if not depth else -MATE_UPPER
 
             for killer in killers:
-                if pos.value(killer) >= val_lower:
-                    yield killer, -self.bound(pos.move(killer), 1 - gamma, d - 1)
+                if (val := pos.value(killer)) >= val_lower:
+                    yield killer, -self.bound(pos.move(killer), 1 - gamma, d - 1 - (val < 0))
 
-            for val, move in sorted(((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= val_lower), reverse=True):
-                if depth <= 1 and pos.score + val < gamma:
+            values = ((v, m) for m in pos.gen_moves()
+                if (v := pos.value(m)) >= val_lower)
+            for val, move in sorted(values, reverse=True):
+                if depth == 0 and pos.score + val < gamma:
                     yield (move, MATE_UPPER) if val >= MATE_LOWER else (None, pos.score + val)
                     break
 
-                yield move, -self.bound(pos.move(move), 1 - gamma, d - 1)
+                yield move, -self.bound(pos.move(move), 1 - gamma, d - 1 - (val < 0))
 
         best, live = -MATE_UPPER, False
         for move, score in moves():

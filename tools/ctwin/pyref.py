@@ -125,7 +125,7 @@ def main():
 
         elif cmd == "set":
             # Shared tuning knobs; the C-only knobs have no Python side.
-            if args[1] in ("QS", "QS_A", "EVAL_ROUGHNESS", "TABLE_SIZE", "NULL_MARGIN"):
+            if args[1] in ("QS", "EVAL_ROUGHNESS", "TABLE_SIZE", "NULL_MARGIN"):
                 setattr(sunfish, args[1], int(args[2]))
                 # TABLE_SIZE sizes the policy-3 slot table at construction:
                 # rebuild so the last set wins (fresh, like the C twin's

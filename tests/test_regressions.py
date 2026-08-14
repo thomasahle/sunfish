@@ -212,6 +212,62 @@ class TestFuelOracle:
             )
 
 
+class TestIntrinsicLMR:
+    """Positive depth admits every move and prices weak moves in fuel.
+
+    The reduction is intrinsic to the move, so a cached killer must receive
+    the same child depth as the same move in the sorted stream.  This keeps
+    the searched value independent of mutable move ordering.
+    """
+
+    CHILD = "rnbq2nr/2p1bppp/p2p4/1p2p3/2P3k1/PP3P1N/3PP2P/RNQ1KB1R b KQ - 0 10"
+    PARENT = "rnbq2nr/2p1bppp/p2p4/1p2p3/2P3k1/PP5N/3PPP1P/RNQ1KB1R w KQ - 0 10"
+
+    def test_negative_move_cost_is_order_independent(self):
+        pos = sf.Position(sf.initial, 0, (True, True), (True, True), 0, 0)
+        moves = list(pos.gen_moves())
+        values = {move: pos.value(move) for move in moves}
+        killer = next(move for move in moves if values[move] < 0)
+
+        searcher = sf.Searcher()
+        searcher.root = pos
+        searcher.history = set()
+        searcher.tp_move[pos] = killer
+        children = {pos.move(move): move for move in moves}
+        seen = []
+        bound = searcher.bound
+
+        def observed(child, gamma, depth, root=False):
+            if child in children:
+                move = children[child]
+                seen.append((move, depth))
+                return 0
+            return bound(child, gamma, depth, root)
+
+        searcher.bound = observed
+        bound(pos, sf.MATE_UPPER, 3, root=True)
+
+        assert seen[0] == (killer, 1)
+        assert set(move for move, _ in seen) == set(moves)
+        assert all(depth == 2 - (values[move] < 0) for move, depth in seen)
+
+    def test_subthreshold_check_evasions_cannot_fake_mate(self):
+        child = hist_from_fen(self.CHILD)[-1]
+        legal = [move for move in child.gen_moves() if not child.move(move).king_capture()]
+        assert sorted(child.value(move) for move in legal) == [-105, -105, -102]
+
+        searcher = sf.Searcher()
+        searcher.root = child
+        searcher.history = set()
+        assert searcher.bound(child, 1 - sf.MATE_LOWER, 1, root=True) > -sf.MATE_LOWER
+
+        parent = hist_from_fen(self.PARENT)[-1]
+        searcher = sf.Searcher()
+        searcher.root = parent
+        searcher.history = set()
+        assert searcher.bound(parent, sf.MATE_LOWER, 2, root=True) < sf.MATE_LOWER
+
+
 class TestNullSentinelMasking:
     """Audit finding A1: in pawn endings the null-move gate
     (abs(score) < 500) admits a "pass" that yields a normal material
