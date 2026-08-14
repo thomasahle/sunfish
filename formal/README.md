@@ -76,6 +76,32 @@ It concerns the quality of the null approximation, not the fail-soft report
 transport. The non-pawn-piece guard excludes pawn-only zugzwangs; the score
 guard and cap make null pruning more conservative in unbalanced positions.
 
+## Pawn-protected move debt
+
+At non-root depths above three, a quiet `B`, `R`, or `Q` move into a square
+protected by an enemy pawn may consume two depth units instead of one. The
+eligible piece suffix shrinks with depth:
+
+```text
+depth 4-5: B, R, Q
+depth 6-7:    R, Q
+depth 8-9:       Q
+depth 10+:       none
+```
+
+The Python expression `"PNBRQ"[depth // 2:]` encodes this table. Eligibility
+depends only on root status, nominal depth, the immutable board, and the move;
+it cannot inspect `gamma`, table contents, killer status, or iteration order.
+The killer path and ordinary sorted path apply the same policy.
+
+`IntrinsicReduction.lean` proves that any such fixed one-or-two-unit edge
+cost defines one gamma-independent recurrence satisfying the fail-soft bound
+contract. `PawnDebt.lean` instantiates the policy with piece ranks and proves
+`pawnDebtReduce_off`: the reduction is identically disabled from depth 10, so
+the full-depth real-move recurrence is restored exactly above a finite
+horizon. This proves search consistency and eventual widening; game matches
+separately measure whether the selective value is a stronger approximation.
+
 ## Mate distance
 
 Checkmate is not one number.  The terminal correction assigns
@@ -245,8 +271,9 @@ at capturable nodes.
 | recursive zero-window move search | `Bound.bound_spec` |
 | null child report negation | `WindowReport.negate` |
 | `min(pos.score + EVAL_ROUGHNESS, pass_report)` | `cappedNull_report` |
-| score guard keeps the cap below positive mate | `guardedStaticCap_in_scoreBand`, `guardedCappedNull_below_positiveMate` |
+| null cap stays below positive mate | `guardedStaticCap_in_scoreBand`, `guardedCappedNull_below_positiveMate` |
 | full-width move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
+| pawn-protected fixed edge debt | `boundPawnDebt_spec`, `pawnDebtReduce_off` |
 | sticky legality evidence and terminal override | terminal/finalizer results in `Stalemate.lean` |
 | king-capture evaluation margins and ordering | `EvalBounds.lean` |
 | `mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)` | `terminalValue`, `terminalValue_exact` |
@@ -268,6 +295,8 @@ transform is the identity, so the model and source are extensionally equal.
 - `GameTree.lean`: chess-free negamax game model.
 - `Bound.lean`: core fail-soft search proof.
 - `CappedNull.lean`: capped-null report transport and score-band facts.
+- `IntrinsicReduction.lean`: fixed edge-cost recurrence and fail-soft proof.
+- `PawnDebt.lean`: pawn-protected policy and finite-horizon theorem.
 - `Stalemate.lean`: selective-search fold, legality, and terminal finalizer.
 - `EvalBounds.lean`: numeric bounds induced by the piece-square tables.
 - `Killer.lean`: move-table legality and lifecycle.

@@ -367,6 +367,8 @@ class Searcher:
             # We read this "killer move" before null-move in case it would get
             # evicted from the table or replaced with something else worse.
             killer = self.tp_move.get(pos)
+            # Risky quiet moves into an enemy pawn's protection cost an extra ply.
+            risky = "PNBRQ"[depth // 2:] if not root and depth > 3 else ""
 
             # First try not moving at all, i.e. the null move.
             # See https://chessprogramming.org/Null_Move for details.
@@ -411,7 +413,12 @@ class Searcher:
             # We will search it again in the main loop below, but the tp will
             # make this mostly free.
             if killer and pos.value(killer) >= val_lower:
-                yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)
+                reduction = (pos.board[killer.j] == "."
+                    and pos.board[killer.i] in risky
+                    and (pos.board[killer.j + N + W] == "p"
+                        or pos.board[killer.j + N + E] == "p"))
+                yield killer, -self.bound(pos.move(killer), 1 - gamma,
+                    depth - 1 - reduction)
 
             # Then all the other moves
             # Quiescent search: only moves above the val-limit are admitted -
@@ -435,7 +442,10 @@ class Searcher:
                     # so it can't get any better than this.
                     break
 
-                yield move, -self.bound(pos.move(move), 1 - gamma, depth - 1)
+                reduction = (pos.board[move.j] == "." and pos.board[move.i] in risky
+                    and (pos.board[move.j + N + W] == "p"
+                        or pos.board[move.j + N + E] == "p"))
+                yield move, -self.bound(pos.move(move), 1 - gamma, depth - 1 - reduction)
 
         # Run through the moves, shortcutting when score >= gamma.
         # live is True if we saw a legal (not null, score > -MATE_UPPER) move

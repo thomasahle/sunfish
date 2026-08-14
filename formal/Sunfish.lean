@@ -10,3 +10,5 @@ import Sunfish.EvalBounds
 import Sunfish.Driver
 import Sunfish.CappedNull
 import Sunfish.Pruning
+import Sunfish.IntrinsicReduction
+import Sunfish.PawnDebt
