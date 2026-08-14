@@ -37,12 +37,20 @@ p.add_argument("--N", type=int, default=4)
 p.add_argument("--seed", type=int, default=20260814)
 p.add_argument("--zeros", type=float, default=0.55)
 p.add_argument("--feats", type=int, default=768)
+p.add_argument("--u2", type=int, default=0,
+               help="ml2 second-layer read-out: emit this many signed u2 "
+                    "values (|u| <= 127) as offset-4050 base-90 digit PAIRS "
+                    "between the biases and the feature chars (certify_ml2 "
+                    "layout; 0 = single-layer replnet payload, unchanged)")
 args = p.parse_args()
 
 rng = random.Random(args.seed)
 digits = [6]                                          # shift
 digits += [rng.randint(20, 60) for _ in range(args.N)]    # gains C_k
 digits += [rng.randint(0, 87) for _ in range(args.N)]     # biases b_k + 44
+for _ in range(args.u2):                                  # ml2 u2, LSB pair first
+    d = rng.randint(-127, 127) + 4050
+    digits += [d % 90, d // 90]
 trits = [0 if rng.random() < args.zeros else rng.choice((-1, 1))
          for _ in range(args.feats * args.N)]
 for i in range(0, len(trits), 4):

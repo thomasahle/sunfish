@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **ML2 SECOND LAYER PRICED (coordinator task, the 0.01286 phase-net's machinery): +98 B code isolated (3315 vs the round-2 3217 floor), BIT-EXACT against packed_layers' int bridge, and the extra big-int multiply costs ~+11% time/node same-tree** | At the 1024-B payload budget ml2 builds to **4339-4343 = ~245 OVER**; what FITS with ml2 code is a **781 B payload (feats 990 = total 4096 exactly; ~750 at the 30-B margin)**; u2 payload seam = 4 offset-4050 digit pairs (+8 digits, ~6 B); derivation landed as packed/make_ml2_proto.py + ml2_check.py (self-deriving, self-checking); nps tax ≈ 0.90× ≈ −15 Elo timed at 100/doubling — the number the −0.0009 val win must beat |
 | 2026-08-15 | **CORRECTION + RANKING VERDICT: `min40_4` takes the classic-builtin venue (+147 [+86,+219] vs the incumbent at 60+0, AS A FLOOR) — and the "no park" claim in my own pre-registration is WRONG** | A park is **not** caused by a cap: at any increment TC the clock must rest where `spend + overhead == income`, so every manager parks, both candidates included. My reading was an artifact of charging O = 200 ms against a 100 ms increment; at the surrogate's 50 ms charge the rest point exists (`e2306d3`). Struck from tests and comments, surviving only at `winc == 0` where income is zero. The shape decides the **altitude**: one-max 6.17 s, incumbent 2.11 s (blind), **min40-4 0.22 s — the LOWEST of the three, below even the incumbent**, the thinnest flag margin in the field, and the reason its second arm is a flag hammer. It is still better than the incumbent because it reaches the floor on a POSITIVE budget where the incumbent's cap has gone negative. Ranking: `onemax` vs `min40_4` is −89 [−170,−16] at 60+0.1, ~0 at 30+1, +23 at 60+1 — min40-4 wins on Elo where they differ AND on the pre-fixed elegance tiebreak. **+147 is a FLOOR, not an estimate**: 594 of `legacy12`'s moves hit the structural-floor path where the surrogate substitutes a BETTER move than the real engine plays; the zero-substitution packed analogue read +228. **Against this lane:** the full `pool` beats min40-4 at every increment TC by +114 to +134 — min40-4 wins the ONE-LINE venue, not the field. Packed **3276 B (−2)**, source −7 B/−2 tokens. PR #196; one-max stays open as runner-up. Two arms STAGED in `tools/arena/`, GO-guarded, **neither launched** |
 | 2026-08-14 | **Two defects in the CLASSIC pool twin, fixed before any PR: the arm label and the opening ramp** | Found by the surrogate lane reading `tm-pool-manager` as a formula source; **arm (a)'s verdict and arm (b) in flight are unaffected — they play packed mods**. (1) `TM_MANAGER="smooth"` actually selected master's `/12`, not #188's rational — renamed to `legacy`, alias refused, and a test goes red when the smooth curve lands so the rename happens in that merge. (2) The opening ramp capped the POOL budget for 8 plies while the measured packed arm has no ramp — the classic pool was an unmeasured variant wearing a measured number's name. Ramp is now the incumbent's only; ply-0 60+1 through the driver: legacy 1.02 s vs pool 3.82 s. Recorded cost: `random()` was the only opening variety without a book, so a deployed pool must get variety from a book, never from a budget cut |
 | 2026-08-14 | **PRE-REGISTERED: the CLASSIC builtin clock drops its cap — two one-line candidates, `max((wtime−8000)/40+winc, 50)` and `min(wtime/40+0.9·winc, wtime/4)`, ranked on the surrogate BEFORE one staged 60+0 real-clock non-inferiority arm (elo0=−10 elo1=0, cap 400)** | Scope is the **packed classic artifact only** (`sunfish.py`'s embedded loop; a checkout reaches `sunfish_ui/uci.py` instead, so neither bot rides it) — byte figures are NOT comparable with the pool ladder's. The incumbent `min(wtime/12+0.9·winc, wtime/2−1000)` carries the park this file measured twice: `T* = 2+2I`, and under a 2 s clock the cap is NEGATIVE so the budget collapses to the 0.05 s floor. Both candidates are distillations of this lane's own pool — `P/M` with the reserve rounded to 8 s, or `P/M` under the pool's `A/4` clip. **Their no-park proofs differ**: one-max reaches the floor holding **10 s (40 moves)** against the incumbent's 2.1 s (8 moves); min40-4 banks nothing but its clip can never bind at `winc == 0`, making the policy exactly `t/40` with no fixed point, and it is **homogeneous of degree 1** so the ms/s trap is unrepresentable. Both net-negative in source (−11/−7 bytes, −2 tokens) and packed 3282 B / **3276 B** vs base 3278 B, so **elegance cannot break the tie**. Measured spend already separates them from base: 300+0 is **23.73 s → 7.38/7.57 s**. **Honest note in advance: a 60+0 pass does not license shipping** — `/40` wins sudden death (+235.5 ± 65.4) but loses increment (+91.1 ± 50.7 at 60+1, +45.9 ± 46.8 at 30+1 for `/12`), and these candidates collapse #188's slide back to a constant, so an increment ranking is required too. Tiebreak fixed in advance: within noise, min40-4 ships on unit-independence. **Request to the surrogate lane: add one-max and the classic base to min40-4's plugin set.** Nothing launched, no PR open |
@@ -252,6 +253,85 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-15 — ML2 MACHINERY PRICED: +98 B code, ~+11%/node — the phase-net's engine seam, measured
+
+Coordinator task: c1024_phase_ml2 posted the campaign's best val (0.01286,
+probes confirming phase x feature knowledge in weights) and the blocker was
+the unmeasured packed price of its SECOND LAYER — one extra big-int
+multiply per node. Built through the generator in the certified form
+(field_budget.certify_ml2: F2=32, m=4, umax=127, shift2=10;
+packed_layers.LaneConv circular is the training twin), priced through
+pack.sh, verified bit-exact, and speed-measured. Form (c) means NO phase
+machinery in the engine — phase lives in the weights; the engine seam is
+exactly ml2.
+
+**The engine form** (landed as a mechanical derivation,
+`nnue_4k/packed/make_ml2_proto.py`, every hunk asserting — no fork to
+rot): after the shipped F=16 crelu head, per perspective block: re-space
+the 4 capped lanes to 32-bit fields (two shift+mask steps), ONE squaring
+folded mod 2^128-1 (= the circular self-convolution), signed per-field u2
+read-out by mask+shift (the certificate's group-hsum precondition FAILS at
+2^32-2, so hsum is illegal), >> 10, added to the L1 cp before the clip.
+Both renorms trunc-toward-zero (`int(x / 2^s)`), so antisymmetry is exact
+by construction. **Payload seam:** +4 u2 values as offset-4050 base-90
+digit PAIRS between the biases and the feature chars (+8 digits ≈ 6 B
+in-context; `make_proto_payload.py --u2 4` emits it).
+
+**Bytes (pack.sh, all measured on the round-2 golfed base):**
+
+| build | B | note |
+|---|---|---|
+| ml2 code-only (payload elided) | **3315** | vs single-layer floor 3217 → **second layer = +98 B isolated** |
+| ml2 @ ps768 + u2 (786 raw) | 3936 | the real phase-net shape at v1 sparsity |
+| ml2 @ 1024-B-cost payload | **4343** | (feats 1330 + u2, cost 1028) → **~245 OVER 4096** |
+| ml2 @ feats 990 + u2 | **4096 exactly** | **the payload ml2 CAN carry: 781 B in-context** |
+| ml2 @ feats 945 + u2 | 4068 | ≈ the 30-B-margin point: ~750 B |
+
+Correction to the tasking premise: round 2 landed **878 B** of payload
+capacity (849 at margin), not 909 — 909≈910 is reachable only if the
+coordinator lands the pack.sh intel (`--no-hoist-literals` −24, shebang
+strip −8), which this lane measured but does not own. With that landed,
+ml2's numbers shift by the same ~32: capacity ~813, overage ~213.
+
+**Fit verdict at the 1024 budget: DOES NOT FIT — 4339-4343 measured, ~245
+over.** The second multiply eats 98 B of code + ~6 B of payload seam: the
+single-layer gap (142) plus ~103. What fits with ml2 machinery TODAY is a
+**781 B payload**. The MEASURED random-shaped phase-net build (ps768 + u2
+at v1 sparsity) is 3936 — 160 under 4096 — and every trained payload this
+ledger has priced compressed well below its random stand-in (v1: 612
+random → 382 trained on the same 777 chars). So the 0.01286 candidate's
+own shape is EXPECTED to fit with margin once its ternary export exists —
+an expectation to be measured through export.py, never banked; only the
+1024-BUDGET framing is over.
+
+**Bit-exactness (packed/ml2_check.py, landed, self-deriving):** independent
+payload decode == engine globals (u2, shift); engine nn_cp ==
+packed_layers.bigint_circular_conv int-bridge reference (the certified
+twin, called verbatim) on 60 fens x both pf + rotations + a 40-ply walk
+with incremental-identity and antisymmetry asserts; L2 fired on 99/100
+probes. Packed smoke: legal bestmove over UCI after moves.
+
+**Speed — the number the ml2 line rides on.** Same-tree isolation (u2=0
+payload: identical eval → identical 19,708-node trees, layer-2 arithmetic
+still executed): L1 13.66/14.33/14.41 vs ML2 15.29/15.87/16.48 us/node,
+interleaved, nice -15 laptop → **+7-15% time per node, central ~+11%
+(nps ratio ≈ 0.90)**. At ~100 Elo/doubling that is **≈ −15 Elo timed**, on
+top of the replnet family's existing speed tax vs the entry (0.66 was the
+stale box reading; re-measure at dispatch per the 8Mv screen rule). Mixed-
+tree probes (random u2) read +1-5% — flattered by tree shape; the same-tree
+number is the honest one. Box pypy may differ; re-measure there before any
+timed screen. Optimization headroom exists (fold-free 7-field read-out,
+L1-native-32-bit layout skipping the spread) but is UNPRICED and changes
+the certified form — price before believing.
+
+**For the byte-budget conversation the coordinator flagged:** the phase win
+(−0.0009 val, the campaign's largest, subsumption-class probe gains) costs
++98 B code + ~11% nps against the alternatives' prices in this ledger
+(khold2 +27 B / pend +42 B / kact +1 B hand-terms at zero hot-loop cost —
+but those are the terms ml2 would SUBSUME). If the family screens positive,
+the code side needs 142+103 ≈ 245 B found (or the payload budget re-set to
+~781/750) before a 1024-B-payload ml2 ships.
 
 ## 2026-08-15 — CORRECTION + RANKING VERDICT: min40-4 takes the classic-builtin venue, and the "no park" claim in my own pre-registration below is WRONG
 
