@@ -29,12 +29,20 @@ UNBOUNDED_MAX_SECONDS = 600
 # ---------------------------------------------------------------- TIME ----
 # TWO TIME MANAGERS, chosen by the TM_MANAGER environment variable:
 #
-#   smooth (default)  the incumbent curve -- ONE number that is both the
-#                     target and the wall. Whatever expression run() computes
-#                     below is that manager; this block does not touch it.
+#   legacy (default)  the incumbent single number -- both the target and the
+#                     wall -- exactly as run() computes it below, untouched.
 #   pool              a whole-game resource POOL, divided into a SOFT limit
 #                     (stop starting new iterations) and a HARD one (the
 #                     in-search deadline). Thomas's design; see the PR.
+#
+# THE ARM NAME MUST MATCH THE CODE, which is why the incumbent is called
+# "legacy" and not "smooth". On this branch the expression it selects is
+# master's `min(wtime/12 + 0.9*winc, wtime/2 - 1)` -- the pre-#188 form, whose
+# cap goes negative under a 2s clock. #188 replaces that one expression with
+# the smooth rational; when it lands, THIS VALUE SHOULD BE RENAMED TO "smooth"
+# in the same merge, because at that point the label would be true and only
+# then. A control arm whose name misdescribes what it plays is how a screen
+# measures one thing and reports another (the steptm sha-identity discipline).
 #
 #   P = max(0, T + (M-1)*I - (M+2)*O)     the pool this game still has
 #   A = max(0, T - 2*O)                   what THIS move can safely reach
@@ -66,9 +74,12 @@ UNBOUNDED_MAX_SECONDS = 600
 # A negative wall is exactly how lichess.org/EAThUL0P was lost: under a 2s
 # clock the old `wtime/2 - 1` cap went negative, the budget collapsed to a
 # blind floor, and the engine played ~16 more moves at no search.
-TM_MANAGER = os.environ.get("TM_MANAGER", "smooth")
-if TM_MANAGER not in ("smooth", "pool"):
-    raise SystemExit(f"TM_MANAGER={TM_MANAGER!r}: expected 'smooth' or 'pool'")
+TM_MANAGER = os.environ.get("TM_MANAGER", "legacy")
+if TM_MANAGER not in ("legacy", "pool"):
+    # "smooth" is deliberately NOT accepted as an alias: a match script that
+    # asks for an arm this branch does not have must fail at startup, not play
+    # a different one quietly.
+    raise SystemExit(f"TM_MANAGER={TM_MANAGER!r}: expected 'legacy' or 'pool'")
 
 # O, SECONDS. 200ms is MEASURED, not chosen: the lichess autopsy of the lost
 # 3+0 game puts ~200ms/move between our bestmove and the clock actually
@@ -716,10 +727,29 @@ def run(sunfish_module, startpos):
                         # ramp starved whole games at long TCs; see #95).
                         # The random() varies the depth reached, giving our
                         # deterministic engine some opening variety.
-                        if len(hist) < 8:
+                        #
+                        # THE RAMP BELONGS TO THE INCUMBENT MANAGER ONLY, and
+                        # that is a measurement rule before it is a design
+                        # one. The pool arm that measured +119.94 +/- 36.44 at
+                        # 60+0 is the packed entry, which has no ramp at all;
+                        # a classic pool that ramped would differ from the
+                        # measured pool for the first 8 plies and would be an
+                        # unmeasured variant wearing a measured number's name.
+                        # The pool also does not need it: P/M already paces
+                        # the opening, and the +2 in (M+2)*O already holds
+                        # back what the ramp was banking.
+                        #
+                        # WHAT IS GIVEN UP, stated because it is real: the
+                        # random() is this engine's only source of opening
+                        # variety when it plays without a book, so a pool arm
+                        # deployed to lichess would repeat openings. Every
+                        # measurement we run is booked (book3k.pgn), so the
+                        # matches are unaffected -- but if the pool ever
+                        # becomes the bot's default, variety has to come back
+                        # as a book, NOT as a budget cut, or the deployed
+                        # engine stops being the measured one again.
+                        if soft_think is None and len(hist) < 8:
                             think = min(think, len(hist) + random())
-                            if soft_think is not None:
-                                soft_think = min(soft_think, think)
 
                     if "depth" in opts:
                         max_depth = opts["depth"]

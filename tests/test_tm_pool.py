@@ -46,10 +46,11 @@ O = uci.MOVE_OVERHEAD            # the measured per-move overhead, SECONDS
 FLOOR = uci.TM_FLOOR             # smallest positive budget, SECONDS
 
 # ---- the arms, as literals ------------------------------------------------
-# The INCUMBENT curve, i.e. the control arm of every match below. Pinned as a
-# literal so this file fails loudly if the pool knob ever changes it, and so
-# that a change to the incumbent (PR #188 replaces this exact line with the
-# smooth two-line form) is a red test rather than a stale comparison.
+# THE INCUMBENT curve on this branch -- what TM_MANAGER=legacy actually plays,
+# which is why the knob value is "legacy" and not "smooth". Pinned as a literal
+# so the pool knob cannot change it silently, and so that #188 replacing this
+# exact line with the smooth two-line form is a red test (and the moment to
+# rename the arm) rather than a stale comparison.
 INCUMBENT_LINE = "think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1)"
 # PR #188's smooth curve, which the PACKED entry already ships and which the
 # packed pool arm is measured against. Kept here because the classic driver
@@ -110,8 +111,27 @@ def test_the_control_arm_is_untouched():
 
 
 def test_the_manager_knob_defaults_to_the_incumbent():
-    assert uci.TM_MANAGER in ("smooth", "pool")
-    assert 'os.environ.get("TM_MANAGER", "smooth")' in SRC, "the default arm moved"
+    assert uci.TM_MANAGER in ("legacy", "pool")
+    assert 'os.environ.get("TM_MANAGER", "legacy")' in SRC, "the default arm moved"
+
+
+def test_the_arm_name_matches_the_code_it_selects():
+    """The label bug this test exists to prevent: the incumbent arm on this
+    branch is master's /12, NOT #188's smooth rational, so it is called
+    "legacy". If someone wires the smooth curve in here, INCUMBENT_LINE above
+    goes red first and this test says what to do about the name."""
+    assert INCUMBENT_LINE in SRC, "the incumbent expression changed -- rename the arm"
+    assert SMOOTH_LINE not in SRC, "the smooth curve landed: rename 'legacy' -> 'smooth'"
+
+
+def test_smooth_is_not_accepted_as_an_alias():
+    """A match script asking for an arm this branch does not have must fail at
+    startup rather than quietly play a different one."""
+    import subprocess
+    env = {**__import__("os").environ, "TM_MANAGER": "smooth"}
+    p = subprocess.run([sys.executable, "-c", "import sunfish_ui.uci"],
+                       cwd=str(ROOT), env=env, capture_output=True, text=True)
+    assert p.returncode != 0 and "smooth" in p.stderr
 
 
 def test_an_unknown_manager_fails_loudly():
@@ -123,6 +143,17 @@ def test_an_unknown_manager_fails_loudly():
                        cwd=str(ROOT), env=env, capture_output=True, text=True)
     assert p.returncode != 0, "an unknown TM_MANAGER was accepted"
     assert "poool" in p.stderr
+
+
+def test_the_opening_ramp_is_the_incumbents_and_not_the_pools():
+    """DEFECT FIXED HERE: the ramp (`min(think, len(hist) + random())`) capped
+    the pool budget for the first 8 plies, but the packed arm that measured
+    +119.94 +/- 36.44 at 60+0 has NO ramp -- so a ramped classic pool would be
+    an unmeasured variant wearing a measured number's name. The ramp is now
+    inside the single-budget path, pinned here as source text because the
+    branch condition IS the fix."""
+    assert "if soft_think is None and len(hist) < 8:" in SRC, "the ramp gate moved"
+    assert SRC.count("len(hist) + random()") == 1, "a second ramp appeared"
 
 
 # ---- (1) the formula, walked ----------------------------------------------
