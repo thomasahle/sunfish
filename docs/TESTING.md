@@ -82,6 +82,12 @@ fastchess \
    final confirmation of a winner stays at 60+1. A handful of time losses
    over hundreds of games is normal; dozens mean the TC is too fast.
 
+   For search-only changes, the node-identical C twin may use `3+0.1` as the
+   calibrated surrogate for Python `30+1`: it applies the same clock formula
+   while reaching comparable depths about ten times faster. This does not
+   validate time-management or Python-throughput changes; those still require
+   the real Python interface at the controls above.
+
 7. **Adjudicate finished games** (`-draw`/`-resign` flags above) — sunfish has
    no resign logic and weak endgames, so unadjudicated games drag on and waste
    most of the wall time on decided positions.
@@ -197,14 +203,15 @@ fastchess \
    are screening signals, subject to rule 12 like every fixed-effort
    number.
 
-15. **Long/realistic time controls are expensive; spend them on exactly two
+15. **Long Python time controls are expensive; spend them on exactly two
    things.** Timed games at 300+0 or 30+1-at-scale are reserved for (1)
    validating **time-management changes** — nothing substitutes for a real
    clock, and note that a faster engine does *not* make timed games
    cheaper (the game still burns the same wall clock), which is why the C
    twin excludes TM by design — and (2) periodic **league-placement
    measurement**. Everything else — search shape, eval terms,
-   hyperparameters — runs fixed-node or on the C twin (see below).
+   hyperparameters — runs fixed-node or at the calibrated C `3+0.1` surrogate
+   (see below).
    For TM validation itself, order the spend by stress per game-minute:
    sudden-death drain is an *absolute-clock* pathology, so short sudden
    death (60+0, or a 1+0 hammer) stresses the mechanism harder per minute
@@ -231,14 +238,14 @@ replacement-policy battery), and PST-shaped eval variants injected via
 the pypy equivalent, so grids that were unaffordable become overnight
 jobs.
 
-**Do not use it for:** *timed* questions — time management, think-time
-curves, anything with a clock. The clock-budgeting branch of classic's
-`main()` is deliberately not cloned; the twin plays clock-free surrogate
-games (`go nodes N`). Nor for NNUE-eval questions: it clones classic's
-search over table-file evaluations, so anything the 4k NNUE work changes
-outside PST-shaped eval is invisible to it. Rule 12 also applies with full
-force: fixed-node results hold search effort constant, so they screen;
-only a wall-clock match on the real engine decides.
+**Do not use it for:** time-management or Python-throughput questions. The
+twin accepts standard UCI clocks and mirrors classic's budget so `3+0.1` can
+serve as the calibrated timed surrogate for search-only changes, but it cannot
+test changes to the Python interface or interpreter cost. Nor use it for
+NNUE-eval questions: it clones classic's search over table-file evaluations,
+so anything the 4k NNUE work changes outside PST-shaped eval is invisible.
+Rule 12 still applies to fixed-node results; the timed C confirmation is what
+adds the speed-versus-quality tradeoff.
 
 **Before believing twin match numbers**, the calibration plan staged in
 [`tools/ctwin/README.md`](../tools/ctwin/README.md) (section "Calibration
