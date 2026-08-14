@@ -66,7 +66,6 @@ stream IS the trit stream the shipped entry already consumes.
 import torch
 import torch.nn as nn
 
-import constraints
 from constraints import WSCALE
 
 
