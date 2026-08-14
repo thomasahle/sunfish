@@ -81,6 +81,9 @@ behavior is reachable by knob: `set IID_MIN_DEPTH 2`, `set MATE_DIST 0`.
 make            # build + regenerate tables
 make test       # quick identity probe (~seconds)
 make test-full  # wide sweep, depth 6
+make gate       # the FULL fidelity gate: wide sweep + walk, depth 7,
+                # knob sweeps, eviction sweeps.  Required after ANY
+                # change to sunfish.c or sunfish.py (TESTING.md rule 13).
 make bench      # C-vs-PyPy wall-time ratio at identical nodes
 ```
 
@@ -94,6 +97,30 @@ Game use: `position startpos moves …` / `position fen …`, then
 `go movetime T`. The `go nodes` loop mirrors the packed dev build: cap
 checked every 2048 nodes inside the search, candidates committed only
 when their depth completes.
+
+## Calibration plan (staged, not yet run)
+
+Node-identity proves the twin searches classic's tree; it does not yet
+prove that *match results* from the twin transfer. Before any twin number
+feeds a merge/decline decision (docs/TESTING.md rule 13), run, in order:
+
+1. **Sanity match:** ctwin vs `sunfish.py` under pypy3, both at the same
+   fixed node budget, standard book, 200+ paired games. Expected ~50%
+   (they play identical moves at identical depths; residual noise comes
+   only from the node-cap landing mid-iteration at different wall times —
+   it must not, since the cap is counted in nodes, not seconds). Any
+   significant deviation is a harness bug, not a result.
+2. **Known-Elo pair A (search flavor):** branch flavor vs master flavor
+   (`IID_MIN_DEPTH 2`, `MATE_DIST 0`), both sides ctwin, fixed nodes.
+   Must reproduce the sign and rough magnitude of the pypy-measured gap
+   between those flavors at fixed effort.
+3. **Known-Elo pair B (eval/knob gap):** a knob detuning with a known
+   real-match gap (e.g. `QS`/`EVAL_ROUGHNESS` shifted to a previously
+   measured losing setting). Same acceptance test.
+
+Only after all three: twin grids/SPSA results are decision-grade at
+*fixed effort* — rule 12 of docs/TESTING.md still applies before any
+wall-clock claim.
 
 ## Caveats (deliberate, documented)
 

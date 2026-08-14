@@ -142,6 +142,57 @@ fastchess \
    to +34 [−34, +105] by 92. Time-to-depth is the hidden variable. Screen
    with fixed depth if you like, but only a wall-clock match decides.
 
+13. **The C twin is under a fidelity contract: node-identity is a regression
+   gate, never a one-time claim.** `tools/ctwin/sunfish.c` is only useful
+   because it provably searches the *exact same tree* as `sunfish.py` — the
+   moment that stops being measured it is just a third engine with familiar
+   variable names. So: any change to `sunfish.c` **or to the Python
+   reference** must re-pass the full differential suite (`make gate` in
+   `tools/ctwin/`: all sampled positions × depths with the movegen walk,
+   the deep sweep, both tuned-knob sweeps, both `TABLE_SIZE` eviction
+   sweeps) before any number from the twin counts. When diffing a knob,
+   apply it to **both** sides (`difftest.py --set NAME=V` does this); a
+   knob set on one side measures the knob *plus* an engine mismatch. And
+   twin results are decision-grade only after the known-Elo calibration
+   plan passes (see below and `tools/ctwin/README.md`); before that they
+   are screening signals, subject to rule 12 like every fixed-effort
+   number.
+
+## Screening with the C twin (`tools/ctwin/`)
+
+`tools/ctwin/` holds a C transcription of classic `sunfish.py` that searches
+the *identical tree* — same probes, same moves, same node counts, same
+scores, verified byte-for-byte by `difftest.py` against the live
+`sunfish.py` — at ~10x the speed of warm pypy3. It is a lab instrument and
+never ships.
+
+**Use it for:** any *search-quality* question at classic semantics where
+games are the bottleneck — fixed-node screening matches, hyperparameter
+grids and SPSA over the exposed knobs (`QS`, `QS_A`, `EVAL_ROUGHNESS`,
+`TABLE_SIZE`, the null-move/IID/futility family), and PST-shaped eval
+variants injected via `gen_tables.py` without recompiling. A fixed-node
+game costs a tenth of the pypy equivalent, so grids that were unaffordable
+become overnight jobs. The twin defaults to branch flavor (`nnue-4k`:
+capped null move, mate-distance scoring, IID at depth > 3); master flavor
+is two knobs away (`set IID_MIN_DEPTH 2`, `set MATE_DIST 0`) — say which
+flavor a result was measured at.
+
+**Do not use it for:** *timed* questions — time management, think-time
+curves, anything with a clock. The clock-budgeting branch of classic's
+`main()` is deliberately not cloned; the twin plays clock-free surrogate
+games (`go nodes N`). Nor for NNUE-eval questions: it clones classic's
+search over table-file evaluations, so anything the 4k NNUE work changes
+outside PST-shaped eval is invisible to it. Rule 12 also applies with full
+force: fixed-node results hold search effort constant, so they screen;
+only a wall-clock match on the real engine decides.
+
+**Before believing twin match numbers**, the calibration plan staged in
+[`tools/ctwin/README.md`](../tools/ctwin/README.md) (section "Calibration
+plan") must have passed: a sanity match of ctwin vs pypy classic at fixed
+nodes scoring ~50%, plus reproduction of two knob-expressible pairs whose
+Elo gap is already known from real matches. Until then, treat twin output
+as directional.
+
 ## Testing the packed artifact
 
 `tools/build/pack.sh` inlines a minimal UCI loop that handles `position startpos
