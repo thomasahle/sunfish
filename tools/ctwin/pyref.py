@@ -55,17 +55,21 @@ Position.gen_moves = _counting_gen_moves
 # Non-default values (or USE_VARIANT=1) swap the searcher for the drift-
 # guarded transcription in variants.py; defaults keep the REAL live-imported
 # Searcher, so the ordinary gate never depends on the transcription.
-BATTERY = {"EVICT_POLICY": 0, "EVICT_SCAN_K": 4, "KILLER_COUNT": 1, "USE_VARIANT": 0}
+BATTERY_DEFAULTS = {
+    "EVICT_POLICY": 0, "EVICT_SCAN_K": 4, "KILLER_COUNT": 1, "USE_VARIANT": 0,
+    # frozen-guide battery (see variants.py)
+    "SCORE_EPOCH": 0, "GUIDE_MODE": 0, "GUIDE_MIN_DEPTH": 3, "GUIDE_COPY": 0, "TWO_KILLERS": 0, "KILLER_DEDUP": 0,
+    "GUIDE_IIR": 0, "GUIDE_INJECT": 0, "GUIDE_PV": 0,
+}
+BATTERY = dict(BATTERY_DEFAULTS)
 
 
 def make_searcher():
-    if any(BATTERY[k] != d for k, d in
-           (("EVICT_POLICY", 0), ("EVICT_SCAN_K", 4), ("KILLER_COUNT", 1),
-            ("USE_VARIANT", 0))):
+    if BATTERY != BATTERY_DEFAULTS:
         import variants
-        variants.EVICT_POLICY = BATTERY["EVICT_POLICY"]
-        variants.EVICT_SCAN_K = BATTERY["EVICT_SCAN_K"]
-        variants.KILLER_COUNT = BATTERY["KILLER_COUNT"]
+        for k in BATTERY_DEFAULTS:
+            if k != "USE_VARIANT":
+                setattr(variants, k, BATTERY[k])
         return variants.VariantSearcher()
     return Searcher()
 
