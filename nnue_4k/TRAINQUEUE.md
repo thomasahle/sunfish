@@ -8,46 +8,48 @@ queue is about TRAINING only. Re-order freely as results land; never
 empty. Provenance pinned on every run (commit, seed, data sha in
 PROVENANCE.txt beside the run).
 
-Context (2026-08-14): budget = engine-sans-eval 2871 + machinery 578;
-payload must land ≥58% zeros (hard), 60-66% target. v1 arms: l1=0.001 →
+Context (2026-08-14, updated ~11:1x UTC): **Thomas directive — payload
+target is now 1024 B** (was 617; a golf lane is opening the code side to
+keep total ≤4096, exact capacity confirmation pending). The ≥58%-zeros
+hard gate applied to the 617 budget; at 1024 the 3,072-trit ps768 payload
+fits at ANY sparsity, so sparsity becomes a capacity dial, not a fit
+gate. Coordinate: golf lane owns generator/machinery; the bake-off lane
+(nnue_4k/train/compress/) owns the encoder — when its table lands, the
+best encoder becomes the export default and arms re-size to the WEIGHT
+capacity it buys. v1 arms: l1=0.001 →
 val 0.01385 @59.6% zeros (winner, thin margin); l1=0.002 → 0.01404
 @73.7%. Sparsity is nearly free (~+0.0002 val per +14% zeros).
 
 ## Queue
 
-1. **replnet_kb8fold — king-bucketed training, folded export** (--kb 8
-   --factor 1, fold the B buckets to shared ternary rows at export; new
-   export step, small). kb multiplies FLOAT rows, not shipped bytes, iff
-   folded; the factorizer may find better shared rows than kb=1 training
-   does. If folding needs new code time, swap with 3.
-2. **replnet_tau — threshold sweep** (τ ∈ {0.6, 1.1} at the winner's l1).
-   τ and l1 are two knobs on one sparsity mechanism; v1 only moved l1.
-3. **replnet_bilt — bilinear m=4 + odd tail, PRICE-FIRST** (--nb 4 --bm 4
-   [--tailw 4]). Bilt history says the tail carries signal, but the ext
-   machinery is float/dev-only: this run is a VAL probe; shipping needs
-   ≥66% zeros (71 B spare) plus new priced machinery. Train, price, then
-   decide.
-4. **replnet_rff — rff64 at tiny width, VAL probe only** (--rff 64).
-   Proven −3.9% val at width 128; unknown at N=4, machinery unpriced.
-5. **replnet_clamp — CLAMP/satpen interaction** (clampcp 400 vs 600 at
-   the winner's sparsity). In replacement mode the clip bounds ALL
-   positional signal; 600 was inherited from the residual era, never
-   measured here. Byte-neutral.
-6. **replnet_ml2 — first MULTI-LAYER packed net, VAL probe, PRICE-FIRST**
-   (`train/queue/80_replnet_ml2.yaml`, new pipeline; runnable as
-   `python3 train/train.py train/queue/80_replnet_ml2.yaml`). Layer 2 =
-   circular self-convolution of the clamped head lanes: ONE extra big-int
-   multiply, fields re-spaced to 32 bits, fold mod 2^128−1, integer
-   read-out, >>10. Sized by the field-budget CERTIFICATE, not by hope
-   (train.py refuses an uncertified config): F2=16 REFUSED (no-carry,
-   fields 32.4M vs 65,535 — the recorded field-budget wall), F2=32
-   certified with margin 4.26e9, hsum read-out legal. u2 starts silent, so
-   epoch 0 IS the one-layer net — the val delta is the second layer's
-   whole case. Float export only; shipping additionally needs the priced
-   machinery bytes (re-space + multiply + fold + read-out, ~8-12 payload
-   digits for u2) via pack.sh on a real stub, like replnet_bilt.
+1. **c1024-cal — capacity calibration at the new budget** (winner recipe,
+   N=4 ps768, sparsity pressure released: l1 ∈ {0, 0.0003}, τ 0.6; target
+   ~35-50% zeros ≈ 1.6-2.0k nonzeros through the same codec). Cheapest
+   capacity arm and the calibration point for everything below. PRICE the
+   payload through pack.sh at each sparsity as it trains.
+2. **c1024-kb4 — king buckets at 1024, PRICE-FIRST** (kb4 × 3,072 trits =
+   12,288 raw ≈ mid-2k B by the old rates — likely still over even at
+   1024; recheck the arithmetic with real exports, incl. the ternshared
+   route: shared ternary rows + small ternary per-bucket DELTAS, which
+   the 567e4ef fold makes buildable. Train only what prices.)
+3. **c1024-n8 — wider hidden N=8 at ps768** (~6.1k trits, two chars per
+   feature = 4+4 trits — a small decode change the GOLF LANE owns; agree
+   the codec seam before training. 8-9k-weight family target.)
+4. **replnet_kb8fold — in-flight** (chained after 8Mv; runs to completion
+   — its fold quality is direct evidence for c1024-kb4's pricing call).
+5. **replnet_tau — threshold sweep** (τ ∈ {0.6, 1.1} at the winner's l1)
+   — subsumed partly by c1024-cal's τ 0.6; keep for the high-τ side.
+6. **replnet_bilt — bilinear m=4 + odd tail, PRICE-FIRST, behind the
+   capacity family** (--nb 4 --bm 4 [--tailw 4]; ext machinery unpriced).
+7. **replnet_rff — rff64 at tiny width, VAL probe only** (--rff 64).
+8. **replnet_clamp — CLAMP/satpen interaction** (clampcp 400 vs 600).
 
 ## Log (newest first)
+
+- 2026-08-14 ~11:1x UTC: Thomas directive via coordinator — payload
+  budget 1024 B. CAPACITY-1024 family added at the top (calibration arm
+  first), speculative arms demoted behind it. Current chain (8M → 8Mv →
+  kb8fold) runs to its natural boundary, then c1024-cal starts.
 
 - 2026-08-14 ~11:0x UTC: caught an instrument slip in the 8M launch — no
   --valn, so its val split is not the 4M runs' and its numbers are
