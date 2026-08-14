@@ -437,3 +437,90 @@ def test_packed_build_still_has_a_working_loop(tmp_path):
         commands="uci\nisready\nposition startpos moves e2e4\ngo movetime 100\nquit\n")
     assert result.returncode == 0, result.stderr
     assert "uciok" in result.stdout and "bestmove" in result.stdout, result.stdout
+
+
+# --- the truncated-search marker (docs/TESTING.md rule 13) -------------------
+#
+# Stopping ASAP on "quit"/"stop"/EOF is correct UCI and does not change here.
+# Being SILENT about having stopped short of the limit we were given is the
+# part that had to go: a one-shot harness that pipes `go depth 8` and `quit`
+# together gets a DEPTH-2 answer wearing a well-formed info line and a
+# well-formed bestmove, and nothing anywhere says the search was cut off.
+# That is a silent degrade (AGENTS.md), and it cost a real screening run --
+# the tell was ten positions reporting byte-identical node counts.
+
+
+def _oneshot(commands, timeout=90):
+    """Pipe everything at once, the way a heredoc harness does."""
+    return _run(isolated_python(str(ROOT / "sunfish.py")), ROOT, commands, timeout)
+
+
+ABORT = "info string aborted at depth"
+
+
+def test_queued_quit_marks_the_truncated_search():
+    out = _oneshot("uci\nisready\nucinewgame\nposition startpos\ngo depth 6\nquit\n")
+    assert "bestmove" in out.stdout, out.stdout
+    marker = [ln for ln in out.stdout.splitlines() if ln.startswith(ABORT)]
+    assert marker, ("a search cut off by a queued quit reported nothing:\n"
+                    + out.stdout)
+    assert "before requested depth 6" in marker[0], marker[0]
+    # the marker must precede bestmove, or a harness reading to bestmove and
+    # stopping there never sees it
+    lines = out.stdout.splitlines()
+    assert (next(i for i, ln in enumerate(lines) if ln.startswith(ABORT))
+            < next(i for i, ln in enumerate(lines) if ln.startswith("bestmove")))
+
+
+@pytest.mark.parametrize("limit,needle", [
+    ("nodes 3000000", "before requested nodes 3000000"),
+    ("movetime 60000", "before requested movetime"),
+])
+def test_truncation_marker_covers_the_nodes_and_movetime_analogues(limit, needle):
+    out = _oneshot(f"uci\nisready\nucinewgame\nposition startpos\ngo {limit}\nquit\n")
+    marker = [ln for ln in out.stdout.splitlines() if ln.startswith(ABORT)]
+    assert marker and needle in marker[0], out.stdout
+
+
+def test_a_search_that_reaches_its_limit_is_not_marked():
+    """The inverse, and the one that keeps the marker meaningful: driven the
+    correct way -- read to bestmove, THEN quit -- nothing is truncated and
+    nothing is announced."""
+    engine = UciEngine(ROOT / "sunfish.py", ROOT).handshake()
+    try:
+        engine.send("ucinewgame")
+        engine.send("position startpos")
+        engine.send("go depth 3")
+        seen = []
+        while True:
+            line = engine.lines.get(timeout=90)
+            assert line is not None, "engine exited before bestmove"
+            seen.append(line)
+            if line.startswith("bestmove"):
+                break
+    finally:
+        engine.close()
+    assert not [ln for ln in seen if ln.startswith(ABORT)], "\n".join(seen)
+    assert any(ln.startswith("info depth 3") for ln in seen), "\n".join(seen)
+
+
+def test_stopping_an_open_ended_search_is_not_a_truncation():
+    """`go infinite` and `go ponder` have no limit to fall short of -- the stop
+    IS how they end. Marking those would fire on every ponder in normal play."""
+    engine = UciEngine(ROOT / "sunfish.py", ROOT).handshake()
+    try:
+        engine.send("ucinewgame")
+        engine.send("position startpos")
+        engine.send("go infinite")
+        engine.expect("info depth 2")
+        engine.send("stop")
+        seen = []
+        while True:
+            line = engine.lines.get(timeout=90)
+            assert line is not None, "engine exited before bestmove"
+            seen.append(line)
+            if line.startswith("bestmove"):
+                break
+    finally:
+        engine.close()
+    assert not [ln for ln in seen if ln.startswith(ABORT)], "\n".join(seen)
