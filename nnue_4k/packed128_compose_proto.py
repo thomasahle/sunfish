@@ -18,11 +18,13 @@ __version__ = "2026-packed"
 version = "sunfish " + __version__
 # PACKED128 COMPOSITION PROTOTYPE (branch packed128-revival) -- NOT AN ENTRY.
 # = today's entry (nnue-4k @ 1ca26e4, 3357 B packed) + the packed big-int
-# width-128 NNUE hot loop exactly as it played +95.7 +/- 54.8 at 60+1
-# (engine commit 92c4746, 2026-08-09). The MACHINERY below is the real
-# measured hot loop; the NET DATA is a zero STUB, because the real
-# width-128 net is ~126,076 B after lzma (raw rows 738,720 B) and cannot
-# exist inside 4096 B. pack.sh on this file prices the machinery, not data.
+# NNUE hot loop exactly as it played +95.7 +/- 54.8 at 60+1 (engine commit
+# 92c4746, 2026-08-09), resized to the N=4 TERNARY bridge the revival audit
+# priced (width 128's data is 126,076 B lzma'd -- impossible; N=4 is the
+# smallest-bridge shape). The MACHINERY is the real hot loop; the WEIGHTS are
+# a random REAL-SHAPED payload (make_proto_payload.py, 55% zeros, char-aligned
+# trits) so pack.sh prices the true composed artifact. Training them is the
+# staged retrain's job; this file prices bytes, it does not claim Elo.
 
 ###############################################################################
 # Evaluation: classic sunfish's piece-square tables, and nothing else
@@ -106,40 +108,57 @@ directions = {
 
 
 ###############################################################################
-# Packed big-int NNUE machinery (v1 hot loop, commit 92c4746) -- STUB DATA
+# Packed big-int NNUE machinery (v1 hot loop, commit 92c4746) at N=4, ternary
 ###############################################################################
 # score = pst(pos) + clip(nn(pos), -CLAMP, CLAMP). value(move) stays the pure
 # pst delta, so ordering / QS gate / futility read the same signal as classic.
-NN = 128                         # lanes per perspective block
-NLANE = 2 * NN
-LBITS, VBITS = 16, 15
-BIAS = 1 << 14
+NN, LBITS, VBITS, CLAMP = 4, 16, 15, 600     # lanes per block, bit layout
 ONES = (1 << VBITS) - 1
 HALF = NN * LBITS
-SHIFT, CLAMP = 6, 600            # v1 net128: shift 6, clampcp 600
-
-def _rep(v, n):
-    r = 0
-    for _ in range(n):
-        r = (r << LBITS) | v
-    return r
-
-MH = _rep(1 << VBITS, NLANE)
-MVAL = _rep(ONES, NLANE)
-MLO = _rep(BIAS, NLANE)
-# STUB: flat activation ceilings G_k = 374 (real net: per-lane G_k = C*|v_k|,
-# sum_G 47973 <= 65534 asserted at build). Real MGP is one 4096-bit literal.
-MGP = _rep(374, NLANE)
-MGH = MGP | MH
-MASKLO = (1 << HALF) - 1
 M16 = (1 << LBITS) - 1
-MTS = ()                         # v1 net128 shipped plain clipped ReLU
-ACC_BASE = MLO                   # STUB: real base is a 4096-bit literal
+# 2^16 == 1 (mod 2^16-1): dividing the all-ones word by M16 replicates a 1
+# into every lane, so masks are one multiply each instead of a build loop.
+_U = ((1 << 2 * HALF) - 1) // M16
+_R2 = 1 | 1 << HALF              # replicate one block's word into both
+MH, MVAL, MLO = _U << VBITS, _U * ONES, _U << 14
 _PIECES = "PNBRQKpnbrqk"
-# STUB DECODE: the real artifact needs 1440 rows (12 pieces x 120 squares) of
-# 2*128 16-bit lanes decoded from an embedded payload here. Measured price of
-# that payload for the net that scored +96: lzma(rows) = 126,076 bytes.
-_rows0 = {_p: [0] * 120 for _p in _PIECES}
+
+# Payload decode (the pst string's own codec). Extraction, LSB first:
+# shift, NN gains, NN biases, 768*NN ternary weights 4-to-a-char.
+_w = 0
+for _c in "kJ_E,L2D1C)b9;_lJOOMe0L+2LLXqI0hhG5LY@J0KbF[FrLLKKLe11jIIF1IJICAEM_UniO9CeGULM0JOC4DhC:KqBJ@tp?O1UZVhXH'EtpYC5L3CU-0ITTeL2DFLrC:BqCFLOOkL1KLUXCLLUL`HFt5h+inMLIXL+IIKTn5$KUL';>UgO_:h1TKIFi^=1qFC1@MhX_:$L'L0&LJqMYCMOBDHtC+LLLPI.KML4K1'?UhhhL>@G'ROHqONT+WiUXCtCU)I5@?1L<Kofl=UUqeTLS`JAnFLFIPnuiVOIDhdLID#FM[.^BV41IBKL?GSOnVYUJ2hLiV9KKBU-O1OK=Lm>A10KUXV:1qeTKT2V2:LWBCIFYOKOpEHUV[:$?@BBNp1@Rr)Nh6WPRL_g;BL_KgNMnLLSgIL_NL4t_UMM@4hdbh[.40S3MIM1JDIWL=CKqNk0*IGFIPH_7FF/LL)kMMK7hIueKIKpu.%+LZR4UefJiL$KHIgqGIIJLKC04h=LLLLBEeM`Ube/UcMHF^UqkUKJJLXeINTD5L$lpiWU9qIOUkDTUG2OO;2YZdMLX41PnqiC4[UOtMCLMRkLI41:eXM1HJRseUL0&.rLUKaV:gMCX1j1So?1TGgKIFd31kVkGaJIhlU'iGLXBt@9`KL4016K1bafLPL)KI_L^7K7OcB/KqgLLfLUlIBROVLPKLngMChLu@LO4RKfMUXD1h4Kit3BVKrKKrL2_;I3HhXUqUL4`110BELK2'CQt4eTL11h..nweR:Y_M*":
+ _d = ord(_c) - 35; _w = _w * 90 + _d - (_d > 4) - (_d > 56)
+_w, SHIFT = divmod(_w, 90)
+_g, _B = [], 0
+for _k in range(NN):
+    _w, _d = divmod(_w, 90); _g.append(_d)
+for _k in range(NN):
+    _w, _d = divmod(_w, 90); _B += _d - 44 << LBITS * _k
+
+# Per-lane activation ceilings G_k (both blocks), and the base: offset-binary
+# BIAS plus the trained per-lane bias, every lane.
+MGP = sum(_g[_k] * 32 << LBITS * _k for _k in range(NN)) * _R2
+MGH = MGP | MH
+ACC_BASE = MLO + _B * _R2
+# One char = one feature's NN lanes (4 trits, values 0..80), in build order:
+# decode and half-row construction are ONE pass, gains folded as they land.
+# Padding squares stay 0 in every half, so the mirrored composition below
+# needs no validity test.
+_half = {}
+for _p in _PIECES:
+    _h = [0] * 120
+    for _f in range(64):
+        _w, _d = divmod(_w, 90)
+        _r = 0
+        for _k in range(NN):
+            _d, _t = divmod(_d, 3); _r += _g[_k] * (_t - 1) << LBITS * _k
+        _h[21 + _f // 8 * 10 + _f % 8] = _r
+    _half[_p] = _h
+
+# ROWS[pf][piece][square]: us-block = the feature in this frame, them-block =
+# the mirrored feature in the opponent's frame; one shared weight table.
+_rows0 = {_p: [_half[_p][_s] + (_half[_p.swapcase()][119 - _s] << HALF)
+               for _s in range(120)] for _p in _PIECES}
 _rows1 = {_p: [_rows0[_p.swapcase()][119 - _s] for _s in range(120)] for _p in _PIECES}
 ROWS = (_rows0, _rows1)
 
@@ -147,13 +166,9 @@ def nn_cp(acc, pf):
     """Clipped centipawn output of the packed net, mover's point of view."""
     m = ((acc & MLO) >> 14) * ONES              # lane >= 0 ?
     y = ((acc & m) | MLO) - MLO                 # relu
-    for T in MTS:                               # convex piecewise-linear
-        x = acc - T
-        m = ((x & MLO) >> 14) * ONES
-        y += ((x & m) | MLO) - MLO
     m = (((MGH - y) & MH) >> VBITS) * ONES      # lane <= G_k ?
     y = (y & m) | (MGP & (m ^ MVAL))            # capped at G_k
-    v = (y & MASKLO) % M16 - (y >> HALF) % M16  # 2^16 == 1 (mod 2^16-1)
+    v = y % (1 << HALF) % M16 - (y >> HALF) % M16  # 2^16 == 1 (mod 2^16-1)
     if pf:
         v = -v
     v = (v >> SHIFT) if v >= 0 else -((-v) >> SHIFT)  # round towards zero
@@ -696,14 +711,12 @@ def parse(c): return A1 + ord(c[0]) - ord("a") - 10 * (int(c[1]) - 1)
 def render(i): return chr((i - A1) % 10 + ord("a")) + str(1 - (i - A1) // 10)
 
 def from_board(board, wc=(True, True), bc=(True, True), ep=0, kp=0, pf=0):
-    """Build a position (and its accumulator) from scratch."""
-    ps = sum(pst[p][i] if p.isupper() else -pst[p.upper()][119 - i]
-             for i, p in enumerate(board) if p.isalpha())
-    acc = ACC_BASE
-    row = ROWS[pf]
-    for i, pc in enumerate(board):
-        if pc in _PIECES:
-            acc += row[pc][i]
+    """Build a position (and its accumulator) from scratch, in one pass."""
+    ps, acc, row = 0, ACC_BASE, ROWS[pf]
+    for i, p in enumerate(board):
+        if p.isalpha():
+            ps += pst[p][i] if p.isupper() else -pst[p.upper()][119 - i]
+            acc += row[p][i]
     return Position(board, ps + nn_cp(acc, pf), ps, wc, bc, ep, kp, acc, pf)
 
 

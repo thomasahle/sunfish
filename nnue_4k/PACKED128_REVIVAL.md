@@ -113,6 +113,11 @@ capacity region (3k params, nonlinear) sits BETWEEN the five dead 384-param
 linear fits (Texel, C1 −57.7, C2 −93.8, d1 −76.0, b1 −182.6) and the
 98k-param net that measured +96/+187 in play — it is genuinely untested.
 
+*Correction, same night (Section 6): the estimate above was optimistic on
+both terms. Measured by building, the golfed N=4 composition is 4512 B —
+416 over — and the composed-figures-miss-measured-ones rule claims its
+6th victim. See the golf ledger.*
+
 ## 3. Staleness check
 
 The +96 is **superseded, not additive**:
@@ -196,3 +201,79 @@ session on the ~150-200 B machinery golf, because at N=4 the composition is
 ~150 B over budget even with data that fits; if the golf does not close, the
 lane stays closed and the +96 stays what it is: the ancestor of a +187 line
 that the 4096-byte accounting, not play, killed.
+
+## 6. Machinery golf (2026-08-14, coordinator-directed)
+
+Target: composed artifact (machinery + N=4 ternary data) ≤ 4096 against the
+current entry at 3357. Every step below ran the invariant suite
+(`nnue_4k/packed/proto_check.py`: mirror identity, 40-ply walk with
+incremental==from-scratch acc/ps/score, exact antisymmetry, net-fires) and
+`tools/build/pack.sh`; regressing steps were REVERTED, not patched around.
+The N=4 payload is a real-shaped random ternary net (`make_proto_payload.py`:
+768 chars through the entry's own base-90 codec, one char = one feature's 4
+trits, char-aligned so lzma sees the sparsity; 55% zeros = the middle of the
+ledger's measured 42/55/66% real-weight sparsities, `4850894`).
+
+### Golf ledger
+
+| step | change | packed B | delta | invariants |
+|---|---|---|---|---|
+| G0 | audit prototype (N=128 machinery, stub data) | 3799 | — | green |
+| G1 | re-baseline: N=4 + real-shaped 777-char payload, naive machinery | 4619 | (baseline) | green |
+| G2 | drop the dead MTS segment loop (the +96 net shipped plain crelu) | 4591 | −28 | green |
+| G3 | "." zero-row to collapse move()'s capture branch | 4597 | +6 → **REVERTED** | green |
+| G4 | shared `_dec` codec function for pst + payload | 4607 | +16 → **REVERTED** (lzma already dedups the twin loops; the abstraction adds unique bytes) | green |
+| G5 | replicator masks: `_U = (2^128−1)//(2^16−1)`, kill `_rep` | 4573 | −18 | green |
+| G6 | fold gains into weights at decode; `_lane` = pure shift-sum | 4568 | −5 | green |
+| G7 | fuse from_board's ps and acc into one pass | 4555 | −13 | green |
+| G8 | micros, bisected: keep `ACC_BASE = MLO + …` (−1); min/max clamp (+2) and extraction-loop merge (+27) **REVERTED** | 4554 | −1 | green |
+| G9 | fuse payload decode with half-row build (one char = one feature, build order = extraction order; `_W`, `_lane`, and the square-validity test all disappear) | 4527 | −27 | green |
+| G10 | inline single-use BIAS and MASKLO | 4517 | −10 | green |
+| G11 | both-block replication `*(1 | 1<<HALF)` for MGP/ACC_BASE; drop NLANE and the `_b` list | 4514 | −3 | green |
+| G12 | tuple-assign constant folding | 4512 | −2 | green |
+
+Golfed total: **4619 → 4512 (−107)**. Final artifact answers UCI and plays
+(1s stdin smoke, `bestmove g1f3`).
+
+### Where the bytes are (measured on the golfed tree)
+
+| component | B |
+|---|---|
+| entry @ HEAD | 3357 |
+| machinery (payload elided, repacked) | **532** |
+| N=4 payload @ 55% zeros, in-context | **623** |
+| **total** | **4512** |
+| **gap to 4096** | **−416** |
+
+Sensitivity: at 66% zeros (the ledger's sparsest measured real-weight point)
+the payload prices at 576 B in-context → total **4465, still 369 over**.
+Considered and declined: moving the payload out of base-90 source text into
+pack.sh's joint-lzma raw-blob stream (the `4850894` mechanism) — 5 trits/byte
+saves ~70 B of payload but costs ~90 B of self-read machinery; net negative
+at this payload size.
+
+### Extrapolation across N (machinery is width-invariant)
+
+| N | data est. | total est. | verdict |
+|---|---|---|---|
+| 4 | 623 | 4512 measured | over by 416 |
+| 2 | ~310 | ~4200 | over by ~100 |
+| 1 | ~160 | ~4050 | fits — but a 1-hidden-unit "net" is not the packed-residual design |
+
+### Verdict: the ternary retrain is NOT GO-able
+
+The pre-registered kill-condition fires: golf cannot close the gap at N=4
+against the current entry — machinery alone (532 B) is within 200 B of the
+739-byte spare, before any weights. No meaningful width closes: even N=2 is
+~100 over. What WOULD reopen the lane, for the record:
+
+1. **Entry-side shrink ≥ ~420 B** (golf against 3357 was the instruction;
+   unhatched savings not counted — but if a future entry lands near ~2940,
+   which the golf ledger `296fd55` once measured as reachable, N=4 fits).
+2. A machinery breakthrough halving the 532 B — nothing in tonight's twelve
+   steps suggests one; the hot loop, decode, and threading are each near
+   their floor, and the two abstraction attempts (G3, G4) both LOST bytes
+   because lzma already shares repeated code.
+
+Until one of those exists, the lane closes per the plan of record, and the
+staged retrain recipe stays unarmed.
