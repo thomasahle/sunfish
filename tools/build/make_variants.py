@@ -226,6 +226,25 @@ MODS = {
     # Late move reductions off. Threshold-triggered (val < LMR), so setting the
     # threshold to 0 disables it without touching the loop.
     "nolmr": ("\nLMR = 60\n", "\nLMR = 0\n"),
+    # THE PRE-FIX TIME MANAGER, rebuilt as a measurement arm and NOTHING else.
+    # It is the only mod here that makes the entry WORSE on purpose: it reverts
+    # the sudden-death budget conditional that landed in e73da7d back to the
+    # unconditional wtime/12 the ladder actually played (LOSS_TAXONOMY.md P0:
+    # 97.2% of 4,158 matched moves), so that "did the TM fix stop the
+    # clock-drain loss class" is a two-arm question with one line between the
+    # arms. The replacement text is byte-identical to the line at e73da7d^.
+    #
+    # NEVER LAND. There is no tombstone rule for this one because there is
+    # nothing to land: if the fix is ever reverted, this mod goes with it (its
+    # anchor would then be the baseline and the generator would raise loudly,
+    # which is the correct outcome).
+    #
+    # Both arms keep the structural bestmove floor (03beefe), so this isolates
+    # TIME MANAGEMENT and not the `(none)` forfeit class the floor closed.
+    "oldtm": (
+        "            think = min(wtime / (12 if winc else 40) + 0.9 * winc, wtime / 2 - 1000)\n",
+        "            think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1000)\n",
+    ),
     # CORRECTION HISTORY, interior-only. A running average of (search value -
     # static value) over positions sharing a pawn skeleton, added to the
     # static score wherever the search trusts it -- here that is exactly one
