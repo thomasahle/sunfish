@@ -53,6 +53,7 @@ how much effort it cost.
 | 2026-08-14 | **AMENDMENT: pool ladder arms (c) 30+1 and (d) phase-M are HELD for the virtual-clock surrogate — held, NOT cancelled** | Owner ruling on real-clock economy. Arm (b) 60+1 PROCEEDS on real clocks (it is both the decisive question and calibration data for the surrogate); (c) and (d) move to the twin's virtual clock once it calibrates against stage 1, the +40.6 with-park run and arm (a), with only the final composite getting one real-clock confirmation. Bounds, book, seed, cap and readings for (c)/(d) stand as pre-registered; the arena scripts are renamed `HELD_*` with the ruling in their headers so the operational state cannot drift from the ledger |
 | 2026-08-14 | **ARM (a) VERDICT: the POOL time manager is +119.94 ± 36.44 at 60+0 — H1 accepted in 274 games on a NON-INFERIORITY screen, 144W-53L-77D (66.61%), LOS 100%, 0 forfeits, 0 illegal** | The arm that was only asked not to give back the +235.5 ± 65.4 sudden-death fix instead added to it, against that winner's own binary (`14b69a606b743a37`). Mechanism is the allocation SHAPE, measured off the PGN: the pool spends **0.79× the median move and 3.3× the maximum** (0.512/5.534 s vs 0.645/1.664 s) — cheap routine moves, a wall that lets a hard one run to 5× soft, which one number that is both target and wall cannot do. Drain: pool's minimum end-clock is **8.4 s = (M+2)·O exactly**, it never fell below 2.4 s in 274/274 games, and 0 games ended under 2 s, against the incumbent's 4 under 2 s and 5 crossings. Blind moves 1,057 (6.0%) vs 117 — same metric, different mechanism: these are deliberate floor moves with 8–12 s still banked, not a collapsed budget, and the arm won 66.6% while playing 14× more of them. `tm_smoke`'s cold-table prediction of 1.5× MORE routine spend over-read it; the pre-registered honest note was too pessimistic. **Arm (b) 60+1 (elo0=0 elo1=10) launched; (c) and (d) gated; v1.1 dynamic still unscreened** |
 | 2026-08-14 | **PRE-REGISTERED: the POOL time manager (soft/hard) goes to a four-arm ladder — (a) 60+0 NON-INFERIORITY pool vs the shipped entry, elo0=−10 elo1=0, cap 600; then (b) 60+1 elo0=0 elo1=10; (c) 30+1 NON-INFERIORITY; (d) phase-M vs pool** | Thomas's v2 architecture, separate from the smooth budget (#188, the conservative acute fix): a whole-game pool `P = T + (M−1)·I − (M+2)·O` split into a soft limit `min(P/M, A/4)` that stops STARTING iterations and a wall `min(5·soft, A/2)` that cannot go negative. `pooltm` mod, **+57 B all-in** (3308 → 3365, 731 spare — the curve's bytes come out with it), sha `cddf392e21449054` against the in-flight #188 baseline `14b69a606b743a37`. **Recorded before the games and against the design's own premise:** budgets are not spends — iterations are discrete, the pool stops at the first one that ENDS past its limit, and the realized spend measures 1.3–2.3× the soft limit (60+0: 2.26 s vs the incumbent's 1.50 s on the laptop; more than the incumbent at every probed TC on the loaded box). v1 is STATIC; the dynamic target is v1.1 and is not screened until v1 survives (a) and (c) |
+| 2026-08-15 | **MATCH 2 VERDICT: 30+1 non-inferiority NOT established — −17.39 ± 20.07 at the 400-game cap, SPRT undecided (LLR −0.81), LOS 4.43%** | The remedy does **not** fire by the rule as written (95% UB = **+2.68**, above 0), but "the rule did not fire" is not "the change is fine": the point estimate is on the wrong side of the −10 margin with ~95.6% posterior that smooth is worse at 30+1. **PRE-REG DEFECT #2:** the 400 cap was never powered for a 10-Elo test (needs **~1750**; half-width was ±20.1), and the trigger "UB below 0" demands proof of harm rather than failure-to-exclude-harm — backwards for a regression question. **The cause is the CAP, not the priced shortfall:** at winc=1 s the sign flips at a 4.5 s clock (step's parking point `T*=2+2I=4.0 s`) — above it smooth spends 0.93×, below it **1.20×/1.80×/2.78×/10.76×**. Step **never crossed 2.4 s in 400/400 games**; smooth did in **222/400**. So the old cap's parking pathology is **lethal at tiny increments (+40.6, +235.5) and protective at fat ones** — one mechanism, opposite signs. **Recommendation: do NOT land on match 1 alone**; targeted fix is an increment-aware cap, which per the amendment costs BOTH matches again at corrected power. Slot decision, reported not taken |
 | 2026-08-14 | **CORRECTION + AMENDMENT: the sudden-death identity boundary is 40/19 ≈ 2.105 s, NOT 2.667 s — and Match 1's acceptance does not survive a retune** | 8/3 belongs to `max(wtime/2−1, wtime/8)`, a cap designed and **abandoned**; the shipped `wtime²/(2·wtime+4)` has two different boundaries, **2/19 ≈ 0.105 s** (cap stops binding) and **40/19 ≈ 2.105 s** (identical to step). Wrong in the SAFE direction: the identity region is **wider by 0.561 s**, so stage 1's 2.4 s minimum clears it by 0.295 s and every argument that leaned on it — including the skipped 60+0 sanity match, and the pool lane's two entries that inherited the figure — is strengthened. Bit-equality verified over **every integer-ms clock 2106–400000, zero exceptions**. Also: cap difference is `2/(t+2)` **absolute** / `4/(t²−4)` **relative**; increment claims partitioned (direct evidence at winc=0.1 only); `∂B/∂I = 560T/(40+240I)²+0.9 > 0` so the allocation is **continuous** (kink at the clip — "smooth" is informal); **the parking fixed point `T* = 2+2I`** predicts both runs' plateaus (2.0 s at 60+0, 2.2 s vs 2.1 s observed at 60+0.1) and explains the zero forfeits. **AMENDMENT:** if match 2's remedy retunes any of {20, 240, 0.9, cap}, match 1 does NOT carry — rerun both, or prove the 60+0.1 allocation unchanged |
 | 2026-08-14 | **MATCH 1 VERDICT: the smooth budget is +40.64 ± 25.61 over the step at 60+0.1 — H1 accepted in 438 games (168W-117L-153D, LOS 99.92%), in 1h53m** | The positive branch: **the step form was leaving Elo on the table at tiny increments**, so this is not a change that falls back on aesthetics. Mechanism is stage 1's again — **zero forfeits on either arm**, all 438 games `normal`, and the step arm's clock **parks at 2.1 s in every single game** (min 2.0 across 438; a 2.2 s clock buys exactly 0.1 s of budget, which is exactly the increment) and pays one increment per move from there: **34.3% of its moves starved vs smooth's 4.0%**, median last-20-move time **0.115 s vs 0.391 s**. **The pre-registered ≤0.06 s metric MISSED it** (0 vs 19) because a capped budget settles where spend == income, not on the floor — logged as a pre-registration defect with a DESCRIPTIVE companion validated against the stage-1 PGN, not silently patched. Zero illegal. **Match 2 (30+1 non-inferiority) launched in the same action** |
 | 2026-08-14 | **PRE-REGISTERED: the step budget becomes a SMOOTH one, and the price of that is two matches — (1) 60+0.1 smooth vs step, elo0=0 elo1=20, cap 600; (2) 30+1 NON-INFERIORITY smooth vs step, elo0=-10 elo1=0, cap 400** | The step form is discontinuous at `winc == 0`: one millisecond of increment moved the divisor 40 → 12, so 60+0.1 was paced at /12 — the exact drain the /40 branch exists to close. Replacement is one rational base (divisor slides 40 → 12) under one cap that cannot go negative. **What carries for free:** `winc == 0` is bit-for-bit `wtime/40` and, above a 2.667 s clock, bit-for-bit the stage-1 `tmfix` arm — so +235.5 ± 65.4 transfers untouched. **What must be bought:** increment TCs are now /12 + 0.9·inc *asymptotically* (−7.4% at 30+1, −8.5% at 60+1, −3.3% at 300+3), so match 2 prices that. Arms are one expression apart from one generator; the step arm packs to **3295 B, sha `fe22791b409b1fba`** — byte-identical to the stage-1 winner. Entry **3295 → 3308 B** (+13, 788 spare). Honest note recorded in advance: if match 1 reads ≈ 0 the change lands as continuity-plus-safety, not as Elo |
@@ -978,6 +979,150 @@ calibration_VOID_old_driver.log, calib/calibration2.{log,pgn},
 pr_pr184_derive / pr_pr182_fuel / pr_pr171_qstail .{log,pgn},
 evict_default / evict_churn / pr_evict_p3churn .{log,pgn},
 gate_*.log (identity suites), ledger.md, consumer_audit.md.
+
+## 2026-08-15 — MATCH 2 VERDICT: 30+1 non-inferiority is NOT established, −17.39 ± 20.07 at the 400-game cap — and the cause is the CAP, not the shortfall it was built to price
+
+Ran to the full 400-game cap in 2 h 28 m without the SPRT resolving. This is
+the uncomfortable outcome and it is reported as one.
+
+| | |
+|---|---|
+| games | **400 of 400 — cap reached, SPRT undecided** (LLR −0.81 against ±2.94) |
+| smooth (engine1) | **113 W, 133 L, 154 D — 47.50%** |
+| Elo (smooth − step) | **−17.39 ± 20.07** (pentanomial 95%), nElo −29.58 ± 34.05 |
+| 95% interval | **[−37.46, +2.68]** |
+| LOS | **4.43%** — i.e. ~95.6% posterior that smooth is *worse* at this TC |
+| pairs | Ptnml(0-2) [11, 42, 108, 34, 5] over 200 pairs, **PairsRatio 0.74** |
+| illegal / forfeits | **0 / 0**, all 400 terminations `normal` |
+
+### The verdict, by the rule as written
+
+The pre-registration says the remedy fires if match 2 **accepts H0** or **the
+95% upper bound at cap is below 0**. Neither happened: the SPRT is undecided,
+and the upper bound is **+2.68**, above zero by a hair. **So the remedy does
+not trigger.** H1 was also not accepted, so **non-inferiority is NOT
+established**.
+
+That is a genuine non-result, and it must not be read as a pass. The point
+estimate is **−17.4**, on the wrong side of the −10 margin we said we cared
+about, with a 95.6% posterior that the smooth form is worse at 30+1. "The rule
+did not fire" and "the change is fine here" are different statements, and only
+the first is true.
+
+### PRE-REGISTRATION DEFECT #2, logged not patched: the design could not answer its own question
+
+The 400-game cap was never powered for a 10-Elo non-inferiority test. From
+this run's own pentanomial variance:
+
+| games | 95% half-width |
+|---|---|
+| **400 (the cap chosen)** | **±20.1 Elo** |
+| 1 000 | ±13.2 |
+| **~1 750** | **±10.0 — the minimum to resolve a 10-Elo question** |
+| 2 000 | ±9.3 |
+
+An interval twice as wide as the bound under test cannot separate H0 from H1,
+and at the observed LLR drift the SPRT needed **~2 000 games** to reach a
+boundary. The cap was short by a factor of 4–5. That is a defect in the
+pre-registration — mine — not in the run.
+
+Worse, the remedy's trigger is specified backwards. "Upper bound below 0"
+demands near-certainty of *harm* before a fix is permitted, on a question
+where the null of interest is harm. Under that rule a genuinely −17 Elo
+regression walks free on 400 games, exactly as it just did. A non-inferiority
+remedy should trigger on **failure to exclude harm**, not on proof of it.
+
+This is the third pre-registration defect in this workstream (after stage 1's
+degenerate `0 < 0` pass rule and match 1's floor-calibrated blind-move
+metric). All three share a shape: a rule written before the mechanism was
+understood encoded an assumption the data then violated.
+
+### The mechanism is NOT the shortfall the match was built to price
+
+Match 2 existed to price the −7.4% asymptotic shortfall at 30+1. The drain
+data says that is probably not what cost the Elo. At `winc == 1 s` the two
+policies differ in **two ways with opposite signs**:
+
+| clock | smooth | step | ratio |
+|---|---|---|---|
+| 30 s | 3.150 | 3.400 | 0.93× ← the shortfall |
+| 10 s | 1.650 | 1.733 | 0.95× |
+| 4.5 s | 1.238 | 1.250 | 0.99× — **the sign flips here** |
+| 4.0 s | 1.200 | 1.000 | **1.20×** |
+| 3.0 s | 0.900 | 0.500 | **1.80×** |
+| 2.5 s | 0.694 | 0.250 | **2.78×** |
+| 2.1 s | 0.538 | 0.050 | **10.76×** |
+
+Above ~4.5 s the smooth form spends *less* (the priced shortfall). Below it
+the smooth form spends **far more**, because the step's cap has parked and
+refuses to pay out while ours never stops. The parking fixed point does the
+work again: at `I = 1 s`, `T* = 2 + 2I = 4.0 s`.
+
+And that is exactly what the clocks show:
+
+| | smooth | step |
+|---|---|---|
+| median clock at game end | **2.5 s** (min 2.1) | **3.1 s** (min 2.9) |
+| games crossing 2.4 s | **222** of 400 | **0** of 400 |
+
+**The step arm never once went below 2.4 s in 400 games.** It parked at ~4 s
+and conserved. The smooth arm spent its reserve down into the 2 s region in
+more than half its games. So the leading candidate for the −17 is not
+under-spending in the middlegame — it is **over-spending in time trouble**,
+caused by the always-positive cap.
+
+**Which makes the cap change a two-sided trade, and that is the real finding
+of both matches together.** The old cap's parking pathology is *lethal* at
+sudden death and tiny increments, where the parked clock buys no depth — that
+is match 1's +40.6 and stage 1's +235.5. The same pathology is *protective* at
+a fat increment, where a parked 4 s clock still buys a whole second per move
+and the discipline is worth more than the reserve. One mechanism, opposite
+signs, and which side you land on depends on whether the increment can sustain
+the parked clock.
+
+### Instrument note: the starvation reading does not discriminate here
+
+At `I = 1 s` the descriptive starved band is `max(0.06, 1.5 × 1) = 1.5 s`,
+which captures 67.5% of smooth's moves and 68.2% of step's — it separates
+nothing. That band was designed for small increments and is uninformative at
+large ones. Reported rather than quietly dropped; the clock-crossing rows
+above are what carry the mechanism at this TC.
+
+### What this does NOT say
+
+It does not say the smooth budget is worse overall. Match 1 (+40.64 ± 25.61,
+H1 accepted, 438 games) and match 2 (−17.39 ± 20.07, undecided, 400 games)
+are measurements at two different TCs and both can be true: the change helps
+where the increment is tiny and plausibly hurts where it is fat. Neither is a
+ladder claim. The TCEC entry plays 1800+3, where the shortfall is −3.3% and
+the parked clock would be 8 s — a third regime that neither match covers.
+
+### Recommendation, and it is not this lane's call
+
+**Do not land on match 1 alone.** The pre-registered rule permits it — the
+remedy did not fire — but the honest reading of −17.4 with 95.6% LOS against
+is a warning, not a clearance, and the mechanism above says it is a real
+effect with an identified cause rather than noise.
+
+The mechanism points at a targeted fix: keep the rational base, and make the
+**cap** increment-aware so it stops paying out into time trouble when income
+is large, instead of the current increment-blind `wtime²/(2·wtime + 4000)`.
+That would aim to keep match 1's gain and remove match 2's loss.
+
+But per the amendment recorded before this match reported, **any change to the
+cap invalidates match 1's acceptance** — the retuned expression would have to
+rerun both matches, or ship with a proof its 60+0.1 allocation is unchanged. A
+cap change cannot offer that proof, since 60+0.1's parked regime is exactly
+where the cap binds. So the honest cost of the targeted fix is **both matches
+again**, at a corrected power (≥ 1 750 games for the non-inferiority arm).
+
+That is a slot decision, reported rather than taken.
+
+### Cotenancy
+
+Launched 20:52 UTC, finished 23:20 UTC, cotenant throughout; box load 20.9 at
+finish, 1 other fastchess process. Nothing of a cotenant's was killed,
+reniced or modified. Arena `~/sunfish-bench/tmsmooth-20260814/m2/`.
 
 ## 2026-08-14 — CORRECTION + AMENDMENT: the sudden-death identity boundary is 40/19 s, not 8/3 s; and Match 1's acceptance does not survive a retune
 
