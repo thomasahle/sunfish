@@ -426,13 +426,37 @@ class Searcher:
             # that decreases with depth. This is a generalization of Quiescent Search,
             # See https://chessprogramming.org/Quiescence_Search for details.
             val_lower = QS - depth * QS_A
+            # Bound the omitted depth-one tail by its best stand-pat,
+            # widening to all moves only when that cannot fail low.
+            if depth == 1:
+                tail = pos.score + val_lower - 1
+                if tail < gamma:
+                    yield None, tail
+                else:
+                    val_lower = -MATE_UPPER
 
             # Now finally play the killer move. But note that we have to respect
             # the QS lower bound, otherwise we would get search instability.
             # We will search it again in the main loop below, but the tp will
             # make this mostly free.
+            # At depths 2-3, a non-checking move is capped by its static gain.
+            # A cap below gamma skips the child; otherwise min transports the
+            # child report to the same fixed capped value.
+            def score_move(move, val):
+                child = pos.move(move)
+                if 2 <= depth <= 3 and pos.board[move.j] == "." and move.j != pos.ep and not move.prom:
+                    cap = min(MATE_LOWER - 1, pos.score + val + (depth - 1) * QS_A)
+                    if cap < gamma:
+                        return ((move, -self.bound(child, 1 - gamma, d - 1))
+                            if child.rotate(nullmove=True).king_capture() else (None, cap))
+                    score = -self.bound(child, 1 - gamma, d - 1)
+                    if score > cap and child.rotate(nullmove=True).king_capture():
+                        return move, score
+                    return move, min(cap, score)
+                return move, -self.bound(child, 1 - gamma, d - 1)
+
             if killer and pos.value(killer) >= val_lower:
-                yield killer, -self.bound(pos.move(killer), 1 - gamma, d - 1)
+                yield score_move(killer, pos.value(killer))
 
             # Then all the other moves
             # Quiescent search: only moves above the val-limit are admitted -
@@ -456,7 +480,7 @@ class Searcher:
                     # so it can't get any better than this.
                     break
 
-                yield move, -self.bound(pos.move(move), 1 - gamma, d - 1)
+                yield score_move(move, val)
 
         # Run through the moves, shortcutting when score >= gamma.
         # live is True if we saw a legal (not null, score > -MATE_UPPER) move
@@ -479,7 +503,7 @@ class Searcher:
                         del self.tp_move[next(k for k in self.tp_move if k != self.root)]
                 break
 
-        # If only virtual evidence was seen, classify terminality exactly.
+        # If no legal real move was witnessed, classify terminality exactly.
         if depth and not live and all(
                 pos.move(m).king_capture() for m in pos.gen_moves()):
             # We can't move, but is it a checkmate or stalemate?
