@@ -199,12 +199,29 @@ fastchess \
 
 15. **Long/realistic time controls are expensive; spend them on exactly two
    things.** Timed games at 300+0 or 30+1-at-scale are reserved for (1)
-   validating **time-management changes** — nothing substitutes for a real
+   **validating** time-management changes — nothing substitutes for a real
    clock, and note that a faster engine does *not* make timed games
-   cheaper (the game still burns the same wall clock), which is why the C
-   twin excludes TM by design — and (2) periodic **league-placement
-   measurement**. Everything else — search shape, eval terms,
-   hyperparameters — runs fixed-node or on the C twin (see below).
+   cheaper: the game still burns the same wall clock — and (2) periodic
+   **league-placement measurement**. Everything else — search shape, eval
+   terms, hyperparameters — runs fixed-node or on the C twin (see below).
+
+   **TM is now twin-RANKABLE and still real-clock VALIDATED.** The twin
+   excluded clocks by design, so TM used to be the one workstream it could
+   not accelerate. `tools/ctwin/vmatch.py` supplies the clock *around* the
+   twin instead of inside it: the budget formula is a pure function of a
+   VIRTUAL clock, a measured node-rate profile converts the budget into a
+   node budget, the twin searches exactly that, and the driver replays the
+   probe trace to find what the engine would have played and spent. Nothing
+   sleeps and no measured duration enters any decision, so a 60+0 game
+   costs ~4 s instead of ~2 min and several arms can run at once without
+   contaminating each other. `tmsim.py` is cheaper still: it solves for
+   the clock pathologies (negative caps, parking equilibria, floor knees)
+   with no games at all.
+   So: **the surrogate RANKS, one real-clock match VALIDATES** — plus the
+   1+0 hammer, because flag safety is precisely what a *modelled* per-move
+   overhead cannot certify. Surrogate output is never a verdict on its own,
+   and the surrogate may rank nothing until its calibration gate passes
+   (`tools/ctwin/README.md`, "Time management on a virtual clock").
    For TM validation itself, order the spend by stress per game-minute:
    sudden-death drain is an *absolute-clock* pathology, so short sudden
    death (60+0, or a 1+0 hammer) stresses the mechanism harder per minute
@@ -231,10 +248,14 @@ replacement-policy battery), and PST-shaped eval variants injected via
 the pypy equivalent, so grids that were unaffordable become overnight
 jobs.
 
-**Do not use it for:** *timed* questions — time management, think-time
-curves, anything with a clock. The clock-budgeting branch of classic's
-`main()` is deliberately not cloned; the twin plays clock-free surrogate
-games (`go nodes N`). Nor for NNUE-eval questions: it clones classic's
+**Timed questions go through the virtual clock, not the twin directly.**
+The clock-budgeting branch of classic's `main()` is deliberately not cloned
+and the twin itself only plays clock-free games (`go nodes N`); `vmatch.py`
+wraps it in a virtual clock so that time management is *rankable* here —
+see rule 15 and the README's "Time management on a virtual clock". Ranking
+is not deciding: a real-clock match still validates the candidate.
+
+**Do not use it for:** NNUE-eval questions — it clones classic's
 search over table-file evaluations, so anything the 4k NNUE work changes
 outside PST-shaped eval is invisible to it. Rule 12 also applies with full
 force: fixed-node results hold search effort constant, so they screen;

@@ -3,3 +3,5 @@ sunfish_c_pgen
 tables_classic.txt
 *.profraw
 *.profdata
+cal/
+matrix/

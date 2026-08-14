@@ -155,8 +155,11 @@ def elo_estimate(w, d, l):
     se = math.sqrt(var / n) if n > 1 else 0.5
     lo = min(max(score - 1.96 * se, eps), 1 - eps)
     hi = min(max(score + 1.96 * se, eps), 1 - eps)
-    return elo, (-400.0 * math.log10(1.0 / hi - 1.0),
-                 -400.0 * math.log10(1.0 / lo - 1.0))
+    # (LOW, HIGH), in that order.  score -> elo is increasing, so the low
+    # score bound is the low Elo bound; returning them the other way round
+    # printed every interval backwards ("elo +58.5 [+312.9, -140.3]").
+    return elo, (-400.0 * math.log10(1.0 / lo - 1.0),
+                 -400.0 * math.log10(1.0 / hi - 1.0))
 
 
 def load_openings(path, seed):

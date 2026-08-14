@@ -80,6 +80,11 @@ in the git history of this file.
   C-only node/movegen screen over it, and the paired-openings fixed-node
   match driver (python-chess arbiter, trinomial SPRT, zero tolerance for
   illegal moves).
+- `tmlib.py`, `tmsim.py`, `vmatch.py`, `tmmatrix.py`, `npsprofile.py`,
+  `npsmodel.json` — the TIME-MANAGEMENT surrogate (see below): the formula
+  mirrors, the stage-0 trajectory simulator, the virtual-clock match driver,
+  the concurrent knob-matrix runner, and the measured node-rate profile the
+  virtual clock converts seconds with.
 
 ## Measured status (2026-08-14, this laptop)
 
@@ -161,11 +166,136 @@ Only after all three: twin grids/SPSA results are decision-grade at
 *fixed effort* — rule 12 of docs/TESTING.md still applies before any
 wall-clock claim.
 
+## Time management on a virtual clock
+
+TM used to be the one thing the twin could not accelerate. A faster engine
+does not make a timed game cheaper — a 60+0 game burns two minutes of wall
+clock whichever engine plays it — so every TM question cost real hours on
+sunfish.py, and the twin excluded clocks by design.
+
+The surrogate removes the wall clock from the loop instead of the engine.
+**Nothing in `tmsim.py` or `vmatch.py` reads a clock** (a unit test asserts
+that neither file so much as imports `time`), and the funnel spends effort in
+the order of what it can rule out:
+
+```
+stage 0   tmsim.py    no games at all.  Walks a clock through a game of a
+                      given length under each manager and SOLVES for the
+                      pathologies: the negative-cap threshold, the fixed
+                      point a budget parks the clock at, the clock where the
+                      pool stops spending.  Milliseconds per manager.
+stage 1   vmatch.py   virtual-clock games on the twin.  ~4 s per 60+0 game
+                      against ~2 min of real clock -- ~30x on top of the
+                      twin's 22x, because the surrogate skips the parts of
+                      a timed game that are pure waiting.
+stage 2   the real thing.  ONE wall-clock match on sunfish.py for the
+                      candidate the surrogate ranked first, plus the 1+0
+                      hammer for flag safety.
+```
+
+**How a virtual move works.** `tmlib` turns the virtual clock into
+`(soft, hard)`; `npsmodel.json` turns `hard` into a node budget (how far the
+*Python* engine would have got in that many seconds); the twin runs
+`go nodes` and emits its whole probe trace; `vmatch.replay` walks that trace
+with `elapsed = nodes / nps` substituted for the clock and applies the arm's
+own stop rule, which yields both the move played and the spend; the clock is
+charged `spend + overhead` and credited the increment.
+
+Replay lives in the driver because that is where the stop rules live in every
+shipped engine (`uci.py`'s `go_loop`, the packed entry's inlined loop) — and
+it keeps `sunfish.c` untouched, which matters because any edit there must
+re-pass the full node-identity gate before any twin number counts. It is also
+*more* faithful than the twin alone: the twin's node cap is a yield-boundary
+rule, while the real deadline aborts inside `bound()`, so replay models the
+wall as a mid-probe abort at exactly `hard`.
+
+**The managers are mirrors, not re-derivations.** `tmlib.PINNED` holds the
+exact source text of every shipped budget — classic's `/12`, the packed
+`oldtm`/`steptm`/`smooth` arms, the pool, and the `min40_4` candidate — with
+its repo, file and commit. `python3 tmlib.py` re-evaluates each literal on a
+21×9 clock/increment grid and asserts the mirror agrees to 1e-12 (2,646
+values), then greps the live source and **fails on drift**. Sources it cannot
+find are reported UNCHECKED per manager rather than silently skipped, and a
+manager listed in `CANDIDATES` reports "not landed yet" instead — a missing
+pin is news for those, not a failure. `TM_UCI=<path>` additionally checks the
+pool mirror against a checked-out `uci.py` that has `pool_budget`: 45,520
+values identical to branch `tm-pool-manager` at 7e8e1ff.
+
+### Calibration gate (2026-08-14, this laptop)
+
+A surrogate that cannot reproduce results we already paid for in real hours
+may not rank anything. Each row is a real fastchess match on the packed
+artifact, re-run on the virtual clock at 50 ms/move of charged overhead.
+
+| target | real (fastchess, packed) | surrogate (virtual, twin) |
+|---|---|---|
+| (a) `steptm` vs `oldtm` @ 60+0 | **+235.5 ± 65.4**, H1 in 100 g | **+227.6 [+154, +325]**, H1 in 80 g |
+| (b) `smooth` vs `steptm` @ 60+0.1 | **+40.6 ± 25.6**, H1 in 438 g | **+84.9 [+42, +131]**, H1 in 192 g |
+| (c) `pool` vs `smooth` @ 60+0 | **+119.9 ± 36.4**, H1 in 274 g | **+112.3 [+48, +185]**, 80 g |
+
+Mechanism telemetry, which is the part that matters more than the Elo:
+
+| reading | real | surrogate |
+|---|---|---|
+| `oldtm` blind moves @ 60+0 | 22.3% | 26.2% |
+| `oldtm` crosses 2.4 s at move | 42 (median) | 40-43 (solved, `tmsim`) |
+| `steptm` minimum clock @ 60+0.1 | 2.0 s | **2.00 s** |
+| starved-move RATIO, step : smooth | 8.6x (34.3% / 4.0%, ≤0.15 s) | 8.5x (12.8% / 1.5%, ≤0.05 s) |
+| time forfeits, both arms @ 60+0.1 | 0 | 0 |
+| `pool` median spend / `smooth`'s | 0.79x | 0.55x |
+| `pool` max spend / `smooth`'s | 3.3x | 4.3x |
+
+(The starved-move *thresholds* differ — the ledger's metric is ≤0.15 s, the
+surrogate counts moves whose budget was at the 0.05 s floor — so the levels
+are not comparable and only the ratio is.)
+
+All three gates pass on sign and rough magnitude, two of them within 8 Elo.
+The pool arm additionally reports WHICH RULE ended each search: **75.6% of
+its moves stopped on the MTD-bracket soft limit and 0% on the depth-transition
+backstop**, which is the design's own load-bearing claim (reading the limit at
+a new depth arrives one full probe late) measured rather than assumed.
+
+The three arithmetic **signatures** are solved rather than simulated, and
+are invariant to *every* modelled parameter (node rate, iteration ladder,
+branching): `oldtm`'s negative-cap threshold **2.400 s**, the step budget's
+parking equilibrium **2.109 s** at 60+0.1 (2.2 s with no overhead charge —
+the measurement's 2.1 s median is what pins the charge at ~50 ms), and the
+pool's floor knee **(M+2)·O = 8.400 s**. All three are unit tests.
+
+**Where it fails, stated plainly.** (b) overstates the smooth edge ~2x, and
+`tmsim` says why: its parked step arm spends a median 0.057 s over its last
+twenty moves where the real one spent 0.115 s, so the surrogate's step arm is
+*twice as starved* as reality and the gap it loses by widens to match. The
+direction of that error is knowable in advance from the stage-0 trace, which
+is the useful part. And the `oldtm` FLAG count is a knife-edge in the modelled
+overhead — never within 80 moves at 5 ms, move 61 at 50 ms — while the
+floor-crawl that causes it is robust across the whole range. The surrogate
+reproduces mechanisms; it does not certify flag safety.
+
+**What the surrogate cannot see, and never will:** real lag variance, PyPy
+warmup and JIT deoptimisation, OS scheduling and cotenancy, and the true
+per-position node rate (the shipped profile explains ~57% of the nps
+variance; the residual is ±18%, and it is recorded in `npsmodel.json`
+rather than smoothed away). **The standing rule is therefore: THE SURROGATE
+RANKS, ONE REAL-CLOCK MATCH VALIDATES** — plus a 1+0 hammer, because flag
+safety is exactly the property a modelled overhead cannot certify.
+
+```sh
+python3 tmlib.py                                   # mirror + drift gate
+git show origin/tm-pool-manager:sunfish_ui/uci.py > /tmp/uci_pool.py
+TM_UCI=/tmp/uci_pool.py python3 tmlib.py           # ...incl. the live pool
+python3 tmsim.py --tc 60+0.1 --plies 63            # stage 0, one table
+python3 vmatch.py --arm-a pool --arm-b smooth --tc 60+0 --rounds 100
+pypy3 npsprofile.py measure && python3 npsprofile.py fit   # re-measure nps
+```
+
 ## Caveats (deliberate, documented)
 
 - The clock-management branch of classic's `main()` (wtime/winc budgets)
-  is *not* cloned — the twin is for clock-free games. `go` without
+  is *not* cloned — the twin itself is for clock-free games. `go` without
   limits runs to depth 999; always pass `nodes`, `depth` or `movetime`.
+  Clocked play is supplied *around* the twin by `vmatch.py`'s virtual
+  clock (above), which drives the same `go nodes` path.
 - `go nodes` semantics transcribe `sunfish_ui/uci.py`'s go_loop (see Game
   use above); node-identity claims are made at fixed depth, where both
   sides are exactly classic. The twin-vs-pypy sanity match at fixed nodes

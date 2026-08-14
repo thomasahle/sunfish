@@ -1,0 +1,105 @@
+{
+ "model": "linear-in-piece-count",
+ "intercept": 49614.8,
+ "slope_per_piece": -837.32,
+ "clamp_pieces": [
+  3,
+  32
+ ],
+ "knots": [
+  [
+   3,
+   51696.6
+  ],
+  [
+   5,
+   60079.5
+  ],
+  [
+   6,
+   38892.1
+  ],
+  [
+   8,
+   32917.3
+  ],
+  [
+   9,
+   30824.3
+  ],
+  [
+   11,
+   30474.1
+  ],
+  [
+   12,
+   43681.4
+  ],
+  [
+   14,
+   40823.5
+  ],
+  [
+   15,
+   47110.0
+  ],
+  [
+   17,
+   34856.3
+  ],
+  [
+   18,
+   34660.3
+  ],
+  [
+   20,
+   33892.3
+  ],
+  [
+   21,
+   37590.6
+  ],
+  [
+   23,
+   29927.6
+  ],
+  [
+   24,
+   27078.9
+  ],
+  [
+   26,
+   24246.8
+  ],
+  [
+   27,
+   27281.1
+  ],
+  [
+   29,
+   22553.9
+  ],
+  [
+   30,
+   27219.4
+  ],
+  [
+   32,
+   23427.5
+  ]
+ ],
+ "residual_rms_nps": 6273.1,
+ "residual_rms_frac": 0.179,
+ "r2": 0.573,
+ "provenance": {
+  "engine": "sunfish.py at f95f49c",
+  "interpreter": "pypy3 PyPy 7.3.23 with GCC Apple LLVM 21.0.0 (clang-2100.0.123.102)",
+  "host": "Darwin arm64, Mac14,10, matches running concurrently",
+  "node_budget_per_rep": 25000,
+  "reps": 3,
+  "estimator": "max over reps (least-disturbed sample)",
+  "positions": "twin self-game sample, one per distinct piece count",
+  "measured": "2026-08-14",
+  "caveat": "a FRESH Searcher() per rep, so BOTH tables start empty.  An in-game move is colder than that only in tp_score (sunfish.py:516 clears it per search) and WARMER in tp_move, which persists all game -- so this profile understates in-game nps and the surrogate searches slightly fewer nodes per virtual second than pypy would.  It is the same understatement on both arms of any A/B, so it compresses absolute depth without biasing a comparison."
+ }
+}
