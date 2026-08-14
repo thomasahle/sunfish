@@ -153,6 +153,15 @@ VAL-probe-first):
 
 ## Log (newest first)
 
+- 2026-08-15 ~02:5x UTC: 13h IDLE VIOLATION (session-bound watcher died
+  with the session) — liveness moved box-side: queue_runner.py detached,
+  own lock/tripwire; monitors are now advisory only. c1024-cal verdict:
+  density buys nothing (0.01421 / 0.01388 vs 0.01378) — structure
+  binding. c1024-phase form (c) phase-through-ml2 RUNNING under the
+  runner (certificate green). Screen arms rebuilt at HEAD (entry
+  5d7d0d1 3308 B / candidate 3536 B), full quick-ladder PASS; ×5
+  conversion stands (0/5 vs 1/5) — coordinator holds the launch call.
+
 - 2026-08-14 ~12:5x UTC: chain2 done. **8Mv: val 0.01378** (comparable
   split) — beats v1 0.01385: data scale pays; candidate packs 3536 B
   (whole-feature sparsity). **kb8fold verdict: NEGATIVE as shipped** —

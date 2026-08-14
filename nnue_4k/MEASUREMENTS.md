@@ -9712,3 +9712,43 @@ corroborates the axis reading: bucketed training-form val 0.01267-78
 (real signal) vs shipped folded 0.01429-40 (the fold loses it) — shared
 rows alone don't carry king knowledge; deltas cost bytes; ml2/phase are
 the byte-efficient axes.
+
+## 2026-08-15 — 13 idle hours, the runner switch, cal verdict, phase form
+
+**Standing-rule violation, owned:** the trainer idled 2026-08-14 13:31 →
+2026-08-15 ~02:4x UTC. c1024-cal completed and nothing started: the
+chain watcher was a SESSION-BOUND monitor and the session died (529
+wave). Root cause is architectural, same class as the wait-loop
+self-match: liveness owned by a laptop session. Fixed structurally —
+**train/queue_runner.py now runs DETACHED on the box** (atomic .runlock,
+nice 19, caps 8/8, its own forfeit tripwire that SIGSTOPs training and
+writes PAUSED_REPORT.txt; baseline 34 historical forfeits across box
+pgns, watching for increase). A session kill can no longer idle the
+trainer or orphan its tripwire.
+
+**c1024-cal verdict (pinned comparable split):** l1=0 τ0.6 → 0.01421;
+l1=0.0003 τ0.6 → 0.01388; vs v1 0.01385 (τ0.85) and 8Mv 0.01378. The
+enlarged 1024 B budget buys NOTHING through density at ps768/N=4 — more
+nonzeros made val WORSE. Structure is the binding constraint, consistent
+with kb8fold (buckets carry signal, 0.01267 training-form; the fold
+loses it, 0.01428 shipped).
+
+**c1024-phase, form (c) chosen and RUNNING** (runner entry
+10_c1024_phase_ml2, certificate green: float64-exact margins, modular
+hsum precondition HOLDS). Why (c): tapered 2× tables price ~1.2 KB at
+v1 sparsity (over target; the golf lane's own round-2 note measures the
+1024 payload budget 142 short at current code); 2-bucket ternshared
+repeats kb8fold's measured fold-negative unless deltas ship. Ml2Net as
+landed already affords phase×feature products with no new machinery — a
+lane can specialize as a material-phase detector and the certified
+one-multiply second layer reads phase×passer / phase×king-activity
+cross-products through u2 (+bm payload digits). The probes' phase class
+is the scoreboard; the subsumption ablation (K_END/khold2/pend) arms
+when this family screens.
+
+**Screen arms refreshed to HEAD** (entry 5d7d0d1, 3308 B; candidate =
+8Mv payload on the golfed round-2 proto, 3536 B): invariants,
+shapecheck-class checks, first-yield, legality 334/334 all PASS on the
+rebuilt pair. The ×5 conversion reading stands (entry 0/5, 8Mv 1/5,
+kqk-mid): the marginal call remains the coordinator's; nothing launches
+from this lane.
