@@ -520,8 +520,15 @@ class Searcher:
 
         # When queens come off, the kings can start to move to the center.
         # This is important to win KRK/KQK endings. Both directions every
-        # search: table state must never outlive the condition (reused
-        # processes start new games with this module state).
+        # search because the queens leave DURING a game, and one Searcher
+        # plays every move of it - a new game gets a new Searcher, so this
+        # was never about state outliving a game ("ucinewgame" in
+        # sunfish_ui/uci.py). What the swap does leave behind is the scores
+        # in history: they were accumulated under the previous table, so
+        # after a swap they are off by a constant (up to 133cp per king)
+        # that move() carries to every descendant. Measured harmless on the
+        # C twin at fixed nodes: 668 games, +0.52 +/- 6.37 Elo. So the
+        # scores stay as they are; only the table follows the board.
         pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END
 
         gamma = 0

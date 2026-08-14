@@ -47,7 +47,7 @@ EXPECTED = {
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "11d52eaa8a661352",
     "Searcher.bound": "47e70ff167eeff41",
-    "Searcher.search": "f9aa8c81b84ff44b",
+    "Searcher.search": "f4b086a70fd55ec9",
     "constants": "9aaf6ed2785fecea",
 }
 

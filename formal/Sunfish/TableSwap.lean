@@ -31,14 +31,31 @@ Two tables, two fates:
   `killerLegal_lifecycle_pstSwap`, the cross-search mirror of
   `killerLegal_lifecycle`).
 
-The review-edit rationale (Thomas, `search`): the assignment runs in
-both directions every search precisely so that the evaluation in force
-is a function of the current position alone, never of module history --
-reused processes start new games with this module state, and `tp_move`
-entries stored under one K-table are then consumed under the other.
-That consumption is sound exactly because the lifecycle invariant is
+The rationale (Thomas, `search`): the assignment runs in both
+directions every search precisely so that the evaluation in force is a
+function of the current position alone.  NOT because module state
+outlives a game -- a new game gets a new `Searcher` (`ucinewgame` in
+`sunfish_ui/uci.py`) -- but because the queens come off DURING a game,
+with one `Searcher` playing every move of it.  `tp_move` entries stored
+under one K-table are then consumed under the other, and that
+consumption is sound exactly because the lifecycle invariant is
 eval-independent modulo `SameKingClass`; the eval-RELATIVE table is the
 one that gets cleared.
+
+What the swap leaves behind is a third piece of state, and this file
+deliberately does not model it: the scores cached in `history` were
+accumulated by `Position.move` under the PREVIOUS table, so a swap
+leaves them off by a constant (up to 133cp per king), and `move`'s
+score identity -- `score = self.score + self.value(move)`, which
+`ValGame.score_identity` states up to the rotation -- carries that
+constant to every descendant instead of confining it to the root.  The
+source keeps the stale scores rather than re-deriving them, because
+re-deriving them is MEASURED to change nothing: 668 fixed-node games,
++0.52 ± 6.37 Elo, 313 of 334 pairs splitting 1-1 (the C twin's
+PR-service measurement, `nnue_4k/MEASUREMENTS.md` on the `nnue-4k`
+branch).  A model of a repair the source does not perform would be a
+model of a different program, so the theorems below stay with the two
+tables the swap actually has to justify.
 -/
 
 import Sunfish.Stalemate
