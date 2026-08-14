@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-14 | **PRE-REGISTERED: the POOL time manager (soft/hard) goes to a four-arm ladder — (a) 60+0 NON-INFERIORITY pool vs the shipped entry, elo0=−10 elo1=0, cap 600; then (b) 60+1 elo0=0 elo1=10; (c) 30+1 NON-INFERIORITY; (d) phase-M vs pool** | Thomas's v2 architecture, separate from the smooth budget (#188, the conservative acute fix): a whole-game pool `P = T + (M−1)·I − (M+2)·O` split into a soft limit `min(P/M, A/4)` that stops STARTING iterations and a wall `min(5·soft, A/2)` that cannot go negative. `pooltm` mod, **+57 B all-in** (3308 → 3365, 731 spare — the curve's bytes come out with it), sha `cddf392e21449054` against the in-flight #188 baseline `14b69a606b743a37`. **Recorded before the games and against the design's own premise:** budgets are not spends — iterations are discrete, the pool stops at the first one that ENDS past its limit, and the realized spend measures 1.3–2.3× the soft limit (60+0: 2.26 s vs the incumbent's 1.50 s on the laptop; more than the incumbent at every probed TC on the loaded box). v1 is STATIC; the dynamic target is v1.1 and is not screened until v1 survives (a) and (c) |
 | 2026-08-14 | **PRE-REGISTERED: the step budget becomes a SMOOTH one, and the price of that is two matches — (1) 60+0.1 smooth vs step, elo0=0 elo1=20, cap 600; (2) 30+1 NON-INFERIORITY smooth vs step, elo0=-10 elo1=0, cap 400** | The step form is discontinuous at `winc == 0`: one millisecond of increment moved the divisor 40 → 12, so 60+0.1 was paced at /12 — the exact drain the /40 branch exists to close. Replacement is one rational base (divisor slides 40 → 12) under one cap that cannot go negative. **What carries for free:** `winc == 0` is bit-for-bit `wtime/40` and, above a 2.667 s clock, bit-for-bit the stage-1 `tmfix` arm — so +235.5 ± 65.4 transfers untouched. **What must be bought:** increment TCs are now /12 + 0.9·inc *asymptotically* (−7.4% at 30+1, −8.5% at 60+1, −3.3% at 300+3), so match 2 prices that. Arms are one expression apart from one generator; the step arm packs to **3295 B, sha `fe22791b409b1fba`** — byte-identical to the stage-1 winner. Entry **3295 → 3308 B** (+13, 788 spare). Honest note recorded in advance: if match 1 reads ≈ 0 the change lands as continuity-plus-safety, not as Elo |
 | 2026-08-14 | **C-TWIN PR SERVICE + EVICT BATTERY: calibration PASSED at 49.83% (300g, -1.16 ± 12.23, after a voided -54 run whose root-cause fixed the twin's go-nodes driver); #184 +0.52 ± 6.37 (668g, Ptnml [4,5,313,10,2]); #182 +1.04 ± 12.74 (668g, mechanism-active, nets neutral); #171 exactly 0.00 (all 334 pairs identical)** | Eviction battery: unguarded simplification is a **no-op at production TABLE_SIZE** and **-15.09 ± 19.57 under TABLE_SIZE=500 churn** (the root guard earns its keep where it was built); hash-slot two-tier +6.24 ± 20.96 is the guardless alternative; k2/k3 killers +1% nodes, screen-pruned. All fixed-node 20k, twin-grade, zero illegal moves in ~3,640 games |
 | 2026-08-14 | **STAGE 1 VERDICT: the sudden-death TM fix is +235.45 ± 65.41 at 60+0 — H1 accepted in 100 games (64W-5L-31D, LOS 100%, 0 losing pairs of 50), in 21 minutes** | And the mechanism is NOT the one the pre-registration expected: **zero time forfeits on either arm**, every decisive game an actual mate. The drain does not flag, it BLINDS — oldtm's clock crosses the negative-cap threshold at median move 42 and it then plays a median 16 moves at the 0.05 s floor (exemplar: 45 moves at 0.00 s), while tmfix never crosses it in 100/100 games and ends with 16.9 s to oldtm's 2.0 s. H3's "depth crater" and H4's TM are therefore ONE finding. Not a ladder claim: arm-vs-arm at 60+0. Stage 1's pass rule had a degenerate-case defect (0 < 0), logged not patched. **Stage 2 (300+0) staged and NOT armed — slot decision** |
@@ -244,6 +245,167 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-14 — PRE-REGISTRATION: the POOL time manager (soft/hard), and the ladder that prices it
+
+Written before a game is played. This is Thomas's design and it is the v2
+architecture, not a second attempt at the acute fix: the smooth budget (PR #188,
+pre-registered above) stays exactly where it is as the conservative correction,
+and this entry asks a different question — whether a **resource pool with two
+limits** beats **one curve that has to be both target and wall**.
+
+### The design (Thomas's, in milliseconds as the entry runs it)
+
+```python
+M = 40
+P = max(0, wtime + (M - 1) * winc - (M + 2) * 200)   # the pool the game has
+A = max(0, wtime - 400)                               # what THIS move can reach
+soft = min(P / M, A / 4)                              # stop STARTING iterations
+think = min(5 * soft, A / 2)                          # the wall, i.e. the deadline
+```
+
+`sunfish_ui/uci.py` runs the same arithmetic in SECONDS (`pool_budget`), and its
+`tests/test_tm_pool.py` pins this mod's millisecond text as a literal and
+asserts `t_ms = 1000·t_s` on a grid — the seconds/ms confusion has cost this
+project two incidents, so it is checked numerically on both sides.
+
+**Why a pool.** A single divisor answers "what is this move worth" and "how long
+may one iteration run" with one number, and the two pull it in opposite
+directions. Splitting them lets a routine move be paced at `P/M` while a hard
+one may run to 5x that. It also prices what a divisor cannot see: the increment
+is **income** (M−1 further moves will earn it) and the per-move overhead is a
+**tax** (M+2 moves pay it, the +2 buying margin for the last move and the flag).
+O = 200 ms is measured, not chosen — the lichess autopsy of `EAThUL0P` and the
+stage-1 60+0 drain forensics agree on it. The `A` clamps are the safety half:
+`A/4` keeps three more moves' worth of clock behind every soft limit and `A/2`
+is a wall that **cannot go negative**, which is the exact failure that lost that
+game.
+
+**Prior art, for calibration rather than authority:** Stockfish's `optimum`/
+`maximum` pair is this pool in another notation, Lc0's move-number curve is the
+phase-M arm below, and Berserk's soft:hard ratio is ~1:5, which is where the 5
+comes from.
+
+### The load-bearing implementation detail, measured before launch
+
+The soft limit is a rule about **starting** an iteration, and the driver's
+obvious landmark — a new depth appearing — arrives one FULL PROBE OF THE NEXT
+DEPTH late. Reading it there measured **2.64 s against a 1.29 s soft limit at
+60+0** and **6.82 s against 2.27 s at 60+1** through `tm_smoke` on the packed
+artifact: a soft limit that is really a 2-3x multiplier. The mod therefore
+mirrors the engine's own MTD bracket in the driver (`lo`/`up`, tightened
+monotonically exactly as `search()` does, so the instability guards' crossing
+case reads as converged too) and stops when it closes to inside
+`EVAL_ROUGHNESS`. The mid-iteration `think * 0.8` break is removed; the
+deadline, the `Stop` handler and the structural bestmove floor are untouched.
+
+### What this actually spends, and why arm (a) is a non-inferiority check
+
+Budgets are not spends: iterations are discrete, so the pool stops at the first
+one that ENDS past its soft limit. Measured through `tm_smoke`, cold table,
+start position, on both machines this lane uses:
+
+| | soft (formula) | smooth realized | pool realized | laptop / box |
+|---|---|---|---|---|
+| 60+0 | 1.29 s | 1.50 s | **2.26 s** | laptop |
+| 60+0.1 | 1.39 s | 2.46 s | **1.74 s** | laptop |
+| 60+1 | 2.27 s | 5.40 s | **3.10 s** | laptop |
+| 60+0 | 1.29 s | 1.41 s | **1.85 s** | box, nice 15, loaded |
+| 60+0.1 | 1.39 s | 2.51 s | **2.86 s** | box, nice 15, loaded |
+| 60+1 | 2.27 s | 4.82 s | **5.23 s** | box, nice 15, loaded |
+
+**Recorded in advance because it is the opposite of the design's premise:** on
+the budgets alone the pool spends 2.4x LESS than the smooth curve at 60+1, but
+the realized spend is dominated by where the iteration ladder happens to land,
+and on the box the pool spends MORE at every probed TC. Whether that costs or
+buys Elo is the question the ladder answers; nothing here is adjusted to make
+the answer nicer.
+
+Clock-safety walks (200 ms lag, our own moves only, in `tests/test_tm_pool.py`):
+at the ideal 1.0x the pool never flags 100 moves of 60+0 (3.0 s left) where /12
+flags at move 39 and the smooth curve at 84; at the measured 1.75x it flags at
+89, still later than either. At match-like lag (20-50 ms) neither arm flags
+within 120 moves, so **no forfeit is expected from either arm** — a forfeit is
+therefore a real signal, not an artifact.
+
+### The arms
+
+`tools/build/make_variants.py` from `nnue_4k/pst_entry.py` (CI-guarded against
+its own generator), new mods `pooltm` and `phasem`. Packed on the laptop
+toolchain, sha re-verified after transfer.
+
+| arm | mod | packed | sha256[:16] |
+|---|---|---|---|
+| **pool** = engine1 | `pooltm` | **3365 B** (731 spare) | `cddf392e21449054` |
+| **smooth** | `base` (= HEAD entry) | **3308 B** | `14b69a606b743a37` |
+| (phase-M, arm d) | `pooltm.phasem` | 3373 B | built at launch |
+
+**+57 B all-in**, and that is the honest price: the pool REPLACES the smooth
+curve, so the curve's bytes are already inside that figure. The `smooth` arm is
+`14b69a60…` — the same binary now playing PR #188's match 1, and at `winc == 0`
+its budget is `wtime/40` with a cap that differs from the stage-1 `tmfix`
+winner only below a 2.667 s clock. So arm (a) is measured against the
++235.5 ± 65.4 winner's behaviour, not a rebuild of it.
+
+### The ladder, in order, never batched
+
+| arm | TC | question | SPRT (engine1 = pool) | cap |
+|---|---|---|---|---|
+| **(a)** | 60+0 | does the pool give any of the +235 back? | elo0=−10 elo1=0 | 600 |
+| (b) | 60+1 | THE risk arm: routine spend vs extensions | elo0=0 elo1=10 | 600 |
+| (c) | 30+1 | non-inferiority at the decision TC | elo0=−10 elo1=0 | 400 |
+| (d) | 60+1 | phase-M (M = max(20, 46 − ply/2)) vs pool | elo0=0 elo1=10 | 600 |
+
+(a) runs now. (b) only after (a) reports, (c) after (b), (d) after (b). **v1 is
+STATIC**: the dynamic target (stability × best-move-change × score-drop, the
+`TM_DYNAMIC` knob in the classic twin) is v1.1 and is not screened until v1
+survives (a) and (c) — if the pool itself is a regression no stability tuning
+saves it, and mixing the two would leave us unable to say which half spoke.
+
+### Match (a) — 60+0 NON-INFERIORITY
+
+| | |
+|---|---|
+| instrument | fastchess on the bench box, arena `~/sunfish-bench/tmpool-20260814/` (NEW dir, fresh `git archive` of the packed HEAD) |
+| **engine1** | **pool** (orientation trap: fastchess states the bounds in engine1's frame) |
+| engine2 | smooth (`14b69a60…`, the in-flight #188 baseline) |
+| TC | **60+0** |
+| book | `book3k.pgn`, PGN not EPD (the packed artifact parses only `position startpos moves …`) |
+| games | 300 rounds × 2, `-repeat`, cap 600, concurrency 8, `nice 10`, `-recover`, srand 20260816 |
+| SPRT | elo0=−10 elo1=0 alpha=0.05 beta=0.05 model=normalized |
+| adjudication | **NONE** — a drained clock kills long, level endgames, exactly the class `-draw` would delete before the defect could show |
+
+**Pre-registered readings, all reported whatever the SPRT says:** W/L/D and Elo
+± pentanomial interval; LLR against the bounds and LOS; **illegal moves (zero
+tolerance — any occurrence kills the run and is reported naming the game)**;
+time forfeits per arm; **blind moves** (≤ 0.06 s) per arm, total and median per
+game; **drain profile** (clock remaining at game end: median, min, games under
+2 s); the move at which the clock first falls under 2.4 s and how many moves
+follow it; median plies; and the **per-arm median move time**, which is the
+realized-spend number the table above predicts.
+
+**Pre-registered remedy, fixed now so the result cannot pick the rule:** if (a)
+fails and the tally shows the pool's median move time above the smooth arm's,
+the single permitted retune is the soft scale `s` (SOFT_SCALE, 1.0 today) set to
+the ratio that equalizes the two medians, rounded to 2 decimals, with ONE rerun
+of (a) at the same seed, both ledgered. Any other adjustment needs a new
+pre-registration.
+
+**Honest note recorded in advance.** If (a) and (b) both read ≈ 0, this is an
+architecture change with no measured Elo and it will be reported as exactly
+that. The case for landing it would then rest on what the walks show and the
+matches cannot — the lichess-lag regimes, where 200 ms/move of unavoidable tax
+is priced by the pool and invisible to a divisor — and that case would be made
+on its own terms, not dressed up as a win.
+
+### Cotenancy
+
+The box is shared under owner-authorized capacity sharing (Thomas, 2026-08-14:
+more processes are fine while no other human user needs the box). At launch two
+tournaments of other lanes were live (PR #188's 60+0.1 arm, concurrency 8; a
+30+1 null-move arm, concurrency 10) on a 96-core box at load ~22. This lane runs
+concurrency 8 at `nice 10`, records every cotenant's game and forfeit counts at
+launch and at finish in `m1/RESULT.txt`, and touches nothing it did not start.
 
 ## 2026-08-14 — C-TWIN PR SERVICE: calibration PASSED at 49.83% (after catching and fixing a real driver bug), three PR intervals delivered, and the tp_move eviction battery — the root guard is worth ~15 Elo exactly where it was built to work
 
