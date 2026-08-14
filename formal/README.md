@@ -123,6 +123,33 @@ depth. `Repetition.lean` adds the game-history rule (`repetition_not_lost`,
 `FuelTailBracketSpec` -- the layer-1 bracket for the composed search -- is
 stated and flagged unproven; it is not used by the theorems above.
 
+### The finiteness variant, without the frontier tail
+
+`eventual_classification_fuel` is stated for `fuelValueD2t`, whose fold list
+already contains the frontier tail -- PR #171's engine change. For the
+*unpatched* fuel value `fuelValueD2` (`movesAbove` only), the same trichotomy
+holds when the game itself is finite (`EventuallyFinite.lean`):
+
+```text
+eventual_classification_fuel_finite :
+  ValFloor G 192 -> EndsWithin G N p -> (root legality) ->
+    forall D >= C*N + C + 6,  W / D / L read off the value, correctly
+```
+
+`EndsWithin G N p` -- every legal play from `p` reaches a terminal within `N`
+plies -- is true of adjudicated chess (50-move plus threefold under match
+adjudication) and false of the ruleless modeled game. At `D >= C*N + 6` every
+node the classification depends on is reached before the frontier, so the
+masking sites are unreachable and `NoMaskedMobility`, the tail, and even
+`EvalQuiet` all drop out. The bound is *effective* (`2N + 8` as shipped, no
+classical `exists D0`), and the file's entire footprint is
+`[propext, Quot.sound]`. The scope is eventual-only, by countermodel: `CexE`
+(the infinite masked chain) violates the premise (`cexE_not_finite`), while
+`CexD` satisfies it at budget 5 and still prices its drawable masked node in
+the mated band at depth 1 (`cexD_fuel_M1`) before classifying it correctly
+from depth 10 on (`cexD_M_eventually_classified`). Fixed-depth honesty below
+the bound still requires `NoMaskedMobility` or the #171 tail.
+
 ## Mate distance
 
 Checkmate is not one number.  The terminal correction assigns
@@ -330,6 +357,8 @@ transform is the identity, so the model and source are extensionally equal.
 - `EventuallyWide.lean`: the fuel oracle -- bounded real-edge cost and the
   W/D/L trichotomy with no chess premise.
 - `Repetition.lean`: the game-history draw rule on top of the fuel value.
+- `EventuallyFinite.lean`: the finiteness variant -- the trichotomy for the
+  untailed fuel value under `EndsWithin`, with an effective depth bound.
 
 ## Rules for search changes
 
