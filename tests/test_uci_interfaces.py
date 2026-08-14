@@ -380,7 +380,10 @@ def test_contract_covers_every_attribute_the_interface_reads():
     whichever command happens to reach it.
     """
     optional = {"TABLE_SIZE", "features", "from_board", "pst"}  # hasattr-guarded at use
-    unaccounted = engine_attributes_used_by_uci() - set(uci.ENGINE_API) - optional
+    # POOL_ENGINE_API is the conditional half of the contract: required, and
+    # checked eagerly by check_engine_module, only when TM_MANAGER=pool.
+    unaccounted = (engine_attributes_used_by_uci() - set(uci.ENGINE_API)
+                   - set(uci.POOL_ENGINE_API) - optional)
     assert not unaccounted, (
         f"{sorted(unaccounted)} read off the engine module but not declared in "
         "ENGINE_API (or in this test's optional set, with a hasattr guard)")
