@@ -19,8 +19,23 @@
 set -eu
 size() { wc -c < "$1" | tr -d ' '; }
 T=$(mktemp)
-pyminify --rename-globals --remove-literal-statements \
-    <(sed '/# minifier-hide start/,/# minifier-hide end/d' "$1") > "$T"
+# Same indivisible lever pair as tools/build/pack.sh (landed eb8897c), applied
+# here after measuring layout B's own consumers -- the bake-off cells -- rather
+# than assuming the joint layout's result carried over:
+#   * `1{/^#!/d}` drops the source's polyglot `#!/bin/sh`. Dead here for the
+#     same reason: the head below execs a NAMED interpreter on a /dev/fd. The
+#     source file keeps its header.
+#   * `--no-hoist-literals` stops pyminify replacing repeated literals with
+#     fresh one-character names, which is the repetition lzma matches for free.
+# Layout B, base -> both: b81 bake-off cell 3913 -> 3882 (-31), its elided cell
+# 3280 -> 3249 (-31), pst_entry 3380 -> 3334 (-46), classic 3271 -> 3249 (-22),
+# sunfish_nnue 3970 -> 3939 (-31), replnet_proto 3880 -> 3851 (-29).
+# The shebang strip ALONE is +4 on classic here TOO, so the pair is indivisible
+# in this script as well. Only the engine stream moves: the weights are
+# appended raw and the head recomputes `head -c$lt` in the same run.
+pyminify --rename-globals --remove-literal-statements --no-hoist-literals \
+    <(sed -e '1{' -e '/^#!/d' -e '}' \
+          -e '/# minifier-hide start/,/# minifier-hide end/d' "$1") > "$T"
 xz --format=lzma --lzma1=preset=9e,pb=0 -c "$T" > "$T.lzma"
 lt=$(size "$T.lzma"); lm=$(size "$2")
 lh=100; head=""
