@@ -1,22 +1,33 @@
-"""The classic builtin clock: one pool, spent down, never parked.
+"""The classic builtin clock: one pool, spent down, and parked off the floor.
 
 sunfish.py's `go` handler budgets time on a single inline line. Two
 properties decide whether that line is safe, and no other gate can see
 either -- the node ladder never starts a clock, and a match reports only
 the result.
 
-  * where the policy PARKS.  Iterate the self-clock recurrence
+  * how HIGH the policy parks.  Iterate the self-clock recurrence
     T <- T - think(T) - O + I over our own moves (O is per-move overhead
-    we cannot avoid, I the increment).  A policy with a fixed point above
-    its floor stops spending down: it reaches that clock and plays the
-    rest of the game at whatever budget the point allows.  The shipped
-    `min(t/12 + .9i, t/2 - 1s)` has one.  Once the cap binds the
-    recurrence is T <- T/2 + 1 + I, fixed point T* = 2 + 2I seconds --
-    measured at 2.0s (60+0) and a 2.1s median (60+0.1).  At 3+0 that park
-    is 2s, the budget under it has already collapsed to the 0.05s floor
-    because `t/2 - 1s` went NEGATIVE, and ~200ms/move of lag drains the
-    remainder: lichess EAThUL0P, lost on time at move 73 with no single
-    move overrunning.
+    we cannot avoid, I the increment).
+
+    A park is NOT caused by a cap, and an earlier draft of this file said
+    it was.  At any increment TC the clock MUST come to rest where
+    `spend + overhead == income`, whatever the budget's shape, so every
+    manager parks -- these candidates included.  What the shape decides is
+    not WHETHER the clock settles but HOW MUCH CLOCK IS STILL IN HAND when
+    it does, and that is the whole of the safety argument.  The surrogate
+    owns those altitudes and reads them off realized spend (60+0.1:
+    one-max 6.17s, the step form 2.11s, min40-4 0.22s; 60+1: reserves of
+    10.4s, 4.1s and 6.4s at a common ~1.06s spend).  This file asserts the
+    MECHANISM that orders them and leaves the numbers to that instrument.
+
+    The incumbent `min(t/12 + .9i, t/2 - 1s)` parks LOW and blind.  Once
+    the cap binds the recurrence is T <- T/2 + 1 + I, fixed point
+    T* = 2 + 2I seconds -- measured at 2.0s (60+0) and a 2.1s median
+    (60+0.1).  Under a 2s clock that cap is already NEGATIVE, so the arm
+    defining the park cannot be spent at all: the budget collapses to the
+    0.05s floor and ~200ms/move of lag drains the remainder.  That is
+    lichess EAThUL0P, lost on time at move 73 with no single move
+    overrunning.  The defect is the ALTITUDE, not the existence.
 
   * how much RESERVE is banked when the floor is reached.  A pool policy
     is worth exactly the clock it still holds at its floor, in moves.
@@ -26,12 +37,13 @@ Two candidate one-liners are walked here against the shipped one:
     one-max   max((wtime - 8000) / 40 + winc, 50)
     min40-4   min(wtime / 40 + 0.9 * winc, wtime / 4)
 
-Both drop the `t/2 - 1s` cap that manufactures the park, and reach the
-same place by different routes -- one-max banks a named 8s overhead
-reserve, min40-4 clips to a quarter clock so the reserve is four
-increments and no time-dimensioned constant appears at all.  This file
-is the shared scaffolding: the candidates are literals, so every
-property below is checked on both no matter which one is shipped.
+Both drop the `t/2 - 1s` cap, which does not create the park but does set
+it at the floor on a negative budget, and they reach a positive budget by
+different routes -- one-max banks a named 8s overhead reserve, min40-4
+clips to a quarter clock so the reserve is four increments and no
+time-dimensioned constant appears at all.  This file is the shared
+scaffolding: the candidates are literals, so every property below is
+checked on both no matter which one is shipped.
 """
 import re
 import os
@@ -177,26 +189,93 @@ def walk(stmt, base_s, inc_s, moves, overhead=OVERHEAD):
     return clock, moves
 
 
-@pytest.mark.parametrize("name,stmt", sorted(CANDIDATES.items()))
-def test_no_park_at_the_reference_increment(name, stmt):
-    """I = 0.1s: the clock strictly falls at every clock, so no fixed point.
+def park_clock(stmt, winc_s, overhead):
+    """The clock a game comes to rest at: the highest T with drift >= 0.
 
-    A fixed point is a T with drift(T) == 0.  Overhead alone (0.2s) already
-    exceeds the 0.1s income, and both candidates spend a nonnegative budget
-    on top, so the drift is bounded strictly below zero everywhere -- there
-    is nothing to converge to and the pool is genuinely spent down.
+    `drift` is nonincreasing in T (the budget only grows with the clock), so
+    the resting point is found by bisection.  Returns 0.0 when the clock
+    never stops falling, i.e. when there is genuinely no park.
     """
-    grid = [t / 10.0 for t in range(1, 6001)]        # 0.1s .. 600s
-    worst = max(drift(stmt, t, 0.1) for t in grid)
-    assert worst < 0, "%s parks: drift reaches %.4f" % (name, worst)
-    assert worst <= 0.1 - OVERHEAD - FLOOR + 1e-12
+    if drift(stmt, 0.0, winc_s, overhead) < 0:
+        return 0.0
+    lo, hi = 0.0, 600.0
+    for _ in range(200):
+        mid = (lo + hi) / 2
+        if drift(stmt, mid, winc_s, overhead) >= 0:
+            lo = mid
+        else:
+            hi = mid
+    return lo
+
+
+@pytest.mark.parametrize("name,stmt", sorted(CANDIDATES.items()) + [("incumbent", OLD)])
+@pytest.mark.parametrize("inc,over,parks", [
+    (0.0, 0.05, False),    # sudden death: no income, so nothing to rest on
+    (0.0, 0.20, False),
+    (0.1, 0.20, False),    # lag exceeds the increment: still a pure drain
+    (0.1, 0.05, True),     # the surrogate's charge: income wins, so a park
+    (1.0, 0.05, True),
+])
+def test_a_park_exists_exactly_when_income_exceeds_overhead(name, stmt, inc, over, parks):
+    """The correction, asserted: a park is not caused by a cap.
+
+    The clock rests where `spend + overhead == income`.  Since spend is at
+    least the floor, a resting point exists iff `income - overhead >= floor`
+    -- a statement about the TIME CONTROL and the lag, not about the budget's
+    shape.  Every policy here obeys it, the candidates included.
+    """
+    assert (park_clock(stmt, inc, over) > 0) is parks
+    assert (inc - over >= FLOOR) is parks
+
+
+def test_park_altitude_is_what_the_shape_actually_decides():
+    """At 60+0.1 the three policies rest at three very different clocks.
+
+    This reproduces the surrogate's ordering from the budget alone (it reads
+    6.17 / 2.11 / 0.22 s off realized spend, which is higher than the budget
+    model because the driver stops at 0.8*think; the numbers are that
+    instrument's, the ordering is arithmetic and belongs here).
+
+    Note where min40-4 lands: it parks LOWEST of the three, below even the
+    incumbent.  That is its known cost -- it wastes almost no clock and has
+    the thinnest flag margin -- and it is why the real-clock confirmation
+    for it is a flag hammer, not another Elo match.
+    """
+    park = {n: park_clock(s, 0.1, 0.05) for n, s in
+            [("one-max", ONE_MAX), ("incumbent", OLD), ("min40-4", MIN40_4)]}
+    assert park["one-max"] == pytest.approx(6.0, abs=0.01)
+    assert park["incumbent"] == pytest.approx(2.1, abs=0.01)
+    assert park["min40-4"] == pytest.approx(0.2, abs=0.01)
+    assert park["one-max"] > park["incumbent"] > park["min40-4"]
+
+
+def test_only_the_incumbent_parks_blind_with_a_negative_budget():
+    """Parking low is survivable; parking on a NEGATIVE budget is the defect.
+
+    All three rest at the floor at 60+0.1.  The difference is that the
+    incumbent gets there because its cap went negative -- it is not choosing
+    a small budget, it has no budget at all -- while both candidates reach
+    the floor with a positive, monotone budget behind them.
+    """
+    assert budget(OLD, 2.0, 0.1) < 0.1                      # cap already biting
+    assert budget(OLD, 1.9, 0.0) < 0                        # and then negative
+    for stmt in CANDIDATES.values():
+        assert budget(stmt, 1.9, 0.0) > 0
+        assert budget(stmt, 0.5, 0.0) > 0
 
 
 @pytest.mark.parametrize("name,stmt", sorted(CANDIDATES.items()))
 def test_no_park_at_sudden_death(name, stmt):
-    """I = 0: income is zero, so any nonnegative budget drains the clock."""
+    """The one place "no park" survives the correction: winc == 0.
+
+    Income is zero, so `spend + overhead == income` has no solution with a
+    nonnegative budget and the clock falls monotonically.  This is the venue
+    the real-clock arm tests, and it is the venue the candidates were chosen
+    for.
+    """
     grid = [t / 10.0 for t in range(1, 6001)]
     assert max(drift(stmt, t, 0.0) for t in grid) < 0
+    assert park_clock(stmt, 0.0, OVERHEAD) == 0.0
 
 
 def test_the_old_policy_does_park_at_two_plus_two_inc():
@@ -226,8 +305,8 @@ def test_at_sudden_death_the_old_park_is_a_drain_not_a_park():
     `t/2 - 1` is already negative below 2s, so the arm that defines the park
     cannot actually be spent -- main()'s 0.05s floor takes over, income at
     I = 0 is nothing, and the remaining 2.1s leaves ~8 moves at 0.05 + 0.2.
-    That is lichess EAThUL0P, and it is the reason a park at a low clock is
-    worse than no park at all.
+    That is lichess EAThUL0P, and it is the reason the ALTITUDE of the park
+    is the thing that matters rather than its existence.
     """
     assert budget(OLD, 1.9) < 0                    # the cap has gone negative
     assert armed(OLD, 1.9) == FLOOR                # so the engine plays blind
@@ -360,8 +439,10 @@ def test_min40_4_reserve_is_four_increments(inc):
 def test_min40_4_never_binds_its_cap_at_sudden_death():
     """At I = 0 the policy is exactly t/40 -- the cap is inert, hence no park.
 
-    This is min40-4's no-park argument and it differs from one-max's: there
-    is no reserve floor doing the work, the capped arm simply never binds.
+    Scoped deliberately to winc == 0, which is the only regime where "no
+    park" survives the correction -- and it is the regime the real-clock arm
+    tests.  Here min40-4 needs no reserve floor at all: the capped arm simply
+    never binds, so the policy is a pure geometric drain.
     """
     for t in [x / 10.0 for x in range(1, 6001)]:
         assert budget(MIN40_4, t) == pytest.approx(t / 40)
