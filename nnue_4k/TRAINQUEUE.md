@@ -36,6 +36,13 @@ val 0.01385 @59.6% zeros (winner, thin margin); l1=0.002 → 0.01404
 
 ## Log (newest first)
 
+- 2026-08-14 ~11:0x UTC: caught an instrument slip in the 8M launch — no
+  --valn, so its val split is not the 4M runs' and its numbers are
+  unreadable against them. Chained replnet_8Mv (--valn 4027406 = the 4M
+  val ids by construction) then replnet_kb8fold (ternshared landed at
+  567e4ef) to start the moment the current run exits. The no-valn 8M run
+  completes and is recorded, but only 8Mv's val counts for the queue.
+
 - 2026-08-14 ~10:46 UTC: v1c finished — val 0.01389 @65.2% zeros (does
   not beat v1's 0.01385 in val, but sits mid-band on bytes; both are
   screen-eligible, v1 stays the staged candidate). Started replnet_8M
