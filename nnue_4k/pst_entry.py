@@ -202,14 +202,14 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                     if i == H1 and self.board[j + W] == "K" and self.wc[1]:
                         yield Move(j + W, j + E, "")
 
-    def rotate(self, nullmove=False):
-        """Rotates the board, preserving enpassant, unless nullmove.
+    def rotate(self, n=False):
+        """Rotates the board, preserving enpassant, unless n.
         The accumulator is unchanged; only which block is "ours" flips, and
         that flips the sign of the net residual exactly as it flips ps."""
         return Position(
             self.board[::-1].swapcase(), -self.score, self.bc, self.wc,
-            119 - self.ep if self.ep and not nullmove else 0,
-            119 - self.kp if self.kp and not nullmove else 0,
+            119 - self.ep if self.ep and not n else 0,
+            119 - self.kp if self.kp and not n else 0,
         )
 
     def move(self, move):
@@ -269,7 +269,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                 score += pst["P"][119 - (j + S)]
         return score
 
-    def king_capture(self):
+    def k(self):
         """The move that takes the opponent king, if any - i.e. the proof
         that this position was reached by an illegal move. Same test as
         gen_moves/value: the target is the king, or within one of the
@@ -290,12 +290,12 @@ class Stop(Exception): pass
 
 
 # lower <= s(pos) <= upper
-Entry = namedtuple("Entry", "lower upper")
+Entry = namedtuple("Entry", "l u")
 
 
 class Searcher:
     def __init__(self):
-        self.tp_score, self.tp_move, self.history = {}, {}, set()
+        self.t, self.tp_move, self.h = {}, {}, set()
         self.nodes, self.deadline = 0, 1 << 63
         # minifier-hide start
         self.node_cap = 1 << 62          # testing only; see bound()
@@ -304,7 +304,7 @@ class Searcher:
     def bound(self, pos, gamma, depth, root=False):
         """ Let s* be the score of the sub-tree from pos at this depth, as
             a function of (pos, depth) alone. This includes null moves and
-            QS pruning, and global parameters like self.history that don't
+            QS pruning, and global parameters like self.h that don't
             change during search. (Things that change, like tp_move or gamma,
             are not allowed to change the sub-tree and value of s*.)
 
@@ -315,7 +315,7 @@ class Searcher:
             if gamma <= s* then gamma <= r <= s* (A better lower bound)
 
             Note, bound() is not guaranteed to be deterministic: stored values
-            in self.tp_score may be used to return a bound that is not the best
+            in self.t may be used to return a bound that is not the best
             possible, but it is guaranteed to be valid according to the rules above.
 
             On top of the bound, three exact promises:
@@ -383,14 +383,14 @@ class Searcher:
         # same two numbers the entry held.) At the root 'entry' stays
         # unbound - its only other reader is the store below, also skipped.
         if not root:
-            entry = self.tp_score.get((pos, depth), Entry(-MATE_UPPER, MATE_UPPER))
-            if entry.lower >= gamma: return entry.lower
-            if entry.upper < gamma: return entry.upper
+            entry = self.t.get((pos, depth), Entry(-MATE_UPPER, MATE_UPPER))
+            if entry.l >= gamma: return entry.l
+            if entry.u < gamma: return entry.u
 
             # Let's not repeat positions. We don't chat
             # - at the root (a driver probe) since it is in history, but not a draw.
             # - at depth=0, since it would be expensive and break "futility pruning".
-            if depth > 0 and pos in self.history: return 0
+            if depth > 0 and pos in self.h: return 0
 
 
         # Generator of moves to search in order.
@@ -426,11 +426,11 @@ class Searcher:
             # (feature, eval) rule does not settle it here). Until that lands,
             # this comment describes the code as written.
             if not root and depth > 2 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
-                score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
+                score = -self.bound(pos.rotate(n=True), 1 - gamma, depth - 3)
                 # A fail high is a virtual claim, and needs verification
                 # before it may cut: if the king is capturable the capture is
                 # substituted (the node must report the exact MATE_UPPER)
-                proof = score >= gamma and (self.tp_move.get(pos) or pos.king_capture())
+                proof = score >= gamma and (self.tp_move.get(pos) or pos.k())
                 if proof and pos.value(proof) >= MATE_LOWER:
                     yield proof, MATE_UPPER
                 # a remaining mate-band claim is vacuous (if passing wins the
@@ -441,7 +441,7 @@ class Searcher:
                 # certifies the value sub-band, letting the cutoff stand
                 # with no chess assumption (the premise it replaced is false
                 # in real chess: 8/6p1/6R1/k7/2K5/8/8/8 w).
-                elif score < gamma or self.bound(pos.rotate(nullmove=True),
+                elif score < gamma or self.bound(pos.rotate(n=True),
                         1 - MATE_LOWER, depth - 3) >= 1 - MATE_LOWER:
                     yield None, score
 
@@ -528,7 +528,7 @@ class Searcher:
                     # plays it (three -5ish queen/piece giveaways in 145
                     # production games).
                     if len(self.tp_move) > TABLE_SIZE:
-                        del self.tp_move[next(k for k in self.tp_move if k != self.root)]
+                        del self.tp_move[next(k for k in self.tp_move if k != self.r)]
                 break
 
         # If we didn't see any legal moves, it might just be that we failed
@@ -536,9 +536,9 @@ class Searcher:
         # we genuinely re in checkmate or stalemate. There's no way to know but
         # to check.
         if depth and not live and all(
-                pos.move(m).king_capture() for m in pos.gen_moves()):
+                pos.move(m).k() for m in pos.gen_moves()):
             # We can't move, but is it a checkmate or stalemate?
-            best = -MATE_LOWER if pos.rotate(nullmove=True).king_capture() else 0
+            best = -MATE_LOWER if pos.rotate(n=True).k() else 0
 
         # Table part 2. Every search decision is gamma-independent, so all
         # bounds target one value function determined by the key and stored
@@ -547,26 +547,26 @@ class Searcher:
         # incomparable evaluations of a move breaks this - that is a bug,
         # not a configuration; see formal/README.md.
         if not root:
-            self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)
-        if len(self.tp_score) > TABLE_SIZE:
-            del self.tp_score[next(iter(self.tp_score))]
+            self.t[pos, depth] = Entry(best, entry.u) if best >= gamma else Entry(entry.l, best)
+        if len(self.t) > TABLE_SIZE:
+            del self.t[next(iter(self.t))]
 
         return best
 
     def search(self, history):
         """Iterative deepening MTD-bi search"""
-        self.nodes, self.history = 0, set(history)
-        self.tp_score.clear()
-        # Table choice is fixed for the whole search (and tp_score is
+        self.nodes, self.h = 0, set(history)
+        self.t.clear()
+        # Table choice is fixed for the whole search (and t is
         # cleared above), so every bound targets one value function.
-        pos = self.root = history[-1]
+        pos = self.r = history[-1]
 
         # Classic's K_END is a centralization gradient, and classic keys it
         # on queens-off. Both directions every search: table state must
         # never outlive the condition.
         pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END
         # The carried score was accumulated under the OTHER table.
-        pos = self.root = from_board(pos.board, pos.wc, pos.bc, pos.ep, pos.kp)
+        pos = self.r = from_board(pos.board, pos.wc, pos.bc, pos.ep, pos.kp)
 
         gamma = 0
         # In finished games, we could potentially go far enough to cause a recursion

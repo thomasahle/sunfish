@@ -322,6 +322,33 @@ for _anchor, _repl in _iir_edits:
         "this generator: %r" % (src.count(_anchor), _anchor[:60]))
     src = src.replace(_anchor, _repl, 1)
 
+# ---- golf: rename what nothing outside this file dereferences -------------
+# pyminify renames globals and locals, but ATTRIBUTE and METHOD names survive
+# minification verbatim -- they are the only long identifiers left in the
+# packed stream. They cannot ALL go: the dev driver (sunfish_ui/uci.py)
+# reads, by name, pos.board/.score/.kp/.move()/.gen_moves()/.rotate()/
+# .value()/.prom, searcher.bound()/.search()/.tp_move/.nodes/.deadline/
+# .node_cap, the `root=` kwarg of bound() (uci.py:216), and the module
+# globals in ENGINE_API -- and agree.py and the variant screens drive entry
+# SOURCES through that driver, so renaming any of those breaks the lane's
+# own instruments. What is renamed here is exactly the set no external
+# caller touches. The ledger's -103 estimate assumed the full rename; the
+# driver-visible names are why the measured saving is smaller.
+_golf_renames = [
+    # (regex, replacement, expected count incl. comments -- drift is loud)
+    (r"\bking_capture\b", "k", 4),
+    (r"\btp_score\b", "t", 9),
+    (r"self\.history\b", "self.h", 4),
+    (r"self\.root\b", "self.r", 3),
+    (r"\bnullmove\b", "n", 7),
+    (r"entry\.lower\b", "entry.l", 3),
+    (r"entry\.upper\b", "entry.u", 3),
+    (r'"lower upper"', '"l u"', 1),
+]
+for _pat, _repl, _n in _golf_renames:
+    src, _c = re.subn(_pat, _repl, src)
+    assert _c == _n, "golf rename %r matched %d times, expected %d" % (_pat, _c, _n)
+
 open(OUT, "w").write(src)
 try:
     compile(src, OUT, "exec")
