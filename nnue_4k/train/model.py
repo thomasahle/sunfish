@@ -107,13 +107,16 @@ class ResidualNet(nn.Module):
             v = v + self.shared
         return v
 
-    def weight(self):
+    def folded(self):
+        """The EFFECTIVE float table (raw + virtual features), pre-grid."""
         v = self.virt()
         if isinstance(v, int):
-            w = self.raw
-        else:
-            N = self.raw.shape[1]
-            w = (self.raw.view(self.B, 768, N) + v).view(self.B * 768, N)
+            return self.raw
+        N = self.raw.shape[1]
+        return (self.raw.view(self.B, 768, N) + v).view(self.B * 768, N)
+
+    def weight(self):
+        w = self.folded()
         if self.cfg.ternary:
             w, self._u = constraints.ternary_ste(w, self.cfg.ternary)
         return w
@@ -220,8 +223,54 @@ class Ml2Net(ResidualNet):
         return base_cp + d.clamp(-self.clampcp, self.clampcp)
 
 
+class StructuredNet(ResidualNet):
+    """The one-layer replnet whose WEIGHT TABLE is parametrized by the
+    structure the payload stores (structures.py).  Forward, antisymmetry,
+    export order and the engine's arithmetic are the plain net's -- only
+    weight() changes, so a structured run is comparable to the plain family
+    line for line (and its epoch-0 net is the plain one for lowrank)."""
+
+    def __init__(self, cfg):
+        if not cfg.ternary:
+            raise ValueError("arch=%s is a replnet parametrization: it needs "
+                             "the ternary grid (model.ternary > 0)" % cfg.arch)
+        super().__init__(cfg)
+        import structures
+        if cfg.arch == "cb":
+            self.struct = structures.CodebookWeight(
+                768 * cfg.kb, cfg.N, cfg.cb_k, cfg.cb_block, cfg.ternary,
+                cfg.cb_temp, init_from=self.raw)
+        else:
+            self.struct = structures.LowRankResidual(
+                768 * cfg.kb, cfg.N, cfg.lr_rank, cfg.ternary, cfg.lr_wmax)
+
+    def weight(self):
+        w = self.folded()
+        if self.cfg.arch == "cb":
+            # l1/rate price the SHADOW: for a codebook net the payload is
+            # book + indices, whose dial is (K, block), and pressure on the
+            # shadow is what steers blocks onto the all-zero codeword.
+            self._u = w / constraints.WSCALE
+            w, self._assign = self.struct(w)
+        else:
+            w, self._u = self.struct(w)
+        return w
+
+    def clamp_weights(self, wclip):
+        super().clamp_weights(wclip)
+        self.struct.clamp_(wclip)
+
+    def export_struct(self):
+        with torch.no_grad():
+            return self.struct.export_struct(self.folded())
+
+
 def build_model(cfg):
-    return Ml2Net(cfg) if cfg.arch == "ml2" else ResidualNet(cfg)
+    if cfg.arch == "ml2":
+        return Ml2Net(cfg)
+    if cfg.arch in ("cb", "lowrank"):
+        return StructuredNet(cfg)
+    return ResidualNet(cfg)
 
 
 def sigmoid_loss(pred, y, K, p):

@@ -21,7 +21,18 @@ Arm protocol -- an arm owns only the BODY of the payload:
 Encoders may be arbitrarily clever; decoders pay by the byte.  Nothing
 here is skipped because it "obviously" loses -- the ledger's
 estimate-vs-measured record (8+ misses) is why the zoo measures.
+
+Some arms price a STRUCTURE the net must have been trained through
+(train/structures.py -- q.struct): those raise NotApplicable on a plain
+net, which the harness records as a SKIP, never as a pass and never as a
+failure.  Their post-hoc cousins (cb8, lr_svd) stay in the zoo as the
+controls: same decoder shape, structure fitted after the fact.
 """
+
+
+class NotApplicable(Exception):
+    """This arm cannot price THIS net (the structure it encodes is absent).
+    A skip in the table -- distinct from an arm that FAILED."""
 
 
 def mixed_pack(pairs):
@@ -55,5 +66,5 @@ def register(arm):
 def all_arms():
     # import for side effect: each module registers its arms
     from . import base81, controls, reorder, lanes, mixedradix, rans, \
-        codebook, sparse, lowrank, rle  # noqa: F401
+        codebook, sparse, lowrank, rle, trained  # noqa: F401
     return list(ARMS)

@@ -23,6 +23,7 @@ usage:
   export.py RUN_DIR_OR_PICKLE --price [--entry PATH]
 """
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -85,8 +86,19 @@ def export_replnet(path, E, b, v, clampcp, base_kind, train_meta):
 
 
 def export_model(model, cfg, path):
-    """Dispatch a live model to its export family.  Returns a short info
-    string for the epoch log."""
+    """Dispatch a live model to its export family, then run the
+    knowledge-class probe suite (diagnostics, never gates) and ledger it
+    beside the artifact.  Returns a short info string for the epoch log."""
+    info = _export_model(model, cfg, path)
+    import probes
+    scores = probes.report(model, cfg, compact=True)
+    with open(path + ".probes.json", "w") as f:
+        json.dump(scores, f, sort_keys=True)
+    return info
+
+
+def _export_model(model, cfg, path):
+    """The per-family export dispatch."""
     m = cfg.model
     with torch.no_grad():
         E = model.weight().detach()

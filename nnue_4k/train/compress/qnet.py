@@ -22,11 +22,16 @@ _R2 = 1 | 1 << HALF
 MH, MLO = _U << VBITS, _U << 14
 PIECES = "PNBRQKpnbrqk"
 
-QNet = namedtuple("QNet", "name shift g bd trits clampcp Efloat")
+QNet = namedtuple("QNet", "name shift g bd trits clampcp Efloat struct")
+QNet.__new__.__defaults__ = (None,)
 # trits: tuple of 768 tuples of N ints in {-1,0,+1}, feature-major
 # (feat = piece_index*64 + sq64), lane-minor -- export_replnet's order.
 # Efloat: the pre-quantization float rows (768 x N) for predictor arms;
 # NOT part of the encode target -- round-trips are against `trits`.
+# struct: the TRAINED-STRUCTURE record (train/structures.py) when the net
+# was trained through a parametrization -- codebook + assignments, or
+# U/V/R.  Arms that need it declare NotApplicable on nets without it;
+# every other arm ignores it and prices the same trits.
 
 
 def load_qnet(path):
@@ -42,6 +47,13 @@ def load_qnet(path):
     trits = tuple(
         tuple(max(-1, min(1, round(x * 32))) for x in row) for row in d["E"])
     assert len(trits) == 768 and all(len(r) == d["N"] for r in trits)
+    if d.get("struct") is not None:
+        # a structured net's table is ALREADY on the grid: the defensive
+        # clamp above must have been a no-op, or the pickle and the
+        # parametrization disagree (never hide it behind the clamp)
+        assert all(round(x * 32) == t for row, trow in zip(d["E"], trits)
+                   for x, t in zip(row, trow)), \
+            "structured net %s: E is off the ternary grid" % path
     name = os.path.basename(path)
     for suf in (".pickle",):
         if name.endswith(suf):
@@ -49,7 +61,7 @@ def load_qnet(path):
     if name == "best":                     # run-dir convention: name the run
         name = os.path.basename(os.path.dirname(os.path.abspath(path)))
     return QNet(name, d["shift"], list(d["g"]), list(d["bias_digits"]),
-                trits, d["clampcp"], d["E"])
+                trits, d["clampcp"], d["E"], d.get("struct"))
 
 
 def header_digits(q):

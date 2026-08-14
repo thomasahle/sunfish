@@ -28,6 +28,23 @@ for _b in range(%d):
 """
 
 
+def book_body(block, nblk):
+    """The shared codebook decoder source.  arms/trained.py's 'trained_cb'
+    emits THIS SAME SOURCE, so the byte delta between the post-hoc control
+    and the trained arm is purely stored state, never decoder shape."""
+    return BODY % (block, nblk) + entrysrc.SRC_HALF_FROM_S
+
+
+def book_pairs(book, index):
+    """(book rows of base-81 symbols, per-block entry index) -> mixed-radix
+    pairs in decode-pop order."""
+    nd = len(book)
+    pairs = [(90, nd % 90), (90, nd // 90)]
+    for row in book:
+        pairs += [(90, s) for s in row]
+    return pairs + [(nd, i) for i in index]
+
+
 class _Codebook:
     native_a = False
 
@@ -42,14 +59,9 @@ class _Codebook:
         freq = Counter(blocks)
         book = [b for b, _ in freq.most_common()]
         index = {b: i for i, b in enumerate(book)}
-        nd = len(book)
-        pairs = [(90, nd % 90), (90, nd // 90)]
-        for b in book:
-            pairs += [(90, s) for s in b]
-        pairs += [(nd, index[b]) for b in blocks]
-        body = mixed_pack(pairs)
-        return body, BODY % (self.w, nblk) + entrysrc.SRC_HALF_FROM_S, \
-            "%d distinct %d-feature blocks of %d" % (nd, self.w, nblk)
+        body = mixed_pack(book_pairs(book, [index[b] for b in blocks]))
+        return body, book_body(self.w, nblk), \
+            "%d distinct %d-feature blocks of %d" % (len(book), self.w, nblk)
 
 
 register(_Codebook(4))

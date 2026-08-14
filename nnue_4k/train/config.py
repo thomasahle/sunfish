@@ -28,7 +28,7 @@ class DataCfg:
 
 @dataclass
 class ModelCfg:
-    arch: str = "residual"      # residual | ml2 (packed_layers second layer)
+    arch: str = "residual"      # residual | ml2 | cb | lowrank (see model.py)
     N: int = 4                  # hidden units per perspective
     kb: int = 1                 # own-king buckets (1/4/8/16)
     factor: int = 1             # virtual per-piece-type features (folded at export)
@@ -44,6 +44,13 @@ class ModelCfg:
     phase: int = 0              # material-phase output buckets (0 = off)
     rff: int = 0                # phase-sketch lanes (0 = off)
     rffsigma: float = 0.5
+    # --- trained structure (structures.py); certified before training
+    cb_k: int = 32              # arch=cb: codebook entries K
+    cb_block: int = 8           # arch=cb: features per block (must divide 768)
+    cb_temp: float = 0.5        # arch=cb: soft-backward temperature (per element)
+    cb_cmax: int = 1            # arch=cb: codebook grid (1 = ternary; <= 5 certifies)
+    lr_rank: int = 1            # arch=lowrank: rank of U@V
+    lr_wmax: int = 1            # arch=lowrank: composite clip (1 = ternary)
 
 
 @dataclass

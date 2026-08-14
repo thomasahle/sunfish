@@ -41,7 +41,7 @@ sys.path.insert(0, os.path.dirname(_here))          # train/ (for verify path)
 sys.path.insert(0, os.path.dirname(os.path.dirname(_here)))  # nnue_4k/
 
 from compress import qnet, entrysrc, packrun               # noqa: E402
-from compress.arms import all_arms                         # noqa: E402
+from compress.arms import all_arms, NotApplicable          # noqa: E402
 
 REPO = packrun.REPO
 # Pinned by default: another lane golfs the working-tree entry live (see
@@ -163,6 +163,10 @@ def run_net(netpath, entry=DEFAULT_ENTRY, arms=None, outdir=None,
             t0 = time.time()
             try:
                 row = measure_cell(arm, layout, q, stock, expected, outdir, boot)
+            except NotApplicable as e:
+                # the arm prices a structure this net does not carry: a SKIP.
+                # Never a pass, never a failure, and never fitted on the fly.
+                row = {"arm": arm.name, "layout": layout, "SKIP": str(e)}
             except Exception as e:
                 import traceback
                 traceback.print_exc()
@@ -226,6 +230,9 @@ def format_table(res):
     for r in res["rows"]:
         if "FAILED" in r:
             lines.append("%-16s %-3s FAILED: %s" % (r["arm"], r["layout"], r["FAILED"]))
+    skipped = sorted({r["arm"]: r["SKIP"] for r in res["rows"] if "SKIP" in r}.items())
+    for arm, why in skipped:
+        lines.append("%-16s %-3s skipped: %s" % (arm, "-", why))
     lines.append("instrument checks: " + ", ".join(
         "%s=%s" % (k, v) for k, v in res["checks"].items()))
     return "\n".join(lines)

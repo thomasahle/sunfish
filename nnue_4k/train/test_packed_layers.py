@@ -5,6 +5,14 @@ tolerances -- plus an end-to-end two-layer probe and the certificate's
 refuse/accept behaviour.  Runs standalone (python3 test_packed_layers.py)
 and under pytest; it is part of the pipeline's own gate: no pipeline
 change lands with this red.
+
+The trained-structure parametrizations (structures.py) are held to the
+same standard, because they are layer-1 weight tables and nothing else:
+their STE rules are checked as GRADIENT IDENTITIES (not by eyeballing a
+loss curve), their weights are checked on the payload grid, the head they
+produce is checked bit-exact against python big-int evaluation, and their
+bake-off arms are checked to decode -- inside a REAL spliced entry -- to
+the same module data the trainer quantization implies.
 """
 import os
 import random
@@ -18,6 +26,7 @@ import constraints                 # noqa: E402
 import features                    # noqa: E402
 import field_budget as fb          # noqa: E402
 import packed_layers as pl         # noqa: E402
+import structures                  # noqa: E402
 from model import Ml2Net, build_model  # noqa: E402
 
 R = random.Random(20260814)
@@ -214,6 +223,209 @@ def test_certified_bounds_are_reachable_not_loose():
         torch.full((4,), 2848.0, dtype=torch.float64),
         torch.full((4,), 2848.0, dtype=torch.float64))
     assert got.tolist() == h.hi
+
+
+# ------------------------------------------- trained structure (structures.py)
+
+def test_codebook_ste_rule_is_the_documented_one():
+    """forward = hard argmin codeword; backward = identity to the shadow and
+    softmax-weighted to the book.  Checked as an exact gradient identity, so
+    the docstring cannot drift away from the code."""
+    torch.manual_seed(0)
+    cb = structures.CodebookWeight(64, 4, 5, 8, tau=0.85, temp=0.7)
+    w = (torch.randn(64, 4) * constraints.WSCALE).requires_grad_(True)
+    y, k = cb(w)
+    B = cb.codewords()
+    x = (w * 32.0).reshape(cb.nblk, cb.D)
+    d = cb._dist(x.detach(), B.detach())
+    assert torch.equal(k, d.argmin(-1))
+    assert torch.equal(y.reshape(cb.nblk, cb.D) * 32.0, B[k].detach()), \
+        "forward must BE the hard codeword"
+    assert set(y.mul(32).flatten().tolist()) <= {-1.0, 0.0, 1.0}
+
+    g = torch.randn(64, 4)
+    (y * g).sum().backward()
+    # identity route to the shadow: d(y)/d(w) = 1 (y and w share the /32)
+    assert torch.allclose(w.grad, g, atol=0, rtol=0), "shadow route is not identity"
+    # soft route to the book: codeword j collects sum_b p_bj * dL/dY_b in
+    # TRIT units (Y = 32*weight, so dL/dY = g/32), through the ternary
+    # grid's own 1/WSCALE
+    p = torch.softmax(-d / (cb.temp * cb.D), -1)
+    want = p.t() @ g.reshape(cb.nblk, cb.D) / (32 * constraints.WSCALE)
+    assert torch.allclose(cb.book.grad, want, atol=1e-12), "book route is not soft"
+
+
+def test_codebook_assignment_moves_with_the_shadow():
+    """The only thing that re-assigns a block is the shadow crossing a
+    Voronoi boundary -- so a shadow set EQUAL to a codeword must select it."""
+    torch.manual_seed(1)
+    cb = structures.CodebookWeight(64, 4, 4, 8, tau=0.85, temp=0.5)
+    B = cb.codewords().detach()
+    w = torch.zeros(64, 4)
+    for b in range(cb.nblk):
+        w.view(cb.nblk, cb.D)[b] = B[b % cb.K] / 32.0
+    y, k = cb(w)
+    assert k.tolist() == [b % cb.K for b in range(cb.nblk)]
+    assert torch.equal(y, w)
+
+
+def test_lowrank_epoch0_is_exactly_the_plain_net():
+    """V zero-init => U@V = 0 => weight() is bit-identical to the plain
+    ternary net at the same seed (the ml2 u2-silent precedent)."""
+    kw = dict(N=4, base="mat", ternary=0.85)
+    torch.manual_seed(0)
+    plain = build_model(cfgmod.ModelCfg(arch="residual", **kw))
+    torch.manual_seed(0)
+    lr = build_model(cfgmod.ModelCfg(arch="lowrank", lr_rank=2, **kw))
+    assert torch.equal(plain.weight(), lr.weight()), "epoch 0 must be the plain net"
+    fi = torch.tensor([features.feat("K", 95), features.feat("q", 44)])
+    mi = torch.tensor([features.feat("k", 24), features.feat("Q", 75)])
+    fo, base = torch.tensor([0]), torch.tensor([12.0])
+    assert torch.equal(plain(fi, mi, fo, base), lr(fi, mi, fo, base))
+    constraints.check_antisymmetry(lr, fi, mi, fo, base)
+
+
+def test_lowrank_composite_grid_and_gradients():
+    """Composite stays on the certified grid; U and V receive gradient
+    through the ternary STE even while V's forward is all zeros."""
+    torch.manual_seed(0)
+    net = build_model(cfgmod.ModelCfg(arch="lowrank", N=4, base="mat",
+                                      ternary=0.85, lr_rank=2))
+    w = net.weight()
+    assert set((w * 32).flatten().tolist()) <= {-1.0, 0.0, 1.0}
+    w.sum().backward()
+    assert net.struct.V.grad is not None and net.struct.V.grad.abs().sum() > 0, \
+        "a silent factor that cannot wake up is a dead parametrization"
+    assert net.raw.grad is not None and net.raw.grad.abs().sum() > 0
+    # with V awake the composite still lands on the grid, clipped
+    with torch.no_grad():
+        net.struct.V.copy_(torch.ones_like(net.struct.V))
+        net.struct.U.copy_(torch.ones_like(net.struct.U))
+    w = net.weight() * 32
+    assert set(w.flatten().tolist()) <= {-1.0, 0.0, 1.0}
+    assert (w == 1).all(), "U@V = rank>=1 plus residual, clipped to +wmax"
+
+
+def _structured_qnet(arch, name, **model_kw):
+    """A structured net as the bake-off sees it: real model -> real export
+    quantization -> QNet, with the reconstruction asserted (this is the
+    export round-trip, in-process)."""
+    cfg = cfgmod.ModelCfg(arch=arch, N=4, base="mat", ternary=0.85, **model_kw)
+    torch.manual_seed(7)
+    net = build_model(cfg)
+    with torch.no_grad():                     # wake the structure up
+        net.raw.mul_(1.7)
+        if arch == "lowrank":
+            net.struct.V.copy_(torch.randn_like(net.struct.V) * 0.06)
+            net.struct.U.mul_(1.4)
+        else:
+            net.struct.book.mul_(1.7)
+    with torch.no_grad():
+        E = net.weight()
+    struct = net.export_struct()
+    trits = tuple(tuple(int(round(x * 32)) for x in row) for row in E.tolist())
+    flat = [t for row in trits for t in row]
+    assert structures.reconstruct(struct) == flat, \
+        "%s: structures.reconstruct != the exported trits" % arch
+    from compress import qnet as qn
+    g = [R.randrange(40, 90) for _ in range(4)]
+    bd = [R.randrange(0, 90) for _ in range(4)]
+    return qn.QNet(name, 3, g, bd, trits, 600, E.tolist(), struct)
+
+
+def test_structured_head_bitexact_vs_bigint():
+    """A structured net's rows, evaluated as the ENGINE does (python big
+    ints: offset lanes, SWAR crelu, modular hsum) equal the torch mirror --
+    the structure changed the weights, not the arithmetic."""
+    for arch, kw in (("cb", {"cb_k": 12, "cb_block": 8}),
+                     ("lowrank", {"lr_rank": 2})):
+        q = _structured_qnet(arch, "probe_" + arch, **kw)
+        clamp = pl.SwarClamp()
+        caps = [32 * x for x in q.g]
+        for _ in range(10):
+            board = random_board()
+            us = [q.bd[k] - 44 for k in range(4)]
+            them = list(us)
+            for s, p in enumerate(board):
+                if p in features.PIECES:
+                    fu, fm = features.feat(p, s), features.feat(p.swapcase(), 119 - s)
+                    for k in range(4):
+                        us[k] += q.g[k] * q.trits[fu][k]
+                        them[k] += q.g[k] * q.trits[fm][k]
+                        assert abs(us[k]) < 1 << 14 and abs(them[k]) < 1 << 14
+            yu = pl.bigint_swar_clamp([(1 << 14) + v for v in us], caps, 16)
+            cu = clamp(torch.tensor(us, dtype=torch.float64),
+                       torch.tensor(caps, dtype=torch.float64))
+            assert cu.tolist() == yu, (arch, us, yu)
+            assert pl.bigint_hsum(yu, 16) == int(pl.HSum()(cu).item())
+
+
+def _arm_roundtrip(q, armname, stock):
+    """Encode -> splice into the REAL entry -> exec -> the decoded module
+    data must equal the independent mirror of the trainer quantization."""
+    from compress import qnet as qn, entrysrc
+    from compress.arms import all_arms
+    arm = next(a for a in all_arms() if a.name == armname)
+    body, body_src, note = arm.encode(q)
+    full = qn.header_int(q) + qn.HEADER_RADIX * body
+    s90 = qn.int_to_s90(full)
+    src = entrysrc.replace_region(
+        stock, entrysrc.build_region(entrysrc.prologue_a(s90), body_src))
+    got, _ = entrysrc.exec_entry(src)
+    want = qn.expected_module_data(q)
+    for key in ("SHIFT", "MGP", "MGH", "ACC_BASE", "ROWS"):
+        assert qn.module_data_of(got)[key] == want[key], (armname, key)
+    return len(s90), note
+
+
+def test_trained_arms_export_roundtrip():
+    from compress import entrysrc
+    stock, _ = entrysrc.read_entry("HEAD:nnue_4k/replnet_proto.py")
+    for arch, armname, kw in (("cb", "trained_cb", {"cb_k": 12, "cb_block": 8}),
+                              ("lowrank", "trained_lr", {"lr_rank": 2})):
+        q = _structured_qnet(arch, "probe_" + arch, **kw)
+        chars, note = _arm_roundtrip(q, armname, stock)
+        print("    %s: %d payload chars -- %s" % (armname, chars, note), flush=True)
+
+
+def test_trained_arms_skip_a_plain_net():
+    """No structure, no arm: NotApplicable, never a fitted stand-in."""
+    from compress import qnet as qn
+    from compress.arms import all_arms, NotApplicable
+    trits = tuple(tuple(R.choice((-1, 0, 0, 1)) for _ in range(4)) for _ in range(768))
+    q = qn.QNet("plain", 3, [50] * 4, [44] * 4, trits, 600,
+                [[t / 32 for t in row] for row in trits])
+    assert q.struct is None
+    for armname in ("trained_cb", "trained_lr"):
+        arm = next(a for a in all_arms() if a.name == armname)
+        try:
+            arm.encode(q)
+        except NotApplicable:
+            continue
+        raise AssertionError("%s priced a net that carries no structure" % armname)
+
+
+def test_structure_certificates_refuse_and_accept():
+    """The grid ceiling is a NUMBER, and it refuses above itself."""
+    assert fb.max_certified_grid() == 5, "gmax 89: 32*5*89 + 45 = 14285 < 2^14"
+    probe = fb.Certificate("c6")
+    fb.certify_grid_head(probe, 6)
+    assert not probe.ok, "|w| = 6*g must fail no-borrow (17133 > 16383)"
+    assert fb.certify_trained_cb(32, 8).ok
+    assert fb.certify_trained_cb(32, 8, cmax=5).ok
+    assert not fb.certify_trained_cb(32, 8, cmax=6).ok
+    assert not fb.certify_trained_cb(32, 7).ok, "7 does not divide 768"
+    assert not fb.certify_trained_cb(200, 8).ok, "K > 96 blocks stores nothing"
+    assert fb.certify_lowrank(1).ok and fb.certify_lowrank(8).ok
+    assert not fb.certify_lowrank(1, wmax=6).ok
+    # an uncertifiable config must never reach the optimizer
+    cfg = cfgmod.ModelCfg(arch="lowrank", N=4, ternary=0.85, lr_wmax=6)
+    try:
+        fb.certify_or_raise(cfg)
+    except SystemExit:
+        pass
+    else:
+        raise AssertionError("certify_or_raise let an uncertifiable config train")
 
 
 def main():
