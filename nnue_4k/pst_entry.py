@@ -14,8 +14,7 @@ import time
 from itertools import count
 from collections import namedtuple
 
-__version__ = "2026-packed"
-version = "sunfish " + __version__
+version = "sunfish 2026-packed"
 
 ###############################################################################
 # Evaluation: classic sunfish's piece-square tables, and nothing else

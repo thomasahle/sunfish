@@ -336,6 +336,11 @@ for _anchor, _repl in _iir_edits:
 # driver-visible names are why the measured saving is smaller.
 _golf_renames = [
     # (regex, replacement, expected count incl. comments -- drift is loud)
+    # __version__ is a dunder, so pyminify keeps it verbatim; the entry's only
+    # reader is the `version` concatenation right below it (ENGINE_API needs
+    # `version`, nothing needs `__version__`). Fold the indirection.
+    (r'__version__ = "([^"]+)"\nversion = "sunfish " \+ __version__',
+     r'version = "sunfish \1"', 1),
     (r"\bking_capture\b", "k", 4),
     (r"\btp_score\b", "t", 9),
     (r"self\.history\b", "self.h", 4),
