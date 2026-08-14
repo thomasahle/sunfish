@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-14 | **Two defects in the CLASSIC pool twin, fixed before any PR: the arm label and the opening ramp** | Found by the surrogate lane reading `tm-pool-manager` as a formula source; **arm (a)'s verdict and arm (b) in flight are unaffected — they play packed mods**. (1) `TM_MANAGER="smooth"` actually selected master's `/12`, not #188's rational — renamed to `legacy`, alias refused, and a test goes red when the smooth curve lands so the rename happens in that merge. (2) The opening ramp capped the POOL budget for 8 plies while the measured packed arm has no ramp — the classic pool was an unmeasured variant wearing a measured number's name. Ramp is now the incumbent's only; ply-0 60+1 through the driver: legacy 1.02 s vs pool 3.82 s. Recorded cost: `random()` was the only opening variety without a book, so a deployed pool must get variety from a book, never from a budget cut |
 | 2026-08-14 | **PRE-REGISTERED: the CLASSIC builtin clock drops its cap — two one-line candidates, `max((wtime−8000)/40+winc, 50)` and `min(wtime/40+0.9·winc, wtime/4)`, ranked on the surrogate BEFORE one staged 60+0 real-clock non-inferiority arm (elo0=−10 elo1=0, cap 400)** | Scope is the **packed classic artifact only** (`sunfish.py`'s embedded loop; a checkout reaches `sunfish_ui/uci.py` instead, so neither bot rides it) — byte figures are NOT comparable with the pool ladder's. The incumbent `min(wtime/12+0.9·winc, wtime/2−1000)` carries the park this file measured twice: `T* = 2+2I`, and under a 2 s clock the cap is NEGATIVE so the budget collapses to the 0.05 s floor. Both candidates are distillations of this lane's own pool — `P/M` with the reserve rounded to 8 s, or `P/M` under the pool's `A/4` clip. **Their no-park proofs differ**: one-max reaches the floor holding **10 s (40 moves)** against the incumbent's 2.1 s (8 moves); min40-4 banks nothing but its clip can never bind at `winc == 0`, making the policy exactly `t/40` with no fixed point, and it is **homogeneous of degree 1** so the ms/s trap is unrepresentable. Both net-negative in source (−11/−7 bytes, −2 tokens) and packed 3282 B / **3276 B** vs base 3278 B, so **elegance cannot break the tie**. Measured spend already separates them from base: 300+0 is **23.73 s → 7.38/7.57 s**. **Honest note in advance: a 60+0 pass does not license shipping** — `/40` wins sudden death (+235.5 ± 65.4) but loses increment (+91.1 ± 50.7 at 60+1, +45.9 ± 46.8 at 30+1 for `/12`), and these candidates collapse #188's slide back to a constant, so an increment ranking is required too. Tiebreak fixed in advance: within noise, min40-4 ships on unit-independence. **Request to the surrogate lane: add one-max and the classic base to min40-4's plugin set.** Nothing launched, no PR open |
 | 2026-08-14 | **AMENDMENT: pool ladder arms (c) 30+1 and (d) phase-M are HELD for the virtual-clock surrogate — held, NOT cancelled** | Owner ruling on real-clock economy. Arm (b) 60+1 PROCEEDS on real clocks (it is both the decisive question and calibration data for the surrogate); (c) and (d) move to the twin's virtual clock once it calibrates against stage 1, the +40.6 with-park run and arm (a), with only the final composite getting one real-clock confirmation. Bounds, book, seed, cap and readings for (c)/(d) stand as pre-registered; the arena scripts are renamed `HELD_*` with the ruling in their headers so the operational state cannot drift from the ledger |
 | 2026-08-14 | **ARM (a) VERDICT: the POOL time manager is +119.94 ± 36.44 at 60+0 — H1 accepted in 274 games on a NON-INFERIORITY screen, 144W-53L-77D (66.61%), LOS 100%, 0 forfeits, 0 illegal** | The arm that was only asked not to give back the +235.5 ± 65.4 sudden-death fix instead added to it, against that winner's own binary (`14b69a606b743a37`). Mechanism is the allocation SHAPE, measured off the PGN: the pool spends **0.79× the median move and 3.3× the maximum** (0.512/5.534 s vs 0.645/1.664 s) — cheap routine moves, a wall that lets a hard one run to 5× soft, which one number that is both target and wall cannot do. Drain: pool's minimum end-clock is **8.4 s = (M+2)·O exactly**, it never fell below 2.4 s in 274/274 games, and 0 games ended under 2 s, against the incumbent's 4 under 2 s and 5 crossings. Blind moves 1,057 (6.0%) vs 117 — same metric, different mechanism: these are deliberate floor moves with 8–12 s still banked, not a collapsed budget, and the arm won 66.6% while playing 14× more of them. `tm_smoke`'s cold-table prediction of 1.5× MORE routine spend over-read it; the pre-registered honest note was too pessimistic. **Arm (b) 60+1 (elo0=0 elo1=10) launched; (c) and (d) gated; v1.1 dynamic still unscreened** |
@@ -417,6 +418,44 @@ two branches off `origin/master`, `classic/tm-one-max-pool` and
 regime tables, the no-park recurrence, banked reserve in moves,
 monotonicity in both arguments, and the unit domain). **No PR is open** —
 per the owner ruling above, it opens carrying the surrogate's winner.
+
+## 2026-08-14 — Two defects in the CLASSIC pool twin, found by the surrogate lane and fixed before any PR
+
+Neither is a crash; both are the kind that make a number mean something other
+than it says. Found while the virtual-clock surrogate was reading the classic
+branch (`tm-pool-manager`) as a formula source. **Arm (a)'s verdict and arm (b)
+in flight are unaffected — those play packed mods, which have neither defect.**
+
+**1. The arm label lied.** `TM_MANAGER="smooth"` selected master's `/12`
+expression — the pre-#188 form whose cap goes negative under a 2 s clock — not
+#188's smooth rational. A control arm whose name misdescribes what it plays is
+how a screen measures one thing and reports another; the `steptm` sha-identity
+discipline exists for exactly this. Renamed to **`legacy`**, which is what the
+expression is on that branch, with a test that goes red the moment the smooth
+curve appears in the file (that is when the value gets renamed to `smooth`, in
+#188's merge and not before). Wiring #188's expression in instead was the other
+option and was rejected: it would make the pool PR carry the acute fix, and the
+two are meant to be separable. `"smooth"` is not accepted as an alias — a script
+asking for an arm that branch does not have fails at startup.
+
+**2. The opening ramp applied to the pool.** `min(think, len(hist) + random())`
+capped the pool budget for the first 8 plies, but **the packed arm that measured
++119.94 ± 36.44 has no ramp at all**, so the classic pool was an unmeasured
+variant wearing a measured number's name. The ramp is now the incumbent
+manager's only, which makes the classic pool the measured pool. Through the real
+driver at ply 0, 60+1: **legacy 1.02 s (ramp-capped) vs pool 3.82 s (its own
+budget)** — before the fix the pool answered inside the ramp cap.
+
+The pool does not need the ramp (P/M paces the opening, and the +2 in (M+2)·O
+banks what it was banking), but what is given up is real and is now written at
+the site: `random()` is this engine's only opening variety without a book, so a
+pool arm deployed to lichess would repeat openings. Every measurement we run is
+booked, so no match is affected — and if the pool becomes the bot's default,
+variety comes back as a book, **never as a budget cut**, or the deployed engine
+stops being the measured one again.
+
+Classic suite after both fixes: `tests/test_tm_pool.py` 44 passed, `tests/` 339
+passed, 2 skipped.
 
 ## 2026-08-14 — AMENDMENT to the pool ladder: arms (c) and (d) are HELD for the virtual-clock surrogate, not cancelled
 
