@@ -1299,6 +1299,12 @@ int main(int argc, char **argv) {
             else puts("err knob");
         }
 
+        else if (!strcmp(tok[0], "setoption")) {
+            if (ntok < 5 || strcmp(tok[1], "name") || strcmp(tok[3], "value")
+                    || !set_knob(tok[2], atol(tok[4])))
+                fprintf(stderr, "ctwin: bad UCI option\n");
+        }
+
         else if (!strcmp(tok[0], "position")) {
             if (ntok >= 2 && !strcmp(tok[1], "startpos")) {
                 reset_ok:
@@ -1344,11 +1350,27 @@ int main(int argc, char **argv) {
         }
 
         else if (!strcmp(tok[0], "go")) {
-            long gnodes = 0; double mt = 0; int gdepth = 0;
+            long gnodes = 0, wtime = -1, btime = -1, winc = 0, binc = 0;
+            double mt = 0;
+            int gdepth = 0, movestogo = 0;
             for (int k = 1; k + 1 < ntok; k += 2) {
                 if (!strcmp(tok[k], "depth")) gdepth = atoi(tok[k + 1]);
                 else if (!strcmp(tok[k], "nodes")) gnodes = atol(tok[k + 1]);
                 else if (!strcmp(tok[k], "movetime")) mt = atol(tok[k + 1]) / 1000.0;
+                else if (!strcmp(tok[k], "wtime")) wtime = atol(tok[k + 1]);
+                else if (!strcmp(tok[k], "btime")) btime = atol(tok[k + 1]);
+                else if (!strcmp(tok[k], "winc")) winc = atol(tok[k + 1]);
+                else if (!strcmp(tok[k], "binc")) binc = atol(tok[k + 1]);
+                else if (!strcmp(tok[k], "movestogo")) movestogo = atoi(tok[k + 1]);
+            }
+            if (mt == 0 && (wtime >= 0 || btime >= 0)) {
+                int black = (side0 == 'b') ^ ((nhist - 1) % 2);
+                double remain = (black ? btime : wtime) / 1000.0;
+                double inc = (black ? binc : winc) / 1000.0;
+                mt = movestogo ? remain / movestogo + inc : remain / 12 + 0.9 * inc;
+                double cap = remain / 2 - 1;
+                if (cap < mt) mt = cap;
+                if (mt < 0.05) mt = 0.05;
             }
             if (gdepth && !gnodes && mt == 0) go_depth(gdepth);
             else go_game(gnodes, mt, gdepth ? gdepth : 999);
@@ -1356,6 +1378,11 @@ int main(int argc, char **argv) {
 
         else if (!strcmp(tok[0], "uci")) {
             puts("id name sunfish ctwin");
+            for (struct knob *k = KNOBS; k->name; k++) {
+                long value = k->ip ? *k->ip : *k->lp;
+                printf("option name %s type spin default %ld min -1000000000 max 1000000000\n",
+                       k->name, value);
+            }
             puts("uciok");
         }
         else if (!strcmp(tok[0], "isready")) puts("readyok");
