@@ -138,6 +138,8 @@ MATE_UPPER = piece["K"] + 10 * piece["Q"]
 # Constants for tuning search
 QS = 40
 QS_A = 140
+LMR = 50
+THREAT_MARGIN = 200
 EVAL_ROUGHNESS = 15
 # Target margin of the deep-null fuel probe (depth >= 6): the pass must
 # beat pos.score + NULL_MARGIN for real moves to burn two plies. Its own
@@ -154,6 +156,8 @@ TABLE_SIZE = 10**6
 opt_ranges = dict(
     QS = (0, 300),
     QS_A = (0, 300),
+    LMR = (-200, 200),
+    THREAT_MARGIN = (0, 500),
     EVAL_ROUGHNESS = (0, 50),
     NULL_MARGIN = (0, 200),
     TABLE_SIZE = (10**4, 10**8),
@@ -400,11 +404,17 @@ class Searcher:
             # burn one or two plies of depth. Nominal depth keys the tables
             # and the QS admission; only the recursion is shortened, so a
             # deep null cut becomes a reduction instead of a virtual score.
+            # A second fixed target detects threats: only positions where
+            # passing stays within THREAT_MARGIN reduce low-valued moves.
             d = depth
+            safe = False
             if depth >= 6 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
+                nullpos = pos.rotate(nullmove=True)
                 target = pos.score + NULL_MARGIN
-                if -self.bound(pos.rotate(nullmove=True), 1 - target, depth - 3) >= target:
-                    d = depth - 1
+                hot = -self.bound(nullpos, 1 - target, depth - 3) >= target
+                d -= hot
+                target = pos.score - THREAT_MARGIN
+                safe = hot or -self.bound(nullpos, 1 - target, depth - 3) >= target
 
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else. (Note depth at root is always > 0.)
@@ -444,16 +454,17 @@ class Searcher:
             # child report to the same fixed capped value.
             def score_move(move, val):
                 child = pos.move(move)
+                move_depth = d - 1 - (safe and val < LMR)
                 if 2 <= depth <= 3 and pos.board[move.j] == "." and move.j != pos.ep and not move.prom:
                     cap = min(MATE_LOWER - 1, pos.score + val + (depth - 1) * QS_A)
                     if cap < gamma:
-                        return ((move, -self.bound(child, 1 - gamma, d - 1))
+                        return ((move, -self.bound(child, 1 - gamma, move_depth))
                             if child.rotate(nullmove=True).king_capture() else (None, cap))
-                    score = -self.bound(child, 1 - gamma, d - 1)
+                    score = -self.bound(child, 1 - gamma, move_depth)
                     if score > cap and child.rotate(nullmove=True).king_capture():
                         return move, score
                     return move, min(cap, score)
-                return move, -self.bound(child, 1 - gamma, d - 1)
+                return move, -self.bound(child, 1 - gamma, move_depth)
 
             if killer and pos.value(killer) >= val_lower:
                 yield score_move(killer, pos.value(killer))
