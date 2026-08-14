@@ -19,16 +19,26 @@ version = "sunfish replnet"
 # Evaluation: packed big-int NNUE REPLACEMENT net -- no positional tables
 ###############################################################################
 # REPLACEMENT-NET PROTOTYPE (nnue-4k lane, 2026-08-14) -- NOT AN ENTRY.
-# Base: pst_entry.py @ 71c9ba1 (3341 B packed; ENGINE-SANS-EVAL 2871 by
+# Base: pst_entry.py @ 71c9ba1 (3295 B packed; ENGINE-SANS-EVAL 2835 by
 # price_engine.sh). GOLF ROUND 2 (2026-08-14, the 1024-B payload directive),
-# all via tools/build/pack.sh, search play-identical by node count:
-#   code side (payload string elided)      3449 -> 3217
-#   trained v1 payload spliced (l1=0.001)  3831 -> 3594  (502 spare)
-#   payload capacity that fits 4096        878 B in-context  (849 at the
-#     30-B margin) measured with random ternary @59.6% zeros through the
-#     codec (make_proto_payload.py --feats 1135/1095); Thomas's 1024-B
-#     payload budget builds to 4238 (--feats 1330) -- 142 B still to find
-#     on the code side. Step ledger: MEASUREMENTS.md 2026-08-14.
+# all via tools/build/pack.sh, search play-identical by node count.
+#
+# EVERY NUMBER BELOW IS AT THE LANDED PACKER (eb8897c: --no-hoist-literals +
+# payload-shebang strip, -26 on every build in this block). The golf round's
+# own column is kept beside it, because the ladder above was gated there and a
+# bare re-quote would silently re-anchor it:
+#                                          golf round 2   LANDED (eb8897c)
+#   code side (payload string elided)      3449 -> 3217   3186
+#   trained v1 payload spliced (l1=0.001)  3831 -> 3594   3567  (529 spare)
+#   payload capacity that fits 4096        878 B in-ctx   909 B in-ctx
+#     at the 30-B safety margin            849 B          880 B
+#     (--feats 1135/1095)                                 (--feats 1170/1130)
+#   Thomas's 1024-B payload budget         4238, 142 over 4212, 116 over
+#     (--feats 1330)
+# Capacity is measured with random ternary @59.6% zeros through the codec
+# (make_proto_payload.py); in-context = total minus the payload-elided total.
+# The remaining 116 B is code-side and belongs to the screened lanes, not to
+# golf. Step ledger: MEASUREMENTS.md 2026-08-14 (both entries).
 # Invariant suite: packed/replnet_check.py.
 # The distilled positional tables are GONE. The score base is a flat MATERIAL
 # table built from `piece` (price_engine.sh's stub semantics, flat rows), and
