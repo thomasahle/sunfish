@@ -47,9 +47,16 @@ def enc90(e):
     return chr(35 + d)
 
 
-def export_replnet(path, E, b, v, clampcp, base_kind, train_meta):
+def export_replnet(path, E, b, v, clampcp, base_kind, train_meta, struct=None):
     """Ternary payload export, replnet_proto.py's exact extraction order.
-    A port of train_packed.export_replnet -- same digits, same warnings."""
+    A port of train_packed.export_replnet -- same digits, same warnings.
+
+    `struct` is a trained-structure record (structures.export_struct): the
+    payload string stays the SHIPPED codec's (so the b81 baseline remains
+    this net's denominator), and the structure rides along in the pickle
+    for the arms that price it.  The reconstruction is asserted here --
+    bit-exact against the very trits the payload carries -- so a structure
+    that cannot be rebuilt never reaches the bake-off."""
     v = [abs(x) for x in v]
     trits = (E * 32).round().long().clamp(-1, 1)
     zeros = float((trits == 0).float().mean())
@@ -74,15 +81,29 @@ def export_replnet(path, E, b, v, clampcp, base_kind, train_meta):
         digits.append(sum((int(trits[f, k]) + 1) * 3 ** k for k in range(len(g))))
     s90 = "".join(enc90(d) for d in reversed(digits))
     assert "\\" not in s90 and '"' not in s90
+    extra, note = {}, ""
+    if struct is not None:
+        import structures
+        want = [int(trits[f, k]) for f in range(768) for k in range(len(g))]
+        got = structures.reconstruct(struct)
+        if got != want:
+            bad = sum(1 for a, c in zip(got, want) if a != c)
+            raise AssertionError(
+                "trained structure (%s) does not rebuild the exported trits: "
+                "%d/%d elements differ -- the parametrization and the decoder "
+                "disagree" % (struct["kind"], bad, len(want)))
+        extra["struct"] = struct
+        note = "  struct %s OK" % struct["kind"]
     with open(path + ".payload", "w") as f:
         f.write(s90 + "\n")
     pnet.save(path, {"kind": "replnet-ternary", "B": 1, "N": len(g),
                      "shift": shift, "g": g, "bias_digits": bd, "zeros": zeros,
                      "clampcp": clampcp, "base_kind": base_kind,
-                     "train": train_meta, "E": E.tolist(), "bias": b, "v": v})
-    print("export_replnet: zeros %.1f%%  shift %d  gains %s  bias %s  -> %s.payload"
-          % (100 * zeros, shift, g, bd, path), flush=True)
-    return "zeros %.1f%% shift %d" % (100 * zeros, shift)
+                     "train": train_meta, "E": E.tolist(), "bias": b, "v": v,
+                     **extra})
+    print("export_replnet: zeros %.1f%%  shift %d  gains %s  bias %s  -> %s.payload%s"
+          % (100 * zeros, shift, g, bd, path, note), flush=True)
+    return "zeros %.1f%% shift %d%s" % (100 * zeros, shift, note)
 
 
 def export_model(model, cfg, path):
@@ -115,7 +136,8 @@ def _export_model(model, cfg, path):
                          "base_kind": m.base, "ternary": m.ternary, "train": meta})
         return "float export (ml2)"
     if m.ternary:
-        return export_replnet(path, E, b, v, m.clampcp, m.base, meta)
+        struct = model.export_struct() if m.arch in ("cb", "lowrank") else None
+        return export_replnet(path, E, b, v, m.clampcp, m.base, meta, struct)
     extras = {}
     if m.phase:
         extras.update(phase=m.phase, phase_s=model.s.detach().tolist())
