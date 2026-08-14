@@ -1,0 +1,41 @@
+# replnet_ratecal -- rate-AWARE retrain of the v1 winner recipe (appended
+# by the compression bake-off lane; slots naturally beside c1024-cal,
+# training lane re-orders freely).
+#
+# Replaces the blunt l1 sparsity pressure with constraints.rate_penalty:
+# a differentiable per-lane order-0 expected-code-length in BYTES, whose
+# hard-quantized value matched the zoo's rc_o0 coder to 518.3 vs 519 B on
+# v1 (MEASUREMENTS 2026-08-14).  l1 buys zeros; rate buys BYTES -- it
+# also charges a lane pushed toward dense +/-1, which l1 undercharges,
+# and that is the dial the c1024 capacity family actually turns.
+#
+# Weight calibration (stated before the run): at v1's distribution the
+# l1=0.001 term contributes ~0.001 x mean|u| ~ 1e-3 to the loss; the
+# rate term at ~518 B matches that total pressure at weight ~2e-6.  The
+# two arms bracket it.  VAL PROBE against v1/v1c (same data, same split
+# discipline as the 4M runs -- valn pinned); export prices through
+# compress/bakeoff.py, whose per-net winner is the export the screen
+# sees.  Val lands nothing; the bar is bytes-at-equal-val or
+# val-at-equal-bytes, then the usual play gates.
+name: replnet_ratecal
+data:
+  source: ../replnet-20260814/cache_repl4M.pkl
+  kind: legacy-pkl
+  split: legacy-perm
+  valn: 4027406
+model:
+  arch: residual
+  N: 4
+  base: mat
+  ternary: 0.85
+loss:
+  l1: 0.0
+  rate: 2.0e-6          # arm 2: 4.0e-6
+  satpen: 0.03
+  satthresh: 480.0
+opt:
+  epochs: 40
+  batch: 8192
+  lr: 3.0e-3
+  seed: 0
+notes: rate-aware capacity dial; compare val@bytes to v1 (l1=0.001) and v1c

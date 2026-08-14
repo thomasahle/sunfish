@@ -215,6 +215,10 @@ def main():
     p.add_argument("target", help="run dir, .pickle, or .payload")
     p.add_argument("--price", action="store_true")
     p.add_argument("--entry", default=None)
+    p.add_argument("--bakeoff", action="store_true",
+                   help="run the compress/ encoder zoo (all arms x both "
+                        "container layouts, measured through the real pack "
+                        "paths) and report the per-net winner")
     a = p.parse_args()
     t = a.target
     if os.path.isdir(t):
@@ -223,9 +227,20 @@ def main():
     if not os.path.exists(payload):
         raise SystemExit("%s not found -- only ternary exports have payloads; "
                          "float/kb exports price via build_kb.py + pack_entry.sh" % payload)
+    if a.bakeoff:
+        from compress import bakeoff
+        kw = {"entry": a.entry} if a.entry else {}
+        res = bakeoff.run_net(payload[:-len(".payload")], **kw)
+        print()
+        print(bakeoff.format_table(res))
+        w = res["ranked"][0]
+        print("\nbakeoff winner: %s layout %s at %d bytes (baseline %d)"
+              % (w["arm"], w["layout"], w["bytes"], res["baseline_bytes"]))
+        if not all(res["checks"].values()) or any("FAILED" in r for r in res["rows"]):
+            raise SystemExit("bakeoff instrument checks or arms FAILED -- see table")
     if a.price:
         price(payload, a.entry)
-    else:
+    if not (a.price or a.bakeoff):
         print(payload)
 
 

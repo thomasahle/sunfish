@@ -46,6 +46,33 @@ def l1_pressure(u, weight):
     return weight * u.abs().mean()
 
 
+def rate_penalty(u, tau, weight, T=8.0):
+    """Differentiable payload-rate estimate: expected code length of the
+    ternarized weights under a per-lane order-0 prior, in BYTES.
+
+    Soft occupancy of the STE's own grid -- P(+1) = sig((u - tau) * T),
+    P(-1) = sig((-u - tau) * T), P(0) the rest (T -> inf recovers the hard
+    threshold) -- aggregated per lane; the expected bits are 768 * H(lane
+    marginal), which is exactly what the zoo's rc_o0 arm realizes at
+    decode time.  Calibration fact from the bake-off (2026-08-14, v1):
+    this bound sits ~35% ABOVE what the shipped base-3^4+lzma path
+    achieves on the same net (519 B order-0 vs 382 B measured in
+    context), because lzma also captures run/match structure.  So this
+    is a steering signal whose unit is honest (bytes-ish) but whose
+    absolute value is an upper bound -- size arms by the MEASURED table,
+    never by this term.  Unlike l1 it prices the whole distribution (a
+    lane pushed
+    toward uniform +/-1 costs log2(3) bits/trit even at zero mean), so
+    it is the principled dial for the c1024 capacity family: rate 0.001
+    charges ~0.1 val-loss-units per 100 estimated payload bytes.
+    """
+    sp = torch.sigmoid((u - tau) * T)
+    sn = torch.sigmoid((-u - tau) * T)
+    probs = torch.stack([sn.mean(0), (1 - sp - sn).mean(0), sp.mean(0)], -1)
+    H = -(probs.clamp_min(1e-9) * probs.clamp_min(1e-9).log2()).sum(-1)
+    return weight * H.sum() * u.shape[0] / 8.0
+
+
 def phasecap_(s, cap):
     """Project phase scales into [1/cap, cap] in place (call under no_grad
     is not needed: clamp_ on a leaf param outside the graph)."""

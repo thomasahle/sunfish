@@ -53,6 +53,8 @@ class LossCfg:
     satpen: float = 0.03        # saturation penalty -- DEFAULT ON (kbbil lesson)
     satthresh: float = 480.0    # cp where the penalty starts
     l1: float = 0.0             # sparsity pressure on pre-ternarization |u|
+    rate: float = 0.0           # payload-rate pressure, val-units per est. BYTE
+    rate_T: float = 8.0         # softness of the rate term's trit occupancy
 
 
 @dataclass

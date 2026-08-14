@@ -43,6 +43,14 @@ val 0.01385 @59.6% zeros (winner, thin margin); l1=0.002 → 0.01404
    capacity family** (--nb 4 --bm 4 [--tailw 4]; ext machinery unpriced).
 7. **replnet_rff — rff64 at tiny width, VAL probe only** (--rff 64).
 8. **replnet_clamp — CLAMP/satpen interaction** (clampcp 400 vs 600).
+9. **replnet_ratecal — rate-aware retrain of the winner recipe**
+   (`train/queue/85_replnet_ratecal.yaml`; APPENDED BY THE COMPRESSION
+   LANE, re-order freely — natural slot is beside c1024-cal since both
+   turn the capacity dial). Swaps l1 for `loss.rate`: the differentiable
+   order-0 payload-BYTE estimator (constraints.rate_penalty), which
+   matched the zoo's rc_o0 coder 518.3 vs 519 B on v1. Two arms, rate ∈
+   {2e-6, 4e-6} (calibrated to v1's l1 pressure in the yaml). VAL PROBE;
+   export prices per-net through compress/bakeoff.py's measured winner.
 
 ## Log (newest first)
 

@@ -164,6 +164,10 @@ def main():
                     model.pre, cfg.loss.satpen, cfg.loss.satthresh)
             if cfg.loss.l1:
                 loss = loss + constraints.l1_pressure(model._u, cfg.loss.l1)
+            if cfg.loss.rate:
+                # ternary-only by construction: _u exists iff the STE ran
+                loss = loss + constraints.rate_penalty(
+                    model._u, cfg.model.ternary, cfg.loss.rate, cfg.loss.rate_T)
             opt.zero_grad()
             loss.backward()
             opt.step()
