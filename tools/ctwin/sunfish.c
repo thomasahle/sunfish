@@ -301,18 +301,21 @@ static int king_capture(const Pos *p, Move *out) {
 /* ------------------------------------------------------------------ */
 /* Insertion-ordered hash map (Python dict semantics)                  */
 /* ------------------------------------------------------------------ */
+/* Node storage is split hot/cold: chain walks in map_find_h touch only
+ * the 16-byte hot array (hash, chain link, depth); the cold array (the
+ * 140-byte Pos key, payloads, insertion-order links) is read once, on a
+ * confirmed hash match.  Same dict semantics, fewer cache misses. */
+typedef struct { uint64_t h; int nxt; int depth; } MHot;
 typedef struct {
-    Pos pos; int depth;          /* key (depth 0 for the killer table) */
+    Pos pos;                     /* key (depth lives in MHot) */
     int lower, upper;            /* tp_score payload */
     Move mv;                     /* tp_move payload */
-    uint64_t h;
-    int nxt;                     /* bucket chain */
     int iprev, inext;            /* insertion-order list */
     char used;
-} MNode;
+} MCold;
 
 typedef struct {
-    MNode *a; int cap;
+    MHot *hot; MCold *cold; int cap;
     int *bk; long nbk;
     long count;
     int ihead, itail;
@@ -328,19 +331,20 @@ static uint64_t hash_key(const Pos *p, int depth) {
 }
 
 static void map_init(Map *m) {
-    m->cap = 0; m->a = NULL;
+    m->cap = 0; m->hot = NULL; m->cold = NULL;
     m->nbk = 1 << 12;
     m->bk = malloc(sizeof(int) * m->nbk);
     for (long k = 0; k < m->nbk; k++) m->bk[k] = -1;
     m->count = 0; m->ihead = m->itail = -1; m->freehead = -1;
 }
 static void map_clear(Map *m) {
-    free(m->a); free(m->bk);
+    free(m->hot); free(m->cold); free(m->bk);
     map_init(m);
 }
 static int map_find_h(Map *m, const Pos *p, int depth, uint64_t h) {
-    for (int idx = m->bk[h & (m->nbk - 1)]; idx >= 0; idx = m->a[idx].nxt)
-        if (m->a[idx].h == h && m->a[idx].depth == depth && pos_eq(&m->a[idx].pos, p))
+    for (int idx = m->bk[h & (m->nbk - 1)]; idx >= 0; idx = m->hot[idx].nxt)
+        if (m->hot[idx].h == h && m->hot[idx].depth == depth
+                && pos_eq(&m->cold[idx].pos, p))
             return idx;
     return -1;
 }
@@ -351,9 +355,9 @@ static void map_rehash(Map *m) {
     long nn = m->nbk * 2;
     int *nb = malloc(sizeof(int) * nn);
     for (long k = 0; k < nn; k++) nb[k] = -1;
-    for (int idx = m->ihead; idx >= 0; idx = m->a[idx].inext) {
-        long b = m->a[idx].h & (nn - 1);
-        m->a[idx].nxt = nb[b];
+    for (int idx = m->ihead; idx >= 0; idx = m->cold[idx].inext) {
+        long b = m->hot[idx].h & (nn - 1);
+        m->hot[idx].nxt = nb[b];
         nb[b] = idx;
     }
     free(m->bk); m->bk = nb; m->nbk = nn;
@@ -366,41 +370,44 @@ static int map_put(Map *m, const Pos *p, int depth) {
     if (m->count + 1 > m->nbk * 3 / 4) map_rehash(m);
     if (m->freehead >= 0) {
         idx = m->freehead;
-        m->freehead = m->a[idx].nxt;
+        m->freehead = m->hot[idx].nxt;
     } else {
         if (m->count >= m->cap) {
             int ncap = m->cap ? m->cap * 2 : 1 << 12;
-            m->a = realloc(m->a, sizeof(MNode) * ncap);
+            m->hot = realloc(m->hot, sizeof(MHot) * ncap);
+            m->cold = realloc(m->cold, sizeof(MCold) * ncap);
             m->cap = ncap;
         }
         idx = (int)m->count;
         /* count == number in use; with a freelist the next fresh slot is
          * the high-water mark, tracked separately below. */
     }
-    MNode *n = &m->a[idx];
-    n->pos = *p; n->depth = depth;
-    n->h = h;
-    long b = n->h & (m->nbk - 1);
-    n->nxt = m->bk[b]; m->bk[b] = idx;
+    MHot *hn = &m->hot[idx];
+    MCold *n = &m->cold[idx];
+    n->pos = *p; hn->depth = depth;
+    hn->h = h;
+    long b = h & (m->nbk - 1);
+    hn->nxt = m->bk[b]; m->bk[b] = idx;
     n->iprev = m->itail; n->inext = -1;
-    if (m->itail >= 0) m->a[m->itail].inext = idx; else m->ihead = idx;
+    if (m->itail >= 0) m->cold[m->itail].inext = idx; else m->ihead = idx;
     m->itail = idx;
     n->used = 1;
     m->count++;
     return idx;
 }
 static void map_del(Map *m, int idx) {
-    MNode *n = &m->a[idx];
-    long b = n->h & (m->nbk - 1);
-    if (m->bk[b] == idx) m->bk[b] = n->nxt;
+    MHot *hn = &m->hot[idx];
+    MCold *n = &m->cold[idx];
+    long b = hn->h & (m->nbk - 1);
+    if (m->bk[b] == idx) m->bk[b] = hn->nxt;
     else {
-        for (int k = m->bk[b]; k >= 0; k = m->a[k].nxt)
-            if (m->a[k].nxt == idx) { m->a[k].nxt = n->nxt; break; }
+        for (int k = m->bk[b]; k >= 0; k = m->hot[k].nxt)
+            if (m->hot[k].nxt == idx) { m->hot[k].nxt = hn->nxt; break; }
     }
-    if (n->iprev >= 0) m->a[n->iprev].inext = n->inext; else m->ihead = n->inext;
-    if (n->inext >= 0) m->a[n->inext].iprev = n->iprev; else m->itail = n->iprev;
+    if (n->iprev >= 0) m->cold[n->iprev].inext = n->inext; else m->ihead = n->inext;
+    if (n->inext >= 0) m->cold[n->inext].iprev = n->iprev; else m->itail = n->iprev;
     n->used = 0;
-    n->nxt = m->freehead; m->freehead = idx;
+    hn->nxt = m->freehead; m->freehead = idx;
     m->count--;
 }
 
@@ -435,16 +442,16 @@ static int in_history(const Pos *p) {
 static int tpm_get(const Pos *p, Move *out) {
     int idx = map_find(&tpm, p, 0);
     if (idx < 0) return 0;
-    *out = tpm.a[idx].mv;
+    *out = tpm.cold[idx].mv;
     return 1;
 }
 static void tpm_store(const Pos *p, Move m) {
     int idx = map_put(&tpm, p, 0);
-    tpm.a[idx].mv = m;
+    tpm.cold[idx].mv = m;
     if (tpm.count > TABLE_SIZE) {
         /* del next(k for k in tp_move if k != root): oldest non-root key */
-        for (int k = tpm.ihead; k >= 0; k = tpm.a[k].inext)
-            if (!pos_eq(&tpm.a[k].pos, &rootpos)) { map_del(&tpm, k); break; }
+        for (int k = tpm.ihead; k >= 0; k = tpm.cold[k].inext)
+            if (!pos_eq(&tpm.cold[k].pos, &rootpos)) { map_del(&tpm, k); break; }
     }
 }
 
@@ -517,7 +524,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root) {
     int elow = -MATE_UPPER, eupp = MATE_UPPER;
     if (!root) {
         int idx = map_find(&tps, pos, depth);
-        if (idx >= 0) { elow = tps.a[idx].lower; eupp = tps.a[idx].upper; }
+        if (idx >= 0) { elow = tps.cold[idx].lower; eupp = tps.cold[idx].upper; }
         if (elow >= gamma) return elow;
         if (eupp < gamma) return eupp;
         if (depth > 0 && in_history(pos)) return 0;
@@ -622,8 +629,8 @@ after_moves:
 
     if (!root) {
         int idx = map_put(&tps, pos, depth);
-        if (best >= gamma) { tps.a[idx].lower = best; tps.a[idx].upper = eupp; }
-        else               { tps.a[idx].lower = elow; tps.a[idx].upper = best; }
+        if (best >= gamma) { tps.cold[idx].lower = best; tps.cold[idx].upper = eupp; }
+        else               { tps.cold[idx].lower = elow; tps.cold[idx].upper = best; }
     }
     if (tps.count > TABLE_SIZE)
         map_del(&tps, tps.ihead);
