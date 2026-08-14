@@ -7765,3 +7765,46 @@ under pypy3 (movetime smokes at start/after e2e4). Weights are the
 real-shaped random payload (packed/make_proto_payload.py) — pricing only,
 no Elo claim. Next: architecture pre-registration, then the ternary
 retrain; play is the only acceptance metric.
+
+## 2026-08-14 — Pre-register REPLNET v1: the N=4 ternary replacement retrain
+
+Design committed BEFORE training; play is the only acceptance metric.
+
+**Architecture (every choice forced by a measured number):**
+- 768 piece-square features, perspective-mirrored shared rows, **kb=1**
+  (kb4/kb8 multiply the payload ×4/×8 against a 617 B budget — impossible;
+  folding buckets to shared ternary rows at export IS kb=1).
+- **N=4 ternary lanes** per perspective. The golfed G9 fused decode is
+  one char = one feature = 4 trits (3⁴ = 81 ≤ 88 codec values); N=5-7
+  breaks char alignment, N=8 doubles the payload (~1.25 KB) — over.
+- Per-lane integer gain g_k ∈ [0,89] — the weight scale AND (×32) the
+  activation cap, output weights folded (so g_k > 0: relu caps are not
+  sign-symmetric; v1 lived with the same constraint). Bias digit ∈
+  [−44,45] lane units. SHIFT picked at export (pnet.pick_shift style).
+- **No bilinear tail, no rff, no segments**: the ext path is float/dev-only
+  machinery the 21-71 B margin cannot carry, and the bilt history's
+  best-val net COLLAPSED −118 in play (7602d7b). Revisit only if the
+  trained net lands ≥66% zeros (71 B spare).
+- clampcp 600 = engine CLAMP (the proto as priced), satpen 0.03 @ 480
+  (MANDATORY), wclip, exact antisymmetry by construction (shared rows +
+  round-toward-zero), **ternary STE** with per-lane scale + sparsity
+  pressure (threshold τ + L1): ≥58% zeros is a HARD fit gate, target
+  60-66%.
+- Trainer: train_packed.py `--base mat` (the seam already exists) + a new
+  ternary path; provenance pinned (seed / torch version / data sha).
+
+**Data, PRE-REGISTERED (the b1 lesson — NATURAL play distribution, NO
+phase rebalancing):** distill160k.npz (19,434 own-search-labelled,
+sha256 b0ed8b6617a7…) + nat8792.npz natural mix + a quiet-filtered dump
+slice from the packed lane's caches. Flat phase-balanced mixes are
+explicitly EXCLUDED this time: b1's balanced fit died in play (−182.6).
+
+**Acceptance, PRE-REGISTERED:** val gates only the recipe against its own
+float baseline — val LANDS NOTHING. Gate ladder before any game: pack.sh
+≤ 4096 on the real composed entry, replnet_check invariants, legality,
+mate, mate-conversion, first-yield v2, zero-illegal (hammer_1p0 once
+landed). Then the screen (STAGED, slot requested from the coordinator —
+this lane launches nothing): fixed-node 20k SPRT elo0=0 elo1=10 vs
+pst_entry @ HEAD, LAND bar 95% LB > 0 on fixed-N confirmation AND a timed
+confirmation LB > 0 (fixed nodes hide the ~19-op/eval speed tax; nps
+ratio vs entry measured under pypy on the box first — speed is Elo).
