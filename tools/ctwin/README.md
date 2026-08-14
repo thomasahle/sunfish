@@ -69,7 +69,9 @@ behavior is reachable by knob: `set IID_MIN_DEPTH 2`, `set MATE_DIST 0`.
   stalemates, null-move mates, perft set, KQK) × depth 1..6, 830 MTD-bi
   probes and 901 movegen lists byte-identical; 5 positions × depth 1..7,
   223 probes identical; two tuned-knob sweeps (QS/QS_A/EVAL_ROUGHNESS
-  changed on both sides) × depth 1..5, 746 probes identical.
+  changed on both sides) × depth 1..5, 746 probes identical; eviction
+  sweeps (`TABLE_SIZE` 500 and 50, heavy FIFO + root-protected killer
+  eviction on both sides) × depth 1..6, 600 probes identical.
 - Speed: 8-10x faster than sunfish.py under pypy3 at identical node
   counts (871k nodes, depth 7, JIT warm; `make bench` reproduces).
 
