@@ -79,8 +79,6 @@ ledgered per net (.probes.json), diagnostics never gates.
    build.
 5. **c1024-n8 — wider hidden N=8 at ps768** (~6.1k trits, two chars per
    feature — codec seam is the GOLF LANE's; agree it before training).
-6. **replnet_kb8fold — in-flight** (chained after 8Mv; fold quality =
-   evidence for #3).
 7. **replnet_ratecal — rate-aware retrain** (compression lane's yaml,
    `train/queue/85_replnet_ratecal.yaml`; natural slot beside #1 — the
    rate term is the capacity family's native loss once calibrated).
@@ -154,6 +152,17 @@ VAL-probe-first):
   tables. Same treatment: in the graph, on the grid, through the codec.
 
 ## Log (newest first)
+
+- 2026-08-14 ~12:5x UTC: chain2 done. **8Mv: val 0.01378** (comparable
+  split) — beats v1 0.01385: data scale pays; candidate packs 3536 B
+  (whole-feature sparsity). **kb8fold verdict: NEGATIVE as shipped** —
+  training-form 0.01267 (buckets carry real signal) vs shipped folded
+  0.01428 (the fold loses it; worse than plain v1). Consequence for
+  c1024-kb4: shared-rows-only folding is dead; only per-bucket DELTAS
+  (bytes) or ml2/phase products can carry king knowledge. Gate-stability
+  ×5 (MEASUREMENTS): entry 0/5, v1 5/5, 8Mv 1/5 — v1 withdrawn from the
+  staged screen, 8Mv staged NOT-READY, kqk-mid is the phase arm's
+  scoreboard. Started c1024-cal (τ 0.6, l1 {0, 0.0003}, 8M+valn).
 
 - 2026-08-14 ~12:2x UTC: TRAINER IDLE INCIDENT, ~70 min — the chain's
   wait loop (`pgrep -f "replnet_8M.pickle"`) was self-matched by my own
