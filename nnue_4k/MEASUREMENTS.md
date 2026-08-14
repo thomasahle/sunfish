@@ -7657,3 +7657,69 @@ anchors were checked and are untouched by the renames.
 **Thresholds:** −58 total crosses the ~42 B line that funds pend (H1,
 +42 B). Nowhere near the ~420 B that would reopen packed128. Entry now
 3299 bytes, 797 spare under 4096.
+
+## 2026-08-14 — Illegal moves: zero, by construction (the structural bestmove floor)
+
+Thomas's ruling on the seedtimed forfeits: "We should never accept illegal
+moves. 15 is too much, so is 4." Zero, achieved structurally, not
+statistically — the gamma seed making the class 4x rarer does not satisfy it.
+
+**All 19 forfeits classified from the PGNs** (seedtimed, 400 games at 1+0,
+b8 vs b8seed). Three candidate classes were checked: (a) a stale move
+committed for an earlier position, (b) `(none)`/no move at all, (c) a
+promotion/castling encoding defect. Every one of the 19 is class (b): the
+literal `bestmove (none)`, flagged by fastchess as "makes an illegal move:
+(none)". No stale moves (structurally impossible: `best_move`/`cand` are
+per-`go` locals in both drivers), no encoding defects.
+
+| victim | rounds (side, plies survived after book) |
+|---|---|
+| b8, 15 games | 6 (W,2) · 10 (B,1) · 11 (W,2) · 11 (B,1) · 31 (W,1) · 31 (B,2) · 52 (W,4) · 52 (B,3) · 53 (W,13) · 61 (B,1) · 61 (W,2) · 69 (B,1) · 78 (B,1) · 90 (W,1) · 90 (B,2) |
+| b8seed, 4 games | 19 (B,1) · 54 (W,4) · 92 (W,66) · 98 (W,2) |
+
+**The emission path.** The arms run the entry, whose dev redirect resolves
+the sunfish_ui driver (the games start from FEN openings, which the builtin
+loop cannot even parse). At 1+0 the driver budget
+`think = min(wtime/12, wtime/2 - 1)` is NEGATIVE below 2 s of clock, so the
+in-search deadline is already past when `go` arrives; `Stop` fires at the
+first poll (node 2048), and any position whose first root fail-high needs
+more than 2,048 nodes ends the search with `best_move = cand = None` and an
+empty `tp_move[root]`. The old tail — `played or (my_pv[0] if my_pv else
+"(none)")` — then printed the literal. That is exactly the b8/b8seed
+asymmetry: max first yield 2,433 nodes vs 394 (the seed's one-sided first
+probe), hence 15 vs 4. The builtin loop had the identical hole
+(`best or cand or '(none)'`).
+
+**The invariant, now enforced at every bestmove emission site** (go_loop,
+mate_loop, and the builtin loop that ships in the artifact): any move we
+emit was generated for the CURRENT root position and survives making the
+move (`can_kill_king`/`king_capture`, which covers check, pins, en-passant
+discoveries and castling-through-check via the king-passant square) — so
+the emitted move is legal, not merely pseudo-legal, and the worst case is a
+weak legal move that can lose the game on the board, never a forfeit.
+`(none)` survives only for checkmate/stalemate roots, where no tournament
+manager ever asks us to move; the builtin loop additionally gained the
+`score >= gamma and move` terminal-root guard so a verified-terminal yield
+cannot crash it. Driver bumped to v3, entry requires >= 3 (same commit, per
+the stale-driver rule).
+
+**Byte price:** entry 3299 → 3341 (+42 B), 755 spare under 4096.
+check_entry.sh green; all 23 variant mods rebuild against the new anchors.
+
+**Verification without games:** nnue_4k/tests/test_bestmove_floor.py (20
+tests) replays the abort-before-commit state deterministically (a searcher
+whose Stop beats the first yield), the position-A-then-aborted-position-B
+derive-never-inherit case, mate/stalemate at the root, the startpos
+instant-stop race, the builtin loop under the same starvation, and the real
+driver over a pipe at `go wtime 1`. Existing gates re-run green on the
+fixed base: legality 334/334, first-yield worst 582 <= 2048, mate 8/8,
+mate-conversion 8/8, full suite 48/48, packed standalone smoke (legal move,
+and `(none)` + alive after mate-at-root).
+
+**The instrument change.** seed_screen stage 2 (and rr_cap / rr_hole /
+ab_fixednode) no longer COUNT illegal moves: any illegal move by any arm in
+any run is a FAIL that names the game. The seed's pair rule is therefore
+DEPTH-QUALITY only — the illegal class it was reducing is closed by
+construction. Staged confirmation: tools/screens/hammer_1p0.sh, self-play
+at 1+0 (the regime that produced the 19), 100 games, REQUIRED zero illegal
+— stage it when an arena is free; PENDING until run.
