@@ -136,7 +136,7 @@ class TestCappedNullMove:
 
         def observed(pos, gamma, depth, root=False):
             calls.append((gamma, depth, root))
-            if pos == nullpos and gamma == 1 and depth == 3:
+            if pos == nullpos and gamma == 1 and depth == 2:
                 return -sf.MATE_LOWER
             return bound(pos, gamma, depth, root)
 
