@@ -75,7 +75,10 @@ static int QS = 40;
 static int QS_A = 140;
 static int EVAL_ROUGHNESS = 15;
 static long TABLE_SIZE = 1000000;
-static int NULL_MARGIN = -1;     /* -1: track EVAL_ROUGHNESS (classic ties them) */
+static int NULL_MARGIN = 15;     /* fuel-probe target margin (its own knob
+                                    since #192, deliberately NOT tied to
+                                    EVAL_ROUGHNESS; the classic sub-depth-6
+                                    null keeps following EVAL_ROUGHNESS) */
 static int NULL_MIN_DEPTH = 2;   /* null move when depth > this */
 static int NULL_LIMIT = 500;     /* |score| bound for trying null */
 static int NULL_RED = 3;         /* null move depth reduction */
@@ -117,16 +120,22 @@ static int USE_VARIANT = 0;      /* no-op here: forces pyref's transcribed
  *   generator order (unsorted, no killer/IID/futility), as an unstored
  *   root probe (its PR base is IID>2/no-mate-distance: --cset
  *   IID_MIN_DEPTH=2 MATE_DIST=0 alongside QS_TAIL=1).
- * PR #182 fuel-oracle null: classic capped null only for
- *   NULL_MIN_DEPTH < depth < FUEL_MIN_DEPTH; from FUEL_MIN_DEPTH a null
- *   probe at the fixed target pos.score + NULL_MARGIN is a FUEL ORACLE,
- *   never a score candidate: pass beats target => real moves recurse to
- *   depth-2 instead of depth-1 (nominal depth still keys tables and QS).
+ * FUEL_NULL (MASTER DEFAULT since #192; born as the PR #182 port):
+ *   classic capped null only for NULL_MIN_DEPTH < depth < FUEL_MIN_DEPTH;
+ *   from FUEL_MIN_DEPTH a null probe at the fixed target pos.score +
+ *   NULL_MARGIN is a FUEL ORACLE, never a score candidate: pass beats
+ *   target => real moves recurse to depth-2 instead of depth-1 (nominal
+ *   depth still keys tables and QS).  FUEL_NULL=0 = pre-#192 deep null.
  * PR #184 derive-never-inherit: search() re-derives every history score
  *   from the board under the K-table chosen for THIS search, so no score
  *   is inherited across table swaps. */
 static int QS_TAIL = 0;
-static int FUEL_NULL = 0;
+static int FUEL_NULL = 1;        /* DEFAULT since #192 merged the fuel
+                                    oracle into master's sunfish.py; 0
+                                    restores the pre-#192 deep-null cutoff
+                                    (historical comparisons only -- no
+                                    longer difftest-provable against the
+                                    live reference) */
 static int FUEL_MIN_DEPTH = 6;
 static int DERIVE_FRESH = 0;
 
@@ -718,16 +727,17 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
     int nkill = 0;
     tpm_get_all(pos, killers, &nkill);
 
-    /* Null move, capped at static eval plus one score bucket.  Under
-     * FUEL_NULL (PR #182) this classic branch runs only below
-     * FUEL_MIN_DEPTH; above it the fuel oracle decides a reduction. */
+    /* Null move, capped at static eval plus one score bucket (the cap
+     * follows EVAL_ROUGHNESS, exactly master's classic branch).  Since
+     * #192 this branch runs only below FUEL_MIN_DEPTH; above it the fuel
+     * oracle decides a reduction.  FUEL_NULL=0 restores the pre-#192
+     * deep-null cutoff for historical comparisons. */
     if (!root && depth > NULL_MIN_DEPTH
             && (!FUEL_NULL || depth < FUEL_MIN_DEPTH)
             && iabs(pos->score) < NULL_LIMIT && has_big_piece(pos)) {
         Pos rp = rotate(pos, 1);
         int s = -bound(&rp, 1 - gamma, depth - NULL_RED, 0, 0);
-        int margin = NULL_MARGIN < 0 ? EVAL_ROUGHNESS : NULL_MARGIN;
-        int score = pos->score + margin;
+        int score = pos->score + EVAL_ROUGHNESS;
         if (s < score) score = s;
         Move proof = nomove;
         int have_proof = 0;
@@ -742,15 +752,15 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         if (done) goto after_moves;
     }
 
-    /* PR #182: fuel oracle -- never a score candidate, only a fuel
-     * decision: real moves below recurse to rd - 1.  Exactly the PR's
-     * placement (between the classic null and the stand pat; no root
-     * gate) and its target margin semantics. */
+    /* Fuel oracle (master since #192) -- never a score candidate, only a
+     * fuel decision: real moves below recurse to rd - 1.  Placement and
+     * semantics exactly master's (between the classic null and the stand
+     * pat; no root gate; target = pos.score + NULL_MARGIN, master's own
+     * knob, independent of EVAL_ROUGHNESS). */
     int rd = depth;
     if (FUEL_NULL && depth >= FUEL_MIN_DEPTH && iabs(pos->score) < NULL_LIMIT
             && has_big_piece(pos)) {
-        int margin = NULL_MARGIN < 0 ? EVAL_ROUGHNESS : NULL_MARGIN;
-        int target = pos->score + margin;
+        int target = pos->score + NULL_MARGIN;
         Pos rp = rotate(pos, 1);
         if (-bound(&rp, 1 - target, depth - NULL_RED, 0, 0) >= target)
             rd = depth - 1;

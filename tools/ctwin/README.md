@@ -20,12 +20,17 @@ approximate around it.
 
 **Reference:** `sunfish.py` at the repo root of the checkout the harness
 runs in — the twin lives on master and that is master's engine (capped
-null move, mate-distance scoring, IID at `depth > 3`; `nnue-4k` currently
-carries the identical file). The reference is imported live by
-`pyref.py`, so drift in the Python file shows up as a harness failure,
-not silent staleness — re-pass the gate and re-tune the flavor knobs if
-the search changes. Historical master flavor (pre-capped-null) is
-reachable by knob: `set IID_MIN_DEPTH 2`, `set MATE_DIST 0`.
+null move below depth 6, fuel-oracle null from depth 6 since #192,
+mate-distance scoring, IID at `depth > 3`). The reference is imported
+live by `pyref.py`, so drift in the Python file shows up as a harness
+failure, not silent staleness — re-pass the gate, re-tune the flavor
+knob defaults, and re-pin variants.py's drift hashes when the search
+changes (done for #192). Historical flavors stay reachable by knob:
+`set FUEL_NULL 0` for the pre-#192 deep-null cutoff, `set IID_MIN_DEPTH
+2` + `set MATE_DIST 0` for pre-capped-null master — knob-off settings
+are no longer difftest-provable against the live reference; their
+identity was proven against the reference of their day and is archived
+in the git history of this file.
 
 ### Where clones silently diverge (all handled, all tested)
 
@@ -110,8 +115,10 @@ make bench      # C-vs-PyPy wall-time ratio at identical nodes
 Tuning knobs (no recompile): `set NAME VALUE` on stdin, `SF_NAME=` env, or
 `NAME=VALUE` argv after the table path (for match harnesses) —
 `QS QS_A EVAL_ROUGHNESS TABLE_SIZE NULL_MARGIN NULL_MIN_DEPTH NULL_LIMIT
-NULL_RED IID_MIN_DEPTH IID_RED FUT_MAX MATE_DIST` (`NULL_MARGIN -1`
-tracks `EVAL_ROUGHNESS`, which is classic's actual coupling), plus the
+NULL_RED IID_MIN_DEPTH IID_RED FUT_MAX MATE_DIST FUEL_NULL
+FUEL_MIN_DEPTH` (`NULL_MARGIN` is the fuel-probe target margin, master's
+own knob since #192, independent of `EVAL_ROUGHNESS`, which still caps
+the classic sub-depth-6 null), plus the
 tp_move battery: `EVICT_POLICY` (0 master root-guarded FIFO, 1 unguarded
 evict-before-insert, 2 depth-stored bounded scan with `EVICT_SCAN_K`,
 3 hash-slot two-tier replace-if-deeper), `KILLER_COUNT` (1..3 most recent
