@@ -8415,3 +8415,30 @@ lanesplit, cb8, control, …); layout B still loses everywhere (pack_entry
 .sh did not take the lever and its cells are byte-identical to the
 re-seam run).  THESE are the current denominators for the c1024 family;
 the two crossover projections above carry unchanged.
+
+## 2026-08-14 — Gate stability ×5: the single-run conversion reading was luck
+
+8Mv (the 8M data-scale arm, val 0.01378 on the pinned comparable split —
+BEATS v1's 0.01385; packs to 3536 B, 560 spare, same ~59.5% zeros but
+whole-feature sparsity that lzma rewards) flapped the box conversion gate
+{8,7,8,7}/8. Pre-stated a stability protocol BEFORE reading more:
+mate-conversion ×5 per engine, same box, same nice; eligible iff fails ≤
+entry's.
+
+| engine | runs with a fail |
+|---|---|
+| entry | 0/5 |
+| replnet v1 | **5/5** (kqk-mid budget, every time) |
+| replnet 8Mv | 1/5 (same case) |
+
+The v1 "8/8 at entry parity" that staged the screen was a 1-in-5 lucky
+run — single-run gate readings on a 500 ms-budget instrument under
+tournament load are an illusion; ×5 is the protocol from here. Screen
+request updated: v1 WITHDRAWN, 8Mv staged NOT-READY (1/5 vs entry 0/5),
+coordinator holds the marginal call. The failing class — KQK conversion
+speed — is exactly phase knowledge: c1024-phase (TRAINQUEUE #2) carries
+it, and the probes' phase scores are its scoreboard. kb8fold interim
+corroborates the axis reading: bucketed training-form val 0.01267-78
+(real signal) vs shipped folded 0.01429-40 (the fold loses it) — shared
+rows alone don't carry king knowledge; deltas cost bytes; ml2/phase are
+the byte-efficient axes.
