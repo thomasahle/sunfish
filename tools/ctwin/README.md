@@ -272,6 +272,54 @@ overhead — never within 80 moves at 5 ms, move 61 at 50 ms — while the
 floor-crawl that causes it is robust across the whole range. The surrogate
 reproduces mechanisms; it does not certify flag safety.
 
+### First full ranking pass (2026-08-15)
+
+Virtual clock, 50 ms/move charge, 60 games/cell (80 where noted, 16 at
+300+3). Elo is A-minus-B; `st<2.4` counts moves made with under 2.4 s left.
+
+| arm | vs | 60+0 | 60+0.1 | 30+1 | 60+1 | 300+3 |
+|---|---|---|---|---|---|---|
+| `pool` | `smooth` | **+112** [+48,+185] | — | — | — | — |
+| `min40_4` | `legacy12` | **+147** [+86,+219] | — | — | — | — |
+| `min40_4` | `smooth` | ≡ identical | +4 [−62,+71] | −31 [−98,+35] | +26 [−43,+97] | −44 [−194,+92] |
+| `min40_4` | `pool` | — | **−114** [−208,−34] | **−134** [−218,−62] | **−114** [−198,−41] | — |
+| `onemax` | `legacy12` | — | −6 [−85,+73] | −47 [−128,+30] | −41 [−115,+30] | — |
+| `onemax` | `min40_4` | — | **−89** [−170,−16] | −0 [−80,+80] | +23 [−54,+103] | — |
+| `onemax` | `pool` | — | **−215** [−328,−132] | **−114** [−201,−39] | **−120** [−206,−47] | — |
+
+**The pool wins every increment TC against both classic candidates, by
++114 to +215** — and it is the only arm that spends its clock down: at 30+1
+it makes 2,400+ moves under 2.4 s and bottoms out at 1.3 s, where `min40_4`
+and `onemax` make **zero** such moves and never go below 2.8 s. That is the
+whole trade, and the surrogate is the wrong instrument for one half of it.
+
+Two identities do a lot of work here and are checked in `tmlib`, not assumed:
+`legacy12` **is** `oldtm` (same expression, other units — and classic is the
+worse of the two below 2.4 s, where it has no floor at all and the budget
+goes negative), and `min40_4` **is** `smooth`/`steptm` at `winc == 0`. So
+calibration (a) already priced the classic pairing at sudden death, and the
+direct cell agrees: +147 vs a +228 calibration analogue.
+
+**The instrument reports its own bias in that cell.** `legacy12`'s budget
+goes negative below a 2 s clock, so 594 of its moves hit the structural-floor
+path where the surrogate substitutes the twin's bestmove — a *better* move
+than the real engine would have played. +147 is therefore a floor on the
+classic gap, not an estimate of it; the packed calibration, whose loser
+floors at 0.05 s and needed **zero** substitutions, read +228.
+
+Pool knob stage 1 @ 60+1 (baseline `pool` s=1.0, O=200 ms, M=40), **3 of 6
+cells — partial**: `s=0.8` +35 [−33,+105], `s=1.2` −12 [−89,+64],
+`O=100 ms` −29 [−106,+45]. Nothing separates yet; `O=300 ms`, phase-M and
+the dynamic target had not finished. Stage-0 had already pruned `s=1.2` on
+shape (it is the only cell that introduces floor moves at 60+0).
+
+**Cost note, honestly:** the surrogate's speedup comes from skipping
+*waiting*, not *searching*, so it shrinks as the TC grows. A 60+0 cell is
+minutes; a 300+3 cell is nearly an hour, because the node budget scales with
+the clock. 300+3 is where stage-0 earns its keep: it answers the reserve
+question exactly and for free (`min40_4` and `onemax` both end 300+3 holding
+73-76 s unspent, against `smooth`'s 11 s — the underspend risk, confirmed).
+
 **What the surrogate cannot see, and never will:** real lag variance, PyPy
 warmup and JIT deoptimisation, OS scheduling and cotenancy, and the true
 per-position node rate (the shipped profile explains ~57% of the nps
