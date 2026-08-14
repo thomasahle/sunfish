@@ -111,12 +111,36 @@ typedef struct {
     int score;
     unsigned char wc0, wc1, bc0, bc1;
     int ep, kp;
+    uint64_t h;   /* content hash; pure function of the fields above,
+                     sealed at construction (pos_seal).  NOT part of
+                     equality -- only a constant-time reject in front of
+                     the exact compare, so lookups stay provably identical
+                     to Python's (hash probe, then full == on the key). */
 } Pos;
+
+static uint64_t mix64(uint64_t x) {            /* splitmix64 finalizer */
+    x ^= x >> 33; x *= 0xff51afd7ed558ccdULL;
+    x ^= x >> 29; x *= 0xc4ceb9fe1a85ec53ULL;
+    x ^= x >> 32; return x;
+}
+static void pos_seal(Pos *p) {
+    /* One hash per Pos construction (rotate/fen/reset), instead of one
+     * FNV over 120 bytes per table operation.  Board = exactly 15 words. */
+    uint64_t w[15], h = 0;
+    memcpy(w, p->b, 120);
+    for (int k = 0; k < 15; k++) h = h * 0x100000001b3ULL ^ mix64(w[k] + k);
+    h = h * 0x100000001b3ULL ^ mix64(((uint64_t)(uint32_t)p->score << 8)
+        | (uint64_t)(p->wc0 | p->wc1 << 1 | p->bc0 << 2 | p->bc1 << 3));
+    h = h * 0x100000001b3ULL ^ mix64(((uint64_t)(uint32_t)p->ep << 32)
+        | (uint32_t)p->kp);
+    p->h = h;
+}
 
 static int pos_eq(const Pos *a, const Pos *b) {
     /* namedtuple equality: ALL fields, score included (a position rebuilt
-     * under a different K-table is a different dict key in Python too). */
-    return memcmp(a->b, b->b, 120) == 0 && a->score == b->score
+     * under a different K-table is a different dict key in Python too).
+     * a->h == b->h is a derived-value fast reject, never a substitute. */
+    return a->h == b->h && memcmp(a->b, b->b, 120) == 0 && a->score == b->score
         && a->wc0 == b->wc0 && a->wc1 == b->wc1
         && a->bc0 == b->bc0 && a->bc1 == b->bc1
         && a->ep == b->ep && a->kp == b->kp;
@@ -133,6 +157,7 @@ static Pos rotate(const Pos *p, int nullmove) {
     r.bc0 = p->wc0; r.bc1 = p->wc1;
     r.ep = (p->ep && !nullmove) ? 119 - p->ep : 0;
     r.kp = (p->kp && !nullmove) ? 119 - p->kp : 0;
+    pos_seal(&r);
     return r;
 }
 
@@ -268,18 +293,11 @@ typedef struct {
 } Map;
 
 static uint64_t hash_key(const Pos *p, int depth) {
-    uint64_t h = 1469598103934665603ULL;
-#define MIX(x) (h = (h ^ (unsigned char)(x)) * 1099511628211ULL)
-    for (int k = 0; k < 120; k++) MIX(p->b[k]);
-    uint32_t vals[5] = {
-        (uint32_t)p->score,
-        (uint32_t)(p->wc0 | p->wc1 << 1 | p->bc0 << 2 | p->bc1 << 3),
-        (uint32_t)p->ep, (uint32_t)p->kp, (uint32_t)depth
-    };
-    for (int v = 0; v < 5; v++)
-        for (int s = 0; s < 4; s++) MIX(vals[v] >> (8 * s));
-#undef MIX
-    return h;
+    /* p->h is sealed at construction; fold the depth in cheaply.  The
+     * bucket layout this induces is unobservable: keys are unique, chain
+     * hits are confirmed by pos_eq, and iteration order lives in the
+     * separate insertion-order list. */
+    return p->h ^ (0x9e3779b97f4a7c15ULL * (uint64_t)(depth + 1));
 }
 
 static void map_init(Map *m) {
@@ -293,12 +311,14 @@ static void map_clear(Map *m) {
     free(m->a); free(m->bk);
     map_init(m);
 }
-static int map_find(Map *m, const Pos *p, int depth) {
-    uint64_t h = hash_key(p, depth);
+static int map_find_h(Map *m, const Pos *p, int depth, uint64_t h) {
     for (int idx = m->bk[h & (m->nbk - 1)]; idx >= 0; idx = m->a[idx].nxt)
         if (m->a[idx].h == h && m->a[idx].depth == depth && pos_eq(&m->a[idx].pos, p))
             return idx;
     return -1;
+}
+static int map_find(Map *m, const Pos *p, int depth) {
+    return map_find_h(m, p, depth, hash_key(p, depth));
 }
 static void map_rehash(Map *m) {
     long nn = m->nbk * 2;
@@ -313,7 +333,8 @@ static void map_rehash(Map *m) {
 }
 /* Insert or update.  An update keeps its insertion slot (Python dicts). */
 static int map_put(Map *m, const Pos *p, int depth) {
-    int idx = map_find(m, p, depth);
+    uint64_t h = hash_key(p, depth);
+    int idx = map_find_h(m, p, depth, h);
     if (idx >= 0) return idx;
     if (m->count + 1 > m->nbk * 3 / 4) map_rehash(m);
     if (m->freehead >= 0) {
@@ -331,7 +352,7 @@ static int map_put(Map *m, const Pos *p, int depth) {
     }
     MNode *n = &m->a[idx];
     n->pos = *p; n->depth = depth;
-    n->h = hash_key(p, depth);
+    n->h = h;
     long b = n->h & (m->nbk - 1);
     n->nxt = m->bk[b]; m->bk[b] = idx;
     n->iprev = m->itail; n->inext = -1;
@@ -689,6 +710,7 @@ static void reset_state(void) {
     hist[0].score = 0;
     hist[0].wc0 = hist[0].wc1 = hist[0].bc0 = hist[0].bc1 = 1;
     hist[0].ep = hist[0].kp = 0;
+    pos_seal(&hist[0]);
     nhist = 1;
     side0 = 'w';
 }
@@ -733,6 +755,7 @@ static int setup_fen(char **tok, int ntok) {
         else if (islo(c)) score -= PSTP[c - 32][119 - i];
     }
     p.score = score;
+    pos_seal(&p);
     side0 = tok[1][0];
     if (side0 == 'b') p = rotate(&p, 0);
     hist[0] = p;
@@ -881,6 +904,7 @@ int main(int argc, char **argv) {
                 hist[0].score = 0;
                 hist[0].wc0 = hist[0].wc1 = hist[0].bc0 = hist[0].bc1 = 1;
                 hist[0].ep = hist[0].kp = 0;
+                pos_seal(&hist[0]);
                 nhist = 1;
                 side0 = 'w';
                 if (ntok >= 3 && !strcmp(tok[2], "moves"))
