@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-14 | **PACK.SH LANDED: `--no-hoist-literals` + payload-shebang strip, verified a win on EVERY artifact family that packs through the shared script — classic −22, sunfish_nnue −31, pst_entry −46, replnet proto −29, variant arms −46/−47/−47/−52** | The golf lane's intel, re-measured and taken global. Free bytes for every family at once: no engine, no eval and no search changed, and all five smoke families answer legally from startpos and from a 6-move Ruy (check_entry 3341 → **3295**, 801 spare; replnet_check PASS; artifacts byte-identical to the pre-land measurement). **The shebang strip ALONE is +4 on classic** and only pays beside `--no-hoist-literals`, so the two are one indivisible change — landing them separately would have shipped a regression. Shebang deadness AUDITED, not assumed: every consumer runs the artifact's own `#!/bin/bash` head, which execs a NAMED interpreter, and the source files keep their polyglot header. **replnet capacity 878 → 909 B in-context (4095 @ --feats 1170), 849 → 880 at the 30-B margin; the 1024-B payload program is 4212 — 116 over, was 142** |
 | 2026-08-14 | **REPLNET GOLF ROUND 2 (the 1024-B payload directive): code side 3449 → 3217 (−232) through pack.sh, play-IDENTICAL by node count and probe stream; trained v1 candidate 3831 → 3594 (502 spare); the 1024-B payload budget measures 4238 — 142 OVER** | 20 steps priced, 13 landed, 7 reverted (+1/+2/+6/+7/+8/+12/+14/+36 negatives ledgered); max payload that FITS today: **878 B in-context** (849 at the 30-B margin) vs 617 before = **+261 capacity**; n8 codec seam DEFINED, VERIFIED and PRICED (+15 B code; the payload is the blocker: 4410 @59.6%, 4233 @73.7% zeros); pack.sh intel for the coordinator: `--no-hoist-literals` −24, +shebang strip −32 total; full ladder green (legality 334/334, first-yield worst 183, mate 8/8, conversion 8/8 @1500ms, verify_export bit-exact, nps FASTER) |
 | 2026-08-14 | **`khold2` BUILT, PRICED +27 B (3326 vs 3299), and the mate-conversion suite SPLIT the arms exactly as pre-registered: entry 8/8, khold2 8/8 (move-for-move = base), khold 7/8 — FAILS `kqk-approach`, king a1→b1 then 18 moves of shuffle at halfmove-clock 36** | Thomas's KQK objection is now a measurement, not an argument; **khold2 REPLACES khold in every composition row and khold's screen priority drops to mechanism control**; tables round-trip exact all arms, forbidden compositions raise in all four orders (khold2.pend, pend.khold2, khold2.khold, khold.khold2), standalone packed smoke green. No Elo claimed — screen staged, not armed |
 | 2026-08-14 | **PRE-REGISTERED: `khold2` (khold + lone-queen escape hatch, K_END iff both queens off OR root non-pawn material ≤ 929) and a MATE-CONVERSION gate** — Thomas's KQK concern made measurable | Pure khold would hold the ATTACKING king home in KQK — the king is a mating piece there; khold2's material clause re-engages K_END exactly on lone-queen boards. New instrument `mate_conversion_gate.py` + 8-position KQK/KRK suite, driver-checked, fixed deterministic defender; **expectation pre-registered: entry 8/8, khold2 8/8, khold FAILS kqk-approach** — if it does, khold's screen priority drops and khold2 replaces it in every composition. Screen = H2's instrument verbatim, both secondary readings carried |
@@ -239,6 +240,129 @@ how much effort it cost.
 
 ---
 
+## 2026-08-14 — PACK.SH: `--no-hoist-literals` + payload-shebang strip LANDED GLOBALLY, a win on every family that packs through the shared script
+
+The golf lane priced two pack-pipeline levers on the replnet artifact and
+deliberately did **not** land them, because `tools/build/pack.sh` is shared by
+every artifact family and a lane that measures one file cannot speak for the
+others. This entry is that verification. Both levers are now in `pack.sh`.
+
+### What the levers are
+
+* **`--no-hoist-literals`.** pyminify rewrites each repeated string literal to
+  a fresh one-character global. That shrinks the TEXT and grows the ARTIFACT,
+  because the repetition it deletes is exactly what lzma matches for free.
+  Measured directly: turning hoisting off makes the minified stream *bigger*
+  by +104 chars (classic), +74 (pst_entry), +60 (replnet) — and every packed
+  artifact smaller. The lever is "stop helping".
+* **The payload shebang strip.** `sed -e '1{' -e '/^#!/d' -e '}'`, line 1 only.
+  The polyglot `#!/bin/sh` survives minification into the compressed payload,
+  where nothing can ever read it.
+
+### Per-family bytes — one real file per cell, through the real script
+
+| family | source | base | −hoist | −shebang | **both** |
+|---|---|---|---|---|---|
+| classic | `sunfish.py` | 3232 | 3221 (−11) | 3236 (**+4**) | **3210 (−22)** |
+| nnue | `nnue_4k/sunfish_nnue.py` | 3931 | 3913 (−18) | 3923 (−8) | **3900 (−31)** |
+| entry (SHIPPED) | `nnue_4k/pst_entry.py` | 3341 | 3303 (−38) | 3332 (−9) | **3295 (−46)** |
+| replnet proto | `nnue_4k/replnet_proto.py` | 3841 | 3822 (−19) | 3834 (−7) | **3812 (−29)** |
+| replnet code-only | payload elided | 3217 | 3195 (−22) | 3211 (−6) | **3186 (−31)** |
+| variant `base` | make_variants | 3341 | 3303 (−38) | 3332 (−9) | **3295 (−46)** |
+| variant `cap` | make_variants | 3352 | 3308 (−44) | 3343 (−9) | **3300 (−52)** |
+| variant `nolmr` | make_variants | 3341 | 3300 (−41) | 3332 (−9) | **3294 (−47)** |
+| variant `khold2` | make_variants | 3365 | 3327 (−38) | 3357 (−8) | **3318 (−47)** |
+
+**The combined column is a win in all nine rows, and that is the only column
+that ships.** The shebang strip ALONE is **+4 on classic** — it lands the
+stream in a worse lzma neighbourhood — so the two levers are one indivisible
+change. Landing them one at a time, in the wrong order, would have shipped a
+regression to the release artifact and looked like progress. The `pack.sh`
+header comment says so, in those words, so the next person cannot split them.
+
+The golf lane's replnet reading reproduces within noise: they measured −24 /
+−32, this stream reads −22 / −31 on the same file (their number came off a
+1024-payload build; the pinned-payload builds below read −26 exactly).
+
+### Correctness, per family
+
+* **Standalone smoke, base vs both, ten runs.** Every artifact executed
+  directly in an empty temp dir with `SF_NET` unset (except the nnue arm,
+  which needs its net): `uciok` in all ten, and a legal `bestmove` from
+  startpos AND from the 6-move Ruy `e2e4 e7e5 g1f3 b8c6 f1b5 a7a6`, legality
+  checked against python-chess. No family changed answer where the search is
+  deterministic; classic's one differing reply (b5c4 vs b5c6, both legal) is
+  movetime jitter, not the pipeline — the artifacts are byte-identical to the
+  ones smoked, verified by sha256.
+* **`check_entry.sh` GREEN**: source still matches its generator, entry packs
+  to **3295 (801 spare)**.
+* **`replnet_check.py` PASS**: mirror + 40-ply walk (acc/ps/score) +
+  antisymmetry + nn-fires + sentinel-margin. It reads the SOURCE, so the pack
+  pipeline cannot perturb it; run as a control, and it did not move.
+* **No pinned byte count anywhere to update.** Both CI workflows assert
+  `-le 4096`; every pricing instrument (`price_engine.sh`, `measure.py`,
+  `price_grid.py`, `price_taper.py`, `price_kbucket.py`, `price_candidates.py`,
+  `build_students.py`) computes its baseline by packing at run time, and all
+  of them report DIFFERENCES, which a uniform shift leaves untouched. Run as a
+  check, `price_engine.sh` reads **ENGINE-SANS-EVAL 2871 → 2835 (−36)** and
+  **EVAL CEILING 1225 → 1261 (+36)** — the eval lane's budget grew by more
+  than the entry shrank, because a zero-eval build has less to un-hoist.
+* **Test suite**: `tests/` + `nnue_4k/tests/` 336 passed, 2 skipped, and one
+  PRE-EXISTING failure (`test_terminal_fail_high_reports_exact_score_before_none`)
+  that reproduces identically with `pack.sh` reverted — the terminal-score fix
+  is on master and not yet on this branch. Not caused here, not fixed here.
+* **Stale-number debt this task could not pay** (single-writer: another lane
+  owns the file): `nnue_4k/replnet_proto.py`'s header comment still quotes the
+  pre-land `878 / 849` capacity and `4238 -- 142 B still to find`. The live
+  numbers are **909 / 880** and **4212 — 116 B**. The golf lane must refresh
+  that comment block on its next touch.
+
+### The shebang is dead — audited, not assumed
+
+The failure this could have caused is in the repo's own history: a pyminify
+update once stripped the shebang while the head still did `exec $T`, and the
+header fed Python source to `/bin/sh`. That is fixed at the root — the head
+execs `$(command -v pypy3||echo python3)` on a `/dev/fd` — and the audit
+confirms nothing depends on the payload's copy:
+
+* every consumer runs the artifact through its OWN `#!/bin/bash` head, which
+  this change does not touch: `./sunfish.packed` (CI), `[abspath(engine)]`
+  (`legality_gate.py`), `["bash", artifact]` (`packrun.py`), `[tgt]`
+  (`measure.py`). Screen wrappers drive `.py` SOURCES, not artifacts;
+* nothing anywhere extracts the payload and runs it on its own — the only
+  `xz -d` sites in the tree are the two pack heads themselves;
+* `pack_entry.sh` names the interpreter the same way, so its payload shebang
+  is dead too (**not landed there — out of this task's write scope; the same
+  −8-ish is available to whoever owns that script**);
+* the SOURCE files keep their polyglot header. `./sunfish.py`, the wheel, the
+  lichess bot and every dev path are untouched; only the copy inside the
+  compressed payload goes.
+
+### New capacity for the c1024 program
+
+Pinned measuring payload as before (`make_proto_payload.py --zeros 0.596
+--seed 20260814`), in-context cost = total − payload-elided total:
+
+| build | base total | landed total | Δ | in-context payload |
+|---|---|---|---|---|
+| code-only (elided) | 3217 | **3186** | −31 | — |
+| `--feats 1330` (the 1024-B program) | 4238 | **4212** | −26 | 1026 |
+| `--feats 1170` | 4120 | **4095** | −25 | **909 — the frontier** |
+| `--feats 1175` | 4125 | 4097 | −28 | 911 (over by 1) |
+| `--feats 1130` | 4091 | **4066** | −25 | **880 at the 30-B margin** |
+| `--feats 1135` (old frontier) | 4095 | 4069 | −26 | 883 |
+
+**Capacity to size arms against: 909 B in-context absolute, 880 B at the
+30-B safety line** (was 878 / 849). The base column reproduces the golf
+lane's 4238 / 4095 / 4066 exactly, so the two pipelines are being compared on
+one instrument and not two.
+
+**The 1024-B payload program now builds to 4212 — 116 B over 4096**, down
+from 142. The pack pipeline paid 26 of the gap; the remaining 116 is still
+code-side and still belongs to the screened lanes, not to golf.
+
+---
+
 ## 2026-08-14 — REPLNET GOLF ROUND 2: the 1024-B payload budget, measured; code side −232, play-identical; 142 B still missing
 
 **Thomas's directive:** the replacement-net artifact gets a **1024-byte net
@@ -337,11 +461,16 @@ n8-at-ps768 does not fit without ~80%+ zeros or the bake-off lane's better
 encoder. The seam is agreed on the golf side; export_replnet already emits
 N=8 (make_proto_payload --N 8 matches it digit-for-digit).
 
-**Instrument intel for the coordinator (NOT landed — pack.sh changes every
-anchor):** pyminify's literal hoisting fights lzma: `--no-hoist-literals`
-is **−24 B** on this artifact; stripping the (unused-in-artifact) shebang
-line in the pack pipe adds −8: **−32 combined** (4238 → 4212 equivalent;
-capacity 878 → ~910). lzma lc/lp sweeps are ±0-1 and not worth it.
+**Instrument intel for the coordinator — since LANDED, see the entry above
+(pack.sh changes every anchor, so it needed a cross-family verification this
+lane could not do):** pyminify's literal hoisting fights lzma:
+`--no-hoist-literals` is **−24 B** on this artifact; stripping the
+(unused-in-artifact) shebang line in the pack pipe adds −8: **−32 combined**
+(4238 → 4212 equivalent; capacity 878 → ~910). lzma lc/lp sweeps are ±0-1 and
+not worth it. **Landed 2026-08-14 and confirmed a win on all nine families;
+the estimate held: 4238 → 4212 measured, capacity 878 → 909 in-context.** One
+correction the cross-family sweep found and this lane could not: the shebang
+strip alone is **+4 on classic**, so the two levers only pay together.
 
 **Coordination (training lane):** c1024-cal fits trivially (ps768 max cost
 ≈ 720 < 849). c1024-kb4 stays priced out (12,288 trits ≈ 3,072 chars raw,
@@ -8169,3 +8298,50 @@ as .probes.json; compact line per epoch-best. DIAGNOSTICS, never gates
 exactly as a newborn net should: mobility arriving (+16), phase absent
 (+1/+0), passers wrong-signed (−5) — the scoreboard the phase arms will
 be read against.
+
+## 2026-08-14 — Bake-off re-seamed to golf round 2; pack scripts pinned after a second moving-denominator incident
+
+Golf round 2 (a1a1a6d) restructured the entry's decode region (constants
+inlined, ACC_BASE renamed `_B`, one-pass `_half` build) and the harness
+refused it by name (the structures lane's `require_seam`).  compress/ now
+knows entry SEAMS: v1 = the recorded blob fb717214, v2 = the settled
+a1a1a6d+ blob be154478; arms stay in one dialect and `build_region`
+token-rewrites per seam at one point, so no artifact carries alias bytes.
+The baseline serves its seam-verbatim decoder (its patched cells price
+the entry's OWN block).  Tests pin BOTH blobs and round-trip the arms
+against each (19/19).
+
+**Second incident, same class as the entry golf:** the working-tree
+pack.sh carried the golf lane's UNCOMMITTED --no-hoist-literals +
+shebang-strip change and silently moved every artifact (old-blob baseline
+3831→3780, settled candidate 3594→3567).  packrun now runs the pack
+scripts from a git pin (default HEAD, BAKEOFF_PACK_REV overrides), NOTES
+working-tree divergence, and lands pack provenance in the results json
+beside the entry blob.  When that pack.sh change lands, every number
+below shifts by its measured −29-family delta — one re-run refreshes.
+
+**Instrument, revalidated at both pins (pinned packer):** settled v2 +
+trained v1 = **3594 B EXACT** (the golf commit's recorded candidate;
+elided 3217 = their recorded code side); historical v1 = **3831/3834
+EXACT**; ctrl_shuffle at v2 worse in both layouts (+193 A, +111 B-vs-B).
+Torch triangle PASS on both nets at the new seam.
+
+**Re-seamed denominators (seam v2, blob be154478, pack.sh 0b41a200):**
+
+| net | baseline (b81, A) | spare | payload in-ctx | closest arm |
+|---|---|---|---|---|
+| v1 (59.6% zeros) | **3594** | 502 | 377 | b81_rle A +44 |
+| v1c (65.2% zeros) | **3543** | 553 | 326 | b81_rle A +53 |
+
+Rank order is unchanged from the v1-seam tables in every band (baseline,
+then rle / fixed square orders / lanesplit / cb8 / control / cb4 /
+pieceperm, then the entropy-coded and split arms, then sparse and the
+stored perm; full 60-cell tables in the per-net bakeoff json, 4
+trained_cb/trained_lr SKIP rows — correct, these nets carry no trained
+structure).  What DID move: patched-arm decoder costs grew ~25-90 B
+relative to the golfed entry (its own block is tighter, e.g. b81_rle's
+decoder 21→46 B, rc_run 144→171 A / 201→243 B), so the golf widened the
+baseline's moat; and every split-B cell still loses (b81 B +319).  The
+two standing crossover projections (dense payload at ~42% zeros; raw
+tail at ~1.1 kB incompressible payload) are unchanged in kind and carry
+to the c1024 exports, where the zoo re-runs as one command.
