@@ -144,15 +144,27 @@ src = src.replace("pos.ps", "pos.score").replace("self.ps", "self.score")
 # will actually use (+3 bytes; net -8, entry 3483 -> 3475).
 old = ('        # Bare-king endings: swap in the centralization gradient (packed\'s\n'
        '        # own measured condition; classic keys on queens-off instead).\n'
-       '        # Both directions every search: table state must never outlive the\n'
-       '        # condition.\n'
+       '        # Both directions every search because a game reaches bare-king\n'
+       '        # DURING play with one Searcher at the wheel (a new game gets a\n'
+       '        # new Searcher via ucinewgame; this was never about state outliving\n'
+       '        # a game). The history scores this search inherits were accumulated\n'
+       '        # under the previous table -- off by a constant after a swap, which\n'
+       '        # classic measured harmless on the C twin at fixed nodes (668 games,\n'
+       '        # +0.52 +/- 6.37; nnue_4k/MEASUREMENTS.md 2026-08-14, PR #184). The\n'
+       '        # 4k entry re-derives instead (pst_entry.py\'s kend+fresh pair).\n'
        '        bare = sum(c.isupper() for c in pos.board) == 1 or sum(c.islower() for c in pos.board) == 1\n'
        '        pst["K"] = K_END if bare else K_MID\n')
 new = ('        # Classic\'s K_END is a centralization gradient, and classic keys it\n'
-       '        # on queens-off. Both directions every search: table state must\n'
-       '        # never outlive the condition.\n'
+       '        # on queens-off. Both directions every search because the queens\n'
+       '        # leave DURING a game and one Searcher plays every move of it (a\n'
+       '        # new game gets a new Searcher; this was never about state\n'
+       '        # outliving a game).\n'
        '        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END\n'
-       '        # The carried score was accumulated under the OTHER table.\n'
+       '        # The carried score was accumulated under the OTHER table: re-derive\n'
+       '        # it fresh so the swap leaves no stale constant behind (the entry\'s\n'
+       '        # kend+fresh pair; classic measured the constant harmless on the C\n'
+       '        # twin, +0.52 +/- 6.37 over 668 fixed-node games -- see\n'
+       '        # nnue_4k/MEASUREMENTS.md 2026-08-14, PR #184).\n'
        '        pos = self.root = from_board(pos.board, pos.wc, pos.bc, pos.ep, pos.kp)\n')
 assert src.count(old) == 1, "king-table block not found verbatim in sunfish_nnue.py"
 src = src.replace(old, new, 1)
