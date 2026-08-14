@@ -46,10 +46,9 @@ it, by countermodel.  The four design items:
    consume directly, so it is the premise.  The counting bridge could
    be added later without touching anything here.
 
-2. COUNTERMODEL DISPOSITIONS, as lemmas (the games are verbatim ports
-   from the #178/#181 stack -- `Shortest.lean` / `Eventual.lean`,
-   which this branch predates; on a rebase past those merges the port
-   section below is deleted wholesale in favour of the originals):
+2. COUNTERMODEL DISPOSITIONS, as lemmas, stated against the canonical
+   countermodels (`Shortest.lean`'s `CexD`, `Eventual.lean`'s `CexE`
+   -- imported, not duplicated):
 
    * `CexE` VIOLATES the premise: `cexE_not_endsWithin` /
      `cexE_not_finite`.  The infinite masked chain admits no budget at
@@ -144,6 +143,7 @@ effective bound needs no choice anywhere.
 -/
 
 import Sunfish.EventuallyWide
+import Sunfish.Eventual
 
 namespace Sunfish
 
@@ -447,50 +447,10 @@ theorem eventual_classification_fuel_finite (G : QSGame) (guard : G.Pos → Bool
 /-! # Countermodel dispositions
 
 The two countermodels of the frontier premise, and where they stand
-against `EndsWithin`.  The game definitions are VERBATIM PORTS from
-the #178/#181 stack (`Shortest.lean`'s `CexD`, `Eventual.lean`'s
-`CexE`), which this branch predates; on a rebase past those merges
-this port section is deleted wholesale in favour of the originals.
-Only the definitions and the facts the dispositions consume are
-ported -- the stacks' value-level lemmas stay where they are. -/
-
-/-- Port of `Eventual.lean`'s chain: `C n` is the masked defender at
-every ply, `X` the admitted illegal move, `K` the captured king that
-makes `X` illegal. -/
-inductive EPos where
-  | C : Nat → EPos
-  | X : EPos
-  | K : EPos
-  deriving DecidableEq
-
-open EPos in
-/-- `C n -> {X, C (n+1)}` with `val (C n) X = 0` and
-`val (C n) (C (n+1)) = -150`: the legal continuation is masked at
-remaining depth 1 and admitted from remaining depth 2 on, repeated at
-every ply.  Verbatim from the #181 branch. -/
-def CexE : QSGame where
-  Pos := EPos
-  moves := fun p => match p with
-    | C n => [X, C (n + 1)]
-    | X => [K]
-    | K => []
-  eval := fun p => match p with
-    | K => -MATE_UPPER
-    | _ => 0
-  pass := fun p => p
-  val := fun p m => match p, m with
-    | C _, C _ => -150
-    | X, K => MATE_LOWER
-    | _, _ => 0
-
-instance : DecidableEq CexE.Pos := inferInstanceAs (DecidableEq EPos)
-
-theorem cexE_moves_C (n : Nat) : CexE.moves (EPos.C n) = [EPos.X, EPos.C (n + 1)] := rfl
-
-theorem cexE_cap_C (n : Nat) :
-    hasKingCapture CexE.toNullGame.toGame (EPos.C n) = false := rfl
-
-theorem cexE_ai_C (n : Nat) : allIllegalB CexE (EPos.C n) = false := rfl
+against `EndsWithin`.  `CexD` and `CexE` are the canonical games of
+`Shortest.lean` and `Eventual.lean` (this file adds only the
+`EndsWithin`-level dispositions; the stacks' value-level lemmas stay
+where they are). -/
 
 /-- **`CexE` violates the premise, at every node and every budget.**
 The only legal move from `C n` is `C (n + 1)` and no `C i` is
@@ -521,46 +481,6 @@ theorem cexE_not_endsWithin : ∀ N n : Nat, ¬ EndsWithin CexE N (EPos.C n) := 
 fails on it outright. -/
 theorem cexE_not_finite : ¬ ∃ N, EndsWithin CexE N (EPos.C 0) :=
   fun ⟨N, h⟩ => cexE_not_endsWithin N 0 h
-
-/-- Port of `Shortest.lean`'s finite tree. -/
-inductive DPos where
-  | Q | D | E | P | M | B | C | X | Z | S | W
-  deriving DecidableEq
-
-open DPos in
-/-- `Q` (defender) → `{D, B}`; the slow defence `D → E → P` with `P`
-mating on `C`, the fast loss `B → C`; `M` is the masked node (`X`
-illegal and admitted, `S` legal, filtered at the depth-1 threshold,
-and itself a stalemate).  Verbatim from the #178 branch. -/
-def CexD : QSGame where
-  Pos := DPos
-  moves := fun p => match p with
-    | Q => [D, B]
-    | D => [E]
-    | E => [P]
-    | P => [M, C]
-    | M => [X, S]
-    | B => [C]
-    | C => [X]
-    | X => [Z]
-    | W => [Z]
-    | Z => []
-    | S => []
-  eval := fun p => match p with
-    | Z => -MATE_UPPER
-    | _ => 0
-  pass := fun p => match p with
-    | C => W
-    | p => p
-  val := fun p m => match p, m with
-    | M, S => -150
-    | _, _ => 0
-
-instance : DecidableEq CexD.Pos := inferInstanceAs (DecidableEq DPos)
-
-theorem cexD_floor : ValFloor CexD 192 := by
-  intro p m _
-  cases p <;> cases m <;> decide
 
 /-- The masked node itself has budget 1: its one legal move is the
 stalemate `S`. -/
