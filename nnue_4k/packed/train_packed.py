@@ -124,6 +124,15 @@ p.add_argument("--ternary", type=float, default=0.0,
                     "positive (relu caps are not sign-symmetric), and export "
                     "writes the base-90 payload string for replnet_proto.py "
                     "next to --out.  kb=1, no ext, N=4 only")
+p.add_argument("--ternshared", action="store_true",
+               help="with --ternary and --kb > 1: ternarize only the bucket-"
+                    "INDEPENDENT factorized rows (shared+typ); the per-bucket "
+                    "raw deviations stay float, training-only absorbers that "
+                    "never ship (keep them small: pass --wclip ~0.02).  "
+                    "Export folds to kb=1 shared ternary rows, and BOTH the "
+                    "best-epoch selection and the export use the SHIPPED "
+                    "form (raw dropped): the number that picks the net is "
+                    "the number the engine plays")
 p.add_argument("--l1", type=float, default=0.0,
                help="sparsity pressure for --ternary: loss adds l1 * "
                     "mean|u| on the pre-ternarization magnitudes.  The "
@@ -176,11 +185,14 @@ if args.threads:
 
 PIECES = pnet.PIECES
 PIDX = {c: i for i, c in enumerate(PIECES)}
-if args.ternary and (args.kb > 1 or args.nb or args.rff or args.phase
-                     or args.segs != 1):
+if args.ternary and ((args.kb > 1 and not args.ternshared) or args.nb
+                     or args.rff or args.phase or args.segs != 1):
     raise SystemExit("--ternary is the packed replnet path: kb=1, plain "
                      "crelu, no extensions -- the payload codec carries "
-                     "none of that machinery")
+                     "none of that machinery (kb > 1 only with --ternshared, "
+                     "which folds to kb=1 at export)")
+if args.ternshared and not (args.ternary and args.kb > 1):
+    raise SystemExit("--ternshared needs --ternary and --kb > 1")
 WSCALE = 0.05     # raw init std: u = raw/WSCALE is ~N(0,1) at init
 # king-bucket scheme; the multiplier packs (own, opp) into one byte
 KBF = {16: pnet.kbucket16, 8: pnet.kbucket8}.get(args.kb, pnet.kbucket)
@@ -451,6 +463,17 @@ class Net(nn.Module):
 
     def weight(self):
         v = self.virt()
+        if args.ternary and args.ternshared:
+            # ternarize the shared factorized rows only; float per-bucket
+            # deviations ride along in training and are DROPPED at ship
+            u = v / WSCALE
+            hard = torch.sign(u) * (u.abs() > args.ternary).float()
+            self._u = u
+            tv = (u + (hard - u).detach()) / 32.0
+            if getattr(self, "ship", False):
+                return tv.repeat(self.B, 1)         # the exported function
+            N = self.raw.shape[1]
+            return (self.raw.view(self.B, 768, N) + tv).view(self.B * 768, N)
         if isinstance(v, int):
             w = self.raw
         else:
@@ -470,7 +493,9 @@ class Net(nn.Module):
         # enforce the clip on the EFFECTIVE weight, which is what is exported
         with torch.no_grad():
             v = self.virt()
-            if isinstance(v, int):
+            if args.ternary and args.ternshared:
+                self.raw.clamp_(-w, w)   # float deviations, never shipped
+            elif isinstance(v, int):
                 self.raw.clamp_(-w, w)
             else:
                 N = self.raw.shape[1]
@@ -657,10 +682,14 @@ def export_replnet(path, E, b, v):
 
 def export(path):
     with torch.no_grad():
+        model.ship = args.ternshared
         E = model.weight().detach()                        # (B*768, N)
+        model.ship = False
         b = model.bias.detach().tolist()
         v = model.v.detach().tolist()
         if args.ternary:
+            if args.ternshared:
+                E = E[:768]        # folded: every bucket ships the same rows
             return export_replnet(path, E, b, v)
         phs = ({"phase": args.phase, "phase_s": model.s.detach().tolist()}
                if args.phase else {})
@@ -754,6 +783,20 @@ for epoch in range(args.epochs):
                 cm = ((ps <= -200) & (y >= 50)) | ((ps >= 200) & (y <= -50))
                 cvl += se[cm].sum().item()
                 cvn += cm.sum().item()
+    if args.ternshared:
+        # the SHIPPED form (bucket deviations dropped) is what the engine
+        # plays, so it is what picks the best epoch -- selection on the
+        # training form would reward capacity that never ships
+        model.ship, svl = True, 0.0
+        with torch.no_grad():
+            for fi, mi, fo, ps, y in batches(val_ids, args.batch, shuffle=False):
+                pred = model(fi, mi, fo, ps)
+                svl += ((torch.sigmoid(pred / K) -
+                         torch.sigmoid(y / K)) ** 2).mean().item() * len(y)
+        model.ship = False
+        print("   shipped-form val %.5f (training-form %.5f)"
+              % (svl / vn, vl / vn), flush=True)
+        vl = svl
     tag = ""
     if vl / vn < best:
         best = vl / vn
