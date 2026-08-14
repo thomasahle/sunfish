@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **CORRECTION + RANKING VERDICT: `min40_4` takes the classic-builtin venue (+147 [+86,+219] vs the incumbent at 60+0, AS A FLOOR) — and the "no park" claim in my own pre-registration is WRONG** | A park is **not** caused by a cap: at any increment TC the clock must rest where `spend + overhead == income`, so every manager parks, both candidates included. My reading was an artifact of charging O = 200 ms against a 100 ms increment; at the surrogate's 50 ms charge the rest point exists (`e2306d3`). Struck from tests and comments, surviving only at `winc == 0` where income is zero. The shape decides the **altitude**: one-max 6.17 s, incumbent 2.11 s (blind), **min40-4 0.22 s — the LOWEST of the three, below even the incumbent**, the thinnest flag margin in the field, and the reason its second arm is a flag hammer. It is still better than the incumbent because it reaches the floor on a POSITIVE budget where the incumbent's cap has gone negative. Ranking: `onemax` vs `min40_4` is −89 [−170,−16] at 60+0.1, ~0 at 30+1, +23 at 60+1 — min40-4 wins on Elo where they differ AND on the pre-fixed elegance tiebreak. **+147 is a FLOOR, not an estimate**: 594 of `legacy12`'s moves hit the structural-floor path where the surrogate substitutes a BETTER move than the real engine plays; the zero-substitution packed analogue read +228. **Against this lane:** the full `pool` beats min40-4 at every increment TC by +114 to +134 — min40-4 wins the ONE-LINE venue, not the field. Packed **3276 B (−2)**, source −7 B/−2 tokens. PR #196; one-max stays open as runner-up. Two arms STAGED in `tools/arena/`, GO-guarded, **neither launched** |
 | 2026-08-14 | **Two defects in the CLASSIC pool twin, fixed before any PR: the arm label and the opening ramp** | Found by the surrogate lane reading `tm-pool-manager` as a formula source; **arm (a)'s verdict and arm (b) in flight are unaffected — they play packed mods**. (1) `TM_MANAGER="smooth"` actually selected master's `/12`, not #188's rational — renamed to `legacy`, alias refused, and a test goes red when the smooth curve lands so the rename happens in that merge. (2) The opening ramp capped the POOL budget for 8 plies while the measured packed arm has no ramp — the classic pool was an unmeasured variant wearing a measured number's name. Ramp is now the incumbent's only; ply-0 60+1 through the driver: legacy 1.02 s vs pool 3.82 s. Recorded cost: `random()` was the only opening variety without a book, so a deployed pool must get variety from a book, never from a budget cut |
 | 2026-08-14 | **PRE-REGISTERED: the CLASSIC builtin clock drops its cap — two one-line candidates, `max((wtime−8000)/40+winc, 50)` and `min(wtime/40+0.9·winc, wtime/4)`, ranked on the surrogate BEFORE one staged 60+0 real-clock non-inferiority arm (elo0=−10 elo1=0, cap 400)** | Scope is the **packed classic artifact only** (`sunfish.py`'s embedded loop; a checkout reaches `sunfish_ui/uci.py` instead, so neither bot rides it) — byte figures are NOT comparable with the pool ladder's. The incumbent `min(wtime/12+0.9·winc, wtime/2−1000)` carries the park this file measured twice: `T* = 2+2I`, and under a 2 s clock the cap is NEGATIVE so the budget collapses to the 0.05 s floor. Both candidates are distillations of this lane's own pool — `P/M` with the reserve rounded to 8 s, or `P/M` under the pool's `A/4` clip. **Their no-park proofs differ**: one-max reaches the floor holding **10 s (40 moves)** against the incumbent's 2.1 s (8 moves); min40-4 banks nothing but its clip can never bind at `winc == 0`, making the policy exactly `t/40` with no fixed point, and it is **homogeneous of degree 1** so the ms/s trap is unrepresentable. Both net-negative in source (−11/−7 bytes, −2 tokens) and packed 3282 B / **3276 B** vs base 3278 B, so **elegance cannot break the tie**. Measured spend already separates them from base: 300+0 is **23.73 s → 7.38/7.57 s**. **Honest note in advance: a 60+0 pass does not license shipping** — `/40` wins sudden death (+235.5 ± 65.4) but loses increment (+91.1 ± 50.7 at 60+1, +45.9 ± 46.8 at 30+1 for `/12`), and these candidates collapse #188's slide back to a constant, so an increment ranking is required too. Tiebreak fixed in advance: within noise, min40-4 ships on unit-independence. **Request to the surrogate lane: add one-max and the classic base to min40-4's plugin set.** Nothing launched, no PR open |
 | 2026-08-14 | **AMENDMENT: pool ladder arms (c) 30+1 and (d) phase-M are HELD for the virtual-clock surrogate — held, NOT cancelled** | Owner ruling on real-clock economy. Arm (b) 60+1 PROCEEDS on real clocks (it is both the decisive question and calibration data for the surrogate); (c) and (d) move to the twin's virtual clock once it calibrates against stage 1, the +40.6 with-park run and arm (a), with only the final composite getting one real-clock confirmation. Bounds, book, seed, cap and readings for (c)/(d) stand as pre-registered; the arena scripts are renamed `HELD_*` with the ruling in their headers so the operational state cannot drift from the ledger |
@@ -251,6 +252,90 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-15 — CORRECTION + RANKING VERDICT: min40-4 takes the classic-builtin venue, and the "no park" claim in my own pre-registration below is WRONG
+
+**The correction first, because the entry below rests on it.** My
+pre-registration's table has a "fixed point (unfloored) — none" column for
+both candidates. **That is false.** A park is not caused by a cap. At any
+increment TC the clock MUST come to rest where `spend + overhead == income`,
+whatever the budget's shape, so every manager parks — both candidates
+included. My reading was an artifact of charging **O = 200 ms against a
+100 ms increment**: with income below overhead nothing can rest, which is a
+fact about the TC and the lag, not about the formula. At the surrogate's
+50 ms charge the income wins and the resting point exists. Struck, not
+softened, in `tests/test_classic_time_budget.py` and in the branch comments.
+`e2306d3` is the authority; the surviving case is `winc == 0`, where income
+is zero and no resting point can exist.
+
+What the shape decides is the **altitude**, and that is the whole safety
+argument:
+
+| policy | park @ 60+0.1 | reserve @ 60+1 (common ~1.06 s spend) |
+|---|---|---|
+| one-max | 6.17 s | 10.4 s |
+| incumbent `legacy12` / step | 2.11 s (blind, floor knee 2.10) | 4.1 s |
+| **min40-4 (shipping)** | **0.22 s** | 6.4 s |
+
+**Recorded against the winner:** min40-4 parks LOWEST of the three, below
+even the incumbent. It wastes almost no clock and buys the thinnest flag
+margin in the field. What still separates it from the incumbent is that it
+reaches the floor on a **positive, monotone** budget — the incumbent gets
+there because its cap went negative, so it has no budget at all.
+
+### Ranking verdict (surrogate, 2026-08-15, `tools/ctwin/README.md`)
+
+| arm | vs | 60+0 | 60+0.1 | 30+1 | 60+1 |
+|---|---|---|---|---|---|
+| `min40_4` | `legacy12` | **+147** [+86,+219] | — | — | — |
+| `onemax` | `min40_4` | — | **−89** [−170,−16] | −0 [−80,+80] | +23 [−54,+103] |
+| `min40_4` | `pool` | — | **−114** [−208,−34] | **−134** [−218,−62] | **−114** [−198,−41] |
+
+**min40-4 wins the classic-builtin venue** — decisive against one-max where
+the two differ, tied elsewhere, and it takes the elegance tiebreak that was
+fixed in advance below. The pre-registered tiebreak was therefore not needed
+on its own: the Elo cell decided it first.
+
+**The +147 is a FLOOR, not an estimate, and the instrument says so:**
+`legacy12`'s negative budget sends **594** of its moves down the
+structural-floor path where the surrogate substitutes the twin's bestmove — a
+*better* move than the real engine would play. The packed calibration, whose
+loser floors at 0.05 s and needed **zero** substitutions, read **+228**.
+Quoted with the caveat attached, per `floorbk`.
+
+**And the honest note from the pre-registration is now answered, against
+this lane:** the full `pool` manager beats min40-4 at **every** increment TC
+by +114 to +134. min40-4 wins the ONE-LINE venue, not the field. The pool
+costs +57 B and a manager; this costs −7 bytes. Anyone reading this entry as
+"the classic clock is solved" is reading it wrong.
+
+### What is staged, and what is NOT
+
+Per surrogate-ranks/real-clock-confirms, **one** confirmation was bought and
+a second arm is added for the flag question the surrogate explicitly cannot
+answer (its README: *"the surrogate reproduces mechanisms; it does not
+certify flag safety"*):
+
+| | |
+|---|---|
+| `STAGED_tm_min40_4_60p0.sh` | 60+0 SPRT, min40_4 vs legacy12, **elo0=0 elo1=20**, 200×2 `-repeat`, cap 400, PGN book, **no adjudication** |
+| `STAGED_tm_min40_4_flag_hammer.sh` | **1+0, not an Elo arm.** PASS = zero time forfeits AND zero illegal moves on the arm. A large negative score with zero forfeits PASSES; one forfeit fails it however good the score. The incumbent is expected to forfeit — that is the control working and does not excuse a forfeit on the arm |
+
+Both live in `tools/arena/` on the PR branch, **GO-guarded**: they print
+their plan and exit 0 unless `GO=1`, and take `.boxlock` as a presence
+marker with an owner file inviting reclaim, queueing behind resident matches
+rather than preempting them. **Neither self-launches; neither has been run.**
+Queued behind the current box matches.
+
+Readings and the single permitted remedy stand exactly as pre-registered
+below — the result cannot pick the rule.
+
+### Cotenancy
+
+No box time taken, no `.boxlock` claimed, nothing launched. Surrogate cells
+were the ranking lane's; no file of theirs was touched. PR
+`thomasahle/sunfish#196` carries min40-4; `classic/tm-one-max-pool` stays
+open as the measured runner-up, closed into the ranking table above.
 
 ## 2026-08-14 — PRE-REGISTRATION: the CLASSIC builtin clock loses its cap, and two one-line candidates go to the surrogate before either sees a real clock
 
