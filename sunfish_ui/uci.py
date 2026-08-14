@@ -16,7 +16,11 @@ print = partial(print, flush=True)
 # check catches a MISSING feature; only a version catches a STALE one.
 #   1: go nodes / max_nodes support
 #   2: node_cap enforced inside the search (mid-iteration, not per depth)
-DRIVER_VERSION = 2
+#   3: structural bestmove floor -- go_loop/mate_loop can no longer answer
+#      "(none)" while a legal move exists (19/400 illegal-move forfeits at
+#      1+0 in seedtimed 2026-08-14, every one an abort landing before the
+#      first root fail-high)
+DRIVER_VERSION = 3
 
 # Longest a "go ponder"/"go infinite" search may run without hearing
 # "stop"/"ponderhit". Those commands carry no time budget, so the only thing
@@ -75,6 +79,29 @@ def parse_move(move_str, white_pov):
     if not white_pov:
         i, j = 119 - i, 119 - j
     return sunfish.Move(i, j, prom)
+
+
+def first_legal_move(hist):
+    """The structural bestmove floor: the first generated move of the
+    CURRENT root that does not leave our king capturable (can_kill_king
+    covers check, pins, en-passant discoveries, and castling-through-check
+    via the king-passant square). Returns rendered UCI, or None only when
+    the root has NO legal move at all -- checkmate or stalemate, where no
+    tournament manager ever asks us to move.
+
+    Exists because an abort landing before the first root fail-high used
+    to answer "bestmove (none)", which managers score as an ILLEGAL MOVE:
+    19/400 games at 1+0 (seedtimed 2026-08-14), every single one an arm
+    whose first fail-high needed more than 2,048 nodes -- the poll
+    granularity of the in-search deadline. This floor closes the class by
+    construction, not by making the abort rarer: anything we emit was
+    generated for the current root and survives making the move, so the
+    worst case is a weak-but-legal move, never a forfeit.
+    """
+    root = hist[-1]
+    return next((render_move(m, white_pov=len(hist) % 2 == 1)
+                 for m in root.gen_moves()
+                 if not can_kill_king(root.move(m))), None)
 
 
 def stop_softly(searcher, gen):
@@ -188,7 +215,12 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
         # Suggest the expected reply for the GUI to let us ponder on
         print("bestmove", played, "ponder", my_pv[1])
     else:
-        print("bestmove", played or (my_pv[0] if my_pv else "(none)"))
+        # INVARIANT: any move we emit was generated for the CURRENT root.
+        # The pv head is tp_move[root], legality-filtered inside pv();
+        # failing that, the structural floor plays the first legal
+        # generated move. "(none)" survives only for terminal roots.
+        print("bestmove", played or (my_pv[0] if my_pv else None)
+              or first_legal_move(hist) or "(none)")
 
 
 def mate_loop(
@@ -234,7 +266,10 @@ def mate_loop(
     except sunfish.Stop:
         pass
     move = searcher.tp_move.get(hist[-1])
-    move_str = render_move(move, white_pov=len(hist) % 2 == 1)
+    # Same invariant as go_loop: never the "(none)" literal while a legal
+    # move exists -- a mate search that found nothing still must move.
+    move_str = (render_move(move, white_pov=len(hist) % 2 == 1)
+                if move is not None else first_legal_move(hist) or "(none)")
     print("bestmove", move_str)
 
 

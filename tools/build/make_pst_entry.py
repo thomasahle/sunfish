@@ -341,7 +341,8 @@ _golf_renames = [
     # `version`, nothing needs `__version__`). Fold the indirection.
     (r'__version__ = "([^"]+)"\nversion = "sunfish " \+ __version__',
      r'version = "sunfish \1"', 1),
-    (r"\bking_capture\b", "k", 4),
+    # 6 = 4 historical + the bestmove-floor call and its comment mention
+    (r"\bking_capture\b", "k", 6),
     (r"\btp_score\b", "t", 9),
     (r"self\.history\b", "self.h", 4),
     (r"self\.root\b", "self.r", 3),

@@ -906,7 +906,7 @@ def main():
         print("info string driver", _drv.__file__, "v%d" % _ver,
               "nodes" if _nodes else "NO-NODES", "fen" if _fen else "NO-FEN",
               flush=True)
-        REQUIRED_DRIVER = 2      # raise with DRIVER_VERSION, same commit
+        REQUIRED_DRIVER = 3      # raise with DRIVER_VERSION, same commit
         if _ver < REQUIRED_DRIVER:
             raise SystemExit(
                 "sunfish_ui driver at %s is version %d, need >= %d. This is a "
@@ -1011,7 +1011,11 @@ def main():
                     if max_nodes and searcher.nodes >= max_nodes and (best or cand):
                         break
                     # minifier-hide end
-                    if score >= gamma:
+                    # `and move`: a root fail-high without a move is a
+                    # verified terminal (bound()'s contract) -- rendering
+                    # it would crash, and there is nothing to play anyway;
+                    # the floor below answers for terminal roots.
+                    if score >= gamma and move:
                         i, j = move.i, move.j
                         if len(hist) % 2 == 0:
                             i, j = 119 - i, 119 - j
@@ -1022,6 +1026,27 @@ def main():
             except Stop:
                 pass
 
+            if not (best or cand):
+                # STRUCTURAL BESTMOVE FLOOR. An abort landing before the
+                # first root fail-high (both stop polls fire every 2,048
+                # nodes) used to answer the "(none)" literal, which
+                # tournament managers score as an ILLEGAL MOVE: 19/400
+                # games at 1+0, seedtimed 2026-08-14. Play the first
+                # generated move that does not leave our king capturable
+                # instead -- king_capture() covers check, pins and
+                # castling-through-check via the king-passant square, so
+                # the move is legal, not merely pseudo-legal: worst case
+                # is a weak move, never a forfeit. The fallthrough to
+                # "(none)" survives only for checkmate/stalemate roots,
+                # where no manager ever asks us to move.
+                pos = hist[-1]
+                for m in pos.gen_moves():
+                    if not pos.move(m).king_capture():
+                        i, j = m.i, m.j
+                        if len(hist) % 2 == 0:
+                            i, j = 119 - i, 119 - j
+                        cand = render(i) + render(j) + m.prom.lower()
+                        break
             print("bestmove", best or cand or '(none)')
 
 
