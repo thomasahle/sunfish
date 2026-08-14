@@ -396,25 +396,14 @@ class Searcher:
                 proof = score >= gamma and (self.tp_move.get(pos) or pos.king_capture())
                 yield (proof, MATE_UPPER) if proof and pos.value(proof) >= MATE_LOWER else (None, score)
 
-            # From depth 8 on the pass is a FUEL ORACLE, never a score
-            # candidate: one probe at the fixed target pos.score +
-            # NULL_MARGIN - a window that depends on (pos, depth) alone,
-            # so the hot bit is position-determined (a fail-soft report is
-            # side-exact at any fixed window) - decides whether real moves
-            # burn one or two plies of depth. Nominal depth keys the tables
-            # and the QS admission; only the recursion is shortened, so a
-            # deep null cut becomes a reduction instead of a virtual score.
-            # A second fixed target detects threats: only positions where
-            # passing stays within THREAT_MARGIN reduce low-valued moves.
+            # Fixed-target null probes reduce hot nodes and protect threatened ones.
             d = depth
             safe = False
             if depth >= 8 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
                 nullpos = pos.rotate(nullmove=True)
-                target = pos.score + NULL_MARGIN
-                hot = -self.bound(nullpos, 1 - target, depth - 5) >= target
-                d -= hot
-                target = pos.score - THREAT_MARGIN
-                safe = hot or -self.bound(nullpos, 1 - target, depth - 5) >= target
+                hot_target, safe_target = pos.score + NULL_MARGIN, pos.score - THREAT_MARGIN
+                d -= -self.bound(nullpos, 1 - hot_target, depth - 5) >= hot_target
+                safe = d < depth or -self.bound(nullpos, 1 - safe_target, depth - 5) >= safe_target
 
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else. (Note depth at root is always > 0.)
