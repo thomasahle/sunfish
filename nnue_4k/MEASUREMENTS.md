@@ -7808,3 +7808,16 @@ this lane launches nothing): fixed-node 20k SPRT elo0=0 elo1=10 vs
 pst_entry @ HEAD, LAND bar 95% LB > 0 on fixed-N confirmation AND a timed
 confirmation LB > 0 (fixed nodes hide the ~19-op/eval speed tax; nps
 ratio vs entry measured under pypy on the box first — speed is Elo).
+
+## 2026-08-14 — REPLNET v1 box run launched (arm rule pinned before results)
+
+Two arms on the box (nice 19, 8 workers/8 threads, tripwire on both live
+tournaments' forfeit counts, baseline 0/0): l1 ∈ {0.001, 0.002}, otherwise
+the pre-registered recipe verbatim, data = replnat28k + 4M quiet dump slice
+(kept 4,000,000 of 6,496,293 read, trainer-identical filter), mat-base val
+anchor 0.01616 on a 200k val split. **Arm selection rule, pinned now,
+mid-run, before either arm's final val exists: among arms whose BEST-VAL
+epoch exports ≥58% zeros, take the lower val; tie breaks to higher zeros.**
+nps gate pre-measurement (weight-independent): entry 88.2k vs replnet
+58.1k nps under pypy on the box, ratio 0.66 — at ~100 Elo/doubling a ~60
+Elo speed tax that the timed confirmation must beat.
