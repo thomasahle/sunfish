@@ -7821,3 +7821,31 @@ epoch exports ≥58% zeros, take the lower val; tie breaks to higher zeros.**
 nps gate pre-measurement (weight-independent): entry 88.2k vs replnet
 58.1k nps under pypy on the box, ratio 0.66 — at ~100 Elo/doubling a ~60
 Elo speed tax that the timed confirmation must beat.
+
+## 2026-08-14 — REPLNET v1 trained, gated at entry parity, screen staged
+
+**Training (box, nice 19, 8 workers, tripwire 0/0 throughout):** 4,027,406
+positions (replnat28k + 4M quiet dump slice), 30 epochs/arm, ~8 min/arm.
+Winner by the pinned rule: **l1=0.001, val 0.01385 vs mat anchor 0.01616
+(−14.3%), 59.6% zeros at the shipped epoch**; l1=0.002 → 0.01404 @73.7%.
+(Context: the Aug-12 SMALLNET residual-era probes read 0.01307-0.01364 at
+N=8-16 on their own split — different val sets, not comparable numbers,
+recorded only as order-of-magnitude neighbors.)
+
+**Candidate build (nnue_4k/replnet_proto.py + winner payload):** packs to
+**3831 B (265 spare)** — the trained payload is cheaper than the 55%-zeros
+pricing stand-in. Ladder: invariants PASS, shapecheck worst 0.9 cp,
+first-yield PASS, legality 334/334, and on the box under pypy:
+mate-conversion **8/8**, mate 7/8 — exact parity with the entry, which
+also reads 7/8 there (each misses a different marginal m1; the local 4 ms
+readings are load-noise, both engines flip positions run to run).
+
+**Staged, NOT launched (coordinator's slot):** fixed-node 20k SPRT
+replnet-v1 vs entry @ 0ee915b, srand 20260814, cap 1000 games, on-box
+screen dir + a request appended to DISARMED_QUEUE.txt. LAND bar per the
+pre-registration: 95% LB > 0 fixed-N AND timed confirmation LB > 0 —
+the measured 0.66 nps ratio (~−60 Elo at timed play) is the number the
+eval edge has to beat, and fixed nodes alone cannot see it.
+
+**Standing rule active:** TRAINQUEUE.md seeded (7 entries); replnet_v1c
+(l1=0.0013 band-center) started the moment arm 2 finished.
