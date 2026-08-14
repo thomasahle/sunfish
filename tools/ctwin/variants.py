@@ -32,6 +32,36 @@ Battery semantics (shared contract with sunfish.c):
   slot).  Bucketing uses the C twin's content hash, reproduced here
   bit-for-bit, so collisions -- which are observable through search
   behavior -- agree across languages.  Exact-position compare on read.
+
+Frozen-guide battery (design: Thomas Ahle) -- same shared contract:
+- Two generations of the move table.  tp_old is the FROZEN GUIDE, a
+  value-bearing policy held constant for one epoch; tp_move stays the
+  MUTABLE CURRENT table and may only affect ordering and the returned
+  move.  A mutable table that could move a reduction, an admission or a
+  searched depth would change the value at a tp_score key under it.
+- THE EPOCH RULE: a tp_score interval is valid for exactly one guide, so
+  every promotion clears tp_score in the same breath.
+  GUIDE_MODE 1 promotes after each COMPLETED ID bracket (a partial
+    iteration is never promoted: a mid-depth stop keeps the previous
+    completed guide).  GUIDE_MODE 2 freezes one guide per search() call
+    -- the previous root search's completed table -- which is exactly
+    the existing tp_score lifetime and costs no epoch churn.
+- SCORE_EPOCH 1 is the isolated control: clear tp_score per ID iteration
+  and change nothing else.
+- TWO_KILLERS searches the guide as a second killer when it is distinct
+  from the current killer; KILLER_DEDUP skips already-searched killers
+  in the sorted list, AFTER the futility test so the futility yield
+  master would emit still happens (then it is exactly max(x, x, ...) =
+  max(x, ...)).
+- GUIDE_IIR replaces the recursive IID probe with a one-ply reduction on
+  guideless nodes.  Root is never reduced and NOMINAL depth still keys
+  tp_score, sets val_lower, scores mates, classifies terminals and gates
+  every eligibility test; only the real-child recursion is shortened.
+- GUIDE_INJECT admits the guide at positive depth regardless of
+  val_lower (A_G = A union {G(p)}).  GUIDE_PV gives the guide the full
+  child depth and takes a ply off the alternatives.
+- Guide lookups are delayed to after the null phases and gated at
+  depth > 3, so a null cutoff and every shallow node pay nothing.
 """
 import hashlib
 import inspect
@@ -62,6 +92,15 @@ for _name, _want in _PINNED.items():
 EVICT_POLICY = 0
 EVICT_SCAN_K = 4
 KILLER_COUNT = 1
+SCORE_EPOCH = 0
+GUIDE_MODE = 0
+GUIDE_MIN_DEPTH = 3
+GUIDE_COPY = 0
+TWO_KILLERS = 0
+KILLER_DEDUP = 0
+GUIDE_IIR = 0
+GUIDE_INJECT = 0
+GUIDE_PV = 0
 
 _M64 = (1 << 64) - 1
 
@@ -161,6 +200,13 @@ def make_killers(searcher):
     return SlotKillers(searcher) if EVICT_POLICY == 3 else DictKillers(searcher)
 
 
+def copy_killers(src):
+    """dict(tp_move): same keys, same insertion order, frozen lists."""
+    out = DictKillers(src.searcher)
+    out.d = dict(src.d)
+    return out
+
+
 class VariantSearcher(Searcher):
     """sunfish.Searcher with tp_move behind a policy object.
 
@@ -175,6 +221,44 @@ class VariantSearcher(Searcher):
     def __init__(self):
         super().__init__()
         self.tp_move = make_killers(self)
+        self.tp_old = make_killers(self)
+
+    def promote(self):
+        """The guide changes only here, and tp_score is emptied in the
+        same breath, so no interval outlives its guide.  GUIDE_COPY takes
+        the guide as a SNAPSHOT instead of emptying the current table:
+        the killer lists are rebuilt, never mutated in place, so a
+        shallow dict copy is genuinely frozen."""
+        if GUIDE_COPY:
+            self.tp_old = copy_killers(self.tp_move)
+        else:
+            self.tp_old, self.tp_move = self.tp_move, make_killers(self)
+        self.tp_score.clear()
+
+    def search(self, history):
+        if GUIDE_MODE and EVICT_POLICY == 3:
+            # Policy 3 replaces tp_move with a slot table, so a promotion
+            # would freeze an empty guide.  Refuse, never measure a no-op.
+            raise RuntimeError("GUIDE_MODE is incompatible with EVICT_POLICY 3")
+        self.nodes, self.history = 0, set(history)
+        self.tp_score.clear()
+        if GUIDE_MODE == 2: self.promote()
+        pos = self.root = history[-1]
+        S.pst["K"] = S.K_MID if "Q" in pos.board and "q" in pos.board else S.K_END
+        gamma = 0
+        for depth in range(1, 1000):
+            lower, upper = 1 - MATE_UPPER, MATE_UPPER
+            while lower < upper - S.EVAL_ROUGHNESS:
+                score = self.bound(pos, gamma, depth, root=True)
+                if score >= gamma: lower = score
+                if score < gamma: upper = score
+                yield depth, gamma, score, self.tp_move.get(pos)
+                gamma = (lower + upper + 1) // 2
+            # Bracket COMPLETED: only now may the guide be promoted.  A
+            # Stop inside the bracket never reaches this line, so the
+            # previous completed guide stays in place.
+            if GUIDE_MODE == 1: self.promote()
+            elif SCORE_EPOCH: self.tp_score.clear()
 
     def bound(self, pos, gamma, depth, root=False):
         self.nodes += 1
@@ -211,22 +295,49 @@ class VariantSearcher(Searcher):
             if depth == 0:
                 yield None, pos.score
 
-            if not killers and depth > 3:
+            # Frozen guide, read only AFTER the null phases: a null
+            # cutoff and every node at depth <= 3 pay no lookup.
+            guide = self.tp_old.get(pos) if (GUIDE_MODE and depth > GUIDE_MIN_DEPTH) else None
+
+            # Either the recursive IID probe or the one-ply IIR that
+            # replaces it.  The reduction reads the FROZEN table only, so
+            # the searched depth is a function of (pos, depth, epoch).
+            red = 0
+            if GUIDE_IIR:
+                red = int(not root and depth > 3 and guide is None)
+            elif not killers and depth > 3:
                 self.bound(pos, gamma, depth - 3, root=True)
                 killers = self.tp_move.get_all(pos)
 
             val_lower = S.QS - depth * S.QS_A
+            # Child depth for every real move.  NOMINAL depth keeps the
+            # table key, val_lower, mate distance, terminal classification
+            # and every eligibility test above.
+            cd = gd = d - 1 - red
+            if GUIDE_PV and guide is not None and not root and depth > 3:
+                gd, cd = d - 1, d - 2
 
+            tried = []
             for killer in killers:
                 if pos.value(killer) >= val_lower:
-                    yield killer, -self.bound(pos.move(killer), 1 - gamma, d - 1)
+                    tried.append(killer)
+                    yield killer, -self.bound(pos.move(killer), 1 - gamma, cd)
+            if (guide is not None and (TWO_KILLERS or GUIDE_INJECT or GUIDE_PV)
+                    and guide not in tried
+                    and (pos.value(guide) >= val_lower or (GUIDE_INJECT and depth > 0))):
+                tried.append(guide)
+                yield guide, -self.bound(pos.move(guide), 1 - gamma, gd)
 
             for val, move in sorted(((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= val_lower), reverse=True):
                 if depth <= 1 and pos.score + val < gamma:
                     yield (move, MATE_UPPER) if val >= MATE_LOWER else (None, pos.score + val)
                     break
+                # Dedup AFTER the futility test, so the futility yield
+                # master would emit for this move still happens.
+                if KILLER_DEDUP and move in tried:
+                    continue
 
-                yield move, -self.bound(pos.move(move), 1 - gamma, d - 1)
+                yield move, -self.bound(pos.move(move), 1 - gamma, cd)
 
         best, live = -MATE_UPPER, False
         for move, score in moves():

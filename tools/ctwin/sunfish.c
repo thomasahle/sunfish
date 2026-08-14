@@ -139,6 +139,74 @@ static int FUEL_NULL = 1;        /* DEFAULT since #192 merged the fuel
 static int FUEL_MIN_DEPTH = 6;
 static int DERIVE_FRESH = 0;
 
+/* Frozen-guide battery (design: Thomas Ahle).  Two generations of the
+ * move table: tp_old is the FROZEN GUIDE -- a value-bearing policy that
+ * is constant for one epoch -- and tp_move stays the MUTABLE CURRENT
+ * table, used for ordering and for the returned move only.  The current
+ * table must never influence a reduction, an admission or a searched
+ * depth, or the value at a tp_score key would change under it.
+ *
+ * THE EPOCH RULE: a tp_score interval is valid for exactly one guide.
+ * Every promotion of the guide therefore clears tp_score.
+ *   GUIDE_MODE 1 promotes after each COMPLETED ID bracket (a partial
+ *     iteration's table is never promoted: on a mid-depth stop the
+ *     previous completed guide is retained).
+ *   GUIDE_MODE 2 freezes the guide once per search() call -- the guide
+ *     is the previous root search's completed table, which matches the
+ *     existing tp_score lifetime exactly and costs zero epoch churn.
+ * SCORE_EPOCH 1 is the isolated control: clear tp_score per ID
+ *   iteration and change NOTHING else, so the cross-ID reuse loss can be
+ *   measured on its own.
+ * TWO_KILLERS  search the guide as a second killer after the current
+ *   killer, when distinct.
+ * KILLER_DEDUP skip already-searched killers in the sorted list.  Exact
+ *   (max(x, x, ...) == max(x, ...)) and applied only AFTER the futility
+ *   test, so the futility yield that master would emit still happens.
+ * GUIDE_IIR    replace the recursive IID probe with a one-ply reduction:
+ *   a node with no guide searches its real moves one ply shallower.  The
+ *   root is never reduced; NOMINAL depth still keys tp_score, sets
+ *   val_lower, scores mates, classifies terminals and gates eligibility.
+ * GUIDE_INJECT admit the guide at positive depth regardless of val_lower
+ *   (A_G = A union {G(p)}).
+ * GUIDE_PV     guide keeps the full child depth, alternatives lose a ply.
+ * Guide lookups are DELAYED to after the null phases (a null cutoff and
+ * every shallow node pay no lookup) and gated by the same depth test as
+ * IID, so shallow nodes are untouched. */
+static int SCORE_EPOCH = 0;
+static int GUIDE_MODE = 0;
+/* Guide lookups run when depth > GUIDE_MIN_DEPTH.  The default 3 is the
+ * design's "shallow nodes pay no lookup" rule, matching IID's gate --
+ * but at depth > 3 val_lower = QS - depth*QS_A is below -500, so no
+ * real move is ever filtered there and GUIDE_INJECT has nothing to
+ * admit.  0 opens the lookup down to depth 1, which is where the QS
+ * threshold actually bites and A_G = A union {G(p)} can differ from A. */
+static int GUIDE_MIN_DEPTH = 3;
+/* How the guide is taken at a promotion.
+ *   0 (the design as specified): tp_old, tp_move = tp_move, {} -- the
+ *     current table restarts empty every epoch.
+ *   1: tp_old = dict(tp_move) -- the guide is a SNAPSHOT and the current
+ *     table keeps accumulating.  Freezing is what the value argument
+ *     needs; emptying is not, because the current table is ordering-only.
+ *     Measured because the ladder's own anchors say the emptying, not
+ *     the guide, is what costs (guideonly / guideonly2 vs master). */
+static int GUIDE_COPY = 0;
+static int TWO_KILLERS = 0;
+static int KILLER_DEDUP = 0;
+static int GUIDE_IIR = 0;
+static int GUIDE_INJECT = 0;
+static int GUIDE_PV = 0;
+
+/* Instrumentation (cumulative over the process, never reset by
+ * ucinewgame: a match driver reads them once at the end).  Pure
+ * counters -- they are read by the `counters` command only and can not
+ * influence a single search decision. */
+static long c_guide_lookup, c_guide_hit, c_guide_agree, c_guide_disagree;
+static long c_guide_below, c_guide_cut, c_killer_cut, c_iid, c_iir;
+static long c_tps_cut, c_dedup_skip, c_promote;
+static long c_peak_tpm, c_peak_tpo, c_peak_tps;
+static long c_total_nodes, c_searches;   /* nodes resets per search; these
+                                            are the cross-game denominators */
+
 /* ------------------------------------------------------------------ */
 /* Python arithmetic                                                   */
 /* ------------------------------------------------------------------ */
@@ -477,7 +545,8 @@ static void map_del(Map *m, int idx) {
 /* Searcher state                                                      */
 /* ------------------------------------------------------------------ */
 static Map tps;                  /* tp_score: (pos, depth) -> (lower, upper) */
-static Map tpm;                  /* tp_move:  pos -> Move                    */
+static Map tpm;                  /* tp_move:  pos -> Move   (mutable current) */
+static Map tpo;                  /* tp_old:   pos -> Move   (frozen guide)    */
 static long nodes;
 static long node_cap;            /* 0 = off; checked every 2048 nodes */
 static double deadline;          /* seconds, monotonic; 0 = off */
@@ -567,6 +636,40 @@ static int tpm_get(const Pos *p, Move *out) {   /* most recent killer */
     return 1;
 }
 
+/* Frozen guide read: tp_old's most recent entry for pos.  A plain dict
+ * read -- the guide table is written only by the promotion below. */
+static int tpo_get(const Pos *p, Move *out) {
+    int idx = map_find(&tpo, p, 0);
+    if (idx < 0 || tpo.cold[idx].nmv == 0) return 0;
+    *out = tpo.cold[idx].mvs[0];
+    return 1;
+}
+
+/* tp_old, tp_move = tp_move, {}  and  tp_score.clear().  The guide only
+ * ever changes here, and tp_score is emptied in the same breath, so no
+ * interval outlives the guide that produced it (the epoch rule). */
+static void promote_guide(void) {
+    if (tpm.count > c_peak_tpm) c_peak_tpm = tpm.count;
+    if (tpo.count > c_peak_tpo) c_peak_tpo = tpo.count;
+    if (GUIDE_COPY) {
+        /* tp_old = dict(tp_move): same keys in the same insertion order,
+         * and the killer lists are rebuilt rather than mutated in place
+         * on both sides, so a shallow copy really is frozen. */
+        map_clear(&tpo);
+        for (int k = tpm.ihead; k >= 0; k = tpm.cold[k].inext) {
+            int idx = map_put(&tpo, &tpm.cold[k].pos, tpm.hot[k].depth);
+            memcpy(tpo.cold[idx].mvs, tpm.cold[k].mvs, sizeof tpm.cold[k].mvs);
+            memcpy(tpo.cold[idx].mds, tpm.cold[k].mds, sizeof tpm.cold[k].mds);
+            tpo.cold[idx].nmv = tpm.cold[k].nmv;
+        }
+    } else {
+        Map t = tpo; tpo = tpm; tpm = t;
+        map_clear(&tpm);
+    }
+    map_clear(&tps);
+    c_promote++;
+}
+
 static void tpm_store(const Pos *p, Move m, int depth) {
     if (EVICT_POLICY == 3) {
         kslot_ensure();
@@ -593,6 +696,7 @@ static void tpm_store(const Pos *p, Move m, int depth) {
     }
     int idx = map_put(&tpm, p, 0);
     klist_push(tpm.cold[idx].mvs, tpm.cold[idx].mds, &tpm.cold[idx].nmv, m, depth);
+    if (tpm.count > c_peak_tpm) c_peak_tpm = tpm.count;
     if (EVICT_POLICY == 0 && tpm.count > TABLE_SIZE) {
         /* del next(k for k in tp_move if k != root): oldest non-root key */
         for (int k = tpm.ihead; k >= 0; k = tpm.cold[k].inext)
@@ -703,8 +807,8 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
     if (!root) {
         int idx = map_find(&tps, pos, depth);
         if (idx >= 0) { elow = tps.cold[idx].lower; eupp = tps.cold[idx].upper; }
-        if (elow >= gamma) return elow;
-        if (eupp < gamma) return eupp;
+        if (elow >= gamma) { c_tps_cut++; return elow; }
+        if (eupp < gamma) { c_tps_cut++; return eupp; }
         if (depth > 0 && in_history(pos)) return 0;
     }
 
@@ -772,21 +876,67 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         if (done) goto after_moves;
     }
 
-    /* Internal iterative deepening (driver probe: root=1, unstored).
-     * A qs_tail probe (PR #171) never runs IID. */
-    if (!qstail && nkill == 0 && depth > IID_MIN_DEPTH) {
+    /* Frozen guide, read only AFTER the null phases: a null cutoff and
+     * every node at or below IID_MIN_DEPTH pay no lookup at all. */
+    Move guide = nomove;
+    int have_guide = 0;
+    if (GUIDE_MODE && depth > GUIDE_MIN_DEPTH) {
+        c_guide_lookup++;
+        have_guide = tpo_get(pos, &guide);
+        if (have_guide) {
+            c_guide_hit++;
+            if (nkill) { if (move_eq(guide, killers[0])) c_guide_agree++;
+                         else c_guide_disagree++; }
+            if (value(pos, guide) < val_lower) c_guide_below++;
+        }
+    }
+
+    /* Either the recursive IID probe (master) or the one-ply frozen-guide
+     * IIR that replaces it.  The reduction reads the FROZEN table only,
+     * so the searched depth is a function of (pos, depth, epoch) -- the
+     * mutable table can never move it.  Root is never reduced. */
+    int red = 0;
+    if (GUIDE_IIR) {
+        red = (!root && depth > IID_MIN_DEPTH && !have_guide);
+        if (red) c_iir++;
+    } else if (!qstail && nkill == 0 && depth > IID_MIN_DEPTH) {
+        c_iid++;
         bound(pos, gamma, depth - IID_RED, 1, 0);
         tpm_get_all(pos, killers, &nkill);
     }
 
-    /* Killer(s) first, gated by the QS threshold, most recent first.
-     * A qs_tail probe skips the killer phase. */
+    /* Child depth for every real move.  NOMINAL depth keeps the table
+     * key, val_lower, mate distance, terminal classification and every
+     * eligibility test above; only this recursion is shortened. */
+    int cd = rd - 1 - red, gd = cd;
+    if (GUIDE_PV && have_guide && !root && depth > IID_MIN_DEPTH) {
+        gd = rd - 1; cd = rd - 2;
+    }
+
+    /* Killer(s) first, gated by the QS threshold, most recent first,
+     * then the frozen guide if it is distinct.  A qs_tail probe skips
+     * the killer phase. */
+    Move tried[MAXKILL + 1];
+    int ntried = 0;
     if (!qstail)
     for (int kk = 0; kk < nkill; kk++) {
         if (value(pos, killers[kk]) < val_lower) continue;
+        tried[ntried++] = killers[kk];
         Pos np = domove(pos, killers[kk]);
-        PROCESS(1, killers[kk], -bound(&np, 1 - gamma, rd - 1, 0, 0));
-        if (done) goto after_moves;
+        PROCESS(1, killers[kk], -bound(&np, 1 - gamma, cd, 0, 0));
+        if (done) { c_killer_cut++; goto after_moves; }
+    }
+    if (!qstail && have_guide && (TWO_KILLERS || GUIDE_INJECT || GUIDE_PV)) {
+        int dup = 0;
+        for (int k = 0; k < ntried; k++) if (move_eq(tried[k], guide)) dup = 1;
+        /* GUIDE_INJECT lifts the QS threshold for the guide alone:
+         * A_G = A union {G(p)} at positive depth. */
+        if (!dup && (value(pos, guide) >= val_lower || (GUIDE_INJECT && depth > 0))) {
+            tried[ntried++] = guide;
+            Pos np = domove(pos, guide);
+            PROCESS(1, guide, -bound(&np, 1 - gamma, gd, 0, 0));
+            if (done) { c_guide_cut++; goto after_moves; }
+        }
     }
 
     /* Then all moves above the threshold, sorted by descending value.
@@ -807,8 +957,16 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
                 else PROCESS(0, nomove, pos->score + val);
                 break;                       /* Python breaks either way */
             }
+            /* Dedup AFTER the futility test: the futility yield master
+             * would emit for this move still happens, so the only thing
+             * removed is a repeat of a value already in the max. */
+            if (KILLER_DEDUP) {
+                int dup = 0;
+                for (int k = 0; k < ntried; k++) if (move_eq(tried[k], m)) dup = 1;
+                if (dup) { c_dedup_skip++; continue; }
+            }
             Pos np = domove(pos, m);
-            PROCESS(1, m, -bound(&np, 1 - gamma, rd - 1, 0, 0));
+            PROCESS(1, m, -bound(&np, 1 - gamma, cd, 0, 0));
             if (done) break;
         }
     }
@@ -859,6 +1017,7 @@ after_moves:
     }
     if (tps.count > TABLE_SIZE)
         map_del(&tps, tps.ihead);
+    if (tps.count > c_peak_tps) c_peak_tps = tps.count;
 
     return best;
 #undef PROCESS
@@ -874,9 +1033,22 @@ static void fmt_move(char *buf, const Move *m, int have) {
 }
 
 static void search_setup(void) {
+    if (GUIDE_MODE && EVICT_POLICY == 3) {
+        /* The guide table is the ordinary insertion-ordered map; policy 3
+         * replaces tp_move with a slot table, so a promotion would freeze
+         * an empty guide.  Refuse rather than measure a silent no-op. */
+        fprintf(stderr, "ctwin: GUIDE_MODE is incompatible with EVICT_POLICY 3\n");
+        abort();
+    }
+    c_total_nodes += nodes;              /* the search that just ended */
+    c_searches++;
     nodes = 0;
     gen_calls = 0;
     map_clear(&tps);
+    /* Option 3: one guide for the whole search call.  The guide is the
+     * previous root search's completed table and tp_score, cleared just
+     * above, has exactly the same lifetime -- zero epoch churn. */
+    if (GUIDE_MODE == 2) promote_guide();
     PSTP['K'] = (memchr(hist[nhist - 1].b, 'Q', 120) && memchr(hist[nhist - 1].b, 'q', 120))
               ? TAB[5] : KEND;
     if (DERIVE_FRESH) {
@@ -918,6 +1090,18 @@ static void go_depth(int maxd) {
             last_nodes = nodes;
             gamma = pyfloordiv(lower + upper + 1, 2);
         }
+        /* pyref's harness consumer breaks on the probe that converges
+         * depth maxd, ABANDONING the generator -- so in Python the
+         * epoch work that sits after the bracket never runs for the
+         * last depth.  Transcribe that, or a second `go depth` starts
+         * from a table state the reference never reaches (caught by
+         * difftest --repeat, which is why that option exists). */
+        if (depth == maxd) break;
+        /* Bracket COMPLETED: only now may the guide be promoted (a
+         * partial iteration's table is never a guide).  A stop inside
+         * the bracket leaves the previous completed guide in place. */
+        if (GUIDE_MODE == 1) promote_guide();
+        else if (SCORE_EPOCH) map_clear(&tps);
     }
     printf("done nodes %ld gen %ld\n", last_nodes, gen_calls);
     fflush(stdout);
@@ -997,6 +1181,8 @@ static void go_game(long max_nodes, double movetime_s, int maxd) {
                 }
                 gamma = pyfloordiv(lower + upper + 1, 2);
             }
+            if (GUIDE_MODE == 1) promote_guide();
+            else if (SCORE_EPOCH) map_clear(&tps);
         }
     }
 out:
@@ -1024,6 +1210,7 @@ out:
 static void reset_state(void) {
     map_clear(&tps);
     map_clear(&tpm);
+    map_clear(&tpo);
     kslot_reset();
     nodes = 0;
     PSTP['K'] = TAB[5];
@@ -1159,6 +1346,15 @@ static struct knob KNOBS[] = {
     { "FUEL_NULL", &FUEL_NULL, NULL },
     { "FUEL_MIN_DEPTH", &FUEL_MIN_DEPTH, NULL },
     { "DERIVE_FRESH", &DERIVE_FRESH, NULL },
+    { "SCORE_EPOCH", &SCORE_EPOCH, NULL },
+    { "GUIDE_MODE", &GUIDE_MODE, NULL },
+    { "GUIDE_MIN_DEPTH", &GUIDE_MIN_DEPTH, NULL },
+    { "GUIDE_COPY", &GUIDE_COPY, NULL },
+    { "TWO_KILLERS", &TWO_KILLERS, NULL },
+    { "KILLER_DEDUP", &KILLER_DEDUP, NULL },
+    { "GUIDE_IIR", &GUIDE_IIR, NULL },
+    { "GUIDE_INJECT", &GUIDE_INJECT, NULL },
+    { "GUIDE_PV", &GUIDE_PV, NULL },
     { NULL, NULL, NULL }
 };
 static int set_knob(const char *name, long v) {
@@ -1171,6 +1367,13 @@ static int set_knob(const char *name, long v) {
     if (!strcmp(name, "FUEL_NULL") && (v < 0 || v > 1)) return 0;
     if (!strcmp(name, "FUEL_MIN_DEPTH") && v < 1) return 0;
     if (!strcmp(name, "DERIVE_FRESH") && (v < 0 || v > 1)) return 0;
+    if (!strcmp(name, "GUIDE_MODE") && (v < 0 || v > 2)) return 0;
+    if (!strcmp(name, "GUIDE_MIN_DEPTH") && v < 0) return 0;
+    if ((!strcmp(name, "SCORE_EPOCH") || !strcmp(name, "TWO_KILLERS")
+         || !strcmp(name, "KILLER_DEDUP") || !strcmp(name, "GUIDE_IIR")
+         || !strcmp(name, "GUIDE_INJECT") || !strcmp(name, "GUIDE_PV")
+         || !strcmp(name, "GUIDE_COPY"))
+        && (v < 0 || v > 1)) return 0;
     for (struct knob *k = KNOBS; k->name; k++)
         if (!strcmp(k->name, name)) {
             if (k->ip) *k->ip = (int)v; else *k->lp = v;
@@ -1306,6 +1509,20 @@ int main(int argc, char **argv) {
             }
             if (gdepth && !gnodes && mt == 0) go_depth(gdepth);
             else go_game(gnodes, mt, gdepth ? gdepth : 999);
+        }
+
+        else if (!strcmp(tok[0], "counters")) {
+            /* Cumulative over the process (ucinewgame does not reset
+             * them): a match driver reads this once, at the end. */
+            printf("counters nodes %ld searches %ld guide_lookup %ld guide_hit %ld "
+                   "guide_agree %ld guide_disagree %ld guide_below %ld "
+                   "guide_cut %ld killer_cut %ld iid %ld iir %ld "
+                   "tps_cut %ld dedup_skip %ld promote %ld "
+                   "peak_tpm %ld peak_tpo %ld peak_tps %ld\n",
+                   c_total_nodes + nodes, c_searches, c_guide_lookup, c_guide_hit, c_guide_agree,
+                   c_guide_disagree, c_guide_below, c_guide_cut, c_killer_cut,
+                   c_iid, c_iir, c_tps_cut, c_dedup_skip, c_promote,
+                   c_peak_tpm, c_peak_tpo, c_peak_tps);
         }
 
         else if (!strcmp(tok[0], "uci")) {

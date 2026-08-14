@@ -78,6 +78,17 @@ class CEngine:
                 self.moves_played += 1
                 return line.split()[1]
 
+    def counters(self):
+        """Cumulative instrumentation line (see sunfish.c `counters`)."""
+        self.send("counters")
+        while True:
+            line = self.proc.stdout.readline()
+            if not line:
+                raise RuntimeError("engine died: %s" % self.argv)
+            if line.startswith("counters"):
+                f = line.split()[1:]
+                return dict(zip(f[::2], map(int, f[1::2])))
+
     def newgame(self):
         self.send("ucinewgame")
 
@@ -159,6 +170,25 @@ def elo_estimate(w, d, l):
                  -400.0 * math.log10(1.0 / lo - 1.0))
 
 
+def _pair(ea, eb, fen, nodes, max_plies):
+    """One color-swapped opening pair, scored from A's perspective."""
+    return (play_game(ea, eb, fen, nodes, max_plies),
+            -play_game(eb, ea, fen, nodes, max_plies))
+
+
+_W = {}
+
+
+def _worker_init(knobs_a, knobs_b, tables, nodes, max_plies):
+    _W["ea"] = CEngine(knobs_a, tables)
+    _W["eb"] = CEngine(knobs_b, tables)
+    _W["nodes"], _W["max_plies"] = nodes, max_plies
+
+
+def _worker_pair(fen):
+    return _pair(_W["ea"], _W["eb"], fen, _W["nodes"], _W["max_plies"])
+
+
 def load_openings(path, seed):
     fens = []
     for line in open(path):
@@ -187,7 +217,15 @@ def main():
     ap.add_argument("--beta", type=float, default=0.05)
     ap.add_argument("--seed", type=int, default=2026)
     ap.add_argument("--tables", default=None)
+    ap.add_argument("--jobs", type=int, default=1,
+                    help="opening pairs played concurrently (each worker owns "
+                         "its own engine pair; SPRT still evaluated in pair order)")
+    ap.add_argument("--counters", action="store_true",
+                    help="dump both engines' cumulative counter lines at the "
+                         "end (--jobs 1 only: counters live per engine process)")
     args = ap.parse_args()
+    if args.counters and args.jobs != 1:
+        raise SystemExit("--counters needs --jobs 1 (counters are per engine process)")
 
     def cell(spec):
         if spec.strip().startswith("{"):
@@ -201,16 +239,24 @@ def main():
     upper = math.log((1 - args.beta) / args.alpha)
     lower = math.log(args.beta / (1 - args.alpha))
 
-    ea = CEngine(knobs_a, args.tables)
-    eb = CEngine(knobs_b, args.tables)
     w = d = l = 0                      # from A's perspective
     verdict = "book exhausted (SPRT undecided)"
+    if args.jobs > 1:
+        # One engine pair per worker; pairs are independent games, so the
+        # only thing concurrency changes is wall time.  imap keeps pair
+        # order, so the SPRT sees exactly the sequence it would serially.
+        import multiprocessing
+        pool = multiprocessing.Pool(
+            args.jobs, initializer=_worker_init,
+            initargs=(knobs_a, knobs_b, args.tables, args.nodes, args.max_plies))
+        results = pool.imap(_worker_pair, openings)
+    else:
+        ea = CEngine(knobs_a, args.tables)
+        eb = CEngine(knobs_b, args.tables)
+        results = (_pair(ea, eb, fen, args.nodes, args.max_plies) for fen in openings)
     try:
-        for g, fen in enumerate(openings):
-            for a_is_white in (True, False):
-                r = (play_game(ea, eb, fen, args.nodes, args.max_plies)
-                     if a_is_white else
-                     -play_game(eb, ea, fen, args.nodes, args.max_plies))
+        for g, rs in enumerate(results):
+            for r in rs:
                 if r > 0:
                     w += 1
                 elif r < 0:
@@ -230,16 +276,25 @@ def main():
                 verdict = "H0 accepted (elo <= %g)" % args.elo0
                 break
     finally:
-        ea.quit()
-        eb.quit()
+        if args.jobs > 1:
+            pool.terminate()
+            pool.join()
+        else:
+            if args.counters:
+                for nm, e in ((name_a, ea), (name_b, eb)):
+                    print("counters %-12s %s" % (nm, " ".join(
+                        "%s=%d" % kv for kv in sorted(e.counters().items()))))
+            ea.quit()
+            eb.quit()
 
     elo, (lo, hi) = elo_estimate(w, d, l)
     n = w + d + l
     print("RESULT A=%s vs B=%s: %d games +%d =%d -%d  elo %+.1f [%+.1f, %+.1f]  %s"
           % (name_a, name_b, n, w, d, l, elo, lo, hi, verdict))
-    print("nodes/move: A %.0f  B %.0f"
-          % (ea.nodes_played / max(ea.moves_played, 1),
-             eb.nodes_played / max(eb.moves_played, 1)))
+    if args.jobs == 1:
+        print("nodes/move: A %.0f  B %.0f"
+              % (ea.nodes_played / max(ea.moves_played, 1),
+                 eb.nodes_played / max(eb.moves_played, 1)))
 
 
 if __name__ == "__main__":

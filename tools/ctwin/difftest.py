@@ -137,11 +137,23 @@ def movegen_phase(py, cc, name, walk):
     return None, checked
 
 
-def search_phase(py, cc, name, depth):
-    pl = py.cmd_lines("go depth %d" % depth, "done")
-    cl = cc.cmd_lines("go depth %d" % depth, "done")
-    err = compare_lists(pl, cl, "search depth<=%d" % depth, name)
-    return err, len(pl) - 1, pl[-1]
+def search_phase(py, cc, name, depth, repeat=1):
+    """Compare `repeat` consecutive searches of the same position.
+
+    Repeating matters for anything whose state crosses a search call --
+    a move table that survives `search()`, or a guide frozen once per
+    search (the first search of a fresh engine has no guide at all, so
+    a single-shot probe would prove only the guideless path)."""
+    probes, done = 0, ""
+    for k in range(repeat):
+        pl = py.cmd_lines("go depth %d" % depth, "done")
+        cl = cc.cmd_lines("go depth %d" % depth, "done")
+        probes += len(pl) - 1
+        done = pl[-1]
+        err = compare_lists(pl, cl, "search #%d depth<=%d" % (k + 1, depth), name)
+        if err:
+            return err, probes, done
+    return None, probes, done
 
 
 def run_diff(args):
@@ -167,7 +179,7 @@ def run_diff(args):
                 print("  pos: %s (%s)" % (name, poscmd))
                 fails += 1
                 continue
-            err, nprobes, done = search_phase(py, cc, name, args.depth)
+            err, nprobes, done = search_phase(py, cc, name, args.depth, args.repeat)
             probes += nprobes
             if err:
                 print(err)
@@ -220,6 +232,10 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=0, help="positions beyond startpos (0=all sampled)")
     ap.add_argument("--depth", type=int, default=4)
+    ap.add_argument("--repeat", type=int, default=1,
+                    help="consecutive searches per position (>1 exercises "
+                         "state that crosses a search call: the surviving "
+                         "move table, and a guide frozen per search)")
     ap.add_argument("--walk", action="store_true", help="depth-2 movegen walk")
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--bench", action="store_true")

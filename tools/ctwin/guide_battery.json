@@ -1,0 +1,108 @@
+{
+  "comment": "Frozen-guide battery (design: Thomas Ahle). Two-generation move table: tp_old is the frozen, value-bearing guide; tp_move stays mutable and ordering-only. Every promotion clears tp_score (the epoch rule). Identity per cell is proven by difftest --set of the same knobs before any number counts.",
+  "cells": {
+    "master": {},
+    "epoch": {
+      "SCORE_EPOCH": 1
+    },
+    "guideonly": {
+      "GUIDE_MODE": 1
+    },
+    "guideonly2": {
+      "GUIDE_MODE": 2
+    },
+    "dedup": {
+      "KILLER_DEDUP": 1
+    },
+    "k2guide": {
+      "GUIDE_MODE": 1,
+      "TWO_KILLERS": 1,
+      "KILLER_DEDUP": 1
+    },
+    "k2guide2": {
+      "GUIDE_MODE": 2,
+      "TWO_KILLERS": 1,
+      "KILLER_DEDUP": 1
+    },
+    "iir": {
+      "GUIDE_MODE": 1,
+      "GUIDE_IIR": 1
+    },
+    "iir2": {
+      "GUIDE_MODE": 2,
+      "GUIDE_IIR": 1
+    },
+    "inject": {
+      "GUIDE_MODE": 1,
+      "TWO_KILLERS": 1,
+      "KILLER_DEDUP": 1,
+      "GUIDE_INJECT": 1
+    },
+    "inject2": {
+      "GUIDE_MODE": 2,
+      "TWO_KILLERS": 1,
+      "KILLER_DEDUP": 1,
+      "GUIDE_INJECT": 1
+    },
+    "pv": {
+      "GUIDE_MODE": 1,
+      "GUIDE_PV": 1
+    },
+    "pv2": {
+      "GUIDE_MODE": 2,
+      "GUIDE_PV": 1
+    },
+    "composite": {
+      "GUIDE_MODE": 1,
+      "TWO_KILLERS": 1,
+      "KILLER_DEDUP": 1,
+      "GUIDE_IIR": 1
+    },
+    "composite2": {
+      "GUIDE_MODE": 2,
+      "TWO_KILLERS": 1,
+      "KILLER_DEDUP": 1,
+      "GUIDE_IIR": 1
+    },
+    "inject_all": {
+      "GUIDE_MODE": 1,
+      "GUIDE_MIN_DEPTH": 0,
+      "TWO_KILLERS": 1,
+      "KILLER_DEDUP": 1,
+      "GUIDE_INJECT": 1
+    },
+    "k2guide_all": {
+      "GUIDE_MODE": 1,
+      "GUIDE_MIN_DEPTH": 0,
+      "TWO_KILLERS": 1,
+      "KILLER_DEDUP": 1
+    },
+    "inject_all2": {
+      "GUIDE_MODE": 2,
+      "GUIDE_MIN_DEPTH": 0,
+      "TWO_KILLERS": 1,
+      "KILLER_DEDUP": 1,
+      "GUIDE_INJECT": 1
+    },
+    "copy2": {
+      "GUIDE_MODE": 2,
+      "GUIDE_COPY": 1,
+      "TWO_KILLERS": 1,
+      "KILLER_DEDUP": 1,
+      "GUIDE_IIR": 1
+    },
+    "copy2_k2": {
+      "GUIDE_MODE": 2,
+      "GUIDE_COPY": 1,
+      "TWO_KILLERS": 1,
+      "KILLER_DEDUP": 1
+    },
+    "copy1": {
+      "GUIDE_MODE": 1,
+      "GUIDE_COPY": 1,
+      "TWO_KILLERS": 1,
+      "KILLER_DEDUP": 1,
+      "GUIDE_IIR": 1
+    }
+  }
+}
