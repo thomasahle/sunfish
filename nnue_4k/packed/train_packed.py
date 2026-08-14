@@ -549,6 +549,8 @@ class Net(nn.Module):
 
 
 RFF_SIGMA = args.rffsigma
+torch.manual_seed(0)   # pinned init: the val split (random.seed(0) below)
+                       # was already deterministic, the model init was not
 model = Net(N, args.factor, args.kb, args.nb, args.bm, args.tailw, args.phase,
             args.baff, args.nb2, args.rff)
 opt = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-5)
