@@ -150,6 +150,59 @@ the mated band at depth 1 (`cexD_fuel_M1`) before classifying it correctly
 from depth 10 on (`cexD_M_eventually_classified`). Fixed-depth honesty below
 the bound still requires `NoMaskedMobility` or the #171 tail.
 
+## Shallow move caps and the lazy move tail
+
+At remaining depths two and three, an admitted quiet, non-promotion,
+non-checking move has value
+
+```text
+min(min(MATE_LOWER - 1,
+        pos.score + pos.value(move) + (depth - 1) * QS_A),
+    full child value)
+```
+
+This is a fixed function of the position, move, and depth. If the static cap
+is below `gamma`, `cappedMove_failLow` proves that the cap itself is a valid
+fail-low report and the child search is skipped. Otherwise
+`WindowReport.cap` transports the full child report through `min`.
+
+Captures (including en passant), promotions, and checking moves bypass the
+cap. The cap is explicitly below the positive mate band, so it cannot create a positive mate value;
+`shallowMoveCap_below_positiveMate` and `cappedMove_positiveMate_only_from_full`
+state that direction. For an eligible move, `pos.score + pos.value(move)` is
+the negated static score of a both-kings child. `EvalBounds.lean` puts it
+strictly above `-MATE_LOWER`, so the positive margin cannot cross downward and
+no lower clamp is needed. `cappedMove_preserves_negativeMate` proves that a
+genuine negative mate is retained exactly.
+
+The check predicate is evaluated lazily, but its meaning is fixed. Before a
+cap fail-low skips the child, it proves the move is not a check. After a child
+search, it is needed only when the full report exceeds the cap. This changes
+the order of proof work, not the declared move value.
+
+The cap deliberately changes ordinary shallow quiet-move values. It exists
+only at depths two and three, so it shapes the moving frontier while leaving
+forcing moves and the deeper tree unchanged. Its strength is an empirical
+question, separate from report correctness.
+
+At remaining depth one, an omitted move has intrinsic value at most
+`val_lower - 1`. Its child is a quiescence node, whose stand-pat candidate
+bounds the parent move from above by
+
+```text
+tail = pos.score + val_lower - 1
+```
+
+If `tail < gamma`, `lazyTail_failLow` lets the search emit that upper report
+without generating the omitted moves. Otherwise the threshold widens to the
+absolute score floor and every move is searched. `lazyTail_report` proves
+that both paths report on the same complete depth-one move fold. Thus
+`gamma` chooses proof work, not semantics, and no filtered legal evasion can
+certify mate. With the shipped constants, the table floor already admits every
+move at depth two and above. `lazyMoves_eq_moves` combines those two facts:
+the declared real-move set is complete at every positive depth, eliminating
+the masked-mobility premise from mate certification.
+
 ## Mate distance
 
 Checkmate is not one number.  The terminal correction assigns
@@ -335,7 +388,7 @@ constant is a change to this theorem.
 | the least distance is odd | `leastMate_odd` | `propext, Quot.sound` |
 | distinct distances are two plies apart | `leastMate_gap` | `propext, Quot.sound` |
 | the value's rung index is exactly `D - k` | `leastMate_value_block` | `+ Classical.choice` |
-| a faster mate outscores a slower one by more than `EVAL_ROUGHNESS` | `leastMate_value_separation` | `+ Classical.choice` |
+| faster mate gap exceeds `EVAL_ROUGHNESS` | `leastMate_value_separation` | `+ Classical.choice` |
 | the driver's own tolerance suffices | `forcedMate_play_shortest_odd` | `+ Classical.choice` |
 | the engine attains the optimal distance | `leastMate_play_shortest` | `+ Classical.choice` |
 | a mated node's own distance is even | `leastMated_odd_or_zero` | `propext, Quot.sound` |
@@ -498,10 +551,10 @@ with no repetition in it, so no draw-by-repetition or well-founded-descent
 argument touches the failure.  **Depth does not help**: the masking sits one ply
 below the choice and stays there however large `d` grows, because the frontier
 travels with the search — `cexD_M4` values that very node honestly at remaining
-depth 4 while `cexD_M1` shows it lying at remaining depth 1.  What retires the
-premise is the engine change: land #171, and the sentinel never survives the
-fold.  Until then `NoMaskedMobility` is the honest name for the gap, and it is a
-*search-level* premise because the gap is in the search.
+depth 4 while `cexD_M1` shows it lying at remaining depth 1. The lazy tail
+retires this premise: an upper report skips the tail only when it is below the
+window; otherwise the threshold widens to the proved move floor and searches
+every evasion. Positive-depth reports therefore target the complete move fold.
 
 ## The eventual classification (`Eventual.lean`)
 
@@ -699,7 +752,10 @@ at capturable nodes.
 | `target = pos.score + NULL_MARGIN` fuel probe (depth >= 6) | `hot_bit_determined`, `hot_bit_stable`, `fuel_edge_cost` |
 | real-move recursion at the reduced `d - 1` | `fuelValueD2t`, `eventual_classification_fuel` |
 | score guard keeps the cap below positive mate | `guardedStaticCap_in_scoreBand`, `guardedCappedNull_below_positiveMate` |
-| full-width move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
+| shallow static move cap and lazy fail-low | `cappedMove_failLow`, `cappedMove_report` |
+| cap mate-band properties | `shallowMoveCap_below_positiveMate`, `cappedMove_preserves_negativeMate` |
+| filtered move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
+| complete positive-depth move set | `lazyTail_report`, `lazyMoves_eq_moves` |
 | sticky legality evidence and terminal override | terminal/finalizer results in `Stalemate.lean` |
 | king-capture evaluation margins and ordering | `EvalBounds.lean` |
 | `mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)` | `terminalValue`, `terminalValue_exact` |
@@ -721,6 +777,7 @@ transform is the identity, so the model and source are extensionally equal.
 - `GameTree.lean`: chess-free negamax game model.
 - `Bound.lean`: core fail-soft search proof.
 - `CappedNull.lean`: capped-null report transport and score-band facts.
+- `CappedMove.lean`: shallow move caps and the lazy complete move tail.
 - `Stalemate.lean`: selective-search fold, legality, and terminal finalizer.
 - `EvalBounds.lean`: numeric bounds induced by the piece-square tables.
 - `Killer.lean`: move-table legality and lifecycle.

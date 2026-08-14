@@ -11,6 +11,7 @@ import Sunfish.CanNull
 import Sunfish.EvalBounds
 import Sunfish.Driver
 import Sunfish.CappedNull
+import Sunfish.CappedMove
 import Sunfish.Pruning
 import Sunfish.EventuallyWide
 import Sunfish.Repetition
