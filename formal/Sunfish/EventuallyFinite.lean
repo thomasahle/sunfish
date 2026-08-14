@@ -12,7 +12,7 @@ left to the frontier device.  Can a finiteness / bounded-diameter
 premise replace it?
 
 THE ANSWER (this file): YES for the eventual claim, with an EFFECTIVE
-depth bound `D0 = C*N + C + 6`; and NO fixed-depth claim comes with
+depth bound `D0 = C*N + C + 8`; and NO fixed-depth claim comes with
 it, by countermodel.  The four design items:
 
 1. THE PREMISE -- `EndsWithin G N p`: every legal play from `p`
@@ -61,7 +61,7 @@ it, by countermodel.  The four design items:
      mated band (`-MATE_UPPER`) at remaining depth 1, while
      `cexD_M_not_mated` shows no `ForcedlyMated` index exists for it,
      and `cexD_M_eventually_classified` shows the same node correctly
-     classified from the effective bound `D0 = 10` on.  So
+     classified from the effective bound `D0 = 12` on.  So
      `hFiniteDiameter` buys NO fixed-depth honesty: below `D0` the
      frontier can still mask, and fixed-depth claims still need
      `NoMaskedMobility` or the #171 tail.  The variant's claim is
@@ -71,21 +71,21 @@ it, by countermodel.  The four design items:
 
      eventual_classification_fuel_finite :
        ValFloor G 192 -> EndsWithin G N p -> (root legality) ->
-         forall D >= C*N + C + 6,
+         forall D >= C*N + C + 8,
            mate-band tests read off the value are exactly the truth,
            and the no-mate case sits strictly inside the band.
 
    `NoMaskedMobility` appears nowhere; neither does the tail, the pass
    (`NoZugzwang`), nor -- a bonus the design did not ask for --
-   `EvalQuiet`: at `D >= C*N + 6` every node the classification
+   `EvalQuiet`: at `D >= C*N + 8` every node the classification
    depends on is reached before the frontier, so no static evaluation
    is ever read at a nonterminal leaf.  The masking sites of the tail
    proof (`frontier_escape_ft`; the two `dg = 0` branches of
    `forcedMate_of_fuelValueD2t`) are not weakened here -- they are
    UNREACHABLE: the honesty induction carries the invariant
-   `C * budget + 6 <= depth`, each attacker/defender round spends two
+   `C * budget + 8 <= depth`, each attacker/defender round spends two
    budget plies against at most `2C` of depth, and a node is examined
-   below depth 6 only past a terminal, where the exact finalizer
+   below depth 8 only past a terminal, where the exact finalizer
    answers instead.  The induction is on the `EndsWithin` budget
    (remaining distance to terminal), not on depth.
 
@@ -104,8 +104,8 @@ it, by countermodel.  The four design items:
    can therefore only change WHICH selector the code computes, never
    what any selector's fold is worth; it is absorbed by the
    quantifier, and its worst case is already priced into the bound as
-   the `C` of `D0 = C*N + C + 6` (every edge at full spend).  The
-   sub-horizon pass (depths 3..5, probing at depth <= 2) IS a score
+   the `C` of `D0 = C*N + C + 8` (every edge at full spend).  The
+   sub-horizon pass (depths 3..7, probing at depth <= 4) IS a score
    candidate, and sits strictly below the invariant's floor,
    unreachable.  So the value-correctness argument needs
    frontier-freedom only on the real-move tree, which is precisely
@@ -123,10 +123,10 @@ it, by countermodel.  The four design items:
 
 4. SCOPE, honestly.  NOT granted: any fixed-depth claim (`CexD`
    above -- a lie at depth 1 inside a game of diameter 5).  The depth
-   bound is explicit -- `D0 = C*N + C + 6`, i.e. `2N + 8` as shipped
+   bound is explicit -- `D0 = C*N + C + 8`, i.e. `2N + 10` as shipped
    -- so "eventually" names a depth computable from the adjudication
-   bound, not a classical existence; the corridor costs `C + 6`
-   (`6` the fuel horizon, below which the capped pass is still a
+   bound, not a classical existence; the corridor costs `C + 8`
+   (`8` the fuel horizon, below which the capped pass is still a
    score candidate; `C` the worst single-edge spend).  Unchanged:
    the game classified is the ruleless one (`ForcedMate` /
    `ForcedlyMated`; `Repetition.lean`'s scope note applies verbatim),
@@ -231,9 +231,9 @@ theorem forcedlyMated_le_budget (G : QSGame) {k n : Nat} {q : G.Pos}
 A mate-band value at a legally reached position IS a forced mate --
 with `EndsWithin` standing where the tail proof used the frontier
 device.  The induction is on the BUDGET, carrying the invariant
-`C * budget + 6 ≤ depth`: each attacker/defender round spends two
+`C * budget + 8 ≤ depth`: each attacker/defender round spends two
 budget plies against at most `2C` of depth, so every examined node
-stays in the real-only regime (`≥ 6`), every fold list is unfiltered
+stays in the real-only regime (`≥ 8`), every fold list is unfiltered
 (`ValFloor` from depth 2), terminal children are finalized exactly,
 and the masking sites of `forcedMate_of_fuelValueD2t` -- the
 `frontier_escape_ft` call and both `dg = 0` branches -- are
@@ -245,7 +245,7 @@ theorem forcedMate_of_fuelValueD2_ends (G : QSGame) (guard : G.Pos → Bool)
     ∀ (n D : Nat) (p : G.Pos),
       EndsWithin G n p →
       hasKingCapture G.toNullGame.toGame p = false →
-      C * n + 6 ≤ D →
+      C * n + 8 ≤ D →
       MATE_LOWER ≤ fuelValueD2 G guard C spend D p →
       ForcedMate G D p := by
   have hMU : MATE_UPPER = 69290 := rfl
@@ -360,7 +360,7 @@ theorem forcedlyMated_of_fuelValueD2_ends (G : QSGame) (guard : G.Pos → Bool)
     (hE : EndsWithin G n q)
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
     (hkgq : ¬ (G.eval q ≤ -MATE_LOWER))
-    (hD : C * n + 6 ≤ D)
+    (hD : C * n + 8 ≤ D)
     (hlo : fuelValueD2 G guard C spend D q ≤ -MATE_LOWER) :
     ForcedlyMated G D q := by
   have hML : MATE_LOWER = 47923 := rfl
@@ -402,8 +402,8 @@ finiteness, with an EFFECTIVE bound.**  Premises: `ValFloor` (tables),
 `EndsWithin G N p` -- `hFiniteDiameter` at the root -- and root
 legality.  `NoMaskedMobility`, the #171 tail, `NoZugzwang` and
 `EvalQuiet` appear nowhere.  Unlike `eventual_classification_fuel`'s
-classical `∃ D0`, the bound is the explicit `D0 = C*N + C + 6`
-(`2N + 8` as shipped): "eventually" names a depth computable from the
+classical `∃ D0`, the bound is the explicit `D0 = C*N + C + 8`
+(`2N + 10` as shipped): "eventually" names a depth computable from the
 adjudication bound.  The wrapper is also choice-free -- no case
 analysis on which arm holds is needed, because the budget compresses
 every mate index below `N + 1`. -/
@@ -414,7 +414,7 @@ theorem eventual_classification_fuel_finite (G : QSGame) (guard : G.Pos → Bool
     (hE : EndsWithin G N p)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER)) :
-    ∀ D : Nat, C * N + C + 6 ≤ D →
+    ∀ D : Nat, C * N + C + 8 ≤ D →
       ((MATE_LOWER ≤ fuelValueD2 G guard C spend D p) ↔ (∃ k, ForcedMate G k p)) ∧
       ((fuelValueD2 G guard C spend D p ≤ -MATE_LOWER) ↔ (∃ k, ForcedlyMated G k p)) ∧
       ((¬ (∃ k, ForcedMate G k p)) → (¬ (∃ k, ForcedlyMated G k p)) →
@@ -594,13 +594,13 @@ theorem cexD_M_not_mated (k : Nat) : ¬ ForcedlyMated CexD k DPos.M := by
   | inr h' => exact cexD_S_not_mating k (h'.2 DPos.S (by decide) (by decide))
 
 /-- The eventual side of the disposition, ON the countermodel: from
-the effective bound `D0 = C*N + C + 6 = 10` the masked node is
+the effective bound `D0 = C*N + C + 8 = 12` the masked node is
 classified correctly -- strictly inside the band, as befits a draw of
 the ruleless game -- for every edge-cost selector.  Fixed-depth lie at
-depth 1 (`cexD_fuel_M1`), eventual truth from depth 10: the variant's
+depth 1 (`cexD_fuel_M1`), eventual truth from depth 12: the variant's
 eventual-only scope, exhibited end to end on one game. -/
 theorem cexD_M_eventually_classified (spend : CexD.Pos → Nat → Nat)
-    (D : Nat) (hD : 10 ≤ D) :
+    (D : Nat) (hD : 12 ≤ D) :
     -MATE_LOWER < fuelValueD2 CexD (fun _ => false) 2 spend D DPos.M ∧
       fuelValueD2 CexD (fun _ => false) 2 spend D DPos.M < MATE_LOWER := by
   have h := (eventual_classification_fuel_finite CexD (fun _ => false) 2 spend

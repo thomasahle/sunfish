@@ -77,11 +77,11 @@ static int EVAL_ROUGHNESS = 15;
 static long TABLE_SIZE = 1000000;
 static int NULL_MARGIN = 15;     /* fuel-probe target margin (its own knob
                                     since #192, deliberately NOT tied to
-                                    EVAL_ROUGHNESS; the classic sub-depth-6
+                                    EVAL_ROUGHNESS; the classic sub-depth-8
                                     null keeps following EVAL_ROUGHNESS) */
 static int NULL_MIN_DEPTH = 2;   /* null move when depth > this */
 static int NULL_LIMIT = 500;     /* |score| bound for trying null */
-static int NULL_RED = 3;         /* null move depth reduction */
+static int NULL_RED = 3;         /* scored null-move reduction */
 static int IID_MIN_DEPTH = 3;    /* IID when depth > this (master: 2) */
 static int IID_RED = 3;          /* IID depth reduction */
 static int FUT_MAX = 1;          /* futility pruning when depth <= this */
@@ -136,7 +136,8 @@ static int FUEL_NULL = 1;        /* DEFAULT since #192 merged the fuel
                                     (historical comparisons only -- no
                                     longer difftest-provable against the
                                     live reference) */
-static int FUEL_MIN_DEPTH = 6;
+static int FUEL_MIN_DEPTH = 8;
+static int FUEL_RED = 2;         /* fixed-target fuel-probe reduction */
 static int DERIVE_FRESH = 0;
 
 /* ------------------------------------------------------------------ */
@@ -788,7 +789,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
             && has_big_piece(pos)) {
         int target = pos->score + NULL_MARGIN;
         Pos rp = rotate(pos, 1);
-        if (-bound(&rp, 1 - target, depth - NULL_RED, 0, 0) >= target)
+        if (-bound(&rp, 1 - target, depth - FUEL_RED, 0, 0) >= target)
             rd = depth - 1;
     }
 
@@ -1198,6 +1199,7 @@ static struct knob KNOBS[] = {
     { "QS_TAIL", &QS_TAIL, NULL },
     { "FUEL_NULL", &FUEL_NULL, NULL },
     { "FUEL_MIN_DEPTH", &FUEL_MIN_DEPTH, NULL },
+    { "FUEL_RED", &FUEL_RED, NULL },
     { "DERIVE_FRESH", &DERIVE_FRESH, NULL },
     { NULL, NULL, NULL }
 };
@@ -1210,6 +1212,7 @@ static int set_knob(const char *name, long v) {
     if (!strcmp(name, "QS_TAIL") && (v < 0 || v > 1)) return 0;
     if (!strcmp(name, "FUEL_NULL") && (v < 0 || v > 1)) return 0;
     if (!strcmp(name, "FUEL_MIN_DEPTH") && v < 1) return 0;
+    if (!strcmp(name, "FUEL_RED") && v < 1) return 0;
     if (!strcmp(name, "DERIVE_FRESH") && (v < 0 || v > 1)) return 0;
     for (struct knob *k = KNOBS; k->name; k++)
         if (!strcmp(k->name, name)) {

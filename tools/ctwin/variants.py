@@ -45,9 +45,9 @@ import sunfish as S
 from sunfish import Entry, MATE_LOWER, MATE_UPPER, Searcher, Stop
 
 _PINNED = {
-    # post-#192 master: fuel-oracle null (classic null bounded 2<depth<6,
-    # fuel probe from depth 6 at pos.score + NULL_MARGIN, real moves at d-1)
-    "bound": "fa52e0701c8e3f1f405915ed0a8079bc21ebd65d66ebfb02c1ac74b993dfe528",
+    # fuel-oracle null (classic null bounded 2<depth<8,
+    # fuel probe from depth 8 at pos.score + NULL_MARGIN, real moves at d-1)
+    "bound": "4daa5a2aef837aa1fb8be62f66ff2428c94995b8238333044b7c450fbfaffdd8",
     "search": "ffae8dfd56348310dd38a86126a2291b7111870b8bc66bced4b2d724ed1ee721",
 }
 for _name, _want in _PINNED.items():
@@ -194,7 +194,7 @@ class VariantSearcher(Searcher):
         def moves():
             killers = self.tp_move.get_all(pos)
 
-            if not root and 2 < depth < 6 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
+            if not root and 2 < depth < 8 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
                 score = min(pos.score + S.EVAL_ROUGHNESS,
                     -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
                 proof = score >= gamma and (self.tp_move.get(pos) or pos.king_capture())
@@ -203,9 +203,9 @@ class VariantSearcher(Searcher):
             # Fuel oracle (master since #192): a fuel decision, never a
             # score candidate; real moves below recurse to d - 1.
             d = depth
-            if depth >= 6 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
+            if depth >= 8 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
                 target = pos.score + S.NULL_MARGIN
-                if -self.bound(pos.rotate(nullmove=True), 1 - target, depth - 3) >= target:
+                if -self.bound(pos.rotate(nullmove=True), 1 - target, depth - 2) >= target:
                     d = depth - 1
 
             if depth == 0:
@@ -221,7 +221,8 @@ class VariantSearcher(Searcher):
                 if pos.value(killer) >= val_lower:
                     yield killer, -self.bound(pos.move(killer), 1 - gamma, d - 1)
 
-            for val, move in sorted(((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= val_lower), reverse=True):
+            values = ((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= val_lower)
+            for val, move in sorted(values, reverse=True):
                 if depth <= 1 and pos.score + val < gamma:
                     yield (move, MATE_UPPER) if val >= MATE_LOWER else (None, pos.score + val)
                     break

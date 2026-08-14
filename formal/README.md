@@ -55,12 +55,12 @@ The proof is generic in `C`; it does not depend on chess or mate constants.
 The production guard is:
 
 ```python
-not root and 2 < depth < 6 and abs(pos.score) < 500 \
+not root and 2 < depth < 8 and abs(pos.score) < 500 \
     and any(c in pos.board for c in "RBNQ")
 ```
 
-The upper bound is new: the pass is a score candidate only *below* depth 6.
-From depth 6 on it is a fuel oracle instead -- see the next section.
+The upper bound is new: the pass is a score candidate only *below* depth 8.
+From depth 8 on it is a fuel oracle instead -- see the next section.
 
 With integer scores and `EVAL_ROUGHNESS = 15`, the score guard gives
 `C(pos) <= 514 < MATE_LOWER`. Theorems
@@ -78,18 +78,18 @@ min(C(pos), P) <= best legal real-move value
 It concerns the quality of the null approximation, not the fail-soft report
 transport. The non-pawn-piece guard excludes pawn-only zugzwangs; the score
 guard and cap make null pruning more conservative in unbalanced positions.
-It is confined to `depth < 6`; above that the fuel oracle removes it.
+It is confined to `depth < 8`; above that the fuel oracle removes it.
 
 ## The deep-null fuel oracle
 
-From depth 6 on the pass is not a score candidate at all. One probe at a
+From depth 8 on the pass is not a score candidate at all. One probe at a
 *fixed* target decides only how much depth the real moves spend:
 
 ```python
 d = depth
-if depth >= 6 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
+if depth >= 8 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
     target = pos.score + NULL_MARGIN
-    if -self.bound(pos.rotate(nullmove=True), 1 - target, depth - 3) >= target:
+    if -self.bound(pos.rotate(nullmove=True), 1 - target, depth - 2) >= target:
         d = depth - 1
 ```
 
@@ -133,15 +133,15 @@ holds when the game itself is finite (`EventuallyFinite.lean`):
 ```text
 eventual_classification_fuel_finite :
   ValFloor G 192 -> EndsWithin G N p -> (root legality) ->
-    forall D >= C*N + C + 6,  W / D / L read off the value, correctly
+    forall D >= C*N + C + 8,  W / D / L read off the value, correctly
 ```
 
 `EndsWithin G N p` -- every legal play from `p` reaches a terminal within `N`
 plies -- is true of adjudicated chess (50-move plus threefold under match
-adjudication) and false of the ruleless modeled game. At `D >= C*N + 6` every
+adjudication) and false of the ruleless modeled game. At `D >= C*N + 8` every
 node the classification depends on is reached before the frontier, so the
 masking sites are unreachable and `NoMaskedMobility`, the tail, and even
-`EvalQuiet` all drop out. The bound is *effective* (`2N + 8` as shipped, no
+`EvalQuiet` all drop out. The bound is *effective* (`2N + 10` as shipped, no
 classical `exists D0`), and the file's entire footprint is
 `[propext, Quot.sound]`. The scope is eventual-only, by countermodel: `CexE`
 (the infinite masked chain) violates the premise (`cexE_not_finite`), while
@@ -612,7 +612,7 @@ parity does the refunding).  At BAND level the same constant is
 irrelevant by three orders of magnitude, which is what lets
 `NearMaximalChoice` be dropped from classification results entirely.
 A change to the tempo would have to be re-argued in both places; a
-change to `depth - 3` in the null reduction would have to be
+change to `depth - 3` in the scored null reduction would have to be
 re-argued in the first.
 
 **The frontier premise, however, survives the weakening.**  Masking is
@@ -748,8 +748,8 @@ at capturable nodes.
 |---|---|
 | recursive zero-window move search | `Bound.bound_spec` |
 | null child report negation | `WindowReport.negate` |
-| `min(pos.score + EVAL_ROUGHNESS, pass_report)` (depth < 6) | `cappedNull_report` |
-| `target = pos.score + NULL_MARGIN` fuel probe (depth >= 6) | `hot_bit_determined`, `hot_bit_stable`, `fuel_edge_cost` |
+| `min(pos.score + EVAL_ROUGHNESS, pass_report)` (depth < 8) | `cappedNull_report` |
+| fixed-target fuel oracle (depth >= 8) | `hot_bit_determined`, `hot_bit_stable`, `fuel_edge_cost` |
 | real-move recursion at the reduced `d - 1` | `fuelValueD2t`, `eventual_classification_fuel` |
 | score guard keeps the cap below positive mate | `guardedStaticCap_in_scoreBand`, `guardedCappedNull_below_positiveMate` |
 | shallow static move cap and lazy fail-low | `cappedMove_failLow`, `cappedMove_report` |

@@ -115,8 +115,8 @@ class TestCappedNullMove:
     the pass value and static evaluation plus one MTD score bucket, so the
     first child report is sufficient and the result is the static cap.
 
-    Probed at depth 5: the pass is a score candidate only on `2 < depth < 6`.
-    From depth 6 it is a fuel oracle that never contributes a score, so the
+    Probed at depth 5: the pass is a score candidate only on `2 < depth < 8`.
+    From depth 8 it is a fuel oracle that never contributes a score, so the
     cap has nothing to cap there (see TestFuelOracle).
     """
 
@@ -148,7 +148,7 @@ class TestCappedNullMove:
 
 
 class TestFuelOracle:
-    """From depth 6 the pass is a fuel oracle, not a score candidate.
+    """From depth 8 the pass is a fuel oracle, not a score candidate.
 
     The probe runs at ONE fixed target, `pos.score + NULL_MARGIN`, which
     depends on `(pos, depth)` and not on the caller's `gamma`. That is what
@@ -169,12 +169,12 @@ class TestFuelOracle:
         seen, bound = [], searcher.bound
 
         def observed(p, g, depth, root=False):
-            if p == passed:
+            if p == passed and not seen:
                 seen.append((g, depth))
             return bound(p, g, depth, root)
 
         searcher.bound = observed
-        bound(pos, gamma, 6)
+        bound(pos, gamma, 8)
         return seen
 
     def test_probe_window_is_gamma_free(self):
@@ -183,20 +183,20 @@ class TestFuelOracle:
         windows = [self.probe_windows(g) for g in (0, 200, -200, sf.MATE_LOWER)]
         for gamma, seen in zip((0, 200, -200, sf.MATE_LOWER), windows):
             assert seen, f"gamma {gamma}: the fuel probe never ran"
-            assert all(g == 1 - target and d == 3 for g, d in seen), (
+            assert all(g == 1 - target and d == 6 for g, d in seen), (
                 f"gamma {gamma}: probe windows {seen} - expected only "
-                f"({1 - target}, 3), the gamma-free fixed target"
+                f"({1 - target}, 6), the gamma-free fixed target"
             )
         assert len({tuple(w) for w in windows}) == 1, (
             f"the probe window moved with gamma: {windows}"
         )
 
     def test_no_pass_score_candidate_above_the_horizon(self):
-        # Below 6 the capped pass yields a score; from 6 it never does, so
+        # Below 8 the capped pass yields a score; from 8 it never does, so
         # the deep null can no longer fail high on its own.
         pos = hist_from_fen("8/6p1/6R1/k7/2K5/8/8/8 w - - 0 1")[-1]
         passed = pos.rotate(nullmove=True)
-        for depth, want in ((5, True), (6, False), (7, False)):
+        for depth, want in ((5, True), (6, True), (7, True), (8, False), (9, False)):
             searcher = sf.Searcher()
             searcher.root, searcher.history = pos, set()
             seen, bound = [], searcher.bound
@@ -395,7 +395,7 @@ class TestMateDistance:
         # Ra8# from a bare-rook mate: the score is the band floor plus the
         # depth the search still had in hand.
         #
-        # From depth 6 the deep-null fuel oracle is live, and in this
+        # From depth 8 the deep-null fuel oracle is live, and in this
         # position it is hot (White is a rook up), so every real edge costs
         # TWO plies instead of one and the mate arrives with one ply less in
         # hand. That is the whole trade -- a bounded, uniform cost per edge
@@ -405,7 +405,7 @@ class TestMateDistance:
         hist = hist_from_fen("3k4/8/3K4/8/8/8/8/7R w - - 0 1")
         searcher = sf.Searcher()
         score = searcher.bound(hist[-1], sf.MATE_LOWER, depth, root=True)
-        fuel = 1 if depth >= 6 else 0
+        fuel = 1 if depth >= 8 else 0
         want = sf.MATE_LOWER + (depth - 1 - fuel) * sf.EVAL_ROUGHNESS
         assert score == want, (
             f"depth {depth}: mate in 1 scored {score}, expected {want}"
