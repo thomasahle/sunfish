@@ -464,7 +464,15 @@ def run(sunfish_module, startpos):
                             # armed in-search deadline guards the hard
                             # edge.  Validated per TESTING.md rule 5
                             # (multi-TC + per-move curves).
-                            think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1)
+                            #
+                            # At sudden death (winc == 0) /12 flags long
+                            # games with no single move overrunning:
+                            # lichess EAThUL0P (3+0) spent 12.8s on ply 9
+                            # and lost on time at move 73 once per-move
+                            # lag drained the wtime/2-capped remainder.
+                            # The audit above only covered increment TCs,
+                            # so winc == 0 paces at /40 instead.
+                            think = min(wtime / (12 if winc else 40) + 0.9 * winc, wtime / 2 - 1)
                         # Play the opening quickly: early moves benefit
                         # least from deep search, and banked time is worth
                         # more in the middlegame. Opening ONLY (an unscoped
