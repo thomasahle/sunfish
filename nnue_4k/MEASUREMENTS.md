@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-14 | **PRE-REGISTERED: the step budget becomes a SMOOTH one, and the price of that is two matches — (1) 60+0.1 smooth vs step, elo0=0 elo1=20, cap 600; (2) 30+1 NON-INFERIORITY smooth vs step, elo0=-10 elo1=0, cap 400** | The step form is discontinuous at `winc == 0`: one millisecond of increment moved the divisor 40 → 12, so 60+0.1 was paced at /12 — the exact drain the /40 branch exists to close. Replacement is one rational base (divisor slides 40 → 12) under one cap that cannot go negative. **What carries for free:** `winc == 0` is bit-for-bit `wtime/40` and, above a 2.667 s clock, bit-for-bit the stage-1 `tmfix` arm — so +235.5 ± 65.4 transfers untouched. **What must be bought:** increment TCs are now /12 + 0.9·inc *asymptotically* (−7.4% at 30+1, −8.5% at 60+1, −3.3% at 300+3), so match 2 prices that. Arms are one expression apart from one generator; the step arm packs to **3295 B, sha `fe22791b409b1fba`** — byte-identical to the stage-1 winner. Entry **3295 → 3308 B** (+13, 788 spare). Honest note recorded in advance: if match 1 reads ≈ 0 the change lands as continuity-plus-safety, not as Elo |
 | 2026-08-14 | **C-TWIN PR SERVICE + EVICT BATTERY: calibration PASSED at 49.83% (300g, -1.16 ± 12.23, after a voided -54 run whose root-cause fixed the twin's go-nodes driver); #184 +0.52 ± 6.37 (668g, Ptnml [4,5,313,10,2]); #182 +1.04 ± 12.74 (668g, mechanism-active, nets neutral); #171 exactly 0.00 (all 334 pairs identical)** | Eviction battery: unguarded simplification is a **no-op at production TABLE_SIZE** and **-15.09 ± 19.57 under TABLE_SIZE=500 churn** (the root guard earns its keep where it was built); hash-slot two-tier +6.24 ± 20.96 is the guardless alternative; k2/k3 killers +1% nodes, screen-pruned. All fixed-node 20k, twin-grade, zero illegal moves in ~3,640 games |
 | 2026-08-14 | **STAGE 1 VERDICT: the sudden-death TM fix is +235.45 ± 65.41 at 60+0 — H1 accepted in 100 games (64W-5L-31D, LOS 100%, 0 losing pairs of 50), in 21 minutes** | And the mechanism is NOT the one the pre-registration expected: **zero time forfeits on either arm**, every decisive game an actual mate. The drain does not flag, it BLINDS — oldtm's clock crosses the negative-cap threshold at median move 42 and it then plays a median 16 moves at the 0.05 s floor (exemplar: 45 moves at 0.00 s), while tmfix never crosses it in 100/100 games and ends with 16.9 s to oldtm's 2.0 s. H3's "depth crater" and H4's TM are therefore ONE finding. Not a ladder claim: arm-vs-arm at 60+0. Stage 1's pass rule had a degenerate-case defect (0 < 0), logged not patched. **Stage 2 (300+0) staged and NOT armed — slot decision** |
 | 2026-08-14 | **PRE-REGISTERED: the sudden-death TM fix goes to a TWO-STAGE validation — stage 1 is a 60+0 SPRT, tmfix (3295 B) vs oldtm (3289 B, the pre-fix `wtime/12`), elo0=0 elo1=20** | Supersedes the LOSS_TAXONOMY appendix's 300+0 round-robin: the mechanism question is answerable at a fifth of the clock and gates whether the expensive confirmation earns a slot. Arms are **one AST node apart** (canonicalised over pyminify's renamed locals: 1 differing node in 3,858) and both carry the bestmove floor, so the screen isolates TIME MANAGEMENT. Gates green both arms (legality 100/100 × 2 budget paths, mate 8/8, standalone smoke); the TM assay proves the mod is live in the artifact — 1.38 s vs 4.00 s at `wtime 60000 winc 0`. No adjudication, on purpose. **Stage 2 (one 300+0 SPRT) is pre-registered as conditional on stage 1** |
@@ -323,6 +324,157 @@ calibration_VOID_old_driver.log, calib/calibration2.{log,pgn},
 pr_pr184_derive / pr_pr182_fuel / pr_pr171_qstail .{log,pgn},
 evict_default / evict_churn / pr_evict_p3churn .{log,pgn},
 gate_*.log (identity suites), ledger.md, consumer_audit.md.
+
+## 2026-08-14 — PRE-REGISTRATION: the step budget becomes a smooth one, and the two matches that price it
+
+Written before a game is played. Thomas's objection to the landed step form
+was the whole cause: *"it's too non-continuous at winc close to 0."* The step
+paced **60+0.1** — a sudden-death clock in all but name, 0.1 s/move of income
+against ~0.9 s/move of spend — at **/12**, which is the exact drain the
+`winc == 0` branch exists to close. One millisecond of increment moved the
+divisor 40 → 12. A policy whose input is continuous should not be.
+
+Shipped replacement (milliseconds; `sunfish_ui/uci.py` runs the same function
+in seconds and the two are asserted equal under `t_ms = 1000·t_s`):
+
+```python
+think = min(wtime * (1000 + 20 * winc) / (40000 + 240 * winc) + 0.9 * winc,
+            wtime * wtime / (2 * wtime + 4000))
+```
+
+One `min`, and it is the safety cap. The base is a single rational function
+whose effective divisor `(40000 + 240·winc)/(1000 + 20·winc)` slides 40 → 12:
+
+| winc | 0 | 50 ms | 100 ms | 200 ms | 500 ms | 1 s | 3 s | → ∞ |
+|---|---|---|---|---|---|---|---|---|
+| divisor | **40** | 26.0 | 21.3 | 17.6 | 14.5 | 13.3 | 12.5 | **12** |
+
+### What carries from which validation, and why
+
+This is the table the screens are built around. Two of these rows are free;
+the third is what the matches buy.
+
+| regime | shipped form there | evidence that carries | why |
+|---|---|---|---|
+| `winc == 0`, clock > 2.667 s | **bit-for-bit the stage-1 `tmfix` arm** | **+235.5 ± 65.4 at 60+0**, 64W-5L-31D, LOS 100% | base is exactly `wtime/40`; the two caps coincide above 2.667 s, which is where the whole 60+0 run lived (`tmfix` never went under 2.4 s in 100/100 games) |
+| `winc == 0`, clock < 2.667 s | cap `wtime²/(2·wtime+4000)` instead of `wtime/2 − 1000` | none needed — the old cap is **negative** there | a negative cap is not a clamp, it is a collapse to the 0.05 s floor. Stage 1 measured what that costs: zero forfeits, and the pre-fix arm still played **1191 blind moves in 5349 (22.3%)** against `tmfix`'s **0 in 5385** |
+| `winc > 0` | /12 + 0.9·inc **asymptotically** | the 11-game production audit, **weakened to a 10% bound** | base ratio `(12 + 240i)/(40 + 240i)` is 0.900 at i = 1 s and rises to 1: −7.4% at 30+1, −8.5% at 60+1, −3.3% at 300+3, always on the spend-less side. A bound is not an identity, so it gets a match |
+| `0 < winc < 500 ms` | **/21.3 at 100 ms, not /12** | **none — this is the regime that CHANGED** | the step's discontinuity lived here; this is match 1 |
+
+Analytic invariants, all asserted numerically in
+`nnue_4k/tests/test_time_budget.py` and `tests/test_time_budget.py` (33 tests
+each, both green): `winc == 0` is exactly `wtime/40`; the cap equals
+`(wtime/2 − 1000) + 2·10⁶/(wtime + 2000)`, is strictly positive for every
+positive clock, never exceeds `wtime/2`, and is within 5% of the old cap from
+a 10 s clock up; no jump over a 0.1 ms `winc` grid at any clock (**and the
+step form is asserted to FAIL that same bound**, so the test has teeth);
+monotone nondecreasing in `wtime`; the ms and seconds forms agree to 3·10⁻¹⁶
+relative; the old `/12` policy still reproduces the EAThUL0P loss and the
+3+0/73-move walk still survives with 21.6 s to spare.
+
+### The arms
+
+Built by `tools/build/make_variants.py` from `nnue_4k/pst_entry.py`, which is
+CI-guarded against its own generator. New mod `steptm` beside `oldtm`, both
+anchored on the shipped budget so a reshaped budget breaks them loudly.
+
+| arm | mod | packed | sha256[:16] |
+|---|---|---|---|
+| **smooth** = engine1 | `base` (= HEAD entry) | **3308 B** (788 spare) | `14b69a606b743a37` |
+| **step** | `steptm` | **3295 B** | **`fe22791b409b1fba`** |
+
+`steptm` reproduces the stage-1 `tmfix` artifact **byte for byte, sha for
+sha**. The baseline in these screens is therefore not a rebuild of the
+stage-1 winner, it *is* the stage-1 winner, and the arms are one expression
+apart from one generator. (`oldtm` likewise still reproduces 3289 B /
+`ecdf96bf34a2e593`, unused here.)
+
+### Match 1 — the regime that changed: 60+0.1
+
+| | |
+|---|---|
+| instrument | fastchess 1.8.2 on the bench box, arena `~/sunfish-bench/tmsmooth-20260814/` (NEW dir, fresh `git archive` of `nnue-4k` HEAD) |
+| **engine1** | **smooth** (orientation trap: fastchess states the bounds in engine1's frame) |
+| engine2 | step |
+| TC | **60+0.1** |
+| book | `book3k.pgn`, PGN not EPD (the packed artifact parses only `position startpos moves …`) |
+| games | 300 rounds × 2, `-repeat`, **cap 600**, concurrency 8, `nice -n 10`, `-recover` |
+| SPRT | **elo0 = 0, elo1 = 20**, α = β = 0.05, normalized |
+| adjudication | **NONE, deliberately** — a drained clock kills long level endgames, which is exactly the class `-draw` would delete before the defect shows |
+
+**Pre-registered readings, both reported whatever the SPRT says.** (1) Time
+forfeits per arm. (2) **Blind moves per arm** — moves played at or under
+0.06 s, i.e. the 0.05 s floor plus process noise. Reading 2 is the primary
+mechanism number, not a consolation prize, because stage 1 established that
+this defect class does *not* cash out as a flag: it had **zero forfeits on
+either arm** and the losing arm still played 22.3% of its moves blind. The
+instrument is calibrated on that run — `tally.py` (one file, arms and TC now
+arguments) reproduces every stage-1 number from the archived PGN and scores
+the blind-move reading **0 / 5385 for `tmfix` vs 1191 / 5349 for `oldtm`**, so
+the metric is known to discriminate before it is used here.
+
+**Zero tolerance, unchanged:** any ILLEGAL move by either arm kills the run
+and is reported as a failure naming the game.
+
+### Match 2 — the price of asymptotic-instead-of-exact: 30+1 non-inferiority
+
+Same arena, same book, same discipline; run **after** match 1 reports, never
+batched with it.
+
+| | |
+|---|---|
+| **engine1** | **smooth** |
+| engine2 | step |
+| TC | **30+1** — the increment TC where the shortfall is largest among those the audit covered (−7.4%; 60+1 is −8.5% but 30+1 is the shorter run) |
+| games | 200 rounds × 2, `-repeat`, **cap 400**, concurrency 8, `nice -n 10` |
+| SPRT | **elo0 = −10, elo1 = 0**, α = β = 0.05, normalized — a NON-INFERIORITY test, not a superiority one |
+
+**Reading.** H1 accepted → the smooth form is not worse than the audited
+policy by as much as 10 Elo at 30+1, and the 10% shortfall is free. H0
+accepted → the shortfall is real and costs ≥ 10 Elo.
+
+**Pre-registered remedy, fixed now so the result cannot pick it.** If match 2
+accepts H0 (or the 95% upper bound at cap is below 0), the rate constant gets
+**exactly one** retune — 20 → 30 in both numerator and denominator terms,
+i.e. `wtime·(1000 + 30·winc)/(40000 + 360·winc)`, which moves the 1 s divisor
+from 13.3 to 12.9 and the 100 ms divisor from 21.3 to 17.8 — and **exactly one**
+rerun of match 2, both ledgered. A second failure is reported as a failure and
+the step form stands: the continuity fix does not get unlimited attempts to
+find constants that pass.
+
+### The 60+0 sanity match, considered and DROPPED — with the reason
+
+The first version of this plan carried a third match: 60+0 smooth vs step,
+non-inferiority, expecting ≈ 0. It is dropped because it is close to
+**vacuous by construction**, and saying so is more useful than spending 400
+games to rediscover it. At `winc == 0` the two arms differ *only* when the
+clock is under 2.667 s — and stage 1 measured that `tmfix` (= the step arm
+here) **never once** went under 2.4 s in 100/100 games at this exact TC. The
+match would play two artifacts that are bit-for-bit identical in every
+position they actually reach. The invariant is instead asserted analytically,
+which is the stronger form: exact float equality of the two budgets at
+`winc == 0` for every clock above 2.667 s.
+
+### Honest note, recorded in advance
+
+**If match 1 reads ≈ 0**, the continuity fix lands on aesthetic-plus-safety
+grounds alone: a policy that is smooth in its inputs, and a cap that cannot go
+negative, are worth having for their own sake and the change costs 13 bytes.
+That is a legitimate outcome and it will be reported as one — *not* dressed up
+as a win. **If match 1 is positive**, the step form was leaving Elo on the
+table at tiny increments, which is a real finding about a real TC class
+(lichess offers `+1`, `+0`, and everything between on the live bot path).
+**If match 1 is negative**, the smooth form is worse where it differs most and
+it does not land.
+
+### Cotenancy
+
+The box is shared. Both matches run at concurrency 8, `nice -n 10`, on 96
+cores, cotenant with whatever else is resident; the `.boxlock` presence marker
+says in writing that it is a marker and not an exclusivity claim, and any lane
+that needs the window may reclaim it freely. Nothing of a cotenant's is
+killed, reniced or modified. Load and live-fastchess counts at launch and at
+finish are recorded in each match's `RESULT.txt`.
 
 ## 2026-08-14 — STAGE 1 VERDICT: the sudden-death TM fix is +235.5 ± 65.4 at 60+0, H1 in 100 games — and the drain kills by BLIND PLAY, not by flagging
 
