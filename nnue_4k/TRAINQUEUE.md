@@ -153,6 +153,12 @@ VAL-probe-first):
 
 ## Log (newest first)
 
+- 2026-08-15 ~23:0x UTC prev-day: **c1024_phase_ml2 val 0.01286 — phase
+  knowledge measured IN WEIGHTS** (king-activity flip +16 from +0,
+  pawn-advance +4..+8; MEASUREMENTS has the full probe rows). Critical
+  path → ml2 engine machinery price (golf lane seam). 80_ml2 requeued
+  (deployment path), queue fed by extension lane (90_cb, 91_lr).
+
 - 2026-08-15 ~02:5x UTC: 13h IDLE VIOLATION (session-bound watcher died
   with the session) — liveness moved box-side: queue_runner.py detached,
   own lock/tripwire; monitors are now advisory only. c1024-cal verdict:

@@ -9852,3 +9852,33 @@ tripwire kills the match and voids the run on ANY illegal move, verdict
 written box-side (session-proof). If LB>0: the timed leg follows with
 nps RE-MEASURED at dispatch — the 0.66 ratio was against the old entry
 and is stale by construction.
+
+## 2026-08-15 — PHASE KNOWLEDGE ARRIVES IN WEIGHTS: ml2 val 0.01286
+
+**c1024_phase_ml2 (form c, runner entry, 22 min): best val 0.01286** on
+the pinned comparable split — against 8Mv 0.01378, v1 0.01385: a −0.0009
+step, the largest single gain of the replacement campaign (data-scale
+4M→8M bought −0.0007 for reference; this bought it and a third more on
+top at the SAME data). Float export (the ml2 packed build is price-first
+by design); certificate green.
+
+**The probes say WHY (the family objective's first measured win):**
+king_activity_end_vs_mid **+16** (the newborn read +0 — the net now
+knows king activity flips sign with phase), pawn_advance_end_vs_mid
++4..+8 (passers grow with phase — pend-class knowledge, in weights),
+shelter +25, centralization penalty +26..+43. Still missing: passer
+recognition flaps (−13..0), rook-file negative (−12), bishop pair noisy
+— second-order pawn/file structure wants more than lane self-products.
+
+**Critical path moved:** the ml2 ENGINE machinery price (one extra
+big-int multiply of the crelu blocks, fields re-spaced to 32 bits,
+folded mod 2^(32m)−1 — packed_layers.LaneConv is the training twin; the
+certificate proves the arithmetic exact). That seam is the golf lane's;
+until it prices, 0.01286 is a float number wearing the subsumption
+claim, not a screenable artifact.
+
+Ops notes: extension lane's 80_replnet_ml2.yaml failed rc=1 on the
+deployment path (same ../replnet-20260814/ assumption as ratecal);
+requeued with the fixed path — the runner's log-and-continue behavior
+was correct. Queue now: 85_ratecal (running) → 80_ml2 → 90_cb → 91_lr.
+Screen dispatcher still waiting on m2's slot (its cap running long).
