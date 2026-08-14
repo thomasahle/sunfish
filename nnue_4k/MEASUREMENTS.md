@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-14 | **PRE-REGISTERED: H2 king-safety terms — `kmid` (steeper K_MID edge gradient, ±36 cp zero-centred) and `khold` (K_END only when BOTH queens are off), both ZERO hot-loop cost** | The base engine centralizes its king at 10/step while the opponent's queen is still on — kact's mate-feed pre-mortem is live in the baseline TODAY and `khold` is the one-word guard; measured tonight: the entry's 49 mated losses split **23 both-queens / 17 exactly-one / 9 queenless** (classic: 11/13/3), partitioning the evidence between kmid and khold; pawn-shield DEFERRED (mechanism overlap with kmid; the claimed classic PAWN_SHIELD=12 prior does NOT exist in this ledger); QS king-ring admission PRICED OUT (scan class + QS retuning); `khold.pend` composition FORBIDDEN (same seam line, loud by construction); screen = H1's instrument verbatim, mated-share pre-registered as the secondary reading |
 | 2026-08-14 | **H1 candidates BUILT AND PRICED: `pend` +42 B, `kact` +1 B, `pend.kact` +43 B against 739 spare** | Order-independent composition (kact.pend byte-identical); shared tables round-trip tuple-identical, kend fix unperturbed; standalone packed smoke green. No Elo claimed — screen staged, not armed |
 | 2026-08-14 | **PRE-REGISTERED: H1 tapered endgame terms — `pend` (endgame pawn-advance table) and `kact` (steeper K_END), both ZERO hot-loop cost on the landed queens-off seam** | Hand-designed with mechanisms, per the ledger's fits-play-worse record; passer delta-rule DESIGNED and priced out (score/ps split returns + scan class); screen = fixed-node 20k SPRT 0/10 vs base, LAND at 95% LB > 0 on fixed-N confirm; scan-class terms need timed confirmation, rule written in |
 | 2026-08-14 | **PRE-REGISTERED: the gamma seed goes to a NON-INFERIORITY screen — and it lands in the SEARCH lane, not here** | +5 B on every base; **every arm passes first yield with it**, including both that fail without; 1.0000× nodes and the **same move 40/40** at completed depth 8. H1 = engine1 = seed; LAND if the 95% LB excludes −10 |
@@ -231,6 +232,226 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-14 — PRE-REGISTRATION: H2 king-safety terms — two zero-hot-loop candidates, and the base engine's own seam is part of the evidence
+
+LOSS_TAXONOMY.md H2: the entry is MATED in **33%** of its losses (43 of 130)
+against classic's 21% in the same league and 9.6% in the classic-vs-classic
+control; the C1 exemplar has d-house walking a queen+knight in from a −1 eval
+with the entry's depth steady at 11 — the attack was never priced, it was
+assembled outside the horizon. The d1 calibration says this is a targeted
+shape anomaly, not generic weakness. This entry is the candidate design and
+the screen rules, committed BEFORE implementation and before any byte is
+priced. No games tonight; the laptop runs a timed ladder.
+
+**What "king safety" can even be in this architecture.** The eval is an
+incremental PST delta; there is no check concept (king-capture-as-mate), no
+king-ring scan, and qsearch admits only moves with static value ≥ QS = 40 —
+quiet checks and slow king-side buildups are invisible at depth 0 by
+construction. So a king-safety term must take one of three forms, in
+cheapest-first order: (i) TABLE SHAPE — make the king's own wandering
+expensive (zero hot-loop cost); (ii) SEAM POLICY — change WHEN the king
+tables swap, at the root where phase is free (zero hot-loop cost); (iii)
+SEARCH ADMISSION — let king-relevant quiet moves into QS (scan class, the
+expensive kind). Two of form (i)/(ii) are implemented; one of each remaining
+form is designed and explicitly not built.
+
+**The kact interaction is designed for, not discovered later.** H1's kact
+pre-mortem recorded that a centre-pulled king may FEED mate-proneness. On
+inspection the hazard is live in the BASE engine: the seam selects K_END —
+60070 minus 10 per step of centre-manhattan distance, a table that actively
+PULLS the king centre-ward — as soon as EITHER queen leaves the board. Trade
+our queen while theirs stays on, and our king starts marching toward the
+enemy queen.
+
+**The queen-regime split of the mated losses, measured tonight** (scratch
+instrument `mate_regime.py`, deterministic python-chess replay of the
+pyleague PGN, queen presence read off the FINAL position; fresh snapshot —
+the ladder has appended since the taxonomy's 00:54 one, so n is larger):
+491 games parsed, 160 entry losses, **49 mated**, splitting **23 both
+queens on / 17 exactly one queen / 9 queenless**. Classic in the same file:
+131 losses, 27 mated, splitting 11 / 13 / 3. So 40 of the entry's 49 mates
+happen with a queen on the board, and the exactly-one-queen slice — where
+the base seam has already flipped to K_END and is centralizing the king
+into a live queen — is 35% of them. That slice is `khold`'s half; the
+both-queens-on excess (23 vs classic's 11, the largest single gap) is
+`kmid`'s half. The two candidates partition H2's evidence between them,
+and the queenless 9 belong to neither (that is kact's regime, K_END either
+way).
+
+### S1 `kmid` — steeper K_MID edge-vs-centre gradient (IMPLEMENTING)
+
+- **Mechanism → loss class**: classic's fitted K_MID carries roughly a
+  60–100 cp home-vs-centre slope (g1 +40, e4-ish −19…−51). At median depth
+  10 with no king-ring term and no check extensions, that slope demonstrably
+  does not keep the king out of assembling attacks (43 MATED losses). Add a
+  linear centre-manhattan gradient, zero-centred at the middle ring:
+  `+ 6*(abs(2*(i//10)-11) + abs(2*(i%10)-9)) - 48`, i.e. corner +36, e1 0,
+  g1 +24, centre four −36 — roughly doubling classic's gradient without
+  touching the material mean. BOTH kings read it via the 119−i mirror, same
+  symmetry argument as kend. Middlegame only: K_END is untouched, so this is
+  the exact mirror of kact (which steepens K_END and leaves K_MID alone).
+- **Hot-loop cost class**: ZERO — startup formula over the decoded K_MID;
+  the base-90 stream is untouched.
+- **Expected bytes**: +15…+45 packed (the abs-expression already sits in the
+  lzma stream; a near-copy is cheap). Exact price via pack.sh only, in the
+  implementation entry.
+- **Pre-mortem**: (a) FILE-BLIND — it cannot tell a shielded g1 from a
+  stripped g1; a naked castled king still reads as safe, so the C1 attack
+  class is only partially priced (that gap belongs to S3); (b) passivity
+  tax — defensive king moves, luft, and legitimate king marches in dead
+  positions are taxed equally; (c) coverage hole at the seam: once EITHER
+  queen is off the board the base engine selects K_END and kmid does
+  nothing — 17 of the 49 mated losses live there, which is `khold`'s half
+  (and under khold.kmid the hole closes: K_MID then covers that regime too);
+  (d) king-step deltas shift by up to 24 cp, so some quiet king retreats
+  cross QS = 40 and get admitted at depth 0 — a real tree-shape change,
+  correctly visible at fixed nodes; (e) the slope is a guess with a
+  mechanism, not a fit — if the sign is right and the size wrong, a slope
+  sweep is a follow-up, not part of this screen.
+
+### S2 `khold` — hold K_MID until BOTH queens are off (IMPLEMENTING)
+
+- **Mechanism → loss class**: the seam line reads `K_MID if "Q" in
+  pos.board and "q" in pos.board else K_END` — K_END, the centralization
+  table, engages when either queen leaves. With the OPPONENT's queen still
+  on, centralizing the king is walking it toward the mating attack; that is
+  the kact pre-mortem as a property of the baseline. One-word fix:
+  `and` → `or`, so K_MID holds while ANY queen is on the board and the
+  centralization reward waits for a genuinely queenless board. Addresses
+  the 17 mated-at-exactly-one-queen losses directly.
+- **Hot-loop cost class**: ZERO — same root seam, same boolean cost, the
+  from_board rebuild after the swap already handles the carried score.
+- **Expected bytes**: −2…+2 packed (raw diff is −1 character).
+- **Pre-mortem**: (a) it NARROWS the landed kend fix (+107.5 ± 31.6 in its
+  RR, keyed either-off): in Q-vs-no-Q endings the queenless side loses its
+  king-activity reward too — one shared table cannot centralize one king
+  and hold back the other, so the symmetric loss is accepted as the price
+  of killing the mate feed. The screen PGNs' ENDGAME loss share is the
+  pre-registered detector for this give-back (secondary reading, reported
+  not gated); (b) locked or dead-queen positions keep the king home too
+  long; (c) a one-word diff with a large behavioral surface — mate-gate
+  parity is load-bearing, not a formality.
+
+### S3 `pshield` — pawn-shield as wing-symmetric pawn PST deltas (DESIGNED, DEFERRED)
+
+The mechanism with the most chess literature behind it, and the soundness
+analysis is the useful part tonight:
+
+- A king-FILE-conditional pawn table is UNSOUND in this architecture. One
+  shared `pst["P"]` serves both colours through the 119−i point mirror — a
+  180° rotation, files flipped — so a bonus keyed on OUR king's file lands
+  on the OPPONENT's rotated files (their g-file shield would be read
+  through our b-file entries), wrong whenever the kings are not
+  point-mirrored. And any root-frozen king square goes stale the moment a
+  line castles in-tree. Pseudo-legal movegen itself is NOT an obstacle —
+  tables read only the board string.
+- The sound form is UNCONDITIONAL and wing-symmetric: +s on files a-c/f-h
+  rank 2, +s/2 rank 3, 0 on d/e — a pattern symmetric under the 180°
+  rotation is side-correct by construction, and it taxes shield pushes
+  whether or not the king has castled yet (which classic's own K_MID
+  already rewards it for doing).
+- **The claimed prior does not exist.** The task pointer to a classic
+  PAWN_SHIELD=12 experiment was checked against this ledger, including the
+  delaybonus-era entries: the delaybonus notes are bench-box scheduling
+  records, and the only pawn-shield mentions anywhere are H2 itself and an
+  NNUE feature-plane proposal. No slope prior to inherit; s would be a pure
+  guess on top of a mechanism kmid already half-covers.
+- **Why deferred rather than built**: kmid and pshield tax the same failure
+  (self-exposure) from two ends; screening both tonight spends two arms on
+  one mechanism before either has a reading. And pshield COLLIDES with
+  pend's P-table capture — pend's `P_END` formula reads `pst["P"]`, so
+  shield deltas would leak into the endgame table via the formula unless
+  the composition is designed, not discovered. Revisit only if kmid lands
+  and the mated share persists.
+- Cost class ZERO (startup formula), expected +25…+50 B, pre-mortem: taxes
+  legitimate pawn storms; discourages wing-pawn development the distilled
+  PSTs currently get right (the entry's opening loss share is 0.8% — the
+  one solved phase, not to be re-broken).
+
+### S4 `qking` — QS admission for king-adjacent captures/checks (DESIGNED AND PRICED OUT)
+
+The search-side fix for "attacks assemble outside the horizon": admit
+king-ring quiet moves at depth 0. Priced honestly, it is the E3 of this
+hypothesis: (1) cost class SCAN — a per-move enemy-king locate plus
+adjacency test inside the admission filter, the hottest comprehension in
+the engine, est. +80…150 code-class bytes; (2) QS-TUNING COUPLING — the
+val ≥ QS − depth·QS_A gate, the futility break and stand-pat all assume
+the admitted set is capture-shaped; flooding depth 0 with quiet king-ring
+moves retunes QS/QS_A implicitly (H1's quadratic discipline was about
+staying UNDER these thresholds; S4 deliberately punches through them); (3)
+the pre-registered nps rule applies in full — fixed-node flatters any
+scan-class term, so a timed confirmation is mandatory before landing.
+Shelved unless both zero-cost arms fail and the mated share persists.
+
+### Interaction matrix with pend/kact (pre-registered now, not negotiated later)
+
+| pair | status |
+|---|---|
+| kmid.kact | allowed AFTER both singles read non-negative — disjoint anchors, disjoint phases (K_MID vs K_END); the "safe middlegame + active endgame" bundle |
+| kmid.pend | allowed after singles — fully disjoint anchors and tables |
+| khold.kact | allowed after singles, and it is the DESIGNED pairing: khold gates exactly the regime where kact's centre pull is dangerous; if kact's single shows a mated-share rise, khold.kact is the pre-registered follow-up arm |
+| khold.pend | **FORBIDDEN as a dot-composition** — both mods rewrite the same seam line, so the generator raises loudly in either order (checked in the implementation entry, not assumed). If both land, a combined `pendkhold` mod must be WRITTEN and screened as its own arm |
+| kmid.khold | the in-lane H2 bundle — built and gated now, SPRT only after both H2 singles read non-negative |
+
+The standing H1 rule is inherited verbatim: NO combination runs before its
+singles read non-negative, and `.seed` is never composed into one arm only.
+
+### THE SCREEN, pre-registered (post-harvest window, nothing armed tonight)
+
+H1's instrument, verbatim, so H1 and H2 singles can share one screen window:
+
+| | |
+|---|---|
+| instrument | `ab_fixednode.sh`, 20,000 fixed nodes, the 2,000-position book |
+| arms | `kmid` vs `base`, `khold` vs `base` — two independent SPRTs; combos per the matrix above |
+| **engine1** | **the candidate** (orientation trap, verified on the C2 record) |
+| SPRT | elo0 = 0, elo1 = 10, α = β = 0.05 |
+| KEEP bar | **LAND requires 95% LB > 0 on a fixed-N confirmation** — SPRT's terminal Elo is biased away from zero and does not earn the number |
+| undecided at cap | reported as undecided, never as a point estimate |
+| secondary reading 1 | **got-MATED share of screen losses, ALL arms** — H2's own outcome metric; reported with n, never gated (n will be small) |
+| secondary reading 2 | **ENDGAME loss share, khold arms** — the kend give-back detector from pre-mortem (a) |
+
+Effect-size honesty: mate is a TERMINATION, not a cause — converting mated
+losses to adjudicated losses is worth nothing. H2's value is bounded by the
+games that were level before the attack landed; LOSS_TAXONOMY's estimate for
+this pool is +20…40 Elo, and unlike H1 the mechanism is eval-shape, so fixed
+nodes should see it without a timed amplifier.
+
+**Gates before any game**, per arm (the b8/d8 lesson — an eval change moves
+the first-yield distribution, and both candidates move king-move admissions):
+
+```sh
+B=/tmp/h2screen; mkdir -p $B
+nice -n 15 python3 tools/build/make_variants.py $B base kmid khold kmid.khold
+for a in base kmid khold kmidkhold; do
+  nice -n 15 python3 tools/build/first_yield_gate.py $B/e_$a.py   # bar: PASS, max <= 2048
+  nice -n 15 python3 tools/build/legality_gate.py $B/e_$a.py 300 --nodes=20000 --first-yield=2048
+                                                                  # bar: GATE PASSED, 0 no-move / 0 illegal
+  nice -n 15 python3 "$ARENA/mate_gate.py" $B/e_$a.py tests/files/mate1.fen 4   # bar: 8/8 parity
+done
+```
+
+First-yield caveat, carried explicitly: the gate is the count-measuring v2,
+and its PASS is a **lower bound on the true worst case** — the sample max
+over our phase-stratified positions bounds the population max from below, so
+PASS is margin evidence, not proof of immunity. It stays the bar because it
+is the strongest instrument that exists here, not because it is airtight.
+
+**Gamma-seed dependency**: H1's rule verbatim — if the seed lands on the
+canonical entry first, every arm inherits it; if not and an arm fails
+first-yield, that arm is BLOCKED on the seed rather than composed with it.
+
+**The nps rule**: kmid and khold are zero-scan (startup formula + the same
+root boolean), so fixed-node is a fair instrument and no timed nps
+confirmation is required. S4-class scan terms remain bound by the timed-
+confirmation rule regardless of their fixed-node reading.
+
+**Timed follow-up**: a LANDing candidate joins the pre-registered 300+0
+confirmation round-robin (LOSS_TAXONOMY.md appendix (b)) as one more arm of
+the SAME tournament, per the standing shared-tournament methodology.
 
 ---
 
