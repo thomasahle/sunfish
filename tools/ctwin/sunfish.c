@@ -108,6 +108,28 @@ static int USE_VARIANT = 0;      /* no-op here: forces pyref's transcribed
                                     transcription==reference at defaults */
 #define MAXKILL 3
 
+/* PR-service knobs: exact ports of open-PR search diffs, one knob each,
+ * identity-proven against the PR branch's own sunfish.py (pyref run in a
+ * worktree of that branch; C-only knobs go through difftest --cset).
+ * PR #171 fix-qsearch-frontier-evasions: before declaring mate at a
+ *   not-live node, find the first legal move; if every legal move is
+ *   below this node's QS threshold, retry ONLY the filtered tail in
+ *   generator order (unsorted, no killer/IID/futility), as an unstored
+ *   root probe (its PR base is IID>2/no-mate-distance: --cset
+ *   IID_MIN_DEPTH=2 MATE_DIST=0 alongside QS_TAIL=1).
+ * PR #182 fuel-oracle null: classic capped null only for
+ *   NULL_MIN_DEPTH < depth < FUEL_MIN_DEPTH; from FUEL_MIN_DEPTH a null
+ *   probe at the fixed target pos.score + NULL_MARGIN is a FUEL ORACLE,
+ *   never a score candidate: pass beats target => real moves recurse to
+ *   depth-2 instead of depth-1 (nominal depth still keys tables and QS).
+ * PR #184 derive-never-inherit: search() re-derives every history score
+ *   from the board under the K-table chosen for THIS search, so no score
+ *   is inherited across table swaps. */
+static int QS_TAIL = 0;
+static int FUEL_NULL = 0;
+static int FUEL_MIN_DEPTH = 6;
+static int DERIVE_FRESH = 0;
+
 /* ------------------------------------------------------------------ */
 /* Python arithmetic                                                   */
 /* ------------------------------------------------------------------ */
@@ -595,17 +617,39 @@ static void tpm_store(const Pos *p, Move m, int depth) {
 #define VM_VAL(k)  ((int)((uint32_t)((k) >> 32) ^ 0x80000000u))
 #define VM_MOVE(k) ((Move){ (int)((k) >> 16 & 0xff), (int)((k) >> 8 & 0xff), \
                             (char)((k) & 0xff) })
-struct collectctx { const Pos *p; int val_lower; uint64_t *v; int n; };
+struct collectctx { const Pos *p; int val_lower; uint64_t *v; int n; int tail; };
 static int collect_cb(Move m, void *vc) {
     struct collectctx *c = vc;
     int val = value(c->p, m);
-    if (val >= c->val_lower) {
+    /* tail=0: admit >= threshold (classic); tail=1 (PR #171 qs_tail
+     * probe): admit the complementary below-threshold tail. */
+    if ((val >= c->val_lower) != c->tail) {
         if (c->n >= MAXMOVES) {                 /* never hide errors */
             fprintf(stderr, "ctwin: move list overflow\n");
             abort();
         }
         c->v[c->n++] = PACK_VM(val, m);
     }
+    return 0;
+}
+
+/* PR #171 terminal scan: lazy transcription of
+ *   legal = (m for m in gen_moves() if not move(m).king_capture())
+ *   move = next(legal, None)
+ *   ... and all(value(m) < val_lower for m in legal)
+ * stop_at_first reproduces the tail-probe short-circuit (next() only). */
+struct qtctx { const Pos *p; int found; int above; int val_lower; int stop_at_first; };
+static int qt_cb(Move m, void *vc) {
+    struct qtctx *c = vc;
+    Pos child = domove(c->p, m);
+    if (king_capture(&child, NULL)) return 0;       /* illegal: skip */
+    if (!c->found) {
+        c->found = 1;
+        if (c->stop_at_first) return 1;             /* next(legal) only */
+        if (value(c->p, m) >= c->val_lower) { c->above = 1; return 1; }
+        return 0;
+    }
+    if (value(c->p, m) >= c->val_lower) { c->above = 1; return 1; }
     return 0;
 }
 static void vm_sort(uint64_t *v, int n) {       /* descending */
@@ -634,7 +678,7 @@ static int has_big_piece(const Pos *p) {       /* any(c in board for "RBNQ") */
 /* bound(): transcription of Searcher.bound in sunfish.py.             */
 /* The generator phases run inline; PROCESS is the consumer loop body. */
 /* ------------------------------------------------------------------ */
-static int bound(const Pos *pos, int gamma, int depth, int root) {
+static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
     nodes++;
     if (nodes % 2048 == 0) {
         if (node_cap && nodes > node_cap) longjmp(stopjmp, 1);
@@ -655,6 +699,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root) {
         if (depth > 0 && in_history(pos)) return 0;
     }
 
+    int val_lower = QS - depth * QS_A;
     int best = -MATE_UPPER, live = 0, done = 0;
     Move nomove = { 0, 0, 0 };
 
@@ -673,11 +718,14 @@ static int bound(const Pos *pos, int gamma, int depth, int root) {
     int nkill = 0;
     tpm_get_all(pos, killers, &nkill);
 
-    /* Null move, capped at static eval plus one score bucket. */
-    if (!root && depth > NULL_MIN_DEPTH && iabs(pos->score) < NULL_LIMIT
-            && has_big_piece(pos)) {
+    /* Null move, capped at static eval plus one score bucket.  Under
+     * FUEL_NULL (PR #182) this classic branch runs only below
+     * FUEL_MIN_DEPTH; above it the fuel oracle decides a reduction. */
+    if (!root && depth > NULL_MIN_DEPTH
+            && (!FUEL_NULL || depth < FUEL_MIN_DEPTH)
+            && iabs(pos->score) < NULL_LIMIT && has_big_piece(pos)) {
         Pos rp = rotate(pos, 1);
-        int s = -bound(&rp, 1 - gamma, depth - NULL_RED, 0);
+        int s = -bound(&rp, 1 - gamma, depth - NULL_RED, 0, 0);
         int margin = NULL_MARGIN < 0 ? EVAL_ROUGHNESS : NULL_MARGIN;
         int score = pos->score + margin;
         if (s < score) score = s;
@@ -694,38 +742,55 @@ static int bound(const Pos *pos, int gamma, int depth, int root) {
         if (done) goto after_moves;
     }
 
+    /* PR #182: fuel oracle -- never a score candidate, only a fuel
+     * decision: real moves below recurse to rd - 1.  Exactly the PR's
+     * placement (between the classic null and the stand pat; no root
+     * gate) and its target margin semantics. */
+    int rd = depth;
+    if (FUEL_NULL && depth >= FUEL_MIN_DEPTH && iabs(pos->score) < NULL_LIMIT
+            && has_big_piece(pos)) {
+        int margin = NULL_MARGIN < 0 ? EVAL_ROUGHNESS : NULL_MARGIN;
+        int target = pos->score + margin;
+        Pos rp = rotate(pos, 1);
+        if (-bound(&rp, 1 - target, depth - NULL_RED, 0, 0) >= target)
+            rd = depth - 1;
+    }
+
     /* QSearch stand pat. */
     if (depth == 0) {
         PROCESS(0, nomove, pos->score);
         if (done) goto after_moves;
     }
 
-    /* Internal iterative deepening (driver probe: root=1, unstored). */
-    if (nkill == 0 && depth > IID_MIN_DEPTH) {
-        bound(pos, gamma, depth - IID_RED, 1);
+    /* Internal iterative deepening (driver probe: root=1, unstored).
+     * A qs_tail probe (PR #171) never runs IID. */
+    if (!qstail && nkill == 0 && depth > IID_MIN_DEPTH) {
+        bound(pos, gamma, depth - IID_RED, 1, 0);
         tpm_get_all(pos, killers, &nkill);
     }
 
-    int val_lower = QS - depth * QS_A;
-
-    /* Killer(s) first, gated by the QS threshold, most recent first. */
+    /* Killer(s) first, gated by the QS threshold, most recent first.
+     * A qs_tail probe skips the killer phase. */
+    if (!qstail)
     for (int kk = 0; kk < nkill; kk++) {
         if (value(pos, killers[kk]) < val_lower) continue;
         Pos np = domove(pos, killers[kk]);
-        PROCESS(1, killers[kk], -bound(&np, 1 - gamma, depth - 1, 0));
+        PROCESS(1, killers[kk], -bound(&np, 1 - gamma, rd - 1, 0, 0));
         if (done) goto after_moves;
     }
 
-    /* Then all moves above the threshold, sorted by descending value. */
+    /* Then all moves above the threshold, sorted by descending value.
+     * A qs_tail probe takes the complementary tail (below-threshold
+     * moves) in GENERATOR order -- unsorted, no futility. */
     {
         uint64_t vbuf[MAXMOVES];             /* stack: longjmp-safe, no malloc */
-        struct collectctx c = { pos, val_lower, vbuf, 0 };
+        struct collectctx c = { pos, val_lower, vbuf, 0, qstail };
         gen_moves(pos, collect_cb, &c);
-        vm_sort(vbuf, c.n);
+        if (!qstail) vm_sort(vbuf, c.n);
         for (int k = 0; k < c.n; k++) {
             int val = VM_VAL(vbuf[k]);
             Move m = VM_MOVE(vbuf[k]);
-            if (depth <= FUT_MAX && pos->score + val < gamma) {
+            if (!qstail && depth <= FUT_MAX && pos->score + val < gamma) {
                 /* Futility: value evidence only, except the mate special
                  * case, which is a real (cutting) witness. */
                 if (val >= MATE_LOWER) PROCESS(1, m, MATE_UPPER);
@@ -733,24 +798,47 @@ static int bound(const Pos *pos, int gamma, int depth, int root) {
                 break;                       /* Python breaks either way */
             }
             Pos np = domove(pos, m);
-            PROCESS(1, m, -bound(&np, 1 - gamma, depth - 1, 0));
+            PROCESS(1, m, -bound(&np, 1 - gamma, rd - 1, 0, 0));
             if (done) break;
         }
     }
 
 after_moves:
-    /* Only virtual evidence seen: classify mate/stalemate exactly. */
     if (depth && !live) {
-        struct termctx tc = { pos, 1 };
-        gen_moves(pos, term_cb, &tc);
-        if (tc.all) {
-            Pos rp = rotate(pos, 1);
-            if (king_capture(&rp, NULL))
-                best = MATE_DIST
-                     ? imax(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)
-                     : -MATE_LOWER;
-            else
-                best = 0;
+        if (!QS_TAIL) {
+            /* Only virtual evidence seen: classify mate/stalemate exactly. */
+            struct termctx tc = { pos, 1 };
+            gen_moves(pos, term_cb, &tc);
+            if (tc.all) {
+                Pos rp = rotate(pos, 1);
+                if (king_capture(&rp, NULL))
+                    best = MATE_DIST
+                         ? imax(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)
+                         : -MATE_LOWER;
+                else
+                    best = 0;
+            }
+        } else {
+            /* PR #171: find the first legal move lazily; mate/stalemate
+             * only when none exists; if every legal move sits below this
+             * node's QS threshold, retry just the filtered tail (once --
+             * never from inside a tail probe).  Lazy short-circuit order
+             * matches the PR: the scan stops at the first legal move at
+             * or above the threshold. */
+            struct qtctx tc = { pos, 0, 0, val_lower, qstail };
+            gen_moves(pos, qt_cb, &tc);
+            if (!tc.found) {
+                Pos rp = rotate(pos, 1);
+                if (king_capture(&rp, NULL))
+                    best = MATE_DIST
+                         ? imax(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)
+                         : -MATE_LOWER;
+                else
+                    best = 0;
+            } else if (!qstail && !tc.above) {
+                int s = bound(pos, gamma, depth, 1, 1);
+                if (s > best) best = s;
+            }
         }
     }
 
@@ -779,9 +867,24 @@ static void search_setup(void) {
     nodes = 0;
     gen_calls = 0;
     map_clear(&tps);
-    rootpos = hist[nhist - 1];
-    PSTP['K'] = (memchr(rootpos.b, 'Q', 120) && memchr(rootpos.b, 'q', 120))
+    PSTP['K'] = (memchr(hist[nhist - 1].b, 'Q', 120) && memchr(hist[nhist - 1].b, 'q', 120))
               ? TAB[5] : KEND;
+    if (DERIVE_FRESH) {
+        /* PR #184: history[:] = [p._replace(score=evaluate(p.board))] --
+         * every score re-derived from the board under the K-table chosen
+         * for THIS search; no score is inherited across table swaps. */
+        for (int k = 0; k < nhist; k++) {
+            int score = 0;
+            for (int i = 0; i < 120; i++) {
+                char c = hist[k].b[i];
+                if (isup(c)) score += PSTP[(int)c][i];
+                else if (islo(c)) score -= PSTP[c - 32][119 - i];
+            }
+            hist[k].score = score;
+            pos_seal(&hist[k]);
+        }
+    }
+    rootpos = hist[nhist - 1];
 }
 
 /* Fixed-depth probe loop for the differential harness: identical yield
@@ -795,7 +898,7 @@ static void go_depth(int maxd) {
     for (int depth = 1; depth <= maxd && depth < 1000; depth++) {
         int lower = 1 - MATE_UPPER, upper = MATE_UPPER;
         while (lower < upper - EVAL_ROUGHNESS) {
-            int score = bound(&rootpos, gamma, depth, 1);
+            int score = bound(&rootpos, gamma, depth, 1, 0);
             if (score >= gamma) lower = score;
             if (score < gamma) upper = score;
             Move mv; char mb[32];
@@ -811,40 +914,57 @@ static void go_depth(int maxd) {
 }
 
 /* Game-loop go for surrogate matches: fixed nodes (primary), or movetime.
- * Structure mirrors the classic main() driver: candidates only from
- * fail-highs, committed when their depth completes. */
+ * The consumer is a transcription of sunfish_ui/uci.py's go_loop, which is
+ * what pypy-classic plays through: candidates from fail-highs, committed
+ * when their depth completes; the node cap checked BETWEEN probes, AFTER
+ * the yield is consumed, and only at depth > 1 -- the probe that crosses
+ * the cap always finishes and its result counts (both sides overshoot by
+ * at most one MTD probe; a mid-probe abort here made the twin play one
+ * depth staler than pypy whenever the cap landed inside the first, long,
+ * probe of a new depth: the calibration match caught it at -63 Elo).
+ * Upperbound probes are reported too, so draw/resign adjudication sees
+ * the same score stream both sides.  bestmove falls back to the first
+ * legal move (never "(none)" while one exists), like uci.py's floor. */
 static void render_sq(char *buf, int i) {
     buf[0] = (char)('a' + pymod(i - A1, 10));
     buf[1] = (char)('0' + (1 - pyfloordiv(i - A1, 10)));
 }
+struct floorctx { const Pos *p; int found; Move m; };
+static int floor_cb(Move m, void *vc) {
+    struct floorctx *c = vc;
+    Pos child = domove(c->p, m);
+    if (king_capture(&child, NULL)) return 0;
+    c->m = m; c->found = 1; return 1;
+}
 static void go_game(long max_nodes, double movetime_s, int maxd) {
     search_setup();
-    node_cap = max_nodes;
+    node_cap = 0;                    /* nodes: yield-boundary rule only */
     double start = now_s();
     deadline = movetime_s > 0 ? start + (movetime_s > 0.05 ? movetime_s : 0.05) : 0.0;
     char best[8] = "", cand[8] = "";
     int d0 = 1;
     int mover_black = (side0 == 'b') ^ ((nhist - 1) % 2);
 
-    if (!setjmp(stopjmp)) {
+    if (!setjmp(stopjmp)) {          /* movetime deadline still aborts mid-probe */
         int gamma = 0;
         for (int depth = 1; depth < 1000 && depth <= maxd; depth++) {
             int lower = 1 - MATE_UPPER, upper = MATE_UPPER;
             while (lower < upper - EVAL_ROUGHNESS) {
-                int score = bound(&rootpos, gamma, depth, 1);
+                int score = bound(&rootpos, gamma, depth, 1, 0);
                 if (score >= gamma) lower = score;
                 if (score < gamma) upper = score;
-                /* --- yield consumer (classic main go loop) --- */
+                /* --- yield consumer (uci.py go_loop) --- */
                 if (depth > d0) {
                     if (cand[0]) strcpy(best, cand);
                     d0 = depth;
                 }
-                if (max_nodes && nodes >= max_nodes && (best[0] || cand[0]))
-                    goto out;
                 if (score >= gamma) {
                     Move mv;
                     if (!tpm_get(&rootpos, &mv)) {
-                        printf("info depth %d score cp %d\n", depth, score);
+                        /* root fail-high without a move: verified terminal,
+                         * exact score; nothing to search or play. */
+                        printf("info depth %d score cp %d nodes %ld\n",
+                               depth, score, nodes);
                         goto out;
                     }
                     int i = mv.i, j = mv.j;
@@ -852,18 +972,38 @@ static void go_game(long max_nodes, double movetime_s, int maxd) {
                     render_sq(cand, i); render_sq(cand + 2, j);
                     cand[4] = mv.prom ? mv.prom + 32 : 0;
                     cand[5] = 0;
-                    printf("info depth %d score cp %d nodes %ld pv %s\n",
+                    printf("info depth %d score cp %d lowerbound nodes %ld pv %s\n",
                            depth, score, nodes, cand);
+                } else {
+                    printf("info depth %d score cp %d upperbound nodes %ld\n",
+                           depth, score, nodes);
                 }
-                if ((best[0] || cand[0]) && deadline != 0.0
-                        && now_s() - start > (deadline - start) * 0.8)
-                    goto out;
+                if (depth > 1) {
+                    if (max_nodes && nodes >= max_nodes)
+                        goto out;
+                    if (deadline != 0.0
+                            && now_s() - start > (deadline - start) * 0.8)
+                        goto out;
+                }
                 gamma = pyfloordiv(lower + upper + 1, 2);
             }
         }
     }
 out:
     node_cap = 0; deadline = 0.0;
+    if (!best[0] && !cand[0]) {
+        /* Structural bestmove floor: never "(none)" while a legal move
+         * exists (uci.py's floor; the recent master rule). */
+        struct floorctx fc = { &rootpos, 0, { 0, 0, 0 } };
+        gen_moves(&rootpos, floor_cb, &fc);
+        if (fc.found) {
+            int i = fc.m.i, j = fc.m.j;
+            if (mover_black) { i = 119 - i; j = 119 - j; }
+            render_sq(cand, i); render_sq(cand + 2, j);
+            cand[4] = fc.m.prom ? fc.m.prom + 32 : 0;
+            cand[5] = 0;
+        }
+    }
     printf("bestmove %s\n", best[0] ? best : cand[0] ? cand : "(none)");
     fflush(stdout);
 }
@@ -1005,6 +1145,10 @@ static struct knob KNOBS[] = {
     { "EVICT_SCAN_K", &EVICT_SCAN_K, NULL },
     { "KILLER_COUNT", &KILLER_COUNT, NULL },
     { "USE_VARIANT", &USE_VARIANT, NULL },
+    { "QS_TAIL", &QS_TAIL, NULL },
+    { "FUEL_NULL", &FUEL_NULL, NULL },
+    { "FUEL_MIN_DEPTH", &FUEL_MIN_DEPTH, NULL },
+    { "DERIVE_FRESH", &DERIVE_FRESH, NULL },
     { NULL, NULL, NULL }
 };
 static int set_knob(const char *name, long v) {
@@ -1013,6 +1157,10 @@ static int set_knob(const char *name, long v) {
     if (!strcmp(name, "EVICT_POLICY") && (v < 0 || v > 3)) return 0;
     if (!strcmp(name, "EVICT_SCAN_K") && v < 1) return 0;
     if (!strcmp(name, "KILLER_COUNT") && (v < 1 || v > MAXKILL)) return 0;
+    if (!strcmp(name, "QS_TAIL") && (v < 0 || v > 1)) return 0;
+    if (!strcmp(name, "FUEL_NULL") && (v < 0 || v > 1)) return 0;
+    if (!strcmp(name, "FUEL_MIN_DEPTH") && v < 1) return 0;
+    if (!strcmp(name, "DERIVE_FRESH") && (v < 0 || v > 1)) return 0;
     for (struct knob *k = KNOBS; k->name; k++)
         if (!strcmp(k->name, name)) {
             if (k->ip) *k->ip = (int)v; else *k->lp = v;
