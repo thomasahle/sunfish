@@ -1,0 +1,3 @@
+# run artifacts (nets, payloads, bake-off workdirs) are re-derivable and
+# box-resident; the committed record is PROVENANCE + the ledger
+runs/
