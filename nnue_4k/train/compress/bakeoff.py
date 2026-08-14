@@ -131,6 +131,7 @@ def run_net(netpath, entry=DEFAULT_ENTRY, arms=None, outdir=None,
     q = qnet.load_qnet(netpath)
     expected = qnet.expected_module_data(q)
     stock, entry_prov = entrysrc.read_entry(entry)
+    entrysrc.require_seam(stock, entry_prov)   # drifted entry: refuse, don't guess
     print("  [%s] entry: %s" % (q.name, entry_prov), flush=True)
     outdir = outdir or os.path.join(
         os.path.dirname(os.path.abspath(netpath.rstrip("/"))), "bakeoff_" + q.name)

@@ -378,9 +378,33 @@ def _arm_roundtrip(q, armname, stock):
     return len(s90), note
 
 
+# The entry blob every recorded bake-off table was measured against
+# (986fa96 = fb717214c3e2).  A round-trip test needs ONE denominator, and
+# the working entry is golfed continuously by another lane -- the same
+# reason the harness itself pins.  When compress/ is re-seamed against a
+# newer entry, move this pin with it (entrysrc.require_seam names the
+# drift; test_entry_seam below reports it without failing this suite).
+RECORDED_ENTRY = "986fa96:nnue_4k/replnet_proto.py"
+
+
+def test_entry_seam_drift_is_visible():
+    """Not a gate on this suite -- a REPORT.  The entry belongs to the golf
+    lane; if it has moved past the seam, say exactly how, here, where a
+    pipeline change is being made."""
+    from compress import entrysrc
+    for spec in ("HEAD:nnue_4k/replnet_proto.py", RECORDED_ENTRY):
+        src, prov = entrysrc.read_entry(spec)
+        miss = entrysrc.seam_missing(src)
+        print("    seam %s: %s" % (prov, "OK" if not miss else "DRIFTED -- " +
+                                   "; ".join(miss)), flush=True)
+    src, prov = entrysrc.read_entry(RECORDED_ENTRY)
+    assert not entrysrc.seam_missing(src), \
+        "the RECORDED entry pin lost the seam -- the pin is wrong, not the entry"
+
+
 def test_trained_arms_export_roundtrip():
     from compress import entrysrc
-    stock, _ = entrysrc.read_entry("HEAD:nnue_4k/replnet_proto.py")
+    stock, _ = entrysrc.read_entry(RECORDED_ENTRY)
     for arch, armname, kw in (("cb", "trained_cb", {"cb_k": 12, "cb_block": 8}),
                               ("lowrank", "trained_lr", {"lr_rank": 2})):
         q = _structured_qnet(arch, "probe_" + arch, **kw)

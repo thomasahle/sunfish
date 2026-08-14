@@ -67,8 +67,45 @@ def splice_payload(src, s90):
     return src[:m.start(1)] + s90 + src[m.end(1):]
 
 
+# Everything this module splices and the bit-exact gate reads.  The entry
+# belongs to the GOLF LANE and moves; when it moves past the seam, the
+# harness must say so in one line instead of dying on str.index deep in a
+# measurement (2026-08-14: golf round 2 inlined NN/LBITS/VBITS, renamed
+# ACC_BASE to _B and restructured the _half build -- every arm broke at
+# once, and the first symptom was a bare ValueError).
+GATE_GLOBALS = ("NN", "LBITS", "VBITS", "ACC_BASE", "ROWS")
+
+
+def seam_missing(src):
+    """What an entry source no longer exposes, in words."""
+    miss = []
+    if not PAYLOAD_RE.search(src):
+        miss.append('the payload string line (for _c in "...":)')
+    if REGION_START not in src:
+        miss.append("the decode region start (a bare `_w = 0` line)")
+    if _REGION_END_LINE not in src:
+        miss.append("the decode region end (`    _half[_p] = _h`)")
+    gone = [n for n in GATE_GLOBALS if not re.search(r"\b%s\b" % n, src)]
+    if gone:
+        miss.append("module globals the bit-exact gate compares: " + ", ".join(gone))
+    return miss
+
+
+def require_seam(src, prov="this entry source"):
+    """Refuse to measure against a drifted entry -- loudly, and without
+    guessing at its new shape (re-seaming compress/ is a coordination job
+    with the lane that owns replnet_proto.py, not an inference)."""
+    miss = seam_missing(src)
+    if miss:
+        raise RuntimeError(
+            "ENTRY SEAM DRIFT -- %s no longer exposes what the bake-off "
+            "splices and gates:\n  * %s\nNothing is measured until compress/ "
+            "is re-seamed against the entry's new shape." % (prov, "\n  * ".join(miss)))
+
+
 def _region_span(src):
     """[start, end) of the replaceable decode region."""
+    require_seam(src)
     i = src.index(REGION_START) + 1          # keep the preceding newline
     j = src.index(_REGION_END_LINE)
     j += len(_REGION_END_LINE)
