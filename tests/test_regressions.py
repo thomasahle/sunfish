@@ -215,6 +215,51 @@ class TestFuelOracle:
             )
 
 
+class TestIntrinsicLMR:
+    """Deep moves below one fixed intrinsic threshold spend an extra ply.
+
+    The edge cost depends only on position, nominal depth, and move value.
+    A cached killer must therefore receive exactly the same depth as that
+    move receives later in the intrinsic ordering.
+    """
+
+    FEN = "4k3/8/8/3p4/4P3/8/8/N3K3 w - - 0 1"
+
+    def observed_depths(self, depth, pass_score):
+        pos = hist_from_fen(self.FEN)[-1]
+        passed = pos.rotate(nullmove=True)
+        moves = list(pos.gen_moves())
+        children = {pos.move(move): move for move in moves}
+        killer = next(move for move in moves if pos.value(move) < sf.LMR)
+        searcher = sf.Searcher()
+        searcher.root, searcher.history = pos, set()
+        searcher.tp_move[pos] = killer
+        seen = []
+
+        def observed(child, gamma, child_depth, root=False):
+            if child == passed:
+                return -pass_score
+            if child in children:
+                seen.append((children[child], child_depth))
+            return 0
+
+        searcher.bound = observed
+        sf.Searcher.bound(searcher, pos, sf.MATE_UPPER, depth, root=True)
+        assert seen[0][0] == killer
+        return pos, moves, seen
+
+    def test_edge_cost_is_intrinsic_and_killer_independent(self):
+        for depth, offset in ((5, 0), (6, 0), (6, -sf.THREAT_MARGIN - 1), (6, sf.NULL_MARGIN)):
+            pos = hist_from_fen(self.FEN)[-1]
+            pass_score = pos.score + offset
+            pos, moves, seen = self.observed_depths(depth, pass_score)
+            hot = depth >= 6 and pass_score >= pos.score + sf.NULL_MARGIN
+            safe = depth >= 6 and pass_score >= pos.score - sf.THREAT_MARGIN
+            for move in moves:
+                expected = depth - hot - 1 - (safe and pos.value(move) < sf.LMR)
+                assert {d for m, d in seen if m == move} == {expected}
+
+
 class TestStaticMoveCap:
     """Quiet depth-two and depth-three moves have a fixed static upper cap.
 

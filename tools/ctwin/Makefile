@@ -26,6 +26,7 @@ gate: all
 	python3 difftest.py --n 5 --depth 7
 	python3 difftest.py --n 40 --depth 5 --set QS=100 --set QS_A=200 --set EVAL_ROUGHNESS=5
 	python3 difftest.py --n 40 --depth 5 --set QS=0 --set EVAL_ROUGHNESS=40
+	python3 difftest.py --n 40 --depth 6 --set LMR=50 --set THREAT_MARGIN=200
 	python3 difftest.py --n 40 --depth 6 --set TABLE_SIZE=500
 	python3 difftest.py --n 40 --depth 6 --set TABLE_SIZE=50
 

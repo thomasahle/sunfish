@@ -73,6 +73,8 @@ static int tables_loaded = 0;
 /* Runtime knobs.  Defaults reproduce sunfish.py at the repo root. */
 static int QS = 40;
 static int QS_A = 140;
+static int LMR = 50;
+static int THREAT_MARGIN = 200;
 static int EVAL_ROUGHNESS = 15;
 static long TABLE_SIZE = 1000000;
 static int NULL_MARGIN = 15;     /* fuel-probe target margin (its own knob
@@ -691,8 +693,9 @@ static int gives_check(const Pos *child) {
 }
 
 static int score_move(const Pos *pos, Move move, int val, int gamma,
-        int depth, int rd, int *real) {
+        int depth, int rd, int safe, int *real) {
     Pos child = domove(pos, move);
+    int move_depth = rd - 1 - (safe && val < LMR);
     *real = 1;
     if (2 <= depth && depth <= 3 && pos->b[move.j] == '.'
             && move.j != pos->ep && !move.prom) {
@@ -700,13 +703,13 @@ static int score_move(const Pos *pos, Move move, int val, int gamma,
         if (cap >= MATE_LOWER) cap = MATE_LOWER - 1;
         if (cap < gamma) {
             if (!gives_check(&child)) { *real = 0; return cap; }
-            return -bound(&child, 1 - gamma, rd - 1, 0, 0);
+            return -bound(&child, 1 - gamma, move_depth, 0, 0);
         }
-        int full = -bound(&child, 1 - gamma, rd - 1, 0, 0);
+        int full = -bound(&child, 1 - gamma, move_depth, 0, 0);
         if (full > cap && gives_check(&child)) return full;
         return cap < full ? cap : full;
     }
-    return -bound(&child, 1 - gamma, rd - 1, 0, 0);
+    return -bound(&child, 1 - gamma, move_depth, 0, 0);
 }
 
 /* ------------------------------------------------------------------ */
@@ -779,17 +782,19 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
     }
 
     /* Fuel oracle (master since #192) -- never a score candidate, only a
-     * fuel decision: real moves below recurse to rd - 1.  Placement and
-     * semantics exactly master's (between the classic null and the stand
-     * pat; no root gate; target = pos.score + NULL_MARGIN, master's own
-     * knob, independent of EVAL_ROUGHNESS). */
-    int rd = depth;
+     * fuel decision.  Its high target reduces the node; the second fixed
+     * target detects threats and permits intrinsic LMR only when passing
+     * stays within THREAT_MARGIN of static evaluation. */
+    int rd = depth, safe = 0;
     if (FUEL_NULL && depth >= FUEL_MIN_DEPTH && iabs(pos->score) < NULL_LIMIT
             && has_big_piece(pos)) {
         int target = pos->score + NULL_MARGIN;
         Pos rp = rotate(pos, 1);
-        if (-bound(&rp, 1 - target, depth - NULL_RED, 0, 0) >= target)
+        int hot = -bound(&rp, 1 - target, depth - NULL_RED, 0, 0) >= target;
+        if (hot)
             rd = depth - 1;
+        target = pos->score - THREAT_MARGIN;
+        safe = hot || -bound(&rp, 1 - target, depth - NULL_RED, 0, 0) >= target;
     }
 
     /* QSearch stand pat. */
@@ -818,7 +823,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         int val = value(pos, killers[kk]);
         if (val < val_lower) continue;
         int real;
-        int score = score_move(pos, killers[kk], val, gamma, depth, rd, &real);
+        int score = score_move(pos, killers[kk], val, gamma, depth, rd, safe, &real);
         PROCESS(real, killers[kk], score);
         if (done) goto after_moves;
     }
@@ -843,7 +848,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
             }
             if (!qstail) {
                 int real;
-                int score = score_move(pos, m, val, gamma, depth, rd, &real);
+                int score = score_move(pos, m, val, gamma, depth, rd, safe, &real);
                 PROCESS(real, m, score);
             } else {
                 Pos np = domove(pos, m);
@@ -1180,7 +1185,8 @@ static int load_tables(const char *path) {
 
 struct knob { const char *name; int *ip; long *lp; };
 static struct knob KNOBS[] = {
-    { "QS", &QS, NULL }, { "QS_A", &QS_A, NULL },
+    { "QS", &QS, NULL }, { "QS_A", &QS_A, NULL }, { "LMR", &LMR, NULL },
+    { "THREAT_MARGIN", &THREAT_MARGIN, NULL },
     { "EVAL_ROUGHNESS", &EVAL_ROUGHNESS, NULL },
     { "TABLE_SIZE", NULL, &TABLE_SIZE },
     { "NULL_MARGIN", &NULL_MARGIN, NULL },
