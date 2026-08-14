@@ -47,6 +47,7 @@ how much effort it cost.
 | Date | Experiment | Verdict |
 |---|---|---|
 | 2026-08-14 | **PRE-REGISTERED: the POOL time manager (soft/hard) goes to a four-arm ladder — (a) 60+0 NON-INFERIORITY pool vs the shipped entry, elo0=−10 elo1=0, cap 600; then (b) 60+1 elo0=0 elo1=10; (c) 30+1 NON-INFERIORITY; (d) phase-M vs pool** | Thomas's v2 architecture, separate from the smooth budget (#188, the conservative acute fix): a whole-game pool `P = T + (M−1)·I − (M+2)·O` split into a soft limit `min(P/M, A/4)` that stops STARTING iterations and a wall `min(5·soft, A/2)` that cannot go negative. `pooltm` mod, **+57 B all-in** (3308 → 3365, 731 spare — the curve's bytes come out with it), sha `cddf392e21449054` against the in-flight #188 baseline `14b69a606b743a37`. **Recorded before the games and against the design's own premise:** budgets are not spends — iterations are discrete, the pool stops at the first one that ENDS past its limit, and the realized spend measures 1.3–2.3× the soft limit (60+0: 2.26 s vs the incumbent's 1.50 s on the laptop; more than the incumbent at every probed TC on the loaded box). v1 is STATIC; the dynamic target is v1.1 and is not screened until v1 survives (a) and (c) |
+| 2026-08-14 | **MATCH 1 VERDICT: the smooth budget is +40.64 ± 25.61 over the step at 60+0.1 — H1 accepted in 438 games (168W-117L-153D, LOS 99.92%), in 1h53m** | The positive branch: **the step form was leaving Elo on the table at tiny increments**, so this is not a change that falls back on aesthetics. Mechanism is stage 1's again — **zero forfeits on either arm**, all 438 games `normal`, and the step arm's clock **parks at 2.1 s in every single game** (min 2.0 across 438; a 2.2 s clock buys exactly 0.1 s of budget, which is exactly the increment) and pays one increment per move from there: **34.3% of its moves starved vs smooth's 4.0%**, median last-20-move time **0.115 s vs 0.391 s**. **The pre-registered ≤0.06 s metric MISSED it** (0 vs 19) because a capped budget settles where spend == income, not on the floor — logged as a pre-registration defect with a DESCRIPTIVE companion validated against the stage-1 PGN, not silently patched. Zero illegal. **Match 2 (30+1 non-inferiority) launched in the same action** |
 | 2026-08-14 | **PRE-REGISTERED: the step budget becomes a SMOOTH one, and the price of that is two matches — (1) 60+0.1 smooth vs step, elo0=0 elo1=20, cap 600; (2) 30+1 NON-INFERIORITY smooth vs step, elo0=-10 elo1=0, cap 400** | The step form is discontinuous at `winc == 0`: one millisecond of increment moved the divisor 40 → 12, so 60+0.1 was paced at /12 — the exact drain the /40 branch exists to close. Replacement is one rational base (divisor slides 40 → 12) under one cap that cannot go negative. **What carries for free:** `winc == 0` is bit-for-bit `wtime/40` and, above a 2.667 s clock, bit-for-bit the stage-1 `tmfix` arm — so +235.5 ± 65.4 transfers untouched. **What must be bought:** increment TCs are now /12 + 0.9·inc *asymptotically* (−7.4% at 30+1, −8.5% at 60+1, −3.3% at 300+3), so match 2 prices that. Arms are one expression apart from one generator; the step arm packs to **3295 B, sha `fe22791b409b1fba`** — byte-identical to the stage-1 winner. Entry **3295 → 3308 B** (+13, 788 spare). Honest note recorded in advance: if match 1 reads ≈ 0 the change lands as continuity-plus-safety, not as Elo |
 | 2026-08-14 | **C-TWIN PR SERVICE + EVICT BATTERY: calibration PASSED at 49.83% (300g, -1.16 ± 12.23, after a voided -54 run whose root-cause fixed the twin's go-nodes driver); #184 +0.52 ± 6.37 (668g, Ptnml [4,5,313,10,2]); #182 +1.04 ± 12.74 (668g, mechanism-active, nets neutral); #171 exactly 0.00 (all 334 pairs identical)** | Eviction battery: unguarded simplification is a **no-op at production TABLE_SIZE** and **-15.09 ± 19.57 under TABLE_SIZE=500 churn** (the root guard earns its keep where it was built); hash-slot two-tier +6.24 ± 20.96 is the guardless alternative; k2/k3 killers +1% nodes, screen-pruned. All fixed-node 20k, twin-grade, zero illegal moves in ~3,640 games |
 | 2026-08-14 | **STAGE 1 VERDICT: the sudden-death TM fix is +235.45 ± 65.41 at 60+0 — H1 accepted in 100 games (64W-5L-31D, LOS 100%, 0 losing pairs of 50), in 21 minutes** | And the mechanism is NOT the one the pre-registration expected: **zero time forfeits on either arm**, every decisive game an actual mate. The drain does not flag, it BLINDS — oldtm's clock crosses the negative-cap threshold at median move 42 and it then plays a median 16 moves at the 0.05 s floor (exemplar: 45 moves at 0.00 s), while tmfix never crosses it in 100/100 games and ends with 16.9 s to oldtm's 2.0 s. H3's "depth crater" and H4's TM are therefore ONE finding. Not a ladder claim: arm-vs-arm at 60+0. Stage 1's pass rule had a degenerate-case defect (0 < 0), logged not patched. **Stage 2 (300+0) staged and NOT armed — slot decision** |
@@ -486,6 +487,99 @@ calibration_VOID_old_driver.log, calib/calibration2.{log,pgn},
 pr_pr184_derive / pr_pr182_fuel / pr_pr171_qstail .{log,pgn},
 evict_default / evict_churn / pr_evict_p3churn .{log,pgn},
 gate_*.log (identity suites), ledger.md, consumer_audit.md.
+
+## 2026-08-14 — MATCH 1 VERDICT: the smooth budget is +40.6 ± 25.6 over the step at 60+0.1, H1 accepted in 438 games
+
+Pre-registered in the entry directly below; nothing here changes a bar. The
+SPRT stopped itself at 438 of the 600-game cap in **1 h 53 m**.
+
+| | |
+|---|---|
+| games | **438** of the 600 cap — `SPRT ([0.00, 20.00]) completed - H1 was accepted` |
+| smooth (engine1) | **168 W, 117 L, 153 D — 55.82%** |
+| Elo (smooth − step) | **+40.64 ± 25.61** (pentanomial 95%), nElo +52.19 ± 32.54 |
+| LLR | 3.00 against ±2.94, **LOS 99.92%** |
+| pairs | Ptnml(0-2) **[14, 38, 82, 53, 32]** over 219 pairs, PairsRatio 1.63 |
+| independent check | `pair_elo.py` reproduces fastchess digit-for-digit: +40.64 ± 25.61 |
+| illegal moves | **0** — and 0 `(none)`, 0 crashes, 0 recovers, 438/438 games carry a Termination tag |
+
+**The step form was leaving Elo on the table at tiny increments.** That is the
+positive branch of the pre-registered reading, and it is the one that landed:
+this is not a change that had to fall back on aesthetics.
+
+### The mechanism is the drain, and it is the same one stage 1 found
+
+**Zero time forfeits. On either arm. All 438 games terminate `normal`** — no
+adjudication, no resign rule. Identical in kind to stage 1: the defect does
+not flag, it starves.
+
+| reading | smooth | step |
+|---|---|---|
+| median clock left at game end | **4.6 s** (mean 6.7, min 0.6) | **2.1 s** (mean 3.1, **min 2.0**) |
+| games ending under 2 s | 82 of 438 | **0 of 438** |
+| games that NEVER cross 2.4 s | **339** of 438 | 90 of 438 |
+| first move the clock crosses 2.4 s (median, of those that do) | move 78 | **move 43** |
+| **starved moves** (≤ 0.15 s) | **1110 — 4.0%** of 27,568 | **9441 — 34.3%** of 27,537 |
+| **median move time over its last 20 moves** | **0.391 s** | **0.115 s** |
+
+The step arm's clock does not fall to zero and it does not fall to the 0.05 s
+floor either — **it parks at 2.1 s and stays there**, in every single game
+(minimum 2.0 s across 438 games, zero games under 2 s). That is an
+equilibrium, not a coincidence: with the cap at `wtime/2 − 1000`, a 2.2 s
+clock buys exactly 0.1 s of budget, which is exactly the increment. The arm
+therefore spends its entire endgame paying one increment per move and never
+loses on time, while the smooth arm is still thinking **3.4× longer** over the
+same phase. A third of the step arm's moves are played that way.
+
+### The pre-registered metric MISSED this, and the miss is the finding
+
+The pre-registered mechanism number was "moves played at or under 0.06 s",
+calibrated on stage 1, where a collapsed cap parks the budget on the 0.05 s
+floor and the reading separated the arms 0 vs 1191. **At 60+0.1 it reads 0 vs
+19 — essentially nothing — while the arms are in fact 4.0% vs 34.3% apart.**
+
+The number stands as written: smooth 0, step 19, of ~27.5k moves each. The
+defect is in the metric, not in the run, and it is instructive. A capped
+budget does not settle on the floor at an increment TC; it settles wherever
+spend equals income. Tie the threshold to the floor and it sees nothing the
+moment the TC has an increment. The starvation reading beside it —
+`≤ max(0.06, 1.5 × increment)`, plus the median last-20-move time — was added
+at analysis time, is labelled DESCRIPTIVE everywhere it appears, and was
+validated by re-running the archived stage-1 PGN, where it reproduces that
+entry's numbers exactly and returns the same 0 vs 1191. Logged as a
+pre-registration defect in the same form as stage 1's degenerate `0 < 0` pass
+rule: **an entry, not a silent patch.**
+
+### What this number is, and what it is not
+
++40.6 Elo is **arm-vs-arm at 60+0.1**, the TC chosen because it is where the
+step's discontinuity lives. It is **not** a ladder claim and it does not
+transfer to sudden death, where the two arms are bit-for-bit identical above a
+2.667 s clock, nor to 30+1, which match 2 is running now. It says that the
+regime the step form left broken — a tiny but nonzero increment — was worth
+about 40 Elo, and that closing it by making the divisor continuous works.
+
+Note also that the smooth arm ends games with a *lower* minimum clock (0.6 s
+vs 2.0 s) and 82 games under 2 s, with **zero** forfeits. That is the intended
+trade: it spends the clock it is given instead of hoarding it in a collapsed
+state, and the cap that cannot go negative is what makes spending it safe.
+
+### Cotenancy, closed out
+
+Launched 18:48 UTC beside two resident matches, finished 20:41 UTC. Box load
+12.7 at launch, 24.4 at finish; live fastchess 2 processes at both ends
+besides ours. Nothing of a cotenant's was killed, reniced or modified. Both
+arms play inside the same game under the same load, so the A/B is protected
+and only the absolute clock figures could shift. Arena
+`~/sunfish-bench/tmsmooth-20260814/m1/`.
+
+### Match 2 is running
+
+30+1 non-inferiority (elo0 = −10, elo1 = 0), cap 400, launched 20:52 UTC in
+the same action that recorded this verdict. It prices the one thing this
+change gives up: the increment budget is now the audited `/12 + 0.9·inc` only
+asymptotically. Its remedy — one retune, one rerun — was fixed in the
+pre-registration and is not revisited here.
 
 ## 2026-08-14 — PRE-REGISTRATION: the step budget becomes a smooth one, and the two matches that price it
 
