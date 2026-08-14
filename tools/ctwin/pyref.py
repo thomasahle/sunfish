@@ -58,7 +58,7 @@ Position.gen_moves = _counting_gen_moves
 BATTERY_DEFAULTS = {
     "EVICT_POLICY": 0, "EVICT_SCAN_K": 4, "KILLER_COUNT": 1, "USE_VARIANT": 0,
     # frozen-guide battery (see variants.py)
-    "SCORE_EPOCH": 0, "GUIDE_MODE": 0, "GUIDE_MIN_DEPTH": 3, "GUIDE_COPY": 0, "TWO_KILLERS": 0, "KILLER_DEDUP": 0,
+    "SCORE_EPOCH": 0, "GUIDE_MODE": 0, "GUIDE_MIN_DEPTH": 3, "GUIDE_PROMOTE": 0, "KILLER_ORDER": 0, "ROOT_CHECKS_FIRST": 0, "TWO_KILLERS": 0, "KILLER_DEDUP": 0,
     "GUIDE_IIR": 0, "GUIDE_INJECT": 0, "GUIDE_PV": 0,
 }
 BATTERY = dict(BATTERY_DEFAULTS)

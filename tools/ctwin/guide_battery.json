@@ -86,23 +86,63 @@
     },
     "copy2": {
       "GUIDE_MODE": 2,
-      "GUIDE_COPY": 1,
+      "GUIDE_PROMOTE": 1,
       "TWO_KILLERS": 1,
       "KILLER_DEDUP": 1,
       "GUIDE_IIR": 1
     },
     "copy2_k2": {
       "GUIDE_MODE": 2,
-      "GUIDE_COPY": 1,
+      "GUIDE_PROMOTE": 1,
       "TWO_KILLERS": 1,
       "KILLER_DEDUP": 1
     },
     "copy1": {
       "GUIDE_MODE": 1,
-      "GUIDE_COPY": 1,
+      "GUIDE_PROMOTE": 1,
       "TWO_KILLERS": 1,
       "KILLER_DEDUP": 1,
       "GUIDE_IIR": 1
+    },
+    "union": {
+      "GUIDE_MODE": 1,
+      "GUIDE_PROMOTE": 2
+    },
+    "union_k2": {
+      "GUIDE_MODE": 1,
+      "GUIDE_PROMOTE": 2,
+      "TWO_KILLERS": 1,
+      "KILLER_DEDUP": 1
+    },
+    "union_iir": {
+      "GUIDE_MODE": 1,
+      "GUIDE_PROMOTE": 2,
+      "GUIDE_IIR": 1
+    },
+    "union_comp": {
+      "GUIDE_MODE": 1,
+      "GUIDE_PROMOTE": 2,
+      "TWO_KILLERS": 1,
+      "KILLER_DEDUP": 1,
+      "GUIDE_IIR": 1
+    },
+    "union_k2_oldfirst": {
+      "GUIDE_MODE": 1,
+      "GUIDE_PROMOTE": 2,
+      "TWO_KILLERS": 1,
+      "KILLER_DEDUP": 1,
+      "KILLER_ORDER": 1
+    },
+    "union_comp_oldfirst": {
+      "GUIDE_MODE": 1,
+      "GUIDE_PROMOTE": 2,
+      "TWO_KILLERS": 1,
+      "KILLER_DEDUP": 1,
+      "GUIDE_IIR": 1,
+      "KILLER_ORDER": 1
+    },
+    "rootchecks": {
+      "ROOT_CHECKS_FIRST": 1
     }
   }
 }

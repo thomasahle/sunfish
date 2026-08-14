@@ -182,14 +182,34 @@ static int GUIDE_MODE = 0;
  * threshold actually bites and A_G = A union {G(p)} can differ from A. */
 static int GUIDE_MIN_DEPTH = 3;
 /* How the guide is taken at a promotion.
- *   0 (the design as specified): tp_old, tp_move = tp_move, {} -- the
- *     current table restarts empty every epoch.
- *   1: tp_old = dict(tp_move) -- the guide is a SNAPSHOT and the current
- *     table keeps accumulating.  Freezing is what the value argument
- *     needs; emptying is not, because the current table is ordering-only.
- *     Measured because the ladder's own anchors say the emptying, not
- *     the guide, is what costs (guideonly / guideonly2 vs master). */
-static int GUIDE_COPY = 0;
+ *   0 (the design as first specified): tp_old, tp_move = tp_move, {} --
+ *     the current table restarts empty every epoch.
+ *   1 SNAPSHOT: tp_old = dict(tp_move), current table keeps accumulating.
+ *     Freezing is what the value argument needs; emptying is not,
+ *     because the current table is ordering-only.
+ *   2 UNION (Thomas's repair): tp_old, tp_move = tp_old | tp_move, {} --
+ *     newest-wins accumulated union, exactly Python's dict `|` (keys
+ *     already in tp_old keep their slot and take tp_move's value; new
+ *     keys append in tp_move's order).  The accumulated guide is then
+ *     content-equivalent to master's persistent killer table (an
+ *     overwrite IS a newest-wins union, modulo eviction), so the guide
+ *     can carry master's ordering while staying epoch-frozen, and
+ *     GuideLegal survives because legality is closed under union.  It
+ *     also sharpens the IIR trigger from "no guide this epoch" to
+ *     "never fail-highed at ANY depth" -- a real novelty signal.
+ *     Costs, all measured below: an O(n) merge per boundary, transient
+ *     2x table memory, and NO eviction on tp_old, so the guide may
+ *     exceed TABLE_SIZE (peak_tpo reports it). */
+static int GUIDE_PROMOTE = 0;
+/* Order of the two killer yields: 0 current killer first (the design's
+ * guess), 1 frozen guide first.  Ordering only -- the set searched and
+ * every value is identical either way, so this is a pure move-ordering
+ * question and the counters below say whether it can matter at all. */
+static int KILLER_ORDER = 0;
+/* ROOT_CHECKS_FIRST (port of Recursing/sunfish_rs f4881a3): order
+ * checking moves first AT THE ROOT ONLY.  Root-only, so the extra
+ * movegen per move is paid once per driver probe, not per node. */
+static int ROOT_CHECKS_FIRST = 0;
 static int TWO_KILLERS = 0;
 static int KILLER_DEDUP = 0;
 static int GUIDE_IIR = 0;
@@ -202,8 +222,10 @@ static int GUIDE_PV = 0;
  * influence a single search decision. */
 static long c_guide_lookup, c_guide_hit, c_guide_agree, c_guide_disagree;
 static long c_guide_below, c_guide_cut, c_killer_cut, c_iid, c_iir;
+static long c_guide_tried, c_kill_present, c_root_checks;
 static long c_tps_cut, c_dedup_skip, c_promote;
 static long c_peak_tpm, c_peak_tpo, c_peak_tps;
+static long c_merge_ns;          /* wall time inside promote_guide */
 static long c_total_nodes, c_searches;   /* nodes resets per search; these
                                             are the cross-game denominators */
 
@@ -649,25 +671,34 @@ static int tpo_get(const Pos *p, Move *out) {
  * ever changes here, and tp_score is emptied in the same breath, so no
  * interval outlives the guide that produced it (the epoch rule). */
 static void promote_guide(void) {
+    double t0 = now_s();
     if (tpm.count > c_peak_tpm) c_peak_tpm = tpm.count;
     if (tpo.count > c_peak_tpo) c_peak_tpo = tpo.count;
-    if (GUIDE_COPY) {
-        /* tp_old = dict(tp_move): same keys in the same insertion order,
-         * and the killer lists are rebuilt rather than mutated in place
-         * on both sides, so a shallow copy really is frozen. */
-        map_clear(&tpo);
+    if (GUIDE_PROMOTE) {
+        /* SNAPSHOT clears first, UNION merges on top of what is there;
+         * both then walk tp_move in insertion order.  map_put keeps an
+         * existing key's slot and appends a new one, which is exactly
+         * dict `|` / dict.update ordering, and the killer lists are
+         * rebuilt rather than mutated in place on both sides, so the
+         * result is genuinely frozen. */
+        if (GUIDE_PROMOTE == 1) map_clear(&tpo);
         for (int k = tpm.ihead; k >= 0; k = tpm.cold[k].inext) {
             int idx = map_put(&tpo, &tpm.cold[k].pos, tpm.hot[k].depth);
             memcpy(tpo.cold[idx].mvs, tpm.cold[k].mvs, sizeof tpm.cold[k].mvs);
             memcpy(tpo.cold[idx].mds, tpm.cold[k].mds, sizeof tpm.cold[k].mds);
             tpo.cold[idx].nmv = tpm.cold[k].nmv;
         }
+        /* UNION also empties the current table (SNAPSHOT deliberately
+         * does not: that is the whole difference between them). */
+        if (GUIDE_PROMOTE == 2) map_clear(&tpm);
     } else {
         Map t = tpo; tpo = tpm; tpm = t;
         map_clear(&tpm);
     }
     map_clear(&tps);
     c_promote++;
+    if (tpo.count > c_peak_tpo) c_peak_tpo = tpo.count;
+    c_merge_ns += (long)((now_s() - t0) * 1e9);
 }
 
 static void tpm_store(const Pos *p, Move m, int depth) {
@@ -882,6 +913,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
     int have_guide = 0;
     if (GUIDE_MODE && depth > GUIDE_MIN_DEPTH) {
         c_guide_lookup++;
+        if (nkill) c_kill_present++;
         have_guide = tpo_get(pos, &guide);
         if (have_guide) {
             c_guide_hit++;
@@ -913,29 +945,33 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         gd = rd - 1; cd = rd - 2;
     }
 
-    /* Killer(s) first, gated by the QS threshold, most recent first,
-     * then the frozen guide if it is distinct.  A qs_tail probe skips
-     * the killer phase. */
-    Move tried[MAXKILL + 1];
-    int ntried = 0;
-    if (!qstail)
-    for (int kk = 0; kk < nkill; kk++) {
-        if (value(pos, killers[kk]) < val_lower) continue;
-        tried[ntried++] = killers[kk];
-        Pos np = domove(pos, killers[kk]);
-        PROCESS(1, killers[kk], -bound(&np, 1 - gamma, cd, 0, 0));
-        if (done) { c_killer_cut++; goto after_moves; }
+    /* Killer(s) and the frozen guide, each gated by the QS threshold and
+     * deduplicated against what was already searched.  KILLER_ORDER 0
+     * (default) puts the CURRENT killer first, 1 puts the guide first.
+     * A qs_tail probe skips the phase entirely. */
+    Move cand[MAXKILL + 1], tried[MAXKILL + 1];
+    unsigned char is_guide[MAXKILL + 1];
+    int ncand = 0, ntried = 0;
+    int use_guide = have_guide && (TWO_KILLERS || GUIDE_INJECT || GUIDE_PV);
+    if (!qstail) {
+        if (use_guide && KILLER_ORDER) { cand[ncand] = guide; is_guide[ncand++] = 1; }
+        for (int kk = 0; kk < nkill; kk++) { cand[ncand] = killers[kk]; is_guide[ncand++] = 0; }
+        if (use_guide && !KILLER_ORDER) { cand[ncand] = guide; is_guide[ncand++] = 1; }
     }
-    if (!qstail && have_guide && (TWO_KILLERS || GUIDE_INJECT || GUIDE_PV)) {
+    for (int k = 0; k < ncand; k++) {
         int dup = 0;
-        for (int k = 0; k < ntried; k++) if (move_eq(tried[k], guide)) dup = 1;
+        for (int t = 0; t < ntried; t++) if (move_eq(tried[t], cand[k])) dup = 1;
         /* GUIDE_INJECT lifts the QS threshold for the guide alone:
          * A_G = A union {G(p)} at positive depth. */
-        if (!dup && (value(pos, guide) >= val_lower || (GUIDE_INJECT && depth > 0))) {
-            tried[ntried++] = guide;
-            Pos np = domove(pos, guide);
-            PROCESS(1, guide, -bound(&np, 1 - gamma, gd, 0, 0));
-            if (done) { c_guide_cut++; goto after_moves; }
+        if (dup || !(value(pos, cand[k]) >= val_lower
+                     || (is_guide[k] && GUIDE_INJECT && depth > 0))) continue;
+        tried[ntried++] = cand[k];
+        if (is_guide[k]) c_guide_tried++;
+        Pos np = domove(pos, cand[k]);
+        PROCESS(1, cand[k], -bound(&np, 1 - gamma, is_guide[k] ? gd : cd, 0, 0));
+        if (done) {
+            if (is_guide[k]) c_guide_cut++; else c_killer_cut++;
+            goto after_moves;
         }
     }
 
@@ -947,6 +983,29 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         struct collectctx c = { pos, val_lower, vbuf, 0, qstail };
         gen_moves(pos, collect_cb, &c);
         if (!qstail) vm_sort(vbuf, c.n);
+        /* ROOT_CHECKS_FIRST (sunfish_rs f4881a3): at the ROOT ONLY, pull
+         * checking moves to the front -- a STABLE partition, so the
+         * (val, move) order survives inside each group.  One extra
+         * movegen per root move (domove, null-rotate, king_capture),
+         * which only the root pays.
+         *
+         * Deliberately NOT applied while the futility break is live
+         * (depth <= FUT_MAX): that break is only sound BECAUSE the list
+         * is value-descending ("it can't get any better than this"), so
+         * reordering under it would prune moves that outrank the one
+         * that tripped it.  At the root that costs only depth 1. */
+        if (ROOT_CHECKS_FIRST && root && !qstail && depth > FUT_MAX) {
+            uint64_t quiet[MAXMOVES];
+            int nc = 0, nq = 0;
+            for (int k = 0; k < c.n; k++) {
+                Pos ch = domove(pos, VM_MOVE(vbuf[k]));
+                Pos rp = rotate(&ch, 1);
+                if (king_capture(&rp, NULL)) vbuf[nc++] = vbuf[k];  /* nc <= k */
+                else quiet[nq++] = vbuf[k];
+            }
+            memcpy(vbuf + nc, quiet, (size_t)nq * sizeof *quiet);
+            c_root_checks += nc;
+        }
         for (int k = 0; k < c.n; k++) {
             int val = VM_VAL(vbuf[k]);
             Move m = VM_MOVE(vbuf[k]);
@@ -1349,7 +1408,9 @@ static struct knob KNOBS[] = {
     { "SCORE_EPOCH", &SCORE_EPOCH, NULL },
     { "GUIDE_MODE", &GUIDE_MODE, NULL },
     { "GUIDE_MIN_DEPTH", &GUIDE_MIN_DEPTH, NULL },
-    { "GUIDE_COPY", &GUIDE_COPY, NULL },
+    { "GUIDE_PROMOTE", &GUIDE_PROMOTE, NULL },
+    { "KILLER_ORDER", &KILLER_ORDER, NULL },
+    { "ROOT_CHECKS_FIRST", &ROOT_CHECKS_FIRST, NULL },
     { "TWO_KILLERS", &TWO_KILLERS, NULL },
     { "KILLER_DEDUP", &KILLER_DEDUP, NULL },
     { "GUIDE_IIR", &GUIDE_IIR, NULL },
@@ -1369,10 +1430,13 @@ static int set_knob(const char *name, long v) {
     if (!strcmp(name, "DERIVE_FRESH") && (v < 0 || v > 1)) return 0;
     if (!strcmp(name, "GUIDE_MODE") && (v < 0 || v > 2)) return 0;
     if (!strcmp(name, "GUIDE_MIN_DEPTH") && v < 0) return 0;
+    if (!strcmp(name, "GUIDE_PROMOTE") && (v < 0 || v > 2)) return 0;
+    if (!strcmp(name, "KILLER_ORDER") && (v < 0 || v > 1)) return 0;
+    if (!strcmp(name, "ROOT_CHECKS_FIRST") && (v < 0 || v > 1)) return 0;
     if ((!strcmp(name, "SCORE_EPOCH") || !strcmp(name, "TWO_KILLERS")
          || !strcmp(name, "KILLER_DEDUP") || !strcmp(name, "GUIDE_IIR")
          || !strcmp(name, "GUIDE_INJECT") || !strcmp(name, "GUIDE_PV")
-         || !strcmp(name, "GUIDE_COPY"))
+         )
         && (v < 0 || v > 1)) return 0;
     for (struct knob *k = KNOBS; k->name; k++)
         if (!strcmp(k->name, name)) {
@@ -1516,12 +1580,12 @@ int main(int argc, char **argv) {
              * them): a match driver reads this once, at the end. */
             printf("counters nodes %ld searches %ld guide_lookup %ld guide_hit %ld "
                    "guide_agree %ld guide_disagree %ld guide_below %ld "
-                   "guide_cut %ld killer_cut %ld iid %ld iir %ld "
-                   "tps_cut %ld dedup_skip %ld promote %ld "
+                   "guide_cut %ld guide_tried %ld kill_present %ld killer_cut %ld iid %ld iir %ld "
+                   "tps_cut %ld dedup_skip %ld promote %ld merge_ms %ld root_checks %ld "
                    "peak_tpm %ld peak_tpo %ld peak_tps %ld\n",
                    c_total_nodes + nodes, c_searches, c_guide_lookup, c_guide_hit, c_guide_agree,
-                   c_guide_disagree, c_guide_below, c_guide_cut, c_killer_cut,
-                   c_iid, c_iir, c_tps_cut, c_dedup_skip, c_promote,
+                   c_guide_disagree, c_guide_below, c_guide_cut, c_guide_tried, c_kill_present, c_killer_cut,
+                   c_iid, c_iir, c_tps_cut, c_dedup_skip, c_promote, c_merge_ns / 1000000, c_root_checks,
                    c_peak_tpm, c_peak_tpo, c_peak_tps);
         }
 

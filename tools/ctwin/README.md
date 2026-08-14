@@ -167,7 +167,9 @@ guide, so every promotion clears `tp_score` in the same breath.
 |---|---|
 | `SCORE_EPOCH` | isolated control: clear `tp_score` per ID iteration, change nothing else |
 | `GUIDE_MODE` | 0 off; 1 promote after each COMPLETED ID bracket; 2 freeze one guide per `search()` call |
-| `GUIDE_COPY` | 0 `tp_old, tp_move = tp_move, {}` (as designed); 1 `tp_old = dict(tp_move)` — freeze without emptying |
+| `GUIDE_PROMOTE` | 0 `tp_old, tp_move = tp_move, {}` (as designed); 1 snapshot `tp_old = dict(tp_move)` — freeze without emptying; 2 union `tp_old, tp_move = tp_old \| tp_move, {}` — newest-wins accumulation (no eviction on `tp_old`, so the guide may exceed `TABLE_SIZE`) |
+| `KILLER_ORDER` | 0 current killer first, 1 frozen guide first (ordering only) |
+| `ROOT_CHECKS_FIRST` | at the ROOT only, stable-partition checking moves to the front (skipped while the futility break is live) |
 | `GUIDE_MIN_DEPTH` | guide lookups run at `depth >` this (3 = IID's gate; 0 opens them to depth 1) |
 | `TWO_KILLERS` | search the guide as a second killer when distinct |
 | `KILLER_DEDUP` | skip already-searched killers in the sorted list, *after* the futility test |
@@ -233,6 +235,25 @@ and every composite collapses onto its own anchor: the guide machinery
 is cheap there and simply worth nothing. `GUIDE_COPY 1` (freeze without
 emptying) was added because the anchors point at the emptying, and it
 does not rescue the family either.
+
+**Union promotion** (`GUIDE_PROMOTE 2`, Thomas's repair: the guide
+accumulates newest-wins instead of being swapped in) is a real
+improvement over the swap and still clearly negative: IIR -90.0 ->
+-63.4 [-94.0, -33.7], composite -59.0 -> -49.8 [-77.0, -23.2], both H0
+at elo0=0 on the extended 4334-position book. The union-only cell is
+byte-identical to `guideonly` (4,874,229 nodes both) and was not played:
+with no feature knob on nothing reads `tp_old`, and the ordering penalty
+comes from `tp_move` being emptied, which the union does too. Costs:
+~0.2-0.25 ms per O(n) merge, and `tp_old` is never evicted so the guide
+reaches master's whole-table peak (340,538 vs 369,022) while `tp_move`
+stays tiny -- under `TABLE_SIZE` here, but unbounded in principle.
+
+**ROOT_CHECKS_FIRST** (port of sunfish_rs f4881a3) does not reproduce
+its claimed -46% on mate finding: over 33 mate positions (mate1 x8 @d4,
+mate2 x20 @d6, mate3 x5 @d8) it is +0.8% nodes in aggregate, -0.9%
+geometric mean, median -0.0% (18 positions cheaper, 3 dearer, 12 equal).
+Root-only reordering has little leverage: the root is one node per probe
+and the MTD-bi driver re-probes it behind a warm table.
 
 `GUIDE_INJECT` is a **structural no-op in classic**, measured rather than
 assumed: `val_lower = QS - depth*QS_A` is -520 at depth 4 and -100 at

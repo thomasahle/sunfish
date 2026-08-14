@@ -95,7 +95,9 @@ KILLER_COUNT = 1
 SCORE_EPOCH = 0
 GUIDE_MODE = 0
 GUIDE_MIN_DEPTH = 3
-GUIDE_COPY = 0
+GUIDE_PROMOTE = 0
+KILLER_ORDER = 0
+ROOT_CHECKS_FIRST = 0
 TWO_KILLERS = 0
 KILLER_DEDUP = 0
 GUIDE_IIR = 0
@@ -200,10 +202,13 @@ def make_killers(searcher):
     return SlotKillers(searcher) if EVICT_POLICY == 3 else DictKillers(searcher)
 
 
-def copy_killers(src):
-    """dict(tp_move): same keys, same insertion order, frozen lists."""
+def merge_killers(base, src):
+    """dict(src) when base is None, else base | src -- Python's own
+    newest-wins union: a key already in base keeps its slot and takes
+    src's value, new keys append in src's order.  The lists are rebuilt
+    rather than mutated in place, so the result is frozen."""
     out = DictKillers(src.searcher)
-    out.d = dict(src.d)
+    out.d = dict(src.d) if base is None else (base.d | src.d)
     return out
 
 
@@ -229,8 +234,11 @@ class VariantSearcher(Searcher):
         the guide as a SNAPSHOT instead of emptying the current table:
         the killer lists are rebuilt, never mutated in place, so a
         shallow dict copy is genuinely frozen."""
-        if GUIDE_COPY:
-            self.tp_old = copy_killers(self.tp_move)
+        if GUIDE_PROMOTE == 1:                       # snapshot
+            self.tp_old = merge_killers(None, self.tp_move)
+        elif GUIDE_PROMOTE == 2:                     # newest-wins union
+            self.tp_old = merge_killers(self.tp_old, self.tp_move)
+            self.tp_move = make_killers(self)
         else:
             self.tp_old, self.tp_move = self.tp_move, make_killers(self)
         self.tp_score.clear()
@@ -317,18 +325,26 @@ class VariantSearcher(Searcher):
             if GUIDE_PV and guide is not None and not root and depth > 3:
                 gd, cd = d - 1, d - 2
 
+            # KILLER_ORDER 0 searches the current killer first, 1 the
+            # frozen guide first.  Same set, same values: ordering only.
+            cand = [(k, False) for k in killers]
+            if guide is not None and (TWO_KILLERS or GUIDE_INJECT or GUIDE_PV):
+                cand.insert(0, (guide, True)) if KILLER_ORDER else cand.append((guide, True))
             tried = []
-            for killer in killers:
-                if pos.value(killer) >= val_lower:
-                    tried.append(killer)
-                    yield killer, -self.bound(pos.move(killer), 1 - gamma, cd)
-            if (guide is not None and (TWO_KILLERS or GUIDE_INJECT or GUIDE_PV)
-                    and guide not in tried
-                    and (pos.value(guide) >= val_lower or (GUIDE_INJECT and depth > 0))):
-                tried.append(guide)
-                yield guide, -self.bound(pos.move(guide), 1 - gamma, gd)
+            for m, isg in cand:
+                if m in tried: continue
+                if not (pos.value(m) >= val_lower or (isg and GUIDE_INJECT and depth > 0)): continue
+                tried.append(m)
+                yield m, -self.bound(pos.move(m), 1 - gamma, gd if isg else cd)
 
-            for val, move in sorted(((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= val_lower), reverse=True):
+            ms = sorted(((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= val_lower), reverse=True)
+            # ROOT_CHECKS_FIRST: stable partition, checks to the front, at
+            # the root only.  Skipped while the futility break is live -
+            # that break is sound only because the list is value-descending.
+            if ROOT_CHECKS_FIRST and root and depth > 1:
+                ms = sorted(ms, key=lambda t:
+                            not pos.move(t[1]).rotate(nullmove=True).king_capture())
+            for val, move in ms:
                 if depth <= 1 and pos.score + val < gamma:
                     yield (move, MATE_UPPER) if val >= MATE_LOWER else (None, pos.score + val)
                     break
