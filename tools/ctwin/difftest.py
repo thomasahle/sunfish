@@ -225,7 +225,7 @@ def main():
     ap.add_argument("--bench", action="store_true")
     ap.add_argument("--set", action="append", default=[], metavar="NAME=V",
                     help="tuning knob applied to BOTH engines (repeatable); "
-                         "shared knobs only: QS EVAL_ROUGHNESS TABLE_SIZE")
+                         "shared knobs only: QS QS_A EVAL_ROUGHNESS TABLE_SIZE")
     ap.add_argument("--cset", action="append", default=[], metavar="NAME=V",
                     help="knob applied to the C SIDE ONLY (repeatable). For "
                          "PR-service knobs where the Python side IS the "

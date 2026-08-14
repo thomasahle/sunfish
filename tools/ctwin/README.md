@@ -87,7 +87,7 @@ in the git history of this file.
   (startpos + openings, Bratko-Kopec, WAC, mates, stalemates, null-move
   mates, perft set, KQK) × depth 1..6 with the movegen walk — 830 MTD-bi
   probes and 901 movegen lists byte-identical; depth 1..7 on 6 positions,
-  264 probes; two tuned-knob sweeps (QS/EVAL_ROUGHNESS on both
+  264 probes; two tuned-knob sweeps (QS/QS_A/EVAL_ROUGHNESS on both
   sides) × depth 1..5, 1285 probes; eviction sweeps (`TABLE_SIZE` 500 and
   50) × depth 1..6, 1691 probes. Movegen *call counts* are compared in
   every `done` line since the battery landed.
@@ -114,8 +114,8 @@ make bench      # C-vs-PyPy wall-time ratio at identical nodes
 
 Tuning knobs (no recompile): `set NAME VALUE` on stdin, `SF_NAME=` env, or
 `NAME=VALUE` argv after the table path (for match harnesses) —
-`QS EVAL_ROUGHNESS TABLE_SIZE NULL_MARGIN NULL_MIN_DEPTH NULL_LIMIT
-NULL_RED IID_MIN_DEPTH IID_RED MATE_DIST FUEL_NULL
+`QS QS_A EVAL_ROUGHNESS TABLE_SIZE NULL_MARGIN NULL_MIN_DEPTH NULL_LIMIT
+NULL_RED IID_MIN_DEPTH IID_RED FUT_MAX MATE_DIST FUEL_NULL
 FUEL_MIN_DEPTH` (`NULL_MARGIN` is the fuel-probe target margin, master's
 own knob since #192, independent of `EVAL_ROUGHNESS`, which still caps
 the classic sub-depth-6 null), plus the

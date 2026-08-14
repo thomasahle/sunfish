@@ -72,6 +72,7 @@ static int tables_loaded = 0;
 
 /* Runtime knobs.  Defaults reproduce sunfish.py at the repo root. */
 static int QS = 40;
+static int QS_A = 140;
 static int EVAL_ROUGHNESS = 15;
 static long TABLE_SIZE = 1000000;
 static int NULL_MARGIN = 15;     /* fuel-probe target margin (its own knob
@@ -83,6 +84,7 @@ static int NULL_LIMIT = 500;     /* |score| bound for trying null */
 static int NULL_RED = 3;         /* null move depth reduction */
 static int IID_MIN_DEPTH = 3;    /* IID when depth > this (master: 2) */
 static int IID_RED = 3;          /* IID depth reduction */
+static int FUT_MAX = 1;          /* futility pruning when depth <= this */
 static int MATE_DIST = 1;        /* mate scores carry distance (master: 0) */
 /* Replacement-policy battery knobs (tp_move only; tp_score untouched).
  * EVICT_POLICY 0: master/branch root-guarded FIFO insert-then-evict (>).
@@ -706,7 +708,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         if (depth > 0 && in_history(pos)) return 0;
     }
 
-    int val_lower = depth ? -MATE_UPPER : QS;
+    int val_lower = QS - depth * QS_A;
     int best = -MATE_UPPER, live = 0, done = 0;
     Move nomove = { 0, 0, 0 };
 
@@ -781,10 +783,9 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
      * A qs_tail probe skips the killer phase. */
     if (!qstail)
     for (int kk = 0; kk < nkill; kk++) {
-        int val = value(pos, killers[kk]);
-        if (val < val_lower) continue;
+        if (value(pos, killers[kk]) < val_lower) continue;
         Pos np = domove(pos, killers[kk]);
-        PROCESS(1, killers[kk], -bound(&np, 1 - gamma, rd - 1 - (val < 0), 0, 0));
+        PROCESS(1, killers[kk], -bound(&np, 1 - gamma, rd - 1, 0, 0));
         if (done) goto after_moves;
     }
 
@@ -799,7 +800,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         for (int k = 0; k < c.n; k++) {
             int val = VM_VAL(vbuf[k]);
             Move m = VM_MOVE(vbuf[k]);
-            if (!qstail && depth == 0 && pos->score + val < gamma) {
+            if (!qstail && depth <= FUT_MAX && pos->score + val < gamma) {
                 /* Futility: value evidence only, except the mate special
                  * case, which is a real (cutting) witness. */
                 if (val >= MATE_LOWER) PROCESS(1, m, MATE_UPPER);
@@ -807,7 +808,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
                 break;                       /* Python breaks either way */
             }
             Pos np = domove(pos, m);
-            PROCESS(1, m, -bound(&np, 1 - gamma, rd - 1 - (val < 0), 0, 0));
+            PROCESS(1, m, -bound(&np, 1 - gamma, rd - 1, 0, 0));
             if (done) break;
         }
     }
@@ -1139,7 +1140,7 @@ static int load_tables(const char *path) {
 
 struct knob { const char *name; int *ip; long *lp; };
 static struct knob KNOBS[] = {
-    { "QS", &QS, NULL },
+    { "QS", &QS, NULL }, { "QS_A", &QS_A, NULL },
     { "EVAL_ROUGHNESS", &EVAL_ROUGHNESS, NULL },
     { "TABLE_SIZE", NULL, &TABLE_SIZE },
     { "NULL_MARGIN", &NULL_MARGIN, NULL },
@@ -1148,6 +1149,7 @@ static struct knob KNOBS[] = {
     { "NULL_RED", &NULL_RED, NULL },
     { "IID_MIN_DEPTH", &IID_MIN_DEPTH, NULL },
     { "IID_RED", &IID_RED, NULL },
+    { "FUT_MAX", &FUT_MAX, NULL },
     { "MATE_DIST", &MATE_DIST, NULL },
     { "EVICT_POLICY", &EVICT_POLICY, NULL },
     { "EVICT_SCAN_K", &EVICT_SCAN_K, NULL },
