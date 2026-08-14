@@ -139,6 +139,11 @@ MATE_UPPER = piece["K"] + 10 * piece["Q"]
 QS = 40
 QS_A = 140
 EVAL_ROUGHNESS = 15
+# Target margin of the deep-null fuel probe (depth >= 6): the pass must
+# beat pos.score + NULL_MARGIN for real moves to burn two plies. Its own
+# parameter, not tied to EVAL_ROUGHNESS - the two knobs tune different
+# things (driver convergence vs reduction aggression).
+NULL_MARGIN = 15
 
 # Max entries kept in each transposition table, roughly 1GB per million.
 # Python dicts keep insertion order, so we cheaply evict the oldest entry
@@ -150,6 +155,7 @@ opt_ranges = dict(
     QS = (0, 300),
     QS_A = (0, 300),
     EVAL_ROUGHNESS = (0, 50),
+    NULL_MARGIN = (0, 200),
     TABLE_SIZE = (10**4, 10**8),
 )
 # minifier-hide end
@@ -376,14 +382,29 @@ class Searcher:
             # (K+P endings). Capping the pass at static evaluation plus one
             # score bucket also keeps its value monotone and below the positive
             # mate band, so one child report is enough to bound it. No null at
-            # root, so we can always return a move.
-            if not root and depth > 2 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
+            # root, so we can always return a move. Below depth 6 only: from
+            # depth 6 on the pass is never a score candidate (see below).
+            if not root and 2 < depth < 6 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
                 score = min(pos.score + EVAL_ROUGHNESS,
                     -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
                 # A king capture substitutes the exact MATE_UPPER for a
                 # virtual fail-high; the cached move is a capture certificate.
                 proof = score >= gamma and (self.tp_move.get(pos) or pos.king_capture())
                 yield (proof, MATE_UPPER) if proof and pos.value(proof) >= MATE_LOWER else (None, score)
+
+            # From depth 6 on the pass is a FUEL ORACLE, never a score
+            # candidate: one probe at the fixed target pos.score +
+            # NULL_MARGIN - a window that depends on (pos, depth) alone,
+            # so the hot bit is position-determined (a fail-soft report is
+            # side-exact at any fixed window) - decides whether real moves
+            # burn one or two plies of depth. Nominal depth keys the tables
+            # and the QS admission; only the recursion is shortened, so a
+            # deep null cut becomes a reduction instead of a virtual score.
+            d = depth
+            if depth >= 6 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
+                target = pos.score + NULL_MARGIN
+                if -self.bound(pos.rotate(nullmove=True), 1 - target, depth - 3) >= target:
+                    d = depth - 1
 
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else. (Note depth at root is always > 0.)
@@ -411,7 +432,7 @@ class Searcher:
             # We will search it again in the main loop below, but the tp will
             # make this mostly free.
             if killer and pos.value(killer) >= val_lower:
-                yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)
+                yield killer, -self.bound(pos.move(killer), 1 - gamma, d - 1)
 
             # Then all the other moves
             # Quiescent search: only moves above the val-limit are admitted -
@@ -435,7 +456,7 @@ class Searcher:
                     # so it can't get any better than this.
                     break
 
-                yield move, -self.bound(pos.move(move), 1 - gamma, depth - 1)
+                yield move, -self.bound(pos.move(move), 1 - gamma, d - 1)
 
         # Run through the moves, shortcutting when score >= gamma.
         # live is True if we saw a legal (not null, score > -MATE_UPPER) move

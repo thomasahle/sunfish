@@ -55,9 +55,12 @@ The proof is generic in `C`; it does not depend on chess or mate constants.
 The production guard is:
 
 ```python
-not root and depth > 2 and abs(pos.score) < 500 \
+not root and 2 < depth < 6 and abs(pos.score) < 500 \
     and any(c in pos.board for c in "RBNQ")
 ```
+
+The upper bound is new: the pass is a score candidate only *below* depth 6.
+From depth 6 on it is a fuel oracle instead -- see the next section.
 
 With integer scores and `EVAL_ROUGHNESS = 15`, the score guard gives
 `C(pos) <= 514 < MATE_LOWER`. Theorems
@@ -75,6 +78,77 @@ min(C(pos), P) <= best legal real-move value
 It concerns the quality of the null approximation, not the fail-soft report
 transport. The non-pawn-piece guard excludes pawn-only zugzwangs; the score
 guard and cap make null pruning more conservative in unbalanced positions.
+It is confined to `depth < 6`; above that the fuel oracle removes it.
+
+## The deep-null fuel oracle
+
+From depth 6 on the pass is not a score candidate at all. One probe at a
+*fixed* target decides only how much depth the real moves spend:
+
+```python
+d = depth
+if depth >= 6 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
+    target = pos.score + NULL_MARGIN
+    if -self.bound(pos.rotate(nullmove=True), 1 - target, depth - 3) >= target:
+        d = depth - 1
+```
+
+The target depends on `(pos, depth)` alone -- `gamma` does not enter -- so the
+window is position-determined, the probe is table-cacheable, and the resulting
+"hot" bit is stable because a fail-soft report is side-exact at any fixed
+window (`WindowReport.side_exact`, `hot_bit_determined`, `hot_bit_stable`).
+Nominal `depth` still keys the tables and the QS admission; only the recursion
+is shortened. So a deep null *cut* becomes a *reduction*: every real edge costs
+1 or 2 plies (`fuel_edge_cost`), never infinity.
+
+That is what buys the premise: a null cutoff gives every real move unbounded
+pruning debt, and discharging it is exactly what `NoZugzwang` was for. A
+bounded edge cost discharges it instead, so the classification theorem needs no
+chess premise:
+
+```text
+eventual_classification_fuel :
+  ValFloor G 192 -> EvalQuiet G -> (root legality) ->
+    exists D0, forall D >= D0,  W / D / L read off the value, correctly
+```
+
+`NoZugzwang` appears nowhere in its premises, nor in those of
+`eventual_classification_fuel_arms` (which pins the arming depths at
+`D >= C*k + 4` for a win and `D >= C*k + C + 4` for a loss) or
+`driver_sees_trichotomy_fuel`. The draw arm needs no depth floor at all: with
+no forced mate for either side the value is strictly inside the band at *every*
+depth. `Repetition.lean` adds the game-history rule (`repetition_not_lost`,
+`draw_arm_strengthened`) on top.
+
+`FuelTailBracketSpec` -- the layer-1 bracket for the composed search -- is
+stated and flagged unproven; it is not used by the theorems above.
+
+### The finiteness variant, without the frontier tail
+
+`eventual_classification_fuel` is stated for `fuelValueD2t`, whose fold list
+already contains the frontier tail -- PR #171's engine change. For the
+*unpatched* fuel value `fuelValueD2` (`movesAbove` only), the same trichotomy
+holds when the game itself is finite (`EventuallyFinite.lean`):
+
+```text
+eventual_classification_fuel_finite :
+  ValFloor G 192 -> EndsWithin G N p -> (root legality) ->
+    forall D >= C*N + C + 6,  W / D / L read off the value, correctly
+```
+
+`EndsWithin G N p` -- every legal play from `p` reaches a terminal within `N`
+plies -- is true of adjudicated chess (50-move plus threefold under match
+adjudication) and false of the ruleless modeled game. At `D >= C*N + 6` every
+node the classification depends on is reached before the frontier, so the
+masking sites are unreachable and `NoMaskedMobility`, the tail, and even
+`EvalQuiet` all drop out. The bound is *effective* (`2N + 8` as shipped, no
+classical `exists D0`), and the file's entire footprint is
+`[propext, Quot.sound]`. The scope is eventual-only, by countermodel: `CexE`
+(the infinite masked chain) violates the premise (`cexE_not_finite`), while
+`CexD` satisfies it at budget 5 and still prices its drawable masked node in
+the mated band at depth 1 (`cexD_fuel_M1`) before classifying it correctly
+from depth 10 on (`cexD_M_eventually_classified`). Fixed-depth honesty below
+the bound still requires `NoMaskedMobility` or the #171 tail.
 
 ## Mate distance
 
@@ -429,6 +503,152 @@ premise is the engine change: land #171, and the sentinel never survives the
 fold.  Until then `NoMaskedMobility` is the honest name for the gap, and it is a
 *search-level* premise because the gap is in the search.
 
+## The eventual classification (`Eventual.lean`)
+
+`eventual_classification` states the trichotomy at EVERY depth and
+spends four premises.  This module asks how many of them survive
+weakening the conclusion to "from some depth `D0` on" -- which is all
+the driver's `range(1, 1000)` deepening loop ever needs.  Two answers,
+one negative and one positive, and one premise that turns out never to
+have been needed.
+
+**`NearMaximalChoice` is free here, and the mate tempo is why.**  The
+driver stops bisecting at `upper - lower <= EVAL_ROUGHNESS`, so the
+shipped root may settle for a value within 15 of the best.
+`Shortest.lean` pays for that one RUNG at a time and needs parity to
+refund it.  At band granularity nothing needs refunding, and the
+statement that makes this a theorem rather than an appeal to
+magnitudes is:
+
+```text
+nullValueD2_offCorridor :
+  0 ≤ B → EvalBand G.toNullGame.toGame B →
+  ∀ d p, OffCorridor B (nullValueD2 G guard d p)
+```
+
+The declared value never enters the corridor between the static score
+range and either band edge.  Four cases, no chess content: the two
+sentinel branches, the terminal ladder (or the stalemate `0`), the
+static eval, and closure of the corridor's complement under negation
+and `max` -- which is all the fold does.  For the shipped tables that
+corridor is `MATE_LOWER - evalBound = 47923 - 15437 = 32486` points
+wide: `shipped_band_gap_wide` machine-checks that it exceeds **two
+thousand** stopping tolerances.  So a 15-point slack cannot move a
+value across a band edge, and the move the driver leaves in `tp_move`
+is classified no worse than any admitted alternative:
+
+```text
+nearMaximal_band_exact :
+  NearMaximalChoice G guard d ch → m ∈ movesAbove G (val_lower (d+1)) p →
+  bandOf (nullValueD2 G guard d (ch p)) ≤ bandOf (nullValueD2 G guard d m)
+```
+
+with `nearMaximal_keeps_mate` ("a near-maximal choice never misses a
+mate") and `driver_stop_band_stable` ("the converged bracket cannot
+straddle a band edge") as the two readings that matter.
+
+**The design fact both of these rest on.**  One whole `EVAL_ROUGHNESS`
+of mate tempo per ply was a deliberate choice (#172), not a scaling
+convenience, and it is load-bearing in two different places for two
+different reasons.  At RUNG level it is the *smallest* step that works:
+consecutive mate distances are two plies apart, two plies is two rungs,
+and the resulting gap is strictly wider than the driver's tolerance --
+at one point per ply the gap would be 2 against a tolerance of 15 and
+the shipped driver could take the slower mate (`Shortest.lean`, where
+parity does the refunding).  At BAND level the same constant is
+irrelevant by three orders of magnitude, which is what lets
+`NearMaximalChoice` be dropped from classification results entirely.
+A change to the tempo would have to be re-argued in both places; a
+change to `depth - 3` in the null reduction would have to be
+re-argued in the first.
+
+**The frontier premise, however, survives the weakening.**  Masking is
+genuinely local -- `val_lower 2 = -240` is below the tables' -192 move
+value floor, so from remaining depth 2 up the filter is the identity
+(`filter_identity_off_frontier`) -- which is why the eventual reading
+looked promising: `CexF`'s phantom dissolves at depth 3.
+
+What kills it is that a masked node does not report a shallow mate.  It
+reports the OFF-LADDER sentinel (`maskedFrontier_value`): the filtered
+fold has no admitted legal move, nothing displaces the initial `LOSS`
+accumulator, and the parent negates it to `MATE_UPPER`.  The ladder
+decays one rung per unspent ply; the sentinel decays not at all.  And
+the frontier RENEWS the phantom at every horizon -- absorbing the old
+one buys nothing when a new one arrives one ply deeper.
+
+`CexE` is that argument machine-checked.  An infinite chain
+`C 0 -> C 1 -> ...` in which every node is masked: each generates an
+illegal move valued 0 (admitted at every depth) and the legal
+continuation valued -150 (filtered at `val_lower 1 = -100`, admitted
+from depth 2 on).  The root is a draw in the strongest sense -- no
+forced mate at any budget for either side -- and its declared value is
+
+```text
+D:        0     1     2     3     4     5    ...
+value:    0   -MU    +MU   -MU   +MU   -MU   ...
+```
+
+Odd depths report "I am mated", even depths report "I mate".  The value
+never re-enters the band, so there is no `D0`: the classification is
+not merely unsettled, it is WRONG in both directions, alternately,
+forever.
+
+Every fidelity premise holds, including `EvalBand` at every width
+(every live static score in `CexE` is exactly 0), so this is not a
+granularity failure and the section-2 machinery does not touch it.
+`NoZugzwang` is vacuous -- the null option is off throughout, so the
+pass has nothing to do with it.  What fails is exactly
+`NoMaskedMobility` (`cexE_masked`).
+
+Two escape routes are closed by construction.  **Acyclicity does not
+help**: `cexE_acyclic` -- the only legal move from `C n` is `C (n+1)`,
+so the chain index strictly increases and no position ever repeats.
+**A read-time clamp does not help**: `cexE_clamp_no_help` -- the
+phantom arrives as the exact sentinel, so clamping the root read at
+`MATE_UPPER - 1` still leaves 69,289, well inside the band.
+
+**What the weakening does buy.**  Both COMPLETENESS arms never needed
+the frontier premise at all (`eventual_completeness_without_frontier`,
+`ValFloor` + `NoZugzwang` only).  A phantom invents mates that are not
+there; it cannot hide one that is.  `NoMaskedMobility` pays for exactly
+one thing -- the honesty arm -- and that is now precise rather than
+inherited from the shape of the proof.
+
+**And the engine change still works.**  The frontier-tail variant of
+Part B values `CexE`'s root at an honest `0` at every depth and every
+chain position (`cexE_t_honest`), so `CexE` joins `CexF` as a positive
+test for #171.  With `CexD` (fixed-depth play) and `CexE` (eventual
+classification) both refuting the premise-free reading over the shipped
+value function, the frontier tail is the only route left to retiring
+`NoMaskedMobility`.
+
+| fact | theorem | axioms |
+|---|---|---|
+| masking lives only at remaining depth 1 | `filter_identity_off_frontier` | `propext, Quot.sound` |
+| a masked node reports the sentinel, not a rung | `maskedFrontier_value` | `propext, Quot.sound` |
+| completeness needs no frontier premise | `eventual_completeness_without_frontier` | `propext, Quot.sound` |
+| the declared value avoids the band corridor | `nullValueD2_offCorridor` | `+ Classical.choice` |
+| the shipped corridor is 2000 tolerances wide | `shipped_band_gap_wide` | none |
+| the tolerance cannot move a value across a band edge | `bandOf_eq_of_slack` | `propext, Quot.sound` |
+| a near-maximal choice is band-exact | `nearMaximal_band_exact` | `+ Classical.choice` |
+| ... and never misses a mate | `nearMaximal_keeps_mate` | `+ Classical.choice` |
+| the converged bracket cannot straddle a band edge | `driver_stop_band_stable` | `propext, Quot.sound` |
+| the drawn root's value oscillates between the extremes | `cexE_ladder` | `propext, Quot.sound` |
+| ... with no forced mate for either side | `cexE_no_forcedMate`, `cexE_no_forcedlyMated` | `propext, Quot.sound` |
+| ... and no repeated position anywhere | `cexE_acyclic` | `propext` |
+| ... which the failing premise is `NoMaskedMobility` | `cexE_masked` | `propext` |
+| a read-time clamp does not rescue it | `cexE_clamp_no_help` | `propext, Quot.sound` |
+| **the eventual trichotomy still needs the frontier premise** | `eventual_classification_needs_frontier` | `propext, Quot.sound` |
+| the frontier tail classifies the same root correctly | `cexE_t_honest` | `propext, Quot.sound` |
+| both directions at once | `eventual_classification_verdict` | `propext, Quot.sound` |
+
+The countermodel and the verdict are choice-free; the `Classical.choice`
+in the corridor results is the same by-case pattern
+`eventual_classification` itself carries.  One new fidelity premise,
+`EvalBand B` -- the two-sided form of the table bound `EvalQuiet` reads
+one-sidedly, discharged for the shipped tables at
+`B = EvalBounds.evalBound = 15437`.
+
 ## Terminal positions and legality evidence
 
 The move fold maintains two independent facts:
@@ -475,7 +695,9 @@ at capturable nodes.
 |---|---|
 | recursive zero-window move search | `Bound.bound_spec` |
 | null child report negation | `WindowReport.negate` |
-| `min(pos.score + EVAL_ROUGHNESS, pass_report)` | `cappedNull_report` |
+| `min(pos.score + EVAL_ROUGHNESS, pass_report)` (depth < 6) | `cappedNull_report` |
+| `target = pos.score + NULL_MARGIN` fuel probe (depth >= 6) | `hot_bit_determined`, `hot_bit_stable`, `fuel_edge_cost` |
+| real-move recursion at the reduced `d - 1` | `fuelValueD2t`, `eventual_classification_fuel` |
 | score guard keeps the cap below positive mate | `guardedStaticCap_in_scoreBand`, `guardedCappedNull_below_positiveMate` |
 | full-width move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
 | sticky legality evidence and terminal override | terminal/finalizer results in `Stalemate.lean` |
@@ -507,11 +729,20 @@ transform is the identity, so the model and source are extensionally equal.
 - `TableSwap.lean`: table-update properties.
 - `Liveness.lean` and `Classification.lean`: mate visibility and search-result
   classification under their named fidelity premises.
+- `Eventual.lean`: what the "from some depth on" weakening of the
+  trichotomy buys -- `NearMaximalChoice` retired at band granularity,
+  completeness shown independent of the frontier premise, and `CexE`,
+  the countermodel showing the frontier premise survives the weakening.
 - `Shortest.lean`: mate-distance parity, value separation, distance-to-mate
   optimal play in both directions under the driver's own stopping tolerance, and
   the countermodel showing the frontier premise cannot be dropped from it.
 - `Pruning.lean` and `Tricks.lean`: proof envelopes for selective-search
   techniques.
+- `EventuallyWide.lean`: the fuel oracle -- bounded real-edge cost and the
+  W/D/L trichotomy with no chess premise.
+- `Repetition.lean`: the game-history draw rule on top of the fuel value.
+- `EventuallyFinite.lean`: the finiteness variant -- the trichotomy for the
+  untailed fuel value under `EndsWithin`, with an effective depth bound.
 
 ## Rules for search changes
 

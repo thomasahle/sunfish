@@ -4,6 +4,7 @@ import Sunfish.Stalemate
 import Sunfish.Liveness
 import Sunfish.Shortest
 import Sunfish.Classification
+import Sunfish.Eventual
 import Sunfish.Killer
 import Sunfish.Tricks
 import Sunfish.CanNull
@@ -11,3 +12,6 @@ import Sunfish.EvalBounds
 import Sunfish.Driver
 import Sunfish.CappedNull
 import Sunfish.Pruning
+import Sunfish.EventuallyWide
+import Sunfish.Repetition
+import Sunfish.EventuallyFinite
