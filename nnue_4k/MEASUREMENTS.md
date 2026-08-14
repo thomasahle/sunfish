@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-14 | **REPLNET GOLF ROUND 2 (the 1024-B payload directive): code side 3449 → 3217 (−232) through pack.sh, play-IDENTICAL by node count and probe stream; trained v1 candidate 3831 → 3594 (502 spare); the 1024-B payload budget measures 4238 — 142 OVER** | 20 steps priced, 13 landed, 7 reverted (+1/+2/+6/+7/+8/+12/+14/+36 negatives ledgered); max payload that FITS today: **878 B in-context** (849 at the 30-B margin) vs 617 before = **+261 capacity**; n8 codec seam DEFINED, VERIFIED and PRICED (+15 B code; the payload is the blocker: 4410 @59.6%, 4233 @73.7% zeros); pack.sh intel for the coordinator: `--no-hoist-literals` −24, +shebang strip −32 total; full ladder green (legality 334/334, first-yield worst 183, mate 8/8, conversion 8/8 @1500ms, verify_export bit-exact, nps FASTER) |
 | 2026-08-14 | **`khold2` BUILT, PRICED +27 B (3326 vs 3299), and the mate-conversion suite SPLIT the arms exactly as pre-registered: entry 8/8, khold2 8/8 (move-for-move = base), khold 7/8 — FAILS `kqk-approach`, king a1→b1 then 18 moves of shuffle at halfmove-clock 36** | Thomas's KQK objection is now a measurement, not an argument; **khold2 REPLACES khold in every composition row and khold's screen priority drops to mechanism control**; tables round-trip exact all arms, forbidden compositions raise in all four orders (khold2.pend, pend.khold2, khold2.khold, khold.khold2), standalone packed smoke green. No Elo claimed — screen staged, not armed |
 | 2026-08-14 | **PRE-REGISTERED: `khold2` (khold + lone-queen escape hatch, K_END iff both queens off OR root non-pawn material ≤ 929) and a MATE-CONVERSION gate** — Thomas's KQK concern made measurable | Pure khold would hold the ATTACKING king home in KQK — the king is a mating piece there; khold2's material clause re-engages K_END exactly on lone-queen boards. New instrument `mate_conversion_gate.py` + 8-position KQK/KRK suite, driver-checked, fixed deterministic defender; **expectation pre-registered: entry 8/8, khold2 8/8, khold FAILS kqk-approach** — if it does, khold's screen priority drops and khold2 replaces it in every composition. Screen = H2's instrument verbatim, both secondary readings carried |
 | 2026-08-14 | **H2 candidates BUILT AND PRICED: `kmid` +22 B, `khold` +1 B, `kmid.khold` +23 B against 739 spare** | Order-independent both in-lane (khold.kmid) and CROSS-LANE (kact.kmid ≡ kmid.kact, both 3381, sha-identical); khold.pend raises loudly in both orders as pre-registered; tables round-trip exact, K_END/kend untouched by both; standalone packed smoke green. No Elo claimed — screen staged, not armed |
@@ -237,6 +238,125 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-14 — REPLNET GOLF ROUND 2: the 1024-B payload budget, measured; code side −232, play-identical; 142 B still missing
+
+**Thomas's directive:** the replacement-net artifact gets a **1024-byte net
+payload**; all code (engine + big-int machinery + decoders) must fit so the
+total packed artifact stays ≤ 4096.
+
+**Step zero — the true gap, measured, not composed.** The budget accounting
+is IN-CONTEXT bytes through tools/build/pack.sh (same as the 617-B budget it
+replaces). A real-shaped payload that COSTS 1024 B in context — random
+ternary at the v1 winner's 59.6% zeros through the entry's own codec — is
+`make_proto_payload.py --feats 1330` (raw 1339 chars; the decode reads its
+768 features and never peels the front padding, so the artifact runs). That
+build measures **4473 → true gap 377 B**, top of the expected 120-380 band.
+The pinned measuring payload (feats 1330 / zeros 0.596 / seed 20260814) was
+held fixed through every step below.
+
+**The golf ledger** (every step: pack.sh on the pinned-payload splice +
+replnet_check; accepted steps re-gated at the end; reverts kept):
+
+| step | Δ | total | note |
+|---|---|---|---|
+| flat pst, no zero border | −22 | 4451 | padding never read; K_END always had nonzero padding |
+| value(): castling-rook term | −31 | 4420 | exactly 0 on flat R rows; dead branch out |
+| rows1 via [::-1] | +1 | REVERTED | lzma already had the 119−s pattern |
+| __ne__ deleted | −10 | 4410 | no consumer; eviction spells `not ==`; comment warns tuple.__ne__ trap |
+| QS/QS_A/EVAL_ROUGHNESS/LMR inlined | −17 | 4393 | no external readers; PROBE_CAP/TABLE_SIZE kept then priced separately |
+| nn_cp tail: int(v/(1<<SHIFT)) + max/min | −13 | 4380 | bit-exact (|v| ≤ 11392 « 2^53); FASTER under pypy |
+| MGP folded into gains decode | −6 | 4374 | |
+| rows0/rows1 zip+slice forms | +7 | REVERTED | dedup loss beats raw savings |
+| null-guard literal 'RBNQ'→'NBRQ' | −4 | 4370 | any() is order-free; dedups with promotion literal |
+| import os → hidden dev block | −3 | 4367 | os is driver-resolution-only |
+| directions["K"] alias | +8 | REVERTED | duplicate tuple was already free |
+| tt Entry namedtuple → plain pairs | −17 | 4350 | lo/up unpack reused at the store |
+| is-None tests → truthiness | −2 | 4348 | Move tuples always truthy |
+| parse loop keyed on len(hist) | −12 | 4336 | exact parity identity; aligns with both render sites |
+| rend() helper factoring | +2 | REVERTED | sharing costs bytes under lzma... |
+| ...render sites spelled byte-identically | −8 | 4328 | ...but ALIGNMENT is free: same var names, whole-block lzma match |
+| trit peel as one comprehension | −10 | 4318 | `_d // 3**k % 3`; `_half[_p] = _h = [0]*120` |
+| header decode as block peels | 0 | REVERTED | byte-neutral; loop form kept |
+| value(): pawn ep/prom flat constants | −6 | 4312 | rows flat ⇒ the literal 100; prom stays a table read |
+| generated `initial` string | +14 | REVERTED | lzma loved the literal rows |
+| TABLE_SIZE + PROBE_CAP inlined | −8 | 4304 | dev Hash option simply not offered (hasattr-guarded); consumers target sunfish_nnue |
+| numeric knight directions | +3 | REVERTED | symbolic A+B dedups better |
+| lambda params, put(j,p), 9e9, while 1 | −4 | 4300 | pyminify leaves lambda params unrenamed |
+| from time import time | −2 | 4298 | 3 call sites |
+| __hash__ on 3 fields | +3 | REVERTED | measured, not assumed |
+| version = "sunfish replnet" | −5 | 4293 | API name kept; value truthful |
+| layout literals hardcoded | −24 | 4269 | NN/LBITS/VBITS/HALF/ONES/M16 → literals; n8 literal map in the header comment |
+| ACC_BASE folded into _B | −4 | 4265 | |
+| gen_moves ep/kp guard → abs form | −6 | 4259 | same set {ep, kp, kp±1}; dedups with k()/value() |
+| def main() removed | +36 | REVERTED | **locals are CHEAPER than globals under --rename-globals** |
+| decode wrapped in a builder fn | +14 | REVERTED | the inverse also loses: plumbing beats rename gains — current structure is the optimum |
+| piece dict via zip("PNBRQK", ...) | −9 | 4250 | the literal dedups 3 ways |
+| directions via zip("PNBRQK", ...) | −6 | 4244 | |
+| pst from piece.items() | +12 | REVERTED | |
+| `% 2 == 0` → `not ... % 2` (5 aligned sites) | −3 | 4241 | |
+| value() capture test `q != "."` | −3 | 4238 | targets on-board ⇒ piece or "."; dedups with move() |
+
+**Result: 4473 → 4238 (−235); code-only (payload elided) 3449 → 3217
+(−232); trained v1 candidate 3831 → 3594 (502 spare).**
+
+**The budget line (measured):** payload 1024 / code 3217 / total **4238 —
+142 OVER 4096**. The directive's 1024-B payload does NOT fit yet. What
+fits TODAY at 59.6% random ternary: **payload 878 / code 3217 / total 4095**
+(--feats 1135), or **849 B at the 4066 safety line** (--feats 1095). Against
+the old 617-B budget that is **+261 B of paid-for capacity**, and the
+trained-payload discount is large (v1's 777-char trained payload costs 382
+in context vs 612 random-shaped): a trained net that SPENDS ~878 B will
+carry well over 1135 features' worth of structure.
+
+**Play-identity, verified:** node counts and full probe streams (depth,
+gamma, score, move) are bit-identical to origin/nnue-4k over 5 random-walk
+roots at depth 5 and the 6-move Ruy position at depth 7 (17,991 nodes both).
+Every accepted step is exactness-preserving by construction; dedicated
+scripts verified castling/ep/promotion incremental identity (ps/acc/score ==
+from_board fresh) under BOTH K tables, and the builtin loop's rewritten
+parse against 4 long random games through the packed artifact.
+
+**Gate ladder on the golfed trained candidate (3594):** replnet_check PASS;
+verify_export (a,b,c) bit-exact (payload==trainer; entry==int-ref==torch
+on 60 fens x 3 views + 40-ply walk); legality **334/334** (packed);
+first-yield **worst 183 / 2048, 0 over** (source+driver); mate **8/8**;
+mate-conversion **7/8 @500ms, 8/8 @1500ms — and origin reads the same 8/8
+@1500ms**, the documented marginal-flip noise, not a change. nps probe
+(pypy, interleaved): golfed 14.4-15.6 us/node vs origin 17.0-18.6 — the
+int(v/2^s) tail is FASTER, node-for-node identical.
+
+**The c1024-n8 codec seam (TRAINQUEUE #3 asked this lane to define it):**
+two chars per feature, low char = lanes 0-3, high char = lanes 4-7; decode =
+`divmod(_w, 8100)` + trit_k = `_d // 90**(k//4) % 90 // 3**(k%4) % 3`,
+range(8), and the 128-bit literal map (1<<256 for _U, _R2 = 1|1<<128,
+rows shift 128, nn_cp mods at 128). Built in scratch, mirror/walk/
+antisymmetry invariants PASS, and PRICED: **n8 code-only 3232 (+15)**; n8
+payload is 1553 raw chars → totals **4410 @59.6% zeros, 4233 @73.7%** —
+n8-at-ps768 does not fit without ~80%+ zeros or the bake-off lane's better
+encoder. The seam is agreed on the golf side; export_replnet already emits
+N=8 (make_proto_payload --N 8 matches it digit-for-digit).
+
+**Instrument intel for the coordinator (NOT landed — pack.sh changes every
+anchor):** pyminify's literal hoisting fights lzma: `--no-hoist-literals`
+is **−24 B** on this artifact; stripping the (unused-in-artifact) shebang
+line in the pack pipe adds −8: **−32 combined** (4238 → 4212 equivalent;
+capacity 878 → ~910). lzma lc/lp sweeps are ±0-1 and not worth it.
+
+**Coordination (training lane):** c1024-cal fits trivially (ps768 max cost
+≈ 720 < 849). c1024-kb4 stays priced out (12,288 trits ≈ 3,072 chars raw,
+mid-2k in context). The export path accepts any payload size through
+splice_entry, and the entry decode ignores front padding by construction —
+verified end-to-end at feats 1330. Capacity number to size arms against:
+**849 B in-context at the safety line, 878 absolute**, measured with
+random ternary at 59.6%; re-price per-arm as sparsity moves.
+
+**What did NOT close:** the remaining 142 B (110 with the pack.sh intel).
+The engine regions after this round: bound 498, uci-main 467, move+value
+363, gen_moves 208, machinery ~400 — all previously golfed; the reverts
+above mark the measured walls. Next credible code-side moves are semantic
+(sort tie-break, K_END drop, TM shrink) and belong to screened lanes, not
+golf.
 
 ## 2026-08-14 — khold2 BUILT AND PRICED +27 B; the mate-conversion suite splits khold from khold2 EXACTLY on the pre-registered position
 

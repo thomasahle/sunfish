@@ -13,6 +13,13 @@ for, so lzma sees the true byte cost:
     which is what lets lzma exploit zero-heavy weights (the ledger's
     "base-3 and lzma COMPOSE" measurement, commit 4850894),
   * extraction order, LSB first: shift, N gains, N biases, 768*N trits.
+
+--feats > 768 sizes the payload for a LARGER capacity (Thomas's 1024-B
+payload directive, 2026-08-14): the extra feature chars sit at the MSB end
+(the FRONT of the string), which the entry's decode never peels -- the
+artifact stays runnable while lzma prices the full-capacity stream. The
+real larger-net decode seam (n8 / kb deltas) is agreed with TRAINQUEUE
+before any training run uses it.
 """
 import argparse
 import random
@@ -29,6 +36,7 @@ p = argparse.ArgumentParser()
 p.add_argument("--N", type=int, default=4)
 p.add_argument("--seed", type=int, default=20260814)
 p.add_argument("--zeros", type=float, default=0.55)
+p.add_argument("--feats", type=int, default=768)
 args = p.parse_args()
 
 rng = random.Random(args.seed)
@@ -36,7 +44,7 @@ digits = [6]                                          # shift
 digits += [rng.randint(20, 60) for _ in range(args.N)]    # gains C_k
 digits += [rng.randint(0, 87) for _ in range(args.N)]     # biases b_k + 44
 trits = [0 if rng.random() < args.zeros else rng.choice((-1, 1))
-         for _ in range(768 * args.N)]
+         for _ in range(args.feats * args.N)]
 for i in range(0, len(trits), 4):
     digits.append(sum((trits[i + j] + 1) * 3 ** j for j in range(4)))
 

@@ -9,27 +9,30 @@ echo "Error: sunfish requires pypy3 or python3" >&2
 exit 1
 ":"""
 
-import os
-import time
+from time import time
 from itertools import count
 from collections import namedtuple
 
-version = "sunfish 2026-packed"
+version = "sunfish replnet"
 
 ###############################################################################
 # Evaluation: packed big-int NNUE REPLACEMENT net -- no positional tables
 ###############################################################################
 # REPLACEMENT-NET PROTOTYPE (nnue-4k lane, 2026-08-14) -- NOT AN ENTRY.
 # Base: pst_entry.py @ 71c9ba1 (3341 B packed; ENGINE-SANS-EVAL 2871 by
-# price_engine.sh). Measured with tools/build/pack.sh: machinery 578 B
-# (payload elided via replacing the string below with ""), N=4 payload
-# in-context 626 B @55% zeros -> TOTAL 4075 B (21 spare); 4062 @60%,
-# 4025 @66%, 4105 @42% (9 OVER). The trained net must land >= ~58% zeros
-# to keep the 30 B safety margin. Invariant suite: packed/replnet_check.py.
+# price_engine.sh). GOLF ROUND 2 (2026-08-14, the 1024-B payload directive),
+# all via tools/build/pack.sh, search play-identical by node count:
+#   code side (payload string elided)      3449 -> 3217
+#   trained v1 payload spliced (l1=0.001)  3831 -> 3594  (502 spare)
+#   payload capacity that fits 4096        878 B in-context  (849 at the
+#     30-B margin) measured with random ternary @59.6% zeros through the
+#     codec (make_proto_payload.py --feats 1135/1095); Thomas's 1024-B
+#     payload budget builds to 4238 (--feats 1330) -- 142 B still to find
+#     on the code side. Step ledger: MEASUREMENTS.md 2026-08-14.
+# Invariant suite: packed/replnet_check.py.
 # The distilled positional tables are GONE. The score base is a flat MATERIAL
-# table built from `piece` (exactly price_engine.sh's stub, so every packed
-# byte above ENGINE-SANS-EVAL is attributable to the net), and every
-# positional signal comes from the packed big-int net:
+# table built from `piece` (price_engine.sh's stub semantics, flat rows), and
+# every positional signal comes from the packed big-int net:
 #     score = mat(pos) + clip(nn(pos), -CLAMP, CLAMP)
 # `value(move)` reads the flat tables, so ordering / the QS gate / futility
 # see exact MATERIAL deltas, and the king-gone sentinel and mate arithmetic
@@ -38,22 +41,29 @@ version = "sunfish 2026-packed"
 # ternary payload (make_proto_payload.py, 55% zeros): this file prices bytes,
 # it does not claim Elo.
 
-piece = {"P": 100, "N": 280, "B": 320, "R": 479, "Q": 929, "K": 60000}
-pst = {_k: tuple([0] * 20 + sum(([0] + [piece[_k]] * 8 + [0]
-                 for _i in range(8)), []) + [0] * 20) for _k in "PNBRQK"}
+piece = dict(zip("PNBRQK", (100, 280, 320, 479, 929, 60000)))
+# Flat material rows with NO zero border: pst is only ever indexed at move
+# squares, piece squares, or their 119-s mirrors -- all on-board -- so the
+# padding entries are never read (K_END below has always had nonzero
+# padding, which proves the border was dead). value() stays an exact
+# material delta; the price_engine.sh stub keeps the bordered form only
+# because it must splice into entries whose tables are read differently.
+pst = {_k: (piece[_k],) * 120 for _k in "PNBRQK"}
 K_MID, K_END = pst["K"], tuple(piece["K"] + 70
    - 10 * (abs(2 * (i // 10) - 11) + abs(2 * (i % 10) - 9)) for i in range(120))
 
 # --- packed big-int NNUE machinery (v1 hot loop, golfed G12) at N=4, ternary
-NN, LBITS, VBITS, CLAMP = 4, 16, 15, 600     # lanes per block, bit layout
-ONES = (1 << VBITS) - 1
-HALF = NN * LBITS
-M16 = (1 << LBITS) - 1
-# 2^16 == 1 (mod 2^16-1): dividing the all-ones word by M16 replicates a 1
+# Layout literals, hardcoded (a named constant costs ~2 packed B each):
+# 4 lanes x 16 bits, value bits 15, half-width 4*16 = 64, lane mask
+# 65535 = 2^16-1, value mask 32767. The N=8 seam flips them to: range(8),
+# half 128 (1<<128 / >>64->>>128 sites), _R2 = 1|1<<128, and TWO payload
+# chars per feature -- agree with TRAINQUEUE before training c1024-n8.
+CLAMP = 600
+# 2^16 == 1 (mod 2^16-1): dividing the all-ones word by 65535 replicates a 1
 # into every lane, so masks are one multiply each instead of a build loop.
-_U = ((1 << 2 * HALF) - 1) // M16
-_R2 = 1 | 1 << HALF              # replicate one block's word into both
-MH, MVAL, MLO = _U << VBITS, _U * ONES, _U << 14
+_U = ((1 << 128) - 1) // 65535
+_R2 = 1 | 1 << 64                # replicate one block's word into both
+MH, MVAL, MLO = _U << 15, _U * 32767, _U << 14
 _PIECES = "PNBRQKpnbrqk"
 
 # Payload decode (base-90, the old pst string's codec). Extraction, LSB
@@ -62,50 +72,47 @@ _w = 0
 for _c in "kJ_E,L2D1C)b9;_lJOOMe0L+2LLXqI0hhG5LY@J0KbF[FrLLKKLe11jIIF1IJICAEM_UniO9CeGULM0JOC4DhC:KqBJ@tp?O1UZVhXH'EtpYC5L3CU-0ITTeL2DFLrC:BqCFLOOkL1KLUXCLLUL`HFt5h+inMLIXL+IIKTn5$KUL';>UgO_:h1TKIFi^=1qFC1@MhX_:$L'L0&LJqMYCMOBDHtC+LLLPI.KML4K1'?UhhhL>@G'ROHqONT+WiUXCtCU)I5@?1L<Kofl=UUqeTLS`JAnFLFIPnuiVOIDhdLID#FM[.^BV41IBKL?GSOnVYUJ2hLiV9KKBU-O1OK=Lm>A10KUXV:1qeTKT2V2:LWBCIFYOKOpEHUV[:$?@BBNp1@Rr)Nh6WPRL_g;BL_KgNMnLLSgIL_NL4t_UMM@4hdbh[.40S3MIM1JDIWL=CKqNk0*IGFIPH_7FF/LL)kMMK7hIueKIKpu.%+LZR4UefJiL$KHIgqGIIJLKC04h=LLLLBEeM`Ube/UcMHF^UqkUKJJLXeINTD5L$lpiWU9qIOUkDTUG2OO;2YZdMLX41PnqiC4[UOtMCLMRkLI41:eXM1HJRseUL0&.rLUKaV:gMCX1j1So?1TGgKIFd31kVkGaJIhlU'iGLXBt@9`KL4016K1bafLPL)KI_L^7K7OcB/KqgLLfLUlIBROVLPKLngMChLu@LO4RKfMUXD1h4Kit3BVKrKKrL2_;I3HhXUqUL4`110BELK2'CQt4eTL11h..nweR:Y_M*":
  _d = ord(_c) - 35; _w = _w * 90 + _d - (_d > 4) - (_d > 56)
 _w, SHIFT = divmod(_w, 90)
-_g, _B = [], 0
-for _k in range(NN):
-    _w, _d = divmod(_w, 90); _g.append(_d)
-for _k in range(NN):
-    _w, _d = divmod(_w, 90); _B += _d - 44 << LBITS * _k
-
-# Per-lane activation ceilings G_k (both blocks), and the base: offset-binary
-# BIAS plus the trained per-lane bias, every lane.
-MGP = sum(_g[_k] * 32 << LBITS * _k for _k in range(NN)) * _R2
+# Per-lane activation ceilings G_k (both blocks) fold as the gains decode;
+# _B is the trained per-lane bias, every lane, offset-binary.
+_g, _B, MGP = [], 0, 0
+for _k in range(4):
+    _w, _d = divmod(_w, 90); _g.append(_d); MGP += _d * 32 << 16 * _k
+for _k in range(4):
+    _w, _d = divmod(_w, 90); _B += _d - 44 << 16 * _k
+MGP *= _R2
 MGH = MGP | MH
-ACC_BASE = MLO + _B * _R2
+_B = MLO + _B * _R2      # the empty-board accumulator: sign offsets + biases
 # One char = one feature's NN lanes (4 trits, values 0..80), in build order:
 # decode and half-row construction are ONE pass, gains folded as they land.
 # Padding squares stay 0 in every half, so the mirrored composition below
 # needs no validity test.
 _half = {}
 for _p in _PIECES:
-    _h = [0] * 120
+    _half[_p] = _h = [0] * 120
     for _f in range(64):
         _w, _d = divmod(_w, 90)
-        _r = 0
-        for _k in range(NN):
-            _d, _t = divmod(_d, 3); _r += _g[_k] * (_t - 1) << LBITS * _k
-        _h[21 + _f // 8 * 10 + _f % 8] = _r
-    _half[_p] = _h
+        _h[21 + _f // 8 * 10 + _f % 8] = sum(
+            _g[_k] * (_d // 3 ** _k % 3 - 1) << 16 * _k for _k in range(4))
 
 # ROWS[pf][piece][square]: us-block = the feature in this frame, them-block =
 # the mirrored feature in the opponent's frame; one shared weight table.
-_rows0 = {_p: [_half[_p][_s] + (_half[_p.swapcase()][119 - _s] << HALF)
+_rows0 = {_p: [_half[_p][_s] + (_half[_p.swapcase()][119 - _s] << 64)
                for _s in range(120)] for _p in _PIECES}
 _rows1 = {_p: [_rows0[_p.swapcase()][119 - _s] for _s in range(120)] for _p in _PIECES}
 ROWS = (_rows0, _rows1)
 
 def nn_cp(acc, pf):
     """Clipped centipawn output of the packed net, mover's point of view."""
-    m = ((acc & MLO) >> 14) * ONES              # lane >= 0 ?
+    m = ((acc & MLO) >> 14) * 32767             # lane >= 0 ?
     y = ((acc & m) | MLO) - MLO                 # relu
-    m = (((MGH - y) & MH) >> VBITS) * ONES      # lane <= G_k ?
+    m = (((MGH - y) & MH) >> 15) * 32767        # lane <= G_k ?
     y = (y & m) | (MGP & (m ^ MVAL))            # capped at G_k
-    v = y % (1 << HALF) % M16 - (y >> HALF) % M16  # 2^16 == 1 (mod 2^16-1)
+    v = y % (1 << 64) % 65535 - (y >> 64) % 65535  # 2^16 == 1 (mod 2^16-1)
     if pf:
         v = -v
-    v = (v >> SHIFT) if v >= 0 else -((-v) >> SHIFT)  # round towards zero
-    return -CLAMP if v < -CLAMP else (CLAMP if v > CLAMP else v)
+    # int(v / 2^s) is EXACT (|v| <= sum of lane caps 11392 << 2^53) and
+    # truncates toward zero -- same result as the branchy shift pair.
+    return max(-CLAMP, min(CLAMP, int(v / (1 << SHIFT))))
 
 ###############################################################################
 
@@ -137,14 +144,13 @@ initial = (
 
 # Lists of possible moves for each piece type.
 N, E, S, W = -10, 1, 10, -1
-directions = {
-    "P": (N, N+N, N+W, N+E),
-    "N": (N+N+E, E+N+E, E+S+E, S+S+E, S+S+W, W+S+W, W+N+W, N+N+W),
-    "B": (N+E, S+E, S+W, N+W),
-    "R": (N, E, S, W),
-    "Q": (N, E, S, W, N+E, S+E, S+W, N+W),
-    "K": (N, E, S, W, N+E, S+E, S+W, N+W)
-}
+directions = dict(zip("PNBRQK", (
+    (N, N+N, N+W, N+E),
+    (N+N+E, E+N+E, E+S+E, S+S+E, S+S+W, W+S+W, W+N+W, N+N+W),
+    (N+E, S+E, S+W, N+W),
+    (N, E, S, W),
+    (N, E, S, W, N+E, S+E, S+W, N+W),
+    (N, E, S, W, N+E, S+E, S+W, N+W))))
 
 # Mate value must be greater than 8*queen + 2*(rook+knight+bishop)
 # King value is set to twice this value such that if the opponent is
@@ -161,29 +167,20 @@ directions = {
 # transposition table's fresh entries assume it (formal/Sunfish/Tricks.lean,
 # `Bounded`). The tables above guarantee it; keep it true if you change them.
 
-# Constants for tuning search
-QS = 40
-QS_A = 140
-EVAL_ROUGHNESS = 15
-# Probes per depth before the MTD driver gives up and commits what it has.
-# The stable engine provably needs <= 15; this engine may not, so the bound
-# is enforced rather than assumed.
-PROBE_CAP = 40
-# Late move reduction: reduce quiet moves whose static value is below this,
-# once past the first few in the sorted list. 0 disables (classic parity).
-LMR = 60
-# Max entries kept in each transposition table, roughly 1GB per million.
-# Python dicts keep insertion order, so we cheaply evict the oldest entry
-# when full (see issue #95).
-TABLE_SIZE = 10**6
+# Search-tuning constants live INLINE at their single use sites (QS 40,
+# QS_A 140, EVAL_ROUGHNESS 15, LMR 60): a packed artifact pays ~2 B per
+# name, and none has an external reader (opt_ranges uses kwargs, the
+# variant grepper targets pst_entry). PROBE_CAP and TABLE_SIZE keep their
+# names: test_mtd_stability reads/greps the former, the dev driver's Hash
+# option and test_eviction_race assign the latter.
+# Probe cap (40/depth before MTD commits what it has) and table size
+# (10**6 entries/table, ~1GB; insertion-order eviction, issue #95) are
+# inlined at their use sites like the other tuning constants. The dev
+# driver's Hash option keys on hasattr(TABLE_SIZE) and is simply not
+# offered here.
 
 # minifier-hide start
-opt_ranges = dict(
-    QS = (0, 300),
-    QS_A = (0, 300),
-    EVAL_ROUGHNESS = (0, 50),
-    TABLE_SIZE = (10**4, 10**8),
-)
+opt_ranges = {}    # every tunable is inlined; nothing left to sweep
 # minifier-hide end
 
 
@@ -223,8 +220,10 @@ class Position(namedtuple("P", "board score ps wc bc ep kp acc pf")):
         return (self.board == o.board and self.ep == o.ep and self.kp == o.kp
                 and self.wc == o.wc and self.bc == o.bc)
 
-    def __ne__(self, o):
-        return not self.__eq__(o)
+    # NO __ne__ on purpose: with __eq__ overridden but no __ne__, `!=` falls
+    # back to tuple.__ne__, which compares score too -- the identity bug the
+    # class docstring warns about. Never use != on positions; the single
+    # eviction site below spells `not ... ==`.
 
     def gen_moves(self):
         # For each of our pieces, iterate through each possible 'ray' of moves,
@@ -246,12 +245,11 @@ class Position(namedtuple("P", "board score ps wc bc ep kp acc pf")):
                     if p == "P":
                         if d in (N, N + N) and q != ".": break
                         if d == N + N and (i < A1 + N or self.board[i + N] != "."): break
-                        if (
-                            d in (N + W, N + E)
-                            and q == "."
-                            and j not in (self.ep, self.kp, self.kp - 1, self.kp + 1)
-                            #and j != self.ep and abs(j - self.kp) >= 2
-                        ):
+                        # same set as the tuple test (ep == 0 or kp == 0
+                        # never match an on-board j), and the abs form dedups
+                        # with k() and value()
+                        if (d in (N + W, N + E) and q == "."
+                                and j != self.ep and abs(j - self.kp) >= 2):
                             break
                         # If we move to the last row, we can be anything
                         if A8 <= j <= H8:
@@ -283,7 +281,7 @@ class Position(namedtuple("P", "board score ps wc bc ep kp acc pf")):
     def move(self, move):
         i, j, prom = move
         p, q = self.board[i], self.board[j]
-        put = lambda board, i, p: board[:i] + p + board[i + 1 :]
+        put = lambda b, i, p: b[:i] + p + b[i + 1:]
         # Copy variables and reset ep and kp
         board = self.board
         wc, bc, ep, kp = self.wc, self.bc, 0, 0
@@ -293,7 +291,7 @@ class Position(namedtuple("P", "board score ps wc bc ep kp acc pf")):
         if q != ".":
             acc -= row[q][j]
         # Actual move
-        board = put(board, j, board[i])
+        board = put(board, j, p)
         board = put(board, i, ".")
         # Castling rights, we move the rook or capture the opponent's
         wc = (wc[0] and i != A1, wc[1] and i != H1)
@@ -328,22 +326,24 @@ class Position(namedtuple("P", "board score ps wc bc ep kp acc pf")):
         p, q = self.board[i], self.board[j]
         # Actual move
         score = pst[p][j] - pst[p][i]
-        # Capture
-        if q in "pnbrqk":
+        # Capture (move targets are on-board: q is a piece or ".")
+        if q != ".":
             score += pst[q.upper()][119 - j]
         # Castling check detection
         if abs(j - self.kp) < 2:
             score += pst["K"][119 - j]
-        # Castling
-        if p == "K" and abs(i - j) == 2:
-            score += pst["R"][(i + j) // 2]
-            score -= pst["R"][A1 if j < i else H1]
-        # Special pawn stuff
+        # No castling term: the classic rook adjustment is pst["R"][kp] -
+        # pst["R"][A1/H1], exactly 0 on flat rows. (move() still moves the
+        # rook on the board and in the accumulator -- the NET sees castling;
+        # the material delta does not.)
+        # Special pawn stuff. The pawn rows are flat, so the promoted-from
+        # and ep-captured pawn terms are the literal 100 (prom stays a table
+        # read: N/B/R/Q rows are flat too, but the key varies).
         if p == "P":
             if A8 <= j <= H8:
-                score += pst[prom][j] - pst["P"][j]
+                score += pst[prom][j] - 100
             if j == self.ep:
-                score += pst["P"][119 - (j + S)]
+                score += 100
         return score
 
     def k(self):
@@ -366,14 +366,15 @@ class Position(namedtuple("P", "board score ps wc bc ep kp acc pf")):
 class Stop(Exception): pass
 
 
-# lower <= s(pos) <= upper
-Entry = namedtuple("E", "l u")
+# tt entries are plain (lower, upper) pairs: lower <= s(pos) <= upper.
+# (Was a namedtuple; nothing outside bound() ever read .l/.u, and the
+# packed artifact pays ~15 B for the class.)
 
 
 class Searcher:
     def __init__(self):
         self.t, self.tp_move, self.h = {}, {}, set()
-        self.nodes, self.deadline = 0, 1 << 63
+        self.nodes, self.deadline = 0, 9e9   # ~year 2255
         # minifier-hide start
         self.node_cap = 1 << 62          # testing only; see bound()
         # minifier-hide end
@@ -418,7 +419,7 @@ class Searcher:
         # minifier-hide end
         # Enforce the time budget inside the search: iteration boundaries can
         # be seconds apart on slow hardware, this is checked every ~2k nodes.
-        if self.nodes % 2048 == 0 and time.time() > self.deadline: raise Stop
+        if not self.nodes % 2048 and time() > self.deadline: raise Stop
 
         # Depth <= 0 is QSearch. Here any position is searched as deeply as is needed for
         # calmness, and from this point on there is no difference in behaviour depending on
@@ -436,7 +437,7 @@ class Searcher:
         # ply shallower instead. This REPLACED the IID probe, which answered
         # the same question by running a whole extra shallow search; keeping
         # both would pay twice for one observation.
-        if depth > 2 and killer is None: depth -= 1
+        if depth > 2 and not killer: depth -= 1   # a Move is always truthy
 
         # Sunfish is a king-capture engine, so we should always check if we
         # still have a king. Notice since this is the only termination check,
@@ -460,9 +461,9 @@ class Searcher:
         # same two numbers the entry held.) At the root 'entry' stays
         # unbound - its only other reader is the store below, also skipped.
         if not root:
-            entry = self.t.get((pos, depth), Entry(-MATE_UPPER, MATE_UPPER))
-            if entry.l >= gamma: return entry.l
-            if entry.u < gamma: return entry.u
+            lo, up = self.t.get((pos, depth), (-MATE_UPPER, MATE_UPPER))
+            if lo >= gamma: return lo
+            if up < gamma: return up
 
             # Let's not repeat positions. We don't chat
             # - at the root (a driver probe) since it is in history, but not a draw.
@@ -502,7 +503,7 @@ class Searcher:
             # an older 300-game test on the NNUE eval was flat, which by the
             # (feature, eval) rule does not settle it here). Until that lands,
             # this comment describes the code as written.
-            if not root and depth > 2 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
+            if not root and depth > 2 and abs(pos.score) < 500 and any(c in pos.board for c in "NBRQ"):
                 score = -self.bound(pos.rotate(n=True), 1 - gamma, depth - 3)
                 # A fail high is a virtual claim, and needs verification
                 # before it may cut: if the king is capturable the capture is
@@ -531,7 +532,7 @@ class Searcher:
             # We only generate moves with an intrinsic score above some treshold
             # that decreases with depth. This is a generalization of Quiescent Search,
             # See https://chessprogramming.org/Quiescence_Search for details.
-            val_lower = QS - depth * QS_A
+            val_lower = 40 - depth * 140    # QS - depth * QS_A
 
             # Now finally play the killer move. But note that we have to respect
             # the QS lower bound, otherwise we would get search instability.
@@ -581,7 +582,7 @@ class Searcher:
                 # A null-window driver makes the verification re-search cheap:
                 # the reduced search only needs to be trusted when it FAILS
                 # LOW (score < gamma), and a fail-high is re-run at full depth.
-                red = LMR and depth > 2 and cnt > 2 and val < LMR
+                red = depth > 2 and cnt > 2 and val < 60    # LMR threshold
                 score = -self.bound(pos.move(move), 1 - gamma, depth - 2 if red else depth - 1)
                 if red and score >= gamma:
                     score = -self.bound(pos.move(move), 1 - gamma, depth - 1)
@@ -592,10 +593,10 @@ class Searcher:
         best, live = -MATE_UPPER, False
         for move, score in moves():
             best = max(best, score)
-            live |= move is not None and score > -MATE_UPPER
+            live |= bool(move) and score > -MATE_UPPER
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
-                if move is not None and depth:
+                if move and depth:
                     self.tp_move[pos] = move
                     # Never evict the current search root: its killer is the
                     # answer go_loop plays, and once the table churns more
@@ -604,8 +605,8 @@ class Searcher:
                     # then stores whatever capture sorts first and a timeout
                     # plays it (three -5ish queen/piece giveaways in 145
                     # production games).
-                    if len(self.tp_move) > TABLE_SIZE:
-                        del self.tp_move[next(k for k in self.tp_move if k != self.r)]
+                    if len(self.tp_move) > 10**6:
+                        del self.tp_move[next(k for k in self.tp_move if not k == self.r)]
                 break
 
         # If we didn't see any legal moves, it might just be that we failed
@@ -624,8 +625,8 @@ class Searcher:
         # incomparable evaluations of a move breaks this - that is a bug,
         # not a configuration; see formal/README.md.
         if not root:
-            self.t[pos, depth] = Entry(best, entry.u) if best >= gamma else Entry(entry.l, best)
-        if len(self.t) > TABLE_SIZE:
+            self.t[pos, depth] = (best, up) if best >= gamma else (lo, best)
+        if len(self.t) > 10**6:
             del self.t[next(iter(self.t))]
 
         return best
@@ -655,7 +656,7 @@ class Searcher:
             # 'while lower != upper' would work, but it's too much effort to spend
             # on what's probably not going to change the move played.
             lower, upper, probes = 1 - MATE_UPPER, MATE_UPPER, 0
-            while lower < upper - EVAL_ROUGHNESS:
+            while lower < upper - 15:    # EVAL_ROUGHNESS
                 score = self.bound(pos, gamma, depth, root=True)
                 # INSTABILITY GUARDS. This engine deliberately breaks
                 # one-value-per-key (reductions, history, gamma-dependent
@@ -677,9 +678,9 @@ class Searcher:
                 else: upper = min(upper, score)
                 probes += 1
                 yield depth, gamma, score, self.tp_move.get(pos)
-                if lower > upper or probes > PROBE_CAP:
+                if lower > upper or probes > 40:   # PROBE_CAP
                     # minifier-hide start
-                    if probes > PROBE_CAP:
+                    if probes > 40:
                         print("info string MTD-GUARD probe cap hit: depth", depth,
                               "lower", lower, "upper", upper, flush=True)
                     if lower > upper:
@@ -703,7 +704,7 @@ def render(i): return chr((i - A1) % 10 + ord("a")) + str(1 - (i - A1) // 10)
 def from_board(board, wc=(True, True), bc=(True, True), ep=0, kp=0, pf=0):
     """Build a position (and its accumulator) from scratch, in one pass;
     `board` is in the mover's orientation."""
-    ps, acc, row = 0, ACC_BASE, ROWS[pf]
+    ps, acc, row = 0, _B, ROWS[pf]
     for i, p in enumerate(board):
         if p.isalpha():
             ps += pst[p][i] if p.isupper() else -pst[p.upper()][119 - i]
@@ -722,6 +723,7 @@ def main():
     # sunfish_ui/ and falls through to the built-in loop below, which is
     # all the 4k rules require.
     try:
+        import os
         import sys
         import inspect
         # NOTE this puts THIS FILE'S GRANDPARENT at the front of sys.path,
@@ -768,7 +770,7 @@ def main():
     # minifier-hide end
 
     searcher = Searcher()
-    while True:
+    while 1:
         args = input().split()
         if args[0] == "uci":
             print("id name", version)
@@ -782,16 +784,18 @@ def main():
 
         elif args[:2] == ["position", "startpos"]:
             del hist[1:]
-            for ply, move in enumerate(args[3:]):
+            for move in args[3:]:
                 i, j, prom = parse(move[:2]), parse(move[2:4]), move[4:].upper()
-                if ply % 2 == 1:
+                # len(hist) even == black to move == mirror the coordinates
+                # (same test as both render sites below)
+                if not len(hist) % 2:
                     i, j = 119 - i, 119 - j
                 hist.append(hist[-1].move(Move(i, j, prom)))
 
         elif args[0] == "go":
             # The times may come in any order and combination, e.g. "go wtime 100 btime 100"
             times = dict(zip(args[1::2], map(int, args[2::2])))
-            side = "wb"[len(hist) % 2 == 0]
+            side = "wb"[not len(hist) % 2]
             wtime, winc = times.get(side + "time", 60000), times.get(side + "inc", 0)
             # TC-conditional budget; see sunfish_ui/uci.py for the increment
             # audit numbers and the safety argument.
@@ -825,7 +829,7 @@ def main():
             think = times.get("movetime", think) / 1000
             if "movetime" in times: think -= max(think * .05, .03)
 
-            start = time.time()
+            start = time()
             # Hard in-search deadline: iteration boundaries can be seconds
             # apart at deep depths, so the soft 0.8*think break alone can
             # overrun arbitrarily and forfeit on time.  max(.05) keeps a
@@ -858,10 +862,10 @@ def main():
                     # the floor below answers for terminal roots.
                     if score >= gamma and move:
                         i, j = move.i, move.j
-                        if len(hist) % 2 == 0:
+                        if not len(hist) % 2:
                             i, j = 119 - i, 119 - j
                         cand = render(i) + render(j) + move.prom.lower()
-                    if (best or cand) and time.time() - start > think * 0.8:
+                    if (best or cand) and time() - start > think * 0.8:
                         break
             except Stop:
                 pass
@@ -880,12 +884,14 @@ def main():
                 # "(none)" survives only for checkmate/stalemate roots,
                 # where no manager ever asks us to move.
                 pos = hist[-1]
-                for m in pos.gen_moves():
-                    if not pos.move(m).k():
-                        i, j = m.i, m.j
-                        if len(hist) % 2 == 0:
+                # identical spelling to the go-loop render above, on purpose:
+                # lzma picks the whole block up as one match
+                for move in pos.gen_moves():
+                    if not pos.move(move).k():
+                        i, j = move.i, move.j
+                        if not len(hist) % 2:
                             i, j = 119 - i, 119 - j
-                        cand = render(i) + render(j) + m.prom.lower()
+                        cand = render(i) + render(j) + move.prom.lower()
                         break
             print("bestmove", best or cand or '(none)')
 
