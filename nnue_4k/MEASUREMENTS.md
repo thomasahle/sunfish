@@ -5993,7 +5993,8 @@ confirms — eval data belongs *inside* the compressed stream, quantised and
 range-narrowed. It applies to **classic's** source (the packed engine's tables
 already live in the net file), so it is a shared-packer, build-time transform,
 and it should be measured before it is claimed. Same for the −103 attribute
-renaming and the −120/−155 UCI shell; the `eg_scale` term (~20 Elo, zero
+renaming and the −120/−155 UCI shell (both MEASURED 2026-08-14, see "The
+unverified golf leads, measured": −35 and 0); the `eg_scale` term (~20 Elo, zero
 parameters) and mobility-fused-into-movegen (104 Elo for 26 B) are engine
 changes that need our own SPRT, not ice4's.
 
@@ -7398,3 +7399,57 @@ Layer-1 incremental already costs as much as the entire packed NNUE head (3.5
 forty NODES per node. Structural: a one-lane input change moves a whole
 neighbourhood of layer-1 outputs, once per filter, so the layer-2 delta is F
 wide-operand multiplies and grows with depth. Recorded, closed.
+
+## 2026-08-14 — The unverified golf leads, measured: 3357 → 3299
+
+The ledger-4850894 estimates had never been executed on the current entry,
+and composed estimates had missed measured values six times. Each lead was
+run as its own step through pack.sh, with the full battery per accepted
+step: decode round-trip tuple-identical to classic, fixed-node driver bench
+identity old-vs-new (nodes/depths/scores/pv byte-identical modulo time/nps),
+check_entry.sh, the time-budget tests, and a standalone packed smoke in an
+empty directory (SF_NET/PYTHONPATH unset) — uciok + legal bestmove at both
+winc 100 and winc 0.
+
+| lead | estimated | MEASURED | verdict |
+|---|---|---|---|
+| attribute/method renaming | −103 | **−35** (3357 → 3322) | accepted |
+| UCI-shell slimming | −120/−155 | **0** — already banked / load-bearing | nothing to cut |
+| `__version__` fold (free win) | — | −15 (3322 → 3307) | accepted |
+| namedtuple typename strings (free win) | — | −7 (3307 → 3300) | accepted |
+| codec `* 1` at step 1 (free win) | — | −1 (3300 → 3299) | accepted |
+
+**Why renaming is −35, not −103.** pyminify already renames every global and
+local, so the only long identifiers left in the packed stream are attributes
+and method names — and most of those are API. sunfish_ui/uci.py reads
+pos.board/.score/.kp/.move()/.gen_moves()/.rotate()/.value()/.prom,
+searcher.bound()/.search()/.tp_move/.nodes/.deadline/.node_cap and the
+`root=` kwarg of bound() by name, and agree.py plus every variant screen
+drive entry SOURCES through that driver, so renaming them breaks the lane's
+own instruments. What went: king_capture→k, tp_score→t, self.history→.h,
+self.root→.r, nullmove→n, Entry fields lower/upper→l/u, all count-asserted
+in the generator. The estimate assumed the full rename; the full rename was
+never available.
+
+**Why the UCI shell yields zero.** The estimate predates the base-90/merge
+era. The shipped loop is already only uci / isready / quit / position
+startpos / go — no info lines, no options, no `position fen` (there was
+nothing to cut there: it was never in the artifact). The one remaining
+candidate, `movetime`, is load-bearing: tools/build/legality_gate.py drives
+the PACKED artifact itself with `go movetime 300` and `go nodes` as two
+deliberately separate budget paths, and the 425-forfeit incident is the
+record of what happens when only one of them is real. Not cut.
+
+**Estimate-vs-measured, points seven and eight:** composed −103 measured
+−35; composed −120/−155 measured 0. The direction is always the same.
+
+**Collateral, caught by rebuilding everything:** make_variants.py
+text-anchors the entry, and the cap/corr/hist mods still said
+`nullmove=True` / `self.tp_score` / `self.history`. A stash-test confirmed
+the stale anchors fail LOUDLY (occurs-0 assert), and all 22 mods plus
+corr.wkey rebuild green after the anchor update. splice.py's section
+anchors were checked and are untouched by the renames.
+
+**Thresholds:** −58 total crosses the ~42 B line that funds pend (H1,
++42 B). Nowhere near the ~420 B that would reopen packed128. Entry now
+3299 bytes, 797 spare under 4096.
