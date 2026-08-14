@@ -194,9 +194,9 @@ MODS = {
     # trigger AND this node's returned value, so an inflated pass estimate
     # propagates into the tt and the MTD bisection.
     "cap": (
-        "                score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)\n",
+        "                score = -self.bound(pos.rotate(n=True), 1 - gamma, depth - 3)\n",
         "                score = min(pos.score + EVAL_ROUGHNESS,\n"
-        "                    -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))\n",
+        "                    -self.bound(pos.rotate(n=True), 1 - gamma, depth - 3))\n",
     ),
     # Late move reductions off. Threshold-triggered (val < LMR), so setting the
     # threshold to 0 disables it without touching the loop.
@@ -241,8 +241,8 @@ MODS = {
          "# and the translation that reduces a board to its pawn skeleton.\n"
          "CORR = 120\n"
          'PAWNS = str.maketrans("RNBQKrnbqk", "." * 10)\n'),
-        ("        self.tp_score, self.tp_move, self.history = {}, {}, set()\n",
-         "        self.tp_score, self.tp_move, self.history = {}, {}, set()\n"
+        ("        self.t, self.tp_move, self.h = {}, {}, set()\n",
+         "        self.t, self.tp_move, self.h = {}, {}, set()\n"
          "        self.corr = {}\n"),
         ("        # Generator of moves to search in order.\n",
          "        # Correction history lookup. INTERIOR NODES ONLY: in QS the key\n"
@@ -323,8 +323,8 @@ MODS = {
          "                    k = (pos.board[move.i], move.j)\n"
          "                    self.hh[k] = self.hh.get(k, 0) + depth * depth\n"
          "                    self.tp_move[pos] = move\n"),
-        ("        self.tp_score.clear()\n",
-         "        self.tp_score.clear()\n"
+        ("        self.t.clear()\n",
+         "        self.t.clear()\n"
          "        self.hh.clear()\n"),
     ],
     # TOMBSTONE: `iir`, `iirk`, `noiid`  --  LANDED 2026-08-13.
