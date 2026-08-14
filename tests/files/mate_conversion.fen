@@ -1,0 +1,14 @@
+# Mate-CONVERSION suite: KQK / KRK, ATTACKER (white) to move, winning by
+# force. Line format: FEN  budget  tag -- budget is the max number of
+# ATTACKER moves the engine gets to deliver mate against the gate's fixed
+# deterministic defender. The -approach positions are the discriminating
+# ones: the attacking king starts on a1 and MUST march before any mate
+# exists, so a seam that holds the king home cannot convert them.
+4k3/8/4K3/8/8/8/8/7Q w - - 0 1 4 kqk-m1
+k7/8/2K5/8/8/8/8/6Q1 w - - 0 1 6 kqk-near
+8/8/8/3k4/8/3K4/8/Q7 w - - 0 1 12 kqk-mid
+k7/8/8/8/8/8/7Q/K7 w - - 0 1 18 kqk-approach
+4k3/8/4K3/8/8/8/8/R7 w - - 0 1 4 krk-m1
+1k6/8/1K6/8/8/8/8/5R2 w - - 0 1 4 krk-m1b
+8/8/8/3k4/8/3K4/8/7R w - - 0 1 18 krk-mid
+k7/8/8/8/8/8/7R/K7 w - - 0 1 22 krk-approach
