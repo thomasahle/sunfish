@@ -101,6 +101,14 @@ ledgered per net (.probes.json), diagnostics never gates.
 
 ## Log (newest first)
 
+- 2026-08-14 ~12:2x UTC: TRAINER IDLE INCIDENT, ~70 min — the chain's
+  wait loop (`pgrep -f "replnet_8M.pickle"`) was self-matched by my own
+  severed ssh launcher wrapper, whose cmdline embeds the script text.
+  Killed the wrapper; 8Mv started immediately (comparable-val confirmed:
+  anchors identical to the 4M split). Root-cause rule for future chains:
+  wait on `pgrep -f "train_packed.py.*<out>"` (the interpreter line),
+  never on a bare string that launcher wrappers also carry.
+
 - 2026-08-14 ~11:3x UTC: Thomas objective + phase directive via
   coordinator — header rewritten around THE FAMILY OBJECTIVE, c1024-phase
   added (#2, three forms, price-first), replnet_ml2 given its explicit
