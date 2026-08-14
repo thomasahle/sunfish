@@ -28,6 +28,7 @@ class DataCfg:
 
 @dataclass
 class ModelCfg:
+    arch: str = "residual"      # residual | ml2 (packed_layers second layer)
     N: int = 4                  # hidden units per perspective
     kb: int = 1                 # own-king buckets (1/4/8/16)
     factor: int = 1             # virtual per-piece-type features (folded at export)

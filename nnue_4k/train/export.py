@@ -93,6 +93,15 @@ def export_model(model, cfg, path):
         b = model.bias.detach().tolist()
         v = model.v.detach().tolist()
     meta = {"config": __import__("config").to_dict(cfg)}
+    if m.arch == "ml2":
+        # float-only, one rule for every extension: the packed build is
+        # engine-side work the val loss has to earn first (and the ml2
+        # payload/machinery is PRICE-FIRST per its queue entry)
+        pnet.save(path, {"kind": "float-ml2", "B": 1, "N": m.N, "m": m.bm,
+                         "E": E.tolist(), "bias": b, "v": v,
+                         "u2": model.u2.detach().tolist(), "clampcp": m.clampcp,
+                         "base_kind": m.base, "ternary": m.ternary, "train": meta})
+        return "float export (ml2)"
     if m.ternary:
         return export_replnet(path, E, b, v, m.clampcp, m.base, meta)
     extras = {}

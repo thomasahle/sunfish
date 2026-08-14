@@ -35,7 +35,8 @@ import data as datamod            # noqa: E402
 import export as exportmod        # noqa: E402
 import features                   # noqa: E402
 import provenance                 # noqa: E402
-from model import ResidualNet, sigmoid_loss  # noqa: E402
+import field_budget               # noqa: E402
+from model import build_model, sigmoid_loss  # noqa: E402
 
 
 def repro_arm1_config(source):
@@ -113,7 +114,11 @@ def main():
     prov["n_train"], prov["n_val"] = len(train_ids), len(val_ids)
     provenance.write(run_dir, prov)
 
-    model = ResidualNet(cfg.model)
+    cert = field_budget.certify_or_raise(cfg.model)   # uncertifiable configs never train
+    if cert is not None:
+        with open(os.path.join(run_dir, "certificate.json"), "w") as f:
+            f.write(cert.to_json())
+    model = build_model(cfg.model)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.opt.lr,
                             weight_decay=cfg.opt.weight_decay)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=cfg.opt.epochs)

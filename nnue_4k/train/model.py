@@ -187,6 +187,43 @@ class ResidualNet(nn.Module):
         return base_cp + d.clamp(-self.clampcp, self.clampcp)
 
 
+class Ml2Net(ResidualNet):
+    """Two packed layers: the ternary head plus a second layer that is the
+    circular self-convolution of the clamped head lanes -- in the engine,
+    ONE extra big-int multiply of the crelu output blocks, fields re-spaced
+    to 32 bits, folded mod 2^(32m)-1 (packed_layers.LaneConv is that op).
+
+    h = conv(A,A) - conv(B,B) is odd under perspective swap and the read-out
+    u2 is shared, so exact antisymmetry survives by construction.  u2 starts
+    silent (zeros): epoch 0 is exactly the one-layer net.
+
+    Trains only under a field-budget certificate (train.py calls
+    certify_or_raise first); the training-normalised h/100 keeps u2 in
+    optimizer-friendly range, the export step owns the integer mapping."""
+
+    def __init__(self, cfg):
+        super().__init__(cfg)
+        import packed_layers
+        self.conv = packed_layers.LaneConv(cfg.N, cfg.N, "circular", cfg.bm)
+        self.u2 = nn.Parameter(torch.zeros(cfg.bm))
+
+    def forward(self, fi, mi, fo, base_cp):
+        E = self.weight()
+        au = self.act(nn.functional.embedding_bag(fi, E, fo, mode="sum") + self.bias)
+        at = self.act(nn.functional.embedding_bag(mi, E, fo, mode="sum") + self.bias)
+        vab = self.v.abs() if self.cfg.ternary else self.v
+        d = ((au - at) * vab).sum(-1)
+        A, B = au * vab.abs(), at * vab.abs()       # cp-scaled lane values
+        h = self.conv(A, A) - self.conv(B, B)       # odd: exact antisymmetry
+        d = d + (h * self.u2).sum(-1) / 100.0
+        self.pre = d
+        return base_cp + d.clamp(-self.clampcp, self.clampcp)
+
+
+def build_model(cfg):
+    return Ml2Net(cfg) if cfg.arch == "ml2" else ResidualNet(cfg)
+
+
 def sigmoid_loss(pred, y, K, p):
     """|sigmoid(pred/K) - sigmoid(y/K)|^p, mean.  K=400 house scale;
     p=2.6 is the wide-net house value (nnue-pytorch's finding), the
