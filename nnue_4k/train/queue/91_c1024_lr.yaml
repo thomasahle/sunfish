@@ -1,0 +1,55 @@
+# c1024-lr -- TRAINED LOW-RANK + RESIDUAL at the 1024 B target (appended
+# by the pipeline-extension lane; VAL-PROBE FIRST, behind c1024-cal,
+# re-order freely).
+#
+# WHY THIS AND NOT lr_svd.  The post-hoc SVD arm priced at +326 B on v1
+# because its rank-1 ternary predictor left an 8.6-10.1% residual whose
+# factor cost never paid.  structures.LowRankResidual trains U, V and R
+# jointly: W = clip(U@V + R, +-1), V zero-initialised so epoch 0 IS the
+# plain net (torch.equal), l1 pressing the residual toward zero while the
+# factors carry the shared structure.  Measured on the smoke net, same
+# net, same day: post-hoc SVD left 89.4% of the residual nonzero and the
+# TRAINED factorization left 9.2% (1762 further entries dropped because
+# the clip makes them invisible) -- 5492 B vs 4220 B artifacts.  The
+# mechanism works; whether it pays at real sparsity is what this run is.
+#
+# EXPECTED PAYLOAD COMPOSITION -- PRICE-FIRST, pre-codec, stated before
+# the run (the arm's note prints the realized numbers):
+#   rank 1:  U 768 trits = 188 base-90 chars, V 4 trits = 1 char,
+#            residual at 5% of 3072 = 154 nz x (log2 R + 1) ~ 166 chars
+#            -> ~355 chars + 5 header digits
+#   rank 2:  +188 chars of U (U is 152 B raw PER RANK UNIT -- the whole
+#            dense table is only 3072 trits, so rank is the expensive
+#            knob and rank 1 is the honest starting arm)
+# against c1024-cal's dense 768-char stream.  Decoder tax measured at
+# 136 B (layout A) -- twice the codebook's, because the arm rebuilds U@V
+# in python before the residual pass.  Bar: bytes at equal val, or val at
+# equal bytes, through compress/bakeoff.py's measured winner.
+#
+# ARMS: lr_rank in {1, 2}.  lr_wmax stays 1: field_budget certifies an
+# unclipped composite only to rank <= 4 (grid ceiling 5 at gmax 89), and a
+# free-int composite has no b81 denominator for its own table.
+name: c1024_lr
+data:
+  source: ../replnet-20260814/cache_repl4M.pkl
+  kind: legacy-pkl
+  split: legacy-perm
+  valn: 4027406
+model:
+  arch: lowrank
+  N: 4
+  base: mat
+  ternary: 0.85
+  lr_rank: 1            # arm 2: 2
+  lr_wmax: 1
+loss:
+  l1: 0.001             # residual sparsity is the whole game here; v1's winner pressure
+  satpen: 0.03
+  satthresh: 480.0
+opt:
+  epochs: 40
+  batch: 8192
+  lr: 3.0e-3
+  seed: 0
+notes: trained low-rank + sparse residual at the 1024 B target; VAL probe vs
+  c1024-cal, export priced through compress/bakeoff.py (arms trained_lr + lr_svd control)

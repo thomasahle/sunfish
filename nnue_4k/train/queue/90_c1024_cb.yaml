@@ -1,0 +1,58 @@
+# c1024-cb -- TRAINED CODEBOOK at the 1024 B target (appended by the
+# pipeline-extension lane; VAL-PROBE FIRST, behind c1024-cal, re-order
+# freely).
+#
+# WHY THIS AND NOT cb8.  The bake-off priced the post-hoc codebook at
+# +141 B (v1) because a net trained for a dense trit stream has no reason
+# to repeat blocks.  structures.CodebookWeight puts the book and the
+# assignment stream INSIDE the graph (hard-argmin forward, identity to
+# the shadow + softmax-weighted to the book on the backward), so the net
+# is trained to have few distinct blocks.
+#
+# EXPECTED PAYLOAD COMPOSITION -- PRICE-FIRST, pre-codec, stated before
+# the run (field_budget.certify_trained_cb prints exactly this beside the
+# run, and the artifact number is pack.sh's alone):
+#   K=32, block=8, N=4:  book 32 x 8 = 256 base-90 chars
+#                        indices 96 x log2(32) = 480 bits = 74 chars
+#                        body 332 chars + 9 header digits
+#   K=64:                book 512 chars + indices 86 = 598 chars
+# against c1024-cal's DENSE 768-char stream on the same net size.  Two
+# measured taxes, both already on the table: the codebook decoder cost
+# 68 B (layout A, v1's cb8 and the smoke net alike), and lzma finds block
+# repeats for free -- on a 22-codeword smoke net the explicit book still
+# lost by +47 B.  So the pre-registered bar is the usual one: bytes at
+# equal val, or val at equal bytes, through compress/bakeoff.py's
+# measured winner.  The interesting operating point is exactly c1024's:
+# the book size does not depend on sparsity, while the dense stream loses
+# its zero-run advantage at 35-50% zeros.
+#
+# ARMS: cb_k in {32, 64} at block 8 (start with 32).  block 16 is legal
+# (96/48 blocks, 8100 K ceiling) and is the natural third arm if K=64
+# prices well.  cb_cmax stays 1: free-int entries certify only to 5 and
+# cost 2.19x per element (see structures.py's grid note).
+name: c1024_cb
+data:
+  source: ../replnet-20260814/cache_repl4M.pkl
+  kind: legacy-pkl
+  split: legacy-perm
+  valn: 4027406
+model:
+  arch: cb
+  N: 4
+  base: mat
+  ternary: 0.85
+  cb_k: 32              # arm 2: 64
+  cb_block: 8
+  cb_temp: 0.5
+  cb_cmax: 1
+loss:
+  l1: 0.0003            # c1024-cal's released pressure; steers blocks onto the zero codeword
+  satpen: 0.03
+  satthresh: 480.0
+opt:
+  epochs: 40
+  batch: 8192
+  lr: 3.0e-3
+  seed: 0
+notes: trained product quantization at the 1024 B target; VAL probe vs c1024-cal,
+  export priced through compress/bakeoff.py (arms trained_cb + cb8 control)

@@ -99,6 +99,60 @@ ledgered per net (.probes.json), diagnostics never gates.
     screens, the matrix includes it vs entry+hand-terms — the goal state
     is the net winning that comparison INCLUDING its nps tax.
 
+### APPENDED 2026-08-14 by the pipeline-extension lane — trained structure
+
+Single-writer discipline: appended as its own block, nothing above
+renumbered. Natural slot for both is **beside c1024-cal** (entry 1) —
+they are the same capacity dial seen from the payload side — and both are
+**VAL-PROBE-FIRST behind it**, since cal is the denominator they are
+read against. Re-order freely. Configs are written and certified:
+`train/queue/90_c1024_cb.yaml`, `train/queue/91_c1024_lr.yaml`.
+
+- **c1024-cb — trained CODEBOOK at 1024, PRICE-FIRST, VAL probe.**
+  `arch: cb`, K ∈ {32, 64} at block 8, ternary entries. The post-hoc
+  version (cb8) priced +141 B on v1 because a net trained for a dense
+  trit stream has no reason to repeat blocks; `structures.CodebookWeight`
+  puts the book and the assignment stream in the graph (hard-argmin
+  forward, identity to the shadow + softmax-weighted to the book
+  backward). **Expected payload composition, pre-codec, K=32/block 8:
+  book 32×8 = 256 base-90 chars + indices 96×log2(32) = 480 bits = 74
+  chars → 332 chars + 9 header**, against cal's dense 768-char stream;
+  K=64 → 598 chars. Two measured taxes stated up front: the codebook
+  decoder costs **68 B** (layout A) and lzma finds block repeats for
+  free — on a 22-codeword smoke net the explicit book still lost by
+  **+47 B**. The reason to run it anyway is the operating point: the book
+  size is sparsity-independent while the dense stream loses its zero-run
+  advantage at cal's 35-50% zeros. NO COMPOSED TOTALS — the artifact
+  number is `compress/bakeoff.py`'s (arm `trained_cb`, control `cb8`).
+
+- **c1024-lr — trained LOW-RANK + RESIDUAL at 1024, PRICE-FIRST, VAL
+  probe.** `arch: lowrank`, rank ∈ {1, 2}, W = clip(U@V + R, ±1), V
+  zero-init so epoch 0 IS the plain net. The post-hoc version (lr_svd)
+  priced +326 B; measured on the smoke net, the same day, same net:
+  post-hoc SVD left **89.4 %** of the residual nonzero, the trained
+  factorization **9.2 %** (a further 1762 entries dropped because the
+  clip makes them invisible) — 5492 B vs 4220 B artifacts. **Expected
+  payload composition, pre-codec, rank 1: U 768 trits = 188 chars + V 1
+  char + residual at 5 % of 3072 = 154 nz × (log2 R + 1) ≈ 166 chars →
+  ~355 chars + 5 header**; rank 2 adds another 188 chars of U (U costs
+  ~152 B raw PER RANK UNIT against a 3072-trit dense table, so rank is
+  the expensive knob and rank 1 is the honest first arm). Decoder tax
+  measured at **136 B** — twice the codebook's. Bar: bytes at equal val
+  or val at equal bytes, through the measured table.
+
+**Next end-to-end candidates** (coordinator, Thomas's standing principle
+"we should train everything end-to-end" — NOT built, for the training
+lane to schedule after the c1024 family; both PRICE-FIRST and
+VAL-probe-first):
+
+- **trainable flat-material BASE.** The replacement design's base is a
+  fixed constant vector; make it jointly trainable with the net on the
+  certified grid and export it through the same codec. Cheapest possible
+  end-to-end win if it moves val at all, since the values already exist
+  in the artifact.
+- **trainable K_MID / K_END seam tables.** Currently hand-kept classic
+  tables. Same treatment: in the graph, on the grid, through the codec.
+
 ## Log (newest first)
 
 - 2026-08-14 ~12:2x UTC: TRAINER IDLE INCIDENT, ~70 min — the chain's

@@ -5,6 +5,33 @@ ternary/quantized nets with PST-shaped features (ps768, king buckets,
 bilinear folds, rff sketches) and — via `packed_layers.py` — multi-layer
 nets built from the engine's own big-int operations with exact backprop.
 
+## Design principle: everything end-to-end
+
+**Every structural constraint the artifact imposes lives INSIDE the
+training graph.** Lane semantics, quantization, sparsity and rate,
+codebooks, factorization, the constraint modules — the net is trained
+through the thing it will actually be, never fitted first and squeezed
+after. (Thomas, 2026-08-14: "Agreed. We should train everything
+end-to-end.")
+
+This is a measured position, not an aesthetic one. The bake-off priced
+the same two structures post hoc and both lost: codebook-over-blocks
+**cb8 +141 B** and low-rank+residual **lr_svd +326 B** on l1-trained
+ternary nets — a net trained for a dense trit stream has no reason to
+repeat blocks or to be low-rank. Same mechanism, three walls up: rounding
+a float fit after training optimises the wrong function
+(quant-error compounding), and the kbbil collapse says a constraint the
+loss cannot see is free in val and ruinous in play.
+
+A new net family must state **what, if anything, remains post-hoc and
+why**. Today's answer for this pipeline: nothing in layer 1 — grid
+(`constraints.ternary_ste`), sparsity (`l1`), payload rate
+(`rate_penalty`), codebook and low-rank factorization
+(`structures.py`) are all in the graph; the *gain schedule* (shift and
+`g_k`) is still chosen at export from the trained `|v|`, and the base
+(flat material) is still a fixed constant — both named as the next
+end-to-end candidates in `../TRAINQUEUE.md`.
+
 Two standing truths, both paid for in the ledger (`../MEASUREMENTS.md`):
 
 1. **Val does not gate landing — play does.** Early-kill exists only for
@@ -59,9 +86,10 @@ val iff `sha256(split_seed + fen) % val_mod == 0`. `legacy-perm` (+
 1. Features: if it is an index transform over ps768, add it to
    `features.Extractor`; if it needs new per-position data, extend
    `data.extract` + the cache format (bump `CACHE_VERSION`).
-2. Model: add a module in `model.py` (or compose `packed_layers`), and
-   register it in `build_model`. Antisymmetry must hold BY CONSTRUCTION —
-   `constraints.check_antisymmetry` on a probe batch is the cheap proof.
+2. Model: add a module in `model.py` (or compose `packed_layers` /
+   `structures`), and register it in `build_model`. Antisymmetry must hold
+   BY CONSTRUCTION — `constraints.check_antisymmetry` on a probe batch is
+   the cheap proof. State what remains post-hoc (see the design principle).
 3. If it is multi-layer / uses products: write its certifier in
    `field_budget.py` first. Uncertifiable configs refuse to train.
 4. Export: extend `export.export_model`. Float-only until the val loss
@@ -90,6 +118,37 @@ float64 exactness — by exact interval arithmetic, with margins. It also
 quantifies depth: with renorm-to-12-bits between layers, 16+ conv layers
 certify at F=32. The three recorded walls (carry coupling, field-budget
 collapse, quant-error compounding) each map to a named check.
+
+## Trained structure (`structures.py`)
+
+Two weight parametrizations for layer 1, both certified before training
+and both priced by their own bake-off arm (never a composed estimate):
+
+- **`arch: cb`** — product quantization. Blocks of `cb_block` consecutive
+  features are codewords from a learned ternary book of `cb_k` entries.
+  STE: hard argmin forward; backward is identity to the shadow weight
+  (`ternary_ste`'s own rule) and softmax-weighted, `p = softmax(-d /
+  (cb_temp·D))`, to the book — the distances are frozen under `no_grad`,
+  so both routes are exact gradient identities that
+  `test_packed_layers.py` checks as identities. Exports book + index
+  stream; arm `trained_cb`.
+- **`arch: lowrank`** — `W = clip(U@V + R, ±lr_wmax)`, `U`/`V` ternary,
+  `R` the ordinary ternary residual. `V` is zero-initialised, so epoch 0
+  is **exactly** the plain net (`torch.equal`) while `V` still receives
+  gradient and can wake up — the ml2 u2-silent precedent. Exports U, V
+  and the residual; arm `trained_lr`, which additionally drops residual
+  entries the clip makes invisible.
+
+**The grid is ternary for both**, and `field_budget.max_certified_grid()`
+is why: a weight of `c` lane-gain units puts `32·c·gmax + 45` into an
+offset lane bounded by `2^14`, so the ceiling is **c = 5** (c = 6 REFUSES
+at 17133 > 16383). Free-int entries are legal up to 5 but cost
+log2(11)/log2(3) = **2.19× per stored element**, cut the no-borrow margin
+from 13490 to 2098 lane units, and leave the shipped codec's
+representable set — a net with no b81 payload has no denominator for its
+own bake-off table. Ternary is the cheaper certified form and it is
+directly executable: the decoded stream *is* the trit stream the entry
+already consumes.
 
 ## Export + pricing
 
