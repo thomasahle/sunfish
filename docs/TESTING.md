@@ -142,7 +142,46 @@ fastchess \
    to +34 [−34, +105] by 92. Time-to-depth is the hidden variable. Screen
    with fixed depth if you like, but only a wall-clock match decides.
 
-13. **The C twin is under a fidelity contract: node-identity is a regression
+13. **Never queue `quit` behind `go` — read until `bestmove`.** The UCI loop
+   drains stdin eagerly, so a one-shot
+   `printf 'uci\n...\ngo depth 8\nquit\n' | ./sunfish.py` sets the stop event
+   while depth 1 is still running. `go_loop` then breaks at the next
+   completed depth and the harness gets a **depth-2 search** — with a normal
+   `info depth 2 ... nodes ...` line and a normal `bestmove`, indistinguishable
+   from a finished depth-8 run unless you look at the depth field. The tell is
+   the *result*, not an error: node counts come back identical between two
+   engines on every position, because both were stopped before the diff could
+   matter. (Observed 2026-08 screening the IID deletion: 10 positions,
+   3,537 nodes total, ratio exactly 1.000 on all ten. Driven properly the same
+   battery searched 776,830 nodes and differed on every position.)
+
+   **Against sunfish itself the engine now says so.** Stopping ASAP is correct
+   UCI and did not change; staying quiet about having stopped short of the
+   limit we were given was a silent degrade, so `sunfish_ui/uci.py` prints,
+   ahead of `bestmove`:
+
+   ```
+   info string aborted at depth 2 (nodes 93, 0.01s) before requested depth 6
+   ```
+
+   with `nodes` and `movetime` analogues, and deliberately *not* for `go
+   infinite`/`go ponder`, where the stop is the terminating condition rather
+   than a truncation. Grep harness output for `info string aborted` and fail
+   the run on it. The marker lives in the interface module only, so the packed
+   4K artifact's inlined loop is untouched and it costs no bytes.
+
+   **The harness discipline still matters**, because no third-party engine
+   emits such a marker: spawn the engine, write the commands *without* `quit`,
+   read stdout until the `bestmove` line, and only then quit — and assert the
+   `info depth` you actually reached equals the one you asked for.
+   `python-chess` (`chess.engine.Limit(depth=N)`) already does this, which is
+   why `tools/tester.py` and the CI depth floors are unaffected and a
+   hand-rolled heredoc harness is not. Adding a clock does *not* fix it: `go`
+   already defaults to an effectively unbounded think budget, so `go depth N
+   movetime 3600000` behind a queued `quit` stops at depth 2 exactly as
+   before. The `quit` is doing all the work.
+
+14. **The C twin is under a fidelity contract: node-identity is a regression
    gate, never a one-time claim.** `tools/ctwin/sunfish.c` is only useful
    because it provably searches the *exact same tree* as `sunfish.py` — the
    moment that stops being measured it is just a third engine with familiar
@@ -158,7 +197,7 @@ fastchess \
    are screening signals, subject to rule 12 like every fixed-effort
    number.
 
-14. **Long/realistic time controls are expensive; spend them on exactly two
+15. **Long/realistic time controls are expensive; spend them on exactly two
    things.** Timed games at 300+0 or 30+1-at-scale are reserved for (1)
    validating **time-management changes** — nothing substitutes for a real
    clock, and note that a faster engine does *not* make timed games
@@ -180,19 +219,17 @@ fastchess \
 `tools/ctwin/` holds a C transcription of classic `sunfish.py` that searches
 the *identical tree* — same probes, same moves, same node counts, same
 scores, verified byte-for-byte by `difftest.py` against the live
-`sunfish.py` — at ~10x the speed of warm pypy3. It is a lab instrument and
+`sunfish.py` — at ~22x the speed of warm pypy3. It is a lab instrument and
 never ships.
 
 **Use it for:** any *search-quality* question at classic semantics where
 games are the bottleneck — fixed-node screening matches, hyperparameter
 grids and SPSA over the exposed knobs (`QS`, `QS_A`, `EVAL_ROUGHNESS`,
-`TABLE_SIZE`, the null-move/IID/futility family), and PST-shaped eval
-variants injected via `gen_tables.py` without recompiling. A fixed-node
-game costs a tenth of the pypy equivalent, so grids that were unaffordable
-become overnight jobs. The twin defaults to branch flavor (`nnue-4k`:
-capped null move, mate-distance scoring, IID at depth > 3); master flavor
-is two knobs away (`set IID_MIN_DEPTH 2`, `set MATE_DIST 0`) — say which
-flavor a result was measured at.
+`TABLE_SIZE`, the null-move/IID/futility family, the tp_move
+replacement-policy battery), and PST-shaped eval variants injected via
+`gen_tables.py` without recompiling. A fixed-node game costs ~1/22nd of
+the pypy equivalent, so grids that were unaffordable become overnight
+jobs.
 
 **Do not use it for:** *timed* questions — time management, think-time
 curves, anything with a clock. The clock-budgeting branch of classic's

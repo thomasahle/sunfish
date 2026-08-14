@@ -22,8 +22,8 @@
  *    search constants are runtime knobs ("set NAME VALUE" or SF_<NAME> env),
  *    so tuning needs no recompilation.
  *
- * Reference: sunfish.py at the repo root on branch nnue-4k (capped null
- * move, mate-distance scoring, IID at depth > 3).  Master-flavor deltas are
+ * Reference: sunfish.py at the repo root of this checkout (capped null
+ * move, mate-distance scoring, IID at depth > 3).  Historical master deltas
  * reachable by knob: set IID_MIN_DEPTH 2, set MATE_DIST 0.
  */
 #include <stdio.h>
@@ -83,6 +83,30 @@ static int IID_MIN_DEPTH = 3;    /* IID when depth > this (master: 2) */
 static int IID_RED = 3;          /* IID depth reduction */
 static int FUT_MAX = 1;          /* futility pruning when depth <= this */
 static int MATE_DIST = 1;        /* mate scores carry distance (master: 0) */
+/* Replacement-policy battery knobs (tp_move only; tp_score untouched).
+ * EVICT_POLICY 0: master/branch root-guarded FIFO insert-then-evict (>).
+ *              1: proposed unguarded evict-BEFORE-insert (>=) -- a
+ *                 variant, not a no-op: boundary, order and guard differ.
+ *              2: depth-stored bounded scan -- insert-then-evict (>),
+ *                 scan the first min(EVICT_SCAN_K, len) FIFO entries and
+ *                 evict the one with the shallowest LAST-store depth
+ *                 (ties: the earliest scanned).  No root guard.
+ *              3: hash-slot table, TABLE_SIZE buckets x two tiers per
+ *                 bucket (deep slot: replace if new depth >= stored;
+ *                 else an always-replace slot).  Exact-position compare
+ *                 on read and update -- a colliding read returns nothing,
+ *                 never a foreign move.
+ * KILLER_COUNT k: keep the k most recent DISTINCT fail-high moves per
+ * position (most recent first; k-deepest is the noted follow-up).  Reads:
+ * single-move consumers (null proof, driver yield) take the most recent;
+ * the killer search phase tries all k in order before the sorted list. */
+static int EVICT_POLICY = 0;
+static int EVICT_SCAN_K = 4;
+static int KILLER_COUNT = 1;     /* 1..3 */
+static int USE_VARIANT = 0;      /* no-op here: forces pyref's transcribed
+                                    VariantSearcher so difftest can prove
+                                    transcription==reference at defaults */
+#define MAXKILL 3
 
 /* ------------------------------------------------------------------ */
 /* Python arithmetic                                                   */
@@ -239,7 +263,11 @@ typedef int (*movecb)(Move, void *);
             YIELD(mi, mj, 'R'); YIELD(mi, mj, 'Q');                     \
         } else YIELD(mi, mj, 0);                                        \
     } while (0)
+static long gen_calls;           /* movegen walks started (battery metric;
+                                    the Python side counts gen_moves() calls
+                                    the same way -- compared in `done` lines) */
 static int gen_moves(const Pos *p, movecb cb, void *ctx) {
+    gen_calls++;
     for (int i = 0; i < 120; i++) {
         char P = p->b[i];
         if (!isup(P)) continue;
@@ -309,7 +337,9 @@ typedef struct { uint64_t h; int nxt; int depth; } MHot;
 typedef struct {
     Pos pos;                     /* key (depth lives in MHot) */
     int lower, upper;            /* tp_score payload */
-    Move mv;                     /* tp_move payload */
+    Move mvs[MAXKILL];           /* tp_move payload: most recent first */
+    int mds[MAXKILL];            /* last-store depth per move */
+    unsigned char nmv;
     int iprev, inext;            /* insertion-order list */
     char used;
 } MCold;
@@ -385,6 +415,7 @@ static int map_put(Map *m, const Pos *p, int depth) {
     MHot *hn = &m->hot[idx];
     MCold *n = &m->cold[idx];
     n->pos = *p; hn->depth = depth;
+    n->nmv = 0;                  /* fresh dict entry: empty killer list */
     hn->h = h;
     long b = h & (m->nbk - 1);
     hn->nxt = m->bk[b]; m->bk[b] = idx;
@@ -439,19 +470,113 @@ static int in_history(const Pos *p) {
     return 0;
 }
 
-static int tpm_get(const Pos *p, Move *out) {
+static int move_eq(Move a, Move b) {
+    return a.i == b.i && a.j == b.j && a.prom == b.prom;
+}
+/* Push m to the front of a killer list, deduplicating, keeping at most
+ * KILLER_COUNT entries.  Records the store depth alongside. */
+static void klist_push(Move *mvs, int *mds, unsigned char *nmv, Move m, int depth) {
+    int n = *nmv, at = -1;
+    for (int k = 0; k < n; k++)
+        if (move_eq(mvs[k], m)) { at = k; break; }
+    if (at < 0) { n = n < KILLER_COUNT ? n + 1 : KILLER_COUNT; at = n - 1; }
+    for (int k = at; k > 0; k--) { mvs[k] = mvs[k - 1]; mds[k] = mds[k - 1]; }
+    mvs[0] = m; mds[0] = depth;
+    *nmv = (unsigned char)n;
+}
+
+/* Policy 3: fixed hash-slot table, 2 tiers per bucket.  Exact-position
+ * keys: a colliding read returns nothing, never a foreign move. */
+typedef struct {
+    Pos pos; Move mvs[MAXKILL]; int mds[MAXKILL];
+    unsigned char nmv, used;
+} KSlot;
+static KSlot *kslots;            /* 2 * kslot_n entries; [2b]=deep [2b+1]=always */
+static long kslot_n;
+
+static void kslot_reset(void) {
+    free(kslots); kslots = NULL; kslot_n = 0;
+    if (EVICT_POLICY == 3) {
+        kslot_n = TABLE_SIZE > 0 ? TABLE_SIZE : 1;
+        kslots = calloc(2 * kslot_n, sizeof(KSlot));
+    }
+}
+/* Knobs are set AFTER reset in the harness flow; the slot table sizes
+ * itself on first use after they settle.  A TABLE_SIZE/policy change
+ * mid-session recreates it empty (documented battery semantics; the
+ * Python variant recreates its table on knob set the same way). */
+static void kslot_ensure(void) {
+    if (!kslots || kslot_n != (TABLE_SIZE > 0 ? TABLE_SIZE : 1)) kslot_reset();
+}
+static KSlot *kslot_pair(const Pos *p) { return &kslots[2 * (long)(p->h % (uint64_t)kslot_n)]; }
+
+static int tpm_get_all(const Pos *p, Move *mvs_out, int *n_out) {
+    if (EVICT_POLICY == 3) {
+        kslot_ensure();
+        KSlot *s = kslot_pair(p);
+        for (int t = 0; t < 2; t++)
+            if (s[t].used && pos_eq(&s[t].pos, p)) {
+                for (int k = 0; k < s[t].nmv; k++) mvs_out[k] = s[t].mvs[k];
+                *n_out = s[t].nmv;
+                return s[t].nmv > 0;
+            }
+        *n_out = 0;
+        return 0;
+    }
     int idx = map_find(&tpm, p, 0);
-    if (idx < 0) return 0;
-    *out = tpm.cold[idx].mv;
+    if (idx < 0) { *n_out = 0; return 0; }
+    for (int k = 0; k < tpm.cold[idx].nmv; k++) mvs_out[k] = tpm.cold[idx].mvs[k];
+    *n_out = tpm.cold[idx].nmv;
+    return tpm.cold[idx].nmv > 0;
+}
+static int tpm_get(const Pos *p, Move *out) {   /* most recent killer */
+    Move mvs[MAXKILL]; int n;
+    if (!tpm_get_all(p, mvs, &n)) return 0;
+    *out = mvs[0];
     return 1;
 }
-static void tpm_store(const Pos *p, Move m) {
+
+static void tpm_store(const Pos *p, Move m, int depth) {
+    if (EVICT_POLICY == 3) {
+        kslot_ensure();
+        KSlot *s = kslot_pair(p);
+        int t;
+        for (t = 0; t < 2; t++)
+            if (s[t].used && pos_eq(&s[t].pos, p)) {         /* in-place update */
+                klist_push(s[t].mvs, s[t].mds, &s[t].nmv, m, depth);
+                return;
+            }
+        t = (!s[0].used || depth >= s[0].mds[0]) ? 0 : 1;    /* deep else always */
+        s[t].pos = *p;
+        s[t].nmv = 0;
+        klist_push(s[t].mvs, s[t].mds, &s[t].nmv, m, depth);
+        s[t].used = 1;
+        return;
+    }
+    if (EVICT_POLICY == 1) {
+        /* if len(tp_move) >= TABLE_SIZE: del tp_move[next(iter(tp_move))]
+         * BEFORE the store -- unguarded: may evict the root, and may evict
+         * the very key being stored (which then re-inserts at the tail --
+         * an update that MOVES slot, unlike a plain dict update). */
+        if (tpm.count >= TABLE_SIZE) map_del(&tpm, tpm.ihead);
+    }
     int idx = map_put(&tpm, p, 0);
-    tpm.cold[idx].mv = m;
-    if (tpm.count > TABLE_SIZE) {
+    klist_push(tpm.cold[idx].mvs, tpm.cold[idx].mds, &tpm.cold[idx].nmv, m, depth);
+    if (EVICT_POLICY == 0 && tpm.count > TABLE_SIZE) {
         /* del next(k for k in tp_move if k != root): oldest non-root key */
         for (int k = tpm.ihead; k >= 0; k = tpm.cold[k].inext)
             if (!pos_eq(&tpm.cold[k].pos, &rootpos)) { map_del(&tpm, k); break; }
+    }
+    if (EVICT_POLICY == 2 && tpm.count > TABLE_SIZE) {
+        /* bounded scan from the FIFO front: evict the shallowest
+         * last-store depth among the first min(K, len); ties keep the
+         * earliest scanned. */
+        int victim = tpm.ihead, k = tpm.ihead, seen = 0, vd = 0;
+        for (; k >= 0 && seen < EVICT_SCAN_K; k = tpm.cold[k].inext, seen++) {
+            int dk = tpm.cold[k].mds[0];
+            if (seen == 0 || dk < vd) { victim = k; vd = dk; }
+        }
+        map_del(&tpm, victim);
     }
 }
 
@@ -538,14 +663,15 @@ static int bound(const Pos *pos, int gamma, int depth, int root) {
         if (_s > best) best = _s;                                       \
         if ((hasmv) && _s > -MATE_UPPER) live = 1;                      \
         if (best >= gamma) {                                            \
-            if ((hasmv) && depth) tpm_store(pos, (mv));                 \
+            if ((hasmv) && depth) tpm_store(pos, (mv), depth);          \
             done = 1;                                                   \
         }                                                               \
     } while (0)
 
-    /* moves() first statement: read the killer BEFORE the null move. */
-    Move killer = nomove;
-    int have_killer = tpm_get(pos, &killer);
+    /* moves() first statement: read the killer(s) BEFORE the null move. */
+    Move killers[MAXKILL];
+    int nkill = 0;
+    tpm_get_all(pos, killers, &nkill);
 
     /* Null move, capped at static eval plus one score bucket. */
     if (!root && depth > NULL_MIN_DEPTH && iabs(pos->score) < NULL_LIMIT
@@ -575,17 +701,18 @@ static int bound(const Pos *pos, int gamma, int depth, int root) {
     }
 
     /* Internal iterative deepening (driver probe: root=1, unstored). */
-    if (!have_killer && depth > IID_MIN_DEPTH) {
+    if (nkill == 0 && depth > IID_MIN_DEPTH) {
         bound(pos, gamma, depth - IID_RED, 1);
-        have_killer = tpm_get(pos, &killer);
+        tpm_get_all(pos, killers, &nkill);
     }
 
     int val_lower = QS - depth * QS_A;
 
-    /* Killer first, gated by the QS threshold. */
-    if (have_killer && value(pos, killer) >= val_lower) {
-        Pos np = domove(pos, killer);
-        PROCESS(1, killer, -bound(&np, 1 - gamma, depth - 1, 0));
+    /* Killer(s) first, gated by the QS threshold, most recent first. */
+    for (int kk = 0; kk < nkill; kk++) {
+        if (value(pos, killers[kk]) < val_lower) continue;
+        Pos np = domove(pos, killers[kk]);
+        PROCESS(1, killers[kk], -bound(&np, 1 - gamma, depth - 1, 0));
         if (done) goto after_moves;
     }
 
@@ -650,6 +777,7 @@ static void fmt_move(char *buf, const Move *m, int have) {
 
 static void search_setup(void) {
     nodes = 0;
+    gen_calls = 0;
     map_clear(&tps);
     rootpos = hist[nhist - 1];
     PSTP['K'] = (memchr(rootpos.b, 'Q', 120) && memchr(rootpos.b, 'q', 120))
@@ -678,7 +806,7 @@ static void go_depth(int maxd) {
             gamma = pyfloordiv(lower + upper + 1, 2);
         }
     }
-    printf("done nodes %ld\n", last_nodes);
+    printf("done nodes %ld gen %ld\n", last_nodes, gen_calls);
     fflush(stdout);
 }
 
@@ -724,7 +852,8 @@ static void go_game(long max_nodes, double movetime_s, int maxd) {
                     render_sq(cand, i); render_sq(cand + 2, j);
                     cand[4] = mv.prom ? mv.prom + 32 : 0;
                     cand[5] = 0;
-                    printf("info depth %d score cp %d pv %s\n", depth, score, cand);
+                    printf("info depth %d score cp %d nodes %ld pv %s\n",
+                           depth, score, nodes, cand);
                 }
                 if ((best[0] || cand[0]) && deadline != 0.0
                         && now_s() - start > (deadline - start) * 0.8)
@@ -745,6 +874,7 @@ out:
 static void reset_state(void) {
     map_clear(&tps);
     map_clear(&tpm);
+    kslot_reset();
     nodes = 0;
     PSTP['K'] = TAB[5];
     memcpy(hist[0].b, INITIAL, 120);
@@ -871,9 +1001,18 @@ static struct knob KNOBS[] = {
     { "IID_RED", &IID_RED, NULL },
     { "FUT_MAX", &FUT_MAX, NULL },
     { "MATE_DIST", &MATE_DIST, NULL },
+    { "EVICT_POLICY", &EVICT_POLICY, NULL },
+    { "EVICT_SCAN_K", &EVICT_SCAN_K, NULL },
+    { "KILLER_COUNT", &KILLER_COUNT, NULL },
+    { "USE_VARIANT", &USE_VARIANT, NULL },
     { NULL, NULL, NULL }
 };
 static int set_knob(const char *name, long v) {
+    /* Out-of-range battery knobs are a hard error, not a clamp: a
+     * silently adjusted knob would fake a variant. */
+    if (!strcmp(name, "EVICT_POLICY") && (v < 0 || v > 3)) return 0;
+    if (!strcmp(name, "EVICT_SCAN_K") && v < 1) return 0;
+    if (!strcmp(name, "KILLER_COUNT") && (v < 1 || v > MAXKILL)) return 0;
     for (struct knob *k = KNOBS; k->name; k++)
         if (!strcmp(k->name, name)) {
             if (k->ip) *k->ip = (int)v; else *k->lp = v;
@@ -907,6 +1046,23 @@ int main(int argc, char **argv) {
         snprintf(env, sizeof env, "SF_%s", k->name);
         const char *v = getenv(env);
         if (v) set_knob(k->name, atol(v));
+    }
+    /* argv knobs after the table path: NAME=VALUE (for match harnesses
+     * that can pass args but not stdin preambles).  Unknown names are a
+     * hard error -- a silently ignored knob would fake a variant. */
+    for (int a = 2; a < argc; a++) {
+        char nm[64];
+        const char *eq = strchr(argv[a], '=');
+        if (!eq || eq - argv[a] >= (long)sizeof nm) {
+            fprintf(stderr, "ctwin: bad knob arg %s\n", argv[a]);
+            return 1;
+        }
+        memcpy(nm, argv[a], eq - argv[a]);
+        nm[eq - argv[a]] = 0;
+        if (!set_knob(nm, atol(eq + 1))) {
+            fprintf(stderr, "ctwin: unknown knob %s\n", nm);
+            return 1;
+        }
     }
     if (tables_loaded) reset_state();
 

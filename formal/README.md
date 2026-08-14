@@ -198,6 +198,237 @@ Premises: `ValFloor G 192` + `EvalQuiet` (fidelity, tables),
 case split in `legal_of_allIllegalB_false`); the distance spine
 `forcedMate_negamaxD2` itself stays choice-free at `propext, Quot.sound`.
 
+## Distance-to-mate optimality (`Shortest.lean`)
+
+`forcedMate_play_mates` mates within *the `k` the spec handed it*.
+`Shortest.lean` replaces that `k` with the LEAST one, which is the shortest-PV
+half of the claim sunfish.py's constant block has made since 2014.
+
+**Parity is the hinge, and it is not a chess fact.**  `ForcedMate`'s `mate`
+constructor costs one ply and `step` costs two, and `step`'s reply quantifier
+is non-vacuous (`hnt` names a legal reply through `legal_of_allIllegalB_false`),
+so an EVEN budget always has a spare ply: `forcedMate_pred_of_even` hands it
+back.  Hence the least distance is ODD (`leastMate_odd`) and two distinct
+achievable distances are at least TWO plies apart (`leastMate_gap`).
+
+That is what prices a ply at a whole `EVAL_ROUGHNESS` rather than two.  The
+declared value's rung index is exactly `D - k` (`leastMate_value_block`: the
+forward spine gives the lower edge, leastness gives the upper -- one rung
+higher would exhibit a mate in `k - 1`).  Two plies is two rungs, so distinct
+distances leave a full rung of clear air:
+
+```text
+leastMate_value_separation :
+  EVAL_ROUGHNESS < nullValueD2 G guard D p - nullValueD2 G guard D q
+```
+
+STRICTLY more than `EVAL_ROUGHNESS`, and `search` stops at
+`upper - lower <= EVAL_ROUGHNESS`, so no final bracket can hold two distinct
+mate values.  **This retires an idealisation.**  `MaximalChoice` assumes an
+exactly-converged bisection, which the shipped driver does not give;
+`NearMaximalChoice` weakens it by exactly the driver's own stopping tolerance,
+and `forcedMate_play_shortest_odd` proves the same conclusion under it.  Where
+near-maximality loses a rung, parity refunds it: the slack budget is even, and
+an even budget is never tight.
+
+```text
+leastMate_play_shortest :
+  NearMaximalChoice G guard d ch →
+  LeastMate G k p → k + 1 ≤ d + 1 →
+  (d : Int) * EVAL_ROUGHNESS ≤ 21366 →
+  hasKingCapture G p = false →
+  MatesWithin G ch k p
+```
+
+So `EVAL_ROUGHNESS`-per-ply is the smallest step for which the theorem is
+true, and it is true only because achievable distances have a fixed parity.
+At one point per ply the gap is 2 against a tolerance of 15 and the shipped
+driver can take the slower mate.
+
+**The `3` in the null reduction is load-bearing for this.**  Parity survives
+along every path because both depth steps are odd: a real move spends one ply
+per negation, the null option spends three (`nullValueD2`'s `d + 1 - 3`).
+Writing `d + 1 - 2` or `d + 1 - 4` would let one line reach a mate value of the
+wrong rung parity, collapsing the separation gap to `EVAL_ROUGHNESS` -- exactly
+the width the driver cannot resolve.  No proof here mentions the null term (the
+parity lives in `ForcedMate`, whose `step` is two plies), but a change to that
+constant is a change to this theorem.
+
+| fact | theorem | axioms |
+|---|---|---|
+| no forced mate in zero plies | `not_forcedMate_zero` | `propext, Quot.sound` |
+| an even budget is never tight | `forcedMate_pred_of_even` | `propext, Quot.sound` |
+| the least distance is odd | `leastMate_odd` | `propext, Quot.sound` |
+| distinct distances are two plies apart | `leastMate_gap` | `propext, Quot.sound` |
+| the value's rung index is exactly `D - k` | `leastMate_value_block` | `+ Classical.choice` |
+| a faster mate outscores a slower one by more than `EVAL_ROUGHNESS` | `leastMate_value_separation` | `+ Classical.choice` |
+| the driver's own tolerance suffices | `forcedMate_play_shortest_odd` | `+ Classical.choice` |
+| the engine attains the optimal distance | `leastMate_play_shortest` | `+ Classical.choice` |
+| a mated node's own distance is even | `leastMated_odd_or_zero` | `propext, Quot.sound` |
+| the engine's defence is distance-maximal | `defence_maximal_resistance` | `+ Classical.choice` |
+| resistance is downward closed | `resistsFor_anti` | `propext, Quot.sound` |
+| a checkmated node resists for nothing | `not_resistsFor_of_checkmated` | `propext, Quot.sound` |
+| the defence gives nothing away | `defence_resistance_step` | `+ Classical.choice` |
+| the engine's defence is legal | `defence_move_legal` | `+ Classical.choice` |
+| the defence lasts the whole distance | `defence_resists` | `+ Classical.choice` |
+| the engine attains the optimal distance on the losing side | `leastMated_defence_resists` | `+ Classical.choice` |
+| both directions at once | `dtm_optimal` | `+ Classical.choice` |
+
+The parity spine is choice-free, like the distance spine it extends -- and so
+is the new play predicate's monotonicity; the `Classical.choice` in the value
+results is inherited from `legal_of_allIllegalB_false`, unchanged.  No new
+chess premise: the defender half spends `ValFloor`, `EvalQuiet`,
+`NoMaskedMobility` and `NoZugzwang` exactly as the attacker half does, and
+`defence_move_legal` does not need `NoZugzwang` at all.
+
+**The defender half.**  "The losing side drags the mate out as long as it can"
+is the same ordering read the other way, and it needs no second move rule to
+model.  At a lost node the reached positions are attacker-to-move and their
+values are positive mate values `MATE_LOWER + (d - n) * EVAL_ROUGHNESS`, and
+the engine's one rule MINIMISES the reached value -- so minimising the value is
+maximising `n`.  There is no `NearMinimalChoice`: in negamax the defender's
+rule is literally the attacker's rule, and the duality lives in the theorem.
+`defence_maximal_resistance` proves the local step in distance form: no legal
+reply leaves the attacker a nearer mate than the engine's own move does.
+Parity refunds the tolerance in exactly the same place as on the attacker side
+-- the block bounds plus one `EVAL_ROUGHNESS` of slack give `i <= j + 1`, and
+both are odd.
+
+### The global induction (`ResistsFor`)
+
+`ResistsFor G ch n q` is the inductive dual of `MatesWithin G ch n p`: the two
+quantifiers swapped and the bound turned around.  There the attacker plays `ch`
+and mate ARRIVES within `n` plies against every legal defence; here the
+DEFENDER plays `ch` and mate does NOT arrive before `n` plies against every
+legal attack.  `MatesWithin.mate` is stated at every index `n + 1` -- once mate
+has landed, any remaining budget is met -- and its mirror image is the pair
+`zero` / `safe`: while mate has not landed, any budget of at most one ply is
+met.  Resistance is downward closed (`resistsFor_anti`) where `matesWithin_mono`
+is upward.
+
+One constructor has no mirror image, and the asymmetry is the point.
+`MatesWithin.step` carries `hnt` so a moveless defender cannot satisfy its reply
+quantifier vacuously -- a stalemate is a draw, not a mate.  The same corner is a
+WIN for resistance, so it appears here as the leaf `draw`: a defender with no
+legal move who is not in check is never mated at all.  One guard, one leaf, one
+reason -- a draw refutes the attacker's claim and establishes the defender's.
+
+The recursion runs on a SPEC-form local step rather than the distance form:
+
+```text
+defence_resistance_step :
+  NearMaximalChoice G guard d ch →
+  allIllegalB G q = false → n % 2 = 1 → n + 1 ≤ d →
+  ForcedMate G n (ch q) →
+  ForcedlyMated G n q
+```
+
+If the engine's own defence lets the attacker mate in `n`, the position was
+already mated within `n` against EVERY defence -- the engine gave nothing away.
+This is where the driver's tolerance is paid for, and parity refunds it: an
+alternative defence one rung worse is read by `forcedMate_of_value_dist` as a
+mate in `n + 1`, and `n + 1` is even because `n` is odd, so `forcedMate_odd_le`
+hands the ply straight back.  Same refund, same place, as the attacker half.
+
+```text
+leastMated_defence_resists :
+  NearMaximalChoice G guard d ch →
+  LeastMated G k q → k ≠ 0 → k + 1 ≤ d →
+  (d : Int) * EVAL_ROUGHNESS ≤ 21366 →
+  hasKingCapture G q = false →
+  ResistsFor G ch (k + 1) q
+```
+
+`k` is the least attacker budget the position permits, so `k + 1` is the exact
+distance to mate for the side to move (`leastMated_odd_or_zero` makes it even),
+and the engine attains it: it survives as long as the position permits.  With
+`leastMate_play_shortest` this is distance-to-mate optimality in both
+directions, bundled as `dtm_optimal`.
+
+The carrier of the recursion is the negative statement `∀ i, ForcedlyMated G i q
+→ N ≤ i + 1`, not a least distance, and deliberately so: it also covers the node
+the attacker has already spoiled, where no forced mate exists and the quantifier
+is vacuous.  The engine defends an escaped position as readily as a lost one and
+the induction needs no case split for it.  Each attacker reply inherits a budget
+two plies smaller, and the arithmetic closes with nothing to spare: the reply's
+own mate budget `i` makes `ch q` a mate in `i + 2` (or in ONE, if the reply
+mates at once), the local step turns that into `ForcedlyMated G j q` with `j`
+odd and `j ≤ i + 2`, and the carrier at `q` gives `N ≤ j + 1 ≤ i + 3`.
+
+Two honest notes.  The depth condition is `k + 1 ≤ d`, one ply stricter than
+the attacker half's `k ≤ d`: the attacker only has to FIND the mate it plays,
+while the defender has to outlast the faster mate that does not exist, and
+refuting that one needs the ply that would have shown it.  And `ResistsFor`
+does not assert that `ch q` is a legal move -- `MatesWithin` does not either --
+so the fact is proved separately rather than assumed:
+
+```text
+defence_move_legal :
+  NearMaximalChoice G guard d ch →
+  allIllegalB G q = false → hasKingCapture G q = false →
+  (∀ i, ForcedlyMated G i q → N ≤ i + 1) → 3 ≤ N → N ≤ d →
+  hasKingCapture G (ch q) = false
+```
+
+An illegal defence hands over the king, which the model prices at the exact
+`MATE_UPPER` sentinel -- the largest value there is -- and the engine minimises
+the value it moves to, so every legal alternative would have to score within
+`EVAL_ROUGHNESS` of the sentinel as well.  That is where the terminal clamp
+becomes quantitative: `hspan` caps the horizon at `d ≤ 1424` plies, so
+`forcedMate_of_value_dist` at `t = 1423` leaves room for a mate in ONE and
+nothing longer, every legal move at `q` would be mate in one, and the carrier
+says `q` is not mated in two.  Below three plies the question is empty: mate
+cannot land before ply two whatever the engine plays.  The recursion hands each
+child these same hypotheses, so the same theorem applies at every node of the
+play whose remaining budget is at least three.
+
+### Can the frontier premise be dropped? No — `CexD`
+
+`NoMaskedMobility` is the model-side stand-in for the engine fix in PR #171
+(search the QS-filtered evasions before declaring mate).  The natural hope is
+that the distance machinery makes it unnecessary: a phantom mate is invented at
+the frontier, where almost no depth is left, so surely it can only claim the
+DEEPEST rungs, and a real mate in `k` with `k + 1 ≤ d` claims a higher one.
+
+That hope is false, and one number says why.  **A masked node does not report a
+shallow mate — it reports the sentinel.**  Its filtered fold has no admitted
+legal move left, so nothing displaces the initial accumulator
+`LOSS = -MATE_UPPER`, and the parent negates that to `MATE_UPPER`, which is not
+a rung at all: it is strictly above every value the ladder can produce
+(`mateFloor_lt_MATE_UPPER`).  A phantom outranks EVERY real mate, at every
+distance and every depth, and no rung argument can separate what is off the
+ladder.
+
+`CexD` is that hope refuted at the exact hypotheses of
+`leastMated_defence_resists`.  `Q` is genuinely lost in four plies; the correct
+defence `D` leads to a real mate in three, the fast loss `B` to mate in one, and
+one ply past the frontier of `D`'s line sits `M` — a defender node whose only
+legal reply is filtered by the depth-1 threshold (`-150 < -100`) while an
+illegal one survives it, the position class of the #171 report, one ply deeper.
+`D` is therefore priced at `MATE_UPPER = 69290` instead of its true rung 47938,
+the mate in one is priced honestly at 47968, and the engine prefers to be mated
+in two.  Every premise but `NoMaskedMobility` holds — including the move rule in
+its IDEALISED exact-argmax form, so the driver's tolerance is not what breaks it
+— and the conclusion is false:
+
+| fact | theorem | axioms |
+|---|---|---|
+| the masked node reports the sentinel | `cexD_M1` | `propext, Quot.sound` |
+| ... which outranks the true mate at the root | `cexD_D4`, `cexD_B4` | `propext, Quot.sound` |
+| the position really is lost in exactly four plies | `cexD_leastMated` | `propext, Quot.sound` |
+| the engine is mated in two | `cexD_not_resists` | `propext, Quot.sound` |
+| **the premise cannot be dropped** | `cexD_defence_needs_frontier` | `propext, Quot.sound` |
+
+Two things this settles.  **Acyclicity does not help**: `CexD` is a finite tree
+with no repetition in it, so no draw-by-repetition or well-founded-descent
+argument touches the failure.  **Depth does not help**: the masking sits one ply
+below the choice and stays there however large `d` grows, because the frontier
+travels with the search — `cexD_M4` values that very node honestly at remaining
+depth 4 while `cexD_M1` shows it lying at remaining depth 1.  What retires the
+premise is the engine change: land #171, and the sentinel never survives the
+fold.  Until then `NoMaskedMobility` is the honest name for the gap, and it is a
+*search-level* premise because the gap is in the search.
+
 ## Terminal positions and legality evidence
 
 The move fold maintains two independent facts:
@@ -276,6 +507,9 @@ transform is the identity, so the model and source are extensionally equal.
 - `TableSwap.lean`: table-update properties.
 - `Liveness.lean` and `Classification.lean`: mate visibility and search-result
   classification under their named fidelity premises.
+- `Shortest.lean`: mate-distance parity, value separation, distance-to-mate
+  optimal play in both directions under the driver's own stopping tolerance, and
+  the countermodel showing the frontier premise cannot be dropped from it.
 - `Pruning.lean` and `Tricks.lean`: proof envelopes for selective-search
   techniques.
 

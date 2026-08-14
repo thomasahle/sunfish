@@ -38,6 +38,38 @@ def fmt_move(m):
     return "%d,%d,%s" % (m.i, m.j, m.prom or "-")
 
 
+# --- movegen call counter (battery metric, compared in `done` lines) ---
+GEN_CALLS = 0
+_orig_gen_moves = Position.gen_moves
+
+
+def _counting_gen_moves(self):
+    global GEN_CALLS
+    GEN_CALLS += 1
+    return _orig_gen_moves(self)
+
+
+Position.gen_moves = _counting_gen_moves
+
+# --- tp_move replacement-policy battery knobs ------------------------------
+# Non-default values (or USE_VARIANT=1) swap the searcher for the drift-
+# guarded transcription in variants.py; defaults keep the REAL live-imported
+# Searcher, so the ordinary gate never depends on the transcription.
+BATTERY = {"EVICT_POLICY": 0, "EVICT_SCAN_K": 4, "KILLER_COUNT": 1, "USE_VARIANT": 0}
+
+
+def make_searcher():
+    if any(BATTERY[k] != d for k, d in
+           (("EVICT_POLICY", 0), ("EVICT_SCAN_K", 4), ("KILLER_COUNT", 1),
+            ("USE_VARIANT", 0))):
+        import variants
+        variants.EVICT_POLICY = BATTERY["EVICT_POLICY"]
+        variants.EVICT_SCAN_K = BATTERY["EVICT_SCAN_K"]
+        variants.KILLER_COUNT = BATTERY["KILLER_COUNT"]
+        return variants.VariantSearcher()
+    return Searcher()
+
+
 def from_fen(fen_fields):
     """Build a Position from FEN, oriented to the side to move.  The C twin
     implements this construction bit for bit (see setup_fen in sunfish.c)."""
@@ -87,7 +119,7 @@ def main():
 
         elif cmd == "reset":
             sunfish.pst["K"] = sunfish.K_MID
-            searcher = Searcher()
+            searcher = make_searcher()
             hist = [Position(sunfish.initial, 0, (True, True), (True, True), 0, 0)]
             emit("ok")
 
@@ -95,6 +127,14 @@ def main():
             # Shared tuning knobs; the C-only knobs have no Python side.
             if args[1] in ("QS", "QS_A", "EVAL_ROUGHNESS", "TABLE_SIZE"):
                 setattr(sunfish, args[1], int(args[2]))
+                # TABLE_SIZE sizes the policy-3 slot table at construction:
+                # rebuild so the last set wins (fresh, like the C twin's
+                # size-on-first-use; sets arrive right after reset).
+                searcher = make_searcher()
+                emit("ok")
+            elif args[1] in BATTERY:
+                BATTERY[args[1]] = int(args[2])
+                searcher = make_searcher()
                 emit("ok")
             else:
                 emit("err knob")
@@ -131,6 +171,8 @@ def main():
 
         elif cmd == "go" and args[1] == "depth":
             maxd = int(args[2])
+            global GEN_CALLS
+            GEN_CALLS = 0
             # Consume the REAL search generator; shadow the driver's bracket
             # so we can stop exactly when depth==maxd converges, without
             # pulling (and paying for) the first probe of depth maxd+1.
@@ -147,7 +189,7 @@ def main():
                     upper = score
                 if depth == maxd and not lower < upper - sunfish.EVAL_ROUGHNESS:
                     break
-            emit("done nodes", nodes)
+            emit("done nodes", nodes, "gen", GEN_CALLS)
 
         else:
             emit("err unknown command:", cmd)

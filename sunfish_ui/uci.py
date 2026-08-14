@@ -113,7 +113,11 @@ def stop_softly(searcher, gen):
 
 
 def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False,
-            max_nodes=0):
+            max_nodes=0, requested_depth=None, open_ended=False):
+    # requested_depth: the depth the GUI actually typed, or None - max_depth
+    # defaults to 100 and would otherwise be reported as if it were asked for.
+    # open_ended: "go infinite"/"go ponder", where a stop is the terminating
+    # condition rather than a truncation. Both feed the abort marker below.
     if debug:
         print(f"Going movetime={max_movetime}, depth={max_depth}, nodes={max_nodes}")
 
@@ -131,6 +135,10 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
     # class of giveaways - possible.
     best_move = cand = None
     last_depth = 1
+    # True once a limit we were GIVEN was actually met. Stays False when the
+    # loop ends because a stop arrived, or because the in-search deadline
+    # aborted the generator - the two are told apart by stop_event below.
+    reached_limit = False
     if max_nodes:
         # stop mid-iteration, not between depths: a per-depth check rewards
         # whichever engine prunes less (bigger last iteration = bigger
@@ -153,6 +161,7 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
             # points of the WAC depth-3 floor.
             if score >= gamma and move is not None:
                 best_move = render_move(move, white_pov=len(hist) % 2 == 1)
+            reached_limit = True
             break
         elapsed = time.perf_counter() - start
         fields = {
@@ -169,6 +178,8 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
                 # score - and stop: there is nothing to search or play.
                 fields["score cp"] = score
                 print("info", " ".join(f"{k} {v}" for k, v in fields.items()))
+                # Terminal root: the search is COMPLETE, not truncated.
+                reached_limit = True
                 break
             fields["score cp"] = f"{score} lowerbound"
             cand = render_move(move, white_pov=len(hist) % 2 == 1)
@@ -180,11 +191,13 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
         # We may not have a move yet at depth = 1
         if depth > 1:
             if elapsed > max_movetime * 2 / 3:
+                reached_limit = True
                 break
             # "go nodes N": equal-thinking matches (fixed-node testing).
             # Checked between probes, so both sides overshoot by at most
             # one MTD probe - symmetric, which is all fixed-node needs.
             if max_nodes and searcher.nodes >= max_nodes:
+                reached_limit = True
                 break
             if stop_event.is_set():
                 break
@@ -209,6 +222,30 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
         print(f"info string EARLY-RETURN-DIAG elapsed={elapsed:.3f} "
               f"budget={max_movetime:.2f} depth={last_depth} "
               f"deadline_in={(searcher.deadline or 0) - time.time():.3f}")
+
+    # A search that ends because "stop"/"quit"/EOF arrived, BEFORE the limit it
+    # was given, answers a shallower question than the one it was asked - and
+    # said so nowhere. Stopping ASAP is correct UCI; being quiet about it is a
+    # silent degrade, which this engine does not do (AGENTS.md).
+    #
+    # The case that costs people days: a one-shot harness pipes
+    # `go depth 8` and `quit` together, stdin is drained eagerly, the stop
+    # lands during depth 1, and a DEPTH-2 result comes back wearing a
+    # well-formed info line and a well-formed bestmove. Nothing distinguishes
+    # it from a finished depth-8 search. See docs/TESTING.md rule 13.
+    #
+    # Not emitted for "go infinite"/"go ponder": there the stop IS the
+    # terminating condition, so there is nothing to warn about.
+    if stop_event.is_set() and not reached_limit and not open_ended:
+        if requested_depth is not None:
+            asked = f"depth {requested_depth}"
+        elif max_nodes:
+            asked = f"nodes {max_nodes}"
+        else:
+            asked = f"movetime {max_movetime:.2f}s"
+        print(f"info string aborted at depth {last_depth} "
+              f"(nodes {searcher.nodes}, {elapsed:.2f}s) before requested {asked}")
+
     played = best_move or cand
     my_pv = pv(searcher, hist[-1], include_scores=False)
     if played and len(my_pv) > 1 and my_pv[0] == played:
@@ -511,9 +548,14 @@ def run(sunfish_module, startpos):
                         max_depth,
                         debug=debug,
                         # mate_loop has no node budget; fixed-node play is a
-                        # go_loop concern only.
+                        # go_loop concern only. Same for the abort marker's
+                        # two inputs: what the GUI actually asked for, and
+                        # whether it asked for anything finite at all.
                         **({"max_nodes": opts["nodes"]}
                            if "nodes" in opts and loop is go_loop else {}),
+                        **({"requested_depth": opts.get("depth"),
+                            "open_ended": "infinite" in opts or "ponder" in opts}
+                           if loop is go_loop else {}),
                     )
 
                     # Make sure we get informed if the job fails

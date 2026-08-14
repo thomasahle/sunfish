@@ -199,7 +199,7 @@ def run_bench(args):
                 t0 = time.time()
                 out = e.cmd_lines("go depth %d" % args.depth, "done")
                 tot_t += time.time() - t0
-                tot_n += int(out[-1].split()[-1])
+                tot_n += int(out[-1].split()[2])   # "done nodes N gen G"
         finally:
             e.quit()
         results.append((name, tot_t, tot_n))

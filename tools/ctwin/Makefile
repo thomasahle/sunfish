@@ -32,7 +32,20 @@ gate: all
 bench: all
 	python3 difftest.py --bench --depth 7
 
+# Profile-guided rebuild of sunfish_c in place (clang toolchain; on
+# Linux replace `xcrun llvm-profdata` with `llvm-profdata`).  Training
+# run: a deep default-knob search.  PGO changes scheduling, never
+# semantics -- but the gate still reruns on the PGO binary, because the
+# binary that ships numbers is the binary that passed.
+pgo: all
+	$(CC) $(CFLAGS) -fprofile-instr-generate -o sunfish_c_pgen sunfish.c
+	printf 'position startpos\ngo depth 9\nquit\n' | \
+	    LLVM_PROFILE_FILE=ctwin.profraw ./sunfish_c_pgen tables_classic.txt > /dev/null
+	xcrun llvm-profdata merge -output=ctwin.profdata ctwin.profraw
+	$(CC) $(CFLAGS) -fprofile-instr-use=ctwin.profdata -o sunfish_c sunfish.c
+	rm -f sunfish_c_pgen ctwin.profraw ctwin.profdata
+
 clean:
-	rm -f sunfish_c
+	rm -f sunfish_c sunfish_c_pgen ctwin.profraw ctwin.profdata
 
 .PHONY: all test test-full bench clean
