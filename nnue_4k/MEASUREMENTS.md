@@ -9752,3 +9752,18 @@ shapecheck-class checks, first-yield, legality 334/334 all PASS on the
 rebuilt pair. The ×5 conversion reading stands (entry 0/5, 8Mv 1/5,
 kqk-mid): the marginal call remains the coordinator's; nothing launches
 from this lane.
+
+## 2026-08-15 — replnet-8mv screen DISPATCHED (coordinator GO)
+
+Coordinator ruling, ledgered verbatim: "mate-conversion 4/5-5/5 class
+marginal on kqk-mid, pre-stated, accepted by coordinator; the phase
+family carries the fix." A deficiency the screen exists to measure
+cannot gate the screen. Dispatch: fixed-node SPRT as staged (elo0=0
+elo1=10, nodes 20000, cap 1000, srand 20260814), arms current vs HEAD
+(entry-5d7d0d1 3308 B vs replnet-8mv 3536 B), box-side detached
+dispatcher: prefers m2's freed slot, presence-marks the boxlock (or
+records cotenancy — permitted under the capacity ruling), zero-illegal
+tripwire kills the match and voids the run on ANY illegal move, verdict
+written box-side (session-proof). If LB>0: the timed leg follows with
+nps RE-MEASURED at dispatch — the 0.66 ratio was against the old entry
+and is stale by construction.
