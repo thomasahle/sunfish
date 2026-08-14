@@ -1,0 +1,20 @@
+{
+  "comment": "tp_move replacement-policy battery cells. Knobs are sunfish_c runtime knobs (argv NAME=VALUE / set NAME V). Identity per cell is proven by difftest --set of the same knobs before any number counts. Churn cells add TABLE_SIZE=500.",
+  "cells": {
+    "master":       {},
+    "p1_unguarded": {"EVICT_POLICY": 1},
+    "p2_scan4":     {"EVICT_POLICY": 2, "EVICT_SCAN_K": 4},
+    "p2_scan16":    {"EVICT_POLICY": 2, "EVICT_SCAN_K": 16},
+    "p3_slot":      {"EVICT_POLICY": 3},
+    "k2":           {"KILLER_COUNT": 2},
+    "k3":           {"KILLER_COUNT": 3},
+    "p1_k2":        {"EVICT_POLICY": 1, "KILLER_COUNT": 2},
+    "p3_k2":        {"EVICT_POLICY": 3, "KILLER_COUNT": 2},
+    "master_churn":       {"TABLE_SIZE": 500},
+    "p1_unguarded_churn": {"EVICT_POLICY": 1, "TABLE_SIZE": 500},
+    "p2_scan4_churn":     {"EVICT_POLICY": 2, "EVICT_SCAN_K": 4, "TABLE_SIZE": 500},
+    "p2_scan16_churn":    {"EVICT_POLICY": 2, "EVICT_SCAN_K": 16, "TABLE_SIZE": 500},
+    "p3_slot_churn":      {"EVICT_POLICY": 3, "TABLE_SIZE": 500},
+    "k2_churn":           {"KILLER_COUNT": 2, "TABLE_SIZE": 500}
+  }
+}
