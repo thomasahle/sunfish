@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-14 | **PRE-REGISTERED: the CLASSIC builtin clock drops its cap — two one-line candidates, `max((wtime−8000)/40+winc, 50)` and `min(wtime/40+0.9·winc, wtime/4)`, ranked on the surrogate BEFORE one staged 60+0 real-clock non-inferiority arm (elo0=−10 elo1=0, cap 400)** | Scope is the **packed classic artifact only** (`sunfish.py`'s embedded loop; a checkout reaches `sunfish_ui/uci.py` instead, so neither bot rides it) — byte figures are NOT comparable with the pool ladder's. The incumbent `min(wtime/12+0.9·winc, wtime/2−1000)` carries the park this file measured twice: `T* = 2+2I`, and under a 2 s clock the cap is NEGATIVE so the budget collapses to the 0.05 s floor. Both candidates are distillations of this lane's own pool — `P/M` with the reserve rounded to 8 s, or `P/M` under the pool's `A/4` clip. **Their no-park proofs differ**: one-max reaches the floor holding **10 s (40 moves)** against the incumbent's 2.1 s (8 moves); min40-4 banks nothing but its clip can never bind at `winc == 0`, making the policy exactly `t/40` with no fixed point, and it is **homogeneous of degree 1** so the ms/s trap is unrepresentable. Both net-negative in source (−11/−7 bytes, −2 tokens) and packed 3282 B / **3276 B** vs base 3278 B, so **elegance cannot break the tie**. Measured spend already separates them from base: 300+0 is **23.73 s → 7.38/7.57 s**. **Honest note in advance: a 60+0 pass does not license shipping** — `/40` wins sudden death (+235.5 ± 65.4) but loses increment (+91.1 ± 50.7 at 60+1, +45.9 ± 46.8 at 30+1 for `/12`), and these candidates collapse #188's slide back to a constant, so an increment ranking is required too. Tiebreak fixed in advance: within noise, min40-4 ships on unit-independence. **Request to the surrogate lane: add one-max and the classic base to min40-4's plugin set.** Nothing launched, no PR open |
 | 2026-08-14 | **AMENDMENT: pool ladder arms (c) 30+1 and (d) phase-M are HELD for the virtual-clock surrogate — held, NOT cancelled** | Owner ruling on real-clock economy. Arm (b) 60+1 PROCEEDS on real clocks (it is both the decisive question and calibration data for the surrogate); (c) and (d) move to the twin's virtual clock once it calibrates against stage 1, the +40.6 with-park run and arm (a), with only the final composite getting one real-clock confirmation. Bounds, book, seed, cap and readings for (c)/(d) stand as pre-registered; the arena scripts are renamed `HELD_*` with the ruling in their headers so the operational state cannot drift from the ledger |
 | 2026-08-14 | **ARM (a) VERDICT: the POOL time manager is +119.94 ± 36.44 at 60+0 — H1 accepted in 274 games on a NON-INFERIORITY screen, 144W-53L-77D (66.61%), LOS 100%, 0 forfeits, 0 illegal** | The arm that was only asked not to give back the +235.5 ± 65.4 sudden-death fix instead added to it, against that winner's own binary (`14b69a606b743a37`). Mechanism is the allocation SHAPE, measured off the PGN: the pool spends **0.79× the median move and 3.3× the maximum** (0.512/5.534 s vs 0.645/1.664 s) — cheap routine moves, a wall that lets a hard one run to 5× soft, which one number that is both target and wall cannot do. Drain: pool's minimum end-clock is **8.4 s = (M+2)·O exactly**, it never fell below 2.4 s in 274/274 games, and 0 games ended under 2 s, against the incumbent's 4 under 2 s and 5 crossings. Blind moves 1,057 (6.0%) vs 117 — same metric, different mechanism: these are deliberate floor moves with 8–12 s still banked, not a collapsed budget, and the arm won 66.6% while playing 14× more of them. `tm_smoke`'s cold-table prediction of 1.5× MORE routine spend over-read it; the pre-registered honest note was too pessimistic. **Arm (b) 60+1 (elo0=0 elo1=10) launched; (c) and (d) gated; v1.1 dynamic still unscreened** |
 | 2026-08-14 | **PRE-REGISTERED: the POOL time manager (soft/hard) goes to a four-arm ladder — (a) 60+0 NON-INFERIORITY pool vs the shipped entry, elo0=−10 elo1=0, cap 600; then (b) 60+1 elo0=0 elo1=10; (c) 30+1 NON-INFERIORITY; (d) phase-M vs pool** | Thomas's v2 architecture, separate from the smooth budget (#188, the conservative acute fix): a whole-game pool `P = T + (M−1)·I − (M+2)·O` split into a soft limit `min(P/M, A/4)` that stops STARTING iterations and a wall `min(5·soft, A/2)` that cannot go negative. `pooltm` mod, **+57 B all-in** (3308 → 3365, 731 spare — the curve's bytes come out with it), sha `cddf392e21449054` against the in-flight #188 baseline `14b69a606b743a37`. **Recorded before the games and against the design's own premise:** budgets are not spends — iterations are discrete, the pool stops at the first one that ENDS past its limit, and the realized spend measures 1.3–2.3× the soft limit (60+0: 2.26 s vs the incumbent's 1.50 s on the laptop; more than the incumbent at every probed TC on the loaded box). v1 is STATIC; the dynamic target is v1.1 and is not screened until v1 survives (a) and (c) |
@@ -249,6 +250,173 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-14 — PRE-REGISTRATION: the CLASSIC builtin clock loses its cap, and two one-line candidates go to the surrogate before either sees a real clock
+
+**Written before a game is played.** Scope first, because the byte figures
+below are NOT comparable with the pool ladder's: this is the **classic**
+engine's embedded loop in `sunfish.py`'s `go` handler, not `sunfish_nnue.py`.
+A checkout or wheel run never reaches it — `main()` imports
+`sunfish_ui.uci` unconditionally and returns — and only `pack.sh`, which
+deletes the `minifier-hide` block and that import with it, leaves the loop
+below live. So this entry prices the **packed classic artifact** and nothing
+else. Neither lichess bot rides it.
+
+The incumbent, in the millisecond domain the handler actually works in
+(`wtime`/`winc` arrive as integer ms; the next line divides by 1000):
+
+```python
+think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1000)
+```
+
+Its cap is not a safety net, it is the park. Once it binds the clock obeys
+`T <- T/2 + 1 + I`, stable fixed point `T* = 2 + 2I` — the same one this
+file already measured twice (2.0 s at 60+0, a 2.1 s median at 60+0.1). Below
+a 2 s clock the cap is NEGATIVE, so the arm that defines the park cannot be
+spent at all: the budget collapses to the 0.05 s floor and ~200 ms/move of
+lag drains the rest. That is `EAThUL0P` again, in the classic loop.
+
+### The two candidates, both one line, both a distillation of Thomas's pool
+
+The pool this lane already validated is `P = T + (M−1)·I − (M+2)·O`; at
+M = 40 and the measured O = 200 ms, `P/M = wtime/40 + 0.975·winc − 210 ms`.
+Round the increment to 1 and the reserve to a flat 8 s and that IS candidate
+one; keep the pool's other term, the `A/4` clip, and drop the reserve and
+that IS candidate two.
+
+```python
+# one-max: the reserve is 8 s, named, and the min becomes a max
+think = max((wtime - 8000) / 40 + winc, 50)
+# min40-4: the reserve is four increments, and nothing carries a unit
+think = min(wtime / 40 + 0.9 * winc, wtime / 4)
+```
+
+**Why min40-4 is not just a second guess.** Every term is linear in the time
+unit, so the statement is homogeneous of degree 1: it reads identically in
+seconds or milliseconds. The ms/s confusion that produced a 590-second move
+becomes *unrepresentable*, which matters precisely because this shape gets
+copied between a seconds-domain interface and a millisecond-domain packed
+loop. one-max cannot claim that — `8000` and `50` are millisecond constants,
+and its line must never be pasted into `uci.py`.
+
+### Where each one's no-park proof comes from — they are NOT the same argument
+
+| policy | floor reached at | banked there | fixed point (unfloored) |
+|---|---|---|---|
+| incumbent | 2.1 s | 8 moves | **`T* = 2 + 2I`, stable** — and at I = 0 the park is a DRAIN, since the cap is already negative under 2 s |
+| one-max | **10.0 s** = 8 + 40·0.05 | **40 moves** | none: drift ≤ I − O − floor < 0 everywhere, so the pool is genuinely spent down |
+| min40-4 | 2.0 s | 8 moves | none **at I = 0**, by a different route — the clip can never bind (`t/40 < t/4` always), so the policy is EXACTLY `t/40`, a pure geometric drain |
+
+one-max buys its safety with a named reserve; min40-4 buys it by never
+letting the budget go negative and approaching the floor slowly. Recorded
+against min40-4, not hidden: **it banks no reserve**, reaching the floor at
+the same 2 s clock as the incumbent. Pricing that against one-max's 10 s is
+the single thing the surrogate is being asked to do.
+
+### The arms
+
+| arm | line | packed | sha256[:16] | source |
+|---|---|---|---|---|
+| base | `min(wtime/12 + 0.9*winc, wtime/2 - 1000)` | 3278 B | `1f458ad9e5370014` | — |
+| **one-max** | `max((wtime - 8000)/40 + winc, 50)` | 3282 B (+4) | `db5bff327327366e` | −11 bytes, −2 tokens, net −2 lines |
+| **min40-4** | `min(wtime/40 + 0.9*winc, wtime/4)` | **3276 B (−2)** | `020f9aaa8e588fb2` | −7 bytes, −2 tokens, net −2 lines |
+
+Both are net-negative in source bytes and tokens against a 4096 B budget
+with ≥ 814 B spare, so **the elegance bar does not decide this** — it is
+neutral-to-favourable for both and cannot break the tie.
+
+### Realized spend, measured on the packed builds before any match
+
+Seconds to `bestmove`, laptop, `position startpos moves e2e4 e7e5 g1f3 b8c6`:
+
+| probe | base | one-max | min40-4 | one-max analytic |
+|---|---|---|---|---|
+| 300+0 | **23.73** | 7.38 | 7.57 | 7.30 |
+| 60+0 | 5.14 | 1.12 | 1.25 | 1.30 |
+| 30+1 | 2.82 | 1.29 | 1.60 | 1.55 |
+| 14+0 | 1.04 | 0.17 | 0.41 | 0.15 |
+| 8+0 | 0.59 | 0.12 | 0.23 | 0.05 (floor) |
+| 2+0 | 0.06 | 0.11 | 0.17 | 0.05 (floor) |
+| 0.5+0 | 0.07 | 0.10 | 0.06 | 0.05 (floor) |
+
+The incumbent spending **23.73 s of a 300 s clock on one move** is the
+overspend side of the same defect the underspend audit found from the other
+end. Note also the two tight-clock rows: base returns `d2d4` at 2+0 and
+0.5+0 where both candidates still return `b1c3` — blind floor play, visible
+in a single probe.
+
+### What the surrogate is asked, and the request to its owner
+
+Per the AMENDMENT above, TM arms now run on the virtual-clock twin first.
+**Request to the surrogate lane, made here because this file is the
+coordination point and no plugin set has been ledgered yet:** min40-4 is
+already named as its first customer; please add **one-max and the classic
+base** to the same plugin set so all three are ranked against each other in
+one run rather than pairwise. The classic base line is not the same as
+`uci.py`'s — it caps at `wtime/2 - 1000` in ms, not `wtime/2 - 1` in s — so
+it needs its own plugin and cannot be aliased to the smooth-budget arm. No
+file of that lane's was touched in writing this.
+
+### The one real-clock arm, STAGED and NOT LAUNCHED
+
+| | |
+|---|---|
+| instrument | fastchess on the bench box, arena to be created fresh from a `git archive` of the winning branch |
+| **engine1** | **the surrogate's winner** (orientation trap: fastchess states the bounds in engine1's frame) |
+| engine2 | base, `1f458ad9e5370014` |
+| TC | **60+0** |
+| book | `book3k.pgn`, PGN not EPD (the packed artifact parses only `position startpos moves …`) |
+| games | 200 rounds × 2, `-repeat`, **cap 400**, `-recover` |
+| SPRT | elo0=−10 elo1=0 alpha=0.05 beta=0.05 model=normalized |
+| adjudication | **NONE** — a drained clock kills long level endgames, the exact class `-draw` would delete before the defect could show |
+
+It is launched only when a slot frees AND the surrogate has ranked the
+three. **The bar is non-inferiority**: this is a simplification that removes
+a cap, so per the simplify-or-Elo-pays rule the simplification side carries
+it if Elo is neutral.
+
+**Pre-registered readings, all reported whatever the SPRT says:** W/L/D and
+Elo ± pentanomial interval; LLR against the bounds and LOS; **illegal moves
+(zero tolerance — any occurrence kills the run and is reported naming the
+game)**; time forfeits per arm; drain profile (clock at game end: median,
+min, games under 2 s); the move at which the clock first falls under 2.4 s
+and how many moves follow it; per-arm median and maximum move time; and
+**the realized reserve at the floor**, which is the 10 s vs 2 s prediction
+in the no-park table and the one number that separates the candidates.
+
+**Pre-registered remedy, fixed now so the result cannot pick the rule:** if
+the arm fails, the single permitted retune is the reserve constant for
+one-max (8000 ms) or the clip divisor for min40-4 (4), set to the value that
+equalizes the two arms' median move time, with ONE rerun at the same seed,
+both ledgered. Anything else needs a new pre-registration.
+
+**Honest note recorded in advance, and it is the sharpest thing in this
+entry.** Both candidates are `/40`-family, and this file holds a standing
+measurement AGAINST that family at increment TCs: `/12 + 0.9·inc` beat
+`t/40 + inc` by **+91.1 ± 50.7 at 60+1 and +45.9 ± 46.8 at 30+1** (160 games
+a leg). It also holds `/40` beating `/12` by **+235.5 ± 65.4 at 60+0**. Those
+are not in conflict — **the divisor that wins depends on the increment**,
+which is exactly why `uci.py` is getting a sliding one in #188. Both
+candidates here collapse that slide back to a constant `/40`, trading
+increment strength for one line and no park. So: **a 60+0 pass does NOT
+license shipping on its own.** 60+0 is the friendly arm for a `/40` policy
+and the standing contrary evidence is at 60+1 and 30+1. The surrogate must
+rank all three at an increment TC as well, and if it cannot, the increment
+arm becomes a second required real-clock match before either candidate
+lands. If the surrogate ranks the two candidates within noise of each other,
+**min40-4 ships on the unit-independence argument alone** — that tiebreak is
+fixed here, before the ranking, so the result cannot choose it.
+
+### Cotenancy
+
+Nothing was launched, no box time was taken, no `.boxlock` claimed. The
+packed builds and probes above ran on the laptop. Implementation lives on
+two branches off `origin/master`, `classic/tm-one-max-pool` and
+`classic/tm-min40-4`, each one line plus a shared
+`tests/test_classic_time_budget.py` (118 tests, passing verbatim on both:
+regime tables, the no-park recurrence, banked reserve in moves,
+monotonicity in both arguments, and the unit domain). **No PR is open** —
+per the owner ruling above, it opens carrying the surrogate's winner.
 
 ## 2026-08-14 — AMENDMENT to the pool ladder: arms (c) and (d) are HELD for the virtual-clock surrogate, not cancelled
 
