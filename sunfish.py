@@ -288,6 +288,7 @@ Entry = namedtuple("Entry", "lower upper")
 class Searcher:
     def __init__(self):
         self.tp_score, self.tp_move, self.history = {}, {}, set()
+        self.tp_deep, self.king = set(), None
         self.nodes, self.deadline = 0, 1 << 63
 
     def bound(self, pos, gamma, depth, root=False):
@@ -484,7 +485,9 @@ class Searcher:
         # not a configuration; see formal/README.md.
         if not root:
             self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)
+            if depth: self.tp_deep.add((pos, depth))
         if len(self.tp_score) > TABLE_SIZE:
+            self.tp_deep.discard(next(iter(self.tp_score)))
             del self.tp_score[next(iter(self.tp_score))]
 
         return best
@@ -492,16 +495,21 @@ class Searcher:
     def search(self, history):
         """Iterative deepening MTD-bi search"""
         self.nodes, self.history = 0, set(history)
-        self.tp_score.clear()
-        # Table choice is fixed for the whole search (and tp_score is
-        # cleared above), so every bound targets one value function.
+        # Only history-independent QSearch entries survive between searches.
         pos = self.root = history[-1]
 
         # When queens come off, the kings can start to move to the center.
         # This is important to win KRK/KQK endings. Both directions every
         # search: table state must never outlive the condition (reused
         # processes start new games with this module state).
-        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END
+        king = K_MID if "Q" in pos.board and "q" in pos.board else K_END
+        if self.king != king:
+            self.tp_score.clear()
+        else:
+            for key in self.tp_deep: self.tp_score.pop(key, None)
+        self.tp_deep.clear()
+        self.king = king
+        pst["K"] = king
 
         gamma = 0
         # In finished games, we could potentially go far enough to cause a recursion

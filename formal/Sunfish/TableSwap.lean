@@ -2,7 +2,8 @@
 pst-swap soundness (milestone 2, part D): why `search` may retarget the
 evaluation between searches -- `pst["K"] = K_MID if "Q" in pos.board and
 "q" in pos.board else K_END`, assigned in BOTH directions on every
-search -- while keeping `tp_move` and clearing `tp_score`.
+search -- while keeping `tp_move`. `tp_score` keeps depth-zero entries only
+while the evaluation is unchanged; an evaluation change clears it entirely.
 
 Two tables, two fates:
 
@@ -11,11 +12,11 @@ Two tables, two fates:
   invariant `CTableOK G ...` (`Sunfish/CanNull.lean`) is G-indexed, and
   the evaluation is part of `G`.  `tableEntries_eval_relative` below
   machine-checks the dependence: an EXACT entry for one evaluation
-  violates the invariant for the other.  So the swap without the clear
-  would be unsound -- and the clear (`self.tp_score.clear()`, every
-  search) restores the invariant for the NEW evaluation
-  unconditionally, because the empty table satisfies `CTableOK` for ANY
-  game (`ctableOK_empty`, cited, not reproven).
+  violates the invariant for the other. So an evaluation swap without a
+  clear would be unsound. When the evaluation is unchanged, only depth-zero
+  entries survive: `ctableOK_keepQ` proves that they remain valid for the new
+  repetition history. When it changes, the empty table satisfies `CTableOK`
+  for any game (`ctableOK_empty`, cited, not reproven).
 
 * **`tp_move` survives the swap.**  `KillerInv`
   (`Sunfish/Stalemate.lean`, the `tp_move` lifecycle) is
@@ -157,9 +158,9 @@ def pstEntryB : Table PstB.toGame :=
 /-- **The eval-dependence of the keyed table invariant,
 machine-checked**: the exact entry satisfies `CTableOK` for the
 evaluation it was proven against and VIOLATES it for the swapped one.
-This is why `search` must clear `tp_score` when the pst assignment can
-change the evaluation -- and `ctableOK_empty` (any game, any history)
-is why clearing suffices. -/
+This is why `search` clears `tp_score` when the pst assignment actually
+changes the evaluation -- and `ctableOK_empty` (any game, any history) is why
+clearing suffices. -/
 theorem tableEntries_eval_relative :
     CTableOK PstA (fun _ => false) pstEntry ∧
       ¬ CTableOK PstB (fun _ => false) pstEntryB := by

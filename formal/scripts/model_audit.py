@@ -45,8 +45,8 @@ EXPECTED = {
     "Position.move": "69bb2460cd611c9e",
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "11d52eaa8a661352",
-    "Searcher.bound": "41a402d756621824",
-    "Searcher.search": "f9aa8c81b84ff44b",
+    "Searcher.bound": "0178edbf0c686320",
+    "Searcher.search": "9b2c7308f98d9c35",
     "constants": "02227a9fd04eb181",
 }
 
@@ -108,6 +108,9 @@ ANCHORS = [
     "pos.rotate(nullmove=True).king_capture()",
     "mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)",
     "self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)",
+    "if depth: self.tp_deep.add((pos, depth))",
+    "for key in self.tp_deep: self.tp_score.pop(key, None)",
+    "self.tp_deep.discard(next(iter(self.tp_score)))",
     "lower, upper = 1 - MATE_UPPER, MATE_UPPER",
     "if depth > 0 and pos in self.history:",
 ]

@@ -252,6 +252,7 @@ at capturable nodes.
 | `mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)` | `terminalValue`, `terminalValue_exact` |
 | legal killer lifecycle and eviction | `Killer.lean` |
 | root versus interior null behavior | `CanNull.lean` |
+| persistent depth-zero TT across histories | `nullValue_zero_history`, `ctableOK_keepQ` |
 | transposition-table interval updates | `TableSwap.lean` and table results in `Stalemate.lean` |
 | MTD-bi bracket range and convergence | `Driver.lean` |
 

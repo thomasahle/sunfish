@@ -72,10 +72,10 @@ Exactness notes from the audit (those that survive the collapse):
   differs depending on the cutoff.  `cNodeTail` therefore applies the
   IID table-effect only on the no-cutoff path.  A model that ran all
   yields eagerly would mis-model `tp_score`.
-* `history` is a FIXED per-search parameter here (`hist`);
-  `ctableOK_empty` below is the invariant fact that justifies sunfish
-  clearing `tp_score` whenever `history` changes -- the table invariant
-  is history-relative, and the empty table satisfies it for any
+* `history` is a FIXED per-search parameter here (`hist`). Positive-depth
+  entries are history-relative and are removed when `history` changes.
+  Depth-zero entries survive: the repetition gate is disabled there, so
+  `ctableOK_keepQ` proves that they satisfy the invariant for every new
   history.
 * The deadline `Stop` (305-310) raises at node ENTRY, before any store:
   an abort can leave the search unfinished but never a table entry
@@ -165,13 +165,36 @@ def CTableOK (G : NullGame) (hist : G.Pos → Bool) (t : Table G.toGame) : Prop 
       lo ≤ nullValue G hist d p ∧ nullValue G hist d p ≤ hi
 
 /-- The repetition gate's bookkeeping fact: the EMPTY table satisfies the
-invariant for ANY history -- which is exactly why sunfish may (and must)
-clear `tp_score` when `history` changes: entries proven against one
-history mean nothing under another, and clearing restores the invariant
-trivially. -/
+invariant for ANY history. -/
 theorem ctableOK_empty (G : NullGame) (hist : G.Pos → Bool) :
     CTableOK G hist ⟨fun _ _ => none⟩ :=
   fun _ _ _ _ h => Option.noConfusion h
+
+/-- Keep exactly the depth-zero entries of a score table. This models
+`Searcher.search` deleting every key recorded in `tp_deep`. -/
+def Table.keepQ {G : Game} (t : Table G) : Table G :=
+  ⟨fun d p => if d = 0 then t.find d p else none⟩
+
+/-- QSearch's value is independent of repetition history: the Python gate is
+`depth > 0 and pos in self.history`. -/
+theorem nullValue_zero_history (G : NullGame) (oldHist newHist : G.Pos → Bool)
+    (p : G.Pos) :
+    nullValue G oldHist 0 p = nullValue G newHist 0 p := rfl
+
+/-- A valid table can be retargeted to an arbitrary new history after all
+positive-depth entries are removed. This licenses keeping QSearch bounds
+between moves while clearing the history-dependent remainder. -/
+theorem ctableOK_keepQ (G : NullGame) (oldHist newHist : G.Pos → Bool)
+    (t : Table G.toGame) (ht : CTableOK G oldHist t) :
+    CTableOK G newHist (Table.keepQ t) := by
+  intro d p lo hi hfind
+  simp only [Table.keepQ] at hfind
+  by_cases hd : d = 0
+  · rw [if_pos hd] at hfind
+    subst d
+    simpa only [nullValue] using ht 0 p lo hi hfind
+  · rw [if_neg hd] at hfind
+    exact Option.noConfusion hfind
 
 /-! ### Helper lemmas -/
 
