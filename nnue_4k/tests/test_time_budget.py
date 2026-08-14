@@ -1,18 +1,35 @@
-"""The clock must survive a long sudden-death game.
+"""The time budget: one smooth function of (wtime, winc), clipped once.
 
-sunfish-nnue-engine lost lichess.org/EAThUL0P on time at move 73 of a
-3+0 game WITHOUT a single move overrunning: `wtime/12` spent 12.8s of a
-180s budget on ply 9, and once the clock fell under 2s the
-`wtime/2 - 1000` cap went negative, the budget collapsed to the 0.05s
-floor, and ~200ms/move of unavoidable lag drained the rest.
+    think = min(wtime * (1000 + 20*winc) / (40000 + 240*winc) + 0.9*winc,
+                wtime * wtime / (2*wtime + 4000))            # milliseconds
 
-No existing gate can see this. The ladder checks nodes, bytes and
-correctness; a match would need a real 3+0 game to reproduce it. So the
-budget curve is walked directly here.
+Three superseded policies are kept below as LITERALS, because every claim
+this file makes is a claim *relative to one of them*:
 
-The formula under test is inline in main(), so it is extracted from the
-source rather than duplicated -- if its shape changes, this test fails
-loudly instead of silently testing a stale copy.
+  OLD12  min(wtime/12 + 0.9*winc, wtime/2 - 1000)               (pre-e73da7d)
+  STEP   min(wtime/(12 if winc else 40) + 0.9*winc, wtime/2 - 1000)
+  SEC    the normative SECONDS form, which sunfish_ui/uci.py runs
+
+OLD12 lost lichess.org/EAThUL0P on time at move 73 of a 3+0 game WITHOUT a
+single move overrunning: /12 spent 12.8 s of a 180 s budget on ply 9, and
+once the clock fell under 2 s the `wtime/2 - 1000` cap went NEGATIVE, the
+budget collapsed to the 0.05 s floor, and ~200 ms/move of unavoidable lag
+drained the rest. STEP fixed that by pacing winc == 0 at /40, and measured
++235.5 +/- 65.4 head-to-head at 60+0 (MEASUREMENTS.md stage 1).
+
+STEP's defect is that it is DISCONTINUOUS at winc == 0: one millisecond of
+increment moves the divisor 40 -> 12 and puts 60+0.1 -- a sudden-death clock
+in all but name -- back in the drain regime the /40 branch exists to close.
+The shipped form ramps the divisor instead, and replaces the cap with one
+that cannot go negative. What it gives up is EXACTNESS at increment TCs: it
+is /12 + 0.9*inc asymptotically, within 10% for every winc >= 1 s, and that
+price is measured in games rather than assumed.
+
+The formula is inline in main(), so it is extracted from the source rather
+than duplicated -- if its shape changes, this test fails loudly instead of
+silently testing a stale copy. It is in MILLISECONDS (main() divides by 1000
+on the next line); the seconds/ms confusion has cost this project two
+incidents, so the two domains are asserted equal on a grid below.
 """
 import os
 import re
@@ -23,89 +40,296 @@ ENGINE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))
                       "sunfish_nnue.py")
 SRC = open(ENGINE).read()
 
-# THE budget line. There is exactly one, and it is NOT inside minifier-hide:
-# source and artifact run the same formula. The old layout kept a plain /12
-# line for the artifact and hid the sudden-death branch behind minifier-hide
-# -- and the 300+0 ladder then played the known-bad /12 branch on 97.2% of
-# 4,158 matched moves while the fix sat dead in source (LOSS_TAXONOMY.md P0).
-DEV = re.search(r"^\s+think = min\(wtime / \(12 if winc else 40\) \+ 0\.9 \* winc,"
-                r" wtime / 2 - 1000\)\s*$", SRC, re.M)
-# the OLD artifact-only /12 policy, kept here as a literal reference so the
-# winc > 0 path is provably unchanged by the unification
-OLD_ART_LINE = "think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1000)"
+# THE budget statement. There is exactly one, and it is NOT inside
+# minifier-hide: source and artifact run the same formula. The old layout kept
+# a plain /12 line for the artifact and hid the sudden-death branch behind
+# minifier-hide -- and the 300+0 ladder then played the known-bad /12 branch on
+# 97.2% of 4,158 matched moves while the fix sat dead in source
+# (LOSS_TAXONOMY.md P0).
+DEV = re.search(r"^\s+think = min\(wtime \* \(1000 \+ 20 \* winc\)"
+                r" / \(40000 \+ 240 \* winc\) \+ 0\.9 \* winc,\n"
+                r"\s+wtime \* wtime / \(2 \* wtime \+ 4000\)\)\s*$", SRC, re.M)
+
+# ---- the superseded policies, as literals -------------------------------
+OLD12_LINE = "think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1000)"
+STEP_LINE = "think = min(wtime / (12 if winc else 40) + 0.9 * winc, wtime / 2 - 1000)"
+# The NORMATIVE seconds form, mirrored here so this repo pins the sibling's
+# text and vice versa (sunfish tests/test_time_budget.py holds the ms mirror).
+# A divergence between the two engines' time managers is then a red test on
+# both sides, not a discovery made in a game.
+SEC_LINE = ("think = min(wtime * (1 + 20 * winc) / (40 + 240 * winc) + 0.9 * winc,"
+            " wtime * wtime / (2 * wtime + 4))")
 
 
-def test_budget_line_ships_in_the_artifact():
-    """One budget line, outside minifier-hide, so the artifact gets the fix."""
-    assert DEV, "budget line missing or reshaped"
-    assert SRC.count("think = min(wtime") == 1, (
-        "more than one budget line -- the hide-block split is back")
-    # the line must not sit inside a minifier-hide region, or the artifact
-    # silently loses the sudden-death branch again
-    stripped = re.sub(r"# minifier-hide start.*?# minifier-hide end", "", SRC, flags=re.S)
-    assert re.search(r"12 if winc else 40", stripped), (
-        "budget line is inside minifier-hide: artifact would drop the fix")
+def _eval(line, wtime, winc):
+    ns = {"wtime": wtime, "winc": winc, "min": min}
+    exec(line, ns)
+    return ns["think"]
 
 
 def budget(wtime_ms, winc_ms):
-    """seconds of thinking time, i.e. the engine's `think` after its /1000.
+    """seconds of thinking time, i.e. the engine's `think` after its /1000"""
+    return _eval(DEV.group(0).strip(), wtime_ms, winc_ms) / 1000.0
 
-    The extracted expression yields MILLISECONDS (wtime is ms); main()
-    divides by 1000 on the next line. Getting this wrong is exactly the
-    ms/seconds confusion that produced a 590-second move earlier today,
-    so the conversion lives in one place and is named.
+
+def old12(wtime_ms, winc_ms):
+    return _eval(OLD12_LINE, wtime_ms, winc_ms) / 1000.0
+
+
+def step(wtime_ms, winc_ms):
+    return _eval(STEP_LINE, wtime_ms, winc_ms) / 1000.0
+
+
+def sec_form(wtime_s, winc_s):
+    """the normative SECONDS form, evaluated in seconds"""
+    return _eval(SEC_LINE, wtime_s, winc_s)
+
+
+def cap(wtime_ms):
+    """the safety clip alone, in seconds"""
+    return wtime_ms * wtime_ms / (2 * wtime_ms + 4000) / 1000.0
+
+
+def base(wtime_ms, winc_ms):
+    """the smooth term alone, before the clip, in seconds"""
+    return (wtime_ms * (1000 + 20 * winc_ms) / (40000 + 240 * winc_ms)
+            + 0.9 * winc_ms) / 1000.0
+
+
+CLOCKS = (1, 10, 100, 500, 1_000, 1_900, 2_667, 5_000, 30_000, 60_000,
+          180_000, 300_000, 1_800_000)
+INCS = (0, 1, 10, 50, 100, 250, 500, 1_000, 3_000, 5_000)
+
+
+# ---- the line actually ships --------------------------------------------
+
+def test_budget_statement_ships_in_the_artifact():
+    """One budget statement, outside minifier-hide, so the artifact gets it."""
+    assert DEV, "budget statement missing or reshaped"
+    assert SRC.count("think = min(wtime") == 1, (
+        "more than one budget statement -- the hide-block split is back")
+    stripped = re.sub(r"# minifier-hide start.*?# minifier-hide end", "", SRC, flags=re.S)
+    assert "40000 + 240 * winc" in stripped, (
+        "budget statement is inside minifier-hide: artifact would drop the fix")
+
+
+# ---- the ms/seconds trap, closed numerically ----------------------------
+
+def test_ms_form_is_the_seconds_form_scaled():
+    """t_ms(W, I) == 1000 * t_s(W/1000, I/1000) at every grid point.
+
+    The two engines must budget the same time; the only thing separating
+    their source lines is a factor of 1000 in three constants. That has been
+    got wrong twice, so it is checked rather than reasoned about.
     """
-    ns = {"wtime": wtime_ms, "winc": winc_ms, "min": min}
-    exec(DEV.group(0).strip(), ns)
-    return ns["think"] / 1000.0
+    worst = 0.0
+    for W in CLOCKS:
+        for I in INCS:
+            got, want = budget(W, I), sec_form(W / 1000.0, I / 1000.0)
+            worst = max(worst, abs(got - want) / max(abs(want), 1e-12))
+    assert worst < 1e-12, "ms and seconds forms disagree by %.3e relative" % worst
 
 
-def old_artifact_budget(wtime_ms, winc_ms):
-    """the pre-fix artifact policy (/12 unconditionally), from the literal above"""
-    ns = {"wtime": wtime_ms, "winc": winc_ms, "min": min}
-    exec(OLD_ART_LINE, ns)
-    return ns["think"] / 1000.0
+# ---- (a) sudden death is EXACTLY /40 ------------------------------------
+
+def test_sudden_death_is_exactly_wtime_over_40():
+    """winc == 0 collapses the rational base to wtime/40, bit-for-bit.
+
+    This is the whole reason stage 1's +235.5 +/- 65.4 at 60+0 carries: at
+    winc == 0 the shipped budget IS the arm that won that match, provided the
+    clip agrees too (next test).
+    """
+    for W in CLOCKS:
+        assert base(W, 0) == W / 40 / 1000.0, "winc == 0 is not wtime/40 at %d ms" % W
 
 
-def walk(base_ms, inc_ms, moves, overhead=0.2):
-    """simulate our own clock over `moves` of our moves; -1 == flagged"""
-    clock = base_ms
+def test_sudden_death_matches_the_validated_step_arm_above_2667ms():
+    """Above 2.667 s of clock, the shipped budget == STEP at winc == 0.
+
+    2.667 s is where wtime/2 - 1000 overtakes the new clip, i.e. exactly
+    where the two caps swap; the whole 60+0 validation lives above it.
+    """
+    for W in CLOCKS:
+        if W <= 2_667:
+            continue
+        assert abs(budget(W, 0) - step(W, 0)) < 1e-9, (
+            "sudden-death budget moved off the validated arm at %d ms" % W)
+
+
+# ---- (b) the clip ---------------------------------------------------------
+
+def test_cap_is_strictly_positive_for_every_positive_clock():
+    """The negative cap was the doorway into the blind floor. It is gone.
+
+    Stage 1 watched the pre-fix arm cross `wtime/2 - 1000 < 0` at median move
+    42 and then play a median 16 moves at the 0.05 s floor -- mated on the
+    board, never flagging. wtime^2/(2*wtime + 4000) has no such crossing.
+    """
+    for W in (1, 2, 5, 10, 50, 100, 500, 999, 1_000, 1_999, 2_000, 2_666, 2_667, 10_000):
+        assert cap(W) > 0, "cap non-positive at wtime=%d ms" % W
+        assert budget(W, 0) > 0, "budget non-positive at wtime=%d ms" % W
+    # and the old cap really did go negative there -- the test has teeth
+    assert min(W / 2 - 1000 for W in (1, 500, 1_999)) < 0
+
+
+def test_cap_never_exceeds_half_the_clock():
+    for W in CLOCKS:
+        assert cap(W) <= W / 2 / 1000.0 + 1e-12, "cap over wtime/2 at %d ms" % W
+
+
+def test_cap_tracks_the_old_cap_within_5pct_above_10s():
+    """cap == (wtime/2 - 1000) + 2e6/(wtime + 2000), so the gap is 4/(t^2-4)
+    in seconds -- 4.2% at a 10 s clock and 0.004% at 300 s. Every measured
+    regime sits in the tail of that, so none of them moved."""
+    for W in (10_000, 20_000, 30_000, 60_000, 180_000, 300_000, 1_800_000):
+        old = W / 2 - 1000
+        assert abs(cap(W) * 1000 - old) / old < 0.05, "cap moved >5% at %d ms" % W
+        # the closed form, asserted rather than trusted
+        assert abs(cap(W) * 1000 - (old + 2e6 / (W + 2000))) < 1e-6
+
+
+# ---- (c) continuity -------------------------------------------------------
+
+@pytest.mark.parametrize("W", (1_000, 30_000, 60_000, 300_000, 1_800_000))
+def test_continuous_in_winc(W):
+    """Thomas's objection, as a test: no jump anywhere in winc.
+
+    Walked at 0.1 ms resolution from 0 to 2 s of increment. The bound is
+    scale-free (5% of the sudden-death budget at the same clock) so it means
+    the same thing at a 1 s clock and a 30 min one.
+    """
+    lim = 0.05 * budget(W, 0)
+    prev, worst = budget(W, 0.0), 0.0
+    for k in range(1, 20_001):
+        cur = budget(W, 2_000 * k / 20_000)
+        worst = max(worst, abs(cur - prev))
+        prev = cur
+    assert worst < lim, "jump of %.4f s in winc at wtime=%d ms (limit %.4f)" % (worst, W, lim)
+
+
+def test_the_step_form_fails_the_continuity_bound():
+    """The bound above has teeth: STEP jumps 3.5 s at a 60 s clock."""
+    prev, worst = step(60_000, 0.0), 0.0
+    for k in range(1, 2_001):
+        cur = step(60_000, 2_000 * k / 2_000)
+        worst = max(worst, abs(cur - prev))
+        prev = cur
+    assert worst > 3.0, "STEP no longer jumps -- this file is testing the wrong thing"
+
+
+# ---- (d) monotone in wtime ------------------------------------------------
+
+@pytest.mark.parametrize("I", (0, 1, 50, 100, 500, 1_000, 3_000))
+def test_monotone_nondecreasing_in_wtime(I):
+    """More clock may never buy less thinking. Both terms of the min are
+    increasing in wtime, so the min is -- checked anyway, cheaply."""
+    prev = -1.0
+    for k in range(0, 20_001):
+        cur = budget(k * 100, I)
+        assert cur >= prev - 1e-12, "budget fell at wtime=%d ms winc=%d" % (k * 100, I)
+        prev = cur
+
+
+# ---- (e) the increment TCs the audit measured -----------------------------
+
+@pytest.mark.parametrize("W,I", ((30_000, 1_000), (60_000, 1_000), (300_000, 3_000)))
+def test_increment_tcs_within_10pct_of_the_audited_policy(W, I):
+    """The 11-game production audit measured /12 + 0.9*inc from 60+1 to
+    300+5. The shipped form approaches it instead of reproducing it, so what
+    carries is a BOUND, not an identity: -7.4% at 30+1, -8.5% at 60+1,
+    -3.3% at 300+3. Whether that price is free is a games question, and it is
+    pre-registered as a 30+1 non-inferiority match, not asserted here."""
+    got, want = budget(W, I), step(W, I)
+    assert abs(got - want) / want < 0.10, (
+        "%d+%d moved %.2f%% off the audited policy" % (W, I, 100 * (got - want) / want))
+
+
+def test_the_10pct_bound_holds_for_every_winc_at_or_above_1s():
+    """Not just the three named TCs, and the deviation is one-sided.
+
+    The base ratio is (12 + 240i)/(40 + 240i): 0.900 at i = 1 s, rising to 1,
+    and the identical +0.9*inc term on both sides only pulls the full ratio
+    up. So over the whole family the shipped form SPENDS LESS than the
+    audited policy, never more, and never by as much as 10% -- 10% is the
+    asymptote (i = 1 s, clock -> infinity), approached and not reached; the
+    worst point on this grid is -9.95% at a 30-minute clock.
+
+    Restricted to where neither policy is clipped: in the clipped regime the
+    two caps differ on purpose, which the cap tests above cover."""
+    for W in CLOCKS:
+        for I in (1_000, 2_000, 3_000, 5_000, 30_000):
+            if step(W, I) >= (W / 2 - 1000) / 1000.0 or budget(W, I) >= cap(W):
+                continue                      # clipped on one side or the other
+            rel = (budget(W, I) - step(W, I)) / step(W, I)
+            assert -0.10 < rel < 0, "%d+%d deviates %+.3f%%" % (W, I, 100 * rel)
+
+
+def test_the_transition_band_is_where_the_shipped_form_differs():
+    """Below 1 s of increment the two policies genuinely part company, and
+    that is the point: STEP pays /12 for a single millisecond of increment."""
+    assert step(60_000, 100) / budget(60_000, 100) > 1.7
+    assert budget(60_000, 100) < 3.0 < step(60_000, 100)
+
+
+# ---- (f) the walks --------------------------------------------------------
+
+def walk(base_ms, inc_ms, moves, fn=budget, overhead=0.2):
+    """simulate our own clock over `moves` of our moves; -1 == flagged.
+
+    overhead is per-move lag (network + process turnaround) the budget cannot
+    see; the lichess games show ~200 ms.
+    """
+    clock, floored = base_ms, 0
     for mv in range(moves):
-        think = max(budget(clock, inc_ms), 0.05)
-        spent = think + overhead                      # lag we cannot avoid
-        clock -= spent * 1000
+        think = max(fn(clock, inc_ms), 0.05)
+        floored += think <= 0.05 + 1e-12
+        clock -= (think + overhead) * 1000
         clock += inc_ms
         if clock <= 0:
-            return -1, mv
-    return clock, moves
+            return -1, mv, floored
+    return clock, moves, floored
+
+
+def test_the_old_policy_reproduces_the_lost_game():
+    """OLD12 flags a 73-move 3+0 game -- the walk model has teeth."""
+    left, reached, _ = walk(180_000, 0, 73, fn=old12)
+    assert left == -1, "the old /12 policy no longer flags: walk model is stale"
+    assert reached > 30, "flagged implausibly early at move %d" % reached
 
 
 @pytest.mark.parametrize("moves", [80, 100, 120])
 def test_sudden_death_survives_long_games(moves):
     """3+0, the control that actually lost a game."""
-    left, reached = walk(180_000, 0, moves)
+    left, reached, _ = walk(180_000, 0, moves)
     assert left > 0, "flagged at move %d of %d in 3+0" % (reached, moves)
 
 
 def test_the_lost_game_would_now_be_survived():
     """73 moves at 3+0 -- the exact game, with time to spare."""
-    left, _ = walk(180_000, 0, 73)
+    left, _, _ = walk(180_000, 0, 73)
     assert left > 5_000, "only %.1fs left after the lost game's length" % (left / 1000)
 
 
-def test_increment_behaviour_unchanged_by_unification():
-    """winc > 0 must budget exactly what the old /12 policy did: that path
-    measured fine at 30+1 and on lichess, so the unification may only change
-    winc == 0."""
-    for wtime in (1_000, 30_000, 180_000, 1_800_000):
-        for winc in (1, 100, 3_000):
-            assert budget(wtime, winc) == old_artifact_budget(wtime, winc), (
-                "winc > 0 budget moved at wtime=%d winc=%d" % (wtime, winc))
+def test_tiny_increment_no_longer_drains():
+    """60+0.1 is the regime the step got wrong, and the walk shows why.
+
+    A 0.1 s increment against ~0.2 s of lag is a sudden-death clock with
+    extra steps, but STEP reads `winc != 0` and pays /12. Neither policy
+    survives 100 moves under this pessimistic 200 ms overhead -- the point is
+    the margin: the shipped form reaches move ~58 having played 3 moves at
+    the floor, STEP reaches ~44 having played 14 blind."""
+    smooth_left, smooth_reach, smooth_floor = walk(60_000, 100, 100)
+    step_left, step_reach, step_floor = walk(60_000, 100, 100, fn=step)
+    assert smooth_reach > step_reach + 8, (
+        "no drain margin at 60+0.1: smooth %d moves vs step %d" % (smooth_reach, step_reach))
+    assert smooth_floor * 2 < step_floor, (
+        "no blind-play margin at 60+0.1: smooth %d floored moves vs step %d"
+        % (smooth_floor, step_floor))
 
 
 def test_tournament_control_unaffected():
     """1800+3 over a long game keeps a healthy reserve."""
-    left, _ = walk(1_800_000, 3_000, 120)
+    left, _, _ = walk(1_800_000, 3_000, 120)
     assert left > 5_000, "1800+3 left only %.1fs" % (left / 1000)
 
 

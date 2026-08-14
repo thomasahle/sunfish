@@ -226,24 +226,39 @@ MODS = {
     # Late move reductions off. Threshold-triggered (val < LMR), so setting the
     # threshold to 0 disables it without touching the loop.
     "nolmr": ("\nLMR = 60\n", "\nLMR = 0\n"),
-    # THE PRE-FIX TIME MANAGER, rebuilt as a measurement arm and NOTHING else.
-    # It is the only mod here that makes the entry WORSE on purpose: it reverts
-    # the sudden-death budget conditional that landed in e73da7d back to the
-    # unconditional wtime/12 the ladder actually played (LOSS_TAXONOMY.md P0:
-    # 97.2% of 4,158 matched moves), so that "did the TM fix stop the
-    # clock-drain loss class" is a two-arm question with one line between the
-    # arms. The replacement text is byte-identical to the line at e73da7d^.
+    # THE TWO SUPERSEDED TIME MANAGERS, rebuilt as measurement arms and NOTHING
+    # else. They are the only mods here that make the entry WORSE on purpose,
+    # and they exist so that every TM claim is a two-arm question with one
+    # expression between the arms. Both share the anchor -- the shipped smooth
+    # budget -- so a reshaped budget breaks them loudly instead of silently
+    # producing a variant that is quietly the baseline.
     #
-    # NEVER LAND. There is no tombstone rule for this one because there is
-    # nothing to land: if the fix is ever reverted, this mod goes with it (its
-    # anchor would then be the baseline and the generator would raise loudly,
-    # which is the correct outcome).
+    # NEVER LAND either of them. There is no tombstone rule here because there
+    # is nothing to land: if the budget is ever reverted these mods go with it
+    # (their anchor would then be the baseline and the generator would raise).
     #
-    # Both arms keep the structural bestmove floor (03beefe), so this isolates
+    # Every arm keeps the structural bestmove floor (03beefe), so these isolate
     # TIME MANAGEMENT and not the `(none)` forfeit class the floor closed.
+    #
+    # `oldtm` is the pre-e73da7d unconditional wtime/12 the ladder actually
+    # played (LOSS_TAXONOMY.md P0: 97.2% of 4,158 matched moves); its
+    # replacement text is byte-identical to the line at e73da7d^. It lost
+    # -235.5 +/- 65.4 to `steptm` at 60+0 (MEASUREMENTS.md stage 1).
     "oldtm": (
-        "            think = min(wtime / (12 if winc else 40) + 0.9 * winc, wtime / 2 - 1000)\n",
+        "            think = min(wtime * (1000 + 20 * winc) / (40000 + 240 * winc) + 0.9 * winc,\n"
+        "                        wtime * wtime / (2 * wtime + 4000))\n",
         "            think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1000)\n",
+    ),
+    # `steptm` is the STEP form of the sudden-death fix -- /40 at winc == 0,
+    # /12 the instant winc is nonzero -- i.e. the entry as shipped between
+    # e73da7d and the smooth budget. Byte-identical to that line. It is the
+    # baseline for the smooth budget's own screens: the two agree exactly at
+    # winc == 0 (both /40, and the caps coincide above 2.67s) and differ most
+    # at tiny increments, which is where the step's discontinuity lives.
+    "steptm": (
+        "            think = min(wtime * (1000 + 20 * winc) / (40000 + 240 * winc) + 0.9 * winc,\n"
+        "                        wtime * wtime / (2 * wtime + 4000))\n",
+        "            think = min(wtime / (12 if winc else 40) + 0.9 * winc, wtime / 2 - 1000)\n",
     ),
     # CORRECTION HISTORY, interior-only. A running average of (search value -
     # static value) over positions sharing a pawn skeleton, added to the

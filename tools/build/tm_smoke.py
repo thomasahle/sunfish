@@ -5,11 +5,21 @@ sunfish_ui/ can be resolved and the builtin loop is what answers) and returns a
 LEGAL move -- checked with python-chess, not by eye.
 
 Assay: the same run times each `go`, which is the only black-box way to see
-WHICH budget line is live inside a packed artifact. At wtime=60000 the two arms
-must differ by construction -- /40 -> ~1.5 s, /12 -> ~5.0 s, both taken at
-0.8x by the soft break -- and at winc>0 they must AGREE, because the fix is
-byte-identical to the old policy for every winc > 0. An arm that does not show
-this has not got the mod that its name claims.
+WHICH budget line is live inside a packed artifact. A mod that silently failed
+to apply otherwise produces two identical arms and a screen that measures
+nothing. Expected budgets on a 60 s clock, before the 0.8x soft break:
+
+    winc     smooth (shipped)   step (tmfix)   old /12
+    0 ms     1.50 s  (/40)      1.50 s (/40)   5.00 s
+    100 ms   2.90 s  (/21.3)    5.09 s (/12)   5.09 s
+    1000 ms  5.40 s  (/13.3)    5.90 s (/12)   5.90 s
+
+winc == 0 is where smooth and step AGREE by construction (both /40, and their
+caps coincide above a 2.667 s clock), so it separates either of them from the
+pre-fix /12 but not from each other. **winc == 100 ms is the discriminator
+between smooth and step** -- roughly 1.75x apart -- and it is the regime the
+step form got wrong. An arm that does not show its row has not got the mod
+that its name claims.
 
 usage: tm_smoke.py ARTIFACT
 
@@ -27,9 +37,10 @@ import chess
 ENGINE = os.path.abspath(sys.argv[1])
 ENV = {k: v for k, v in os.environ.items() if k not in ("SF_NET", "PYTHONPATH")}
 CASES = [
-    ("wtime 60000 winc 0", "sudden death, full clock"),
+    ("wtime 60000 winc 0", "sudden death, full clock -- smooth == step"),
+    ("wtime 60000 winc 100", "TINY increment -- the smooth/step discriminator"),
     ("wtime 60000 winc 1000", "increment, full clock"),
-    ("wtime 1900 winc 0", "sub-2s clock (the negative-cap regime)"),
+    ("wtime 1900 winc 0", "sub-2s clock (where the old cap went negative)"),
 ]
 
 d = tempfile.mkdtemp(prefix="smoke_")

@@ -711,18 +711,42 @@ def main():
             times = dict(zip(args[1::2], map(int, args[2::2])))
             side = "wb"[len(hist) % 2 == 0]
             wtime, winc = times.get(side + "time", 60000), times.get(side + "inc", 0)
-            # TC-conditional budget; see sunfish_ui/uci.py for the increment
-            # audit numbers and the safety argument.
-            # INCREMENT (winc > 0): /12 + 0.9*inc front-loads the middlegame
-            # where depth buys Elo; measured fine at 30+1 and on lichess.
-            # SUDDEN DEATH (winc == 0) needs a flatter divisor: /12 spends 7%
-            # of the whole budget on one early move (12.8s of 180s on ply 9
-            # in lichess.org/EAThUL0P) and the game is lost on time at move
-            # 73 without a single move overrunning: below 2s the
-            # wtime/2 - 1000 cap goes negative, the budget collapses to the
-            # 0.05s floor, and ~200ms/move of unavoidable lag drains the rest.
-            # /40 is what classic uses and classic does not flag -- a constant
-            # with production evidence rather than a fit to one game.
+            # Budget = a smooth base, clipped once by a safety cap. Milliseconds
+            # here; sunfish_ui/uci.py runs the SAME function in seconds
+            # (wtime*(1 + 20*winc)/(40 + 240*winc) + .9*winc, cap
+            # wtime**2/(2*wtime + 4)) and the two agree under t_ms = 1000*t_s,
+            # asserted numerically in tests/test_time_budget.py.
+            # THE BASE spends wtime/d(winc) + 0.9*winc with an effective
+            # divisor d(winc) = (40000 + 240*winc)/(1000 + 20*winc) that slides
+            # 40 -> 12 as the increment grows:
+            #   winc  0ms  50   100   200   500   1s     3s     inf
+            #   d     40   26   21.3  17.6  14.5  13.3   12.5   12
+            # SUDDEN DEATH (winc == 0) is EXACTLY wtime/40. /12 spends 7% of
+            # the whole budget on one early move (12.8s of 180s on ply 9 in
+            # lichess.org/EAThUL0P) and loses on time at move 73 without a
+            # single move overrunning. /40 is what classic uses and classic
+            # does not flag -- a constant with production evidence, not a fit
+            # to one game -- and it is worth +235.5 +/- 65.4 head-to-head at
+            # 60+0 (MEASUREMENTS.md stage 1). Those PGNs also show the loss
+            # mechanism is not the flag but BLIND PLAY: a median 16 moves at
+            # the 0.05s floor.
+            # INCREMENT is /12 + 0.9*inc ASYMPTOTICALLY, within 10% of the
+            # audited policy at every winc >= 1s (the base ratio
+            # (12 + 240i)/(40 + 240i) is 0.900 at i=1s and rises to 1), so the
+            # 30+1..300+5 audit carries. It is an approximation, not an
+            # identity, and that price is measured rather than assumed.
+            # WHY NOT A STEP at winc == 0: the input is continuous and the
+            # policy was not. 60+0.1 is a sudden-death clock in all but name
+            # -- 0.1s/move of income against ~0.9s/move of spend -- and the
+            # step paced it at /12, i.e. the exact drain the winc == 0 branch
+            # exists to close. The ramp paces it at /21.3.
+            # THE ONE min IS THE SAFETY CAP, and wtime**2/(2*wtime + 4000)
+            # replaces wtime/2 - 1000 because that cap goes NEGATIVE under 2s
+            # and a negative cap is the doorway into the 0.05s blind floor.
+            # Identically (wtime/2 - 1000) + 2e6/(wtime + 2000): strictly
+            # positive for every positive clock, never above wtime/2, and
+            # within 5% of the old cap for wtime >= 10s, so the regime the
+            # audit measured does not move.
             # Movecount-aware divisors were simulated and are WORSE: a
             # shrinking "moves remaining" divisor spends MORE per move as the
             # game lengthens, which is backwards for sudden death.
@@ -733,7 +757,8 @@ def main():
             # (LOSS_TAXONOMY.md P0) while this source carried the fix. The
             # branch now SHIPS: a fix that exists in source but not in the
             # artifact is a defect class, not a byte saving.
-            think = min(wtime / (12 if winc else 40) + 0.9 * winc, wtime / 2 - 1000)
+            think = min(wtime * (1000 + 20 * winc) / (40000 + 240 * winc) + 0.9 * winc,
+                        wtime * wtime / (2 * wtime + 4000))
             # A GUI-supplied movetime is a HARD limit that the GUI itself
             # enforces, so spending all of it forfeits: the node counter is
             # only checked every 2048 nodes, so the search returns at
