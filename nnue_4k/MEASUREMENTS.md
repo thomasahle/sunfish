@@ -7849,3 +7849,49 @@ eval edge has to beat, and fixed nodes alone cannot see it.
 
 **Standing rule active:** TRAINQUEUE.md seeded (7 entries); replnet_v1c
 (l1=0.0013 band-center) started the moment arm 2 finished.
+
+## 2026-08-14 — nnue_4k/train/: the PyTorch pipeline stands; arm-1 reproduced; big-int layers with exact backprop
+
+**MIGRATION NOTE (training-lane handoff).** New runs queue through the
+config-driven pipeline in `nnue_4k/train/` (Thomas's directive; design in
+`train/README.md`). Mid-flight runs are NOT switched; the next queued run
+after the current chain is the first pipeline-native one. The legacy
+trainers (`packed/train_packed.py`, `tools/tune/distill_train.py`) stay
+untouched and remain the reference for their own historical numbers.
+
+**Pipeline validation, instrument-first (tolerance pre-stated).** REPLNET
+v1 arm 1 (l1=0.001, τ=0.85, 40 epochs, 4M cache, seed 0, legacy split)
+retrained through the NEW pipeline on the box (nice 19, 8 threads, beside
+— not touching — the live v1c/8M chain), against the ledger's 0.01385
+@59.6% zeros, tolerance |Δval| ≤ 0.0002 and zeros ±5 points: **val 0.01382
+@60.0% zeros — PASS** (Δ = −0.00003; the val split is byte-identical by
+RNG-stream alignment, val-sha pinned in PROVENANCE.json). Export of the
+reproduced net verified BIT-EXACT: payload decode == trainer quantization,
+and entry == integer reference == torch float64 mirror on 200 fens × 3
+views + a 60-ply walk (`train/verify_export.py`); spliced entry packs via
+pack.sh (measured, not composed).
+
+**Packed big-int layers (the scope expansion, now the pipeline's core).**
+`train/packed_layers.py`: LaneConv IS the big-int multiply (linear conv at
+field width F; circular via the mod 2^(Fm)−1 fold — the recorded rank-1
+trap's fix, now a layer), SwarClamp/HSum/ShiftRenorm mirror crelu, the
+modular lane sum and the signed shift. Forward = float64 exact-int
+semantics (every certified value an integer < 2^53, where float64 IS
+integer arithmetic); backward = true polynomial gradients, with exactly
+two documented STE points (trunc shift g/2^s; optional clamp
+pass-through, default exact subgradient + satpen). **10/10 bit-exactness
+tests vs actual python big-int evaluation** (`train/test_packed_layers.py`,
+incl. an end-to-end 2-layer probe and gradient-exactness) — these run on
+every pipeline change.
+
+**Field-budget certification** (`train/field_budget.py`) maps the three
+recorded walls to named per-layer checks by exact interval arithmetic —
+no-carry (carry coupling), per-layer widths + ShiftRenorm (field-budget
+collapse in deep products), in-forward quantization + the 2^53 exactness
+bound (quant-error compounding) — and REFUSES to train uncertifiable
+configs (train.py calls it before the first batch). Concrete: the ml2
+second layer at F2=16 is refused (fields reach 32,444,416 vs 65,535);
+F2=32 certifies with margin 4.26e9 and a legal hsum read-out; with
+renorm-to-12-bits between layers, 16+ conv layers certify at F=32 — depth
+is structural, not lucky. First multi-layer experiment queued as
+replnet_ml2 (TRAINQUEUE #6, PRICE-FIRST, certificate beside the run).

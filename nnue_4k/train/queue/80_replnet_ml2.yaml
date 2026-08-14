@@ -1,0 +1,40 @@
+# replnet_ml2 -- first MULTI-LAYER packed experiment, VAL PROBE, PRICE-FIRST.
+#
+# Layer 2 = circular self-convolution of the clamped head lanes: in the
+# engine, ONE extra big-int multiply of the crelu output blocks re-spaced
+# to 32-bit fields, folded mod 2^128-1, integer read-out u then >> 10.
+# Sized by the field-budget certificate, not by hope (train.py refuses to
+# start without it; certificate.json lands beside the run):
+#   F2=16 REFUSED (no-carry: fields reach 32,444,416 vs 65,535 -- the
+#   recorded field-budget wall), F2=32 CERTIFIED with margin 4,262,522,879;
+#   modular hsum read-out legal (group sum 129,777,664 <= 2^32-2).
+# Export is FLOAT-ONLY (house rule: the packed build is engine-side work
+# the val loss has to earn first).  Shipping additionally needs the priced
+# machinery bytes (re-space + multiply + fold + read-out) and ~8-12 payload
+# digits for u2 -- pack.sh on a real stub before any gate, like
+# replnet_bilt.  Val gates only the recipe against its own one-layer
+# baseline (u2 starts silent, so epoch 0 IS the one-layer net) -- val
+# lands nothing, play does.
+#
+# Data: the v1 winner's 4M natural mix via the legacy cache (box path).
+name: replnet_ml2
+data:
+  source: ../replnet-20260814/cache_repl4M.pkl
+  kind: legacy-pkl
+  split: legacy-perm
+model:
+  arch: ml2
+  N: 4
+  base: mat
+  ternary: 0.85
+  bm: 4
+loss:
+  l1: 0.001
+  satpen: 0.03
+  satthresh: 480.0
+opt:
+  epochs: 40
+  batch: 8192
+  lr: 3.0e-3
+  seed: 0
+notes: certificate-sized 2-layer packed net; compare val to repro_arm1 (same split, seed, data)

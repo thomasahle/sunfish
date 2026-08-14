@@ -33,6 +33,19 @@ val 0.01385 @59.6% zeros (winner, thin margin); l1=0.002 → 0.01404
    the winner's sparsity). In replacement mode the clip bounds ALL
    positional signal; 600 was inherited from the residual era, never
    measured here. Byte-neutral.
+6. **replnet_ml2 — first MULTI-LAYER packed net, VAL probe, PRICE-FIRST**
+   (`train/queue/80_replnet_ml2.yaml`, new pipeline; runnable as
+   `python3 train/train.py train/queue/80_replnet_ml2.yaml`). Layer 2 =
+   circular self-convolution of the clamped head lanes: ONE extra big-int
+   multiply, fields re-spaced to 32 bits, fold mod 2^128−1, integer
+   read-out, >>10. Sized by the field-budget CERTIFICATE, not by hope
+   (train.py refuses an uncertified config): F2=16 REFUSED (no-carry,
+   fields 32.4M vs 65,535 — the recorded field-budget wall), F2=32
+   certified with margin 4.26e9, hsum read-out legal. u2 starts silent, so
+   epoch 0 IS the one-layer net — the val delta is the second layer's
+   whole case. Float export only; shipping additionally needs the priced
+   machinery bytes (re-space + multiply + fold + read-out, ~8-12 payload
+   digits for u2) via pack.sh on a real stub, like replnet_bilt.
 
 ## Log (newest first)
 
