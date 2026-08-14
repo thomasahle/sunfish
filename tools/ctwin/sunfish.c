@@ -77,11 +77,11 @@ static int EVAL_ROUGHNESS = 15;
 static long TABLE_SIZE = 1000000;
 static int NULL_MARGIN = 15;     /* fuel-probe target margin (its own knob
                                     since #192, deliberately NOT tied to
-                                    EVAL_ROUGHNESS; the classic sub-depth-6
+                                    EVAL_ROUGHNESS; the classic sub-depth-8
                                     null keeps following EVAL_ROUGHNESS) */
 static int NULL_MIN_DEPTH = 2;   /* null move when depth > this */
 static int NULL_LIMIT = 500;     /* |score| bound for trying null */
-static int NULL_RED = 3;         /* null move depth reduction */
+static int NULL_RED = 5;         /* null move depth reduction */
 static int IID_MIN_DEPTH = 3;    /* IID when depth > this (master: 2) */
 static int IID_RED = 3;          /* IID depth reduction */
 static int FUT_MAX = 1;          /* futility pruning when depth <= this */
@@ -136,7 +136,7 @@ static int FUEL_NULL = 1;        /* DEFAULT since #192 merged the fuel
                                     (historical comparisons only -- no
                                     longer difftest-provable against the
                                     live reference) */
-static int FUEL_MIN_DEPTH = 6;
+static int FUEL_MIN_DEPTH = 8;
 static int DERIVE_FRESH = 0;
 
 /* ------------------------------------------------------------------ */
