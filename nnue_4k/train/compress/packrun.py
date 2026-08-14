@@ -10,12 +10,47 @@ exercised, not assumed -- layout B's SF_A self-read in particular.
 """
 import os
 import subprocess
+import tempfile
 
 _here = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(_here)))
-PACK_A = os.path.join(REPO, "tools", "build", "pack.sh")
-PACK_B = os.path.join(REPO, "tools", "build", "pack_entry.sh")
 NICE = ["nice", "-n", "15"]
+
+# The pack scripts are PINNED to a git rev, like the entry and for the
+# same incident: the golf lane's --no-hoist-literals/shebang-strip pack.sh
+# sat UNCOMMITTED in the working tree on 2026-08-14 and silently moved
+# every measured artifact (old-blob baseline 3831 -> 3780, settled 3594 ->
+# 3567).  A bake-off through an in-flight packer looks current and is
+# not; when the change LANDS, HEAD moves and one re-run refreshes every
+# number against the landed path.
+PACK_REV = os.environ.get("BAKEOFF_PACK_REV", "HEAD")
+_pinned = {}
+
+
+def _pin(relpath):
+    """Materialize REV:tools/build/<script> once; returns (path, prov)."""
+    if relpath not in _pinned:
+        spec = "%s:tools/build/%s" % (PACK_REV, relpath)
+        src = subprocess.run(["git", "-C", REPO, "show", spec],
+                             capture_output=True, text=True, check=True).stdout
+        sha = subprocess.run(["git", "-C", REPO, "rev-parse", spec],
+                             capture_output=True, text=True, check=True).stdout.strip()
+        wt = os.path.join(REPO, "tools", "build", relpath)
+        with open(wt) as f:
+            if f.read() != src:
+                print("  NOTE: working-tree %s differs from pinned %s (%s) -- "
+                      "packing with the PIN" % (relpath, PACK_REV, sha[:12]),
+                      flush=True)
+        d = tempfile.mkdtemp(prefix="bakeoff_pack_")
+        path = os.path.join(d, relpath)
+        with open(path, "w") as f:
+            f.write(src)
+        _pinned[relpath] = (path, "%s (blob %s)" % (spec, sha[:12]))
+    return _pinned[relpath]
+
+
+def provenance():
+    return {"pack_a": _pin("pack.sh")[1], "pack_b": _pin("pack_entry.sh")[1]}
 
 
 def _run(cmd, **kw):
@@ -26,12 +61,12 @@ def _run(cmd, **kw):
 
 
 def pack_a(entry_path, out_path):
-    _run(["bash", PACK_A, entry_path, out_path])
+    _run(["bash", _pin("pack.sh")[0], entry_path, out_path])
     return os.path.getsize(out_path)
 
 
 def pack_b(entry_path, weights_path, out_path):
-    _run(["bash", PACK_B, entry_path, weights_path, out_path])
+    _run(["bash", _pin("pack_entry.sh")[0], entry_path, weights_path, out_path])
     return os.path.getsize(out_path)
 
 

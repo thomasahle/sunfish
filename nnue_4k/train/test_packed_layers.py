@@ -360,56 +360,72 @@ def test_structured_head_bitexact_vs_bigint():
             assert pl.bigint_hsum(yu, 16) == int(pl.HSum()(cu).item())
 
 
-def _arm_roundtrip(q, armname, stock):
+def _arm_roundtrip(q, armname, stock, seam):
     """Encode -> splice into the REAL entry -> exec -> the decoded module
     data must equal the independent mirror of the trainer quantization."""
     from compress import qnet as qn, entrysrc
     from compress.arms import all_arms
     arm = next(a for a in all_arms() if a.name == armname)
     body, body_src, note = arm.encode(q)
+    if hasattr(arm, "body_src_for"):
+        body_src = arm.body_src_for(seam)
     full = qn.header_int(q) + qn.HEADER_RADIX * body
     s90 = qn.int_to_s90(full)
     src = entrysrc.replace_region(
-        stock, entrysrc.build_region(entrysrc.prologue_a(s90), body_src))
+        stock, entrysrc.build_region(entrysrc.prologue_a(s90), body_src, seam))
     got, _ = entrysrc.exec_entry(src)
     want = qn.expected_module_data(q)
     for key in ("SHIFT", "MGP", "MGH", "ACC_BASE", "ROWS"):
-        assert qn.module_data_of(got)[key] == want[key], (armname, key)
+        assert qn.module_data_of(got, seam)[key] == want[key], (armname, key)
     return len(s90), note
 
 
-# The entry blob every recorded bake-off table was measured against
-# (986fa96 = fb717214c3e2).  A round-trip test needs ONE denominator, and
-# the working entry is golfed continuously by another lane -- the same
-# reason the harness itself pins.  When compress/ is re-seamed against a
-# newer entry, move this pin with it (entrysrc.require_seam names the
-# drift; test_entry_seam below reports it without failing this suite).
+# The TWO pinned entry blobs the arms must round-trip against -- one pin
+# per settled seam, because the working entry is golfed continuously by
+# another lane (the same reason the harness itself pins):
+#   RECORDED  986fa96 = blob fb717214c3e2, seam v1 -- the denominator of
+#             the recorded 3831/3834 tables (historical reproduction).
+#   SETTLED   a1a1a6d = blob be154478ed92, seam v2 -- golf round 2
+#             (code 3217 elided, trained v1 candidate 3594), the current
+#             denominator for the c1024 family.
+# When the golf lane settles a new shape, add its seam to entrysrc and
+# its pin HERE (entrysrc.require_seam names any drift; test_entry_seam
+# below reports HEAD's status without failing this suite).
 RECORDED_ENTRY = "986fa96:nnue_4k/replnet_proto.py"
+SETTLED_ENTRY = "a1a1a6d:nnue_4k/replnet_proto.py"
+PINS = (("v1", RECORDED_ENTRY), ("v2", SETTLED_ENTRY))
 
 
 def test_entry_seam_drift_is_visible():
-    """Not a gate on this suite -- a REPORT.  The entry belongs to the golf
-    lane; if it has moved past the seam, say exactly how, here, where a
-    pipeline change is being made."""
+    """Not a gate on this suite -- a REPORT for HEAD, an assert for the
+    pins.  The entry belongs to the golf lane; if HEAD has moved past
+    every known seam, say exactly how, here, where a pipeline change is
+    being made."""
     from compress import entrysrc
-    for spec in ("HEAD:nnue_4k/replnet_proto.py", RECORDED_ENTRY):
+    src, prov = entrysrc.read_entry("HEAD:nnue_4k/replnet_proto.py")
+    miss = entrysrc.seam_missing(src)
+    print("    seam %s: %s" % (prov, ("OK (%s)" % entrysrc.seam_of(src))
+                               if not miss else "DRIFTED -- " + "; ".join(miss)),
+          flush=True)
+    for want, spec in PINS:
         src, prov = entrysrc.read_entry(spec)
-        miss = entrysrc.seam_missing(src)
-        print("    seam %s: %s" % (prov, "OK" if not miss else "DRIFTED -- " +
-                                   "; ".join(miss)), flush=True)
-    src, prov = entrysrc.read_entry(RECORDED_ENTRY)
-    assert not entrysrc.seam_missing(src), \
-        "the RECORDED entry pin lost the seam -- the pin is wrong, not the entry"
+        got = entrysrc.seam_of(src)
+        print("    seam %s: %s" % (prov, got), flush=True)
+        assert got == want, \
+            "pin %s should be seam %s, reads %s -- the pin is wrong, not the entry" \
+            % (spec, want, got)
 
 
 def test_trained_arms_export_roundtrip():
     from compress import entrysrc
-    stock, _ = entrysrc.read_entry(RECORDED_ENTRY)
-    for arch, armname, kw in (("cb", "trained_cb", {"cb_k": 12, "cb_block": 8}),
-                              ("lowrank", "trained_lr", {"lr_rank": 2})):
-        q = _structured_qnet(arch, "probe_" + arch, **kw)
-        chars, note = _arm_roundtrip(q, armname, stock)
-        print("    %s: %d payload chars -- %s" % (armname, chars, note), flush=True)
+    for seam, spec in PINS:
+        stock, _ = entrysrc.read_entry(spec)
+        for arch, armname, kw in (("cb", "trained_cb", {"cb_k": 12, "cb_block": 8}),
+                                  ("lowrank", "trained_lr", {"lr_rank": 2})):
+            q = _structured_qnet(arch, "probe_" + arch, **kw)
+            chars, note = _arm_roundtrip(q, armname, stock, seam)
+            print("    %s[%s]: %d payload chars -- %s"
+                  % (armname, seam, chars, note), flush=True)
 
 
 def test_trained_arms_skip_a_plain_net():

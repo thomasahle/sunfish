@@ -68,10 +68,12 @@ def torch_verify(netpath, spliced, cwd):
     return r.stdout.strip().splitlines()[-1]
 
 
-def measure_cell(arm, layout, q, stock, expected, outdir, boot):
+def measure_cell(arm, layout, q, stock, expected, outdir, boot, seam):
     """One (arm, layout): returns the result row dict."""
     name = "%s_%s" % (arm.name, layout)
     body, body_src, note = arm.encode(q)
+    if hasattr(arm, "body_src_for"):     # seam-verbatim decoders (baseline)
+        body_src = arm.body_src_for(seam)
     full = qnet.header_int(q) + qnet.HEADER_RADIX * body
     row = {"arm": arm.name, "layout": layout, "note": note}
 
@@ -83,11 +85,11 @@ def measure_cell(arm, layout, q, stock, expected, outdir, boot):
             src_elided = entrysrc.splice_payload(stock, "")
         else:
             src = entrysrc.replace_region(
-                stock, entrysrc.build_region(entrysrc.prologue_a(s90), body_src))
+                stock, entrysrc.build_region(entrysrc.prologue_a(s90), body_src, seam))
             src_elided = entrysrc.replace_region(
-                stock, entrysrc.build_region(entrysrc.prologue_a(""), body_src))
+                stock, entrysrc.build_region(entrysrc.prologue_a(""), body_src, seam))
         g, dt = entrysrc.exec_entry(src)
-        _gate(g, expected, name)
+        _gate(g, expected, name, seam)
         row["decode_s"] = round(dt, 3)
         ep = _write(os.path.join(outdir, name + ".py"), src)
         row["bytes"] = packrun.pack_a(ep, os.path.join(outdir, name + ".packed"))
@@ -98,9 +100,9 @@ def measure_cell(arm, layout, q, stock, expected, outdir, boot):
         tail = qnet.int_to_bytes(full)
         row["payload_bytes_raw"] = len(tail)
         src = entrysrc.replace_region(
-            stock, entrysrc.build_region(entrysrc.PROLOGUE_B, body_src))
+            stock, entrysrc.build_region(entrysrc.PROLOGUE_B, body_src, seam))
         g, dt = entrysrc.exec_entry(src, tail_bytes=tail, tmpdir=outdir)
-        _gate(g, expected, name)
+        _gate(g, expected, name, seam)
         row["decode_s"] = round(dt, 3)
         ep = _write(os.path.join(outdir, name + ".py"), src)
         wp = _write(os.path.join(outdir, name + ".weights"), tail)
@@ -114,13 +116,15 @@ def measure_cell(arm, layout, q, stock, expected, outdir, boot):
     return row
 
 
-def _gate(g, expected, name):
+def _gate(g, expected, name, seam):
     """Bit-exactness: the spliced module's decoded data must equal the
-    independent mirror EXACTLY.  Also re-assert the layout constants the
-    mirror hardcodes, so entry drift is loud here, not downstream."""
-    assert g["NN"] == qnet.NN and g["LBITS"] == qnet.LBITS \
-        and g["VBITS"] == qnet.VBITS, "entry layout constants drifted"
-    got = qnet.module_data_of(g)
+    independent mirror EXACTLY.  Seam v1 also re-asserts the layout
+    constants the mirror hardcodes; v2 inlines them as literals, where any
+    drift breaks ROWS equality instead -- same loudness, one seam later."""
+    if seam == "v1":
+        assert g["NN"] == qnet.NN and g["LBITS"] == qnet.LBITS \
+            and g["VBITS"] == qnet.VBITS, "entry layout constants drifted"
+    got = qnet.module_data_of(g, seam)
     for k in ("SHIFT", "MGP", "MGH", "ACC_BASE", "ROWS"):
         if got[k] != expected[k]:
             raise AssertionError("%s: decoded %s != trainer quantization" % (name, k))
@@ -131,8 +135,8 @@ def run_net(netpath, entry=DEFAULT_ENTRY, arms=None, outdir=None,
     q = qnet.load_qnet(netpath)
     expected = qnet.expected_module_data(q)
     stock, entry_prov = entrysrc.read_entry(entry)
-    entrysrc.require_seam(stock, entry_prov)   # drifted entry: refuse, don't guess
-    print("  [%s] entry: %s" % (q.name, entry_prov), flush=True)
+    seam = entrysrc.require_seam(stock, entry_prov)  # drifted entry: refuse, don't guess
+    print("  [%s] entry: %s [seam %s]" % (q.name, entry_prov, seam), flush=True)
     outdir = outdir or os.path.join(
         os.path.dirname(os.path.abspath(netpath.rstrip("/"))), "bakeoff_" + q.name)
     os.makedirs(outdir, exist_ok=True)
@@ -163,7 +167,7 @@ def run_net(netpath, entry=DEFAULT_ENTRY, arms=None, outdir=None,
         for layout in "AB":
             t0 = time.time()
             try:
-                row = measure_cell(arm, layout, q, stock, expected, outdir, boot)
+                row = measure_cell(arm, layout, q, stock, expected, outdir, boot, seam)
             except NotApplicable as e:
                 # the arm prices a structure this net does not carry: a SKIP.
                 # Never a pass, never a failure, and never fitted on the fly.
@@ -203,7 +207,8 @@ def run_net(netpath, entry=DEFAULT_ENTRY, arms=None, outdir=None,
                 r["bytes"] > base["bytes"] if r["layout"] == "A" \
                 else r["bytes"] >= base["bytes"]
     return {"net": q.name, "netpath": os.path.abspath(netpath),
-            "entry": entry_prov, "outdir": outdir,
+            "entry": entry_prov, "seam": seam, "pack": packrun.provenance(),
+            "outdir": outdir,
             "baseline_bytes": base_a["bytes"], "rows": rows, "ranked": ok,
             "checks": checks}
 

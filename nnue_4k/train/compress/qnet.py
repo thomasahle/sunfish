@@ -163,7 +163,11 @@ def expected_module_data(q):
             "ROWS": (rows0, rows1)}
 
 
-def module_data_of(mod):
-    """The same tuple pulled from an exec'd spliced entry module."""
+def module_data_of(mod, seam="v1"):
+    """The same tuple pulled from an exec'd spliced entry module.  The
+    accumulator base is ACC_BASE in seam v1 and `_B` in seam v2 (golf
+    round 2 reused the bias accumulator's name); the VALUE is identical
+    algebra, so the mirror keys stay seam-neutral."""
     return {"SHIFT": mod["SHIFT"], "MGP": mod["MGP"], "MGH": mod["MGH"],
-            "ACC_BASE": mod["ACC_BASE"], "ROWS": mod["ROWS"]}
+            "ACC_BASE": mod["ACC_BASE" if seam == "v1" else "_B"],
+            "ROWS": mod["ROWS"]}
