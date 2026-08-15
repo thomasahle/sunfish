@@ -156,12 +156,12 @@ reuse is balanced by a fresh deterministic shuffle per epoch, and independent
 books remain mandatory for final confirmation. A fixed inducing basis permits
 online Laplace updates without rebuilding a quadratic comparison matrix. The
 optimizer keeps its small matrix operations single-threaded so its 128-site
-model does not compete with the 20 game lanes. The finite 2,048-point design is
-gated once before play, so exploration and exploitation operate on the exact
-feasible subset; rejected policies consume neither games nor allocation credit.
-Three reserved pairs per lane, replenished while two remain, then hide proposal
-latency even when unusual policies finish quickly. Results append to a JSONL
-journal and compact into the JSON checkpoint every 1,000 pairs,
+model does not compete with the 20 game lanes. Its 2,048-point global design is
+gated once before play, so design, exploration seeds, and inducing sites use a
+feasible backbone. UCB's coordinate refinements are still gated on demand;
+rejected policies consume neither games nor allocation credit. Three reserved
+pairs per lane, replenished while two remain, hide proposal latency. Results
+append to a JSONL journal and compact every 1,000 pairs,
 avoiding quadratic checkpoint I/O while remaining restartable. At the
 wall-time limit, the scheduler finishes every reserved color pair before its
 final checkpoint.
