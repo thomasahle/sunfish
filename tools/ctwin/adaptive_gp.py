@@ -17,10 +17,13 @@ import asyncio
 import hashlib
 import json
 import math
+import os
 import pathlib
+import random
 import re
 import shlex
 import shutil
+import signal
 import subprocess
 from collections import deque
 
@@ -90,10 +93,20 @@ def engine_identity(command, arguments, options):
     }
 
 
+def command_identity(command):
+    if not command:
+        return None
+    argv = shlex.split(command)
+    executable = shutil.which(argv[0]) or argv[0]
+    files = [file_identity(token) for token in [executable, *argv[1:]]
+             if pathlib.Path(token).is_file()]
+    return {"argv": argv, "files": files}
+
+
 def study_identity(args):
     """Describe everything that changes the distribution of game observations."""
     return {
-        "version": 2,
+        "version": 3,
         "scheduler": file_identity(__file__),
         "model": file_identity(pathlib.Path(__file__).with_name("logistic_gp.py")),
         "fastchess": file_identity(shutil.which(args.fastchess) or args.fastchess),
@@ -101,6 +114,12 @@ def study_identity(args):
         "baseline": engine_identity(
             args.baseline_engine, args.baseline_args, args.baseline_options),
         "openings": file_identity(args.openings),
+        "opening_schedule": {
+            "cycle": args.cycle_openings,
+            "seed": args.opening_seed,
+        },
+        "gate": command_identity(args.gate),
+        "gate_timeout": args.gate_timeout,
         "space": file_identity(args.space) if args.space else "legacy",
         "seed_state": file_identity(args.seed_state) if args.seed_state else None,
         "tc": args.tc,
@@ -108,7 +127,8 @@ def study_identity(args):
             name: getattr(args, name)
             for name in ("pair_weight", "exploration", "initial_design", "explore_start",
                          "explore_floor", "explore_half_life", "explore_optimism",
-                         "duel_fraction", "inducing", "seed_selections")
+                         "duel_fraction", "inducing", "seed_selections",
+                         "acquisition_restarts")
         },
     }
 
@@ -230,6 +250,82 @@ def exploration_probability(selections, start, floor, half_life):
 def pending_configurations(slots, pairs):
     """Smallest number of parameter choices that can keep every lane busy."""
     return math.ceil(slots / pairs)
+
+
+class OpeningSchedule:
+    """Map an unbounded sequence onto independently shuffled book epochs."""
+
+    def __init__(self, path, seed=0, cycle=False):
+        self.count = sum(bool(line.strip()) for line in pathlib.Path(path).read_text().splitlines())
+        if not self.count:
+            raise ValueError("opening book is empty")
+        self.seed = seed
+        self.cycle = cycle
+        self.epochs = {}
+
+    def opening(self, sequence):
+        if sequence < 1 or not self.cycle and sequence > self.count:
+            raise ValueError(f"opening sequence {sequence} exceeds the {self.count}-position book")
+        epoch, offset = divmod(sequence - 1, self.count)
+        if epoch not in self.epochs:
+            order = list(range(1, self.count + 1))
+            random.Random(self.seed + epoch).shuffle(order)
+            self.epochs[epoch] = order
+        return self.epochs[epoch][offset]
+
+
+def gate_policy(args, state, space, vector):
+    """Run and cache a deterministic policy gate; exit 1 means infeasible."""
+    if not args.gate:
+        return True
+    knobs = space.knobs(vector)
+    key = json.dumps(knobs, sort_keys=True, separators=(",", ":"))
+    cache = state.setdefault("gates", {})
+    if key in cache:
+        return cache[key]["accepted"]
+    payload = {
+        "engine": args.engine,
+        "engine_args": args.engine_args,
+        "options": knobs,
+    }
+    process = subprocess.Popen(
+        shlex.split(args.gate), text=True, stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        start_new_session=os.name != "nt")
+    try:
+        output = process.communicate(json.dumps(payload), timeout=args.gate_timeout)[0]
+    except subprocess.TimeoutExpired:
+        if os.name == "nt":
+            process.kill()
+        else:
+            os.killpg(process.pid, signal.SIGKILL)
+        output = process.communicate()[0] + f"\ntimeout after {args.gate_timeout:g}s"
+        process.returncode = 1
+    if process.returncode not in (0, 1):
+        raise RuntimeError(
+            f"policy gate failed with status {process.returncode}:\n{output}")
+    accepted = process.returncode == 0
+    cache[key] = {
+        "accepted": accepted,
+        "knobs": knobs,
+        "output": output[-2000:],
+    }
+    print(f"[gate] {'accept' if accepted else 'reject'} {key}", flush=True)
+    return accepted
+
+
+def selection_state(state):
+    """Fork only the small mutable acquisition clock, not the observations."""
+    trial = dict(state)
+    trial["allocations"] = dict(state.get("allocations", {}))
+    return trial
+
+
+def commit_selection(state, trial):
+    for key, value in trial.items():
+        if key in {"selections", "allocations", "exploration_credit"} or key.endswith(
+                "_structural_credit"):
+            state[key] = value
 
 
 def exploration_stratum(state, mode, space):
@@ -380,12 +476,15 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
         # Fantasized variance decides whether another pending copy is useful;
         # do not impose a fixed one-copy-per-configuration rule on top of it.
         vector = coordinate_maximum(
-            space, [*candidates, *observed], score, set(forbidden), stratum)
+            space, [*candidates, *observed], score, set(forbidden), stratum,
+            args.acquisition_restarts)
     else:
         for index, candidate in enumerate(candidates):
-            if candidate in active or (
+            if candidate in forbidden or candidate in active or (
                     stratum is not None and space.is_structural(candidate) != stratum):
                 acquisition[index] = -np.inf
+        if not np.isfinite(acquisition).any():
+            raise RuntimeError("no available acquisition point")
         vector = candidates[int(np.argmax(acquisition))]
     selected_mean, selected_variance = statistics([vector])
     exact_batches = sum(
@@ -497,8 +596,12 @@ async def run_pair(args, slot, experiment, vector, opponent, opening, space):
 async def optimize(args):
     pathlib.Path(args.logs).mkdir(parents=True, exist_ok=True)
     state = load_state(args.state, args.start)
-    validate_opening_budget(args.openings, state["next_opening"], args.batches, args.pairs)
+    openings = OpeningSchedule(args.openings, args.opening_seed, args.cycle_openings)
+    if not args.cycle_openings:
+        validate_opening_budget(args.openings, state["next_opening"], args.batches, args.pairs)
     space = logistic_gp.MixedSpace.load(args.space) if args.space else logistic_gp.LegacySpace()
+    if args.baseline_options == "default":
+        args.baseline_options = space.knobs(space.default)
     bind_study(state, study_identity(args))
     if args.seed_state and not state["batches"]:
         seed = json.loads(pathlib.Path(args.seed_state).read_text())
@@ -522,6 +625,8 @@ async def optimize(args):
     validate_options(args.baseline_engine, args.baseline_args, args.baseline_options)
     fixed = fixed_baseline_point(args, space)
     if fixed is not None:
+        if not gate_policy(args, state, space, fixed):
+            raise RuntimeError("the fixed baseline fails the policy gate")
         space.condition(fixed)
     mean_function = source_prior(args.source_logs, args.battery, args.transfer, space)
     candidates = [candidate for candidate in space.candidates if candidate != fixed]
@@ -546,23 +651,40 @@ async def optimize(args):
         if allocation_model is None:
             allocation_model = posterior(
                 state, mean_function, args.pair_weight, space, args.inducing)
-        vector, diagnostics = choose(
-            state, mean_function, candidates, pending, args, space, allocation_model,
-            [fixed] if fixed is not None else [])
+        rejected = {
+            space.canonical(record["knobs"])
+            for record in state.get("gates", {}).values()
+            if not record["accepted"]
+        }
+        forbidden = rejected | ({fixed} if fixed is not None else set())
+        for _ in range(args.gate_attempts):
+            trial = selection_state(state)
+            vector, diagnostics = choose(
+                trial, mean_function, candidates, pending, args, space,
+                allocation_model, forbidden)
+            if gate_policy(args, state, space, vector):
+                commit_selection(state, trial)
+                break
+            forbidden.add(vector)
+            save_state(args.state, state)
+        else:
+            raise RuntimeError(f"policy gate rejected {args.gate_attempts} consecutive proposals")
         opponent = None
         if diagnostics["mode"] != "design":
             opponent = choose_opponent(
                 state, mean_function, vector, args, space, allocation_model)
         number = state.get("next_experiment", 0)
         state["next_experiment"] = number + 1
-        opening = state["next_opening"]
+        sequence = state["next_opening"]
         state["next_opening"] += args.pairs
+        scheduled = [openings.opening(sequence + offset) for offset in range(args.pairs)]
         experiments[number] = {
-            "vector": vector, "opening": opening, "wins": 0, "draws": 0, "losses": 0,
+            "vector": vector, "opening": scheduled[0], "opening_sequence": sequence,
+            "openings": scheduled, "wins": 0, "draws": 0, "losses": 0,
             "allocation": diagnostics["mode"], "opponent": opponent,
         }
-        for offset in range(args.pairs):
-            queue.append((number, vector, opponent, opening + offset))
+        for opening in scheduled:
+            queue.append((number, vector, opponent, opening))
         save_state(args.state, state)
         elo = diagnostics["mean"] * logistic_gp.ELO_PER_LOGIT
         error = 1.96 * diagnostics["sd"] * logistic_gp.ELO_PER_LOGIT
@@ -578,18 +700,23 @@ async def optimize(args):
             flush=True,
         )
 
+    def start_queued():
+        while queue and len(running) < args.slots:
+            used = set(running.values())
+            slot = next(index for index in range(args.slots) if index not in used)
+            experiment, vector, opponent, opening = queue.popleft()
+            task = asyncio.create_task(
+                run_pair(args, slot, experiment, vector, opponent, opening, space))
+            running[task] = slot
+
     while completed < args.batches:
         if len(experiments) <= args.queue_batches - args.refill_batches:
             while (len(experiments) < args.queue_batches
                     and completed + len(experiments) < args.batches):
                 add_experiment()
-        while queue and len(running) < args.slots:
-            used = {value for value in running.values()}
-            slot = next(x for x in range(args.slots) if x not in used)
-            experiment, vector, opponent, opening = queue.popleft()
-            task = asyncio.create_task(
-                run_pair(args, slot, experiment, vector, opponent, opening, space))
-            running[task] = slot
+                start_queued()
+                await asyncio.sleep(0)
+        start_queued()
         done, _ = await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED)
         for task in done:
             running.pop(task)
@@ -608,6 +735,8 @@ async def optimize(args):
                 "draws": experiment["draws"],
                 "losses": experiment["losses"],
                 "opening": experiment["opening"],
+                "opening_sequence": experiment["opening_sequence"],
+                "openings": experiment["openings"],
                 "allocation": experiment["allocation"],
                 "opponent_knobs": (
                     space.knobs(experiment["opponent"])
@@ -629,10 +758,14 @@ def main():
     parser.add_argument("--baseline-engine")
     parser.add_argument("--engine-args", default="")
     parser.add_argument("--baseline-args")
-    parser.add_argument("--baseline-options", type=json.loads, default={})
+    parser.add_argument("--baseline-options", type=lambda value: (
+        value if value == "default" else json.loads(value)), default={})
     parser.add_argument("--space", help="JSON numeric/categorical UCI option space")
     parser.add_argument("--seed-state", help="import completed batches into a new study")
     parser.add_argument("--openings", required=True)
+    parser.add_argument("--cycle-openings", action="store_true",
+        help="reuse the book in independently shuffled epochs")
+    parser.add_argument("--opening-seed", type=int, default=2026)
     parser.add_argument("--state", default="adaptive-gp.json")
     parser.add_argument("--logs", default="adaptive-gp-logs")
     parser.add_argument("--battery")
@@ -659,6 +792,10 @@ def main():
     parser.add_argument("--pair-weight", type=float, default=0.5)
     parser.add_argument("--inducing", type=int, default=0,
         help="sparse GP size; exact inference is the default")
+    parser.add_argument("--acquisition-restarts", type=int, default=8)
+    parser.add_argument("--gate", help="command reading a policy JSON object on stdin")
+    parser.add_argument("--gate-timeout", type=float, default=60)
+    parser.add_argument("--gate-attempts", type=int, default=1000)
     parser.add_argument("--seed-selections", type=int, default=0,
         help="continue the allocation clock when importing a state")
     parser.add_argument("--safe-only", action="store_true")
@@ -673,8 +810,8 @@ def main():
         parser.error("require 0 <= --duel-fraction <= 0.40 to preserve the baseline anchor")
     if args.pair_weight <= 0:
         parser.error("--pair-weight must be positive")
-    if args.pairs < 1 or args.slots < 1 or args.batches < 1:
-        parser.error("--pairs, --slots and --batches must be positive")
+    if min(args.pairs, args.slots, args.batches, args.gate_timeout, args.gate_attempts) <= 0:
+        parser.error("pair, slot, batch, and gate limits must be positive")
     if args.queue_batches is None:
         args.queue_batches = pending_configurations(args.slots, args.pairs)
     elif args.queue_batches < 1:
@@ -683,8 +820,8 @@ def main():
         parser.error("require 1 <= --refill-batches <= --queue-batches")
     if args.initial_design < 1 or args.explore_half_life <= 0:
         parser.error("--initial-design and --explore-half-life must be positive")
-    if args.inducing < 0:
-        parser.error("--inducing cannot be negative")
+    if args.inducing < 0 or args.acquisition_restarts < 1:
+        parser.error("--inducing cannot be negative; acquisition restarts must be positive")
     if args.explore_optimism < 0 or args.seed_selections < 0:
         parser.error("--explore-optimism and --seed-selections cannot be negative")
     asyncio.run(optimize(args))

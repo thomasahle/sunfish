@@ -124,7 +124,8 @@ class MixedSpace:
             if not maximum or size <= spec.get("max_grid", 100000):
                 dictionaries = (dict(zip(self.names, values)) for values in itertools.product(*choices))
             else:
-                dictionaries = self.halton_design(self.names, choices, maximum * 32)
+                dictionaries = self.halton_design(
+                    self.names, choices, maximum * spec.get("design_oversample", 8))
         candidates = sorted(set(self.canonical(values) for values in dictionaries))
         if maximum and len(candidates) > maximum:
             required = [self.default]

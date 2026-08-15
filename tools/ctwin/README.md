@@ -79,6 +79,10 @@ in the git history of this file.
   C-only node/movegen screen over it, and the paired-openings fixed-node
   match driver (python-chess arbiter, trinomial SPRT, zero tolerance for
   illegal moves).
+- `adaptive_gp.py`, `logistic_gp.py`, `all_parameters.json` — an
+  asynchronous logistic-GP game tuner and its mixed search/evaluation space.
+  `sunfish_gate.py` prevents policies that lose the deterministic mate floors
+  from consuming games.
 - `tmlib.py`, `tmsim.py`, `vmatch.py`, `tmmatrix.py`, `npsprofile.py`,
   `npsmodel.json` — the TIME-MANAGEMENT surrogate (see below): the formula
   mirrors, the stage-0 trajectory simulator, the virtual-clock match driver,
@@ -122,12 +126,34 @@ Tuning knobs (no recompile): UCI `setoption name NAME value VALUE`, lab
 NULL_CUT_RED NULL_RED IID_MIN_DEPTH IID_RED FUT_MAX MATE_DIST FUEL_NULL
 FUEL_MIN_DEPTH` (`NULL_MARGIN` is the fuel-probe target margin,
 `NULL_CUT_RED` controls the shallow score candidate, and `NULL_RED` controls
-the deep fuel probe), plus the tp_move battery: `EVICT_POLICY` (0 master
+the deep fuel probe). `VALUE_N VALUE_B VALUE_R VALUE_Q` tune material, while
+`PST_P PST_N PST_B PST_R PST_Q PST_K PST_KE` scale the positional component
+of each loaded table. The tp_move battery adds `EVICT_POLICY` (0 master
 root-guarded FIFO, 1 unguarded
 evict-before-insert, 2 depth-stored bounded scan with `EVICT_SCAN_K`,
 3 hash-slot two-tier replace-if-deeper), `KILLER_COUNT` (1..3 most recent
 distinct killers), `USE_VARIANT` (Python-side transcription proof; no-op
 in C). Unknown or out-of-range knobs are hard errors on every input path.
+
+For long joint studies, one color-swapped opening pair is one posterior
+update. Forty engine processes means twenty scheduler slots:
+
+```sh
+python3 adaptive_gp.py \
+  --fastchess /path/to/fastchess \
+  --engine ./sunfish_c --engine-args ./tables_classic.txt \
+  --baseline-options default \
+  --space all_parameters.json --openings openings.fen \
+  --gate "python3 sunfish_gate.py" --cycle-openings \
+  --slots 20 --queue-batches 20 --refill-batches 4 \
+  --pairs 1 --initial-design 256 --inducing 128 \
+  --explore-start .5 --explore-floor .2 --duel-fraction .3 \
+  --batches 100000
+```
+
+`--baseline-options default` pins the exact default point to zero. Opening
+reuse is balanced by a fresh deterministic shuffle per epoch, and independent
+books remain mandatory for final confirmation.
 
 Game use: `position startpos moves …` / `position fen …`, then
 `go nodes N` (primary — clock-free surrogate games), `go depth D`,

@@ -15,12 +15,16 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from adaptive_gp import (
     aggregate,
     bind_study,
+    commit_selection,
     coordinate_maximum,
     engine_identity,
     exploration_probability,
     fantasy_variance,
     fixed_baseline_point,
+    gate_policy,
     inducing_basis,
+    OpeningSchedule,
+    selection_state,
     UCI_OPTION,
     pending_configurations,
     validate_opening_budget,
@@ -65,7 +69,7 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertIn(space.default, space.candidates)
 
     def test_joint_eval_domain_preserves_mate_band_invariants(self):
-        path = pathlib.Path(__file__).with_name("pr202_joint_eval_valid_space.json")
+        path = pathlib.Path(__file__).with_name("all_parameters.json")
         parameters = {parameter["name"]: parameter for parameter in json.loads(
             path.read_text())["parameters"]}
         for parameter in parameters.values():
@@ -276,6 +280,54 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(pending_configurations(10, 1), 10)
         self.assertEqual(pending_configurations(10, 3), 4)
         self.assertEqual(pending_configurations(10, 10), 1)
+
+    def test_opening_epochs_are_balanced_and_reproducible(self):
+        with tempfile.TemporaryDirectory() as directory:
+            book = pathlib.Path(directory, "book.epd")
+            book.write_text("a\nb\nc\n")
+            first = OpeningSchedule(book, seed=7, cycle=True)
+            second = OpeningSchedule(book, seed=7, cycle=True)
+            sequence = [first.opening(index) for index in range(1, 7)]
+            self.assertEqual(sequence, [second.opening(index) for index in range(1, 7)])
+            self.assertEqual(sorted(sequence[:3]), [1, 2, 3])
+            self.assertEqual(sorted(sequence[3:]), [1, 2, 3])
+            with self.assertRaises(ValueError):
+                OpeningSchedule(book).opening(4)
+
+    def test_policy_gate_is_cached_without_advancing_selection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            gate = pathlib.Path(directory, "gate.py")
+            calls = pathlib.Path(directory, "calls")
+            gate.write_text(
+                "import json,pathlib,sys\n"
+                f"p=pathlib.Path({str(calls)!r});p.write_text(p.read_text()+'x' if p.exists() else 'x')\n"
+                "sys.exit(json.load(sys.stdin)['options']['X'] == 0)\n")
+            args = SimpleNamespace(
+                gate=f"{sys.executable} {gate}", gate_timeout=5,
+                engine="engine", engine_args="")
+            state = {"batches": [], "selections": 4, "allocations": {"ucb": 4}}
+            point = self.space.canonical({"X": 0, "Y": 10})
+            self.assertFalse(gate_policy(args, state, self.space, point))
+            self.assertFalse(gate_policy(args, state, self.space, point))
+            self.assertEqual(calls.read_text(), "x")
+            trial = selection_state(state)
+            trial["selections"] += 1
+            trial["allocations"]["ucb"] += 1
+            self.assertEqual(state["selections"], 4)
+            commit_selection(state, trial)
+            self.assertEqual(state["selections"], 5)
+
+    def test_policy_gate_timeout_is_a_cached_rejection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            gate = pathlib.Path(directory, "gate.py")
+            gate.write_text("import time\ntime.sleep(10)\n")
+            args = SimpleNamespace(
+                gate=f"{sys.executable} {gate}", gate_timeout=0.01,
+                engine="engine", engine_args="")
+            state = {"batches": []}
+            self.assertFalse(gate_policy(args, state, self.space, self.space.default))
+            record = next(iter(state["gates"].values()))
+            self.assertIn("timeout", record["output"])
 
     def test_opening_budget_rejects_silent_fallback(self):
         with tempfile.NamedTemporaryFile("w") as openings:
