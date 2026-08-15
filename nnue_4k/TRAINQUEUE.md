@@ -153,6 +153,25 @@ VAL-probe-first):
 
 ## Log (newest first)
 
+- 2026-08-15 ~05:3x UTC: **ml2 EXPORT BLOCKED — the trained layer-2
+  read-out quantizes to ZERO on the certified grid**, and the export now
+  refuses to price a silent second layer (`train/export.py`). Harvest:
+  `40_c1024_cb` (trained codebook K=32) val **0.01415**, `41_c1024_lr`
+  (trained low-rank rank=1) val **0.01384**, both certificates green.
+  Same 200 k val as the whole family (`val_sha 0239a7b84ec6ba2f`) but at
+  4 M data, so the honest control is the ml2-at-4M run `80_replnet_ml2`
+  at 0.01283 — **NEITHER structured arm beats the 0.01280 incumbent**
+  (+8.1 % / +10.5 % relative). Export candidate stays `21_phase_ml2_dense`
+  (ml2, l1 .0005, 8 M). `50_dense60` finished at 0.01274, which is a
+  **best-of-60 selection artifact, not a gain**: at matched budget its
+  best-of-first-30 is 0.01282 (21's is 0.01280), its last-10 mean is
+  0.01302 (21's 0.01292), and epoch-to-epoch val noise is ±0.0002. Sixty
+  epochs buy nothing on this recipe. Blocker detail and the whole price
+  sheet in MEASUREMENTS.md, same date; the retrain it implies —
+  **u2 quantized on the certified grid INSIDE forward, at the export
+  scale, the way the ternary weights already are** — is the natural next
+  ml2 queue entry and is NOT queued unilaterally.
+
 - 2026-08-15 morning: **SCREEN: H0, −107.06 ± 35.84** (318 games, penta
   [51,27,58,12,11], zero illegal). Linear-family generalization sharpens
   (six linear play-failures, both capacity ends); phase-ml2 inherits

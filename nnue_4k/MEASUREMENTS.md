@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **ML2 EXPORT VERDICT: the artifact FITS (3884 B measured, 212 spare) and is BIT-EXACT — but the trained layer-2 read-out QUANTIZES TO ZERO on the certified grid, so the default export ships a SILENT second layer** | `U2_k = u2_k·2^10/(100·2^(2·shift))` = [0.171, 0.084, 0.136, 0.108] → **[0,0,0,0]** at the export's own shift 4, while the float L2 term carries **mean 60.50 cp vs L1's 24.08 cp** — the eval's larger half, deleted. Root cause is the recorded **quant-error-compounding** wall, hit where `packed_layers.py` says not to: `u2` trains as a free float with no in-forward grid STE (the ternary weights have one). The L1 shift is the only knob (U2 ×4 per unit dropped, gains ÷2); measured end-to-end vs the float model: shift 4 **60.95 cp**, shift 3 13.91, **shift 2 2.89**, shift 1 4.81, shift 0 7.44. A shift-2 build gates CLEAN end to end (bit-exact, 200/200 legal, 8/8 mate-in-1, 8/8 KQK/KRK conversion, first-yield max 108 nodes, standalone smoke) at **3884 B**. Choosing that shift post-hoc is a **design change needing its own screen** (5457f27's precedent), so the screen below is REGISTERED and **NOT LAUNCHED**; the queue harvest that shares this date is in TRAINQUEUE.md |
 | 2026-08-15 | **`pooltm` LANDS as the entry's DEFAULT time manager — measured **+65 packed bytes** (3340 → 3405, 691 spare), NOT the +57 the pre-registration quoted** | Both pass-conditions of the registered landing shape (`fb0f7b9`) are met, so the shape executes verbatim. The mod moves into `tools/build/make_pst_entry.py` as `_pooltm` and retires from `make_variants.py` with a tombstone; `oldtm`/`steptm` retire with it because their shared anchor — the smooth budget line — stops existing. **+57 was measured against the pre-pend 3308 base; on the post-pend 3340 base the same edits cost +65** — measured-never-composed, third instance. **Equivalence proved twice, not asserted:** the landed entry packs to a **sha256-IDENTICAL artifact** to the old-way `pooltm` mod arm built from the same HEAD (`5a207fdf9cf05f2e…`), and against the arm that actually PLAYED the deciding match every executable difference is exactly `pend` — everything else is comments (packer-stripped) and the generator provenance header. Gate ladder: `check_entry` green, mate-conversion **8/8 on 5/5 runs**, legality 200/200 source + 200/200 packed at both budget paths (0 no-move, 0 illegal), first-yield worst 582 vs 2048, standalone empty-dir smoke plays `g1f3` and leaves nothing behind, 20-position fixed-node probe 20/20 identical. **The −210 cliff is landed AS DISCLOSED, not fixed:** P>0-scoping and flooring `soft` against `A` are design changes needing their own screen, and the artifact that ships is the artifact that was measured. Cliff mechanism reproduced on the landed artifact: 1 s clock → answer in 0.04 s, 60 s clock → 2.16 s |
 | 2026-08-15 | **DECIDING MATCH 1 (30+1 non-inferiority): H1 ACCEPTED in 288 games — the non-inferiority question returned outright superiority, +124.50 ± 38.79, and the pool wins a THIRD regime** | SPRT elo0=−10 elo1=0 with engine1=pool, cap 1750: **LLR 2.97 crossed +2.94 at 288 games** (1 h 47 m of a budgeted ~7 h), 156W 57L 75D = 67.19%, nElo +140.89 ± 40.13, pentanomial **[10, 14, 31, 45, 44]**, PairsRatio 3.71, WL/DD 2.88, LOS 100.00%. Tripwires all zero: **0 illegal, 0 loses-on-time, 0 forfeits, 288/288 terminations `normal`**, 0 blind moves out of 17,487 pool / 17,436 smooth. Arm sha256s verified against the log header (`cddf392e…` pool = `pooltm`, `14b69a60…` smooth = base, both built at `522931a` per the `629cba2` prereg). **Read honestly: all three regime numbers are SPRT-stopped and therefore biased high** — `pend` measured that bias at 42% on its own screen — so the direction is what is established, not the altitude. The registered warning ("if match 1 reads ~0 that is a PASS, never a third win") binds the ~0 case; this is not it, but no fixed-N confirmation exists at any TC. Spend is near-identical (median 1.276 vs 1.239 s, ratio **1.03×**) — at 30+1 the redistribution the 60-second regimes showed has flattened out, and the pool wins on shape at equal spend. The one number against it is unchanged: **77 games ended under 2 s of clock to smooth's 0** |
 | 2026-08-15 | **DECIDING MATCH 2 (1+0 hammer): GATE PASSED — 0 illegal, 0 `(none)`, 0 null moves, 100/100 normal — but the match found a −209.91 ± 60.11 CLIFF at a 1-second clock, and OUR OWN GATE SCRIPT reported a false FAILED** | Three things, not one. (1) The pre-registered gate passes: at a 1 s clock, where P is empty all game and the floor governs every move, the structural bestmove floor and the wall held perfectly. (2) The inline gate printed "HAMMER FAILED" on a clean run — `grep -c` prints 0 AND exits 1, so `|| echo 0` made `non` the two-line string "0\n0" and `[ -eq ]` errored into the else branch; the naive `0000` probe also matched the `+0000` timezone 200×. Fixed as a standalone `gate_check.sh`, re-run → PASSED, appended as a correction. Same defect class as the label and ramp defects, and it does not get a pass for being ours. (3) **The finding: `P = max(0, 1 − 8.4) = 0` for the WHOLE game, so soft = 0 and the pool plays depth-1 moves at 0.001 s against the incumbent's 0.013 s — 13× shallower, 23.00% score, never flagging (0.9 s median end-clock) and never illegal. `A/4 = 0.15 s` was reachable and safe the entire time: when P = 0 and A > 0 the soft limit collapses to zero and the safety clamp becomes unreachable.** Landing shape now has an OPEN QUESTION (scope the default / floor soft against A / land-and-document); this lane is not deciding it alone. 30+1 deciding match launched meanwhile |
@@ -257,6 +258,151 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-15 — ML2 EXPORT VERDICT: the artifact FITS and is BIT-EXACT, and the trained second layer QUANTIZES TO ZERO
+
+The first non-linear replacement candidate reached the export step. Three
+results, kept separate because they point in different directions.
+
+### 1. Queue harvest — neither structured arm displaces the incumbent
+
+| run | arch | data | best val | vs same-data ml2 control |
+|---|---|---|---|---|
+| `40_c1024_cb` | trained codebook K=32 block=8 | 4 M | **0.01415** | +10.3 % |
+| `41_c1024_lr` | trained low-rank rank=1 + residual | 4 M | **0.01384** | +7.9 % |
+| `80_replnet_ml2` | ml2 (the control at 4 M) | 4 M | 0.01283 | — |
+| `21_phase_ml2_dense` | ml2, l1 .0005 | 8 M | **0.01280** | the incumbent |
+| `50_phase_ml2_dense60` | same recipe, 60 epochs | 8 M | 0.01274 | see below |
+
+All five share one validation set (`val_sha 0239a7b84ec6ba2f`, 200 000
+positions), so the column is comparable; both new certificates are green
+(codec preconditions and the composite-grid reach both inside their
+ceilings). **Neither trained structure beats 0.01280**, so the export
+candidate is unchanged: `21_phase_ml2_dense`.
+
+`50_dense60`'s 0.01274 is a **selection artifact, not a gain**. Matched
+budget: its best-of-first-30 is 0.01282 against 21's 0.01280. Its last-10
+mean is 0.01302 against 21's 0.01292. Epoch-to-epoch val noise on this
+recipe is ±0.0002 (the 60-epoch run ranges 0.01274–0.01322), which swamps
+the 0.00006 gap — best-of-60 simply draws a lower minimum than best-of-30
+from the same distribution. Sixty epochs buy nothing.
+
+### 2. The blocker: the certified read-out cannot express the trained u2
+
+`train/export.py` had no ml2 payload path at all — it wrote float only,
+and refused verbatim:
+
+    runs/21_phase_ml2_dense/best.pickle.payload not found -- only ternary
+    exports have payloads; float/kb exports price via build_kb.py + pack_entry.sh
+
+Writing that path (this entry's code) exposed why it matters. Training
+normalises the conv by 100 and leaves `u2` a free float — `model.Ml2Net`
+says "the export step owns the integer mapping" — and the engine's
+read-out is fixed by `field_budget.certify_ml2` and the landed
+`packed/make_ml2_proto.py`: signed per-field `|U2| ≤ 127`, then `>> 10`.
+With the engine's lane `y_k = A_k·2^shift`, one mapping exists:
+
+    U2_k = u2_k · 2^10 / (100 · 2^(2·shift))
+
+At the export's own shift rule (the largest legal shift, 4) that is
+**[0.171, 0.084, 0.136, 0.108] → [0, 0, 0, 0]**. The second layer is not
+degraded, it is *deleted* — and it is the larger half of the eval:
+measured over 60 probe positions, the float model's **L2 term is mean
+60.50 cp against L1's 24.08 cp**. Verified rather than argued: replaying
+the engine's integer path with a *float* U2 reproduces the trained L2 to
+0.18 cp mean, so the mapping above is right and the zeros are real.
+
+This is the **quant-error-compounding** wall — one of the three
+`packed_layers.py` names — hit exactly where its own docstring says it
+must not be: the ternary first-layer weights are snapped on the grid
+INSIDE forward by STE, and `u2` is not snapped anywhere until export.
+
+**The only knob the export has is the L1 shift** (U2 ×4 per unit dropped,
+gains ÷2). Measured mean |Δcp| of the integer engine against the trained
+float model, 60 probes, `21_phase_ml2_dense`:
+
+| shift | gains | U2 (exact) | U2 (int) | mean\|ΔL1\| | mean\|ΔL2\| | **mean\|Δtotal\|** |
+|---|---|---|---|---|---|---|
+| 4 (default) | [65,67,68,64] | [.171,.084,.136,.108] | **[0,0,0,0]** | 0.47 | 60.50 | **60.95** |
+| 3 | [33,34,34,32] | [.68,.34,.54,.43] | [1,0,1,0] | 0.38 | 13.90 | **13.91** |
+| 2 | [16,17,17,16] | [2.73,1.35,2.17,1.72] | [3,1,2,2] | 0.36 | 2.90 | **2.89** |
+| 1 | [8,8,8,8] | [10.9,5.4,8.7,6.9] | [11,5,9,7] | 1.08 | 3.76 | 4.81 |
+| 0 | [4,4,4,4] | [43.7,21.5,34.7,27.6] | [44,22,35,28] | 1.23 | 6.26 | 7.44 |
+
+`50_dense60` reads the same shape (shift 4 → 55.04, shift 2 → 5.12,
+shift 1 → 1.84), so this is the recipe's property, not one checkpoint's.
+
+`export.py` now (a) emits the certified ml2 payload — the shipped ternary
+body with the 4 offset-4050 u2 digit pairs spliced between the biases and
+the feature chars, the layout `make_proto_payload.py --u2 4` prices and
+`packed/ml2_check.py` decodes — (b) prints the integer read-out beside
+every export, and (c) **refuses to price a payload whose read-out is all
+zeros**, printing the table above instead of picking a shift itself. A
+silent second layer that still pays ml2's +98 B and its ~0.90× nps is
+precisely the "degraded mode that keeps running quietly" the house
+forbids.
+
+### 3. What the artifact does when the read-out is alive — measured
+
+Built at an explicit `--shift 2` (labelled a pricing build, not a
+screened arm), from `21_phase_ml2_dense`, spliced into the ml2 entry
+derived by `packed/make_ml2_proto.py` from `replnet_proto.py`:
+
+| | |
+|---|---|
+| payload | 785 base-90 chars (777 single-layer body + 8 u2 digits) |
+| **packed artifact** | **3884 B — IN BUDGET, 212 B spare** (`tools/build/pack.sh`) |
+| same build at shift 4 | 3885 B (the shift moves digit values, not length) |
+| bit-exactness | `ml2_check.py` **PASS** — independent decode == engine (u2/shift), engine == `packed_layers.bigint_circular_conv` int bridge, 60 fens × 2 pf + rotations + 40-ply walk with incremental-identity and antisymmetry asserts; L2 fired on 99 probes |
+| legality | **200/200 legal**, 0 no-move (forced/in-check/quiet × movetime 300 and nodes 20000) |
+| first yield | 505 positions, median 4, p99 78, **max 108 nodes** (window 2048), 0 never-yields |
+| mate-in-1 | **8/8** |
+| mate conversion | **8/8** KQK+KRK converted (movetime 500) |
+| standalone smoke | packed artifact alone in an empty dir: `bestmove g8f6`, no files left behind |
+
+**This settles the open question `c0d59f8` left.** That entry measured
+ml2 at a 1024-B-cost payload as 4339–4343, ~245 OVER, and expected the
+trained shape to fit "once its ternary export exists — an expectation to
+be measured through export.py, never banked". Measured: **3884 B, 212 B
+of margin**, and the mate-conversion class that the phase family was
+supposed to fix reads 8/8 here against the entry's historical 0/5.
+
+### 4. PRE-REGISTERED — and deliberately NOT LAUNCHED
+
+Registered before any game, in the 8Mv screen's exact form:
+
+| | |
+|---|---|
+| screen | fixed-node SPRT, elo0=0 elo1=10, nodes 20000, cap 1000, srand 20260814, openings_2k |
+| arm | ml2 entry, `21_phase_ml2_dense` payload at an explicit shift, packed **3884 B** |
+| base | the landed entry at **nnue-4k `a14a6a3`** — `nnue_4k/pst_entry.py`, packed **3340 B** (measured at registration) |
+| base, re-pinned | the `pooltm` landing (`5f16bae`) arrived while this was being written and **before any game was played**, so the base moves with it: same file at `5f16bae`, packed **3405 B** — measured here, not taken from that entry's own +65. Re-pinning is free precisely because no result exists yet; it would not be after the first game |
+| gate | zero illegal moves; one ends the run and voids it |
+| arena | `scratchpad/arena-ml2export/` |
+
+It is **not launched, and this lane did not take the laptop screen lock.**
+The shift that makes the arm non-degenerate was chosen *after* seeing the
+error table, which makes it a design change, and this ledger's own
+precedent is explicit about that case (`5457f27`: the preferred fix "did
+NOT apply because it is a design change needing its own screen"). Two
+candidate arms exist and the coordinator owns the choice:
+
+- **(a) screen the shift-2 build as registered** — cheapest path to the
+  campaign's central datum (does the first NON-linear net play?), at the
+  cost of screening a post-hoc rescale;
+- **(b) retrain with `u2` on the certified grid inside forward** (STE to
+  the integer `U2` at the export scale, exactly as the ternary weights
+  are already handled) — the fix that removes the defect rather than
+  routing around it, at a training cycle's cost. TRAINQUEUE.md carries it
+  as a proposal, not a queued run.
+
+Whichever runs, the **subsumption ablation is a standing follow-up
+obligation, not part of this screen**: net-vs-net+pend, so the ml2 arm
+must be shown to subsume the hand-built terms it is meant to replace
+rather than merely to coexist with them. It is registered here and NOT
+run.
 
 ---
 

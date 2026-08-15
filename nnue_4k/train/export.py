@@ -29,7 +29,9 @@ import re
 import subprocess
 import sys
 
-import torch
+# torch is imported lazily by the live-model paths only: re-exporting a
+# SAVED checkpoint (lists on disk) and pricing it through pack.sh are pure
+# python, and the box that prices is not the box that trains.
 
 _here = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, _here)
@@ -106,6 +108,107 @@ def export_replnet(path, E, b, v, clampcp, base_kind, train_meta, struct=None):
     return "zeros %.1f%% shift %d%s" % (100 * zeros, shift, note)
 
 
+# ------------------------------------------------------------------ ml2
+# The engine's layer-2 read-out is FIXED by field_budget.certify_ml2 and by
+# the landed derivation packed/make_ml2_proto.py: signed per-field u2 with
+# |u2| <= 127, then >> 10.  Training normalises the conv by 100 and keeps u2
+# a free float ("the export step owns the integer mapping", model.Ml2Net),
+# so the mapping is this and only this:
+#
+#   engine lane y_k = A_k * 2^shift      (A = au*|v| in cp; cap 32*g_k = v_k*2^shift)
+#   engine conv     = 2^(2*shift) * conv(A,A)
+#   engine L2 cp    = 2^(2*shift) * sum U2.H / 2^SHIFT2   ==   sum u2.H / 100
+#   =>  U2_k = u2_k * 2^SHIFT2 / (100 * 2^(2*shift))
+#
+# The L1 shift is therefore the export's ONLY free knob for layer 2: every
+# unit it drops multiplies U2 by 4 and coarsens the L1 gains g_k by 2.
+ML2_SHIFT2 = 10
+ML2_UMAX = 127
+
+
+def ml2_readout(u2, shift, shift2=ML2_SHIFT2, umax=ML2_UMAX):
+    """(integer u2 digits, exact float pre-image) for a payload at `shift`."""
+    scale = (1 << shift2) / (100.0 * (1 << (2 * shift)))
+    exact = [x * scale for x in u2]
+    return [max(-umax, min(umax, int(round(x)))) for x in exact], exact
+
+
+def ml2_shift_table(v, u2, shift2=ML2_SHIFT2, umax=ML2_UMAX):
+    """The price sheet for that knob: per legal shift, the gains it leaves
+    and the integer read-out it can carry.  Printed on refusal so the
+    trade-off is on the table instead of in someone's head."""
+    rows = []
+    for s in range(8, -1, -1):
+        g = [max(0, min(89, round(x * (1 << s) / 32.0))) for x in v]
+        if max(g) > 89 or max(v) * (1 << s) / 32.0 > 89.49:
+            continue
+        U2, exact = ml2_readout(u2, s, shift2, umax)
+        rows.append("  shift %d  gains %-18s U2 %-18s (exact %s)%s"
+                    % (s, g, U2, ["%.3f" % x for x in exact],
+                       "  DEAD LANES" if 0 in g else ("  SILENT L2" if not any(U2) else "")))
+    return "\n".join(rows)
+
+
+def export_ml2(path, E, b, v, u2, clampcp, base_kind, train_meta, shift=None):
+    """Ternary ml2 payload: the single-layer body with the certified
+    layer-2 seam spliced in -- 4 offset-4050 base-90 digit PAIRS between the
+    bias digits and the feature chars (packed/make_proto_payload.py --u2 4
+    emits the same layout; packed/ml2_check.py decodes it independently).
+
+    Everything the single-layer export prints, this prints too, plus the
+    integer read-out.  A read-out that rounds to all zeros is announced as
+    DEAD: the payload is still written (it is a legitimate single-layer net)
+    but nothing downstream may quietly price it as a two-layer one."""
+    v = [abs(x) for x in v]
+    trits = [[max(-1, min(1, int(round(x * 32)))) for x in row] for row in E]
+    N = len(v)
+    zeros = sum(t == 0 for row in trits for t in row) / float(len(trits) * N)
+    if shift is None:
+        shift = 0
+        for s in range(8, -1, -1):
+            if max(v) * (1 << s) / 32.0 <= 89.49:
+                shift = s
+                break
+    elif max(v) * (1 << shift) / 32.0 > 89.49:
+        raise SystemExit("export_ml2: shift %d overflows the gain digit "
+                         "(max v %.2f) -- refused" % (shift, max(v)))
+    g = [max(0, min(89, round(x * (1 << shift) / 32.0))) for x in v]
+    if 0 in g:
+        print("export_ml2: DEAD LANES (gain rounded to 0): g=%s" % g, flush=True)
+    bd, clip = [], 0
+    for k in range(N):
+        d = round(b[k] * 32 * g[k])
+        clip += not -44 <= d <= 45
+        bd.append(max(-44, min(45, d)) + 44)
+    if clip:
+        print("export_ml2: %d/%d bias digits CLIPPED to the payload range" % (clip, N), flush=True)
+    U2, exact = ml2_readout(u2, shift)
+    digits = [shift] + g + bd
+    for x in U2:                       # LSB pair first, offset 4050 (certify_ml2 layout)
+        d = x + 4050
+        digits += [d % 90, d // 90]
+    for f in range(len(trits)):
+        digits.append(sum((trits[f][k] + 1) * 3 ** k for k in range(N)))
+    s90 = "".join(enc90(d) for d in reversed(digits))
+    assert "\\" not in s90 and '"' not in s90
+    with open(path + ".payload", "w") as f:
+        f.write(s90 + "\n")
+    pnet.save(path, {"kind": "replnet-ml2", "B": 1, "N": N, "m": len(U2),
+                     "shift": shift, "g": g, "bias_digits": bd, "zeros": zeros,
+                     "u2_digits": U2, "u2": u2, "shift2": ML2_SHIFT2,
+                     "clampcp": clampcp, "base_kind": base_kind,
+                     "train": train_meta, "E": E, "bias": b, "v": v})
+    dead = not any(U2)
+    print("export_ml2: zeros %.1f%%  shift %d  gains %s  bias %s  u2 %s (exact %s)  -> %s.payload"
+          % (100 * zeros, shift, g, bd, U2, ["%.3f" % x for x in exact], path), flush=True)
+    if dead:
+        print("export_ml2: DEAD LAYER-2 READ-OUT -- every u2 digit rounds to 0 at shift %d, so the "
+              "exported net's second layer is SILENT (it evaluates as the single-layer net while "
+              "paying ml2's code and nps).  The knob is the L1 shift:\n%s"
+              % (shift, ml2_shift_table(v, u2)), flush=True)
+    return "zeros %.1f%% shift %d u2 %s%s" % (100 * zeros, shift, U2, "  DEAD L2" if dead else "")
+
+
 def export_model(model, cfg, path):
     """Dispatch a live model to its export family, then run the
     knowledge-class probe suite (diagnostics, never gates) and ledger it
@@ -120,6 +223,7 @@ def export_model(model, cfg, path):
 
 def _export_model(model, cfg, path):
     """The per-family export dispatch."""
+    import torch
     m = cfg.model
     with torch.no_grad():
         E = model.weight().detach()
@@ -127,14 +231,11 @@ def _export_model(model, cfg, path):
         v = model.v.detach().tolist()
     meta = {"config": __import__("config").to_dict(cfg)}
     if m.arch == "ml2":
-        # float-only, one rule for every extension: the packed build is
-        # engine-side work the val loss has to earn first (and the ml2
-        # payload/machinery is PRICE-FIRST per its queue entry)
-        pnet.save(path, {"kind": "float-ml2", "B": 1, "N": m.N, "m": m.bm,
-                         "E": E.tolist(), "bias": b, "v": v,
-                         "u2": model.u2.detach().tolist(), "clampcp": m.clampcp,
-                         "base_kind": m.base, "ternary": m.ternary, "train": meta})
-        return "float export (ml2)"
+        # the certified two-layer payload (engine form: packed/make_ml2_proto.py).
+        # Its ternary body is the shipped codec's, so this net's bytes stay
+        # comparable with every single-layer number in the ledger.
+        return export_ml2(path, E.tolist(), b, v, model.u2.detach().tolist(),
+                          m.clampcp, m.base, meta)
     if m.ternary:
         struct = model.export_struct() if m.arch in ("cb", "lowrank") else None
         return export_replnet(path, E, b, v, m.clampcp, m.base, meta, struct)
@@ -203,21 +304,34 @@ def splice_entry(payload_path, entry_path, out_path):
 
 
 def price(payload_path, entry_path=None, out_dir=None):
-    entry_path = entry_path or os.path.join(REPO, "nnue_4k", "replnet_proto.py")
+    netpath = payload_path[:-len(".payload")]
+    ml2 = _load_meta(netpath).get("kind") == "replnet-ml2"
     out_dir = out_dir or os.path.dirname(os.path.abspath(payload_path))
+    if entry_path is None and ml2:
+        # the ml2 arm prices the ml2 ENTRY: derived from the shipped one by
+        # the landed generator, never a fork (every hunk asserts it hit).
+        gen = os.path.join(REPO, "nnue_4k", "packed", "make_ml2_proto.py")
+        entry_path = os.path.join(out_dir, "ml2_entry.py")
+        subprocess.run([sys.executable, gen, os.path.join(REPO, "nnue_4k", "replnet_proto.py"),
+                        entry_path], check=True, capture_output=True, text=True)
+    entry_path = entry_path or os.path.join(REPO, "nnue_4k", "replnet_proto.py")
     spliced = os.path.join(out_dir, "entry_spliced.py")
     packed = os.path.join(out_dir, "entry_spliced.packed")
     splice_entry(payload_path, entry_path, spliced)
 
-    # invariant suite + bit-exactness triangle on the spliced module
-    netpath = payload_path[:-len(".payload")]
-    check = os.path.join(_here, "verify_export.py")
-    r = subprocess.run([sys.executable, check, netpath, spliced],
-                       capture_output=True, text=True, cwd=out_dir)
+    # invariant suite + bit-exactness on the spliced module.  ml2's checker
+    # is packed/ml2_check.py (verify_export's triangle is single-layer: it
+    # has no second layer to mirror), and it self-derives its reference from
+    # packed_layers' int bridge, so it never trusts this file's arithmetic.
+    check = os.path.join(REPO, "nnue_4k", "packed", "ml2_check.py") if ml2 \
+        else os.path.join(_here, "verify_export.py")
+    argv = [sys.executable, check, spliced] if ml2 \
+        else [sys.executable, check, netpath, spliced]
+    r = subprocess.run(argv, capture_output=True, text=True, cwd=out_dir)
     print(r.stdout, end="", flush=True)
     if r.returncode:
         print(r.stderr, end="", flush=True)
-        raise SystemExit("verify_export FAILED on the spliced entry")
+        raise SystemExit("%s FAILED on the spliced entry" % os.path.basename(check))
 
     # measured bytes: pack.sh's own count, never composed arithmetic
     pack = os.path.join(REPO, "tools", "build", "pack.sh")
@@ -244,11 +358,25 @@ def price(payload_path, entry_path=None, out_dir=None):
     return nbytes
 
 
+def _load_meta(netpath):
+    import pickle
+    try:
+        with open(netpath, "rb") as f:
+            return pickle.load(f)
+    except (OSError, EOFError, pickle.UnpicklingError):
+        return {}
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("target", help="run dir, .pickle, or .payload")
     p.add_argument("--price", action="store_true")
     p.add_argument("--entry", default=None)
+    p.add_argument("--shift", type=int, default=None,
+                   help="ml2 only: override the L1 shift.  It is the export's "
+                        "only knob on the certified layer-2 read-out (U2 scales "
+                        "4x per unit dropped, gains halve) -- a payload-scale "
+                        "decision, so it is explicit, never inferred")
     p.add_argument("--bakeoff", action="store_true",
                    help="run the compress/ encoder zoo (all arms x both "
                         "container layouts, measured through the real pack "
@@ -258,9 +386,25 @@ def main():
     if os.path.isdir(t):
         t = os.path.join(t, "best.pickle")
     payload = t if t.endswith(".payload") else t + ".payload"
+    net = payload[:-len(".payload")]
+    d = _load_meta(net)
+    if d.get("kind") in ("float-ml2", "replnet-ml2") and (a.shift is not None
+                                                          or not os.path.exists(payload)):
+        # re-export a SAVED ml2 checkpoint: the floats on disk are the whole
+        # net, so this needs no torch and no retraining
+        export_ml2(net, d["E"], d["bias"], d["v"], d["u2"], d["clampcp"],
+                   d["base_kind"], d.get("train", {}), shift=a.shift)
+        d = _load_meta(net)
     if not os.path.exists(payload):
         raise SystemExit("%s not found -- only ternary exports have payloads; "
                          "float/kb exports price via build_kb.py + pack_entry.sh" % payload)
+    if d.get("kind") == "replnet-ml2" and not any(d["u2_digits"]) and (a.price or a.bakeoff):
+        raise SystemExit(
+            "REFUSED to price a SILENT second layer: every u2 digit rounds to 0 at shift %d, so "
+            "this artifact carries ml2's +98 B of code and its ~0.90x nps and evaluates as the "
+            "single-layer net.  Choose the L1 shift deliberately (--shift) or retrain u2 on the "
+            "certified grid -- this file will not pick for you:\n%s"
+            % (d["shift"], ml2_shift_table(d["v"], d["u2"])))
     if a.bakeoff:
         from compress import bakeoff
         kw = {"entry": a.entry} if a.entry else {}
