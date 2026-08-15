@@ -66,6 +66,7 @@ static const char INITIAL[121] =
 static int TAB[6][120];          /* padded pst for P N B R Q K(mid) */
 static int KEND[120];            /* endgame king table */
 static int PIECEVAL[6];          /* bare piece values P N B R Q K */
+static int REF_TAB[6][120], REF_KEND[120], REF_PIECEVAL[6];
 static int *PSTP[128];           /* by piece char; PSTP['K'] is swapped */
 static int MATE_LOWER, MATE_UPPER;
 static int tables_loaded = 0;
@@ -75,6 +76,9 @@ static int QS = 40;
 static int QS_A = 140;
 static int LMR = 75;
 static int EVAL_ROUGHNESS = 15;
+static int VALUE_N = 280, VALUE_B = 320, VALUE_R = 479, VALUE_Q = 929;
+static int PST_P = 100, PST_N = 100, PST_B = 100, PST_R = 100;
+static int PST_Q = 100, PST_K = 100, PST_KE = 100;
 static long TABLE_SIZE = 1000000;
 static int NULL_MARGIN = -200;   /* fuel-probe target margin (its own knob
                                     since #192, deliberately NOT tied to
@@ -1141,6 +1145,29 @@ static void apply_uci_moves(char **tok, int ntok) {
 /* ------------------------------------------------------------------ */
 /* Table loading and knobs                                             */
 /* ------------------------------------------------------------------ */
+static int scale_eval(int value, int scale) {
+    int product = value * scale;
+    return (product + (product >= 0 ? 50 : -50)) / 100;
+}
+
+static void refresh_eval(void) {
+    if (!tables_loaded) return;
+    int values[] = {REF_PIECEVAL[0], VALUE_N, VALUE_B, VALUE_R, VALUE_Q,
+                    REF_PIECEVAL[5]};
+    int scales[] = {PST_P, PST_N, PST_B, PST_R, PST_Q, PST_K};
+    for (int p = 0; p < 6; p++) {
+        PIECEVAL[p] = values[p];
+        for (int i = 0; i < 120; i++)
+            TAB[p][i] = values[p] + scale_eval(
+                REF_TAB[p][i] - REF_PIECEVAL[p], scales[p]);
+    }
+    for (int i = 0; i < 120; i++)
+        KEND[i] = PIECEVAL[5] + scale_eval(
+            REF_KEND[i] - REF_PIECEVAL[5], PST_KE);
+    MATE_LOWER = PIECEVAL[5] - 13 * PIECEVAL[4];
+    MATE_UPPER = PIECEVAL[5] + 10 * PIECEVAL[4];
+}
+
 static int load_tables(const char *path) {
     FILE *f = fopen(path, "r");
     if (!f) return 0;
@@ -1172,9 +1199,11 @@ static int load_tables(const char *path) {
     for (int c = 0; c < 128; c++) PSTP[c] = NULL;
     const char *order = "PNBRQK";
     for (int k = 0; k < 6; k++) PSTP[(int)order[k]] = TAB[k];
-    MATE_LOWER = PIECEVAL[5] - 13 * PIECEVAL[4];
-    MATE_UPPER = PIECEVAL[5] + 10 * PIECEVAL[4];
+    memcpy(REF_TAB, TAB, sizeof TAB);
+    memcpy(REF_KEND, KEND, sizeof KEND);
+    memcpy(REF_PIECEVAL, PIECEVAL, sizeof PIECEVAL);
     tables_loaded = 1;
+    refresh_eval();
     return 1;
 }
 
@@ -1182,6 +1211,12 @@ struct knob { const char *name; int *ip; long *lp; };
 static struct knob KNOBS[] = {
     { "QS", &QS, NULL }, { "QS_A", &QS_A, NULL }, { "LMR", &LMR, NULL },
     { "EVAL_ROUGHNESS", &EVAL_ROUGHNESS, NULL },
+    { "VALUE_N", &VALUE_N, NULL }, { "VALUE_B", &VALUE_B, NULL },
+    { "VALUE_R", &VALUE_R, NULL }, { "VALUE_Q", &VALUE_Q, NULL },
+    { "PST_P", &PST_P, NULL }, { "PST_N", &PST_N, NULL },
+    { "PST_B", &PST_B, NULL }, { "PST_R", &PST_R, NULL },
+    { "PST_Q", &PST_Q, NULL }, { "PST_K", &PST_K, NULL },
+    { "PST_KE", &PST_KE, NULL },
     { "TABLE_SIZE", NULL, &TABLE_SIZE },
     { "NULL_MARGIN", &NULL_MARGIN, NULL },
     { "NULL_MIN_DEPTH", &NULL_MIN_DEPTH, NULL },
@@ -1215,6 +1250,7 @@ static int set_knob(const char *name, long v) {
     for (struct knob *k = KNOBS; k->name; k++)
         if (!strcmp(k->name, name)) {
             if (k->ip) *k->ip = (int)v; else *k->lp = v;
+            refresh_eval();
             return 1;
         }
     return 0;
