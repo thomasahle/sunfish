@@ -1092,6 +1092,29 @@ prevented.
 venue explanation rather than a fixed per-game engine defect: the rate
 tracked the load, not the game count.
 
+**Harvest defect, recorded because "self-completing" turned out not to
+be.** `run_meter.sh` **exited after the match without running its summary
+section**: no `games played` line, no tripwire counts, **no lock release**,
+no `METER COMPLETE`. The match itself finished normally — `meter.log` ends
+`Finished match / Total Time: 04:07:15` and the PGN holds all 300 games —
+so **no data was lost**, but the verdict block and the lock release had to
+be done by hand, and the chained run 2 was blocked behind a marker that
+never arrived. Two consequences:
+
+- The lock was **held by a dead script** until released manually. A
+  self-releasing lock is only as reliable as the process holding it, which
+  is an argument for the release condition being checkable by others —
+  which it was, and which is why this was recoverable.
+- **Diagnosing it hit the same false-positive trap for the third time
+  today**: `pgrep -f run_meter.sh` reported the script alive when what it
+  actually matched was the *shell that launched the chain*. Process
+  identity by command-line substring is unreliable in every direction, and
+  this ledger now has three independent instances of it.
+
+The reconstructed block is appended to `AB_meter.txt` and labelled as
+reconstructed, with the Elo **deliberately not computed** — the void is
+not softened by curiosity at harvest time either.
+
 ### The venue check, run honestly
 
 The instruction was to check without steering toward the convenient
