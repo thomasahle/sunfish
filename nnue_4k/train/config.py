@@ -51,6 +51,13 @@ class ModelCfg:
     cb_cmax: int = 1            # arch=cb: codebook grid (1 = ternary; <= 5 certifies)
     lr_rank: int = 1            # arch=lowrank: rank of U@V
     lr_wmax: int = 1            # arch=lowrank: composite clip (1 = ternary)
+    u2grid: int = 0             # arch=ml2: snap u2 to the CERTIFIED integer
+    #                             read-out grid inside forward (STE), at the
+    #                             export scale.  0 = free float, which is what
+    #                             let the 0.01280 net train a layer 2 the
+    #                             engine then rounded to zero (MEASUREMENTS
+    #                             2026-08-15).  1 = train against the real
+    #                             resolution.
 
 
 @dataclass

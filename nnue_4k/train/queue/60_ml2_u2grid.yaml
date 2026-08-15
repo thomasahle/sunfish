@@ -1,0 +1,41 @@
+# ml2-u2grid -- THE FIX for the export blocker, and the first ml2 run whose
+# second layer is trained against the resolution the engine actually has.
+#
+# WHY. 21_phase_ml2_dense reached val 0.01280 with a layer-2 term worth mean
+# 60.50 cp (against layer 1's 24.08 cp) -- and the certified read-out could
+# not carry ANY of it: the engine stores a signed integer |U2| <= 127 and
+# renormalises by 2^10, so
+#     U2_k = u2_k * 2^10 / (100 * 2^(2*shift))
+# and at the export's own shift the trained u2 = [4.27, 2.10, 3.39, 2.69]
+# maps to [0.171, 0.084, 0.136, 0.108] -> [0, 0, 0, 0].  The exported net is
+# the single-layer net wearing ml2's +98 B of code and its ~0.90x nps.
+# MEASUREMENTS.md 2026-08-15 has the derivation, the numerical confirmation
+# (float-U2 replay reproduces the trained L2 to 0.18 cp) and the shift sweep.
+#
+# THE MECHANISM, not a workaround: model.Ml2Net now snaps u2 onto that exact
+# integer grid INSIDE forward with a straight-through estimator (u2grid: 1),
+# at the export scale, recomputed from v each step -- the same discipline the
+# ternary weights have had all along, and the cure for the third recorded
+# wall (quant-error compounding: "rounding a float fit after training
+# optimises the wrong function at every layer").  Epoch 0 is unchanged (u2
+# starts at zero, which is on the grid), and the gradient keeps flowing while
+# the forward value is zero, so training can walk u2 up until it crosses the
+# first grid step instead of drifting in a resolution it does not have.
+#
+# WHAT SUCCESS LOOKS LIKE, stated before the run so it cannot be moved:
+#   * NON-ZERO integer read-out at export -- export.py prints "u2 [..]" beside
+#     every export and REFUSES to price an all-zero one.  A run that ends with
+#     [0,0,0,0] again says the capacity is not reachable at this scale, which
+#     is a real answer.
+#   * val at or under 0.01280 (the free-float number is an UPPER bound on
+#     what a grid-constrained net can do, so parity is already informative).
+#   * probes keeping the phase signature the ml2 family bought (king activity
+#     flipping with phase, pawn advance growing) rather than collapsing back.
+# Bytes are unchanged by construction: same payload shape, 4 u2 digit pairs.
+name: ml2_u2grid
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406}
+model: {arch: ml2, N: 4, base: mat, ternary: 0.85, bm: 4, u2grid: 1}
+loss: {l1: 0.0005, satpen: 0.03, satthresh: 480.0}
+opt: {epochs: 30, batch: 8192, lr: 3.0e-3, seed: 0}
+notes: 21_phase_ml2_dense's recipe with u2 on the certified integer grid inside
+  forward (STE at the export scale); the 0.01280 float number is the reference

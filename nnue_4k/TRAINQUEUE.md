@@ -153,6 +153,40 @@ VAL-probe-first):
 
 ## Log (newest first)
 
+- 2026-08-15 03:59 UTC: **QUEUE REFILLED after a 38-MINUTE IDLE GAP — a
+  standing-rule violation, recorded rather than glossed.** `50_dense60`
+  finished 03:21; the queue sat empty until 03:59 while this lane was
+  harvesting and exporting, and `queue_runner` nagged `[queue] EMPTY` four
+  times into `runner.log` — the instrument worked, the operator (me) was
+  the failure. In my export report I described the empty queue as benign
+  because the runner was healthy; that was wrong, and the coordinator
+  corrected it. **The trainer never idles: a finishing run is a REFILL
+  TRIGGER, not a status update.** Two entries queued, both validated
+  box-side before drop (`config.load` + `config_hash`):
+  - `60_ml2_u2grid.yaml` (hash `d5a8b66bc26c`) — **the fix for the export
+    blocker**: `21_phase_ml2_dense`'s recipe with `u2` snapped onto the
+    certified integer read-out grid INSIDE forward, STE at the export
+    scale (`model.Ml2Net._u2`, `model.u2grid: 1`). Verified on the box
+    before queueing: the trained free-float `u2` [4.27, 2.10, 3.39, 2.69]
+    snaps to **[0, 0, 0, 0] inside forward** — the defect is now visible
+    to the loss instead of only to the exporter — the grid step is 25.0 at
+    shift 4, the STE gradient passes (1.0), and `u2grid: 0` (the default)
+    is bit-identical to before, so no queued or historical config moves.
+  - `61_replnet_clamp.yaml` (hash `c0ab623b4fd5`) — registered family arm
+    **#11 `replnet_clamp`** (CLAMP 400 vs the 600 default, byte-free), on
+    the same `u2grid` recipe so the pair differs in exactly one field. No
+    new seam, no new invention. It is more interesting now than when it
+    was registered: the ml2 second layer's own contribution is mean 60.50
+    cp with a 186.59 cp maximum, so the residual reaching the clip is
+    materially bigger than it was when 600 was chosen.
+
+  Pre-registered success criterion for `60`, stated before the run: a
+  **non-zero integer read-out at export** (`export.py` prints it beside
+  every export and refuses to price an all-zero one) and val at or under
+  0.01280, the free-float number being an upper bound on what a
+  grid-constrained net can reach. A second `[0,0,0,0]` is a real answer —
+  it would say the capacity is not reachable at this scale.
+
 - 2026-08-15 ~05:3x UTC: **ml2 EXPORT BLOCKED — the trained layer-2
   read-out quantizes to ZERO on the certified grid**, and the export now
   refuses to price a silent second layer (`train/export.py`). Harvest:

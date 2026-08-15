@@ -204,11 +204,39 @@ class Ml2Net(ResidualNet):
     certify_or_raise first); the training-normalised h/100 keeps u2 in
     optimizer-friendly range, the export step owns the integer mapping."""
 
+    SHIFT2, UMAX = 10, 127          # certified: field_budget.certify_ml2
+
     def __init__(self, cfg):
         super().__init__(cfg)
         import packed_layers
         self.conv = packed_layers.LaneConv(cfg.N, cfg.N, "circular", cfg.bm)
         self.u2 = nn.Parameter(torch.zeros(cfg.bm))
+        self.u2grid = cfg.u2grid
+
+    def _u2(self, vab):
+        """u2 as the ENGINE will carry it.
+
+        Free float by default -- and that default is what MEASUREMENTS
+        2026-08-15 caught: the engine stores a signed integer |U2| <= 127 and
+        renormalises by 2^10, so the value it can actually carry is
+        U2 = u2 * 2^SHIFT2 / (100 * 2^(2*shift)) with `shift` the export's L1
+        shift, and the 0.01280 net's u2 landed at U2 = [0.17, 0.08, 0.14,
+        0.11] -> ALL ZERO.  With u2grid=1 the snap happens INSIDE forward
+        (straight-through), so the loss sees the resolution the artifact has
+        -- the same discipline the ternary weights already get, and the cure
+        for the quant-error-compounding wall packed_layers.py names."""
+        if not self.u2grid:
+            return self.u2
+        with torch.no_grad():
+            vmax = float(vab.abs().max())
+            shift = 0
+            for s in range(8, -1, -1):
+                if vmax * (1 << s) / 32.0 <= 89.49:
+                    shift = s
+                    break
+        scale = (1 << self.SHIFT2) / (100.0 * (1 << (2 * shift)))
+        q = torch.clamp(torch.round(self.u2 * scale), -self.UMAX, self.UMAX) / scale
+        return self.u2 + (q - self.u2).detach()      # STE: snap forward, pass grad
 
     def forward(self, fi, mi, fo, base_cp):
         E = self.weight()
@@ -218,7 +246,7 @@ class Ml2Net(ResidualNet):
         d = ((au - at) * vab).sum(-1)
         A, B = au * vab.abs(), at * vab.abs()       # cp-scaled lane values
         h = self.conv(A, A) - self.conv(B, B)       # odd: exact antisymmetry
-        d = d + (h * self.u2).sum(-1) / 100.0
+        d = d + (h * self._u2(vab)).sum(-1) / 100.0
         self.pre = d
         return base_cp + d.clamp(-self.clampcp, self.clampcp)
 

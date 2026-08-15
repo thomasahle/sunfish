@@ -1,0 +1,28 @@
+# replnet-clamp -- registered family arm #11 (TRAINQUEUE.md header:
+# "replnet_clamp -- CLAMP/satpen interaction (400 vs 600, byte-free)").
+# Queued behind 60_ml2_u2grid so the queue is not empty when that finishes;
+# no new invention, and nothing here is a new seam.
+#
+# WHY IT IS WORTH A SLOT NOW, and why on the ml2 recipe. clampcp is the
+# operator the ENGINE runs -- max(-CLAMP, min(CLAMP, v)) -- and it costs
+# zero bytes to change, so it is the cheapest arm in the family. It became
+# more interesting, not less, with the ml2 measurement: the second layer's
+# own contribution is mean 60.50 cp with a 186.59 cp maximum on probe
+# positions, so the residual reaching the clip is materially bigger than the
+# single-layer family's was when 600 was chosen. Whether 400 helps (tighter
+# clip = less saturation pressure, satpen doing less work) or hurts (the L2
+# signal clipped away) is exactly the interaction the arm is registered to
+# measure, and it is now measurable on a net that HAS a second layer.
+#
+# Same recipe as 60 in every other respect, u2grid on, so the two runs differ
+# in ONE field and their val numbers are directly comparable to each other and
+# to the 0.01280 free-float reference. satpen/satthresh stay at the house
+# defaults deliberately: moving both the clip and the penalty at once would
+# make the result uninterpretable.
+name: replnet_clamp400
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406}
+model: {arch: ml2, N: 4, base: mat, ternary: 0.85, bm: 4, u2grid: 1, clampcp: 400}
+loss: {l1: 0.0005, satpen: 0.03, satthresh: 480.0}
+opt: {epochs: 30, batch: 8192, lr: 3.0e-3, seed: 0}
+notes: "registered arm 11 (replnet_clamp): CLAMP 400 vs the 600 default,
+  byte-free, on the u2grid ml2 recipe so the pair differs in exactly one field"
