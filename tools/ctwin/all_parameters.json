@@ -1,7 +1,7 @@
 {
   "parameters": [
     {"name": "QS", "type": "integer", "default": 40,
-     "min": 40, "max": 100, "step": 10, "scale": 30},
+     "min": 20, "max": 100, "step": 10, "scale": 30},
     {"name": "QS_A", "type": "integer", "default": 140,
      "min": 80, "max": 220, "step": 20, "scale": 40},
     {"name": "EVAL_ROUGHNESS", "type": "discrete", "default": 15,
@@ -17,7 +17,7 @@
     {"name": "NULL_MIN_DEPTH", "type": "discrete", "default": 2,
      "values": [1, 2, 3, 4, 5, 99], "off_values": [99], "scale": 1.5},
     {"name": "FUEL_MIN_DEPTH", "type": "discrete", "default": 6,
-     "values": [5, 6, 7, 8, 9, 10, 12, 99], "off_values": [99], "scale": 2},
+     "values": [4, 5, 6, 7, 8, 9, 10, 12, 99], "off_values": [99], "scale": 2},
     {"name": "LMR", "type": "discrete", "default": 75,
      "values": [-70000, 0, 20, 30, 40, 50, 60, 75, 100, 140, 200],
      "off_values": [-70000], "scale": 40},
