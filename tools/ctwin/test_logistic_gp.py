@@ -67,6 +67,14 @@ class MixedAcquisitionTest(unittest.TestCase):
             self.space, [*self.space.candidates, *observed], score, set(), None)
         self.assertEqual(found, exact)
 
+    def test_coordinate_search_rejects_observations_outside_new_domain(self):
+        def score(points):
+            return -np.asarray(points)[:, 0]
+
+        found = coordinate_maximum(
+            self.space, [(-10, 10), *self.space.candidates], score, set(), None)
+        self.assertEqual(found[0], 0)
+
     def test_structural_constraint_is_preserved(self):
         space = MixedSpace({
             "parameters": [

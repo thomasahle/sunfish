@@ -256,7 +256,10 @@ def coordinate_maximum(space, seeds, score, active, structural, restarts=4):
         return point not in active and (
             structural is None or space.is_structural(point) == structural)
 
-    seeds = sorted(set(normalize(point) for point in seeds if allowed(normalize(point))))
+    seeds = sorted(set(
+        normalize(point) for point in seeds
+        if space.contains(normalize(point)) and allowed(normalize(point))
+    ))
     if not seeds:
         raise RuntimeError("no available acquisition point")
     seed_scores = evaluate(seeds)
