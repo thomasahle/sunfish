@@ -82,7 +82,8 @@ static int NULL_MARGIN = -200;   /* fuel-probe target margin (its own knob
                                     null keeps following EVAL_ROUGHNESS) */
 static int NULL_MIN_DEPTH = 2;   /* null move when depth > this */
 static int NULL_LIMIT = 60000;   /* |score| bound; inactive on legal positions */
-static int NULL_RED = 7;         /* null move depth reduction */
+static int NULL_CUT_RED = 3;     /* shallow null-candidate reduction */
+static int NULL_RED = 7;         /* deep fuel-probe reduction */
 static int IID_MIN_DEPTH = 99;   /* tuned off; retained as a lab knob */
 static int IID_RED = 3;          /* IID depth reduction */
 static int FUT_MAX = 1;          /* futility pruning when depth <= this */
@@ -692,9 +693,9 @@ static int gives_check(const Pos *child) {
 }
 
 static int score_move(const Pos *pos, Move move, int val, int gamma,
-        int depth, int rd, int guard, int *real) {
+        int depth, int rd, int root, int guard, int *real) {
     Pos child = domove(pos, move);
-    int move_depth = rd - 1 - (guard && val < LMR);
+    int move_depth = rd - 1 - (!root && guard && val < LMR);
     *real = 1;
     if (2 <= depth && depth <= 3 && pos->b[move.j] == '.'
             && move.j != pos->ep && !move.prom) {
@@ -764,7 +765,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
             && (!FUEL_NULL || depth < FUEL_MIN_DEPTH)
             && iabs(pos->score) < NULL_LIMIT && has_big_piece(pos)) {
         Pos rp = rotate(pos, 1);
-        int s = -bound(&rp, 1 - gamma, depth - NULL_RED, 0, 0);
+        int s = -bound(&rp, 1 - gamma, depth - NULL_CUT_RED, 0, 0);
         int score = pos->score + EVAL_ROUGHNESS;
         if (s < score) score = s;
         Move proof = nomove;
@@ -817,7 +818,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         int val = value(pos, killers[kk]);
         if (val < val_lower) continue;
         int real;
-        int score = score_move(pos, killers[kk], val, gamma, depth, rd, guard, &real);
+        int score = score_move(pos, killers[kk], val, gamma, depth, rd, root, guard, &real);
         PROCESS(real, killers[kk], score);
         if (done) goto after_moves;
     }
@@ -842,7 +843,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
             }
             if (!qstail) {
                 int real;
-                int score = score_move(pos, m, val, gamma, depth, rd, guard, &real);
+                int score = score_move(pos, m, val, gamma, depth, rd, root, guard, &real);
                 PROCESS(real, m, score);
             } else {
                 Pos np = domove(pos, m);
@@ -1185,6 +1186,7 @@ static struct knob KNOBS[] = {
     { "NULL_MARGIN", &NULL_MARGIN, NULL },
     { "NULL_MIN_DEPTH", &NULL_MIN_DEPTH, NULL },
     { "NULL_LIMIT", &NULL_LIMIT, NULL },
+    { "NULL_CUT_RED", &NULL_CUT_RED, NULL },
     { "NULL_RED", &NULL_RED, NULL },
     { "IID_MIN_DEPTH", &IID_MIN_DEPTH, NULL },
     { "IID_RED", &IID_RED, NULL },

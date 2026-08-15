@@ -136,7 +136,7 @@ class TestCappedNullMove:
 
         def observed(pos, gamma, depth, root=False):
             calls.append((gamma, depth, root))
-            if pos == nullpos and gamma == 1 and depth <= 0:
+            if pos == nullpos and gamma == 1 and depth == 2:
                 return -sf.MATE_LOWER
             return bound(pos, gamma, depth, root)
 
@@ -225,7 +225,7 @@ class TestIntrinsicLMR:
 
     FEN = "4k3/8/8/3p4/4P3/8/8/N3K3 w - - 0 1"
 
-    def observed_depths(self, depth, pass_score, fen=FEN):
+    def observed_depths(self, depth, pass_score, fen=FEN, root=False):
         pos = hist_from_fen(fen)[-1]
         passed = pos.rotate(nullmove=True)
         moves = list(pos.gen_moves())
@@ -244,7 +244,7 @@ class TestIntrinsicLMR:
             return 0
 
         searcher.bound = observed
-        sf.Searcher.bound(searcher, pos, sf.MATE_UPPER, depth, root=True)
+        sf.Searcher.bound(searcher, pos, sf.MATE_UPPER, depth, root=root)
         assert seen[0][0] == killer
         return pos, moves, seen
 
@@ -265,6 +265,33 @@ class TestIntrinsicLMR:
             for move in moves:
                 expected = depth - hot - 1 - (guard and pos.value(move) < sf.LMR)
                 assert {d for m, d in seen if m == move} == {expected}
+
+    def test_root_moves_are_not_intrinsically_reduced(self):
+        pos = hist_from_fen(self.FEN)[-1]
+        _, moves, seen = self.observed_depths(6, pos.score + sf.NULL_MARGIN, root=True)
+        for move in moves:
+            assert {d for m, d in seen if m == move} == {4}
+
+
+class TestShallowNullMateFloor:
+    """#205 coupled the shallow null candidate to the deep probe's reduction.
+
+    Together with root LMR, that hid this forced mate at the CI depth-six
+    floor. Shallow null keeps its three-ply recurrence, and root moves get no
+    additional intrinsic reduction.
+    """
+
+    FEN = "2q1r3/4pR2/3rQ1pk/p1pnN2p/Pn5B/8/1P4PP/3R3K w - - 1 0"
+
+    def test_depth_six_search_reports_mate(self):
+        pos = hist_from_fen(self.FEN)[-1]
+        result = None
+        for depth, _, score, move in sf.Searcher().search([pos]):
+            if depth == 6:
+                result = score, move
+            elif depth > 6:
+                break
+        assert result is not None and result[0] >= sf.MATE_LOWER
 
 
 class TestStaticMoveCap:

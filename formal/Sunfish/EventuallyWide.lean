@@ -150,8 +150,8 @@ def fuelValueD2 (G : QSGame) (guard : G.Pos → Bool) (C : Nat)
       foldMax (fun m => -(fuelValueD2 G guard C spend d m))
         (movesAbove G (val_lower (d + 1)) p)
         (if guard p = true ∧ 2 < d + 1 then
-          (if -(fuelValueD2 G guard C spend (d + 1 - 7) (G.pass p)) < MATE_LOWER then
-            max LOSS (-(fuelValueD2 G guard C spend (d + 1 - 7) (G.pass p)))
+          (if -(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
+            max LOSS (-(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)))
           else LOSS)
         else LOSS)
     else
@@ -212,7 +212,7 @@ theorem fuelValueD2_of_fold_regime (G : QSGame) (guard : G.Pos → Bool)
   rw [if_neg hkg, if_neg hcap, if_neg (by simp [hai]), if_neg (by omega)]
 
 /-- The sub-horizon fold: below depth 6, the shipped capped-null shape,
-verbatim (children at `d`, the pass at `d + 1 - 7`). -/
+verbatim (children at `d`, the pass at `d + 1 - 3`). -/
 theorem fuelValueD2_of_fold_sub (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (d : Nat) (p : G.Pos)
@@ -224,8 +224,8 @@ theorem fuelValueD2_of_fold_sub (G : QSGame) (guard : G.Pos → Bool)
       = foldMax (fun m => -(fuelValueD2 G guard C spend d m))
           (movesAbove G (val_lower (d + 1)) p)
           (if guard p = true ∧ 2 < d + 1 then
-            (if -(fuelValueD2 G guard C spend (d + 1 - 7) (G.pass p)) < MATE_LOWER then
-              max LOSS (-(fuelValueD2 G guard C spend (d + 1 - 7) (G.pass p)))
+            (if -(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
+              max LOSS (-(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)))
             else LOSS)
           else LOSS) := by
   simp only [fuelValueD2]
@@ -1036,8 +1036,8 @@ def fuelValueD2t (G : QSGame) (guard : G.Pos → Bool) (C : Nat)
     else if d + 1 < 6 then
       foldMax (fun m => -(fuelValueD2t G guard C spend d m)) (tailList G (d + 1) p)
         (if guard p = true ∧ 2 < d + 1 then
-          (if -(fuelValueD2t G guard C spend (d + 1 - 7) (G.pass p)) < MATE_LOWER then
-            max LOSS (-(fuelValueD2t G guard C spend (d + 1 - 7) (G.pass p)))
+          (if -(fuelValueD2t G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
+            max LOSS (-(fuelValueD2t G guard C spend (d + 1 - 3) (G.pass p)))
           else LOSS)
         else LOSS)
     else
@@ -1051,8 +1051,8 @@ decreasing_by all_goals omega
 def fuelTermD2t (G : QSGame) (guard : G.Pos → Bool) (C : Nat)
     (spend : G.Pos → Nat → G.Pos → Nat) (d : Nat) (p : G.Pos) : Int :=
   if guard p = true ∧ 2 < d + 1 then
-    (if -(fuelValueD2t G guard C spend (d + 1 - 7) (G.pass p)) < MATE_LOWER then
-      max LOSS (-(fuelValueD2t G guard C spend (d + 1 - 7) (G.pass p)))
+    (if -(fuelValueD2t G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
+      max LOSS (-(fuelValueD2t G guard C spend (d + 1 - 3) (G.pass p)))
     else LOSS)
   else LOSS
 
@@ -1127,7 +1127,7 @@ theorem fuelTermD2t_ge_LOSS (G : QSGame) (guard : G.Pos → Bool)
   simp only [fuelTermD2t]
   by_cases h1 : guard p = true ∧ 2 < d + 1
   · rw [if_pos h1]
-    by_cases h2 : -(fuelValueD2t G guard C spend (d + 1 - 7) (G.pass p)) < MATE_LOWER
+    by_cases h2 : -(fuelValueD2t G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER
     · rw [if_pos h2]; omega
     · rw [if_neg h2]; omega
   · rw [if_neg h1]; omega
@@ -1144,7 +1144,7 @@ theorem fuelTermD2t_lt_ML (G : QSGame) (guard : G.Pos → Bool)
   simp only [fuelTermD2t]
   by_cases h1 : guard p = true ∧ 2 < d + 1
   · rw [if_pos h1]
-    by_cases h2 : -(fuelValueD2t G guard C spend (d + 1 - 7) (G.pass p)) < MATE_LOWER
+    by_cases h2 : -(fuelValueD2t G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER
     · rw [if_pos h2]; omega
     · rw [if_neg h2]; omega
   · rw [if_neg h1]; omega
@@ -1770,8 +1770,8 @@ theorem fuelValueD2t_bounded (G : QSGame) (guard : G.Pos → Bool)
                 simp only [fuelTermD2t]
                 by_cases h1 : guard p = true ∧ 2 < d + 1
                 · rw [if_pos h1]
-                  have := ih (d + 1 - 7) (by omega) (G.pass p)
-                  by_cases h2 : -(fuelValueD2t G guard C spend (d + 1 - 7) (G.pass p))
+                  have := ih (d + 1 - 3) (by omega) (G.pass p)
+                  by_cases h2 : -(fuelValueD2t G guard C spend (d + 1 - 3) (G.pass p))
                       < MATE_LOWER
                   · rw [if_pos h2]; omega
                   · rw [if_neg h2]; omega

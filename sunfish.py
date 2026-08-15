@@ -388,7 +388,7 @@ class Searcher:
             # depth 6 on the pass is never a score candidate (see below).
             if not root and 2 < depth < 6 and any(c in pos.board for c in "RBNQ"):
                 score = min(pos.score + EVAL_ROUGHNESS,
-                    -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 7))
+                    -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
                 # A king capture substitutes the exact MATE_UPPER for a
                 # virtual fail-high; the cached move is a capture certificate.
                 proof = score >= gamma and (self.tp_move.get(pos) or pos.king_capture())
@@ -430,17 +430,15 @@ class Searcher:
             # child report to the same fixed capped value.
             def score_move(move, val):
                 child = pos.move(move)
-                move_depth = d - 1 - (guard and val < LMR)
+                move_depth = d - 1 - (not root and guard and val < LMR)
+                cap = MATE_UPPER
                 if 2 <= depth <= 3 and pos.board[move.j] == "." and move.j != pos.ep and not move.prom:
                     cap = min(MATE_LOWER - 1, pos.score + val + (depth - 1) * QS_A)
-                    if cap < gamma:
-                        return ((move, -self.bound(child, 1 - gamma, move_depth))
-                            if child.rotate(nullmove=True).king_capture() else (None, cap))
-                    score = -self.bound(child, 1 - gamma, move_depth)
-                    if score > cap and child.rotate(nullmove=True).king_capture():
-                        return move, score
-                    return move, min(cap, score)
-                return move, -self.bound(child, 1 - gamma, move_depth)
+                check = cap < gamma and child.rotate(nullmove=True).king_capture()
+                if cap < gamma and not check: return None, cap
+                score = -self.bound(child, 1 - gamma, move_depth)
+                check = check or score > cap and child.rotate(nullmove=True).king_capture()
+                return move, score if check else min(cap, score)
 
             if killer and pos.value(killer) >= val_lower:
                 yield score_move(killer, pos.value(killer))
