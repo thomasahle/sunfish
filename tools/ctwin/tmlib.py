@@ -68,23 +68,6 @@ PINNED = {
     # sunfish_ui/uci.py:452 -- the movestogo branch of the same manager.
     "legacy12_mtg": (
         "sunfish_ui/uci.py", "min(wtime / movestogo + winc, wtime / 2 - 1)"),
-    # tools/build/make_variants.py "oldtm" replacement text (sunfish-packed,
-    # branch nnue-4k, commit adf1313).  MILLISECONDS.  This is the line the
-    # ladder actually played and lost -235.5 +/- 65.4 with.
-    "oldtm": (
-        "tools/build/make_variants.py",
-        "min(wtime / 12 + 0.9 * winc, wtime / 2 - 1000)"),
-    # make_variants.py "steptm" replacement text, same commit.  MILLISECONDS.
-    # Byte-identical to the stage-1 tmfix winner (packed sha fe22791b409b1fba).
-    "steptm": (
-        "tools/build/make_variants.py",
-        "min(wtime / (12 if winc else 40) + 0.9 * winc, wtime / 2 - 1000)"),
-    # nnue_4k/pst_entry.py:766-767 (sunfish-packed, nnue-4k) -- the shipped
-    # smooth budget, packed sha 14b69a606b743a37.  MILLISECONDS.
-    "smooth": (
-        "nnue_4k/pst_entry.py",
-        "min(wtime * (1000 + 20 * winc) / (40000 + 240 * winc) + 0.9 * winc,"
-        " wtime * wtime / (2 * wtime + 4000))"),
     # CANDIDATE (in CANDIDATES above), so its absence from the tree is
     # reported as "not landed yet" rather than as drift.  It IS implemented on
     # branch classic/tm-min40-4: sunfish.py:601 at a7d9a6c, in the classic
@@ -103,19 +86,58 @@ PINNED = {
     # MILLISECONDS, and unlike min40_4 that matters -- the 8000 and the 50
     # are absolute, so this literal is grid-checked in the ms domain only.
     "onemax": ("sunfish.py", "max((wtime - 8000) / 40 + winc, 50)"),
-    # make_variants.py "pooltm" replacement text, commit 629cba2.
-    # MILLISECONDS; packed sha cddf392e21449054.  This one is a STATEMENT
-    # block, not an expression, and it is checked by exec-ing the literal
-    # itself -- so the text that is grepped for and the text that is
-    # evaluated are the same string, with no reformulation in between.
-    "pool_ms": (
-        "tools/build/make_variants.py",
-        "M = 40\n"
-        "P = max(0, wtime + (M - 1) * winc - (M + 2) * 200)\n"
-        "A = max(0, wtime - 400)\n"
-        "soft = min(P / M, A / 4)\n"
-        "think = min(5 * soft, A / 2)\n"),
 }
+# ---------------------------------------------------------------------------
+# RE-PINNED 2026-08-15 after the 4k entry's pooltm landing (nnue-4k 5f16bae;
+# PR #201's handoff flagged exactly this breakage). oldtm/steptm/pool_ms used
+# to anchor in tools/build/make_variants.py, smooth in nnue_4k/pst_entry.py.
+# That commit retired oldtm/steptm/pooltm from make_variants.py (tombstoned,
+# their shared anchor gone) and replaced the entry's smooth budget line with
+# the pool. All four pins broke. None of the four belongs back in PINNED
+# above, for two different reasons:
+#
+#   oldtm, steptm  DROPPED, not re-anchored -- RETIRED. The smooth line they
+#                  shared as an anchor no longer exists anywhere, on any
+#                  branch, so there is no live text left to pin. Their
+#                  mirrors stay (stage 1's -235.5 +/- 65.4, and every test
+#                  that calls them, still need them), just without a
+#                  source-drift check: a retired formula cannot drift, it can
+#                  only be misremembered, and the explicit numeric asserts in
+#                  test_tm_surrogate.py are what guard against that instead.
+#   smooth         DROPPED too, same reason: superseded by the pool, and
+#                  nnue_4k/pst_entry.py no longer carries this expression on
+#                  ANY branch. (It never carried it on master to begin with --
+#                  master's nnue_4k predates the smooth budget entirely,
+#                  which is the OTHER reason this pin drifted; see PR #201's
+#                  comment.)
+#   pool_ms        NOT retired -- LANDED, and still the live truth. Its text
+#                  is unchanged: the same M/P/A/soft/think block that lived
+#                  in make_variants.py's `pooltm` mod now lives, byte-for-byte,
+#                  in tools/build/make_pst_entry.py's `_pooltm` list (checked
+#                  by hand against nnue-4k 5f16bae; the two are identical).
+#                  It is not re-anchored to that path here because the path
+#                  does not resolve on THIS checkout: master's own
+#                  tools/build/make_pst_entry.py is a different, older
+#                  generator (builds pst_entry.py from nnue_4k's retired
+#                  accumulator source, not from make_variants.py's mod
+#                  system, and has no `_pooltm`), so a live-file check there
+#                  would find a real file with the WRONG content and report a
+#                  drift that is really a wrong-checkout lookup -- exactly
+#                  what _pinned_present's own docstring warns about, and
+#                  exactly what job 2's root fix exists to stop happening via
+#                  a sibling. The grid-assert below still runs in full
+#                  against this text (_POOL_MS_TEXT), so the MIRROR is proven
+#                  correct against the landed formula; only the automatic
+#                  "is the formula still there" tripwire is unavailable from
+#                  a master-only checkout, until nnue_4k here is next synced
+#                  past 5f16bae.
+# ---------------------------------------------------------------------------
+_POOL_MS_TEXT = (
+    "M = 40\n"
+    "P = max(0, wtime + (M - 1) * winc - (M + 2) * 200)\n"
+    "A = max(0, wtime - 400)\n"
+    "soft = min(P / M, A / 4)\n"
+    "think = min(5 * soft, A / 2)\n")
 
 
 # --------------------------------------------------------------- managers ---
@@ -351,10 +373,14 @@ GRID_I = [0.0, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 5.0]
 def _pinned_present(relpath, literal, roots):
     """Where is the pinned text still checked out?
 
-    EVERY root is searched, not the first one that happens to hold a file of
-    that name: `nnue_4k/pst_entry.py` exists in both checkouts and only the
-    packed one carries the shipped budget, so stopping at the first hit
-    reports a drift that is really a wrong-copy lookup.
+    `roots` is a list for callers that pass one explicitly, but verify()'s
+    OWN default is this checkout alone (job 2, 2026-08-15) -- a second,
+    sibling root used to be the default and made the verdict depend on that
+    other checkout's mutable state, which is not what a drift tripwire is
+    for. EVERY given root is still searched in order, not just the first:
+    `nnue_4k/pst_entry.py` can exist in more than one checkout with different
+    content, and stopping at the first hit would report a drift that is
+    really a wrong-copy lookup.
     """
     # Line by line and IN ORDER, on collapsed whitespace.  A multi-line
     # pinned block is a generator MOD in make_variants.py, i.e. it lives in
@@ -383,7 +409,13 @@ def _pinned_present(relpath, literal, roots):
 
 def verify(roots=(), verbose=True):
     """Grid-check every mirror against its pinned literal.  Returns coverage."""
-    roots = list(roots) or [ROOT, os.path.expanduser("~/repos/sunfish-packed")]
+    # Pinned to THIS checkout only (job 2, 2026-08-15): a verifier whose
+    # verdict depends on a SIBLING checkout's mutable state is broken --
+    # observed directly (PR #201's handoff): the same commit read green, then
+    # 4 drifted an hour later, purely because ~/repos/sunfish-packed moved
+    # underneath it. ROOT is already derived upward from __file__, so pinning
+    # to it is the whole fix; no env-var override is added; see it here.
+    roots = list(roots) or [ROOT]
     checked = drift = 0
     report = []
 
@@ -407,11 +439,15 @@ def verify(roots=(), verbose=True):
     # Classic arms the deadline at exactly `think`, with no floor: a negative
     # budget is an already-expired deadline, and that IS the drain pathology.
     grid("legacy12", legacy12, PINNED["legacy12"][1], 1, lambda v: v)
-    # The packed arms divide by 1000 and then floor at .05 (pst_entry.py's
-    # `searcher.deadline = start + max(think, .05)`).
-    for name in ("oldtm", "steptm", "smooth"):
-        grid(name, MANAGERS[name], PINNED[name][1], 1000,
-             lambda v: max(v / 1000, TM_FLOOR))
+    # oldtm/steptm/smooth used to grid-assert here against PINNED[name][1],
+    # the packed arms' divide-then-floor-at-.05 shape. Retired 2026-08-15 (see
+    # the RE-PINNED note above): no PINNED entry survives for any of the
+    # three, so there is no live text left to grid them against here -- their
+    # mirrors are still fully exercised, by the explicit numeric asserts in
+    # test_tm_surrogate.py (e.g. test_the_managers_disagree_where_the_matches_
+    # said_they_do), which is a stronger check on frozen, no-longer-shipping
+    # formulas than re-deriving a pin from nothing would be.
+    #
     # The candidate is unit-independent, so its literal is checked in BOTH
     # units -- if the mirror ever acquired an absolute constant this is where
     # it would show.
@@ -434,10 +470,14 @@ def verify(roots=(), verbose=True):
 
     # The pool, against the packed millisecond text (no movestogo there, and
     # the packed mod has no TM_FLOOR on soft, so re-apply the clamps here).
+    # Text is _POOL_MS_TEXT (see the RE-PINNED note above), not a PINNED
+    # entry: the landed formula, verified by hand identical to nnue-4k
+    # 5f16bae's tools/build/make_pst_entry.py `_pooltm`, but not re-derivable
+    # from a live file in THIS checkout.
     for t in GRID_T:
         for i in GRID_I:
             env = {"min": min, "max": max, "wtime": 1000 * t, "winc": 1000 * i}
-            exec(PINNED["pool_ms"][1], env)        # noqa: S102 - the pinned text
+            exec(_POOL_MS_TEXT, env)               # noqa: S102 - the landed pool formula
             s_ms, h_ms = env["soft"], env["think"]
             b = pool(t, i)
             want_soft = min(max(s_ms / 1000, TM_FLOOR), b.hard)
@@ -462,6 +502,20 @@ def verify(roots=(), verbose=True):
             report.append("  %-13s *** DRIFTED: pinned text absent from %s"
                           % (name, path))
             drift += 1
+
+    # The four re-pinned names (see the RE-PINNED note above): not in PINNED,
+    # so the loop above never touches them, but "it says so, per position,
+    # instead of quietly skipping" applies to these as much as to any other.
+    report.append("  oldtm         RETIRED at 5f16bae (shared anchor gone); "
+                  "mirror kept for test_tm_surrogate.py, not source-checked")
+    report.append("  steptm        RETIRED at 5f16bae (same anchor as oldtm); "
+                  "mirror kept, not source-checked")
+    report.append("  smooth        RETIRED at 5f16bae (superseded by the pool); "
+                  "mirror kept, not source-checked")
+    report.append("  pool_ms       LANDED at 5f16bae into make_pst_entry.py's "
+                  "_pooltm (make_variants.py no longer has it); that file does "
+                  "not resolve on this checkout, so grid-assert only (below), "
+                  "no source check")
 
     # THE LIVE pool_budget, which is the pool mirror's real proof.  It lives
     # on branch tm-pool-manager, so on master there is nothing to check
