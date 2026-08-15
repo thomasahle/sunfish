@@ -602,10 +602,10 @@ def choose_opponent(state, mean_function, challenger, args, space, model=None):
     if not anchored:
         return None
     credit = state.get("duel_credit", 0.0) + args.duel_fraction
-    if credit < 1:
+    if credit < 1 - 1e-12:
         state["duel_credit"] = credit
         return None
-    state["duel_credit"] = credit - 1
+    state["duel_credit"] = max(0, credit - 1)
     if model is None:
         model = posterior(
             state, mean_function, args.pair_weight, space, getattr(args, "inducing", 0))
@@ -766,10 +766,8 @@ async def optimize(args):
         }
 
     def schedule_experiment(vector, diagnostics):
-        opponent = None
-        if diagnostics["mode"] != "design":
-            opponent = choose_opponent(
-                state, mean_function, vector, args, space, allocation_model)
+        opponent = choose_opponent(
+            state, mean_function, vector, args, space, allocation_model)
         number = state.get("next_experiment", 0)
         state["next_experiment"] = number + 1
         sequence = state["next_opening"]

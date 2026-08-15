@@ -16,6 +16,7 @@ from adaptive_gp import (
     aggregate,
     bind_study,
     checkpoint_state,
+    choose_opponent,
     commit_selection,
     coordinate_maximum,
     design_variance,
@@ -325,6 +326,23 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(pending_configurations(10, 1), 10)
         self.assertEqual(pending_configurations(10, 3), 4)
         self.assertEqual(pending_configurations(10, 10), 1)
+
+    def test_duels_keep_a_directly_anchored_opponent(self):
+        anchored = self.space.canonical({"X": 0, "Y": 10})
+        challenger = self.space.canonical({"X": 100, "Y": 10})
+        state = {
+            "batches": [{
+                "knobs": self.space.knobs(anchored), "opponent_knobs": None,
+                "wins": 1, "draws": 0, "losses": 1,
+            }],
+        }
+        args = SimpleNamespace(duel_fraction=0.3, pair_weight=0.5, inducing=0)
+        opponents = [
+            choose_opponent(state, self.space.prior_mean, challenger, args, self.space)
+            for _ in range(10)
+        ]
+        self.assertEqual(opponents.count(anchored), 3)
+        self.assertEqual(opponents.count(None), 7)
 
     def test_opening_epochs_are_balanced_and_reproducible(self):
         with tempfile.TemporaryDirectory() as directory:
