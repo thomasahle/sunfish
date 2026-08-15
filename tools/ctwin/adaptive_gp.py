@@ -12,13 +12,19 @@ GP-UCB for the rest.  This prevents a noisy early loss from permanently
 discarding a region while still concentrating games around promising policies.
 """
 
+import os
+
+# Small GP matrices are faster single-threaded, and tuning CPU belongs to games.
+for variable in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS",
+                 "VECLIB_MAXIMUM_THREADS"):
+    os.environ.setdefault(variable, "1")
+
 import argparse
 import asyncio
 import copy
 import hashlib
 import json
 import math
-import os
 import pathlib
 import random
 import re
