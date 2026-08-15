@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **PRE-REGISTERED: the pool's single real-clock confirmation — (1) 30+1 NON-INFERIORITY, elo0=−10 elo1=0, cap raised to 1750; (2) a 1+0 ZERO-ILLEGAL hammer, 100 games, zero required — plus THE LANDING SHAPE, fixed before either starts** | After two H1s the temptation to decide the landing shape from the result is at its highest, so it is written first. The cap goes 400 → 1750 on a recorded lesson: the smooth ladder's match 2 was an underpowered non-inferiority, the same defect class as the two just ledgered (~7 h at conc 8, affordable for THE deciding match). The 1+0 hammer is not a formality for THIS manager — it ended 48 of 262 games under 2 s at 60+1 and at 1+0 the whole game lives where P is empty and the floor governs. **If both pass:** `pooltm` becomes the entry default at its measured +57 B (mod retires in place with a tombstone; `oldtm`/`steptm` go with it), the classic driver ships the pool with `legacy` kept as the control arm, and **#188 closes SUPERSEDED — not wrong**: its negative-cap mechanism is what the A/2 wall exists to prevent. **If the hammer fails on one illegal move or `(none)`, landing is blocked outright regardless of the Elo** |
 | 2026-08-15 | **ARM (b) VERDICT: the POOL manager is +136.58 ± 35.24 at 60+1 — H1 accepted in 262 games, 142W-44L-76D (68.70%), PairsRatio 5.71, 0 forfeits, 0 illegal** | The risk arm was not the risk: the regime where the pool budgets 2.4× LESS per routine move beat the shipped curve by more than the 60+0 arm did. **The spend shape INVERTS between the two TCs and that is the finding**: 0.79× the median move at 60+0 but **1.09× at 60+1**, with a LOWER p90 (3.311 vs 3.655 s) and a 1.8× higher max (10.151 vs 5.509 s). The pool is a REDISTRIBUTION, not a spend-less manager — it moves time off the body of ordinary moves onto the few that need 10 s — and both directions won ~130 Elo. The pre-registered "2.4× less routinely" claim was the BUDGET ratio and is corrected here. Blind moves 0 on both arms (nobody floors at an increment TC); the increment-aware starvation band has pool 44.1% vs smooth 50.6%. Against it: pool ended **48 games under 2 s** to the incumbent's 0, which is why the deciding match carries a 1+0 zero-illegal hammer |
 | 2026-08-15 | **ML2 SECOND LAYER PRICED (coordinator task, the 0.01286 phase-net's machinery): +98 B code isolated (3315 vs the round-2 3217 floor), BIT-EXACT against packed_layers' int bridge, and the extra big-int multiply costs ~+11% time/node same-tree** | At the 1024-B payload budget ml2 builds to **4339-4343 = ~245 OVER**; what FITS with ml2 code is a **781 B payload (feats 990 = total 4096 exactly; ~750 at the 30-B margin)**; u2 payload seam = 4 offset-4050 digit pairs (+8 digits, ~6 B); derivation landed as packed/make_ml2_proto.py + ml2_check.py (self-deriving, self-checking); nps tax ≈ 0.90× ≈ −15 Elo timed at 100/doubling — the number the −0.0009 val win must beat |
 | 2026-08-15 | **CORRECTION + RANKING VERDICT: `min40_4` takes the classic-builtin venue (+147 [+86,+219] vs the incumbent at 60+0, AS A FLOOR) — and the "no park" claim in my own pre-registration is WRONG** | A park is **not** caused by a cap: at any increment TC the clock must rest where `spend + overhead == income`, so every manager parks, both candidates included. My reading was an artifact of charging O = 200 ms against a 100 ms increment; at the surrogate's 50 ms charge the rest point exists (`e2306d3`). Struck from tests and comments, surviving only at `winc == 0` where income is zero. The shape decides the **altitude**: one-max 6.17 s, incumbent 2.11 s (blind), **min40-4 0.22 s — the LOWEST of the three, below even the incumbent**, the thinnest flag margin in the field, and the reason its second arm is a flag hammer. It is still better than the incumbent because it reaches the floor on a POSITIVE budget where the incumbent's cap has gone negative. Ranking: `onemax` vs `min40_4` is −89 [−170,−16] at 60+0.1, ~0 at 30+1, +23 at 60+1 — min40-4 wins on Elo where they differ AND on the pre-fixed elegance tiebreak. **+147 is a FLOOR, not an estimate**: 594 of `legacy12`'s moves hit the structural-floor path where the surrogate substitutes a BETTER move than the real engine plays; the zero-substitution packed analogue read +228. **Against this lane:** the full `pool` beats min40-4 at every increment TC by +114 to +134 — min40-4 wins the ONE-LINE venue, not the field. Packed **3276 B (−2)**, source −7 B/−2 tokens. PR #196; one-max stays open as runner-up. Two arms STAGED in `tools/arena/`, GO-guarded, **neither launched** |
@@ -585,6 +586,96 @@ two branches off `origin/master`, `classic/tm-one-max-pool` and
 regime tables, the no-park recurrence, banked reserve in moves,
 monotonicity in both arguments, and the unit domain). **No PR is open** —
 per the owner ruling above, it opens carrying the surrogate's winner.
+
+## 2026-08-15 — PRE-REGISTRATION: the pool's single real-clock confirmation, and the LANDING SHAPE it decides
+
+Written before either match starts, and it pre-registers **what landing means**
+as well as what passing means — because after two H1s in a row the temptation to
+decide the landing shape from the result is at its highest, and that is exactly
+when the rule has to already exist.
+
+### Why these two and not the rest of the ladder
+
+Arms (a) and (b) are in (+119.94 ± 36.44 at 60+0; +136.58 ± 35.24 at 60+1).
+Under the real-clock economy ruling the remaining ladder moves to the twin's
+virtual clock, and **the pool gets one real-clock confirmation**. It is spent on
+the two things a surrogate cannot settle:
+
+1. **30+1, the decision TC.** `docs/TESTING.md`'s minimum decision-grade
+   control, and the one classic is judged at. Non-inferiority, because a manager
+   that wins at 60+0 and 60+1 still has to be safe where the clock is half.
+2. **1+0, the zero-illegal hammer.** For this manager it is **not** a formality.
+   The pool runs its clock down by design — it ended 48 of 262 games under 2 s
+   at 60+1 — and at 1+0 the whole game lives inside the regime where `P` is
+   empty and the floor governs. If the structural bestmove floor or the wall has
+   any hole in it, this is where it shows.
+
+### Match 1 — 30+1 NON-INFERIORITY
+
+| | |
+|---|---|
+| arms | `pool` (`cddf392e21449054`) vs `smooth` (`14b69a606b743a37`) — same two binaries as arms (a) and (b), unrebuilt |
+| TC / book | 30+1, `book3k.pgn`, order=random, srand 20260818, **no adjudication** |
+| SPRT | elo0=−10 elo1=0 alpha=0.05 beta=0.05, engine1 = pool (bounds in engine1's frame) |
+| cap | **1750 games** (875 rounds × 2, `-repeat`), concurrency 8, nice 10, `-recover` |
+
+**The cap is raised from the ladder's 400 on a recorded lesson, not a hunch.**
+The smooth ladder's match 2 was an underpowered non-inferiority: a 400-game cap
+against a ±10 band cannot separate "not worse" from "not measured", and that is
+the same defect class as the two ledgered above — a number that means something
+other than what it says. At ~1 minute per game pair and concurrency 8 this is
+about 7 hours, which is affordable for THE deciding match and is why it is the
+only real-clock spend left.
+
+### Match 2 — the 1+0 zero-illegal hammer
+
+| | |
+|---|---|
+| arms | same two binaries |
+| TC / book | 1+0, `book3k.pgn`, srand 20260819, no adjudication |
+| games | **100**, concurrency 8, nice 10 |
+| **pass condition** | **ZERO illegal moves and ZERO `(none)` answers from the pool arm. Required, not a target.** Time forfeits are read and reported but are not the gate — the flag is the manager's business, an illegal move is the driver's |
+
+### THE LANDING SHAPE, fixed now
+
+**If both pass**, the pool becomes the **recommended time manager for both
+engines**:
+
+* the packed **entry** takes `pooltm` as its default at its measured **+57 B**
+  (3308 → 3365, 731 spare), by moving the mod into `make_pst_entry.py`; the
+  `pooltm` mod then RETIRES IN PLACE with a tombstone naming which of its
+  anchors survive, and `oldtm`/`steptm` go with it because their anchor stops
+  existing;
+* the **classic driver** ships the pool as its default manager, and the knob
+  value `legacy` keeps the incumbent expression available as a control arm;
+* **#188 closes as SUPERSEDED, not as wrong.** Its mechanism is the legacy this
+  builds on — the negative cap is what the `A/2` wall exists to prevent, and its
+  60+0.1 result (+40.6) is what established that the transition band is real.
+  Superseded means its curve is deleted and its bytes come back, not that its
+  argument was mistaken;
+* the entry's TM section is rewritten around the pool, with the two verdicts and
+  this confirmation as its evidence.
+
+**If match 1 fails** (H0 accepted, i.e. the pool is worse than −10 at 30+1): the
+pool does NOT become the default at either engine. It stays a knob, the ledger
+records that the manager is TC-dependent, and the one permitted follow-up is the
+soft scale `s` retuned to equalize the 30+1 median spends, screened once at
+30+1. **If match 2 fails on a single illegal move or `(none)`**: landing is
+blocked outright regardless of match 1, the game is named, and the defect is
+fixed and re-hammered before anything else — no Elo result buys past a driver
+that can answer an illegal move.
+
+**If match 1 reads ≈ 0 within the band** (the likely outcome for a
+non-inferiority at this power): that is a PASS on the pre-registered rule and
+will be reported as "not worse at the decision TC", never as a third win.
+
+### Venue and queue discipline
+
+Both run in `~/sunfish-bench/tmpool-20260814/` on the same arena, same book,
+same binaries. They queue **behind the 8Mv screen's boxlock** and take the slot
+when it frees; nothing chains itself — the launch is a person's action, and the
+staged scripts stay named `HELD_`/queued until then. Cotenancy is recorded at
+launch and at finish, as for every arm in this ladder.
 
 ## 2026-08-15 — ARM (b) VERDICT: the POOL manager is +136.6 ± 35.2 at 60+1, H1 in 262 games — the risk arm was not the risk
 
