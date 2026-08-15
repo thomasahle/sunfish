@@ -145,7 +145,7 @@ python3 adaptive_gp.py \
   --baseline-options default \
   --space all_parameters.json --openings openings.fen \
   --gate "python3 sunfish_gate.py" --gate-workers 4 --cycle-openings \
-  --slots 20 --queue-batches 40 --refill-batches 20 \
+  --slots 20 --queue-batches 100 --refill-batches 20 \
   --pairs 1 --initial-design 256 --inducing 128 --update-batches 8 \
   --explore-start .5 --explore-floor .2 --duel-fraction .3 \
   --wall-time 3d --batches 1000000
@@ -158,8 +158,9 @@ online Laplace updates without rebuilding a quadratic comparison matrix. The
 optimizer keeps its small matrix operations single-threaded so its 128-site
 model does not compete with the 20 game lanes. Gate workers check proposals
 concurrently, but rejected policies consume neither games nor the reserved
-design/exploration allocation. Two reserved pairs per lane hide proposal and
-gate latency when unusually fast policies finish in bursts. Results append to
+design/exploration allocation. Five reserved pairs per lane, replenished while
+four remain, hide proposal and gate latency even when unusual policies finish
+quickly. Results append to
 a JSONL journal and compact into the JSON checkpoint every 1,000 pairs,
 avoiding quadratic checkpoint I/O while remaining restartable. At the
 wall-time limit, the scheduler finishes every reserved color pair before its
