@@ -439,6 +439,13 @@ def engine_config(command, name, arguments, options):
     return result
 
 
+def validate_opening_budget(path, start, batches, pairs):
+    openings = sum(1 for line in pathlib.Path(path).read_text().splitlines() if line.strip())
+    required = start + batches * pairs - 1
+    if required > openings:
+        raise ValueError(f"study needs opening {required}, but {path} has {openings}")
+
+
 async def run_pair(args, slot, experiment, vector, opponent, opening, space):
     if opponent is None:
         rival = engine_config(
@@ -486,6 +493,7 @@ async def run_pair(args, slot, experiment, vector, opponent, opening, space):
 async def optimize(args):
     pathlib.Path(args.logs).mkdir(parents=True, exist_ok=True)
     state = load_state(args.state, args.start)
+    validate_opening_budget(args.openings, state["next_opening"], args.batches, args.pairs)
     space = logistic_gp.MixedSpace.load(args.space) if args.space else logistic_gp.LegacySpace()
     bind_study(state, study_identity(args))
     if args.seed_state and not state["batches"]:

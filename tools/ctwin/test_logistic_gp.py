@@ -21,6 +21,7 @@ from adaptive_gp import (
     inducing_basis,
     UCI_OPTION,
     pending_configurations,
+    validate_opening_budget,
 )
 from logistic_gp import ELO_PER_LOGIT, LogisticGP, MixedSpace
 
@@ -215,6 +216,14 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(pending_configurations(10, 1), 10)
         self.assertEqual(pending_configurations(10, 3), 4)
         self.assertEqual(pending_configurations(10, 10), 1)
+
+    def test_opening_budget_rejects_silent_fallback(self):
+        with tempfile.NamedTemporaryFile("w") as openings:
+            openings.write("one\ntwo\nthree\n")
+            openings.flush()
+            validate_opening_budget(openings.name, 2, 2, 1)
+            with self.assertRaisesRegex(ValueError, "needs opening 4"):
+                validate_opening_budget(openings.name, 2, 3, 1)
 
     def test_pending_pairs_retain_noise_and_multiplicity(self):
         point = self.space.default
