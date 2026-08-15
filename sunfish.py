@@ -288,7 +288,7 @@ Entry = namedtuple("Entry", "lower upper")
 class Searcher:
     def __init__(self):
         self.tp_score, self.tp_move, self.history = {}, {}, set()
-        self.tp_deep, self.king = set(), None
+        self.king = None
         self.nodes, self.deadline = 0, 1 << 63
 
     def bound(self, pos, gamma, depth, root=False):
@@ -485,9 +485,7 @@ class Searcher:
         # not a configuration; see formal/README.md.
         if not root:
             self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)
-            if depth: self.tp_deep.add((pos, depth))
         if len(self.tp_score) > TABLE_SIZE:
-            self.tp_deep.discard(next(iter(self.tp_score)))
             del self.tp_score[next(iter(self.tp_score))]
 
         return best
@@ -506,8 +504,7 @@ class Searcher:
         if self.king != king:
             self.tp_score.clear()
         else:
-            for key in self.tp_deep: self.tp_score.pop(key, None)
-        self.tp_deep.clear()
+            self.tp_score = {key: entry for key, entry in self.tp_score.items() if key[1] == 0}
         self.king = king
         pst["K"] = king
 

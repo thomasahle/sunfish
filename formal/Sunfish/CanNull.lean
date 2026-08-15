@@ -171,7 +171,7 @@ theorem ctableOK_empty (G : NullGame) (hist : G.Pos → Bool) :
   fun _ _ _ _ h => Option.noConfusion h
 
 /-- Keep exactly the depth-zero entries of a score table. This models
-`Searcher.search` deleting every key recorded in `tp_deep`. -/
+`Searcher.search` projecting `tp_score` to keys whose depth is zero. -/
 def Table.keepQ {G : Game} (t : Table G) : Table G :=
   ⟨fun d p => if d = 0 then t.find d p else none⟩
 
