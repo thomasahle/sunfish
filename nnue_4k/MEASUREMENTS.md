@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **PRE-REGISTERED before game 1: the #205 PORT into the 4k entry — classic's tuned null shaping (two-regime null + fuel oracle, `NULL_MARGIN = -200`, `depth - 7` probe, `abs(pos.score) < 500` guard dropped) plus the intrinsic LMR GATE, at **+71 B measured** (3405 → 3476, 620 spare). Fixed-node SPRT, srand 20260824, cap 1000, gate ladder ALL GREEN** | `LMR = 75` is **deliberately DROPPED** and said so before the result: 60 already governs measured entry behaviour (+38.9 ± 19.1) and classic tuned 75 for a reduction classic did not previously have — port constants that arrive WITH a mechanism, never overwrite constants that already govern measured behaviour. #205's IID removal is **already done here and better** (`iirk.noiid`, IIR, +22.3 ± 16.0), so the arm cannot reproduce classic's +48.25 ± 27.03 — a share of that is classic acquiring an LMR the entry already has. Gates: mate-conversion **8/8 both arms** (the test that matters — KQK/KRK are exactly what the deleted guard used to shield), legality **130/130, 0 illegal** on laptop AND box at `go nodes 20000`, first-yield MAX **676/2048 identical**, empty-dir smoke both. **Mechanism confirmed and a cost registered in advance**: same 20000-node budget, the arm reaches a deeper final depth on **53/60** positions and shallower on **0** (mean **9.93 → 12.13 plies**), while the MTD bracket-crossing tripwire goes **1 → 13**. That tripwire also corrects upstream's own comment: the fuel probe's *window* is (pos, depth)-fixed but the *probe* reads `bound()`, which can answer from the table, so `d` is TABLE-STATE dependent — a real new break of one-value-per-key, clamped by the MTD guards. Claiming position-determinism would be a model/code divergence, so the mod's comment was rewritten instead |
 | 2026-08-16 | **POOL FIXED-N VERDICT: the pool TM's true magnitude at 30+1 is **+102.47 ± 32.43** over a full 300 games — and the SPRT decider was **22 Elo (17.7%) HIGH**, the early-stop bias measured at last** | 144W/58L/98D = **64.33%**, pentanomial **[5, 20, 41, 52, 32]** over 150 pairs with **0 unpaired**, PairsRatio 6.40, draw ratio 32.67%. **0 illegal, 0 forfeits, 300/300 `normal`** — the box's clean-timed-game record extends to **951/951**. Against the decider's SPRT-stopped +124.50 ± 38.79: **−22.03 Elo**, the direction a stopping rule guarantees (`pend`'s own bias was 42%). **Stated honestly, the two are NOT separated** — the intervals overlap heavily — so this does not prove the gap is bias rather than noise; what it establishes is which number to quote, since only the fixed-N interval means what it advertises (and it is *tighter*, ±32.43 vs ±38.79, on 12 more games). **The pool still wins decisively** and the landing stands; only its altitude comes down. Mechanism reproduced: **zero blind moves on either arm**, spend ratio 1.03×, and the one number against it unchanged — 98 pool games ended under 2 s of clock to smooth's 0 |
 | 2026-08-16 | **THE +400 PROGRESS METER LANDS: the 4k entry is +244.47 ± 39.23 over sunfish-classic at 60+1 — the campaign's first CLEAN, FIXED-N, real-clock magnitude. 300/300 games, ZERO forfeits, ZERO illegal. Progress toward +400 is 61%, and the interval's upper bound (+284) is still short of the target** | Gates read in the registered order and both passed **before the Elo was computed**: forfeits **0** (the void condition), illegal **0** (the stop condition), 300/300 `Termination "normal"`. Only then was the number taken. **80.33%** — 207 W / 25 L / 68 D, nElo **+337.26 ± 39.32**, ptnml **[1, 6, 22, 52, 69]** over **150 complete pairs**, PairsRatio **17.29**, DrawRatio 14.67%, LOS 100.00%. Independent round-paired recompute reproduces fastchess to the digit. Bench box, **concurrency 8 as declared**, srand 20260822, 2 h 05 m, box load 25.67 at launch — and the arms were **sha256-verified after transfer, not rebuilt** (`5a207fdf9cf05f2e…` 3405 B vs `7bdbd6054f70622a…` 3246 B), with a boot smoke on each before games. Labelled **pre-#205-classic** (classic pinned at master `2784dbf`). **It CONFIRMS AND TIGHTENS B's glimpse**: B was +325.17 ± 134.54, the meter's point estimate sits inside B's interval, the interval is **3.4× narrower**, and the two differ by only z = 1.13 — so B is settled lower, not overturned. **Both instruments now stand together and say something precise**: fixed-node **−1.74 ± 27.93** (per-node parity with classic) and clean-clock **+244.47 ± 39.23** — the entry's entire advantage is **speed and time management**, now measured rather than inferred. Run 1's void (9 forfeits, all venue) cost nothing but time: the relocated re-run is the number |
 | 2026-08-15 | **PRE-REGISTERED: the pool TM's FIXED-N confirmation — N=300 at 30+1, no stopping rule, to earn the magnitude the three SPRT-stopped regime numbers cannot** | The oldest open follow-up on the landing lane's list. All three pool regime figures (+119.94 ± 36.44 at 60+0, +136.58 ± 35.24 at 60+1, **+124.50 ± 38.79** at 30+1) are **SPRT-stopped and therefore biased away from zero** — `pend` measured that bias at 42% on its own screen. This match has **no stopping rule**: 300 games, played out. Arms are the pinned m5 pair, shas **re-verified before registration** (`cddf392e2144…` pool, `14b69a606b74…` smooth, both built at `522931a`). 30+1, `book3k.pgn` order=random, **srand 20260820** (fresh), **adjudication NONE**, concurrency 8, nice 10. Zero illegal ends and voids the run; forfeits recorded either way — box history is 651/651 clean, so **any** forfeit here is a genuine holdback-revisit signal (unlike the laptop meter's 9). **#205 does not touch this**: both arms predate it and the measured quantity is the pool-vs-smooth TM difference, not anything-vs-classic |
@@ -283,6 +284,150 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-16 — PRE-REGISTRATION: does classic's #205 search transfer to the entry? Fixed-node screen, registered before game 1
+
+Classic merged **#205** today ("Land tuned null shaping and intrinsic LMR",
+master `bf44c52`, plus the `#206` follow-up `936d232` restoring the shallow
+mate floor). Thomas's 9,310-game tuning campaign measured the search change at
+**+48.25 ± 27.03**. Classic has it; the entry does not. The +400 meter just
+put the entry at **+244.47 ± 39.23** at 60+1 over *pre*-#205 classic with
+**per-node parity** (−1.74 ± 27.93 at fixed nodes), so the entry's whole edge
+is nps and TM and the remaining ~155 Elo has to come from search. This is the
+first attempt to take some of it off classic's shelf.
+
+### #205 mapped part-by-part onto the entry, and what the arm actually contains
+
+The entry's search forked from classic long ago, so **#205 is not a patch that
+applies**. Each part is mapped to the entry's own site; the parts that do not
+map are named here rather than quietly bundled.
+
+| #205 part | entry status | in the arm? |
+|---|---|---|
+| two-regime null (score candidate < 6, **fuel oracle** ≥ 6) | entry has only the score candidate, at every `depth > 2` | **CARRIED** — the oracle is new here |
+| `NULL_MARGIN = -200`, probe at `depth - 7` | no entry-side incumbent | **CARRIED** unchanged |
+| drop `abs(pos.score) < 500` from the null guard | entry carries the same test | **CARRIED** |
+| intrinsic LMR **gate** (reduce on `guard`, no count condition) | entry reduces only past the third move | **CARRIED** as the *union* of both gates |
+| `LMR = 75` | entry's `LMR = 60` already governs measured behaviour (**+38.9 ± 19.1** fixed-node, 2026-08-13) | **DROPPED** — see below |
+| IID removal | **already done, and better**: `iirk.noiid` landed internal iterative *reduction* (+22.3 ± 16.0, 2026-08-13) | nothing to port |
+| unverified reduction | entry re-searches a reduced child that fails high | **DROPPED** — kept the entry's verification |
+| `score_move`, depth 2-3 static cap, depth-1 tail, `proof` certificate | #193's lineage, not #205's | out of scope |
+
+**Why `LMR = 75` is dropped, stated before the result so it cannot become an
+excuse afterwards.** Classic tuned 75 for a reduction classic *did not
+previously have* — #205 is classic acquiring an LMR. The entry has had one
+since 2026-08-12. Moving 60 → 75 would retune a measured entry mechanism under
+cover of a port, and it would confound the null shaping with a threshold
+change. **The rule applied: port constants that arrive WITH a new mechanism;
+do not overwrite constants that already govern measured entry behaviour.** If
+this arm wins, 60-vs-75 is the cheap decomposition follow-up.
+
+**This also means the arm is not expected to reproduce +48.25.** A meaningful
+share of classic's number is classic getting an LMR at all, which the entry
+already banked. The transfer question is about the *null shaping*.
+
+### The arm
+
+Built by `tools/build/make_variants.py` as mod **`n205`** — screen-time
+generation from the single committed source, not an accumulated file — so the
+base arm *is* the shipped entry and cannot drift from it.
+
+| | |
+|---|---|
+| base | `e_base.py` (no mods) `61d20d7654292b5ed1ee7797db017d035194eaf1c5f0b2dfb6502c728962594a` |
+| arm | `e_n205.py` (mod `n205`) `35a8cedaff5685d180f480e0a5b0448252f593e9c4c7514675779f8c8d67ef40` |
+| source | `nnue_4k/pst_entry.py` `e27f9dff3d92561a7dbaca1834966917218d4e3ed3c64e945b599ffc83cff3ae` @ `279fcb3` |
+| packer | `tools/build/pack.sh` `2c95b7a8075722c3dbe361acdab55ecfd5f4b45fe60a422b928f8dd5d947e2be` |
+| **byte price** | **3405 → 3476 B, +71 B measured** by the real packer on the real file (`5a207fdf9cf0…` → `f56119a7cf52…`). **620 spare** of 4096. Measured, never composed |
+
+### Gate ladder — ALL GREEN before game 1
+
+| gate | base | arm |
+|---|---|---|
+| `check_entry.sh` | OK, 3405 B, 691 spare (base untouched — the port is a screen-time variant) | n/a |
+| mate conversion KQK+KRK | **8/8** | **8/8** (kqk-mid takes 10 attacker moves vs 9; every other position identical) |
+| legality, laptop, both budget paths | 130/130, **0 illegal, 0 no-move** | 130/130, **0 illegal, 0 no-move** |
+| legality, **bench box**, `go nodes 20000` | 130/130, 0 illegal | 130/130, 0 illegal |
+| first-yield, 505 positions | median 5, p90 28, MAX **676**/2048, 0 never-yields | **identical** |
+| empty-dir standalone smoke | `uciok` / `readyok` / `bestmove g1f3` | `uciok` / `readyok` / `bestmove g1f3` |
+
+The mate-conversion gate is the one that mattered: KQK/KRK are exactly the
+high-|score| positions the deleted `abs(pos.score) < 500` guard used to keep
+the null out of. It holds.
+
+### Mechanism check, and a tripwire registered BEFORE the games
+
+Over the 60 first-yield positions at the screen's own 20000-node budget, both
+arms honour the cap identically (max 20480 nodes = the 2048-node poll
+granularity, 0 over-cap on either side):
+
+- **The port prunes as intended.** Same budget, the arm reaches a deeper final
+  depth on **53** positions, shallower on **0**, equal on **7** — mean
+  **9.93 → 12.13 plies for the same 20000 nodes**.
+- **And it costs search stability.** The MTD driver's bracket-crossing
+  tripwire fires **1 time on the base and 13 times on the arm**.
+
+**The second number corrects a claim I had written into the mod and is
+recorded here rather than discovered later.** Upstream's comment says the fuel
+probe's window depends on `(pos, depth)` alone and is therefore
+position-determined. The *window* is; the *probe* is not — it goes through
+`bound()`, which may satisfy itself from a table entry, so the ply `d` gives up
+is a function of TABLE STATE. That is a **genuine new break of
+one-value-per-key**, on top of the existing `cnt` term, and the 1 → 13 count is
+it showing. The MTD guards in `search()` exist for exactly this and clamp it;
+the gate ladder is green either way. The comment in `make_variants.py` was
+rewritten to claim only what is true — a model/code divergence is a blocker,
+not a footnote.
+
+Nominal `depth` still keys and stores the table and still drives the QS
+admission, so no shallow value is ever filed under a deep key. The entry's
+mate-band verification probe is kept verbatim: it is the entry's device, not
+classic's `proof` certificate, and the zero-illegal bestmove floor rests on it.
+
+### The screen
+
+**Fixed nodes is the right instrument, not a convenience.** This is a search
+change, so it is clock-independent, and both arms are ours — the standing ban
+on fixed-node applies to comparisons against *classic*, which has no mid-search
+node cap and sails a measured 1.70× past the budget. **Python arms are
+mandatory**: the node cap lives inside `# minifier-hide`, so the packed
+artifact has no `go nodes` enforcement at all.
+
+| | |
+|---|---|
+| question | does #205's null shaping transfer to the entry's eval/TM context? |
+| test | **SPRT elo0=0 elo1=10, alpha=beta=0.05** |
+| budget | `nodes=20000`, **cap 1000 games** (500 rounds × 2, `-repeat`) |
+| book / seed | `openings_2k.epd` order=random, **srand 20260824** (fresh — 20260814…20260820, 20260822 and 20260830 are spent) |
+| run | bench box, concurrency **8**, `nice -n 10`, `-recover`, `restart=on` |
+| adjudication | flags present for parity with `ab_fixednode.sh` but **structurally inert**: neither arm emits `info` lines (the entry's info print is golfed out), so score-based resign/draw cannot fire for either side. **Symmetric by construction** |
+| **stop condition** | **zero illegal moves** — one ends the run and voids it |
+| tripwires recorded either way | time forfeits, `(none)` answers, MTD bracket crossings |
+| at cap | **report as UNDECIDED, never as a point estimate** |
+| expectation | H1 or H0 well inside 1000 games at this separation |
+
+**Cotenancy census at launch** (per `box-cotenancy-ban`'s capacity-sharing
+amendment): the box is **96 cores at load 16.1**, running Thomas's **#190
+block-2 audit** (`match3`, 30+1, concurrency 10) and **two `adaptive_gp`
+studies** (20 slots each). ~60 slots of 96 before this screen's 8. Their
+processes and directories are not touched; the census is recorded again at
+finish. A fixed-node screen is the one instrument that does not care about the
+neighbours, which is why it is the one being run here.
+
+### What each outcome licenses
+
+- **H1** → register (do not run) the timed confirmation and the landing shape.
+  The confirmation is the coordinator's GO, and the magnitude stays unclaimed
+  until it runs: an SPRT terminal Elo is biased away from zero.
+- **H0 / undecided** → the honest reading is that **classic-tuned search
+  constants do not transfer to the entry**, and the ledger says so. Thomas
+  tuned `NULL_MARGIN = -200` and `depth - 7` on classic's eval, classic's move
+  ordering and classic's time manager; the entry has a different eval seam
+  (K_MID/K_END + P_MID/P_END), IIR instead of IID, a verified LMR classic lacks
+  and the pool TM. A negative here is a real result about transfer, not a
+  failed experiment.
 
 ---
 

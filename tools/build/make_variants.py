@@ -309,6 +309,140 @@ MODS = {
     # Late move reductions off. Threshold-triggered (val < LMR), so setting the
     # threshold to 0 disables it without touching the loop.
     "nolmr": ("\nLMR = 60\n", "\nLMR = 0\n"),
+    # THE #205 PORT: classic's tuned null shaping, and its intrinsic LMR gate.
+    #
+    # Classic merged #205 ("Land tuned null shaping and intrinsic LMR", master
+    # bf44c52) out of a 9,310-game tuning campaign and measured the search
+    # change at +48.25 +/- 27.03. The entry's search forked from classic long
+    # ago, so #205 is not a patch that applies -- each part is mapped to the
+    # entry's own site here, and the parts that do NOT map are named rather
+    # than quietly bundled.
+    #
+    # CARRIED:
+    #  * The TWO-REGIME null. Classic splits the pass into a score candidate
+    #    below depth 6 and a FUEL ORACLE from 6 on. The entry has only ever had
+    #    the score candidate, at every depth > 2; the oracle is new here.
+    #  * NULL_MARGIN = -200 with the depth - 7 probe, #205's tuned pair, ported
+    #    unchanged. They arrive WITH the mechanism they tune, so there is no
+    #    entry-side incumbent for them to overwrite.
+    #  * The static guard drop. Classic deleted `abs(pos.score) < 500` from
+    #    both regimes; the entry carries the same test and it goes here too.
+    #  * The intrinsic LMR GATE. Classic reduces a low-value child whenever the
+    #    null guard holds, with no count condition; the entry only reduced past
+    #    the third move. The gate becomes the UNION, so every move the entry
+    #    already reduced is still reduced and the guard adds the early ones.
+    #
+    # DROPPED, each for a stated reason:
+    #  * LMR = 75. Not ported. 60 already governs measured entry behaviour
+    #    (+38.9 +/- 19.1 fixed-node, ledger 2026-08-13) and classic tuned 75
+    #    for a reduction classic did not previously have. Moving it would
+    #    retune a measured mechanism under cover of a port; it is the cheap
+    #    decomposition follow-up if this arm wins.
+    #  * The IID removal. ALREADY DONE here, and better: `iirk.noiid` landed
+    #    internal iterative REDUCTION in its place (+22.3 +/- 16.0, 2026-08-13),
+    #    which answers the same question without spending a shallow search.
+    #  * The unverified reduction. Classic's intrinsic LMR never re-searches;
+    #    the entry re-searches a reduced child that fails high. That
+    #    verification is an entry invariant, so the ported gate FEEDS the
+    #    entry's verified reduction rather than replacing it.
+    #  * score_move, the depth 2-3 static cap, the depth-1 tail widening, and
+    #    classic's `proof` certificate. Those are #193's and the entry's own
+    #    lineage respectively -- out of this port's scope.
+    #
+    # INVARIANTS. `d` shortens the RECURSION only: the node still keys and
+    # stores under nominal `depth`, and the QS admission still reads nominal
+    # `depth`, so no shallow value is ever filed under a deep key. The
+    # mate-band verification probe on the score candidate is kept verbatim --
+    # it is the entry's device, not classic's, and the zero-illegal bestmove
+    # floor rests on it. Gate ladder green on both arms (mate-conversion 8/8,
+    # legality 130/130 at both budget paths on laptop AND box, first-yield
+    # MAX 676/2048 identical, empty-dir smoke).
+    #
+    # WHAT IS *NOT* HELD, measured rather than reasoned. The target window
+    # `pos.score + NULL_MARGIN` is fixed by (pos, depth), but the probe that
+    # reads it goes through `bound()`, which may satisfy itself from a table
+    # entry -- so the ply `d` gives up is a function of TABLE STATE, not of
+    # (pos, depth) alone. That is a genuine new break of one-value-per-key, on
+    # top of the `cnt` term, and it shows: over the 60 first-yield positions at
+    # the screen's own 20000-node budget the MTD driver's bracket-crossing
+    # tripwire fires **1 time on the base and 13 times on this arm**. The
+    # guards in search() exist for exactly this and clamp it, and the number is
+    # pre-registered in the ledger so it cannot be re-read after the result.
+    # Claiming position-determinism here (as the upstream comment does) would
+    # be a model/code divergence, so it is not claimed.
+    #
+    # MECHANISM CHECK, same 60 positions and budget: the arm reaches a deeper
+    # final depth on 53, shallower on 0, equal on 7 -- mean 9.93 -> 12.13 plies
+    # for the same 20000 nodes. The port prunes as intended; whether the extra
+    # depth is worth the extra instability is what the screen is for.
+    "n205": [
+        # 1. The tuned margin arrives with the oracle it belongs to.
+        ("# Late move reduction: reduce quiet moves whose static value is below this,\n"
+         "# once past the first few in the sorted list. 0 disables (classic parity).\n"
+         "LMR = 60\n",
+         "# Late move reduction: reduce quiet moves whose static value is below this,\n"
+         "# once past the first few in the sorted list. 0 disables (classic parity).\n"
+         "LMR = 60\n"
+         "# Target margin of the deep-null fuel probe (depth >= 6): the pass must beat\n"
+         "# pos.score + NULL_MARGIN for real moves to burn two plies instead of one.\n"
+         "NULL_MARGIN = -200\n"),
+        # 2. Free (minifier-hide strips it): the tuner sees the new knob.
+        ("    EVAL_ROUGHNESS = (0, 50),\n",
+         "    EVAL_ROUGHNESS = (0, 50),\n"
+         "    NULL_MARGIN = (-300, 300),\n"),
+        # 3. The score candidate keeps its body and loses its static guard and
+        #    its deep half.
+        ('            if not root and depth > 2 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):\n',
+         '            if not root and 2 < depth < 6 and any(c in pos.board for c in "RBNQ"):\n'),
+        # 4. The oracle is appended after it, before the QSearch stand-pat.
+        ("                elif score < gamma or self.bound(pos.rotate(n=True),\n"
+         "                        1 - MATE_LOWER, depth - 3) >= 1 - MATE_LOWER:\n"
+         "                    yield None, score\n",
+         "                elif score < gamma or self.bound(pos.rotate(n=True),\n"
+         "                        1 - MATE_LOWER, depth - 3) >= 1 - MATE_LOWER:\n"
+         "                    yield None, score\n"
+         "\n"
+         "            # THE FUEL ORACLE. From depth 6 on the pass stops being a score\n"
+         "            # candidate and becomes a question about DEPTH: one probe at the\n"
+         "            # fixed target pos.score + NULL_MARGIN -- a window determined by\n"
+         "            # (pos, depth) alone, so a fail-soft report is side-exact at it --\n"
+         "            # decides whether real moves burn one ply or two. Nominal depth\n"
+         "            # still keys the table and the QS admission; only the recursion\n"
+         "            # shortens, so a deep null cut becomes a reduction and never a\n"
+         "            # virtual score. Its guard doubles as the intrinsic LMR gate\n"
+         "            # below, which is why the two landed as one change upstream.\n"
+         "            d = depth\n"
+         '            guard = depth >= 6 and any(c in pos.board for c in "RBNQ")\n'
+         "            if guard:\n"
+         "                target = pos.score + NULL_MARGIN\n"
+         "                d -= -self.bound(pos.rotate(n=True), 1 - target, depth - 7) >= target\n"),
+        # 5. One child rule for both streams. Factoring it is what lets the
+        #    killer and its re-appearance in the sorted list agree on depth at a
+        #    guard node, so the second one is a table hit rather than a second
+        #    real search -- the cost-equality #194's lineage was built around.
+        ("            if killer and pos.value(killer) >= val_lower:\n"
+         "                yield killer, -self.bound(pos.move(killer), 1 - gamma, depth - 1)\n",
+         "            # One child search for both streams, at one depth rule, so the\n"
+         "            # killer and its later re-appearance cost the same and the second\n"
+         "            # is a table hit. `late` is the entry's own count condition;\n"
+         "            # `guard` is #205's intrinsic one. The killer is never late.\n"
+         "            def child(move, val, late=False):\n"
+         "                red = LMR and val < LMR and (guard or late)\n"
+         "                score = -self.bound(pos.move(move), 1 - gamma, d - 2 if red else d - 1)\n"
+         "                if red and score >= gamma:\n"
+         "                    score = -self.bound(pos.move(move), 1 - gamma, d - 1)\n"
+         "                return move, score\n"
+         "\n"
+         "            if killer and pos.value(killer) >= val_lower:\n"
+         "                yield child(killer, pos.value(killer))\n"),
+        # 6. The loop hands its count condition to the same rule.
+        ("                red = LMR and depth > 2 and cnt > 2 and val < LMR\n"
+         "                score = -self.bound(pos.move(move), 1 - gamma, depth - 2 if red else depth - 1)\n"
+         "                if red and score >= gamma:\n"
+         "                    score = -self.bound(pos.move(move), 1 - gamma, depth - 1)\n"
+         "                yield move, score\n",
+         "                yield child(move, val, depth > 2 and cnt > 2)\n"),
+    ],
     # ===================================================================
     # TOMBSTONE: `pooltm` LANDED 2026-08-15, and `oldtm`/`steptm` went with
     # it. The pool manager is now the entry's DEFAULT time manager, applied
