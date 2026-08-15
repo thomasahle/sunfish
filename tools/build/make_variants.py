@@ -229,6 +229,14 @@ MODS = {
     # untouched text rather than text this mod re-asserts -- if `pend`'s pawn
     # line ever moves, this mod raises instead of silently reinstating an old
     # copy of it.
+    #
+    # SCREENED 2026-08-15 AND LOST: -10.78 +/- 6.96, 95% [-17.75, -3.81], H0
+    # accepted at 774 of a 1000-game cap. The registered bar was a pentanomial
+    # LOWER bound above zero; the measured UPPER bound is below zero, so this
+    # is not the expected straddle -- khold2's marginal contribution on top of
+    # the landed pend is measurably NEGATIVE. Kept as a built, priced, measured
+    # arm (it is the control for any future attempt at this seam), NOT as a
+    # candidate. See nnue_4k/MEASUREMENTS.md for the mechanism reading.
     "pendkhold2": (
         '        end = "Q" not in pos.board or "q" not in pos.board\n'
         '        pst["K"] = K_END if end else K_MID\n',

@@ -47,6 +47,7 @@ how much effort it cost.
 | Date | Experiment | Verdict |
 |---|---|---|
 | 2026-08-15 | **SCREEN VERDICT: ml2 H0 ACCEPTED — the first NON-LINEAR replacement net is −234.18 ± 55.08 at fixed nodes, roughly twice as far behind the distilled PSTs as the linear one was — and the `u2` retrain shows the val win was bought with resolution the engine does not have** | 195 games of a 1000 cap, SPRT stopped early, score **20.62%**, pentanomial **[51, 19, 23, 1, 3]** over 97 pairs, PairsRatio 0.06, **0 illegal / 0 forfeits / 195 normal terminations**. Arm 3884 B vs entry 3405 B @ `5f16bae`: **+479 B for −234 Elo**. The played artifact sits 2.89 cp from the float model that scored 0.01280, so the coarser shift-2 head does not explain it. Adjudication was **symmetrically inert** — neither arm emits `info` lines, 0 adjudications, median game 93 plies. Retrain `60_ml2_u2grid` (u2 on the certified grid inside forward) lands at **val 0.01362 with a live read-out [1,0,1,0]**, every `u2` component parked at **12.50001 — the rounding knife-edge** (grid step 25.0): forced to train against real resolution the recipe gives back 0.00082 of the 0.00098 the whole ml2 family had won. Co-run with `pendkhold2`; lock handed back, not freed. Subsumption ablation still NOT run |
+| 2026-08-15 | **`pendkhold2` SCREEN: H0 accepted at 774 games — **−10.78 ± 6.96, 95% [−17.75, −3.81]**. The bar is not met and the result is not the expected straddle: khold2 on top of `pend` is measurably NEGATIVE** | Registered bar was a 95% **pentanomial LB > 0**; measured LB **−17.75**, and the **UPPER** bound is **−3.81**, so zero is excluded on the wrong side. Ptnml [9, 17, 350, 11, 0] over 387 pairs (350 pairs drawn-drawn — a seam mod that rarely changes play, and loses when it does). Zero illegal, zero forfeits, zero `(none)`. **Mechanism reading (hypothesis, not measured):** in the *exactly-one-queen-off* regime the base switches the pawn AND king tables on ONE test, so they stay coherent; khold2's whole purpose is to give the king a DIFFERENT test, which leaves the combined arm pushing pawns on an endgame table while holding the king home on a middlegame one — the promotion race without the king. The accidental coherence was load-bearing. **Instrument lesson, and it was OURS:** the first independent recompute disagreed with fastchess (±13.39 vs ±6.97) because it paired games by **PGN file order**, which is completion order at concurrency 4, not round order — that error alone would have reported this decisive loss as a straddle. Round-grouped pairing reproduces fastchess's pentanomial exactly. `khold2` stays closed; the H1/H2 programme's closure is unchanged |
 | 2026-08-15 | **ML2 EXPORT VERDICT: the artifact FITS (3884 B measured, 212 spare) and is BIT-EXACT — but the trained layer-2 read-out QUANTIZES TO ZERO on the certified grid, so the default export ships a SILENT second layer** | `U2_k = u2_k·2^10/(100·2^(2·shift))` = [0.171, 0.084, 0.136, 0.108] → **[0,0,0,0]** at the export's own shift 4, while the float L2 term carries **mean 60.50 cp vs L1's 24.08 cp** — the eval's larger half, deleted. Root cause is the recorded **quant-error-compounding** wall, hit where `packed_layers.py` says not to: `u2` trains as a free float with no in-forward grid STE (the ternary weights have one). The L1 shift is the only knob (U2 ×4 per unit dropped, gains ÷2); measured end-to-end vs the float model: shift 4 **60.95 cp**, shift 3 13.91, **shift 2 2.89**, shift 1 4.81, shift 0 7.44. A shift-2 build gates CLEAN end to end (bit-exact, 200/200 legal, 8/8 mate-in-1, 8/8 KQK/KRK conversion, first-yield max 108 nodes, standalone smoke) at **3884 B**. Coordinator ruling: the shift is **val-side model selection** (it minimises |Δcp| against the float model on training-side data, the same class of choice as picking l1=.0005 by family val — no play outcome informed it), so the registered bar stands and the screen is **LAUNCHED**; the `u2`-on-the-grid retrain is queued in parallel. Queue harvest of the same date is in TRAINQUEUE.md |
 | 2026-08-15 | **`pendkhold2` HAND-WRITTEN, PRICED **+37 B** (3340 → 3377) and its composition PROVED — the orphaned screen's arm, built entirely at the 902d9a2 pin** | The pair cannot dot-compose (both parents rewrite the queens-off seam line, and all four orders raise), so the ledger's standing rule applies: a combined mod is WRITTEN and screened as its own arm. **Attribution proved mechanically, not asserted** — four generated sources (BASE0 @5457f27, +pend, +khold2, and the shipped base @902d9a2), and every one of the arm's 6 added lines maps to exactly one parent (3 pend, 2 khold2, plus pend's table pair), the 1 removed line is the shared seam line both parents delete, both parents' decisions survive, and the shared line resolves to khold2's **because `pend` never changed the king's condition — it only re-expressed it so the pawn table could share the test**. `khold2` cost +27 B on the pre-pend base and **+37 B here** — measured-never-composed, fourth instance. Gates on BOTH arms: legality 200/200 at both budget paths, first-yield 582/2048, standalone empty-dir smoke, and **mate-conversion 8/8 on 5/5 runs each — khold2's KQK survives composition with pend**. Everything pinned at 902d9a2 including the packer (`2c95b7a80757…`); the pinned base reproduces the landed 3340 B artifact sha-for-sha |
 | 2026-08-15 | **`pooltm` LANDS as the entry's DEFAULT time manager — measured **+65 packed bytes** (3340 → 3405, 691 spare), NOT the +57 the pre-registration quoted** | Both pass-conditions of the registered landing shape (`fb0f7b9`) are met, so the shape executes verbatim. The mod moves into `tools/build/make_pst_entry.py` as `_pooltm` and retires from `make_variants.py` with a tombstone; `oldtm`/`steptm` retire with it because their shared anchor — the smooth budget line — stops existing. **+57 was measured against the pre-pend 3308 base; on the post-pend 3340 base the same edits cost +65** — measured-never-composed, third instance. **Equivalence proved twice, not asserted:** the landed entry packs to a **sha256-IDENTICAL artifact** to the old-way `pooltm` mod arm built from the same HEAD (`5a207fdf9cf05f2e…`), and against the arm that actually PLAYED the deciding match every executable difference is exactly `pend` — everything else is comments (packer-stripped) and the generator provenance header. Gate ladder: `check_entry` green, mate-conversion **8/8 on 5/5 runs**, legality 200/200 source + 200/200 packed at both budget paths (0 no-move, 0 illegal), first-yield worst 582 vs 2048, standalone empty-dir smoke plays `g1f3` and leaves nothing behind, 20-position fixed-node probe 20/20 identical. **The −210 cliff is landed AS DISCLOSED, not fixed:** P>0-scoping and flooring `soft` against `A` are design changes needing their own screen, and the artifact that ships is the artifact that was measured. Cliff mechanism reproduced on the landed artifact: 1 s clock → answer in 0.04 s, 60 s clock → 2.16 s |
@@ -501,6 +502,111 @@ subsume the hand-built terms it is meant to replace rather than merely to
 coexist with them. Registered here, NOT run.
 
 ---
+## 2026-08-15 — `pendkhold2` SCREEN VERDICT: H0 at 774 games, −10.78 ± 6.96 — the combination is worse than either half, and the accidental coherence was load-bearing
+
+The orphaned screen ran to its registration. It does **not** land, and it does
+not land in a more interesting way than "undecided".
+
+| | |
+|---|---|
+| arms | `comb` = base + `pendkhold2`, 3377 B (`2b7eb0c82dd4137a`) vs `base` = the 902d9a2 entry, 3340 B (`94c90da36cb76d0f`) |
+| form | fixed node 20000, SPRT elo0=0 elo1=10 α=β=0.05, cap 1000, srand 20260819, `book3k.pgn` |
+| result | **277W 301L 196D of 774**, 48.45% |
+| Elo | **−10.78 ± 6.96**, 95% **[−17.75, −3.81]**, nElo −37.91 ± 24.48 |
+| pentanomial | **[9, 17, 350, 11, 0]** over 387 pairs, WL/DD 3.17 |
+| SPRT | **H0 ACCEPTED** at 774 of the 1000 cap — an early stop, not a cap |
+| tripwires | **0 illegal, 0 time forfeits, 0 `(none)`** |
+
+**The registered bar was a 95% pentanomial LOWER bound above zero. It measures
+−17.75, so the arm does not land.** The bar was set by the lane that registered
+this screen and is quoted here unchanged.
+
+### This is not the straddle that was expected, and the difference matters
+
+The pre-registration expected a straddle — `khold2` alone closed **undecided at
+cap, +2.43 ± 7.24**, so its marginal contribution was expected to sit on zero.
+Instead the **upper** bound is **−3.81**: zero is excluded on the wrong side.
+khold2 on top of the landed `pend` is measurably harmful, which is a stronger
+statement than "did not help" and closes the seam rather than leaving it open.
+
+350 of 387 pairs are drawn-drawn. This is a seam mod that rarely changes play at
+all — and loses on the occasions when it does.
+
+### Mechanism reading — a HYPOTHESIS, consistent with the numbers, not measured
+
+The two parents were **coherent by accident, and the accident was load-bearing.**
+In the base, one test (`end` = at least one queen off) switches the pawn table
+AND the king table together. `khold2`'s entire purpose is to give the king a
+*different* test. So in the **exactly-one-queen-off** regime the combined arm
+does this:
+
+| | pawn table | king table |
+|---|---|---|
+| base (`pend`) | `P_END` — push the passers | `K_END` — king marches out |
+| **comb** | `P_END` — push the passers | **`K_MID` — king stays home** |
+
+That is a promotion race run without the king, in a regime that occurs in a
+large share of games. `pend` did not merely coexist with the old king rule; it
+was *tuned against a king that shared its test*. Splitting the tests is exactly
+what khold2 does, and it costs about 11 Elo.
+
+This is offered as the reading that fits, not as a measured cause — isolating it
+would need a third arm (khold2's king rule with pend's pawn rule keyed to the
+same test), and no such arm is registered or launched.
+
+### The instrument lesson, and it was ours
+
+The first independent recompute of the pentanomial **disagreed with fastchess**
+— ±13.39 against ±6.97 on identical data — and the disagreement was the probe's
+fault, not fastchess's. It paired games by **PGN file order**, which at
+concurrency 4 is *completion* order, not round order, so it was pairing games
+from different openings and destroying the correlation that pairing exists to
+capture. Grouping on the `[Round]` tag reproduces fastchess's `[9, 17, 350, 11,
+0]` exactly.
+
+Left uncaught, that error would have reported **[−24.19, +2.60]** — a straddle —
+where the truth is a decisive loss. It was caught only because the two numbers
+were compared instead of one being trusted. Same defect class as the `grep -c`
+gate, the arm label and the ramp: the instrument, not the engine.
+
+### INCIDENT: the laptop screen-slot lock was raced, and both results still stand
+
+Recorded because a future reader comparing timestamps would otherwise discover
+it by surprise. **This screen ran CONCURRENTLY with the `phase-ml2-export`
+lane's screen**, 03:55–04:53 UTC, overlapping from launch.
+
+Sequence, as reconstructed from the lock file's own hand-off notes:
+
+1. this lane created the lock and then spent ~8 minutes building and gating arms;
+2. the ml2 lane arrived **03:47:19Z**, found the lock held but **zero** match
+   processes running, and re-claimed it under a coordinator priority ruling,
+   recording its hand-over in the file;
+3. this lane launched at **03:55:08Z without re-reading the lock**.
+
+The defect is this lane's and it is a **check-then-act race with an eight-minute
+window** — the lock was read once, long before it was relied upon.
+
+**Coordinator ruling: both screens continue, neither result is void, because
+fixed-node play is node-deterministic and contention moves wall-clock only.**
+That ruling is correct, and it was verified rather than assumed — the verification
+matters because it is *conditional*:
+
+> Under `go nodes`, these arms default `wtime = 60000`, giving a **1.2 s soft
+> break** and a **1.5 s hard deadline**. Fixed-node determinism therefore holds
+> only while every move's 20,000 nodes fit inside 1.2 s of WALL CLOCK. Measured
+> during the co-run: median **0.309 s**, worst **0.682 s** — **1.76× headroom**.
+> The node cap governed throughout.
+
+So the margin is finite, not infinite. **A fixed-node screen on this harness is
+clock-independent only while a move fits in 1.2 s**, and every prior fixed-node
+screen in this ledger inherits that same condition. A heavier co-tenant would
+cross it silently, because nothing in the harness reports which limit bound.
+
+The ml2 screen finished first (**04:32:49Z**, 195 games, H0), rewrote the lock to
+name this lane as holder rather than freeing it, and this lane released it after
+its own match ended at **04:53:03Z** with both matches confirmed stopped. Both
+verdicts cross-reference the co-run.
+
 ## 2026-08-15 — `pendkhold2` HAND-WRITTEN and PRICED +37 B: the composition is PROVED to be pend + khold2 and not a third thing
 
 The orphaned screen's arm, built to its original registration. `khold2` and
