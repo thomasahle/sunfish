@@ -258,6 +258,92 @@ how much effort it cost.
 
 ---
 
+## 2026-08-15 — pend CONFIRMED at +21.31 and LANDED: the first full conversion of the taxonomy → mechanism → screen → confirm pipeline
+
+The fixed-N confirmation ran and the pre-registered bar is met. **`pend` lands.**
+
+| | screen (SPRT) | **confirmation (fixed N)** |
+|---|---|---|
+| games | 722, stopped early | **800, no early stopping** |
+| raw PGN | 315-239-168 | **pend W 336 · L 287 · D 177 = 53.06%** |
+| Elo | +36.71 ± 16.20 | **+21.31 ± 15.73 → [+5.58, +37.04]** |
+| status | **biased screen figure** | **the earned number** |
+
+The confirmation did exactly what it exists to do: the SPRT's +36.71 is inflated
+by its own stopping rule, and the honest figure is **+21.31**, a **42% haircut**.
+Zero illegal, zero `(none)`, zero forfeits in 800 games.
+
+### Reconciling the interval, because two readings differed
+
+An independent read gave **[+0.09, +42.69]** (±21.30) against the instrument's
+**±15.73**. Recomputed from the confirmation's own pentanomial
+(`Ptnml(0-2): [23, 42, 235, 63, 37]`, 400 pairs):
+
+| method | 95% | LB | verdict |
+|---|---|---|---|
+| **pentanomial (pre-registered path)** | **±15.73** | **+5.58** | **LAND** |
+| the independent read | ±21.30 | +0.09 | LAND, barely |
+| game-level (ignores pairing) | ±24.12 | **−2.81** | straddle |
+
+±15.73 reproduces fastchess's printed figure to the digit and is the method every
+other verdict in this ledger used, so it is what the bar was set against. All
+three agree on the point estimate and two of three clear zero — **but the third
+does not, so this landing is method-dependent at the margin** and is recorded as
+such, not as a comfortable win. Pairing is what buys the margin: it removes the
+colour/opening variance the game-level calculation leaves in.
+
+### The landing
+
+Applied **in the generator**, not by hand-editing the entry: `make_pst_entry.py`
+injects both anchors and asserts each occurs exactly once, so drift is a hard
+build error rather than a silently unmodified entry. It belongs in the 4k
+generator rather than `sunfish.py` because it is an entry change, not a classic
+one.
+
+The queens-off seam already switches the KING table; `pend` adds the PAWN table
+at the **same test**, so it costs one tuple and no new branch. With queens off a
+pawn is worth `(8 - rank)^2 * 2` more, steeply rewarding advanced passers exactly
+when promotion is the winning plan.
+
+| | |
+|---|---|
+| entry | **3308 → 3340 B (+32)**, 756 spare |
+| `check_entry.sh` | green |
+| decode round-trip | `pst` bit-identical to classic; `K_MID`/`K_END` preserved; `P_MID` is classic's pawn table |
+| standalone | packed artifact in an empty dir plays `g1f3` |
+| legality | 100/100 at both budgets |
+| mate / conversion | **8/8 / 8/8** |
+| first yield | max **676**, passed |
+
++32 B is not the +37 measured against the old 3341 base: lzma shares one
+dictionary, so byte deltas never compose across landings.
+
+### SUBSUMPTION OBLIGATION — recorded next to the landing, not filed away
+
+`pend` is a hand-written phase term. **When a phase-capable net screens, the
+comparison matrix must include net-vs-net+pend, and `pend` is DELETED if
+subsumed**, returning its 32 bytes. This obligation travels with the code — it is
+the price of landing a hand-written phase term into a lane whose stated goal is a
+learned evaluation, and the ML2 machinery priced in the entry below is exactly
+the thing that will trigger it.
+
+### The H1/H2 programme, closed
+
+| arm | bytes | verdict |
+|---|---|---|
+| **pend** | +32 landed | **CONFIRMED +21.31, LANDED** |
+| kact | +1 | DROP, −33.07 ± 15.98 |
+| kmid | +15 | undecided at cap, +2.08 ± 16.58 |
+| khold2 | +24 | undecided at cap, +2.43 ± 7.24 |
+
+Four candidates, one landing; kact/kmid/khold2 all closed empty. **pend is the
+programme's sole conversion** and the first time this lane has run taxonomy →
+mechanism → screen → confirm end to end and put Elo into the entry. Every prior
+eval candidate (Texel, C1, C2, d1, b1) died — the difference is that this one is
+a search-seam mechanism found by taxonomy, not a fitted table.
+
+---
+
 ## 2026-08-15 — ML2 MACHINERY PRICED: +98 B code, ~+11%/node — the phase-net's engine seam, measured
 
 Coordinator task: c1024_phase_ml2 posted the campaign's best val (0.01286,
