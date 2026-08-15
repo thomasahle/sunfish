@@ -585,9 +585,17 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
 
         # Fantasized variance decides whether another pending copy is useful;
         # do not impose a fixed one-copy-per-configuration rule on top of it.
-        vector = coordinate_maximum(
-            space, [*candidates, *observed], score, set(forbidden), stratum,
-            args.acquisition_restarts)
+        if args.gate_all:
+            pool = [point for point in candidates if point not in forbidden and (
+                stratum is None or space.is_structural(point) == stratum)]
+            if not pool:
+                raise RuntimeError("no available acquisition point")
+            values = score(pool)
+            vector = min(zip(values, pool), key=lambda item: (-item[0], item[1]))[1]
+        else:
+            vector = coordinate_maximum(
+                space, [*candidates, *observed], score, set(forbidden), stratum,
+                args.acquisition_restarts)
     else:
         for index, candidate in enumerate(candidates):
             if candidate in forbidden or candidate in active or (
