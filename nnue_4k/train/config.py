@@ -51,6 +51,13 @@ class ModelCfg:
     cb_cmax: int = 1            # arch=cb: codebook grid (1 = ternary; <= 5 certifies)
     lr_rank: int = 1            # arch=lowrank: rank of U@V
     lr_wmax: int = 1            # arch=lowrank: composite clip (1 = ternary)
+    gridste: int = 0            # ternary path: snap the OUTPUT weights and the
+    #                             biases to the integer digits the payload
+    #                             stores (v = 32*g/2^s, b = bd/(32*g)) inside
+    #                             forward, by STE.  With ternary weights (grid
+    #                             already) and u2grid, this is FULL exported
+    #                             fidelity: nothing the artifact rounds is
+    #                             trained at a precision it does not have.
     u2grid: int = 0             # arch=ml2: snap u2 to the CERTIFIED integer
     #                             read-out grid inside forward (STE), at the
     #                             export scale.  0 = free float, which is what

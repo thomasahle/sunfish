@@ -71,6 +71,7 @@ class ResidualNet(nn.Module):
             # steps to wake.  Bias starts inside its exportable band.
             self.v = nn.Parameter(120.0 + torch.randn(N).abs() * 15.0)
             self.bias = nn.Parameter(torch.zeros(N) + 0.02)
+        self.gridste = cfg.gridste
         self.nb, self.m, self.tailw = cfg.nb, cfg.bm, cfg.tailw
         self.phase, self.baff, self.nb2, self.rff = cfg.phase, cfg.baff, cfg.nb2, cfg.rff
         if cfg.phase:
@@ -137,13 +138,54 @@ class ResidualNet(nn.Module):
                 # exportable bias range is +-44 lane units of a 32*g_k cap
                 self.bias.clamp_(-0.019, 0.019)
 
+    def export_shift(self):
+        """The L1 shift the exporter will pick -- export.export_ml2 /
+        export_replnet's rule, verbatim, read off the RAW v the exporter is
+        handed (`model.v`), never off a snapped copy: the payload carries one
+        shift and both layers must be scaled by that same number."""
+        with torch.no_grad():
+            vmax = float(self.v.abs().max())
+        for s in range(8, -1, -1):
+            if vmax * (1 << s) / 32.0 <= 89.49:
+                return s
+        return 0
+
+    def gvb(self):
+        """(v, bias) AS THE PAYLOAD WILL CARRY THEM.
+
+        The payload stores integers -- gain digits g_k = round(v_k*2^s/32)
+        capped at 89, and bias digits bd_k = round(b_k*32*g_k) clipped to
+        [-44, 45] -- so the values the ENGINE evaluates are v = 32*g/2^s and
+        b = bd/(32*g), not the floats the optimizer holds.  With
+        model.gridste the snap happens INSIDE forward (straight-through), the
+        way the ternary weights already do it and the way `u2grid` now does
+        the layer-2 read-out: after 2026-08-15 the campaign's standing rule is
+        that a net trains under the resolution its artifact has, from step 1.
+
+        Off (the default) this is the identity, so every historical config
+        reproduces bit-for-bit."""
+        vab = self.v.abs() if self.cfg.ternary else self.v
+        if not (self.gridste and self.cfg.ternary):
+            return vab, self.bias
+        s = self.export_shift()
+        g = torch.clamp(torch.round(vab * (1 << s) / 32.0), 0.0, 89.0)
+        v_q = 32.0 * g / (1 << s)
+        # a gain digit of 0 is a DEAD lane; the exporter shouts about it, and
+        # the grid must not silently divide by it here
+        gsafe = torch.clamp(g, min=1.0)
+        bd = torch.clamp(torch.round(self.bias * 32.0 * gsafe), -44.0, 45.0)
+        b_q = bd / (32.0 * gsafe)
+        return (vab + (v_q - vab).detach(),
+                self.bias + (b_q - self.bias).detach())
+
     def forward(self, fi, mi, fo, base_cp):
         E = self.weight()
-        au = self.act(nn.functional.embedding_bag(fi, E, fo, mode="sum") + self.bias)
-        at = self.act(nn.functional.embedding_bag(mi, E, fo, mode="sum") + self.bias)
+        vab, bias = self.gvb()
+        au = self.act(nn.functional.embedding_bag(fi, E, fo, mode="sum") + bias)
+        at = self.act(nn.functional.embedding_bag(mi, E, fo, mode="sum") + bias)
         # ternary: folded gains are activation CAPS [0, 32*g_k] -- not
         # sign-symmetric, so the output weight must be positive
-        d = ((au - at) * (self.v.abs() if self.cfg.ternary else self.v)).sum(-1)
+        d = ((au - at) * (vab if self.cfg.ternary else self.v)).sum(-1)
         if self.rff:
             fr, mr = (fi % 768, mi % 768) if self.B > 1 else (fi, mi)
             pu = torch.cos(nn.functional.embedding_bag(fr, self.theta, fo, mode="sum") + self.phb)
@@ -213,7 +255,7 @@ class Ml2Net(ResidualNet):
         self.u2 = nn.Parameter(torch.zeros(cfg.bm))
         self.u2grid = cfg.u2grid
 
-    def _u2(self, vab):
+    def _u2(self, vab, shift=None):
         """u2 as the ENGINE will carry it.
 
         Free float by default -- and that default is what MEASUREMENTS
@@ -227,26 +269,23 @@ class Ml2Net(ResidualNet):
         for the quant-error-compounding wall packed_layers.py names."""
         if not self.u2grid:
             return self.u2
-        with torch.no_grad():
-            vmax = float(vab.abs().max())
-            shift = 0
-            for s in range(8, -1, -1):
-                if vmax * (1 << s) / 32.0 <= 89.49:
-                    shift = s
-                    break
+        if shift is None:
+            shift = self.export_shift()
         scale = (1 << self.SHIFT2) / (100.0 * (1 << (2 * shift)))
         q = torch.clamp(torch.round(self.u2 * scale), -self.UMAX, self.UMAX) / scale
         return self.u2 + (q - self.u2).detach()      # STE: snap forward, pass grad
 
     def forward(self, fi, mi, fo, base_cp):
         E = self.weight()
-        au = self.act(nn.functional.embedding_bag(fi, E, fo, mode="sum") + self.bias)
-        at = self.act(nn.functional.embedding_bag(mi, E, fo, mode="sum") + self.bias)
-        vab = self.v.abs() if self.cfg.ternary else self.v
+        vab, bias = self.gvb()
+        au = self.act(nn.functional.embedding_bag(fi, E, fo, mode="sum") + bias)
+        at = self.act(nn.functional.embedding_bag(mi, E, fo, mode="sum") + bias)
         d = ((au - at) * vab).sum(-1)
         A, B = au * vab.abs(), at * vab.abs()       # cp-scaled lane values
         h = self.conv(A, A) - self.conv(B, B)       # odd: exact antisymmetry
-        d = d + (h * self._u2(vab)).sum(-1) / 100.0
+        # ONE shift for both layers -- the payload carries a single one, so the
+        # snapped gains and the layer-2 scale must be read off the same value
+        d = d + (h * self._u2(vab, self.export_shift())).sum(-1) / 100.0
         self.pre = d
         return base_cp + d.clamp(-self.clampcp, self.clampcp)
 

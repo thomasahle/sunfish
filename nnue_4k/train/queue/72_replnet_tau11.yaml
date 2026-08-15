@@ -1,0 +1,27 @@
+# replnet-tau -- registered family arm 8 (TRAINQUEUE.md header: "replnet_tau
+# -- threshold sweep (tau in {0.6, 1.1}; low side subsumed by 1)").  The high
+# side is the one still owed, so this is it: tau 1.1 against the house 0.85.
+#
+# WHAT TAU DOES.  constraints.ternary_ste snaps a weight to 0 unless |w|
+# exceeds tau/32; raising tau to 1.1 makes the grid harder to reach, so the
+# table gets SPARSER -- fewer non-zero trits, a more compressible payload, and
+# less capacity.  It is a bytes-vs-val dial, and the replacement campaign is
+# byte-bound, so it is worth one slot even though the family's play record is
+# poor: whatever eventually ships has to buy its bytes somewhere.
+#
+# ON THE FULL-FIDELITY RECIPE, one field apart from 71, so the pair prices tau
+# alone and both sit under the standing conclusion.  Priced through the same
+# split and the same l1 as everything above.
+#
+# PRE-REGISTERED READING: 71's val is the reference.  tau 1.1 pays only if it
+# is at or under that val, OR if the sparsity it buys is large enough that the
+# bake-off's measured bytes drop by more than the val costs -- and that second
+# clause is decided by compress/bakeoff.py's measured winner at export, never
+# by looking at a zeros percentage and reasoning about it.
+name: replnet_tau11
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406}
+model: {arch: residual, N: 4, base: mat, ternary: 1.1, gridste: 1}
+loss: {l1: 0.0005, satpen: 0.03, satthresh: 480.0}
+opt: {epochs: 30, batch: 8192, lr: 3.0e-3, seed: 0}
+notes: "registered arm 8 (replnet_tau): the owed high side tau=1.1 vs the house
+  0.85, on the full-fidelity plain recipe so it is one field from run 71"

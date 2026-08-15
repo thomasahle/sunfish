@@ -35,6 +35,17 @@ when a phase-capable net candidate reaches screening, the screen matrix
 includes net-vs-net+term; a term the net subsumes is DELETED and its
 bytes refunded. Hand terms are stopgaps, not accumulation.
 
+**EXPORTED-FIDELITY RULE (standing, 2026-08-15, coordinator-authorized):**
+a net trains under the resolution its ARTIFACT has, from step 1 — every
+tensor the payload rounds is rounded inside forward by STE, never rounded
+for the first time at export. The ternary weights always had this; `u2`
+and the gain/bias digits did not, and the cost was measured: the ml2
+family's entire val win over the linear net was 0.00098, and forcing `u2`
+onto its certified grid gave back 0.00082 of it (run 60). Mechanism is
+`model.gridste` (gains + biases) with `model.u2grid` (layer-2 read-out);
+both default off, so historical configs reproduce bit-for-bit. Any new
+arm in this family carries them unless it states why not.
+
 ## Context
 
 2026-08-14: payload target 1024 B (Thomas; golf lane opening the code
@@ -152,6 +163,64 @@ VAL-probe-first):
   tables. Same treatment: in the graph, on the grid, through the codec.
 
 ## Log (newest first)
+
+- 2026-08-15 05:12 UTC: **CLAMP 400 LOSES, the knife-edge REPLICATES, and
+  the queue emptied a SECOND time — 31 minutes, same manual-refill cause.**
+
+  **Correction first, because my last report got it wrong.** I reported
+  "one config remains behind it" after `61_replnet_clamp` started. There
+  was no third config. `queue_runner` moves a yaml to `done/` only when it
+  FINISHES, so the `ls queue/*.yaml | wc -l` that returned 1 was counting
+  61 **itself**, still sitting in the queue while running. I queued exactly
+  two (60, 61); both ran; `queue/done/` holds exactly those two and
+  `runs/` gained exactly those two. The count was real, my reading of it
+  was not — a self-referential-instrument error of the same class as the
+  `grep -c` gate that lied and the `pgrep -f` wait loop that matched its
+  own launcher. **Reading a queue depth while you are the thing in the
+  queue needs the same care as reading a process list while you are the
+  process.**
+
+  **`61_replnet_clamp` (registered arm 11, CLAMP 400 vs 600) — 400 LOSES.**
+  val **0.01380** against run 60's **0.01362** on the identical recipe,
+  split and val set (`val_sha 0239a7b84ec6ba2f`, n_train 7 827 406); one
+  field apart, so the comparison is clean. **CLAMP stays 600**; the arm is
+  answered and closed. Mechanism visible in the log: clip-saturation rose
+  to 0.14–0.52% in late epochs against 60's 0.00–0.08%, i.e. the tighter
+  clip started biting exactly where the ml2 second layer lives (that term
+  alone is worth mean 60.50 cp with a 186.59 cp maximum). The probe suite
+  agrees it costs knowledge, not just loss: king-activity **14.83 → 0.00**,
+  passed-vs-opposed **25.53 → 0.00**, rook-open-file **14.44 → 0.00**.
+  Byte-free was the arm's whole appeal and it is not free in val.
+
+  **The knife-edge REPLICATES.** 61 parked `u2` at
+  **[12.50014, 12.38654, 12.50001, 12.48103]** — the same 12.5 boundary as
+  run 60 ([12.50001, 12.41849, 12.50001, 12.49148]), under a different
+  clamp, reaching the same read-out digits **[1, 0, 1, 0]**. Two
+  independent runs park at half a grid step. That is now a property of the
+  recipe, not an accident of one run — and it is why the queue below
+  carries a 60-epoch tail asking whether the ride length changes it.
+
+  **Refill: 4 configs, ~100 minutes of runway, longest last.**
+  `70_gridste_ml2` (`19ea4a95c764`) full exported fidelity on ml2 ·
+  `71_gridste_plain` (`10413c06ccc6`) the same on the PLAIN one-layer net,
+  the control that says whether the defect is ml2's or the family's ·
+  `72_replnet_tau11` (`e525cdd862f6`) registered arm 8's owed high side ·
+  `73_gridste_ml2_long` (`de0446fa9a34`) the 60-epoch TAIL. Each pre-registers
+  its reading in its own header. `model.gridste` was verified before
+  queueing: at v = [130.63, 134.15, 135.54, 127.47] it reproduces the
+  exporter's own digits exactly (g [65, 67, 68, 64], bd [40, 41, 41, 39]),
+  gradients pass 1.0, and `gridste: 0` is the bit-exact identity.
+
+  **Structural fix, and its limit.** `queue_runner` has **no** low-water
+  hook or tail mechanism — its entire CLI is `--queue-dir / --once /
+  --pgn-globs`, and on empty it nags and sleeps 600 s. So the only lever
+  available without touching a running process is **depth plus a long tail
+  entry placed last**, which is what this refill is. A real fix (refuse to
+  idle below a configured depth, or run a designated tail config on empty)
+  is a `queue_runner` change that only takes effect at the next restart,
+  and restarting the runner is not this lane's call — **proposed here, not
+  taken.** Until it lands, every lane that drains the queue owes it a
+  refill in the same breath.
 
 - 2026-08-15 03:59 UTC: **QUEUE REFILLED after a 38-MINUTE IDLE GAP — a
   standing-rule violation, recorded rather than glossed.** `50_dense60`

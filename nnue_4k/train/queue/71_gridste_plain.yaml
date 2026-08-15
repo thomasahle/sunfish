@@ -1,0 +1,30 @@
+# gridste-plain -- the CONTROL that tells us whether the resolution defect is
+# ml2's or the whole replacement family's.
+#
+# Same full-fidelity treatment as 70 (gains and biases snapped inside forward;
+# the ternary weights already were) but on the PLAIN one-layer ternary net --
+# the replacement line itself, the family whose v1/8Mv numbers this ledger has
+# been quoting all campaign.  No second layer, so u2grid does not apply and
+# nothing here is a new architecture: it is the standing conclusion applied to
+# the existing base family.
+#
+# WHY IT MATTERS MORE THAN IT LOOKS.  Every val number in the replacement
+# campaign -- v1 0.01385, 8Mv 0.01378, c1024-cal, the cb/lowrank arms -- was
+# trained with the gains and biases as free floats and then ROUNDED at export.
+# If this run lands at 8Mv's 0.01378 the rounding was free and those numbers
+# stand as written.  If it lands materially above, then the whole family's val
+# ladder has been reading a net that is not the net we ship, and the
+# comparisons between arms are still valid (same treatment) while the absolute
+# numbers are optimistic.  That is worth one 20-minute slot.
+#
+# PRE-REGISTERED REFERENCE: 8Mv val 0.01378 on this exact split (val_sha
+# 0239a7b84ec6ba2f).  Same data, same l1 as the ml2 line so the pair 70/71 is
+# one field apart in architecture and nothing else.
+name: gridste_plain
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406}
+model: {arch: residual, N: 4, base: mat, ternary: 0.85, gridste: 1}
+loss: {l1: 0.0005, satpen: 0.03, satthresh: 480.0}
+opt: {epochs: 30, batch: 8192, lr: 3.0e-3, seed: 0}
+notes: "plain one-layer ternary replnet under full exported fidelity; reference
+  is 8Mv 0.01378 on the same split -- does gain/bias rounding cost the LINEAR
+  family anything?"

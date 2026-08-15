@@ -1,0 +1,35 @@
+# gridste-ml2-long -- the TAIL config, and a real question rather than filler.
+#
+# TAIL, deliberately: at ~40 minutes it is the longest entry in the queue and
+# it sits last, so a single finish upstream cannot drain the queue to empty
+# before the next coordinator tick.  queue_runner has no low-water hook (its
+# whole CLI is --queue-dir / --once / --pgn-globs; on empty it nags and sleeps
+# 600 s), so DEPTH plus a long tail is the mechanism available without
+# touching a running process.
+#
+# THE QUESTION.  Runs 60 and 61 both parked every u2 component at 12.50001 --
+# the rounding knife-edge, grid step 25.0 at shift 4 -- under different clamps,
+# so the parking replicates.  Two readings fit: either 12.5 is a genuine
+# optimum (the loss is indifferent between a read-out of 0 and one of 1, and
+# the STE sits on the fence), or it is a CONVERGENCE artifact of a 30-epoch
+# ride under a step function.  Doubling the ride separates them.
+#
+# 50_phase_ml2_dense60 already established that 60 epochs buys nothing on the
+# FREE-FLOAT recipe (best-of-60 0.01274 was a selection artifact; matched
+# budget 0.01282 vs 0.01280).  That finding stands and is not being retested:
+# under a grid the optimisation problem is a different one -- the gradient is
+# straight-through and the forward is piecewise constant -- so the epoch
+# question is reopened for the grid recipe only.
+#
+# PRE-REGISTERED READING: report best-of-first-30 alongside best-of-60, as the
+# dense60 entry taught, so a lower minimum drawn from twice as many epochs is
+# not mistaken for a gain.  Escape from 12.5 in either direction is the result
+# worth having; a third run parked at 12.50001 makes the knife-edge a property
+# of the recipe, not of the ride.
+name: gridste_ml2_long
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406}
+model: {arch: ml2, N: 4, base: mat, ternary: 0.85, bm: 4, u2grid: 1, gridste: 1}
+loss: {l1: 0.0005, satpen: 0.03, satthresh: 480.0}
+opt: {epochs: 60, batch: 8192, lr: 3.0e-3, seed: 0}
+notes: "tail config (~40 min, last in the queue): does doubling the ride move
+  u2 off the 12.5 knife-edge, or is the parking a property of the recipe?"

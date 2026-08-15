@@ -1,0 +1,33 @@
+# gridste-ml2 -- FULL exported fidelity on the ml2 recipe: every tensor the
+# payload rounds is now rounded INSIDE forward.
+#
+# The campaign's standing conclusion after 2026-08-15: a net trains under the
+# resolution its artifact has, from step 1.  u2grid (run 60) applied that to
+# the layer-2 read-out and cost 0.00082 of the family's 0.00098 val win.  It
+# left two exported tensors still trained as free floats:
+#   gains   g_k  = round(v_k * 2^s / 32), capped 89  -> engine v = 32*g/2^s
+#   biases  bd_k = round(b_k * 32 * g_k), clipped [-44, 45] -> b = bd/(32g)
+# model.gridste snaps both by STE (ternary weights were already on their grid,
+# so ternary + gridste + u2grid = nothing trained at a precision the artifact
+# lacks).  Verified before queueing: at v = [130.63, 134.15, 135.54, 127.47]
+# the snap reproduces the exporter's own digits exactly -- g [65, 67, 68, 64],
+# bd [40, 41, 41, 39] -- gradients pass 1.0, and gridste=0 is the bit-exact
+# identity so no historical config moves.
+#
+# PRE-REGISTERED READING, stated before the run.  Reference is run 60
+# (u2grid only, same recipe, same split): val 0.01362.
+#   * val ~ 0.01362  -> the gain/bias rounding is FREE; u2 was the whole
+#     resolution story, and the export's L1 error measurement (mean 0.47 cp)
+#     already said so.
+#   * val materially worse -> L1 resolution costs too, and every val number
+#     in this ledger trained without gridste is optimistic by that margin.
+#   * the knife-edge is the thing to watch: 60 and 61 BOTH parked every u2
+#     component at 12.50001 (grid step 25.0).  Whether snapping v moves that
+#     boundary is the second question this run answers.
+name: gridste_ml2
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406}
+model: {arch: ml2, N: 4, base: mat, ternary: 0.85, bm: 4, u2grid: 1, gridste: 1}
+loss: {l1: 0.0005, satpen: 0.03, satthresh: 480.0}
+opt: {epochs: 30, batch: 8192, lr: 3.0e-3, seed: 0}
+notes: "full exported fidelity (weights + gains + biases + u2 all on their
+  certified grids inside forward); reference is run 60's 0.01362"
