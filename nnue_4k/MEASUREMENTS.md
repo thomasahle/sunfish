@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **DECIDING MATCH 1 (30+1 non-inferiority): H1 ACCEPTED in 288 games — the non-inferiority question returned outright superiority, +124.50 ± 38.79, and the pool wins a THIRD regime** | SPRT elo0=−10 elo1=0 with engine1=pool, cap 1750: **LLR 2.97 crossed +2.94 at 288 games** (1 h 47 m of a budgeted ~7 h), 156W 57L 75D = 67.19%, nElo +140.89 ± 40.13, pentanomial **[10, 14, 31, 45, 44]**, PairsRatio 3.71, WL/DD 2.88, LOS 100.00%. Tripwires all zero: **0 illegal, 0 loses-on-time, 0 forfeits, 288/288 terminations `normal`**, 0 blind moves out of 17,487 pool / 17,436 smooth. Arm sha256s verified against the log header (`cddf392e…` pool = `pooltm`, `14b69a60…` smooth = base, both built at `522931a` per the `629cba2` prereg). **Read honestly: all three regime numbers are SPRT-stopped and therefore biased high** — `pend` measured that bias at 42% on its own screen — so the direction is what is established, not the altitude. The registered warning ("if match 1 reads ~0 that is a PASS, never a third win") binds the ~0 case; this is not it, but no fixed-N confirmation exists at any TC. Spend is near-identical (median 1.276 vs 1.239 s, ratio **1.03×**) — at 30+1 the redistribution the 60-second regimes showed has flattened out, and the pool wins on shape at equal spend. The one number against it is unchanged: **77 games ended under 2 s of clock to smooth's 0** |
 | 2026-08-15 | **DECIDING MATCH 2 (1+0 hammer): GATE PASSED — 0 illegal, 0 `(none)`, 0 null moves, 100/100 normal — but the match found a −209.91 ± 60.11 CLIFF at a 1-second clock, and OUR OWN GATE SCRIPT reported a false FAILED** | Three things, not one. (1) The pre-registered gate passes: at a 1 s clock, where P is empty all game and the floor governs every move, the structural bestmove floor and the wall held perfectly. (2) The inline gate printed "HAMMER FAILED" on a clean run — `grep -c` prints 0 AND exits 1, so `|| echo 0` made `non` the two-line string "0\n0" and `[ -eq ]` errored into the else branch; the naive `0000` probe also matched the `+0000` timezone 200×. Fixed as a standalone `gate_check.sh`, re-run → PASSED, appended as a correction. Same defect class as the label and ramp defects, and it does not get a pass for being ours. (3) **The finding: `P = max(0, 1 − 8.4) = 0` for the WHOLE game, so soft = 0 and the pool plays depth-1 moves at 0.001 s against the incumbent's 0.013 s — 13× shallower, 23.00% score, never flagging (0.9 s median end-clock) and never illegal. `A/4 = 0.15 s` was reachable and safe the entire time: when P = 0 and A > 0 the soft limit collapses to zero and the safety clamp becomes unreachable.** Landing shape now has an OPEN QUESTION (scope the default / floor soft against A / land-and-document); this lane is not deciding it alone. 30+1 deciding match launched meanwhile |
 | 2026-08-15 | **PRE-REGISTERED: the pool's single real-clock confirmation — (1) 30+1 NON-INFERIORITY, elo0=−10 elo1=0, cap raised to 1750; (2) a 1+0 ZERO-ILLEGAL hammer, 100 games, zero required — plus THE LANDING SHAPE, fixed before either starts** | After two H1s the temptation to decide the landing shape from the result is at its highest, so it is written first. The cap goes 400 → 1750 on a recorded lesson: the smooth ladder's match 2 was an underpowered non-inferiority, the same defect class as the two just ledgered (~7 h at conc 8, affordable for THE deciding match). The 1+0 hammer is not a formality for THIS manager — it ended 48 of 262 games under 2 s at 60+1 and at 1+0 the whole game lives where P is empty and the floor governs. **If both pass:** `pooltm` becomes the entry default at its measured +57 B (mod retires in place with a tombstone; `oldtm`/`steptm` go with it), the classic driver ships the pool with `legacy` kept as the control arm, and **#188 closes SUPERSEDED — not wrong**: its negative-cap mechanism is what the A/2 wall exists to prevent. **If the hammer fails on one illegal move or `(none)`, landing is blocked outright regardless of the Elo** |
 | 2026-08-15 | **ARM (b) VERDICT: the POOL manager is +136.58 ± 35.24 at 60+1 — H1 accepted in 262 games, 142W-44L-76D (68.70%), PairsRatio 5.71, 0 forfeits, 0 illegal** | The risk arm was not the risk: the regime where the pool budgets 2.4× LESS per routine move beat the shipped curve by more than the 60+0 arm did. **The spend shape INVERTS between the two TCs and that is the finding**: 0.79× the median move at 60+0 but **1.09× at 60+1**, with a LOWER p90 (3.311 vs 3.655 s) and a 1.8× higher max (10.151 vs 5.509 s). The pool is a REDISTRIBUTION, not a spend-less manager — it moves time off the body of ordinary moves onto the few that need 10 s — and both directions won ~130 Elo. The pre-registered "2.4× less routinely" claim was the BUDGET ratio and is corrected here. Blind moves 0 on both arms (nobody floors at an increment TC); the increment-aware starvation band has pool 44.1% vs smooth 50.6%. Against it: pool ended **48 games under 2 s** to the incumbent's 0, which is why the deciding match carries a 1+0 zero-illegal hammer |
@@ -257,6 +258,91 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-15 — DECIDING MATCH 1 VERDICT: 30+1 non-inferiority is ESTABLISHED, and the question came back as a third regime win
+
+The pre-registered deciding match ran to an early SPRT stop and the pool's
+pass-condition is met.
+
+| | |
+|---|---|
+| question | **NON-INFERIORITY**, SPRT elo0=−10 elo1=0, α=β=0.05, engine1 = pool |
+| arms | `pool` = `pooltm` (`cddf392e214490548e1397271067da6f75146306d17c37ef61072b9f44fd60f2`, 3365 B) vs `smooth` = base (`14b69a606b743a377b84b6f99856c8593bf37e5d90d382496e4e4ea3580ede5b`, 3308 B), both built at `522931a` per the `629cba2` pre-registration |
+| TC / book | 30+1, `book3k.pgn` 3000 games, order=random, srand 20260818, **adjudication NONE** |
+| result | **156W 57L 75D of 288**, 67.19%, median 132 plies |
+| Elo | **+124.50 ± 38.79** (nElo +140.89 ± 40.13), LOS 100.00% |
+| pentanomial | **[10, 14, 31, 45, 44]**, PairsRatio 3.71, WL/DD 2.88, draw ratio 21.53% |
+| SPRT | **LLR 2.97 > +2.94 — H1 ACCEPTED** at 288 of a 1750 cap, 1 h 47 m 02 s |
+| tripwires | **0 illegal, 0 loses-on-time, 0 forfeits, 288/288 `normal`, 0 blind moves** |
+
+Both arm sha256s were re-verified against the run log's own header before this
+entry was written, and the PGN independently carries 288 `[Result]` tags with
+zero `illegal move` and zero `loses on time` lines.
+
+### The cap was raised for nothing, and that is worth saying
+
+The registration raised the cap 400 → 1750 specifically because "a 400-game cap
+against a ±10 band cannot separate *not worse* from *not measured*" — the defect
+that voided the smooth ladder's match 2. The match then stopped at **288**,
+because the effect was nowhere near the band. The raise was still correct: it
+was bought as insurance against the ~0 outcome the registration called likely,
+and insurance that goes unused was not wasted. What it did buy is that the stop
+is unambiguous — 288 games under a 1750 cap is an effect crossing the boundary,
+not a cap being reached.
+
+### Read honestly: the direction is established, the altitude is not
+
+All three regime numbers are **SPRT-stopped and therefore biased high**, and
+this lane has its own measurement of that bias: `pend` screened +36.71 by SPRT
+and earned **+21.31** over a fixed 800, a 42% haircut. So:
+
+| TC | Elo (SPRT-stopped) | games | pentanomial |
+|---|---|---|---|
+| 60+0 | +119.9 ± 36.4 | 274 | — |
+| 60+1 | +136.6 ± 35.2 | 262 | [3, 11, 37, 45, 35] |
+| **30+1** | **+124.50 ± 38.79** | **288** | **[10, 14, 31, 45, 44]** |
+
+Three regimes, three H1s, no fixed-N confirmation at any of them. The claim this
+supports is *the pool is better across the increment regimes*, not *the pool is
+worth +127*. The registration's warning — "if match 1 reads ~0 inside the band,
+that is a PASS reported as **not worse at the decision TC**, never as a third
+win" — binds the ~0 case and this is not it; the pentanomial LB alone is +85.7.
+But the warning's spirit is that the landing rests on the PASS, and it does.
+
+### Spend: at 30+1 the redistribution flattens, and the pool wins at equal spend
+
+| arm | moves | median | mean | p90 | max | ≤0.06 s |
+|---|---|---|---|---|---|---|
+| pool | 17,487 | 1.276 s | 1.450 s | 2.326 s | **6.846 s** | **0** |
+| smooth | 17,436 | 1.239 s | 1.446 s | 2.291 s | 3.431 s | **0** |
+
+Ratio of medians **1.03×** — at 60+0 it was 0.79×, at 60+1 1.09×. The only shape
+difference left is the tail: the pool's maximum is **2.0× higher** (6.85 vs
+3.43 s) on an identical mean. That is the whole mechanism in one line at this TC:
+same total spend, moved onto the moves that need it.
+
+Secondary readings, all consistent with the 60+1 arm:
+
+| reading | pool | smooth |
+|---|---|---|
+| starved moves (≤1.50 s band) | 64.7% | 67.6% |
+| median clock at game end | 2.3 s | 2.4 s |
+| **games ending under 2 s** | **77** | **0** |
+| first falls below 2.4 s at move | 36 | 57 |
+| games that never fall below 2.4 s | 40 | 107 |
+
+The pool is again the LESS starved arm while running its clock lower, and the
+one number against it is the one that has been against it since 60+1: it plays
+close to the flag. It did not flag once in 288 games at 30+1, or in 100 at 1+0.
+
+### Cotenancy, recorded because it was heavy
+
+Launch load average 29.52 with 3 live fastchess processes and 1,276 other-user
+processes; finish load 33.50 with 11. The box was carrying another campaign
+throughout. **Both arms shared it equally, move-for-move, inside one match**,
+which is exactly what a paired A/B is for — but the absolute spend numbers above
+are numbers *under that load*, not clean-box numbers, and a repeat on an idle
+box would not reproduce them to the millisecond.
 
 ## 2026-08-15 — pend CONFIRMED at +21.31 and LANDED: the first full conversion of the taxonomy → mechanism → screen → confirm pipeline
 
