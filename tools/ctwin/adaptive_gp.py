@@ -107,7 +107,8 @@ def study_identity(args):
         "allocation": {
             name: getattr(args, name)
             for name in ("pair_weight", "exploration", "initial_design", "explore_start",
-                         "explore_floor", "explore_half_life", "duel_fraction", "inducing")
+                         "explore_floor", "explore_half_life", "explore_optimism",
+                         "duel_fraction", "inducing", "seed_selections")
         },
     }
 
@@ -369,7 +370,8 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
                 model, space, pending, points, point_variance,
                 2 * args.pair_weight * args.pairs)
             if mode == "explore":
-                return point_variance
+                return (point_mean + args.explore_optimism * np.sqrt(point_variance)
+                        if args.explore_optimism else point_variance)
             return point_mean + args.exploration * np.sqrt(point_variance)
 
         # Fantasized variance decides whether another pending copy is useful;
@@ -499,7 +501,7 @@ async def optimize(args):
             for batch in seed["batches"]
         ]
         state["next_experiment"] = len(state["batches"])
-        state["selections"] = 0
+        state["selections"] = args.seed_selections
         state["allocations"] = {}
         state["new_axes"] = [name for name in space.names if name not in old_names]
     save_state(args.state, state)
@@ -639,10 +641,14 @@ def main():
     parser.add_argument("--explore-start", type=float, default=0.50)
     parser.add_argument("--explore-floor", type=float, default=0.20)
     parser.add_argument("--explore-half-life", type=float, default=40)
+    parser.add_argument("--explore-optimism", type=float, default=0,
+        help="explore with mean + K*sd instead of pure variance")
     parser.add_argument("--duel-fraction", type=float, default=0.30)
     parser.add_argument("--pair-weight", type=float, default=0.5)
     parser.add_argument("--inducing", type=int, default=0,
         help="sparse GP size; exact inference is the default")
+    parser.add_argument("--seed-selections", type=int, default=0,
+        help="continue the allocation clock when importing a state")
     parser.add_argument("--safe-only", action="store_true")
     args = parser.parse_args()
     args.baseline_engine = args.baseline_engine or args.engine
@@ -667,6 +673,8 @@ def main():
         parser.error("--initial-design and --explore-half-life must be positive")
     if args.inducing < 0:
         parser.error("--inducing cannot be negative")
+    if args.explore_optimism < 0 or args.seed_selections < 0:
+        parser.error("--explore-optimism and --seed-selections cannot be negative")
     asyncio.run(optimize(args))
 
 
