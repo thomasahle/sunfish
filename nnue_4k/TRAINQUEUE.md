@@ -153,6 +153,13 @@ VAL-probe-first):
 
 ## Log (newest first)
 
+- 2026-08-15 morning: **SCREEN: H0, −107.06 ± 35.84** (318 games, penta
+  [51,27,58,12,11], zero illegal). Linear-family generalization sharpens
+  (six linear play-failures, both capacity ends); phase-ml2 inherits
+  skepticism only. ml2 val ladder: 0.01280 new best (l1 .0005 — density
+  pays under products). 90/91 path-fixed → requeued 40/41; 50_dense60
+  queued; own-labels 28k probe flips king geometry (retest at scale).
+
 - 2026-08-15 ~23:0x UTC prev-day: **c1024_phase_ml2 val 0.01286 — phase
   knowledge measured IN WEIGHTS** (king-activity flip +16 from +0,
   pawn-advance +4..+8; MEASUREMENTS has the full probe rows). Critical

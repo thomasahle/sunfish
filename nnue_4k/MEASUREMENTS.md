@@ -10463,3 +10463,52 @@ deployment path (same ../replnet-20260814/ assumption as ratecal);
 requeued with the fixed path — the runner's log-and-continue behavior
 was correct. Queue now: 85_ratecal (running) → 80_ml2 → 90_cb → 91_lr.
 Screen dispatcher still waiting on m2's slot (its cap running long).
+
+## 2026-08-15 — SCREEN VERDICT: replnet-8mv H0 ACCEPTED, −107 at fixed nodes
+
+**The full table** (fixed-node 20k SPRT elo0=0 elo1=10, srand 20260814,
+openings_2k, box, boxlock held 23:21→23:39 UTC, 18 min):
+
+| | |
+|---|---|
+| verdict | **H0 accepted, LLR −2.99 (bounds ±2.94)** |
+| Elo / nElo | **−107.06 ± 35.84 / −121.98 ± 38.19**, LOS 0.00% |
+| games (W/L/D) | 318 (91/186/41), 35.06% |
+| pentanomial (0-2) | [51, 27, 58, 12, 11], PairsRatio 0.29 |
+| draw ratio | 36.48% |
+| zero-illegal | **0 hits** in log and pgn; tripwire never fired |
+| arms | replnet-8mv 3536 B vs entry-5d7d0d1 3308 B, both @ HEAD |
+
+At EQUAL nodes the 3k-param one-layer ternary replacement loses ~107 Elo
+to the 384-value distilled PSTs — before the ~34% nps tax the timed leg
+would add. The timed leg is MOOT; no landing talk.
+
+**The linear-family generalization (pre-discussed framing) sharpens:**
+every play-failed fitted eval to date — Texel −57.7, C1 −93.8, d1 −76.0,
+b1 −182.6, now 8Mv −107 — is LINEAR in its features (the one-layer
+ternary net is a learned linear basis over ps768; clamp and caps bend
+little at these operating points). The five 384-param table fits and the
+3k-param net now bracket the linear family from both ends: capacity was
+NOT the missing ingredient — linearity-in-ps768 is the dead end. The
+distilled-PST entry survives because its 384 values ride hand-built
+nonlinear machinery (K_MID/K_END swap, khold2, pend). **phase-ml2 — the
+first NON-linear candidate — inherits the skepticism, not the verdict**:
+its val record (below) is exactly the shape the generalization predicts
+a survivor would show.
+
+**The ml2 family's val ladder on the pinned split** (all float exports;
+engine machinery unpriced — the golf-lane seam is the critical path):
+0.01286 (bm4, l1 .001) → 0.01283 (extension lane's 4M arm) → 0.01291
+(bm2: halving read-out digits costs ~nothing) → **0.01280 (l1 .0005 —
+NEW BEST: density pays UNDER PRODUCTS; the density-negative was a
+one-layer phenomenon, a clean axis interaction)**. Own-labels profile
+probe (28k corpus): val incomparable by design; probes FLIP king
+centralization (−46) — a corpus-scale artifact to retest at scale before
+any conclusion; the big own-label corpus (label_corpus.sh) is the data
+arm the screen result argues for.
+
+Ops: 90_cb/91_lr failed on the deployment path (same as 80/85), fixed
+and requeued as 40/41; queue now 40_cb → 41_lr → 50_dense60. The
+session-bound advisory monitor died again mid-screen; the box-side
+dispatcher carried the run and the verdict regardless — the liveness
+architecture held.
