@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **POOL FIXED-N VERDICT: the pool TM's true magnitude at 30+1 is **+102.47 ± 32.43** over a full 300 games — and the SPRT decider was **22 Elo (17.7%) HIGH**, the early-stop bias measured at last** | 144W/58L/98D = **64.33%**, pentanomial **[5, 20, 41, 52, 32]** over 150 pairs with **0 unpaired**, PairsRatio 6.40, draw ratio 32.67%. **0 illegal, 0 forfeits, 300/300 `normal`** — the box's clean-timed-game record extends to **951/951**. Against the decider's SPRT-stopped +124.50 ± 38.79: **−22.03 Elo**, the direction a stopping rule guarantees (`pend`'s own bias was 42%). **Stated honestly, the two are NOT separated** — the intervals overlap heavily — so this does not prove the gap is bias rather than noise; what it establishes is which number to quote, since only the fixed-N interval means what it advertises (and it is *tighter*, ±32.43 vs ±38.79, on 12 more games). **The pool still wins decisively** and the landing stands; only its altitude comes down. Mechanism reproduced: **zero blind moves on either arm**, spend ratio 1.03×, and the one number against it unchanged — 98 pool games ended under 2 s of clock to smooth's 0 |
 | 2026-08-15 | **PRE-REGISTERED: the pool TM's FIXED-N confirmation — N=300 at 30+1, no stopping rule, to earn the magnitude the three SPRT-stopped regime numbers cannot** | The oldest open follow-up on the landing lane's list. All three pool regime figures (+119.94 ± 36.44 at 60+0, +136.58 ± 35.24 at 60+1, **+124.50 ± 38.79** at 30+1) are **SPRT-stopped and therefore biased away from zero** — `pend` measured that bias at 42% on its own screen. This match has **no stopping rule**: 300 games, played out. Arms are the pinned m5 pair, shas **re-verified before registration** (`cddf392e2144…` pool, `14b69a606b74…` smooth, both built at `522931a`). 30+1, `book3k.pgn` order=random, **srand 20260820** (fresh), **adjudication NONE**, concurrency 8, nice 10. Zero illegal ends and voids the run; forfeits recorded either way — box history is 651/651 clean, so **any** forfeit here is a genuine holdback-revisit signal (unlike the laptop meter's 9). **#205 does not touch this**: both arms predate it and the measured quantity is the pool-vs-smooth TM difference, not anything-vs-classic |
 | 2026-08-15 | **RELOCATION BRANCH (b) FIRES — the laptop run 2 is CANCELLED WITHOUT A GAME and the +400 meter MOVES TO THE BENCH BOX. Registered before any game: N=300, 60+1, srand 20260822, concurrency 8 DECLARED, arms TRANSFERRED not rebuilt** | Two independent reasons, both measured: the quiet gate **refused continuously from 19:34:35Z** on foreign CPU **124-310%** that was **pure user-desktop load** (every one of this project's lanes already stopped — audit-lane CPython count 0, leanpy embargoed), and run 1's lock release freed a queued **~40-min lake build + sweeps + a 30-min ctwin leg** that holds the laptop busy regardless. The branch's own rationale — "a gate that never passes is a void arriving early" — says act on evidence, not on the calendar word "tonight". **No data lost: `meter2.pgn` never existed.** Box verified read-only before registering: **96 cores, load 22.81**, fastchess + pypy3 present, `book3k.pgn` present, 4 matches already running (pool fixed-N at conc 8 + #190 audit at conc 10) — and its record is **651/651 clean timed packed-arm games at heavier cotenancy than the laptop ever saw**. **Arms are TRANSFERRED, never rebuilt** — a box rebuild would use that box's pyminify/xz and break identity with stage 1, A/B and run 1 — with sha256 re-verified after transfer (`5a207fdf9cf05f2e…` 3405 B, `7bdbd6054f70622a…` 3246 B) and the launch refusing to play if either differs. **EXECUTION SPLIT: this lane is read-only on the box, so the training lane launches per this registration; HARVEST AUTHORITY STAYS HERE** (read-only ssh, committed reading rules, Elo unread until N=300 completes forfeit-free). Classic arm is master `2784dbf`, so the number is labelled **pre-#205-classic**. Concurrency 8 is **declared and reported with the number**, because at a real clock concurrency is part of the conditions |
 | 2026-08-15 | **RE-REGISTERED: THE +400 METER, RUN 2 — same form and the SAME sha-pinned arms, new srand **20260821**, void-on-forfeit again, and this time an ABSOLUTE venue embargo ordered across all lanes (nothing above shell-trivial on this laptop while it runs)** | Identical to run 1 so the two are the same measurement, not two different ones: fixed **N=300**, 60+1, concurrency 4, adjudication none, `book3k` order=random, entry **3405 B** `5a207fdf9cf05f2e…` vs classic **3246 B** `7bdbd6054f70622a…` — byte-identical arms to run 1 and to B, re-verified at registration. **Only the srand changes** (20260820 → **20260821**), so run 2 is an independent draw of the same quantity. **Void-on-forfeit stands unchanged** — it fired correctly once and is not being weakened because it cost a run. Quiet gate raised on run 1's evidence: run 1 started at a passing gate and was still overtaken 3 h later, so the gate is necessary but not sufficient and only the embargo closes it; the gate now also requires the venue to hold, with the sampler recording throughout and the per-window analysis run at harvest whatever the outcome. **Reading rules carry over verbatim** including no early stop on the score, and the Elo stays unread until the run is confirmed forfeit-free. Overnight run authorized; self-completing; ETA ~4 h from gate pass |
@@ -1914,6 +1915,72 @@ fastchess's reported Elo and Ptnml on all three screens before any
 truncated number is believed.
 
 ---
+
+## 2026-08-16 — POOL FIXED-N VERDICT: the magnitude is **+102.47 ± 32.43**, and the SPRT decider was **22 Elo high**
+
+The pre-registered fixed-N ran to its full 300 games with no stopping rule.
+**This is THE pool magnitude at 30+1.** The three SPRT figures stay in the
+ledger as what they always were — decisions, not magnitudes.
+
+| | |
+|---|---|
+| form | **N = 300 fixed**, no SPRT, no early stop — played out |
+| result | **pool 144 W / 58 L / 98 D**, **64.33%** |
+| **Elo** | **+102.47 ± 32.43** (95%, pentanomial) → **[+70.04, +134.90]** |
+| pentanomial | **[5, 20, 41, 52, 32]** over 150 pairs, **0 unpaired**, PairsRatio **6.40** |
+| draw ratio | 32.67%; median 136 plies (p90 194, max 345) |
+| **tripwires** | **0 illegal, 0 time forfeits, 300/300 `[Termination "normal"]`** |
+| arms | `cddf392e2144…` pool vs `14b69a606b74…` smooth, built at `522931a`, shas verified before game 1 |
+| conditions | 30+1, `book3k.pgn` order=random, srand 20260820, adjudication NONE, concurrency 8, nice 10 |
+
+### The early-stop bias, measured
+
+| | Elo | interval |
+|---|---|---|
+| SPRT decider (stopped at 288) | **+124.50 ± 38.79** | [+85.71, +163.29] |
+| **fixed N=300 (this run)** | **+102.47 ± 32.43** | [+70.04, +134.90] |
+| **difference** | **−22.03 Elo** | **17.7% of the SPRT reading** |
+
+**The SPRT number was high, by 22 Elo or ~18%** — the direction the
+stopping rule guarantees, and the reason this match was registered. For
+scale, `pend` measured its own early-stop bias at **42%**; the pool's is
+smaller but real.
+
+**Said honestly, the two are not statistically separated.** The intervals
+overlap heavily ([+85.71, +163.29] vs [+70.04, +134.90]), so this single
+comparison does not *prove* the 22 Elo is bias rather than sampling noise.
+What it does establish is the number to quote: the fixed-N interval means
+what it advertises, and the SPRT's does not — which is the whole reason
+magnitudes are not read off stopped tests. Note also that the fixed-N
+interval is **tighter** (±32.43 vs ±38.79) on only 12 more games, because
+a stopped test pays for its optionality in width as well as in location.
+
+**What does not change: the pool still wins, decisively.** +102.47 with a
+95% interval entirely above zero, 64.33%, PairsRatio 6.40, and only 5 of
+150 pairs lost outright. The landing stands; its *altitude* comes down.
+
+### Mechanism, unchanged from the decider
+
+**Zero blind moves on either arm** (0 of 18,321 pool moves, 0 of 18,276
+smooth) — the pre-registered mechanism number, and it stays clean. Spend
+is near-identical (median 1.271 s vs 1.236 s, **ratio 1.03×**), so at 30+1
+the pool wins on *shape at equal spend*, exactly as the decider read. The
+one number against it is also unchanged and reproduced at fixed N: **98 of
+the pool's 300 games ended under 2 s of clock against smooth's 0.**
+
+### Venue
+
+Box, four concurrent timed matches, 96 cores at load 18→30 across the run.
+**The box's clean-timed-game record extends to 951/951** (m2 263 + m5 288 +
+m6 100 + this 300). Cotenancy recorded at launch and finish per
+`box-cotenancy-ban`'s amendment; other humans logged in were measured at
+**0.0% CPU** before launch, which is the amendment's actual condition and
+was checked rather than assumed.
+
+**#205 does not touch this number.** Both arms predate it and the measured
+quantity is the pool-vs-smooth **TM difference**, not anything-vs-classic.
+Entry-vs-classic goal measurements from today onward must re-arm against
+post-#205 master.
 
 ## 2026-08-15 — PRE-REGISTRATION: the pool TM's FIXED-N confirmation, and the magnitude the SPRT numbers were never allowed to be
 
