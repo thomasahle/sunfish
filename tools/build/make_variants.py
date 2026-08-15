@@ -99,26 +99,51 @@ MODS = {
     # the landed kend+fresh fix already pays for (one boolean per search, and
     # the from_board rebuild line after the swap handles the carried score).
     #
-    # `pend`: endgame pawn-advance table. At queens-off, every pawn's value
-    # grows quadratically with advancement -- 0,2,8,18,32,50 by rank 2..7
-    # (72 on the promotion row, consistently discounting the promotion
-    # delta). BOTH colours read it: the mover prices the opponent's runner
-    # through the 119-i mirror, which is the taxonomy's pawn-race blindness
-    # (41.h3?? c3!) mechanism. The quadratic is search-coupling discipline,
-    # not numerology: per-move deltas are 2,6,10,14,18,22 -- all below
-    # QS=40 and LMR=60, so the QS admission gate, the futility break and
-    # the reduction trigger keep their measured tuning. `x and` keeps the
-    # padding zeros zero.
-    "pend": [
-        ("K_MID, K_END = pst[\"K\"], tuple(piece[\"K\"] + 70\n",
-         "P_MID, P_END = pst[\"P\"], tuple(x and x + (8 - i // 10) ** 2 * 2\n"
-         "   for i, x in enumerate(pst[\"P\"]))\n"
-         "K_MID, K_END = pst[\"K\"], tuple(piece[\"K\"] + 70\n"),
-        ('        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END\n',
-         '        end = "Q" not in pos.board or "q" not in pos.board\n'
-         '        pst["K"] = K_END if end else K_MID\n'
-         '        pst["P"] = P_END if end else P_MID\n'),
-    ],
+    # ===================================================================
+    # TOMBSTONE: `pend` LANDED 2026-08-15 (61b1a51), CONFIRMED +21.31 (902d9a2).
+    # Endgame pawn-advance table: at queens-off, every pawn's value grows
+    # quadratically with advancement (0,2,8,18,32,50 by rank 2..7), read by
+    # both colours through the 119-i mirror. It is now injected DIRECTLY by
+    # tools/build/make_pst_entry.py (`_pend`, beside `_pooltm`), asserted
+    # exactly once there the same way this file always asserted it.
+    #
+    # WHAT IT MEASURED (nnue_4k/MEASUREMENTS.md, "pend CONFIRMED at +21.31
+    # and LANDED"): screen (SPRT, stops early) +36.71 +/- 16.20 over 722
+    # games; confirmation (fixed 800, no early stopping) pend W336/L287/D177
+    # = 53.06%, +21.31 +/- 15.73 -> [+5.58, +37.04], pentanomial. Landed cost
+    # +32 packed bytes (3308 -> 3340) measured on its OWN base -- the +37
+    # some earlier notes quote was measured against a base that no longer
+    # applies; byte deltas never compose across landings.
+    #
+    # WHICH ANCHORS SURVIVE -- the load-bearing part of a tombstone:
+    #
+    #   * The SECOND anchor, `pst["K"] = K_MID if "Q" in pos.board and "q"
+    #     in pos.board else K_END`, is GONE from the baseline -- the landed
+    #     seam reads `end = "Q" not in pos.board or "q" not in pos.board`
+    #     then `pst["K"] = K_END if end else K_MID` / `pst["P"] = P_END if
+    #     end else P_MID` instead. Re-creating `pend` raises there today.
+    #     SAFE, but only half the story.
+    #
+    #   * The FIRST anchor, `K_MID, K_END = pst["K"], tuple(piece["K"] + 70`,
+    #     STILL OCCURS EXACTLY ONCE -- the landing inserts the P_MID/P_END
+    #     definition BEFORE this line, not through it, so the line itself is
+    #     untouched. A re-created `pend` would match it and insert a SECOND
+    #     P_MID/P_END pair WHILE THE OCCURS-EXACTLY-ONCE CHECK ON THAT ANCHOR
+    #     PASSES CLEANLY -- silent double-application on top of the already
+    #     landed pend, caught only by the second anchor raising first. If the
+    #     seam line ever drifts back toward the pre-landing text, that second
+    #     anchor stops being the backstop. DO NOT re-create this mod; compose
+    #     against the baseline instead, exactly as `pendkhold2` already does.
+    #
+    # SUBSUMPTION OBLIGATION, carried from the landing: `pend` is a
+    # hand-written phase term, and it is DELETED (not composed) the day a
+    # phase-capable net screens and subsumes it -- the comparison matrix must
+    # include net-vs-net+pend at that point.
+    #
+    # ledger: nnue_4k/MEASUREMENTS.md, "pend CONFIRMED at +21.31 and LANDED"
+    # (902d9a2) -- carries the arm sha256s and the packed sha of the artifact
+    # that played the confirmation.
+    # ===================================================================
     # `kact`: steeper K_END centralization. The gradient (10 cp per step of
     # centre manhattan distance) was inherited from classic and never swept
     # on this engine; 14/step makes an active king worth up to +126 across
