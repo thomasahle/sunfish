@@ -52,6 +52,15 @@ class MixedAcquisitionTest(unittest.TestCase):
             target,
         )
 
+    def test_halton_design_handles_full_tuning_space(self):
+        parameters = [
+            {"name": f"X{i}", "type": "discrete", "values": [0, 1, 2], "default": 1}
+            for i in range(25)
+        ]
+        space = MixedSpace({"parameters": parameters, "max_candidates": 64})
+        self.assertEqual(len(space.candidates), 64)
+        self.assertIn(space.default, space.candidates)
+
     def test_coordinate_search_matches_exhaustive_gp_ucb(self):
         domain = list(itertools.product(*self.space.coordinate_values))
         observed = [domain[index] for index in (0, 211, 702, 1050, 1537, 2120)]
