@@ -74,7 +74,6 @@ static int tables_loaded = 0;
 static int QS = 40;
 static int QS_A = 140;
 static int LMR = 60;
-static int THREAT_MARGIN = 500;
 static int EVAL_ROUGHNESS = 15;
 static long TABLE_SIZE = 1000000;
 static int NULL_MARGIN = 15;     /* fuel-probe target margin (its own knob
@@ -693,9 +692,9 @@ static int gives_check(const Pos *child) {
 }
 
 static int score_move(const Pos *pos, Move move, int val, int gamma,
-        int depth, int rd, int safe, int *real) {
+        int depth, int rd, int guard, int *real) {
     Pos child = domove(pos, move);
-    int move_depth = rd - 1 - (safe && val < LMR);
+    int move_depth = rd - 1 - (guard && val < LMR);
     *real = 1;
     if (2 <= depth && depth <= 3 && pos->b[move.j] == '.'
             && move.j != pos->ep && !move.prom) {
@@ -781,20 +780,16 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         if (done) goto after_moves;
     }
 
-    /* Fuel oracle (master since #192) -- never a score candidate, only a
-     * fuel decision.  Its high target reduces the node; the second fixed
-     * target detects threats and permits intrinsic LMR only when passing
-     * stays within THREAT_MARGIN of static evaluation. */
-    int rd = depth, safe = 0;
-    if (FUEL_NULL && depth >= FUEL_MIN_DEPTH && iabs(pos->score) < NULL_LIMIT
-            && has_big_piece(pos)) {
+    /* Fuel oracle -- its fixed target reduces the node.  Its static guard
+     * also limits intrinsic LMR to positions where passing is meaningful. */
+    int rd = depth;
+    int guard = FUEL_NULL && depth >= FUEL_MIN_DEPTH
+        && iabs(pos->score) < NULL_LIMIT && has_big_piece(pos);
+    if (guard) {
         int target = pos->score + NULL_MARGIN;
         Pos rp = rotate(pos, 1);
-        int hot = -bound(&rp, 1 - target, depth - NULL_RED, 0, 0) >= target;
-        if (hot)
+        if (-bound(&rp, 1 - target, depth - NULL_RED, 0, 0) >= target)
             rd = depth - 1;
-        target = pos->score - THREAT_MARGIN;
-        safe = hot || -bound(&rp, 1 - target, depth - NULL_RED, 0, 0) >= target;
     }
 
     /* QSearch stand pat. */
@@ -823,7 +818,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         int val = value(pos, killers[kk]);
         if (val < val_lower) continue;
         int real;
-        int score = score_move(pos, killers[kk], val, gamma, depth, rd, safe, &real);
+        int score = score_move(pos, killers[kk], val, gamma, depth, rd, guard, &real);
         PROCESS(real, killers[kk], score);
         if (done) goto after_moves;
     }
@@ -848,7 +843,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
             }
             if (!qstail) {
                 int real;
-                int score = score_move(pos, m, val, gamma, depth, rd, safe, &real);
+                int score = score_move(pos, m, val, gamma, depth, rd, guard, &real);
                 PROCESS(real, m, score);
             } else {
                 Pos np = domove(pos, m);
@@ -1186,7 +1181,6 @@ static int load_tables(const char *path) {
 struct knob { const char *name; int *ip; long *lp; };
 static struct knob KNOBS[] = {
     { "QS", &QS, NULL }, { "QS_A", &QS_A, NULL }, { "LMR", &LMR, NULL },
-    { "THREAT_MARGIN", &THREAT_MARGIN, NULL },
     { "EVAL_ROUGHNESS", &EVAL_ROUGHNESS, NULL },
     { "TABLE_SIZE", NULL, &TABLE_SIZE },
     { "NULL_MARGIN", &NULL_MARGIN, NULL },

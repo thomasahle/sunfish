@@ -114,7 +114,7 @@ make bench      # C-vs-PyPy wall-time ratio at identical nodes
 
 Tuning knobs (no recompile): UCI `setoption name NAME value VALUE`, lab
 `set NAME VALUE`, `SF_NAME=` env, or `NAME=VALUE` argv after the table path —
-`QS QS_A LMR THREAT_MARGIN EVAL_ROUGHNESS TABLE_SIZE NULL_MARGIN NULL_MIN_DEPTH NULL_LIMIT
+`QS QS_A LMR EVAL_ROUGHNESS TABLE_SIZE NULL_MARGIN NULL_MIN_DEPTH NULL_LIMIT
 NULL_RED IID_MIN_DEPTH IID_RED FUT_MAX MATE_DIST FUEL_NULL
 FUEL_MIN_DEPTH` (`NULL_MARGIN` is the fuel-probe target margin, master's
 own knob since #192, independent of `EVAL_ROUGHNESS`, which still caps

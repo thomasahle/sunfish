@@ -225,8 +225,8 @@ class TestIntrinsicLMR:
 
     FEN = "4k3/8/8/3p4/4P3/8/8/N3K3 w - - 0 1"
 
-    def observed_depths(self, depth, pass_score):
-        pos = hist_from_fen(self.FEN)[-1]
+    def observed_depths(self, depth, pass_score, fen=FEN):
+        pos = hist_from_fen(fen)[-1]
         passed = pos.rotate(nullmove=True)
         moves = list(pos.gen_moves())
         children = {pos.move(move): move for move in moves}
@@ -249,14 +249,21 @@ class TestIntrinsicLMR:
         return pos, moves, seen
 
     def test_edge_cost_is_intrinsic_and_killer_independent(self):
-        for depth, offset in ((7, 0), (8, 0), (8, -sf.THREAT_MARGIN - 1), (8, sf.NULL_MARGIN)):
-            pos = hist_from_fen(self.FEN)[-1]
+        cases = (
+            (self.FEN, 7, 0),
+            (self.FEN, 8, 0),
+            (self.FEN, 8, sf.NULL_MARGIN),
+            ("4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1", 8, sf.NULL_MARGIN),
+            ("4k3/8/8/8/8/8/8/Q3K3 w - - 0 1", 8, sf.NULL_MARGIN),
+        )
+        for fen, depth, offset in cases:
+            pos = hist_from_fen(fen)[-1]
             pass_score = pos.score + offset
-            pos, moves, seen = self.observed_depths(depth, pass_score)
-            hot = depth >= 8 and pass_score >= pos.score + sf.NULL_MARGIN
-            safe = depth >= 8 and pass_score >= pos.score - sf.THREAT_MARGIN
+            pos, moves, seen = self.observed_depths(depth, pass_score, fen)
+            guard = depth >= 8 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ")
+            hot = guard and pass_score >= pos.score + sf.NULL_MARGIN
             for move in moves:
-                expected = depth - hot - 1 - (safe and pos.value(move) < sf.LMR)
+                expected = depth - hot - 1 - (guard and pos.value(move) < sf.LMR)
                 assert {d for m, d in seen if m == move} == {expected}
 
 

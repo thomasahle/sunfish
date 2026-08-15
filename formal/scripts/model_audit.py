@@ -23,8 +23,7 @@ reformatting of surrounding code does not fire):
   - Position.gen_moves   (Game.moves, CaptureFirst's list)
   - Position.king_capture (the substitution/in-check scan, kp = 0 note)
   - constants            (MATE_LOWER, MATE_UPPER, QS, QS_A, LMR,
-                          THREAT_MARGIN, EVAL_ROUGHNESS, NULL_MARGIN,
-                          TABLE_SIZE)
+                          EVAL_ROUGHNESS, NULL_MARGIN, TABLE_SIZE)
 
 Run from the repo root:  python formal/scripts/model_audit.py
 Refresh after a re-audit: python formal/scripts/model_audit.py --update
@@ -38,8 +37,8 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SUNFISH = ROOT / "sunfish.py"
 
-CONSTANTS = ["MATE_LOWER", "MATE_UPPER", "QS", "QS_A", "LMR", "THREAT_MARGIN",
-             "EVAL_ROUGHNESS", "NULL_MARGIN", "TABLE_SIZE"]
+CONSTANTS = ["MATE_LOWER", "MATE_UPPER", "QS", "QS_A", "LMR", "EVAL_ROUGHNESS",
+             "NULL_MARGIN", "TABLE_SIZE"]
 
 EXPECTED = {
     "Position.gen_moves": "3453dbe008109d3d",
@@ -47,9 +46,9 @@ EXPECTED = {
     "Position.move": "69bb2460cd611c9e",
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "11d52eaa8a661352",
-    "Searcher.bound": "f5d1836a2c1a724b",
+    "Searcher.bound": "8529af1cfad1b356",
     "Searcher.search": "f9aa8c81b84ff44b",
-    "constants": "241b2a4e1d369ea9",
+    "constants": "c2157b7c45988f7c",
 }
 
 
@@ -101,11 +100,11 @@ ANCHORS = [
     "if not killer and depth > 3:",
     "if killer and pos.value(killer) >= val_lower:",
     "yield score_move(killer, pos.value(killer))",
-    "move_depth = d - 1 - (safe and val < LMR)",
+    "move_depth = d - 1 - (guard and val < LMR)",
     "if not root and 2 < depth < 8 and",
-    "hot_target, safe_target = pos.score + NULL_MARGIN, pos.score - THREAT_MARGIN",
-    "d -= -self.bound(nullpos, 1 - hot_target, depth - 5) >= hot_target",
-    "safe = d < depth or -self.bound(nullpos, 1 - safe_target, depth - 5) >= safe_target",
+    "guard = depth >= 8 and abs(pos.score) < 500 and any(c in pos.board for c in \"RBNQ\")",
+    "target = pos.score + NULL_MARGIN",
+    "d -= -self.bound(nullpos, 1 - target, depth - 5) >= target",
     "yield None, pos.score",
     "score = min(pos.score + EVAL_ROUGHNESS,",
     "if depth <= 1 and pos.score + val < gamma:",

@@ -139,7 +139,6 @@ MATE_UPPER = piece["K"] + 10 * piece["Q"]
 QS = 40
 QS_A = 140
 LMR = 60
-THREAT_MARGIN = 500
 EVAL_ROUGHNESS = 15
 # Target margin of the deep-null fuel probe (depth >= 8): the pass must
 # beat pos.score + NULL_MARGIN for real moves to burn two plies. Its own
@@ -157,7 +156,6 @@ opt_ranges = dict(
     QS = (0, 300),
     QS_A = (0, 300),
     LMR = (-200, 200),
-    THREAT_MARGIN = (0, 500),
     EVAL_ROUGHNESS = (0, 50),
     NULL_MARGIN = (0, 200),
     TABLE_SIZE = (10**4, 10**8),
@@ -396,14 +394,14 @@ class Searcher:
                 proof = score >= gamma and (self.tp_move.get(pos) or pos.king_capture())
                 yield (proof, MATE_UPPER) if proof and pos.value(proof) >= MATE_LOWER else (None, score)
 
-            # Fixed-target null probes reduce hot nodes and protect threatened ones.
+            # A fixed-target null probe reduces hot nodes. Its static guard also
+            # limits intrinsic LMR to positions where passing is meaningful.
             d = depth
-            safe = False
-            if depth >= 8 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
+            guard = depth >= 8 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ")
+            if guard:
                 nullpos = pos.rotate(nullmove=True)
-                hot_target, safe_target = pos.score + NULL_MARGIN, pos.score - THREAT_MARGIN
-                d -= -self.bound(nullpos, 1 - hot_target, depth - 5) >= hot_target
-                safe = d < depth or -self.bound(nullpos, 1 - safe_target, depth - 5) >= safe_target
+                target = pos.score + NULL_MARGIN
+                d -= -self.bound(nullpos, 1 - target, depth - 5) >= target
 
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else. (Note depth at root is always > 0.)
@@ -443,7 +441,7 @@ class Searcher:
             # child report to the same fixed capped value.
             def score_move(move, val):
                 child = pos.move(move)
-                move_depth = d - 1 - (safe and val < LMR)
+                move_depth = d - 1 - (guard and val < LMR)
                 if 2 <= depth <= 3 and pos.board[move.j] == "." and move.j != pos.ep and not move.prom:
                     cap = min(MATE_LOWER - 1, pos.score + val + (depth - 1) * QS_A)
                     if cap < gamma:
