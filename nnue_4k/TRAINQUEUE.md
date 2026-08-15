@@ -57,6 +57,89 @@ default when its table lands; arms re-size to the weight capacity it
 buys. Probe suite (train/probes.py) runs at every export; scores are
 ledgered per net (.probes.json), diagnostics never gates.
 
+## SELECTOR SPEC (standing, 2026-08-15, coordinator-authorized)
+
+**The problem it solves.** `val` ranks arms **inside** a family and
+**inverts across** family boundaries — measured three times, ledgered
+under the anti-predictive finding. Eight fitted evals died in play behind
+that inversion. Selection therefore has to be **play-anchored**, and the
+question is only how few games that costs. Measured retrospectively on the
+three surviving screens' PGNs (MEASUREMENTS.md 2026-08-15, "TRUNCATION
+VERDICT"), no new games spent.
+
+### The rule
+
+> **Candidate selection = a fixed-node mini-match, N\* = 50 games, against
+> the pinned current entry, fresh srand per candidate, ranked by score%.**
+
+| field | value |
+|---|---|
+| N\* | **50 games** = 25 colour-swapped pairs. Always whole pairs — a mini-match that stops mid-pair is biased |
+| opponent | the **pinned current entry**, one common base for every candidate in a cohort; never candidate-vs-candidate, never a moving base |
+| limit | fixed nodes 20000 (the ledger's standard screen budget), **sources under pypy3** — packed artifacts ignore `go nodes` |
+| srand | **fresh per candidate**, recorded |
+| book | `book3k.pgn`, order=random |
+| statistic | **score%** (equivalently pentanomial Elo). The pentanomial interval is reported but is not the decision |
+| gate | zero illegal moves. One ends the mini-match and voids it — same tolerance as a screen |
+| cost | ~10 min at concurrency 8 (from the ml2 screen's own rate, 195 games in 41 min) |
+
+### What it returns, and what it does NOT return
+
+**It returns a TOP PICK. It does not return a ranking, and it never
+returns an Elo for the ledger.** The measured calibration (bootstrap,
+4000 resamples, on true gaps of 127 and 66 Elo):
+
+| decision at N=50 | accuracy |
+|---|---|
+| **pick the best arm** | **96.8%** |
+| resolve a ~127 Elo cross-family gap | 96.0% |
+| **complete 3-way ordering** | **72.4%** |
+| resolve a ~66 Elo adjacent gap | 76.2% |
+
+So: promote the winner, and treat everything below the winner as
+**unordered**. Reading positions 2 and 3 off a 50-game mini-match is
+reading noise about a quarter of the time.
+
+### Promotion to a full screen
+
+A candidate is promoted to a registered screen when it **wins its cohort's
+mini-match**, i.e. tops the score% table against the pinned base. If two
+candidates finish within **10 percentage points** of each other (the
+measured resolution floor: 50 games resolve ~101 Elo at z = 1.645, so
+anything closer is a tie), the mini-match has **not** separated them —
+either extend that pair to **N\*\* = 150 games** (where a ~127 Elo gap is
+99.9% and a ~66 Elo gap 90.8%) or promote both and let the screens decide.
+Never break a mini-match tie by val: that is the inversion this whole spec
+exists to route around.
+
+### Honesty caveats, attached permanently
+
+- **The selector RANKS; only a registered screen produces a verdict.** No
+  mini-match number is ever quoted as Elo in MEASUREMENTS.md, and a
+  mini-match win is not evidence a candidate clears any bar. Screens
+  decide landing; this decides queue order.
+- **The source data is SPRT-truncated.** All three screens stopped early
+  and their full-N numbers are biased away from zero. The study used them
+  for *ordering*, which truncation does not distort, never for altitude.
+- **The three screens are not mutually calibrated.** Bases 3308 B vs
+  3405 B, srands 20260814/20260814/20260815, `openings_2k.epd` vs
+  `book3k.pgn`, and adjudication **active on 8mv (229/320) but inert on
+  both ml2 screens**. N\* is fitted under that heterogeneity, which is why
+  the spec pins ONE base and a fresh srand — the configuration the number
+  was fitted for is the configuration it is valid in.
+- **N\* = 50 sits exactly on the crossing point**, with zero margin: one
+  pair earlier the top two tie exactly, and below that the ranking
+  inverts. 50 is where it first becomes right and stays right on *these*
+  trajectories — the bootstrap's 5th–95th percentile for that crossing
+  spans 10 to 158 games, and 7.6% of resamples never stabilised at all.
+  This is why the rule is "top pick at 96.8%", not "ranking at N\*".
+- **The bootstrap covers outcome noise only** — not srand, base, book, or
+  a genuinely different candidate's true strength. It is a lower bound on
+  the uncertainty.
+- **Gaps under ~60 Elo are out of reach** at any affordable mini-match
+  size: the two ml2 arms (66 Elo apart) never separated even with all 370
+  games their two screens played.
+
 ## Queue
 
 1. **c1024-cal — capacity calibration at the new budget** (winner recipe,

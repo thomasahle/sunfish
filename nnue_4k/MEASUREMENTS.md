@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **TRUNCATION VERDICT: N\* = 50 GAMES — a 50-game fixed-node mini-match reproduces the three screens' full ranking and keeps it at every larger N. But the honest reading is narrower than "50 games ranks candidates": at a fixed 50-game budget the COMPLETE 3-way ordering is right only 72.4% of the time, while picking the BEST arm is right 96.8%** | Registered criterion (`52a4afb`) applied to the three surviving PGNs, truncated by ROUND. Cross-check passed first: all three "all" rungs reproduce fastchess exactly (8mv −107.06 ± 35.84 ptnml [51,27,58,12,11]; float-ml2 −234.18 ± 55.08 [51,19,23,1,3]; grid-ml2 −300.56 ± 71.33 [58,13,13,2,2]). **N\* = 50** (sign+rank hold at 50, 75, 100, 150, all; both FAIL at 25, where float-ml2 sits at exactly 50.00% and outranks 8mv). **N\*\* = 150** — the smallest rung where the CROSS-FAMILY pair also reaches one-sided z ≥ 1.645 (z: 25 −1.92, 50 0.12, 75 0.75, 100 0.82, **150 2.58**, all 4.09). **N\* has ZERO margin**: an unregistered fine scan puts the first-stable point at exactly 25 pairs — at 24 pairs the top two are an exact tie (39.58% vs 39.58%) and below that float-ml2 leads. **Bootstrap (4000 resamples of the pair pool) is the calibration that matters**: at N=50 pick-the-best **96.8%**, resolve the 127-Elo cross-family gap **96.0%**, full 3-way ordering **72.4%**, the 66-Elo adjacent pair only **76.2%**; at N=150 those are 99.9% / 99.9% / 90.8% / 90.8%. **As predicted at registration the adjacent ml2 pair never separates** (z 1.48 at 150, 1.52 at all). Selector resolution measured directly: 50 games resolve ~101 Elo at z=1.645, 150 games ~59 Elo. **SELECTOR SPEC written to TRAINQUEUE.md**: the mini-match returns a TOP PICK, never a ranking, and never a ledger Elo |
 | 2026-08-15 | **PRE-REGISTERED: the +400 progress meter gets re-measured — entry vs sunfish-classic, and a HARNESS DEFECT is registered with it: at a nominal 20000-node cap classic actually searches 1.53× the entry's nodes** | Entry `nnue_4k/pst_entry.py` @ nnue-4k `5af840d`, packed **3405 B measured** (691 spare, `check_entry.sh` green) vs classic `sunfish.py` @ master **`573d692`** (packs to **3246 B**, reference only — classic is not a 4k entry). **Stage 1**: fixed-node 20000, **fixed N=400 games, NOT SPRT** (a magnitude measurement wants an unbiased number), book3k order=random, **srand 20260816** (fresh — 20260814/20260815 are spent), concurrency 4, adjudication copied from the ml2 config. **The asymmetry, measured on 24 opening positions BEFORE game 1**: the entry enforces the cap INSIDE the search (`self.nodes > self.node_cap: raise Stop`); classic@573d692's `Searcher` stores `node_cap` and never reads it, so it only stops between iterations and overshoots — median nodes **24247 vs 16866 (1.53× per position, max 4.41×)**, wall time 1.33×. **One-sided, in classic's favour**, so whatever stage 1 reports is a conservative FLOOR on the entry's equal-effort standing. **Stage 2** (conditional on a free laptop and a clean stage 1): 60+1, N=200, **PACKED ARTIFACTS both sides** — the only vehicle that carries the entry's `_pooltm`, which lives in the builtin loop the sunfish_ui driver bypasses. **Adjudication is ACTIVE here, NOT inert** — the standing inertness note does not apply: both arms emit `score cp` (verified), exactly as on the 8mv screen (229/320 adjudicated). Gates before games: node cap binds by SCALING on both arms (17×/21× for 100× the nodes), legality 200/200 both arms both paths, first-yield worst 582/2048, empty cwd, driver pinned to `DRIVER_VERSION 3` (the main-repo copy has **no `max_nodes`** — the pre-`go nodes` driver that voided 425 games). Zero-illegal tripwire on the full match |
 | 2026-08-15 | **PRE-REGISTERED (measurement lane, before a single number was computed): can a SHORT fixed-node mini-match rank candidates that val cannot? The three surviving screen PGNs get truncated to their first N games and asked to reproduce their own full-screen ranking** | Retrospective truncation of `replnet-8mv` (−107.06), `float-ml2` (−234.18), `grid-ml2 g70` (−300.56). Ladder **N ∈ {25, 50, 75, 100, 150, all} games, rounded DOWN to whole colour-swapped pairs** = {12, 25, 37, 50, 75, all} pairs. Truncation is by **ROUND number, never file order** (file order is completion order at concurrency 8 — the pairing defect that made `pendkhold2` read ±13.39 instead of ±6.97). **N\*** = smallest ladder rung where (a) all three point-estimate Elos are NEGATIVE, (b) the score-rate ranking is 8mv > float-ml2 > grid-ml2 matching the full screens, and (c) **both hold at that rung AND at every larger rung** (rank stability — the truncation-ladder form of "stable across N and N±25"). **N\*\*** = smallest rung that additionally separates the CROSS-FAMILY pair (8mv vs float-ml2) at one-sided z ≥ 1.645 on the score-rate difference, and holds for all larger rungs. **Stated in advance: non-overlap is known-impossible for the float/grid pair** — the full screens already overlap on [−289.26, −229.23] — so requiring it everywhere would set N\* = ∞ by construction, and any spec that comes out of this must say the selector cannot resolve adjacent near-ties. Cross-check: hand pentanomial at "all" must reproduce fastchess's reported Elo/ptnml on all three |
 | 2026-08-15 | **REGISTERED (hygiene lane, before fixing): `khold`/`khold2` in `make_variants.py` are already broken -- their sole anchor (the pre-landing king seam) was removed by `pend`'s landing (`61b1a51`), same mechanism as `oldtm`/`steptm` losing theirs to `5f16bae`. They fail loudly today (safe), but look like live, buildable variants and are not -- and the whole family they belong to is now closed by measurement: `kact` DROP (-33.07 +/- 15.98, `ec70bd8`), `kmid` UNDECIDED (+2.08 +/- 16.58, `ec70bd8`), `khold2` alone UNDECIDED (+2.43 +/- 7.24, `bbc1969`), `khold2` on `pend` LOSES (-10.78 +/- 6.96 [-17.75,-3.81], `78ff222`), `khold` itself FAILS the mate-conversion gate and was never screened (`ad292ae`)** | Fix: tombstone `khold`/`khold2` in one block, same pattern as `pend`/`pooltm`-trio, naming every closing verdict's ledger commit and the rev to rebuild from for reproduction. Also checked `kact`/`kmid` (disjoint anchors, unrelated to pend's seam) -- both still build; left alone. Gate: `khold`/`khold2` raise unknown-mod loudly; `kact`/`kmid` and every other remaining mod still build |
@@ -266,6 +267,120 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-15 — TRUNCATION VERDICT: N* = 50 games, and what 50 games can actually be trusted to decide
+
+The registered question (`52a4afb`) is answered. **N\* = 50 games**, and the
+useful part of the answer is not that number but what a 50-game mini-match
+turns out to be *good at*.
+
+### Cross-check first, as the registration required
+
+Before any truncated number was believed, the hand pentanomial at "all" had to
+reproduce fastchess. It does, on all three, to the digit:
+
+| screen | this recompute | fastchess / ledger |
+|---|---|---|
+| 8mv | −107.06 ± 35.84, 318 g, 35.06%, [51, 27, 58, 12, 11] | −107.06 ± 35.84, 318 g, 35.06%, [51, 27, 58, 12, 11] |
+| float-ml2 | −234.18 ± 55.08, 194 g, 20.62%, [51, 19, 23, 1, 3] | −234.18 ± 55.08, 20.62%, [51, 19, 23, 1, 3] |
+| grid-ml2 | −300.56 ± 71.33, 176 g, 15.06%, [58, 13, 13, 2, 2] | −300.56 ± 71.33, 15.06%, [58, 13, 13, 2, 2] |
+
+Pairing is by **round**, and the rounds are contiguous from 1 in all three
+PGNs — file order is completion order and would have produced different pairs.
+
+### The ladder
+
+Each rung is the first N games of that screen in round order, rounded down to
+whole pairs.
+
+| rung | 8mv (linear) | float-ml2 | grid-ml2 | (a) sign | (b) rank |
+|---|---|---|---|---|---|
+| **25** (12 pr) | 27.08% −172.05 ± 166.72 | **50.00% −0.00** ± 117.81 | 8.33% −416.56 ± 263.22 | **FAIL** | **FAIL** |
+| **50** (25 pr) | 39.00% −77.71 ± 95.62 | 38.00% −85.04 ± 81.17 | 21.00% −230.16 ± 129.79 | PASS | PASS |
+| **75** (37 pr) | 37.84% −86.24 ± 78.06 | 32.43% −127.50 ± 77.22 | 18.24% −260.57 ± 105.98 | PASS | PASS |
+| **100** (50 pr) | 34.00% −115.23 ± 70.58 | 29.00% −155.54 ± 67.81 | 15.50% −294.61 ± 95.35 | PASS | PASS |
+| **150** (75 pr) | 35.33% −105.00 ± 56.87 | 22.67% −213.19 ± 62.09 | 16.33% −283.79 ± 75.60 | PASS | PASS |
+| **all** | 35.06% −107.06 ± 35.84 | 20.62% −234.18 ± 55.08 | 15.06% −300.56 ± 71.33 | PASS | PASS |
+
+**N\* = 50 games.** At 25 games the study fails both ways at once and it fails
+*informatively*: float-ml2 — the arm that eventually reads −234 — sits at
+**exactly 50.00%**, ahead of the arm that eventually reads −107. A 25-game
+mini-match would have promoted the wrong family.
+
+**N\*\* = 150 games.** One-sided z on the cross-family score-rate difference
+(8mv vs float-ml2, a 127-Elo gap):
+
+| rung | 25 | 50 | 75 | 100 | **150** | all |
+|---|---|---|---|---|---|---|
+| z(8mv > float-ml2) | −1.92 | 0.12 | 0.75 | 0.82 | **2.58** | 4.09 |
+| z(float-ml2 > grid-ml2) | 4.40 | 2.13 | 2.18 | 2.55 | 1.48 | 1.52 |
+| z(8mv > grid-ml2) | 1.94 | 2.07 | 2.86 | 3.23 | 3.98 | 5.68 |
+
+**The pre-registered impossibility held.** The adjacent ml2 pair (66 Elo
+apart) never reaches z = 1.645 — it is 1.48 at 150 games and 1.52 with all
+370 games between the two screens. The registration said demanding non-overlap
+there would set N\* = ∞ by construction, and the data agrees.
+
+### N* = 50 has ZERO margin, and that is the point
+
+An **unregistered** fine scan (labelled exploratory, run after the ladder) asks
+for the smallest pair count at which sign+rank hold for *every* larger count
+out to 88 pairs. The answer is **25 pairs — exactly the registered rung**. One
+pair earlier the top two are an **exact tie** (39.58% vs 39.58%); at 23 pairs
+and below float-ml2 is ahead. So 50 is not comfortably past the crossing, it
+*is* the crossing, and the top-two ordering at 50 rests on a 1.00-point score
+gap with z = 0.12 — a coin flip on that pair.
+
+### The calibration that decides the spec
+
+One trajectory per screen is one observation, not a distribution. Resampling
+pairs with replacement inside each screen (pairs are the independent unit —
+that is what the pentanomial is for), 4000 resamples, asking what an N-game
+mini-match would decide:
+
+| N games | full 3-way ranking | **pick the BEST** | kill the worst | 8mv > float (127 Elo) | float > grid (66 Elo) |
+|---|---|---|---|---|---|
+| 24 | 55.1% | 88.3% | 73.3% | 87.1% | 67.2% |
+| **50** | **72.4%** | **96.8%** | 80.4% | **96.0%** | 76.2% |
+| 74 | 80.4% | 98.8% | 85.0% | 98.5% | 81.9% |
+| 100 | 84.6% | 99.6% | 87.3% | 99.5% | 85.0% |
+| **150** | **90.8%** | 99.9% | 91.9% | 99.9% | 90.8% |
+| 200 | 93.1% | 100.0% | 94.2% | 100.0% | 93.1% |
+
+**This reframes the deliverable.** "N\* = 50" is true under the registered
+criterion and would be *misleading* as "50 games ranks candidates": the
+complete ordering at 50 games is right 72.4% of the time. What 50 games does
+reliably is **pick the best arm (96.8%)** and **resolve a cross-family gap of
+~127 Elo (96.0%)**. It cannot resolve 66 Elo — that needs ~150 games for 91%,
+and the full screens themselves never got there.
+
+Direct resolution, from the same pentanomial standard errors: at a 35%
+operating point, z = 1.645 needs a score-rate gap of **0.140 ≈ 101 Elo at 50
+games**, 0.100 ≈ 73 Elo at 100, **0.081 ≈ 59 Elo at 150**.
+
+### What the bootstrap does NOT cover
+
+It resamples pairs from these three screens, so it captures outcome noise and
+nothing else. It does not capture srand variation, base variation, book
+variation, or — most importantly — the variation of a *different candidate*
+with a different true strength. It is a lower bound on the real uncertainty.
+
+The comparability limits registered up front all stand: bases 3308 B (8mv) vs
+3405 B (both ml2), srands 20260814/20260814/20260815, `openings_2k.epd` vs
+`book3k.pgn`, and **adjudication active on 8mv (229 of 320 games) but inert on
+both ml2 screens** (packed-source arms emit no `info`). All three "all"
+numbers are SPRT-stopped and biased away from zero. This study is therefore
+evidence about **how many games ranking needs**, never a claim that the three
+screens are mutually calibrated.
+
+### Deliverable
+
+`nnue_4k/TRAINQUEUE.md` carries the **SELECTOR SPEC** that follows from this:
+a 50-game fixed-node mini-match against a common pinned base returns a **top
+pick**, not a ranking, and never a ledger Elo. Only a registered screen
+produces a number that enters this file.
 
 ---
 
