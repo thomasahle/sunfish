@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **PRE-REGISTERED (measurement lane, before a single number was computed): can a SHORT fixed-node mini-match rank candidates that val cannot? The three surviving screen PGNs get truncated to their first N games and asked to reproduce their own full-screen ranking** | Retrospective truncation of `replnet-8mv` (−107.06), `float-ml2` (−234.18), `grid-ml2 g70` (−300.56). Ladder **N ∈ {25, 50, 75, 100, 150, all} games, rounded DOWN to whole colour-swapped pairs** = {12, 25, 37, 50, 75, all} pairs. Truncation is by **ROUND number, never file order** (file order is completion order at concurrency 8 — the pairing defect that made `pendkhold2` read ±13.39 instead of ±6.97). **N\*** = smallest ladder rung where (a) all three point-estimate Elos are NEGATIVE, (b) the score-rate ranking is 8mv > float-ml2 > grid-ml2 matching the full screens, and (c) **both hold at that rung AND at every larger rung** (rank stability — the truncation-ladder form of "stable across N and N±25"). **N\*\*** = smallest rung that additionally separates the CROSS-FAMILY pair (8mv vs float-ml2) at one-sided z ≥ 1.645 on the score-rate difference, and holds for all larger rungs. **Stated in advance: non-overlap is known-impossible for the float/grid pair** — the full screens already overlap on [−289.26, −229.23] — so requiring it everywhere would set N\* = ∞ by construction, and any spec that comes out of this must say the selector cannot resolve adjacent near-ties. Cross-check: hand pentanomial at "all" must reproduce fastchess's reported Elo/ptnml on all three |
 | 2026-08-15 | **REGISTERED (hygiene lane, before fixing): `khold`/`khold2` in `make_variants.py` are already broken -- their sole anchor (the pre-landing king seam) was removed by `pend`'s landing (`61b1a51`), same mechanism as `oldtm`/`steptm` losing theirs to `5f16bae`. They fail loudly today (safe), but look like live, buildable variants and are not -- and the whole family they belong to is now closed by measurement: `kact` DROP (-33.07 +/- 15.98, `ec70bd8`), `kmid` UNDECIDED (+2.08 +/- 16.58, `ec70bd8`), `khold2` alone UNDECIDED (+2.43 +/- 7.24, `bbc1969`), `khold2` on `pend` LOSES (-10.78 +/- 6.96 [-17.75,-3.81], `78ff222`), `khold` itself FAILS the mate-conversion gate and was never screened (`ad292ae`)** | Fix: tombstone `khold`/`khold2` in one block, same pattern as `pend`/`pooltm`-trio, naming every closing verdict's ledger commit and the rev to rebuild from for reproduction. Also checked `kact`/`kmid` (disjoint anchors, unrelated to pend's seam) -- both still build; left alone. Gate: `khold`/`khold2` raise unknown-mod loudly; `kact`/`kmid` and every other remaining mod still build |
 | 2026-08-15 | **SCREEN VERDICT: the EXPORT-FAITHFUL ml2 net is −300.56 ± 71.33 — WORSE than the defective net it was built to replace, so honest training did NOT rescue the two-layer eval** | 178 games of a 1000 cap, SPRT H0, score **15.06%**, pentanomial **[58, 13, 13, 2, 2]** over 88 pairs, PairsRatio 0.034, **0 illegal / 0 forfeits / 178 normal terminations**, adjudication symmetrically inert (0 adjudications, neither arm emits `info` lines). Arm 3775 B vs entry 3405 B @ `c5534cd`. The pre-registered bad branch: fixing quantization did not recover the family. **Not** separated from float-ml2 ([−371.89,−229.23] vs [−289.26,−179.10] overlap) — directionally worse, not measurably. **The anti-predictive finding now has three points and a precise form: val ranks arms INSIDE a family and INVERTS across family boundaries** — linear has the worst val of the three (0.01378) and the best play (−107); within ml2, float 0.01280→−234 and grid 0.01347→−300 move together. Probes do not rescue it: `70` responds on more classes (passer +23.9 vs +2.8, bishop-pair +14.2 vs 0.0) and plays 194 Elo worse. Grid-era vals: `70` 0.01347, `71` **0.01378 = the linear reference exactly** (one-layer family is fully grid-representable), `72` τ=1.1 0.01378 at **+1 measured byte** — arm 8 closed |
 | 2026-08-15 | **REGISTERED (hygiene lane, before fixing): `pend`'s mod was never retired from `make_variants.py` after it landed (61b1a51/902d9a2) — its second anchor fails safe today (the seam it targeted is gone), but its FIRST anchor (`K_MID, K_END = pst["K"], tuple(piece["K"] + 70`) still matches exactly once, so a future drift that removes only the second anchor's protection would let `pend` double-apply on top of the already-landed pend, silently** | Fix: retire `pend` with a tombstone naming both anchors' fates, same pattern as `pooltm`/`oldtm`/`steptm` in `5f16bae`. Gate: building the `pend` variant must fail LOUDLY (unknown-mod `SystemExit`, not a silent success); every remaining mod must still build |
@@ -264,6 +265,108 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-15 — PRE-REGISTRATION: how few games does it take to RANK candidates, when val cannot? (retrospective truncation of the three surviving screens)
+
+**Registered before a single truncated number was computed.** The
+campaign's most expensive finding is that **val ranks arms inside a
+family and INVERTS across family boundaries** — so every cross-family
+selection this lane made on val was inadmissible, and eight fitted evals
+died in play behind it. The program needs a selection signal that is
+*play-anchored* (so it cannot invert) yet cheap enough to run per
+candidate. The obvious candidate is a very short fixed-node mini-match.
+This measurement asks whether such a thing would have worked, using
+games that were **already paid for** — no new games are spent.
+
+### The data
+
+| screen | arm vs base | full-screen verdict | PGN |
+|---|---|---|---|
+| `replnet-8mv` (linear one-layer) | 3536 B vs entry-`5d7d0d1` 3308 B | **−107.06 ± 35.84**, 318 games | bench-box `screen/replnet_screen.pgn`, copied read-only |
+| `float-ml2` | 3884 B vs entry 3405 B @ `5f16bae` | **−234.18 ± 55.08**, 195 games | `scratchpad/arena-ml2export/ml2screen.pgn` |
+| `grid-ml2` (`70_gridste_ml2`) | 3775 B vs entry 3405 B @ `c5534cd` | **−300.56 ± 71.33**, 178 games | `scratchpad/arena-ml2export/g70screen.pgn` |
+
+### The question, and the pass criterion, fixed now
+
+Ladder: **N ∈ {25, 50, 75, 100, 150, all} games**, each rounded **down to
+a whole number of colour-swapped pairs** ({12, 25, 37, 50, 75, all}
+pairs) — a mini-match that stops mid-pair is a biased mini-match, so the
+selector will always play whole pairs and the ladder is defined the same
+way.
+
+Truncation is by **ROUND number, not file order.** File order in these
+PGNs is *completion* order at concurrency 8; the `pendkhold2` screen
+already recorded what happens when a lane forgets this (±13.39 instead of
+±6.97, a decisive loss misread as a straddle). Round order is also what a
+real `-rounds` cap would have played, so it is the faithful simulation.
+
+- **(a) sign** — all three point-estimate Elos negative at that rung.
+- **(b) ranking** — score-rate order `8mv > float-ml2 > grid-ml2`,
+  matching the full screens.
+- **(c) stability** — (a) and (b) hold at that rung **and at every larger
+  rung on the ladder**. This is the truncation-ladder form of "stable
+  across N and N±25"; a rung that is right once and wrong later is a
+  lucky crossing, not a selector.
+
+**N\*** is the smallest rung satisfying (a)+(b)+(c).
+
+**N\*\*** — the strong variant — additionally requires the *cross-family*
+comparison (8mv vs float-ml2, the one the campaign actually needs) to
+reach **one-sided z ≥ 1.645** on the difference of per-game score rates,
+`z = (μ₁ − μ₂) / √(se₁² + se₂²)` with pentanomial `se`, and to hold for
+every larger rung.
+
+**Why (c) is stability and not non-overlap, stated before looking.**
+Non-overlap is *known impossible* for the float-ml2 / grid-ml2 pair at
+any N: the full screens overlap on [−289.26, −229.23] and the ml2 verdict
+already ledgered "directionally worse, not measurably worse". Demanding
+separation for adjacent arms would set N\* = ∞ by construction and teach
+nothing. So separation is measured and reported where it is achievable
+(the cross-family pair), and any spec that comes out of this **must state
+that the selector cannot resolve adjacent near-ties** — it ranks, it does
+not adjudicate.
+
+### Comparability limits, recorded before the numbers
+
+These three screens were never designed to be compared game-for-game, and
+the truncation study inherits every difference:
+
+- **Bases differ**: entry-`5d7d0d1` **3308 B** (8mv) vs entry **3405 B**
+  (both ml2 screens) — the ml2 arms play a *stronger* base (it carries
+  `pend` and `pooltm`), so their Elo deficits are measured against a
+  higher bar than 8mv's.
+- **srand differs**: 20260814 (8mv, float-ml2) vs 20260815 (grid-ml2).
+- **Openings differ**: 8mv used the box's `openings_2k.epd`; both ml2
+  screens used `book3k.pgn` order=random.
+- **Adjudication differs and it is NOT inert on 8mv.** The ml2 screens
+  ran packed-source arms that emit no `info` lines, so `-resign`/`-draw`
+  could never fire (0 adjudications, the standing inertness note). The
+  8mv screen's arms DO emit `info`, and its own log shows games ending
+  "by adjudication" — the count is measured below, and it means the 8mv
+  number is not produced by the same instrument.
+- **All three are SPRT-truncated at the full-N end**, so "all" is itself
+  biased away from zero. The truncation ladder is therefore studying
+  *ranking*, never altitude.
+
+For all of these reasons the selector this produces is for ranking future
+candidates against a **COMMON pinned base with a fresh srand**, and the
+retrospective fit is evidence about how many games ranking needs — not a
+claim that these three numbers are mutually calibrated.
+
+### What this can and cannot license
+
+A selector output is **not a verdict.** Only a registered screen produces
+an Elo that enters this ledger. The mini-match ranks a queue; the screen
+decides whether a thing lands. If this study finds N\* small, the
+deliverable is a TRAINQUEUE selection rule; if it finds N\* large or
+unstable, the honest answer is that play-anchored selection costs real
+games and the queue must be shorter.
+
+Cross-check obligation: the hand pentanomial at "all" must reproduce
+fastchess's reported Elo and Ptnml on all three screens before any
+truncated number is believed.
 
 ---
 
