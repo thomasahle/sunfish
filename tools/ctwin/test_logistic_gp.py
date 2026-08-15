@@ -362,7 +362,7 @@ class MixedAcquisitionTest(unittest.TestCase):
             openings = root / "openings.fen"
             openings.write_text("startpos\n")
             state = root / "state.json"
-            subprocess.run([
+            command = [
                 sys.executable, str(pathlib.Path(__file__).with_name("adaptive_gp.py")),
                 "--fastchess", str(manager), "--engine", str(engine),
                 "--baseline-options", "default", "--space", str(space),
@@ -370,7 +370,9 @@ class MixedAcquisitionTest(unittest.TestCase):
                 "--slots", "1", "--queue-batches", "1", "--refill-batches", "1",
                 "--initial-design", "1", "--wall-time", "0.5s", "--batches", "100",
                 "--state", str(state), "--logs", str(root / "logs"),
-            ], check=True, stdout=subprocess.DEVNULL)
+            ]
+            subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
+            subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
             self.assertEqual(len(load_state(state, 1)["batches"]), 1)
 
     def test_policy_gates_do_not_block_queued_games(self):

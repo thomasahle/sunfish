@@ -764,7 +764,11 @@ async def optimize(args):
         space.candidates = sorted(set(candidates + ([fixed] if fixed is not None else [])))
     if not candidates:
         raise ValueError("the policy gate rejected every challenger")
-    deadline = time.monotonic() + args.wall_time if args.wall_time else None
+    deadline = None
+    if args.wall_time:
+        wall_deadline = state.setdefault("wall_deadline", time.time() + args.wall_time)
+        deadline = time.monotonic() + max(0, wall_deadline - time.time())
+        save_state(args.state, state)
     queue = deque()
     activity = asyncio.Event()
     experiments = {}
