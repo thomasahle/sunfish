@@ -837,6 +837,38 @@ Interim — A is still running and the sample will grow — but zero forfeits
 in a clean venue against 29.4% in a contended one is the confirmation the
 replication was ordered to produce.
 
+#### UPDATE at 61 games: it is a monotone DOSE-RESPONSE, not just a split
+
+The sample grew and the binary split resolved into a graded one, which is
+much harder to explain by anything other than the load itself:
+
+| foreign CPU during the game | games | forfeits | rate |
+|---|---|---|---|
+| **QUIET** (< 40%) | 4 | **0** | **0.0%** |
+| **LIGHT** (40 – 100%) | 3 | **0** | **0.0%** |
+| **BUSY** (100 – 250%) | 28 | 9 | **32.1%** |
+| **SATURATED** (> 250%) | 13 | 7 | **53.8%** |
+| contended total (> 100%) | 41 | 16 | 39.0% |
+| clean total (≤ 100%) | 7 | **0** | **0.0%** |
+
+**More foreign load, more flags, monotonically.** Zero illegal moves
+throughout.
+
+**A IS NOT THE MATCHED-CONDITIONS ARM IT WAS REGISTERED AS, and that has
+to be said plainly.** Its registered question was "does the forfeit
+reproduce at the voided run's conditions". It reproduces — but the
+conditions are **not** matched, they are **worse**: foreign CPU over A's
+run has median **173%**, p90 **348%**, max **903%**. A's own headline rate
+(16 forfeits in 48 sampled games, 33%) is therefore **not comparable** to
+the void's 2/41 = 4.9%; the venue degraded between the two runs. What A
+establishes is the *dose-response*, not a rate for any particular venue.
+
+**The honest weakness:** the clean bucket is only **7 games**. "0.0%" over
+7 games is consistent with any true rate below **34.8%** (exact one-sided 95% bound), so the clean
+end of the curve is the part that still needs data — which is exactly
+what B is for, and why B waits for quiet rather than starting on a dirty
+machine.
+
 ### CORRECTION: the "100 ms overrun" was never the engine's overrun
 
 This retires an arithmetic I did myself. The stage-2 entry compared a
