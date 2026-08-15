@@ -649,6 +649,67 @@ observable.
 fix stay **registered-not-run** until the rate and venue answers land. No
 engine source is touched by this work.
 
+### Two instrument findings, and the measurement that replaces flag-counting
+
+**1. `-pgnout timeleft=true` is BLIND to the entry, measured not assumed.**
+The registration proposed it as the instrumentation upgrade. It does not
+work for this arm: fastchess sources the PGN's `tl=` from the engine's own
+`info` output, and **95 of 189 move comments in replication A read
+`tl=0.000s` — every entry move** — while classic's carry a real clock
+(`tl=59.553s`). **Every packed 4k artifact is info-silent**, so this
+blindness applies to all of them and to any future timed match on a packed
+arm. The clock is therefore **reconstructed** instead, which is exact:
+fastchess records each move's wall time, and
+`clock_after = clock_before − spent + increment` from a known 60.000 s
+start.
+
+**2. Reconstruction CANNOT detect a forfeit, and finding that out is why
+the analyzer has a validation gate.** `overrun.py` first reported **0**
+forfeits on a run known to have **2**. The cause is structural: a flagged
+engine never produces the move, so there is no move and no time comment
+for it — fastchess attaches the note to the *opponent's* last move
+(`Kg8 {+1.59/6 1.123s, White loses on time (100ms overrun)}`). Forfeits
+and their overruns are now parsed from the arbiter's message (ground
+truth: 2 forfeits, overruns **[100, 101] ms**, matching `grep -c`), and
+reconstruction supplies only the continuous distributions.
+
+**3. The measurement that replaces counting flags.** A forfeit is a rare
+binary event — 2 in 41 games gives almost no signal, and a 100-game match
+would give little more. But **every move has a margin**, which is
+thousands of samples per match. Two quantities, deliberately separated:
+
+- **SELF-OVERRUN** = `spent − own_deadline`, where the deadline is the
+  engine's own `max(min(5·soft, A/2), 0.05)`. **Artifact-intrinsic**: it
+  measures the engine running past a limit *it chose*, with no reference
+  to the arbiter.
+- **FLAG MARGIN** = `clock_before − spent` over completed moves. A
+  near-miss distribution, not a forfeit detector.
+
+Re-analysing the **voided** stage-2 games with this instrument (the Elo is
+void; the per-move times are real observational data and stay valid):
+
+| quantity | value |
+|---|---|
+| moves past the entry's OWN deadline | **187 / 2085 = 8.97%** |
+| … by more than one poll gap (27.4 ms) | 173 (8.30%) |
+| … by more than 500 ms | 46 (**2.21%**) |
+| **max self-overrun** | **+5535 ms** (spent 12 100 ms against a 6 565 ms deadline) |
+| median self-overrun | −4009 ms (normally it stops at the soft break, far inside) |
+| min flag margin, completed moves | **297 ms** — it came within 0.3 s of flagging |
+
+**+5535 ms is 200× the poll gap.** Whatever delays the return, polling
+granularity is a small part of it, and the stage-2 entry's attribution is
+superseded by this table.
+
+**The overruns are BURSTY, not a steady rate** — in the voided run one
+game contributed **15 of its 66 moves** and another 4 of 69, while most
+games contributed **zero**. A steady intrinsic defect would not clump like
+that; a transient venue condition (thermal state after the preceding
+30-minute match, a background process, scheduler migration) would. This is
+the hypothesis A and B are now positioned to separate, and it is a
+*different* hypothesis from the concurrency one the order named — worth
+recording because neither A nor B fully isolates it.
+
 ---
 
 ## 2026-08-15 — STAGE 2 VOID: the tripwire fired, and it found a real clock defect in the shipped artifact
