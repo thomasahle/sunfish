@@ -729,6 +729,9 @@ async def optimize(args):
         state["selections"] = args.seed_selections
         state["allocations"] = {}
         state["new_axes"] = [name for name in space.names if name not in old_names]
+        compatible = ("candidate", "gate", "gate_timeout", "space")
+        if all(seed["study"].get(name) == state["study"].get(name) for name in compatible):
+            state["gates"] = seed.get("gates", {})
     save_state(args.state, state)
     options = set().union(*(space.knobs(candidate) for candidate in space.candidates))
     validate_options(args.engine, args.engine_args, options)
@@ -758,6 +761,7 @@ async def optimize(args):
             save_state(args.state, state)
         print(f"[gate] feasible candidate space: {len(feasible)}/{len(candidates)}", flush=True)
         candidates = feasible
+        space.candidates = sorted(set(candidates + ([fixed] if fixed is not None else [])))
     if not candidates:
         raise ValueError("the policy gate rejected every challenger")
     deadline = time.monotonic() + args.wall_time if args.wall_time else None

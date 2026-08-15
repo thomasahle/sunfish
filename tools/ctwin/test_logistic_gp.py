@@ -426,6 +426,7 @@ class MixedAcquisitionTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
             engine, manager, gate = root / "engine", root / "fastchess", root / "gate"
+            calls = root / "calls"
             engine.write_text(
                 f"#!{sys.executable}\n"
                 "print('option name X type spin default 3 min 0 max 5')\n"
@@ -435,7 +436,9 @@ class MixedAcquisitionTest(unittest.TestCase):
                 "print('Score of candidate vs baseline: 1 - 0 - 1  [0.750] 2')\n")
             gate.write_text(
                 f"#!{sys.executable}\n"
-                "import json,sys\n"
+                "import json,pathlib,sys\n"
+                f"p=pathlib.Path({str(calls)!r})\n"
+                "with p.open('a') as f:f.write('x')\n"
                 "sys.exit(json.load(sys.stdin)['options']['X'] < 3)\n")
             for program in (engine, manager, gate):
                 program.chmod(0o755)
@@ -462,6 +465,19 @@ class MixedAcquisitionTest(unittest.TestCase):
             result = load_state(state, 1)
             self.assertEqual(len(result["gates"]), 6)
             self.assertTrue(all(batch["knobs"]["X"] >= 3 for batch in result["batches"]))
+            resumed = root / "resumed.json"
+            subprocess.run([
+                sys.executable, str(pathlib.Path(__file__).with_name("adaptive_gp.py")),
+                "--fastchess", str(manager), "--engine", str(engine),
+                "--baseline-options", "default", "--space", str(space),
+                "--openings", str(openings), "--cycle-openings",
+                "--gate", str(gate), "--gate-all", "--gate-workers", "3",
+                "--slots", "1", "--queue-batches", "1", "--refill-batches", "1",
+                "--initial-design", "2", "--batches", "1", "--start", "4",
+                "--seed-state", str(state), "--seed-selections", "3",
+                "--state", str(resumed), "--logs", str(root / "resumed-logs"),
+            ], check=True, stdout=subprocess.DEVNULL)
+            self.assertEqual(calls.read_text(), "x" * 6)
 
     def test_duels_keep_a_directly_anchored_opponent(self):
         anchored = self.space.canonical({"X": 0, "Y": 10})
