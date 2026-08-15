@@ -1,0 +1,20 @@
+# plain draw-B seed 2 -- completes the 2x2 that separates DRAW effect from
+# SEED effect for the only family that ever beat a coin flip in play.
+#
+# WHERE THIS STANDS.  Draw A now has n=4 (seeds 0-3: 0.01378, 0.01374,
+# 0.01368, 0.01370 -> mean 0.013725, sd 4.4e-5).  Draw B has n=1: run 83's
+# matched-budget number, 0.01388 at seed 0.  The apparent draw shift is
+# ~1.0e-4 -- but against a 4.4e-5 seed sd, ONE draw-B point cannot tell a
+# draw effect from an unlucky seed.
+#
+# NAMED QUESTION: with draw B at n=3 (seeds 0, 1, 2), is the draw shift real?
+# Compare draw-B mean against draw-A's 0.013725 with both spreads in hand.
+# This is the last instrument question the one-layer family can answer by
+# itself, and it decides whether "val gaps under ~1.5e-4 mean nothing here"
+# is a measured statement or an inference from n=1.
+name: plain_drawB_s2
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406, perm_seed: 1}
+model: {arch: residual, N: 4, base: mat, ternary: 0.85, gridste: 1}
+loss: {l1: 0.0005, satpen: 0.03, satthresh: 480.0}
+opt: {epochs: 30, batch: 8192, lr: 3.0e-3, seed: 2}
+notes: "draw-B seed 2: completes the draw x seed 2x2 for the one-layer family"

@@ -1,0 +1,25 @@
+# THE TAIL -- what the runner fires when the queue is genuinely empty.
+#
+# Not busywork: it is the one-layer seed census, continued.  That family is
+# the only thing this campaign produced that beat a coin flip in play (-107
+# against the entry, versus -234 and -300 for the two ml2 arms), so its val
+# noise floor is the number every future selection argument leans on.  Draw A
+# seeds 0-3 gave mean 0.013725, sd 4.4e-5 at n=4; each tail firing adds a
+# point, and n grows for free whenever the queue would otherwise idle.
+#
+# NAMED QUESTION (standing): does the one-layer seed sd hold at 4.4e-5 as n
+# grows, in val AND in packed bytes?  The ml2 census showed a two-point
+# estimate can hide a 2.8x larger spread, and that the BYTE outcome of a
+# fixed recipe moves 70 B across seeds -- more than any dial measured all
+# day.  A census that keeps growing is the honest answer to both.
+#
+# MECHANICS: queue_runner.spawn_tail copies this file into the queue with the
+# seed advanced by the number of tail runs already archived, so firings
+# accumulate a census (seed 4, 5, 6, ...) instead of repeating one run.  This
+# file is never consumed.  Replace it whenever a better standing question
+# exists -- a tail is maintenance, and it yields to any real queue entry.
+name: tail_plain_seedcensus
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406, perm_seed: 0}
+model: {arch: residual, N: 4, base: mat, ternary: 0.85, gridste: 1}
+loss: {l1: 0.0005, satpen: 0.03, satthresh: 480.0}
+opt: {epochs: 30, batch: 8192, lr: 3.0e-3, seed: 3}

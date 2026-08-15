@@ -247,6 +247,104 @@ VAL-probe-first):
 
 ## Log (newest first)
 
+- 2026-08-15 13:20 UTC: **THE ONE-LAYER INSTRUMENT STORY CLOSES, and the
+  always-training rule stops depending on me remembering.**
+
+  ### Instrument verdict — one-layer seed spread (n=4, draw A, 30 ep)
+
+  | seed | val | packed |
+  |---|---|---|
+  | 0 (`71`) | 0.01378 | 3570 B |
+  | 1 (`78`) | 0.01374 | 3575 B |
+  | 2 (`84`) | 0.01368 | 3618 B |
+  | 3 (`85`) | 0.01370 | 3618 B |
+  | | mean **0.013725**, sd **4.4e-5**, range **1.0e-4** | range **48 B** |
+
+  **The two-point estimate HELD.** 78's 4e-5 became 4.4e-5 at n=4 — unlike
+  ml2, whose 1.8e-4 two-point became a 1.25e-4 sd over a 3.0e-4 range. **The
+  one-layer family is 2.8× quieter on val and its byte spread is 48 B
+  against ml2's 70 B.** That asymmetry is itself a finding: the family with
+  the second layer is the noisier one on every axis measured.
+
+  ### Instrument verdict — one-layer val draw
+
+  Matched 30-epoch budget, seed 0: **draw A 0.01378 → draw B 0.01388 =
+  1.0e-4** (`83`'s best-of-first-30; its first 30 epochs are identical to a
+  30-epoch run's). Against ml2's 3.6e-4, again **3.6× quieter**. Same shape
+  of answer as ml2, smaller magnitude: **the draw moves this family's val by
+  about one seed-range.**
+
+  **Retroactively, for the family that matters most.** Taking seed sd and
+  draw shift together, a one-layer val gap needs roughly **1.5e-4** before
+  it means anything. The campaign's one-layer claims:
+
+  | claim | gap | verdict |
+  |---|---|---|
+  | "data scale pays": 8Mv 0.01378 vs v1 0.01385 | 7e-5 | **1.6σ — NOT resolved** |
+  | c1024-cal 0.01388 vs 0.01378 | 1.0e-4 | 2.3σ — marginal |
+  | τ 1.1 vs 0.85 (`71`/`72`) | <1e-5 | tie, confirmed |
+
+  Even the quiet family cannot support "data scale pays" as stated. And
+  `83`'s own 60-epoch ride bought 0.01388 → 0.01381 = 7e-5, inside the seed
+  sd — the `dense60` lesson holding for a third family.
+
+  **Program-level state: COMPLETE-PENDING-DIRECTION, now for BOTH families.**
+  ml2 carried this already; the one-layer family now joins it. Every dial
+  either family can turn without a seam has been measured — l1 × clamp × τ ×
+  satpen × ride × seed × draw × fidelity — and **only three effects in the
+  whole campaign exceed their own noise floor**: the fidelity rule (5σ, and
+  it costs val), satpen-off (which breaks the run), and the play numbers.
+  Selection therefore rests entirely on the **SELECTOR SPEC**'s
+  play-anchored mini-match. The next move is a direction call, not a run.
+
+  ### The structural fix: the queue no longer depends on a human
+
+  Three gaps today — 38 min, 31 min, and **50 min (12:22→13:12Z)** — all the
+  same cause: refill was manual and I was the manual part. `queue_runner`
+  now fires a **TAIL** config when the queue is genuinely empty, instead of
+  nagging for ten minutes.
+
+  - `spawn_tail()` copies `train/tail.yaml` into the queue as an ordinary
+    entry with **the seed rotated** by the number of tail runs already
+    archived — so firings accumulate a census (seed 4, 5, 6 …) instead of
+    recomputing one run, and it is logged, run and archived like anything
+    else. `tail.yaml` is never consumed. A tail with no rotatable `seed: N`
+    is **REFUSED**, not run unrotated.
+  - Tested on a **dummy** queue dir before deployment, never the live one:
+    rotation across firings, `perm_seed`/`split_seed` correctly untouched,
+    refusal path, and a full end-to-end cycle —
+    `EMPTY -- firing the TAIL tail.yaml -> 99_tail001.yaml` → started →
+    logged to LOG.md → archived to `done/`, with `tail.yaml` surviving.
+  - **The tail's own named question** (it is maintenance, not busywork):
+    continue the one-layer seed census — does sd hold at 4.4e-5 as n grows,
+    in val *and* in bytes? Every idle window now buys a census point for the
+    only family that ever beat a coin flip in play.
+
+  **Restart, done by the book.** The runner was **idle — 0 `train.py`
+  children, verified before the signal** — and was this workstream's own
+  process (`start_runner.sh`, `setsid nohup`, PPID 1). Per
+  `box-systemd-queue-incident` I checked `systemctl --user` first: no unit
+  owns it (the only sunfish unit present is an unrelated **failed**
+  `pawn-debt-handoff` service). Old `runner.log` preserved to
+  `runner.log.20260815T1310Z`; the stale `.runlock` (SIGTERM skips the
+  `finally`) removed deliberately — the code says a human removes it and
+  this restart was the authorization. **Downtime 13:11→13:12Z ≈ 70 s.** New
+  pid holds the lock from 13:12:12 and picked up `86_plain_drawB_s1`
+  immediately.
+
+  **Cotenancy recorded at launch, per `box-cotenancy-ban`'s amendment.**
+  Thomas's own joint-eval tuning campaign (`adaptive_gp.py`, PR #202, 3+0.1,
+  10 slots) started 12:59Z and is live at ~1750% CPU. Box is **96 cores,
+  load 35** — ample headroom, and Thomas's 2026-08-14 amendment authorizes
+  capacity sharing when no other human needs the box. The runner's **forfeit
+  tripwire** is armed against exactly this (baseline 34): any rise in "loses
+  on time" SIGSTOPs our training and reports rather than guessing.
+
+  **Queue:** `86_plain_drawB_s1` (running) and `87_plain_drawB_s2` complete
+  the draw × seed 2×2 — with draw B at n=1, one point cannot separate a draw
+  effect from an unlucky seed, and this is the last instrument question the
+  family can answer by itself. The tail backs them.
+
 - 2026-08-15 11:15 UTC: **BOTH INSTRUMENT VERDICTS, and the family's dial
   space is SPANNED — COMPLETE-PENDING-DIRECTION.**
 

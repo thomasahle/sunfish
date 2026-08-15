@@ -28,6 +28,7 @@ usage: queue_runner.py [--queue-dir DIR] [--once] [--pgn-globs G1:G2:...]
 import argparse
 import glob
 import os
+import re
 import signal
 import subprocess
 import sys
@@ -63,6 +64,33 @@ def acquire_lock(qdir):
     with open(os.path.join(lock, "owner"), "w") as f:
         f.write("%d %s\n" % (os.getpid(), time.strftime("%Y-%m-%dT%H:%M:%S")))
     return lock
+
+
+def spawn_tail(tail, qdir):
+    """Materialise the TAIL config as an ordinary queue entry, with the seed
+    rotated, and return its path.
+
+    The tail exists so an empty queue starts work instead of nagging for ten
+    minutes (three gaps on 2026-08-15 cost ~100 idle minutes between them).
+    It is copied rather than consumed, so `tail.yaml` survives every firing;
+    the copy is a normal entry, which means it is logged to LOG.md, gets its
+    own run dir from its filename, and is archived to done/ like anything
+    else.  The seed advances by the number of tail runs already archived, so
+    repeated firings accumulate a seed census instead of recomputing one run.
+    A tail whose seed cannot be found is REFUSED, never run unrotated."""
+    n = len(glob.glob(os.path.join(qdir, "done", "*_tail*.yaml")))
+    with open(tail) as f:
+        src = f.read()
+    new, k = re.subn(r"(?<![\w])seed: (\d+)",
+                     lambda m: "seed: %d" % (int(m.group(1)) + n + 1), src, count=1)
+    if k != 1:
+        raise SystemExit("tail config %s has no rotatable `seed: N` (found %d) -- "
+                         "refusing to run it unrotated, which would repeat one run "
+                         "forever instead of accumulating a census" % (tail, k))
+    dst = os.path.join(qdir, "99_tail%03d.yaml" % (n + 1))
+    with open(dst, "w") as f:
+        f.write(new)
+    return dst
 
 
 def run_one(cfg_path, qdir, globs):
@@ -116,7 +144,15 @@ def main():
         while True:
             pending = sorted(p_ for p_ in glob.glob(os.path.join(qdir, "*.yaml")))
             if not pending:
-                print("[queue] EMPTY -- the standing rule says the queue is "
+                tail = os.path.join(os.path.dirname(os.path.abspath(qdir)), "tail.yaml")
+                if os.path.exists(tail):
+                    spawned = spawn_tail(tail, qdir)
+                    print("[queue] EMPTY -- firing the TAIL %s -> %s (always-training "
+                          "stays true without a human in the loop; refill the queue "
+                          "proper when there is a real question)"
+                          % (os.path.basename(tail), os.path.basename(spawned)), flush=True)
+                    continue
+                print("[queue] EMPTY and NO TAIL -- the standing rule says the queue is "
                       "never empty; refill it (re-checking in 10 min)", flush=True)
                 if a.once:
                     return
