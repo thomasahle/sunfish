@@ -265,6 +265,61 @@ how much effort it cost.
 
 ---
 
+## 2026-08-15 — PRE-REGISTRATION: the first EXPORT-FAITHFUL net gets its play number, and val is now known to be ANTI-PREDICTIVE across family boundaries
+
+Registered before game 1. `70_gridste_ml2` is the first candidate in this
+campaign whose shipped integer net **is** the function it was trained to
+compute — weights, gains, biases and the layer-2 read-out all snapped on
+their certified grids inside forward, from step 1.
+
+| | |
+|---|---|
+| screen | fixed-node SPRT, elo0=0 elo1=10, alpha=beta=0.05, nodes 20000, cap 1000 games, **srand 20260815** (fresh — the ml2 screen used 20260814) |
+| book | `book3k.pgn`, order=random |
+| arm | **gridste-ml2** (`70_gridste_ml2`, val 0.01347), packed **3775 B** — measured, 321 B spare |
+| base | `nnue_4k/pst_entry.py` at **nnue-4k `c5534cd`**, packed **3405 B** — measured at registration |
+| gate | zero illegal moves; one ends the run and voids it |
+| arena | `scratchpad/arena-ml2export/`, tag `g70screen`, laptop, `nice -n 5`, concurrency 8 |
+
+**Export faithfulness, verified rather than assumed.** The exported digits
+were compared component-by-component against what the training forward
+actually used: integer `u2` **[1, 1, 1, 0]** both sides, gains
+**[68, 71, 71, 67]** both sides. `ml2_check` then held the engine
+bit-exact against `packed_layers`' int bridge (60 fens × 2 pf +
+rotations + 40-ply walk, L2 fired on 92 probes). **One fragility recorded
+now, before it can be discovered later:** three of the four `u2`
+components sit within 1e-5 of the rounding tie (`u2·scale` =
+0.5000051, 0.5074217, 0.5000017, 0.4999114). Float32 and float64 paths
+agree here — checked on both — but this net's second layer is one
+arithmetic-path change away from different digits. The knife-edge that
+runs 60 and 61 found is not gone; it has been shipped.
+
+**Gate ladder, all green on the packed 3775 B artifact:** legality
+**200/200** (0 illegal, 0 no-move, movetime and `go nodes 20000` paths),
+mate-in-1 **8/8**, KQK/KRK conversion **8/8**, first-yield 505 positions
+median 4 / **max 162** of a 2048 window with 0 never-yields, standalone
+empty-dir smoke plays `b8c6` and leaves nothing behind.
+
+**What this screen is for, stated honestly in advance.** It is *not* run
+because val 0.01347 promises anything. This ledger has now measured the
+opposite across family boundaries at this budget:
+
+> **VAL IS ANTI-PREDICTIVE OF PLAY ACROSS FAMILY BOUNDARIES.** The linear
+> one-layer net at val **0.01378** played **−107**. The float-ml2 net with
+> the *better* val **0.01280** played **−234**. Lower val, worse play —
+> and the gap is not marginal in either direction.
+
+So the screen exists to give the honestly-trained family its own play
+number, and the informative outcome is **where it lands relative to −107
+(linear) and −234 (float-ml2)** — not whether it clears the bar. A result
+near −107 would say the export defect explained the ml2 collapse; near
+−234 would say the two-layer eval is bad in play whatever its precision;
+better than −107 would be the first good news the replacement line has
+had. All three are worth the slot, which is why the bar stays exactly
+where the ml2 screen set it and does not move.
+
+Subsumption ablation and any timed leg remain **registered, not run**.
+
 ## 2026-08-15 — SCREEN VERDICT: ml2 H0 ACCEPTED at −234, and the u2 retrain shows the val win was bought with resolution the engine does not have
 
 The first NON-linear replacement net played, and it played worse than the
