@@ -226,127 +226,64 @@ MODS = {
     # Late move reductions off. Threshold-triggered (val < LMR), so setting the
     # threshold to 0 disables it without touching the loop.
     "nolmr": ("\nLMR = 60\n", "\nLMR = 0\n"),
-    # THE TWO SUPERSEDED TIME MANAGERS, rebuilt as measurement arms and NOTHING
-    # else. They are the only mods here that make the entry WORSE on purpose,
-    # and they exist so that every TM claim is a two-arm question with one
-    # expression between the arms. Both share the anchor -- the shipped smooth
-    # budget -- so a reshaped budget breaks them loudly instead of silently
-    # producing a variant that is quietly the baseline.
+    # ===================================================================
+    # TOMBSTONE: `pooltm` LANDED 2026-08-15, and `oldtm`/`steptm` went with
+    # it. The pool manager is now the entry's DEFAULT time manager, applied
+    # by tools/build/make_pst_entry.py (`_pooltm`, next to `_pend`).
     #
-    # NEVER LAND either of them. There is no tombstone rule here because there
-    # is nothing to land: if the budget is ever reverted these mods go with it
-    # (their anchor would then be the baseline and the generator would raise).
+    # WHAT IT MEASURED, three regimes vs the shipped smooth budget on the
+    # bench box, book3k, no adjudication (nnue_4k/MEASUREMENTS.md):
+    #   60+0  +119.9 +/- 36.4   H1
+    #   60+1  +136.6 +/- 35.2   H1, 262 games
+    #   30+1  +124.50 +/- 38.79 H1, 288 games, Ptnml [10,14,31,45,44]
+    # plus the pre-registered 1+0 hammer: 100 games, zero illegal, zero
+    # (none), zero forfeits. Landed cost +65 packed bytes (3340 -> 3405)
+    # measured on the post-pend base -- NOT the +57 it measured on the
+    # pre-pend 3308 base, because lzma shares one dictionary and byte
+    # deltas never compose across landings. The arm sha256s and the packed
+    # sha of the artifact that played the deciding match are in the ledger
+    # entry "POOL DECIDING MATCH 1".
     #
-    # Every arm keeps the structural bestmove floor (03beefe), so these isolate
-    # TIME MANAGEMENT and not the `(none)` forfeit class the floor closed.
+    # WHICH ANCHORS SURVIVE -- the load-bearing part of a tombstone:
     #
-    # `oldtm` is the pre-e73da7d unconditional wtime/12 the ladder actually
-    # played (LOSS_TAXONOMY.md P0: 97.2% of 4,158 matched moves); its
-    # replacement text is byte-identical to the line at e73da7d^. It lost
-    # -235.5 +/- 65.4 to `steptm` at 60+0 (MEASUREMENTS.md stage 1).
-    "oldtm": (
-        "            think = min(wtime * (1000 + 20 * winc) / (40000 + 240 * winc) + 0.9 * winc,\n"
-        "                        wtime * wtime / (2 * wtime + 4000))\n",
-        "            think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1000)\n",
-    ),
-    # `steptm` is the STEP form of the sudden-death fix -- /40 at winc == 0,
-    # /12 the instant winc is nonzero -- i.e. the entry as shipped between
-    # e73da7d and the smooth budget. Byte-identical to that line. It is the
-    # baseline for the smooth budget's own screens: the two agree exactly at
-    # winc == 0 (both /40, and the caps coincide above 2.67s) and differ most
-    # at tiny increments, which is where the step's discontinuity lives.
-    "steptm": (
-        "            think = min(wtime * (1000 + 20 * winc) / (40000 + 240 * winc) + 0.9 * winc,\n"
-        "                        wtime * wtime / (2 * wtime + 4000))\n",
-        "            think = min(wtime / (12 if winc else 40) + 0.9 * winc, wtime / 2 - 1000)\n",
-    ),
-    # THE POOL MANAGER (Thomas's design; the classic twin is sunfish_ui/uci.py's
-    # pool_budget, and the two are asserted equal under t_ms = 1000*t_s by
-    # tests/test_tm_pool.py there). This is the ONLY TM mod here that is meant
-    # to be better than the baseline rather than deliberately worse -- it is a
-    # CANDIDATE, screened against the shipped smooth budget.
+    #   * The smooth budget line (`think = min(wtime * (1000 + 20 * winc)
+    #     ...`) IS GONE from the baseline. It was pooltm's first anchor and
+    #     it was ALSO the shared anchor of `oldtm` and `steptm`, which is
+    #     why those two retire here rather than merely being unused: their
+    #     anchor stopped existing, so re-creating any of the three would
+    #     RAISE loudly. That is the safe failure.
     #
-    # MILLISECONDS throughout, like everything above this `/1000` line:
-    #   P = max(0, T + (M-1)*I - (M+2)*O)   the pool the game still has
-    #   A = max(0, T - 2*O)                 what THIS move can safely reach
-    #   soft = min(P/M, A/4)                stop STARTING iterations
-    #   think = min(5*soft, A/2)            the wall, i.e. searcher.deadline
-    # with O = 200ms measured (the lichess autopsy's move-to-clock lag, which
-    # the 60+0 drain forensics reproduce) and M = 40 assumed for sudden death.
+    #   * `if "movetime" in times: think -= max(think * .05, .03)` STILL
+    #     OCCURS EXACTLY ONCE. pooltm kept it and appended `soft = min(soft
+    #     / 1000, think)` after it. Re-creating pooltm would therefore
+    #     append a SECOND rescale of `soft` WHILE THE OCCURS-EXACTLY-ONCE
+    #     CHECK PASSED CLEANLY -- soft in seconds divided by 1000 again, a
+    #     ~0-second soft limit, i.e. an arm that looks correctly generated
+    #     and plays depth-1 moves. This is the `iirk`/`fresh` failure mode
+    #     and no automated check catches it. DO NOT re-create this mod.
     #
-    # WHY IT IS A DIFFERENT SHAPE, not a different constant: a single divisor
-    # is both the target and the wall, so it cannot be tight for a routine move
-    # AND generous for a hard one. Splitting them lets the routine move be
-    # paced at P/M while an unstable one may run to 5x that -- and it prices
-    # the two things a divisor cannot see, increment as INCOME ((M-1) further
-    # moves earn it) and overhead as TAX ((M+2) moves pay it).
+    #   * `best, cand, d0 = None, None, 1`, the `depth > d0` block and the
+    #     `think * 0.8` break are all gone (rewritten); re-applying those
+    #     three edits would raise.
     #
-    # THE SEMANTIC HALF IS THE REST OF THE EDITS, and they are why this is not a
-    # one-line mod. The incumbent's mid-iteration `think * 0.8` break is
-    # REMOVED, because 80% of a wall is not a wall; between soft and the
-    # deadline the running iteration continues, the deadline still ends it
-    # inside bound(), the Stop handler still catches it, and the structural
-    # bestmove floor is untouched.
+    # THE ONE MEASURED HOLE, recorded with the landing rather than buried:
+    # at a 1-second sudden-death clock the pool scores -209.91 +/- 60.11,
+    # because P = max(0, 1000 - 42*200) = 0 makes soft = 0 and the A/4
+    # clamp unreachable. Mechanism, options and the open scoping decision
+    # are in make_pst_entry.py's `_pooltm` comment and in the ledger.
+    # ===================================================================
+    # PHASE-M ARM. M falls with the move number instead of standing at 40:
+    # Lc0's phase curve in its cheapest form, 46 at move one down to a floor
+    # of 20 from ply 52 on, so spending rises through the middlegame where
+    # depth buys the most. len(hist) is the driver's own counter (plies
+    # played), the same input the classic twin's phase_m arm reads.
     #
-    # WHERE THE SOFT LIMIT IS READ is the load-bearing detail. It is a rule
-    # about STARTING an iteration, and the loop's only obvious landmark --
-    # `depth > d0` -- arrives one FULL PROBE OF THE NEXT DEPTH too late.
-    # Measured through tm_smoke on this very artifact: reading it there spends
-    # 2.64s against a 1.29s soft limit at 60+0 and 6.82s against 2.27s at 60+1,
-    # i.e. a soft limit that is really a 2-3x multiplier and an arm that spends
-    # MORE than the baseline it is supposed to spend less than. So the driver
-    # MIRRORS THE ENGINE'S OWN MTD BRACKET instead (lo/up, tightened by each
-    # probe's answer exactly as search() does, monotonically, so the
-    # instability guards' crossing case reads as converged too): when the
-    # bracket closes to inside EVAL_ROUGHNESS the iteration is over, and that
-    # is the moment the rule is about. The probe cap is the one iteration end
-    # the mirror does not model -- 40 probes, so vanishingly rare, and the cost
-    # is one late soft check rather than a wrong move.
-    #
-    # THE RISK, recorded before the games: at 60+1 this spends 2.4x LESS on a
-    # routine move than the shipped budget (2.27s vs 5.40s from a full clock).
-    # That only pays if the wall and the extensions buy back more than routine
-    # depth loses, which is exactly what the 60+1 arm of the ladder measures.
-    # At 60+0 the two are within 16% (1.29s vs 1.50s), which is why that arm is
-    # a NON-REGRESSION check against the +235.5 +/- 65.4 winner and not the
-    # interesting one.
-    #
-    # IF IT LANDS it goes into make_pst_entry.py and this mod retires with a
-    # tombstone naming which anchors survive -- and `oldtm`/`steptm` go with it,
-    # since their anchor would no longer exist.
-    "pooltm": [
-        ("            think = min(wtime * (1000 + 20 * winc) / (40000 + 240 * winc) + 0.9 * winc,\n"
-         "                        wtime * wtime / (2 * wtime + 4000))\n",
-         "            M = 40\n"
-         "            P = max(0, wtime + (M - 1) * winc - (M + 2) * 200)\n"
-         "            A = max(0, wtime - 400)\n"
-         "            soft = min(P / M, A / 4)\n"
-         "            think = min(5 * soft, A / 2)\n"),
-        ('            if "movetime" in times: think -= max(think * .05, .03)\n',
-         '            if "movetime" in times: think -= max(think * .05, .03)\n'
-         "            soft = min(soft / 1000, think)\n"),
-        ("            best, cand, d0 = None, None, 1\n",
-         "            best, cand, d0, lo, up = None, None, 1, -1e9, 1e9\n"),
-        ("                    if depth > d0:\n"
-         "                        best, d0 = cand or best, depth\n",
-         "                    if depth > d0:\n"
-         "                        best, d0, lo, up = cand or best, depth, -1e9, 1e9\n"),
-        ("                    if (best or cand) and time.time() - start > think * 0.8:\n"
-         "                        break\n",
-         "                    if score >= gamma: lo = max(lo, score)\n"
-         "                    else: up = min(up, score)\n"
-         "                    if not lo < up - EVAL_ROUGHNESS:\n"
-         "                        best = cand or best\n"
-         "                        if best and time.time() - start > soft: break\n"),
-    ],
-    # PHASE-M ARM, composable onto the pool ONLY (`pooltm.phasem`, in that
-    # order -- its anchor is a line pooltm creates, so the generator raises
-    # loudly on `phasem` alone or on the reverse order). M falls with the move
-    # number instead of standing at 40: Lc0's phase curve in its cheapest form,
-    # 46 at move one down to a floor of 20 from ply 52 on, so spending rises
-    # through the middlegame where depth buys the most. len(hist) is the
-    # driver's own counter (plies played), the same input the classic twin's
-    # phase_m arm reads.
+    # ITS ANCHOR MOVED WITH THE LANDING, and this note is the reason the
+    # tombstone above exists. `M = 40` used to be a line `pooltm` CREATED,
+    # so `phasem` only composed as `pooltm.phasem` and raised in any other
+    # form. The pool is now the baseline, so `M = 40` occurs exactly once in
+    # the entry itself and `phasem` is a PLAIN mod: build it as `phasem`.
+    # `pooltm.phasem` no longer exists and will raise on the pooltm name.
     "phasem": ("            M = 40\n", "            M = max(20, 46 - len(hist) / 2)\n"),
     # CORRECTION HISTORY, interior-only. A running average of (search value -
     # static value) over positions sharing a pawn skeleton, added to the

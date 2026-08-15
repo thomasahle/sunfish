@@ -393,6 +393,87 @@ for _a, _b in _pend:
     assert src.count(_a) == 1, "pend anchor %r occurs %d times" % (_a[:40], src.count(_a))
     src = src.replace(_a, _b, 1)
 
+# ---- THE POOL TIME MANAGER (LANDED 2026-08-15) ----------------------------
+# Thomas's design. It replaces the smooth budget's single divisor with a POOL
+# and a WALL, in milliseconds like everything above the `/1000` line:
+#   P = max(0, T + (M-1)*I - (M+2)*O)   the pool the game still has
+#   A = max(0, T - 2*O)                 what THIS move can safely reach
+#   soft = min(P/M, A/4)                stop STARTING iterations
+#   think = min(5*soft, A/2)            the wall, i.e. searcher.deadline
+# with O = 200 ms measured overhead (the lichess autopsy's move-to-clock lag,
+# reproduced by the 60+0 drain forensics) and M = 40 assumed for sudden death.
+# One divisor cannot be tight for a routine move AND generous for a hard one;
+# splitting target from wall lets a routine move be paced at P/M while an
+# unstable one runs to 5x that, and it prices the two things a divisor cannot
+# see -- increment as INCOME ((M-1) further moves earn it) and overhead as TAX
+# ((M+2) moves pay it).
+#
+# THE SOFT LIMIT IS READ OFF THE MTD BRACKET, not off `depth > d0`. It is a
+# rule about STARTING an iteration, and the loop's obvious landmark arrives one
+# full probe of the next depth too late -- measured through tm_smoke on this
+# very artifact at 2.64s against a 1.29s soft limit (60+0) and 6.82s against
+# 2.27s (60+1), i.e. a soft limit that was really a 2-3x multiplier. So the
+# driver mirrors the engine's own lo/up bracket, tightened by each probe
+# exactly as search() does: when it closes to inside EVAL_ROUGHNESS the
+# iteration is over, and that is the moment the rule is about. The incumbent's
+# mid-iteration `think * 0.8` break is REMOVED with it -- 80% of a wall is not
+# a wall; between soft and the deadline the running iteration continues, the
+# deadline still ends it inside bound(), and the structural bestmove floor
+# (03beefe) is untouched.
+#
+# EARNED IT IN THREE REGIMES, all vs the shipped smooth budget on the bench
+# box, book3k, no adjudication (nnue_4k/MEASUREMENTS.md):
+#   60+0  +119.9 +/- 36.4   H1        (the non-regression arm won outright)
+#   60+1  +136.6 +/- 35.2   H1, 262 games
+#   30+1  +124.50 +/- 38.79 H1, 288 games, Ptnml [10,14,31,45,44]
+# plus a pre-registered 1+0 zero-illegal hammer: 100 games, zero illegal, zero
+# (none), zero forfeits, 100/100 normal terminations.
+#
+# THE ONE MEASURED HOLE, disclosed here because the code is where the next
+# reader meets it: at a 1-second sudden-death clock the pool scores -209.91
+# +/- 60.11. Mechanism is this formula, not a bug -- P = max(0, 1000 + 39*0 -
+# 42*200) = 0 for the whole game, so soft = min(0/40, A/4) = 0 and the search
+# stops at its first converged iteration, a depth-1 move against the
+# incumbent's 13. It never flags and never answers illegally; it plays the
+# whole game 13x shallower. WHEN P == 0 AND A > 0 THE SOFT LIMIT COLLAPSES TO
+# ZERO AND THE A/4 CLAMP BECOMES UNREACHABLE. Scoping the manager to P > 0, or
+# flooring soft against A, is a DESIGN CHANGE that needs its own screen and is
+# deliberately NOT applied here: what landed is byte-identical in semantics to
+# the arm that played the three matches above.
+#
+# Applied HERE, like _pend, because it is a 4k-entry change: sunfish_nnue.py is
+# another lane's artifact and has played no game with this manager. The classic
+# twin is sunfish_ui/uci.py's pool_budget (asserted equal under t_ms = 1000*t_s
+# by tests/test_tm_pool.py there).
+_pooltm = [
+    ("            think = min(wtime * (1000 + 20 * winc) / (40000 + 240 * winc) + 0.9 * winc,\n"
+     "                        wtime * wtime / (2 * wtime + 4000))\n",
+     "            M = 40\n"
+     "            P = max(0, wtime + (M - 1) * winc - (M + 2) * 200)\n"
+     "            A = max(0, wtime - 400)\n"
+     "            soft = min(P / M, A / 4)\n"
+     "            think = min(5 * soft, A / 2)\n"),
+    ('            if "movetime" in times: think -= max(think * .05, .03)\n',
+     '            if "movetime" in times: think -= max(think * .05, .03)\n'
+     "            soft = min(soft / 1000, think)\n"),
+    ("            best, cand, d0 = None, None, 1\n",
+     "            best, cand, d0, lo, up = None, None, 1, -1e9, 1e9\n"),
+    ("                    if depth > d0:\n"
+     "                        best, d0 = cand or best, depth\n",
+     "                    if depth > d0:\n"
+     "                        best, d0, lo, up = cand or best, depth, -1e9, 1e9\n"),
+    ("                    if (best or cand) and time.time() - start > think * 0.8:\n"
+     "                        break\n",
+     "                    if score >= gamma: lo = max(lo, score)\n"
+     "                    else: up = min(up, score)\n"
+     "                    if not lo < up - EVAL_ROUGHNESS:\n"
+     "                        best = cand or best\n"
+     "                        if best and time.time() - start > soft: break\n"),
+]
+for _a, _b in _pooltm:
+    assert src.count(_a) == 1, "pooltm anchor %r occurs %d times" % (_a[:40], src.count(_a))
+    src = src.replace(_a, _b, 1)
+
 for _pat, _repl, _n in _golf_renames:
     src, _c = re.subn(_pat, _repl, src)
     assert _c == _n, "golf rename %r matched %d times, expected %d" % (_pat, _c, _n)

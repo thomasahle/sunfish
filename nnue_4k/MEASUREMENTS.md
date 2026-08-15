@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **`pooltm` LANDS as the entry's DEFAULT time manager — measured **+65 packed bytes** (3340 → 3405, 691 spare), NOT the +57 the pre-registration quoted** | Both pass-conditions of the registered landing shape (`fb0f7b9`) are met, so the shape executes verbatim. The mod moves into `tools/build/make_pst_entry.py` as `_pooltm` and retires from `make_variants.py` with a tombstone; `oldtm`/`steptm` retire with it because their shared anchor — the smooth budget line — stops existing. **+57 was measured against the pre-pend 3308 base; on the post-pend 3340 base the same edits cost +65** — measured-never-composed, third instance. **Equivalence proved twice, not asserted:** the landed entry packs to a **sha256-IDENTICAL artifact** to the old-way `pooltm` mod arm built from the same HEAD (`5a207fdf9cf05f2e…`), and against the arm that actually PLAYED the deciding match every executable difference is exactly `pend` — everything else is comments (packer-stripped) and the generator provenance header. Gate ladder: `check_entry` green, mate-conversion **8/8 on 5/5 runs**, legality 200/200 source + 200/200 packed at both budget paths (0 no-move, 0 illegal), first-yield worst 582 vs 2048, standalone empty-dir smoke plays `g1f3` and leaves nothing behind, 20-position fixed-node probe 20/20 identical. **The −210 cliff is landed AS DISCLOSED, not fixed:** P>0-scoping and flooring `soft` against `A` are design changes needing their own screen, and the artifact that ships is the artifact that was measured. Cliff mechanism reproduced on the landed artifact: 1 s clock → answer in 0.04 s, 60 s clock → 2.16 s |
 | 2026-08-15 | **DECIDING MATCH 1 (30+1 non-inferiority): H1 ACCEPTED in 288 games — the non-inferiority question returned outright superiority, +124.50 ± 38.79, and the pool wins a THIRD regime** | SPRT elo0=−10 elo1=0 with engine1=pool, cap 1750: **LLR 2.97 crossed +2.94 at 288 games** (1 h 47 m of a budgeted ~7 h), 156W 57L 75D = 67.19%, nElo +140.89 ± 40.13, pentanomial **[10, 14, 31, 45, 44]**, PairsRatio 3.71, WL/DD 2.88, LOS 100.00%. Tripwires all zero: **0 illegal, 0 loses-on-time, 0 forfeits, 288/288 terminations `normal`**, 0 blind moves out of 17,487 pool / 17,436 smooth. Arm sha256s verified against the log header (`cddf392e…` pool = `pooltm`, `14b69a60…` smooth = base, both built at `522931a` per the `629cba2` prereg). **Read honestly: all three regime numbers are SPRT-stopped and therefore biased high** — `pend` measured that bias at 42% on its own screen — so the direction is what is established, not the altitude. The registered warning ("if match 1 reads ~0 that is a PASS, never a third win") binds the ~0 case; this is not it, but no fixed-N confirmation exists at any TC. Spend is near-identical (median 1.276 vs 1.239 s, ratio **1.03×**) — at 30+1 the redistribution the 60-second regimes showed has flattened out, and the pool wins on shape at equal spend. The one number against it is unchanged: **77 games ended under 2 s of clock to smooth's 0** |
 | 2026-08-15 | **DECIDING MATCH 2 (1+0 hammer): GATE PASSED — 0 illegal, 0 `(none)`, 0 null moves, 100/100 normal — but the match found a −209.91 ± 60.11 CLIFF at a 1-second clock, and OUR OWN GATE SCRIPT reported a false FAILED** | Three things, not one. (1) The pre-registered gate passes: at a 1 s clock, where P is empty all game and the floor governs every move, the structural bestmove floor and the wall held perfectly. (2) The inline gate printed "HAMMER FAILED" on a clean run — `grep -c` prints 0 AND exits 1, so `|| echo 0` made `non` the two-line string "0\n0" and `[ -eq ]` errored into the else branch; the naive `0000` probe also matched the `+0000` timezone 200×. Fixed as a standalone `gate_check.sh`, re-run → PASSED, appended as a correction. Same defect class as the label and ramp defects, and it does not get a pass for being ours. (3) **The finding: `P = max(0, 1 − 8.4) = 0` for the WHOLE game, so soft = 0 and the pool plays depth-1 moves at 0.001 s against the incumbent's 0.013 s — 13× shallower, 23.00% score, never flagging (0.9 s median end-clock) and never illegal. `A/4 = 0.15 s` was reachable and safe the entire time: when P = 0 and A > 0 the soft limit collapses to zero and the safety clamp becomes unreachable.** Landing shape now has an OPEN QUESTION (scope the default / floor soft against A / land-and-document); this lane is not deciding it alone. 30+1 deciding match launched meanwhile |
 | 2026-08-15 | **PRE-REGISTERED: the pool's single real-clock confirmation — (1) 30+1 NON-INFERIORITY, elo0=−10 elo1=0, cap raised to 1750; (2) a 1+0 ZERO-ILLEGAL hammer, 100 games, zero required — plus THE LANDING SHAPE, fixed before either starts** | After two H1s the temptation to decide the landing shape from the result is at its highest, so it is written first. The cap goes 400 → 1750 on a recorded lesson: the smooth ladder's match 2 was an underpowered non-inferiority, the same defect class as the two just ledgered (~7 h at conc 8, affordable for THE deciding match). The 1+0 hammer is not a formality for THIS manager — it ended 48 of 262 games under 2 s at 60+1 and at 1+0 the whole game lives where P is empty and the floor governs. **If both pass:** `pooltm` becomes the entry default at its measured +57 B (mod retires in place with a tombstone; `oldtm`/`steptm` go with it), the classic driver ships the pool with `legacy` kept as the control arm, and **#188 closes SUPERSEDED — not wrong**: its negative-cap mechanism is what the A/2 wall exists to prevent. **If the hammer fails on one illegal move or `(none)`, landing is blocked outright regardless of the Elo** |
@@ -343,6 +344,89 @@ throughout. **Both arms shared it equally, move-for-move, inside one match**,
 which is exactly what a paired A/B is for — but the absolute spend numbers above
 are numbers *under that load*, not clean-box numbers, and a repeat on an idle
 box would not reproduce them to the millisecond.
+
+## 2026-08-15 — `pooltm` LANDS as the entry default: +65 B measured, and the equivalence is proved twice rather than asserted
+
+Both pass-conditions of the registered landing shape (`fb0f7b9`) are met — match
+1 H1 above, and the 1+0 hammer's zero-illegal gate at `5457f27`, where illegal
+moves were the gate and the −210 Elo cliff was explicitly reported-not-gating.
+The shape executes verbatim.
+
+**The mod moves; nothing is redesigned on the way in.** `pooltm`'s five edits are
+now `_pooltm` in `tools/build/make_pst_entry.py`, beside `_pend`, each anchor
+asserted to occur exactly once so drift is a hard build error. `make_variants.py`
+keeps a tombstone in its place naming which anchors survive — and one does:
+`if "movetime" in times: think -= max(think * .05, .03)` still occurs exactly
+once, so re-creating `pooltm` would append a **second** `soft = min(soft/1000,
+think)` while the occurs-exactly-once check passed cleanly, rescaling `soft` to
+~0 and producing an arm that looks correctly generated and plays depth-1 moves.
+That is the `iirk`/`fresh` failure mode, and it is why the tombstone convention
+exists. `oldtm` and `steptm` retire in the same commit: their shared anchor, the
+smooth budget line, no longer exists, so re-creating them raises loudly.
+
+`phasem` changed shape too and the tombstone says so: `M = 40` used to be a line
+`pooltm` created, so `phasem` only composed as `pooltm.phasem`. It is now a plain
+mod on the baseline — build it as `phasem`, and `pooltm.phasem` raises.
+
+### The byte count: +65, not +57
+
+| entry | packed (pack.sh, layout A) |
+|---|---|
+| pre-`pend` base (what +57 was measured against) | 3308 B |
+| `pend` landed | 3340 B |
+| **`pooltm` landed** | **3405 B** (691 spare) |
+
+The registration quoted +57 and expected ≈3397. **The measurement is 3405, so the
+cost on this base is +65.** lzma shares one dictionary across the stream, so byte
+deltas do not compose across landings — third time this lane has been bitten by
+it (`pend` +37→+32, the bake-off's moving denominators, and now this). Layout B
+(`pack_entry.sh`, zero weights) reads 3444 B and loses as it always has; layout A
+remains the artifact.
+
+### Equivalence, proved twice
+
+The registration required the landed artifact to be behaviourally sha-equal to
+the confirmed pool arm. It is better than that:
+
+1. **The packed artifacts are byte-identical.** Building the old-way `pooltm` mod
+   from HEAD *before* the landing and packing it gives
+   `5a207fdf9cf05f2e3cbd3bb6a6f2a40a716332c819609df4fea887611e46b486` — the exact
+   sha256 the landed entry packs to. Sources differ only by `make_variants.py`'s
+   own two-line provenance header, which the packer strips anyway.
+2. **Against the arm that actually PLAYED the deciding match**, every executable
+   difference is exactly `pend` (the `P_MID`/`P_END` tuple and the queens-off
+   seam) — `pend` landed after those arms were built and carries its own
+   confirmed +21.31. Every other diff line is a comment. The time manager itself
+   moved byte-for-byte.
+3. The registered 20-position fixed-node probe agrees 20/20 with no `(none)` or
+   `0000`, which after (1) is a formality that was run because it was registered.
+
+### Gate ladder
+
+| gate | result |
+|---|---|
+| `check_entry.sh` | source matches generator, 3405 B, **691 spare** |
+| mate-conversion (KQK/KRK, 8 positions) | **8/8 converted, on 5/5 runs** — the ×5 stability protocol, since a single reading is an illusion under load |
+| legality, source, both budget paths | 200/200 legal, **0 no-move, 0 illegal** |
+| legality, packed artifact, both budget paths | 200/200 legal, **0 no-move, 0 illegal** |
+| first-yield (source; the packed artifact prints no `info` lines by design) | worst **582** nodes vs the 2048 budget, 0 over |
+| standalone empty-dir smoke | `uciok` → `readyok` → `bestmove g1f3`, **leaves nothing behind** |
+
+### The cliff lands AS DISCLOSED
+
+No `P=0` scoping and no `A`-floor were applied. Both are design changes that
+need their own screen, and applying either would mean shipping an artifact that
+is not the artifact three matches measured. The mechanism is reproduced on the
+landed artifact from an empty directory:
+
+| clock | landed artifact answers in |
+|---|---|
+| `go wtime 1000 winc 0` (P = max(0, 1000 − 42·200) = 0) | **0.04 s** |
+| `go wtime 60000 winc 0` | 2.16 s |
+
+The scoping decision is the owner's and is recorded as open in
+`make_pst_entry.py`'s `_pooltm` comment, where the next reader of the code meets
+it rather than having to find this ledger.
 
 ## 2026-08-15 — pend CONFIRMED at +21.31 and LANDED: the first full conversion of the taxonomy → mechanism → screen → confirm pipeline
 

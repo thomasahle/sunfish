@@ -790,8 +790,11 @@ def main():
             # (LOSS_TAXONOMY.md P0) while this source carried the fix. The
             # branch now SHIPS: a fix that exists in source but not in the
             # artifact is a defect class, not a byte saving.
-            think = min(wtime * (1000 + 20 * winc) / (40000 + 240 * winc) + 0.9 * winc,
-                        wtime * wtime / (2 * wtime + 4000))
+            M = 40
+            P = max(0, wtime + (M - 1) * winc - (M + 2) * 200)
+            A = max(0, wtime - 400)
+            soft = min(P / M, A / 4)
+            think = min(5 * soft, A / 2)
             # A GUI-supplied movetime is a HARD limit that the GUI itself
             # enforces, so spending all of it forfeits: the node counter is
             # only checked every 2048 nodes, so the search returns at
@@ -800,6 +803,7 @@ def main():
             # way: 425 local fixed-node games, every single one a forfeit.
             think = times.get("movetime", think) / 1000
             if "movetime" in times: think -= max(think * .05, .03)
+            soft = min(soft / 1000, think)
 
             start = time.time()
             # Hard in-search deadline: iteration boundaries can be seconds
@@ -811,7 +815,7 @@ def main():
             # converged): a mid-depth fail-high can come from a deep
             # fail-low dive probe at an absurd gamma and is only a
             # candidate (classic's Qxc6 giveaway class).
-            best, cand, d0 = None, None, 1
+            best, cand, d0, lo, up = None, None, 1, -1e9, 1e9
             # minifier-hide start
             # "go nodes N": equal-effort matches. Testing-only -- the 4k
             # rules mandate no such command, so the artifact does not carry
@@ -823,7 +827,7 @@ def main():
             try:
                 for depth, gamma, score, move in searcher.search(hist):
                     if depth > d0:
-                        best, d0 = cand or best, depth
+                        best, d0, lo, up = cand or best, depth, -1e9, 1e9
                     # minifier-hide start
                     if max_nodes and searcher.nodes >= max_nodes and (best or cand):
                         break
@@ -837,8 +841,11 @@ def main():
                         if len(hist) % 2 == 0:
                             i, j = 119 - i, 119 - j
                         cand = render(i) + render(j) + move.prom.lower()
-                    if (best or cand) and time.time() - start > think * 0.8:
-                        break
+                    if score >= gamma: lo = max(lo, score)
+                    else: up = min(up, score)
+                    if not lo < up - EVAL_ROUGHNESS:
+                        best = cand or best
+                        if best and time.time() - start > soft: break
             except Stop:
                 pass
 
