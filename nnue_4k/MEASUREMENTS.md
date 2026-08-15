@@ -47,6 +47,7 @@ how much effort it cost.
 | Date | Experiment | Verdict |
 |---|---|---|
 | 2026-08-15 | **PRE-REGISTERED: the pool TM's FIXED-N confirmation — N=300 at 30+1, no stopping rule, to earn the magnitude the three SPRT-stopped regime numbers cannot** | The oldest open follow-up on the landing lane's list. All three pool regime figures (+119.94 ± 36.44 at 60+0, +136.58 ± 35.24 at 60+1, **+124.50 ± 38.79** at 30+1) are **SPRT-stopped and therefore biased away from zero** — `pend` measured that bias at 42% on its own screen. This match has **no stopping rule**: 300 games, played out. Arms are the pinned m5 pair, shas **re-verified before registration** (`cddf392e2144…` pool, `14b69a606b74…` smooth, both built at `522931a`). 30+1, `book3k.pgn` order=random, **srand 20260820** (fresh), **adjudication NONE**, concurrency 8, nice 10. Zero illegal ends and voids the run; forfeits recorded either way — box history is 651/651 clean, so **any** forfeit here is a genuine holdback-revisit signal (unlike the laptop meter's 9). **#205 does not touch this**: both arms predate it and the measured quantity is the pool-vs-smooth TM difference, not anything-vs-classic |
+| 2026-08-15 | **RELOCATION BRANCH (b) FIRES — the laptop run 2 is CANCELLED WITHOUT A GAME and the +400 meter MOVES TO THE BENCH BOX. Registered before any game: N=300, 60+1, srand 20260822, concurrency 8 DECLARED, arms TRANSFERRED not rebuilt** | Two independent reasons, both measured: the quiet gate **refused continuously from 19:34:35Z** on foreign CPU **124-310%** that was **pure user-desktop load** (every one of this project's lanes already stopped — audit-lane CPython count 0, leanpy embargoed), and run 1's lock release freed a queued **~40-min lake build + sweeps + a 30-min ctwin leg** that holds the laptop busy regardless. The branch's own rationale — "a gate that never passes is a void arriving early" — says act on evidence, not on the calendar word "tonight". **No data lost: `meter2.pgn` never existed.** Box verified read-only before registering: **96 cores, load 22.81**, fastchess + pypy3 present, `book3k.pgn` present, 4 matches already running (pool fixed-N at conc 8 + #190 audit at conc 10) — and its record is **651/651 clean timed packed-arm games at heavier cotenancy than the laptop ever saw**. **Arms are TRANSFERRED, never rebuilt** — a box rebuild would use that box's pyminify/xz and break identity with stage 1, A/B and run 1 — with sha256 re-verified after transfer (`5a207fdf9cf05f2e…` 3405 B, `7bdbd6054f70622a…` 3246 B) and the launch refusing to play if either differs. **EXECUTION SPLIT: this lane is read-only on the box, so the training lane launches per this registration; HARVEST AUTHORITY STAYS HERE** (read-only ssh, committed reading rules, Elo unread until N=300 completes forfeit-free). Classic arm is master `2784dbf`, so the number is labelled **pre-#205-classic**. Concurrency 8 is **declared and reported with the number**, because at a real clock concurrency is part of the conditions |
 | 2026-08-15 | **RE-REGISTERED: THE +400 METER, RUN 2 — same form and the SAME sha-pinned arms, new srand **20260821**, void-on-forfeit again, and this time an ABSOLUTE venue embargo ordered across all lanes (nothing above shell-trivial on this laptop while it runs)** | Identical to run 1 so the two are the same measurement, not two different ones: fixed **N=300**, 60+1, concurrency 4, adjudication none, `book3k` order=random, entry **3405 B** `5a207fdf9cf05f2e…` vs classic **3246 B** `7bdbd6054f70622a…` — byte-identical arms to run 1 and to B, re-verified at registration. **Only the srand changes** (20260820 → **20260821**), so run 2 is an independent draw of the same quantity. **Void-on-forfeit stands unchanged** — it fired correctly once and is not being weakened because it cost a run. Quiet gate raised on run 1's evidence: run 1 started at a passing gate and was still overtaken 3 h later, so the gate is necessary but not sufficient and only the embargo closes it; the gate now also requires the venue to hold, with the sampler recording throughout and the per-window analysis run at harvest whatever the outcome. **Reading rules carry over verbatim** including no early stop on the score, and the Elo stays unread until the run is confirmed forfeit-free. Overnight run authorized; self-completing; ETA ~4 h from gate pass |
 | 2026-08-15 | **THE +400 METER IS VOID — 5 time forfeits, registered void condition fired, and the venue check comes back CONTENDED (not the more interesting answer). The registration DID ITS JOB: it caught contamination and protected the number instead of shipping it** | Void by the rule registered at `90fe032` before game 1: one forfeit voids, and there were five (all the **entry**, overruns 101-102 ms — the arbiter-quantum starvation signature). **The honest venue check, run without steering toward the convenient answer**: forfeited games' play windows had **median foreign CPU 104%** (p25 84%, p75 194%) against **35%** for the 278 non-forfeited games — every forfeit sat in a contended window and **none in a quiet one**, so the **holdback-fix revisit condition (a clean-venue forfeit) is NOT met** and that fix stays shelved. Contention is necessary but not sufficient: 63 of 278 clean-finishing games (23%) also ran at ≥84%. **Attribution corrected against the coordinator's own account**: sustained load began at **~18:15Z**, not the 18:45-19:00Z window he named — 15-min medians run 18-44% from 15:16Z to 18:00Z, then **129% / 104% / 172% / 152%** — and the first forfeit is **18:24Z**, 21 minutes before the authorization he blamed. **The first ~200 games (15:16-18:00Z) ran clean at median 18-44% with ZERO forfeits**, which is itself a clean-venue record consistent with B. Elo deliberately **UNREAD and unquotable**; **B's +325.17 ± 134.54 remains the only clean timed number.** Match allowed to finish (283/300 at write time) to preserve per-move data. Re-run registered with a new srand and an absolute venue embargo |
 | 2026-08-15 | **NEAR-MISS ON THE PRIMARY MEASUREMENT, and two liveness checks that BOTH misfire: another lane read this lane's STALE lock purpose text, concluded the lock was awaiting cleanup, and flagged the running meter's `fastchess` for reaping. New rule: a re-taken lock has its PURPOSE TEXT REWRITTEN AT TAKE TIME** | The barrier held and nothing was touched, but the cause was ours: the lock said "forfeit replications A and B" with A/B **COMPLETE** markers while a live N=300 match was playing under it. **Stale purpose text on a LIVE lock is how another lane politely kills your match.** Worse, the obvious liveness tests are both wrong and I hit **both** today: `ps -Ao comm \| grep -x fastchess` is a **FALSE NEGATIVE** — `comm` holds the FULL PATH, so it returned **0 while the meter was live and writing games** — and `pgrep -f fastchess` is a **FALSE POSITIVE**, matching the reader's own shell wrappers containing the word (it reported a match running at 15:08 when none was). A false negative is the dangerous one: it authorizes reaping a live match. The lock now carries a **tested** identity — the single `fastchess` whose **pgnout IS the meter arena file** — plus both anti-patterns named, an ETA computed from the PGN's own game timestamps rather than guessed (a first attempt produced a **negative rate** from a hand-typed epoch and was caught before it shipped), and a two-clause release condition. `run_meter.sh` writes this text **at take time** so a future re-take cannot inherit a stale purpose. Meter unaffected: **70/300, 0 forfeits, 0 illegal**, score deliberately unread |
@@ -951,6 +952,109 @@ in seconds and lives outside the engine. **Fixing the holdback would not
 have prevented one of these forfeits** — which is precisely why it stays
 registered-not-run, and why the venue-exclusivity rule is the real
 remedy.
+
+---
+
+## 2026-08-15 — RELOCATION REGISTRATION: the +400 meter moves to the bench box
+
+**The pre-registered branch (b) fired.** It was written at `ff2a85f` before
+any of this was known, precisely so that this decision would be an
+execution of a rule rather than an argument made while tired.
+
+### The evidence that fired it
+
+1. **The quiet gate refused continuously from 19:34:35Z** — foreign CPU
+   **124% → 310% → 137% → 267%** against a 40% threshold — and by then
+   **every one of this project's lanes was already stopped** (audit-lane
+   CPython process count **0**, leanpy lanes embargoed). What remained was
+   **user-desktop load**, the one source no embargo can reach. That is
+   trigger (b) exactly.
+2. **Run 1's lock release freed the queued gate-window**: a ~40-minute
+   `lake` build, sweeps, and a 30-minute ctwin leg, which will hold the
+   laptop's foreign CPU high **regardless of the user**.
+
+Two independent directions, either sufficient. The branch's own rationale
+— *a gate that never passes is a void arriving early* — says act on the
+evidence rather than on the calendar word "tonight".
+
+### Laptop run 2: CANCELLED, and nothing was lost
+
+`meter2.pgn` **never existed** — the gate did its job and no game was ever
+played, so there is no partial data, no biased fragment, and nothing to
+throw away. The chain, gate, waiters and sampler are stopped and **the
+screen lock is removed**, so the queued builds run guilt-free. **The
+laptop hosts no timed match tonight.**
+
+### The new venue, verified read-only BEFORE registering
+
+| | |
+|---|---|
+| cores | **96** |
+| load at check | **22.81** (≈ 23 of 96 busy — ample headroom) |
+| already running | 4 matches: the pool fixed-N at conc 8 + the #190 audit at conc 10 |
+| toolchain | `fastchess-linux-x86-64`, `pypy3.11-v7.3.20`, `book3k.pgn` all present |
+| **its record** | **651 / 651 clean timed packed-arm games** (m2 60+1, m5 30+1, m6 1+0) at **heavier cotenancy than this laptop ever saw** |
+
+The diagnosed mechanism — a niced process descheduled for seconds — is a
+small-core-count phenomenon. 96 cores absorb what ~10 cannot, and the box's
+own history is the evidence.
+
+### Form — unchanged, so the quantity is unchanged
+
+| | |
+|---|---|
+| N | **fixed 300**, no SPRT |
+| TC | **60+1** |
+| adjudication | **none** |
+| book | `book3k.pgn` order=random |
+| **srand** | **20260822** (fresh; laptop runs used 20260820 / 20260821) |
+| **concurrency** | **8 — DECLARED**, and reported with the number |
+| tripwires | **zero illegal = STOP; zero forfeit = VOID** |
+
+**Concurrency is declared rather than incidental** because at a real clock
+— unlike fixed nodes — it is part of the measurement conditions, not a
+throughput convenience.
+
+### Arms: TRANSFERRED, never rebuilt
+
+| arm | packed | sha256 |
+|---|---|---|
+| entry | **3405 B** | `5a207fdf9cf05f2e…` |
+| classic | **3246 B** | `7bdbd6054f70622a…` |
+
+**A rebuild on the box would use that box's `pyminify`/`xz` and produce a
+different artifact**, breaking identity with stage 1, replications A/B and
+run 1. The packed files are plain bytes and are platform-independent, so
+they are copied and their sha256 **re-verified after transfer**; the launch
+script refuses to play if either differs. Classic is master **`2784dbf`**,
+so this number is labelled **pre-#205-classic**.
+
+### Execution split, and where authority sits
+
+**This lane is read-only on the bench box by standing rule.** So:
+
+- **The training lane executes** the launch, verbatim, per this
+  registration. The script and a `HANDOFF.md` with the exact `scp`/`ssh`
+  commands are staged in `scratchpad/arena-meas/handoff/`.
+- **Harvest authority stays with this lane**: it reads the box PGN over
+  read-only ssh and applies the reading rules already committed — N=300
+  fixed, no early stop on the score, one forfeit voids, and **the Elo
+  stays unread until the run completes forfeit-free.**
+
+The launch script itself computes **no Elo**, deliberately, so that the
+executing lane cannot accidentally publish a number that the harvest rules
+have not yet cleared.
+
+### Cross-reference
+
+Run 1's final harvest (300/300, **9 forfeits, all the entry**, 0 illegal,
+forfeited games at median 200% foreign CPU vs 36% for the 291 normal ones)
+is the immediately preceding entry, and it is the reason the form did not
+change here: run 1 was killed by its venue, not by its design.
+
+**Until this lands, B's +325.17 ± 134.54 remains the only clean real-clock
+entry-vs-classic number, and stage 1's fixed-node −1.74 ± 27.93 stands
+untouched.**
 
 ---
 
