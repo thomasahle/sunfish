@@ -61,6 +61,10 @@ not root and 2 < depth < 6 and any(c in pos.board for c in "RBNQ")
 The pass is a score candidate only below depth 6. From depth 6 on it is a
 fuel oracle instead -- see the next section.
 
+The shallow candidate retains its original three-ply reduction. The deep
+fuel probe has a different role and may use a more aggressive reduction;
+sharing one reduction between them changes the declared shallow value.
+
 `EvalBounds.lean` proves that every reachable both-kings static evaluation is
 bounded by `EvalBounds.evalBound`. With `EVAL_ROUGHNESS = 15`, theorems
 `staticCap_in_scoreBand` and `staticCappedNull_below_positiveMate` prove that
@@ -90,7 +94,7 @@ if guard:
     target = pos.score + NULL_MARGIN
     d -= -self.bound(nullpos, 1 - target, depth - 7) >= target
 
-move_depth = d - 1 - (guard and val < LMR)
+move_depth = d - 1 - (not root and guard and val < LMR)
 ```
 
 The target depends on `(pos, depth)` alone -- `gamma` does not enter. Table
@@ -106,6 +110,11 @@ only selects the recursion depth. Every real edge spends one to three plies,
 exactly matching the two code subtractions (`intrinsic_child_depth`,
 `intrinsic_edge_cost`). Thus the killer can reorder a move but cannot change
 its edge cost, and no MTD window changes the declared tree.
+
+The driver root is deliberately exempt from intrinsic LMR. Root probes are
+not stored in `tp_score`, so this does not create a second value for any TT
+key; the model's `eligible` bit is false there. Interior nodes retain the
+fixed edge-cost recurrence proved by `IntrinsicLMR.lean`.
 
 That is what buys the premise: a null cutoff gives every real move unbounded
 pruning debt, and discharging it is exactly what `NoZugzwang` was for. A
