@@ -1,0 +1,25 @@
+# one-layer seed census, point 4 of 4 -- the noise floor that actually
+# matters for selection.
+#
+# WHY THIS FAMILY AND NOT ml2.  The one-layer net is the only thing this
+# campaign has produced that beat a coin flip in play: -107 against the
+# entry, versus -234 and -300 for the two ml2 arms.  If a future candidate
+# comes from anywhere, it comes from here -- so the ladder that would select
+# it is THIS family's, and its noise floor rests on n=2 (71 seed 0: 0.01378,
+# 78 seed 1: 0.01374 -> 4e-5).  The ml2 census just showed what n=2 hides:
+# its two-point 1.8e-4 became a 3.0e-4 range and a 1.25e-4 sd at n=4.
+#
+# NAMED QUESTION: what is the one-layer val spread at n=4, in val AND in
+# packed bytes?  The ml2 census found the BYTE outcome moves 70 B across
+# seeds at fixed recipe -- more than any dial this campaign has measured --
+# so "how many bytes does recipe X cost" needs the same n=4 treatment here
+# before any one-layer candidate is chosen on a byte argument.
+#
+# Identical to 71/78 in every field but opt.seed; split pinned to draw A.
+name: plain_seedcensus_s3
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406, perm_seed: 0}
+model: {arch: residual, N: 4, base: mat, ternary: 0.85, gridste: 1}
+loss: {l1: 0.0005, satpen: 0.03, satthresh: 480.0}
+opt: {epochs: 30, batch: 8192, lr: 3.0e-3, seed: 3}
+notes: "one-layer seed census point (seed 3): val AND packed-byte spread at
+  n=4 for the only family that ever beat a coin flip in play"

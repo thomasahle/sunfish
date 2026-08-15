@@ -247,6 +247,113 @@ VAL-probe-first):
 
 ## Log (newest first)
 
+- 2026-08-15 11:15 UTC: **BOTH INSTRUMENT VERDICTS, and the family's dial
+  space is SPANNED — COMPLETE-PENDING-DIRECTION.**
+
+  ### Verdict A — the ml2 seed spread (n=4, l1 .001, 30 ep, draw A)
+
+  | seed | val | zeros | **packed** |
+  |---|---|---|---|
+  | 0 (`74`) | 0.01347 | 72.9% | 3740 B |
+  | 1 (`82x`) | 0.01359 | 73.2% | **3697 B** |
+  | 2 (`79`) | 0.01329 | 70.0% | 3766 B |
+  | 4 (`82y`) | 0.01341 | 72.5% | **3767 B** |
+  | | mean **0.01344**, sd **1.25e-4**, range **3.0e-4** | | mean 3742, **range 70 B** |
+
+  **The two-point estimate held and got worse.** Every ml2 val distinction
+  this campaign drew — density .0005 vs .001 (6e-5), bm4 vs bm2 (5e-5),
+  grid .0005 vs .0003 (7e-5), u2grid-only vs full grid (1.5e-4) — is
+  **inside one standard deviation.** The ml2 val ladder cannot resolve any
+  of them.
+
+  **And a correction to my own entry of two hours ago.** I wrote that the
+  byte results were unaffected because "`pack.sh` is deterministic, no seed
+  involved". That conflated *the measurement* being deterministic with *the
+  quantity* being stable. The net depends on the seed, so the byte outcome
+  of a **recipe** does too — and it moves **70 B across seeds at fixed
+  recipe**, which is **twice** the 35 B I ledgered as l1 .001's "free
+  bytes". **That claim does not survive either**: 3775 → 3740 was n=1 per
+  arm inside a 70 B spread. l1 .001 is not established as cheaper; it is
+  established as *not worse*, on val and bytes both.
+
+  ### Verdict B — the val draw
+
+  Same seed, same recipe, different 200 000-row draw: **`74` 0.01347
+  (draw A) vs `82_valdraw_ml2` 0.01383 (draw B) = 3.6e-4** — *larger than
+  the entire seed range*. So the ladder's differences were **draw noise as
+  well as seed noise**. This is an instrument finding, not a finding about
+  any net: a val gap under ~4e-4 on this family means nothing unless it is
+  replicated across seeds *and* draws, and nothing in this campaign was.
+
+  ### What SURVIVES both verdicts, stated so this is not over-read
+
+  - **The fidelity effect is real**: float ml2 0.01280 → grid ml2 mean
+    0.01344 = **6.4e-4 ≈ 5σ** of the measured seed sd. Training under the
+    grid genuinely costs val; that was never noise. (Caveat: the float
+    number is n=1 and its own noise is unmeasured.)
+  - **The ⅓ recovery, restated properly rather than retracted.** Against
+    the one-layer mean 0.01376, recovery is
+    (0.01376−0.01344)/(0.01376−0.01280) = **33%, at ≈2.6σ**. Two hours ago
+    I called it "1.7× a single-seed observation, not resolved"; with n=4 it
+    is *better* than that — resolved at about 2.6σ. The correction runs in
+    both directions and this is the direction it ran.
+  - **Every play number**: −107, −234.18 ± 55.08, −300.56 ± 71.33 are
+    pentanomial with >100 Elo gaps. **The anti-predictive finding is
+    untouched and is now the only load-bearing selection evidence the
+    family has.**
+  - **The attractor**, which lives in the weights and never touched a val
+    set.
+
+  ### Arm 11's satpen half — CLOSED, and not by a val comparison
+
+  `81_satpen_off` did not finish: the trainer's own anchor tripwire killed
+  it at epoch 21.
+
+  > `EARLY-KILL: val 0.01894 vs anchors zero 0.02001 / mat 0.01616 at epoch
+  > 21 -- the run is broken, not merely weak. Stopping.`
+
+  With `satpen: 0` the run **diverged** — clip-saturation 0.02% → **4.87%**
+  in one epoch and val worse than the material-only anchor. Its 0.01329
+  "best" is a pre-blowup epoch and is not a result; its payload packs to
+  **3814 B**, the worst of any grid-era ml2 net (zeros fell to 60.7%).
+  **satpen 0.03 stays**, the kbbil lesson holds, and **arm 11 is now closed
+  on both halves** (CLAMP by run 61, satpen here). The instrument caught it
+  and stopped — the anchors earned their keep.
+
+  ### Attractor census — FINAL
+
+  **14 finished ml2 runs, 56 components**, spanning seeds {0,1,2,3,4},
+  l1 {.0003,.0005,.001}, clamp {400,600}, rides {30,60}, satpen {0,0.03}
+  and **both val draws**. Max deviation over *all 56* components:
+  **1.85e-2**. `80_seed3_l1_001_long` — seed 3 × 60 epochs, the last free
+  combination — landed at **7.63e-08**, the tightest of the campaign, and
+  vindicates refusing to read its epoch-3 intermediate (which sat at 0.12
+  only because `u2` climbs from zero). The attractor is not a seed, ride,
+  dial or draw artifact.
+
+  ### State: COMPLETE-PENDING-DIRECTION
+
+  Every dial the family header licenses without a seam is now measured:
+  **l1 × clamp × τ × satpen × ride × seed × draw × fidelity-flags.** Only
+  two effects exceed the noise floor: **the fidelity rule** (5σ, and it
+  costs val) and **satpen off** (which breaks the run). Everything else
+  this campaign ranked on is unresolved at its own measurement precision.
+  The remaining registered arms (#5 n8, #3 kb4) need a seam this lane
+  declined on direction grounds, and #12 is owner-gated. **The family has
+  no next question it can answer by itself — the next move is a direction
+  call.**
+
+  Queued meanwhile (depth 3, real questions only): `83_valdraw_plain_long`
+  (running — the one-layer draw answer) and the **one-layer seed census**
+  `84_plain_seedcensus_s2` / `85_plain_seedcensus_s3`. That family is the
+  only one that ever beat a coin flip in play, its noise floor rests on
+  n=2, and the ml2 census just demonstrated what n=2 hides — in bytes as
+  much as in val.
+
+  (Context: Thomas retitled #202, "Jointly tune null shaping and intrinsic
+  LMR" — his campaign is consolidating. No training effect; this lane cites
+  nnue-4k revs throughout.)
+
 - 2026-08-15 09:30 UTC: **THE ml2 VAL LADDER CANNOT RESOLVE WHAT THIS
   CAMPAIGN USED IT TO DECIDE: seed alone moves it 1.8e-4.**
 
