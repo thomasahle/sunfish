@@ -848,13 +848,14 @@ async def optimize(args):
             pending = pending_comparisons()
             forbidden = rejected_configurations() | ({fixed} if fixed is not None else set())
             proposal_state = selection_state(state)
+            proposal_state["batches"] = list(state["batches"])
             proposals = []
             for _ in range(size):
                 reservation = selection_state(proposal_state)
                 trial = selection_state(reservation)
                 reservation_pending = list(pending)
-                vector, diagnostics = choose(
-                    trial, mean_function, candidates, pending, args, space,
+                vector, diagnostics = await asyncio.to_thread(
+                    choose, trial, mean_function, candidates, pending, args, space,
                     allocation_model, forbidden | {item[0] for item in proposals})
                 commit_selection(proposal_state, trial)
                 proposals.append([vector, diagnostics, reservation, 0, reservation_pending])
@@ -884,8 +885,8 @@ async def optimize(args):
                             f"policy gate rejected {args.gate_attempts} consecutive proposals")
                     others = {other[0] for other in proposals if other is not item}
                     trial = selection_state(item[2])
-                    item[0], replacement = choose(
-                        trial, mean_function, candidates, item[4], args, space,
+                    item[0], replacement = await asyncio.to_thread(
+                        choose, trial, mean_function, candidates, item[4], args, space,
                         allocation_model, forbidden | others)
                     if replacement["mode"] != item[1]["mode"]:
                         raise AssertionError("gate replacement changed allocation mode")
