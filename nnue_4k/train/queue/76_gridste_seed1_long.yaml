@@ -1,0 +1,27 @@
+# gridste-seed1-long -- the TAIL, and the robustness check the screen's own
+# registration says is owed.
+#
+# Run 70 is the artifact now playing a screen, and its second layer sits on a
+# KNIFE EDGE: three of four u2 components land within 1e-5 of the rounding tie
+# (u2*scale = 0.5000051, 0.5074217, 0.5000017, 0.4999114).  Float32 and
+# float64 agree today, so the shipped digits are the trained ones -- verified
+# component-by-component before game 1 -- but a net whose read-out is decided
+# in the fifth decimal is not a net anyone should call stable on one sample.
+# A different seed answers it directly: does the tie recur, or was 70's
+# parking a draw from a distribution with room on both sides?
+#
+# 60 epochs, last in the queue, ~40 min: a single upstream finish must not
+# drain the queue before the next tick.
+#
+# PRE-REGISTERED READING: report best-of-first-30 beside best-of-60 (the
+# dense60 lesson -- a lower minimum drawn from twice the epochs is not a
+# gain), and report u2*scale to five decimals.  Landing off the tie is the
+# result worth having either way: it would make 70's edge a seed artifact
+# rather than a property of the recipe.
+name: gridste_seed1_long
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406}
+model: {arch: ml2, N: 4, base: mat, ternary: 0.85, bm: 4, u2grid: 1, gridste: 1}
+loss: {l1: 0.0005, satpen: 0.03, satthresh: 480.0}
+opt: {epochs: 60, batch: 8192, lr: 3.0e-3, seed: 1}
+notes: "tail (~40 min, last): seed-1 replicate of run 70 at double the ride --
+  does the u2 rounding-tie recur, or was 70's knife-edge a seed draw?"

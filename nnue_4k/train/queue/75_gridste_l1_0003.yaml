@@ -1,0 +1,19 @@
+# gridste-l1-0003 -- the third point of the density dial, so the answer is a
+# CURVE and not a coin flip between two neighbours (registered line 1).
+#
+# .0003 is c1024-cal's released pressure -- the value the trained-codebook and
+# low-rank arms both ran at -- so this point also tells the structure lane
+# whether its operating point moves under the fidelity rule.  Same recipe as
+# 70 and 74 in every other field.
+#
+# PRE-REGISTERED READING: reported as a three-point curve
+# (.0003 / .0005 / .001) against run 70's 0.01347, and a monotone curve is
+# worth more than the winner: it says which direction the grid pushed the
+# optimum, which is what the next arm needs to know.
+name: gridste_l1_0003
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406}
+model: {arch: ml2, N: 4, base: mat, ternary: 0.85, bm: 4, u2grid: 1, gridste: 1}
+loss: {l1: 0.0003, satpen: 0.03, satthresh: 480.0}
+opt: {epochs: 30, batch: 8192, lr: 3.0e-3, seed: 0}
+notes: "third point of the density curve under fidelity (.0003, c1024-cal's
+  released pressure); read as a curve against 70's 0.01347, not a duel"
