@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **#205 PORT SCREEN VERDICT: UNDECIDED at the 1000-game cap — **+5.91 ± 17.25**, 95% **[−11.33, +23.17]**, 0 illegal, 0 forfeits. The interval EXCLUDES classic's own **+48.25 ± 27.03**, so classic-tuned search does NOT transfer to the entry — and at **+71 B** it fails the byte bar outright. DO NOT LAND** | LLR 0.20 of (−2.94, 2.94) = 6.7% of a decision; 500 pairs 0 unpaired, ptnml **[55, 82, 219, 79, 65]**, 50.85%, adjudication symmetric (679/1000, same driver both arms), median 225 plies, 54 m on the box at conc 8. Pentanomial **recomputed from the PGN independently** and reproduces fastchess to the digit. **The negative is informative because the mechanism DID transfer**: same 20000 nodes, the arm is deeper on **53/60** positions and shallower on **0**, **+2.20 plies** — the depth was bought and did not convert. Decomposition says why it might not: fuel oracle alone = **1.87 plies for 2** MTD crossings, intrinsic gate alone = **0.27 for 4**, together **2.20 for 13** — depth additive, **instability superadditive**. Byte economics settle it: **0.08 Elo/byte** at the point estimate (0.33 at the 95% upper bound) against LMR's ~1.8. `LMR = 75` was pre-registered as dropped and the decomposition bounds that gap — the whole intrinsic half is 0.27 of 2.20 plies, a poor place for a hidden +40. No timed confirmation is spent. Landing shape was still verified end to end (byte-identical artifact `f56119a7…`; golf count `nullmove` 7→8; **3 of 6 anchors survive landing**, incl. the fuel oracle itself — the `iirk` silent-double trap) |
 | 2026-08-16 | **#205 PORT RUN 1 VOID BY INSTRUMENT at 868 games — `sunfish_ui/` was not staged in the arena, so BOTH arms fell through to the builtin UCI loop, which silently ignores `position fen`, and answered an EPD book from the START POSITION. 868 illegal moves, all `g1f3`, **434 base / 434 n205 — exactly symmetric**. NO Elo exists and the arms are innocent** | The entry resolves its driver from THIS FILE'S GRANDPARENT (`arena/bin/` → `arena/`), which had no `sunfish_ui/`. A documented trap (2026-08-15 stage-2 amendment says it verbatim) that I walked into because `tools/screens/ab_fixednode.sh` still specifies an EPD book — it predates the finding and its wrappers assumed an arena with `sunfish_ui/` beside `bin/`. The gate ladder never saw it: the gates drive FENs through `sunfish_ui` in-process and passed 130/130 zero-illegal on both arms. **Fixed so it cannot recur silently**: driver v3 staged beside `bin/`, and the runner now ABORTS before game 1 unless both arms print `v3 nodes fen` AND answer a black-to-move FEN with `g8f6` rather than `g1f3` — verified, not assumed. Run 2 re-registered with **srand 20260825** (20260824 burned) and adjudication reclassified from structurally-inert to **ACTIVE and symmetric**, since the driver makes both arms emit `score cp`. Cost: ~3 minutes of 8 slots |
 | 2026-08-16 | **PRE-REGISTERED before game 1: the #205 PORT into the 4k entry — classic's tuned null shaping (two-regime null + fuel oracle, `NULL_MARGIN = -200`, `depth - 7` probe, `abs(pos.score) < 500` guard dropped) plus the intrinsic LMR GATE, at **+71 B measured** (3405 → 3476, 620 spare). Fixed-node SPRT, srand 20260824, cap 1000, gate ladder ALL GREEN** | `LMR = 75` is **deliberately DROPPED** and said so before the result: 60 already governs measured entry behaviour (+38.9 ± 19.1) and classic tuned 75 for a reduction classic did not previously have — port constants that arrive WITH a mechanism, never overwrite constants that already govern measured behaviour. #205's IID removal is **already done here and better** (`iirk.noiid`, IIR, +22.3 ± 16.0), so the arm cannot reproduce classic's +48.25 ± 27.03 — a share of that is classic acquiring an LMR the entry already has. Gates: mate-conversion **8/8 both arms** (the test that matters — KQK/KRK are exactly what the deleted guard used to shield), legality **130/130, 0 illegal** on laptop AND box at `go nodes 20000`, first-yield MAX **676/2048 identical**, empty-dir smoke both. **Mechanism confirmed and a cost registered in advance**: same 20000-node budget, the arm reaches a deeper final depth on **53/60** positions and shallower on **0** (mean **9.93 → 12.13 plies**), while the MTD bracket-crossing tripwire goes **1 → 13**. That tripwire also corrects upstream's own comment: the fuel probe's *window* is (pos, depth)-fixed but the *probe* reads `bound()`, which can answer from the table, so `d` is TABLE-STATE dependent — a real new break of one-value-per-key, clamped by the MTD guards. Claiming position-determinism would be a model/code divergence, so the mod's comment was rewritten instead |
 | 2026-08-16 | **POOL FIXED-N VERDICT: the pool TM's true magnitude at 30+1 is **+102.47 ± 32.43** over a full 300 games — and the SPRT decider was **22 Elo (17.7%) HIGH**, the early-stop bias measured at last** | 144W/58L/98D = **64.33%**, pentanomial **[5, 20, 41, 52, 32]** over 150 pairs with **0 unpaired**, PairsRatio 6.40, draw ratio 32.67%. **0 illegal, 0 forfeits, 300/300 `normal`** — the box's clean-timed-game record extends to **951/951**. Against the decider's SPRT-stopped +124.50 ± 38.79: **−22.03 Elo**, the direction a stopping rule guarantees (`pend`'s own bias was 42%). **Stated honestly, the two are NOT separated** — the intervals overlap heavily — so this does not prove the gap is bias rather than noise; what it establishes is which number to quote, since only the fixed-N interval means what it advertises (and it is *tighter*, ±32.43 vs ±38.79, on 12 more games). **The pool still wins decisively** and the landing stands; only its altitude comes down. Mechanism reproduced: **zero blind moves on either arm**, spend ratio 1.03×, and the one number against it unchanged — 98 pool games ended under 2 s of clock to smooth's 0 |
@@ -285,6 +286,132 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-16 — SCREEN VERDICT: the #205 port is UNDECIDED at 1000 games, +5.91 ± 17.25 — the search transfers MECHANICALLY (+2.2 plies per node) and NOT IN ELO, and at +71 bytes it does not pay
+
+The registered question is answered, and the answer is no. **DO NOT LAND.**
+
+| | |
+|---|---|
+| verdict | **UNDECIDED AT CAP** — 1000 games, LLR **0.20** of (−2.94, 2.94), i.e. **6.7%** of the way to a decision |
+| Elo (pentanomial) | **+5.91 ± 17.25**, 95% **[−11.33, +23.17]** |
+| nElo | +7.38 ± 21.53 |
+| score | **50.85%** — 392 W / 375 L / 233 D over **500 complete pairs, 0 unpaired** |
+| ptnml (arm) | **[55, 82, 219, 79, 65]**, WL/DD 5.08, draw ratio 23.30% |
+| **zero-illegal** | **0 illegal moves, 0 time forfeits, 1000/1000 games terminated** |
+| adjudication | 679 of 1000, **symmetric** — both arms run the same driver and emit the same `score cp` |
+| game length | min 25, p10 113, **median 225**, p90 390, max 790 plies |
+| arms | `n205` 3476 B vs `base` 3405 B, both @ `279fcb3`; base verified **bit-identical** to `git show 279fcb3:nnue_4k/pst_entry.py` |
+| run | bench box, 54 m 47 s, concurrency 8, `nice -n 10`, srand 20260825, box load 27.9 at finish |
+
+The pentanomial read was **recomputed independently from the PGN** and
+reproduces fastchess to the digit — 500 pairs, the same ptnml vector, the same
+±17.25. Per the registered rule and `ab_fixednode.sh`'s own warning, an SPRT
+that runs to its cap is reported as **undecided, not as a point estimate**.
+
+### What the number rules out
+
+**The interval excludes classic's own result.** #205 measured **+48.25 ± 27.03**
+on classic; the port measures **[−11.33, +23.17]** on the entry. Those do not
+overlap. Whatever #205 is worth to classic, **the ported null shaping is not
+worth that to the entry**, and this is precise enough to say so rather than
+shrug at a wide bar.
+
+**It is also not measurably different from zero**, so the honest statement is
+two-sided: the port is *at most* a small gain, and may be nothing.
+
+### It is not a failed implementation — the mechanism transferred exactly
+
+This is the part that makes the negative informative. At the screen's own
+20000-node budget, over the 60 first-yield positions:
+
+| arm | mean final depth | MTD bracket crossings |
+|---|---|---|
+| base | 9.93 | **1** |
+| **`n205` (full port)** | **12.13** | **13** |
+| `nogate` (fuel oracle only, entry's original count gate) | 11.80 | 2 |
+| `nofuel` (intrinsic gate only, no fuel ply) | 10.20 | 4 |
+
+The port **does exactly what #205 does**: it reaches a deeper final depth on
+**53 of 60** positions, shallower on **0**, for **+2.20 plies at the same node
+count**. The depth was bought. **It did not convert.**
+
+**And the decomposition says where the cost is.** The fuel oracle supplies
+**1.87 of the 2.20 plies** — ~85% of the gain — for only **2** crossings. The
+intrinsic LMR gate supplies **0.27** for **4**. Together they produce **13**:
+the depth is roughly additive, **the instability is sharply superadditive**.
+The most defensible reading of a +2.2-ply gain that pays ~0 Elo is that the
+extra depth is bought with a search that is less self-consistent, and the MTD
+driver spends back in reconciliation what the pruning saved.
+
+### The byte verdict, which is the one that actually settles it
+
+**+71 packed bytes** (3405 → 3476). Even taking the 95% **upper** bound, that
+is **0.33 Elo/byte**; at the point estimate it is **0.08**. The standing
+comparison in this ledger is **LMR at ~1.8 Elo/byte**. The port fails the
+exchange rate by more than an order of magnitude, and the 4k budget is the
+binding constraint on this artifact. **A change that cannot be distinguished
+from zero has no claim on 71 of 620 remaining bytes.**
+
+### Carried vs dropped, restated against the result
+
+Carried and screened: the two-regime null with the **fuel oracle**,
+`NULL_MARGIN = -200` with the `depth - 7` probe, the `abs(pos.score) < 500`
+guard drop, and the **intrinsic LMR gate** as the union of classic's guard
+condition with the entry's count one.
+
+Dropped, and none of them rescues the result:
+
+- **`LMR = 75`.** Deliberately not ported, and registered as such *before* the
+  games: 60 already governs measured entry behaviour (+38.9 ± 19.1) and classic
+  tuned 75 for a reduction classic did not previously have. **This is the one
+  place the verdict is incomplete, and the decomposition bounds it**: the whole
+  intrinsic-LMR half of the port contributes **0.27 of 2.20 plies**, so a
+  threshold retune inside that half is a poor candidate for a hidden +40.
+- **The IID removal** — already done here, and better, as IIR (+22.3 ± 16.0).
+- **Classic's unverified reduction** — the entry re-searches a reduced fail-high
+  and that invariant was kept.
+
+### Why the transfer failed, stated as a hypothesis and not as a fact
+
+The evidence is consistent with a simple account, and the ledger already
+contains its premise: **the entry and classic are at per-node parity**
+(−1.74 ± 27.93 at fixed nodes). A meaningful share of #205's +48.25 is
+therefore plausibly **classic acquiring things the entry already had** — an LMR
+at all, and a cheap answer to the no-table-move question. On top of that,
+Thomas tuned `-200` and `depth - 7` against classic's eval, classic's ordering
+and classic's time manager; the entry has a different eval seam
+(`K_MID`/`K_END` + `P_MID`/`P_END`), IIR instead of IID, a verified LMR classic
+lacks, and the pool TM. **Classic-tuned search constants did not transfer here,
+and that is now measured rather than suspected.**
+
+### What this licenses, and what it does not
+
+- **No landing, and no timed confirmation.** The registered rule was that H1
+  buys a timed confirmation. There is no H1. Spending a timed match on an arm
+  whose fixed-node interval excludes the effect it was chasing would be
+  spending games to relitigate a bar.
+- **The `n205` mod is KEPT in `make_variants.py`, carrying this verdict in its
+  comment**, so the next reader does not re-run it blind. `nofuel`/`nogate` are
+  named there as the decomposition arms.
+- **The one follow-up with a defensible prior is `nogate`** — the fuel oracle
+  *alone*, which buys 85% of the depth for 2 crossings instead of 13. It is
+  cheaper in bytes than the full port and avoids the superadditive instability.
+  **It is NOT registered here**: on this evidence its prior is weak, and the
+  lane's remaining ~155 Elo is more likely to come from nps and TM, which is
+  what the +400 meter's per-node parity has been saying all along.
+- **The landing shape was nonetheless verified end to end** while the games ran,
+  so if the coordinator ever wants it, it is a known quantity rather than a
+  plan: the generator-anchored form of the port produces the **byte-identical
+  artifact** to the one that played (`f56119a7cf52…`, 3476 B), it requires the
+  golf-rename count `nullmove` **7 → 8** (the generator's expected-count assert
+  caught this loudly, as designed), and **three of the six mod anchors survive
+  landing** — 1, 2 and **4** — so re-applying the mod afterwards would silently
+  double `NULL_MARGIN`, its opt_range, and **the fuel oracle itself**, with the
+  occurs-exactly-once check passing. That is the `iirk` trap and it is written
+  down here because no automated check catches it.
 
 ---
 

@@ -311,6 +311,16 @@ MODS = {
     "nolmr": ("\nLMR = 60\n", "\nLMR = 0\n"),
     # THE #205 PORT: classic's tuned null shaping, and its intrinsic LMR gate.
     #
+    # SCREENED AND NOT LANDED, 2026-08-16. Fixed-node SPRT, 1000 games at the
+    # cap: **UNDECIDED, +5.91 +/- 17.25, 95% [-11.33, +23.17]**, 0 illegal, 0
+    # forfeits. The interval EXCLUDES classic's own +48.25 +/- 27.03, so the
+    # transfer claim is refuted at this precision -- and at +71 packed bytes it
+    # fails the exchange rate outright (0.08 Elo/byte at the point estimate
+    # against LMR's ~1.8). The mod is KEPT, not deleted: it is the base for the
+    # `nofuel`/`nogate` decomposition below, and a reader who re-runs it
+    # unaware of this verdict would spend another 1000 games. Full entry and
+    # the decomposition are in nnue_4k/MEASUREMENTS.md, 2026-08-16.
+    #
     # Classic merged #205 ("Land tuned null shaping and intrinsic LMR", master
     # bf44c52) out of a 9,310-game tuning campaign and measured the search
     # change at +48.25 +/- 27.03. The entry's search forked from classic long
@@ -443,6 +453,24 @@ MODS = {
          "                yield move, score\n",
          "                yield child(move, val, depth > 2 and cnt > 2)\n"),
     ],
+    # The two halves of `n205`, for decomposition. COMPOSE ONTO IT -- they are
+    # `n205.nofuel` and `n205.nogate`, never standalone, and both anchors exist
+    # only after `n205` has applied (so a wrong order raises, as designed).
+    #
+    # What they measured, 60 first-yield positions at 20000 nodes (mean final
+    # depth / MTD bracket crossings; base is 9.93 / 1):
+    #   n205         12.13 / 13      the full port
+    #   n205.nogate  11.80 /  2      fuel oracle only  -- 1.87 of the 2.20 plies
+    #   n205.nofuel  10.20 /  4      intrinsic gate only -- 0.27 plies
+    # Depth is roughly additive; INSTABILITY IS SHARPLY SUPERADDITIVE. That is
+    # the standing lead if anyone revisits this: `nogate` buys ~85% of the
+    # depth for 2 crossings instead of 13. It has NOT been played.
+    "nofuel": (
+        "                d -= -self.bound(pos.rotate(n=True), 1 - target, depth - 7) >= target\n",
+        "                self.bound(pos.rotate(n=True), 1 - target, depth - 7)\n"),
+    "nogate": (
+        "                red = LMR and val < LMR and (guard or late)\n",
+        "                red = LMR and val < LMR and late\n"),
     # ===================================================================
     # TOMBSTONE: `pooltm` LANDED 2026-08-15, and `oldtm`/`steptm` went with
     # it. The pool manager is now the entry's DEFAULT time manager, applied
