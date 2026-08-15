@@ -29,20 +29,56 @@ UNBOUNDED_MAX_SECONDS = 600
 # ---------------------------------------------------------------- TIME ----
 # TWO TIME MANAGERS, chosen by the TM_MANAGER environment variable:
 #
-#   legacy (default)  the incumbent single number -- both the target and the
-#                     wall -- exactly as run() computes it below, untouched.
-#   pool              a whole-game resource POOL, divided into a SOFT limit
+#   pool (default)    a whole-game resource POOL, divided into a SOFT limit
 #                     (stop starting new iterations) and a HARD one (the
-#                     in-search deadline). Thomas's design; see the PR.
+#                     in-search deadline). Thomas's design.
+#   legacy            the incumbent single number -- both the target and the
+#                     wall -- exactly as run() computes it below, untouched.
+#                     KEPT AS THE CONTROL ARM: every future clock claim is a
+#                     two-arm question with one expression between the arms,
+#                     and a control that has been deleted cannot be re-run.
 #
-# THE ARM NAME MUST MATCH THE CODE, which is why the incumbent is called
-# "legacy" and not "smooth". On this branch the expression it selects is
-# master's `min(wtime/12 + 0.9*winc, wtime/2 - 1)` -- the pre-#188 form, whose
-# cap goes negative under a 2s clock. #188 replaces that one expression with
-# the smooth rational; when it lands, THIS VALUE SHOULD BE RENAMED TO "smooth"
-# in the same merge, because at that point the label would be true and only
-# then. A control arm whose name misdescribes what it plays is how a screen
-# measures one thing and reports another (the steptm sha-identity discipline).
+# THE POOL IS THE DEFAULT because the packed twin earned it in three regimes
+# against the shipped smooth budget, on a real clock, book3k, no adjudication
+# (nnue_4k/MEASUREMENTS.md):
+#
+#   60+0   +119.9 +/- 36.4   H1 in 274 games
+#   60+1   +136.6 +/- 35.2   H1 in 262 games, pentanomial [3,11,37,45,35]
+#   30+1   +124.50 +/- 38.79 H1 in 288 games, pentanomial [10,14,31,45,44]
+#
+# plus a pre-registered 1+0 zero-illegal hammer: 100 games, zero illegal, zero
+# `(none)`, zero forfeits, 100/100 normal terminations. All three Elo figures
+# are SPRT-stopped and therefore biased HIGH -- the same lane measured that
+# bias at 42% on another change -- so what is established is the DIRECTION
+# across the increment regimes, not the altitude.
+#
+# THE ONE MEASURED HOLE, disclosed here rather than in a ledger the next reader
+# will not find: at a 1-SECOND SUDDEN-DEATH clock the pool scores -209.91 +/-
+# 60.11. It is this formula, not a bug. P = max(0, 1 - (M+2)*O) = max(0, 1 -
+# 8.4) = 0 for the whole game, so t_soft = min(s*0/M, A/4) = 0 and the search
+# stops at its first converged iteration -- a depth-1 move in about a
+# millisecond against the incumbent's 13. It never flags (0.9s median end
+# clock) and never answers illegally; it plays the whole game 13x shallower.
+# WHEN P == 0 AND A > 0 THE SOFT LIMIT COLLAPSES TO ZERO AND THE A/4 CLAMP
+# BECOMES UNREACHABLE. Scoping the pool to P > 0, or flooring t_soft against A,
+# would fix it -- and both are DESIGN CHANGES that need their own screen, so
+# neither is applied here: what ships is what was measured. Until that screen
+# runs, ultra-bullet deployments should set TM_MANAGER=legacy explicitly.
+#
+# THE ARM NAME MUST MATCH THE CODE, which is why the control is called
+# "legacy" and not "smooth": the expression it selects is master's
+# `min(wtime/12 + 0.9*winc, wtime/2 - 1)`, the pre-#188 form, whose cap goes
+# NEGATIVE under a 2s clock. A control arm whose name misdescribes what it
+# plays is how a screen measures one thing and reports another (the steptm
+# sha-identity discipline).
+#
+# #188 -- which replaced that one expression with a smooth rational -- is
+# recommended CLOSED AS SUPERSEDED rather than merged, so the rename it would
+# have forced is not coming. Not closed as wrong: its +40.6 +/- 25.6 at 60+0.1
+# established that the transition band is real, and that finding is what
+# motivated the pool. What supersedes it is that its mechanism is a NEGATIVE
+# CAP, and preventing a negative cap is exactly what the A/2 wall above does
+# structurally rather than by choosing a better constant.
 #
 #   P = max(0, T + (M-1)*I - (M+2)*O)     the pool this game still has
 #   A = max(0, T - 2*O)                   what THIS move can safely reach
@@ -74,7 +110,7 @@ UNBOUNDED_MAX_SECONDS = 600
 # A negative wall is exactly how lichess.org/EAThUL0P was lost: under a 2s
 # clock the old `wtime/2 - 1` cap went negative, the budget collapsed to a
 # blind floor, and the engine played ~16 more moves at no search.
-TM_MANAGER = os.environ.get("TM_MANAGER", "legacy")
+TM_MANAGER = os.environ.get("TM_MANAGER", "pool")
 if TM_MANAGER not in ("legacy", "pool"):
     # "smooth" is deliberately NOT accepted as an alias: a match script that
     # asks for an arm this branch does not have must fail at startup, not play

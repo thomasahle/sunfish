@@ -110,9 +110,29 @@ def test_the_control_arm_is_untouched():
     assert SRC.count("think = min(wtime /") == 2, "budget statements added or lost"
 
 
-def test_the_manager_knob_defaults_to_the_incumbent():
+def test_the_manager_knob_defaults_to_the_pool():
+    """The default flipped when the pool won its third regime (30+1, +124.50
+    +/- 38.79, H1 in 288 games; 60+0 +119.9, 60+1 +136.6; 1+0 hammer clean).
+
+    This test is the one place the default is pinned, so flipping it back --
+    or a scoping change that silently makes `pool` mean something else at some
+    clocks -- is a red test rather than a quiet behaviour change on every
+    deployment that never sets the variable.
+    """
     assert uci.TM_MANAGER in ("legacy", "pool")
-    assert 'os.environ.get("TM_MANAGER", "legacy")' in SRC, "the default arm moved"
+    assert 'os.environ.get("TM_MANAGER", "pool")' in SRC, "the default arm moved"
+
+
+def test_the_control_arm_is_still_selectable():
+    """`legacy` is kept deliberately, not left behind. A control arm that has
+    been deleted cannot be re-run, and every clock claim after this one has to
+    be a two-arm question with one expression between the arms."""
+    import subprocess
+    env = {**__import__("os").environ, "TM_MANAGER": "legacy"}
+    p = subprocess.run([sys.executable, "-c",
+                        "import sunfish_ui.uci as u; print(u.TM_MANAGER)"],
+                       cwd=str(ROOT), env=env, capture_output=True, text=True)
+    assert p.returncode == 0 and p.stdout.strip() == "legacy", p.stderr
 
 
 def test_the_arm_name_matches_the_code_it_selects():
@@ -649,7 +669,12 @@ def test_the_pool_manager_requires_the_engines_roughness(monkeypatch):
         __name__ = "blind_engine"
     for attr in uci.ENGINE_API + ("pst",):
         setattr(Blind, attr, 1)
-    uci.check_engine_module(Blind)                      # smooth: accepted
+    # Both arms are set EXPLICITLY here. This used to lean on the module
+    # default for the accepting half, which made the test a silent hostage of
+    # which arm ships: when the pool became the default the "accepted" call
+    # started raising and the failure pointed at Blind, not at the default.
+    monkeypatch.setattr(uci, "TM_MANAGER", "legacy")
+    uci.check_engine_module(Blind)                      # legacy: accepted
     monkeypatch.setattr(uci, "TM_MANAGER", "pool")
     with pytest.raises(TypeError, match="EVAL_ROUGHNESS"):
         uci.check_engine_module(Blind)
