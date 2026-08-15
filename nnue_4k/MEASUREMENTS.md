@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **STAGE 2 VOID by its OWN registered zero-forfeit tripwire at 41 games — and the reason is a REAL DEFECT IN THE SHIPPED ARTIFACT: the packed entry overruns a real clock by ~100 ms because its 5% polling holdback is applied ONLY on the `movetime` path, never on the wtime/winc path** | 2 time forfeits, **both the entry**, both games of round 20, overruns **100 ms and 101 ms**; 0 illegal, 39/41 normal. **No Elo is reported** — the tripwire I registered fired, and quoting a number from a run my own registration voided would be moving the bar after seeing it. **Mechanism confirmed in the artifact's source, not inferred**: `think = times.get("movetime", think)/1000` then `if "movetime" in times: think -= max(think*.05, .03)` — the holdback whose comment says it was "measured the hard way: 425 local fixed-node games, every single one a forfeit" **guards only the movetime branch**, while the clock branch's hard limit `min(5*soft, A/2)` gets none, and `searcher.deadline` is polled every 2048 nodes, so the search returns at `think + epsilon`. Classic's builtin loop keeps 20% slack via its `think * 0.8` soft break and did not forfeit once. **Invisible until now because every previous timed match ran SOURCES through `sunfish_ui`, which does its own deadline handling — this was the first timed match on the packed artifact.** Honest limit: 2 events cannot separate artifact overrun from concurrency-4 contention, so the MECHANISM is established and the RATE is not. Follow-ups registered, none run: concurrency-1 replication, a `timemargin` sweep to get the overrun distribution, and the source fix (holdback on the clock path) which is a build change needing its own screen. **Stage 1 is unaffected** — fixed nodes reads no clock |
 | 2026-08-15 | **+400 PROGRESS METER, STAGE 1: the 4k entry and sunfish-classic are INDISTINGUISHABLE at fixed nodes — −1.74 ± 27.93 over a fixed 400 games. Corrected for the registered 1.53× node asymmetry the entry's per-node edge is ≈ +60, which means its historical timed advantage is SPEED AND TIME MANAGEMENT, not per-node quality** | Fixed N=400 (no SPRT), nodes 20000, srand 20260816, book3k order=random, concurrency 4, 29 m 48 s. **158 W / 160 L / 82 D = 49.75%**, nElo −2.12 ± 34.05, LOS 45.14%, ptnml **[26, 31, 88, 29, 26]** over **200 complete pairs**, PairsRatio 0.96, DrawRatio 44.00%. **0 illegal, 0 time forfeits, 400/400 terminations** (279 adjudication, 121 normal — adjudication was ACTIVE and symmetric as registered, both arms emit `score cp`). Independent round-paired recompute reproduces fastchess to the digit. Arms verified by sha256: entry source `e27f9dff…` **==** `git show 5af840d:nnue_4k/pst_entry.py`, classic `329ae372…` **==** `git show 573d692:sunfish.py`; **entry.packed 3405 B hashes `5a207fdf9cf05f2e…`, bit-identical to the artifact the pooltm landing recorded**; classic packs to 3246 B. Driver pinned `DRIVER_VERSION 3` on both arms. **Progress toward +400: this is ~0 of 400, and the bias-corrected ≈ +60 is ~15% of it.** Context that must travel with the number: the **+187.0 ± 49.7** goal-line figure was the **256kb8@100M NNUE testbed engine, NOT the 4k entry** — the entry's own last number was `entry_kf` **+107.54 ± 31.64 at 10+0.1** (2026-08-13). Fixed nodes removes speed and TM from the comparison, which is exactly why it reads lower, and classic has since absorbed **#196 (min40-4, +147 [+86,+219])** — though that is a TM change and cannot have moved a fixed-node result |
 | 2026-08-15 | **AMENDMENT to the stage-2 registration, made BEFORE game 1: adjudication is REMOVED, because on packed arms it would be ASYMMETRIC — `entry.packed` emits 0 info lines and `classic.packed` emits 17, so `-resign score=500` could fire for classic ONLY** | Measured, not assumed: the entry's info output sits inside `# minifier-hide` and `pack.sh` strips it; classic's does not. A one-sided resign rule adjudicates losses for exactly one arm, which is a biased instrument, so stage 2 runs with `-resign`/`-draw` OFF and every game ends naturally. Two further packed-arm facts confirmed by direct test, both reproducing the **2026-08-13** harness findings rather than discovering them: (1) the builtin UCI loop **silently ignores `position fen`** — both artifacts answer `g1f3` to a black-to-move FEN — so stage 2 must use a **PGN book from the standard start** (`book3k`), never an EPD/FEN book, verified by a 4-game smoke where fastchess replayed the book as `position startpos moves …` with **0 illegal**; (2) `legality_gate.py` cannot gate a packed artifact at all (it drives FENs), so the substitute gate is a **20-game arbiter-verified smoke** at 2+0.05 on the same book, zero illegal required, plus the full-match tripwire. Stage 2 srand **20260817** |
 | 2026-08-15 | **TRUNCATION VERDICT: N\* = 50 GAMES — a 50-game fixed-node mini-match reproduces the three screens' full ranking and keeps it at every larger N. But the honest reading is narrower than "50 games ranks candidates": at a fixed 50-game budget the COMPLETE 3-way ordering is right only 72.4% of the time, while picking the BEST arm is right 96.8%** | Registered criterion (`52a4afb`) applied to the three surviving PGNs, truncated by ROUND. Cross-check passed first: all three "all" rungs reproduce fastchess exactly (8mv −107.06 ± 35.84 ptnml [51,27,58,12,11]; float-ml2 −234.18 ± 55.08 [51,19,23,1,3]; grid-ml2 −300.56 ± 71.33 [58,13,13,2,2]). **N\* = 50** (sign+rank hold at 50, 75, 100, 150, all; both FAIL at 25, where float-ml2 sits at exactly 50.00% and outranks 8mv). **N\*\* = 150** — the smallest rung where the CROSS-FAMILY pair also reaches one-sided z ≥ 1.645 (z: 25 −1.92, 50 0.12, 75 0.75, 100 0.82, **150 2.58**, all 4.09). **N\* has ZERO margin**: an unregistered fine scan puts the first-stable point at exactly 25 pairs — at 24 pairs the top two are an exact tie (39.58% vs 39.58%) and below that float-ml2 leads. **Bootstrap (4000 resamples of the pair pool) is the calibration that matters**: at N=50 pick-the-best **96.8%**, resolve the 127-Elo cross-family gap **96.0%**, full 3-way ordering **72.4%**, the 66-Elo adjacent pair only **76.2%**; at N=150 those are 99.9% / 99.9% / 90.8% / 90.8%. **As predicted at registration the adjacent ml2 pair never separates** (z 1.48 at 150, 1.52 at all). Selector resolution measured directly: 50 games resolve ~101 Elo at z=1.645, 150 games ~59 Elo. **SELECTOR SPEC written to TRAINQUEUE.md**: the mini-match returns a TOP PICK, never a ranking, and never a ledger Elo |
@@ -522,6 +523,84 @@ after seeing the score:**
 The laptop lock is deliberately **still held** while these games run — a
 timed match cannot share the machine — and its release condition is
 written into `scratchpad/laptop-screen.lock`.
+
+**UPDATE, same day: stage 2 was VOIDED at 41 games by rule 3's sibling —
+its own registered zero-forfeit tripwire. See the entry below.**
+
+---
+
+## 2026-08-15 — STAGE 2 VOID: the tripwire fired, and it found a real clock defect in the shipped artifact
+
+Stage 2 ran 41 of its 200 games and was stopped, not by wall clock, but by
+the **zero-time-forfeit tripwire its own registration named**.
+
+| | |
+|---|---|
+| stopped at | **41 games** (of a registered fixed N = 200) |
+| **time forfeits** | **2 — both the entry**, both games of **round 20**, overruns **100 ms** and **101 ms** |
+| illegal moves | **0** |
+| terminations | 39 normal, 2 time forfeit |
+| evidence | preserved as `stage2_VOID.pgn` / `stage2_VOID.log` |
+
+**No Elo is reported from this run, and that is deliberate.** The
+registration named a zero-forfeit tripwire; the tripwire fired; deciding
+after the fact that the forfeits are "real losses that should count" would
+be moving a bar after seeing the numbers, which is the one thing this
+ledger does not do. The games are preserved so a future run can decide
+whether they are admissible under a *different*, pre-registered rule.
+
+### The defect, confirmed in the artifact's own source
+
+The entry's builtin loop:
+
+```
+think = times.get("movetime", think) / 1000
+if "movetime" in times: think -= max(think * .05, .03)
+```
+
+The 5%-minimum-30 ms polling holdback — whose own comment records that it
+was *"measured the hard way: 425 local fixed-node games, every single one
+a forfeit"* — **guards only the `movetime` branch.** Under a real clock
+there is no `movetime` key, so no holdback is subtracted, and the hard
+limit is `think = min(5·soft, A/2)` with `searcher.deadline = start +
+think` polled **every 2048 nodes**. The search therefore returns at
+`think + epsilon`, and with fastchess's default `timemargin 0` that
+epsilon is a flag.
+
+**Classic did not forfeit once**, and the asymmetry is structural: its
+builtin loop breaks at `time.time() - start > think * 0.8`, keeping 20%
+of its only limit in reserve. The entry breaks softly at `soft` but may
+run on to a hard limit **5× larger**, where nothing is held back.
+
+**Why no previous timed match caught it.** Every prior 60+1 / 30+1 / 1+0
+result in this ledger ran the *sources* through `sunfish_ui`, which
+computes its own `think` and enforces its own deadline. **This was the
+first timed match played by the packed artifact**, and the first
+opportunity for the builtin loop's clock path to be exercised in anger.
+It is the same defect class the P0 appendix in `LOSS_TAXONOMY.md` names —
+a fix that exists on one path but not the one that ships.
+
+### What is established and what is not
+
+- **Established:** the mechanism, from the source, deterministically.
+- **NOT established:** the *rate*. Two events at concurrency 4 cannot
+  separate an artifact overrun from machine contention, and ~100 ms is
+  exactly the scale a contended scheduler can add. Anyone quoting "the
+  entry flags 5% of games at 60+1" from this run is over-reading it.
+
+### Registered, none run
+
+1. **Concurrency-1 replication** at 60+1 — the only way to separate
+   contention from the artifact.
+2. **A `timemargin` sweep** to measure the overrun distribution instead
+   of counting flags at a zero margin.
+3. **The fix** — apply the holdback on the clock path too, or floor the
+   hard limit against a poll-slack reserve. That is a build change to a
+   shipped artifact and needs its own registration, byte price and gate
+   ladder; it is **not** made here.
+
+**Stage 1 is unaffected**: a fixed-node match reads no clock, and its
+−1.74 ± 27.93 stands.
 
 ---
 

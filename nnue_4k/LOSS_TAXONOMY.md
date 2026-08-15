@@ -287,3 +287,39 @@ nice -n 15 python3 "$ARENA/mate_gate.py" /tmp/entry_tmfix.packed tests/files/mat
                                             # screen arena; suite is the 8-position
                                             # tests/files/mate1.fen)
 ```
+
+## Appendix: a SECOND one-path fix — the polling holdback never reached the clock branch (2026-08-15, found by play)
+
+Same defect class as the P0 above, opposite direction: not "the fix is in the source but
+not the artifact", but **"the fix is in the artifact and guards only one of the two paths
+that reach it."**
+
+`nnue_4k/pst_entry.py`, builtin loop:
+
+```
+think = times.get("movetime", think) / 1000
+if "movetime" in times: think -= max(think * .05, .03)
+```
+
+The 5%-minimum-30 ms holdback exists because 425 local games once forfeited to it, and
+its comment says so. But it subtracts only when a `movetime` key is present. **Under a
+real clock (`wtime`/`winc`) nothing is held back**, while the hard limit is
+`think = min(5*soft, A/2)` and `searcher.deadline` is polled every 2048 nodes — so the
+search returns at `think + epsilon` and a zero-margin arbiter flags it.
+
+Observed: the +400 progress meter's stage 2 (60+1, PACKED artifacts, first timed match
+this artifact has ever played on its own loop) took **2 time forfeits in 41 games, both
+the entry, overruns 100 ms and 101 ms**, against **zero** for classic. Classic is
+protected structurally rather than by a holdback: its loop breaks at `think * 0.8`,
+keeping 20% of its only limit in reserve, whereas the entry's soft break at `soft` can be
+followed by a hard limit **5x larger** with no reserve at all.
+
+Why it hid: every previous timed result in this project ran the SOURCES through
+`sunfish_ui`, which computes its own `think` and enforces its own deadline. The builtin
+loop's clock path had never been played under a real arbiter.
+
+**Rate not established** — two events at concurrency 4 cannot separate artifact overrun
+from scheduler contention, and ~100 ms is that scale. The MECHANISM is established from
+the source; the frequency needs a concurrency-1 replication and a `timemargin` sweep,
+both registered in MEASUREMENTS.md and neither run. No fix is made here: changing the
+budget line of a shipped artifact needs its own registration, byte price and gates.
