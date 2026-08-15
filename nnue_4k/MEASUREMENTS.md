@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **#205 PORT RUN 1 VOID BY INSTRUMENT at 868 games — `sunfish_ui/` was not staged in the arena, so BOTH arms fell through to the builtin UCI loop, which silently ignores `position fen`, and answered an EPD book from the START POSITION. 868 illegal moves, all `g1f3`, **434 base / 434 n205 — exactly symmetric**. NO Elo exists and the arms are innocent** | The entry resolves its driver from THIS FILE'S GRANDPARENT (`arena/bin/` → `arena/`), which had no `sunfish_ui/`. A documented trap (2026-08-15 stage-2 amendment says it verbatim) that I walked into because `tools/screens/ab_fixednode.sh` still specifies an EPD book — it predates the finding and its wrappers assumed an arena with `sunfish_ui/` beside `bin/`. The gate ladder never saw it: the gates drive FENs through `sunfish_ui` in-process and passed 130/130 zero-illegal on both arms. **Fixed so it cannot recur silently**: driver v3 staged beside `bin/`, and the runner now ABORTS before game 1 unless both arms print `v3 nodes fen` AND answer a black-to-move FEN with `g8f6` rather than `g1f3` — verified, not assumed. Run 2 re-registered with **srand 20260825** (20260824 burned) and adjudication reclassified from structurally-inert to **ACTIVE and symmetric**, since the driver makes both arms emit `score cp`. Cost: ~3 minutes of 8 slots |
 | 2026-08-16 | **PRE-REGISTERED before game 1: the #205 PORT into the 4k entry — classic's tuned null shaping (two-regime null + fuel oracle, `NULL_MARGIN = -200`, `depth - 7` probe, `abs(pos.score) < 500` guard dropped) plus the intrinsic LMR GATE, at **+71 B measured** (3405 → 3476, 620 spare). Fixed-node SPRT, srand 20260824, cap 1000, gate ladder ALL GREEN** | `LMR = 75` is **deliberately DROPPED** and said so before the result: 60 already governs measured entry behaviour (+38.9 ± 19.1) and classic tuned 75 for a reduction classic did not previously have — port constants that arrive WITH a mechanism, never overwrite constants that already govern measured behaviour. #205's IID removal is **already done here and better** (`iirk.noiid`, IIR, +22.3 ± 16.0), so the arm cannot reproduce classic's +48.25 ± 27.03 — a share of that is classic acquiring an LMR the entry already has. Gates: mate-conversion **8/8 both arms** (the test that matters — KQK/KRK are exactly what the deleted guard used to shield), legality **130/130, 0 illegal** on laptop AND box at `go nodes 20000`, first-yield MAX **676/2048 identical**, empty-dir smoke both. **Mechanism confirmed and a cost registered in advance**: same 20000-node budget, the arm reaches a deeper final depth on **53/60** positions and shallower on **0** (mean **9.93 → 12.13 plies**), while the MTD bracket-crossing tripwire goes **1 → 13**. That tripwire also corrects upstream's own comment: the fuel probe's *window* is (pos, depth)-fixed but the *probe* reads `bound()`, which can answer from the table, so `d` is TABLE-STATE dependent — a real new break of one-value-per-key, clamped by the MTD guards. Claiming position-determinism would be a model/code divergence, so the mod's comment was rewritten instead |
 | 2026-08-16 | **POOL FIXED-N VERDICT: the pool TM's true magnitude at 30+1 is **+102.47 ± 32.43** over a full 300 games — and the SPRT decider was **22 Elo (17.7%) HIGH**, the early-stop bias measured at last** | 144W/58L/98D = **64.33%**, pentanomial **[5, 20, 41, 52, 32]** over 150 pairs with **0 unpaired**, PairsRatio 6.40, draw ratio 32.67%. **0 illegal, 0 forfeits, 300/300 `normal`** — the box's clean-timed-game record extends to **951/951**. Against the decider's SPRT-stopped +124.50 ± 38.79: **−22.03 Elo**, the direction a stopping rule guarantees (`pend`'s own bias was 42%). **Stated honestly, the two are NOT separated** — the intervals overlap heavily — so this does not prove the gap is bias rather than noise; what it establishes is which number to quote, since only the fixed-N interval means what it advertises (and it is *tighter*, ±32.43 vs ±38.79, on 12 more games). **The pool still wins decisively** and the landing stands; only its altitude comes down. Mechanism reproduced: **zero blind moves on either arm**, spend ratio 1.03×, and the one number against it unchanged — 98 pool games ended under 2 s of clock to smooth's 0 |
 | 2026-08-16 | **THE +400 PROGRESS METER LANDS: the 4k entry is +244.47 ± 39.23 over sunfish-classic at 60+1 — the campaign's first CLEAN, FIXED-N, real-clock magnitude. 300/300 games, ZERO forfeits, ZERO illegal. Progress toward +400 is 61%, and the interval's upper bound (+284) is still short of the target** | Gates read in the registered order and both passed **before the Elo was computed**: forfeits **0** (the void condition), illegal **0** (the stop condition), 300/300 `Termination "normal"`. Only then was the number taken. **80.33%** — 207 W / 25 L / 68 D, nElo **+337.26 ± 39.32**, ptnml **[1, 6, 22, 52, 69]** over **150 complete pairs**, PairsRatio **17.29**, DrawRatio 14.67%, LOS 100.00%. Independent round-paired recompute reproduces fastchess to the digit. Bench box, **concurrency 8 as declared**, srand 20260822, 2 h 05 m, box load 25.67 at launch — and the arms were **sha256-verified after transfer, not rebuilt** (`5a207fdf9cf05f2e…` 3405 B vs `7bdbd6054f70622a…` 3246 B), with a boot smoke on each before games. Labelled **pre-#205-classic** (classic pinned at master `2784dbf`). **It CONFIRMS AND TIGHTENS B's glimpse**: B was +325.17 ± 134.54, the meter's point estimate sits inside B's interval, the interval is **3.4× narrower**, and the two differ by only z = 1.13 — so B is settled lower, not overturned. **Both instruments now stand together and say something precise**: fixed-node **−1.74 ± 27.93** (per-node parity with classic) and clean-clock **+244.47 ± 39.23** — the entry's entire advantage is **speed and time management**, now measured rather than inferred. Run 1's void (9 forfeits, all venue) cost nothing but time: the relocated re-run is the number |
@@ -284,6 +285,73 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-16 — RUN 1 IS VOID BY INSTRUMENT at 868 games, and the arms are INNOCENT: `sunfish_ui/` was not staged in the arena, so both engines answered an EPD book from the START POSITION
+
+**No Elo is reported and none exists.** Every one of the 868 games ended the
+same way and neither engine is at fault.
+
+| | |
+|---|---|
+| what happened | 868 games, **868 illegal moves, every one `g1f3`** |
+| by arm | **434 base, 434 n205** — exactly symmetric |
+| verdict | **VOID BY INSTRUMENT.** The registered zero-illegal stop fired, but its cause is the harness |
+
+**Mechanism, confirmed in the entry's own source.** `main()` resolves its
+driver from **this file's grandparent**:
+
+```
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import sunfish_ui.uci as _drv
+```
+
+The arms live at `arena/bin/e_*.py`, so the grandparent is the arena root —
+which had no `sunfish_ui/`. `_drv` came back `None`, both arms fell through to
+the **builtin UCI loop, which silently ignores `position fen`**, and against an
+EPD book both sides played the start position's moves into a board that was not
+the start position. Whichever arm happened to move first got flagged, which is
+why the split is 434/434 and why the illegal move is always the startpos knight
+move.
+
+**This was a documented trap and I walked into it.** The 2026-08-15 stage-2
+amendment records it verbatim: *"the builtin UCI loop silently ignores
+`position fen` — both artifacts answer `g1f3` to a black-to-move FEN — so stage
+2 must use a PGN book from the standard start, never an EPD/FEN book."* What
+led me in is that `tools/screens/ab_fixednode.sh`, the house's own fixed-node
+script, still specifies `openings_2k.epd`; it predates the finding and its
+`w_*.sh` wrappers assumed an arena with `sunfish_ui/` beside `bin/`. **The
+lasting fix is not to remember the trap but to make it impossible to launch
+past it** — see the preflight below.
+
+**Nothing about the port is implicated.** The gate ladder that ran before this
+drives positions through `sunfish_ui` in-process and passed 130/130 with zero
+illegal on both arms, on both machines. The defect is the arena layout, and it
+hit the base arm exactly as hard as the arm under test.
+
+**Cost:** ~3 minutes of 8 slots. Artifacts kept as
+`VOID-instrument-n205.{pgn,log}` rather than deleted.
+
+### Run 2: the fix, and the check that now blocks the launch
+
+`sunfish_ui/` v3 is staged beside `bin/`, and the runner **refuses to start**
+unless both arms prove the driver resolved:
+
+| check | required | observed, both arms |
+|---|---|---|
+| driver banner | `v3 nodes fen` | `.../entry-n205-20260816/sunfish_ui/uci.py v3 nodes fen` |
+| black-to-move FEN honoured | a **black** move | `bestmove g8f6` (run 1 answered `g1f3`) |
+
+Two registration lines change with the driver, and both are recorded here
+before game 1:
+
+- **srand → 20260825.** 20260824 is burned; 868 games were played on it.
+- **Adjudication becomes ACTIVE and SYMMETRIC.** Under the builtin loop
+  neither arm emitted `info` lines, so I registered the resign/draw flags as
+  structurally inert. The driver emits full `score cp` lines, so they will now
+  fire — for **both** arms, from the same driver, which is the condition the
+  +400 meter's fixed-node stage ran under. Everything else is unchanged.
 
 ---
 
