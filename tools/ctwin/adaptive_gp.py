@@ -32,6 +32,7 @@ import shlex
 import shutil
 import signal
 import subprocess
+import threading
 import time
 from collections import deque
 
@@ -44,6 +45,7 @@ SCORE = re.compile(
     r"Score of candidate vs (?:baseline|opponent):\s+(\d+)\s+-\s+(\d+)\s+-\s+(\d+)")
 UCI_OPTION = re.compile(r"^option name (.+?) type ")
 SAVED_STATES = {}
+STATE_LOCK = threading.RLock()
 
 
 def duration(value):
@@ -110,40 +112,42 @@ def state_snapshot(state):
 
 
 def save_state(path, state):
-    path = pathlib.Path(path)
-    key = str(path.resolve())
-    if not path.exists():
-        path.with_suffix(".jsonl").unlink(missing_ok=True)
-        checkpoint_state(path, state)
-        SAVED_STATES[key] = state_snapshot(state)
-        return
-    old = SAVED_STATES.setdefault(key, state_snapshot(state))
-    new = state_snapshot(state)
-    event = {
-        "batches": state.get("batches", ())[old["batches"]:],
-        "gates": {
-            name: record for name, record in state.get("gates", {}).items()
-            if name not in old["gates"]
-        },
-        "meta": {
-            name: value for name, value in new["meta"].items()
-            if old["meta"].get(name) != value
-        },
-    }
-    if any(event.values()):
-        journal = path.with_suffix(".jsonl")
-        with journal.open("a") as events:
-            events.write(json.dumps(event, separators=(",", ":")) + "\n")
-    SAVED_STATES[key] = new
+    with STATE_LOCK:
+        path = pathlib.Path(path)
+        key = str(path.resolve())
+        if not path.exists():
+            path.with_suffix(".jsonl").unlink(missing_ok=True)
+            checkpoint_state(path, state)
+            SAVED_STATES[key] = state_snapshot(state)
+            return
+        old = SAVED_STATES.setdefault(key, state_snapshot(state))
+        new = state_snapshot(state)
+        event = {
+            "batches": state.get("batches", ())[old["batches"]:],
+            "gates": {
+                name: record for name, record in state.get("gates", {}).items()
+                if name not in old["gates"]
+            },
+            "meta": {
+                name: value for name, value in new["meta"].items()
+                if old["meta"].get(name) != value
+            },
+        }
+        if any(event.values()):
+            journal = path.with_suffix(".jsonl")
+            with journal.open("a") as events:
+                events.write(json.dumps(event, separators=(",", ":")) + "\n")
+        SAVED_STATES[key] = new
 
 
 def checkpoint_state(path, state):
-    path = pathlib.Path(path)
-    journal = path.with_suffix(".jsonl")
-    payload = state | {"_journal_offset": journal.stat().st_size if journal.exists() else 0}
-    temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
-    temporary.replace(path)
+    with STATE_LOCK:
+        path = pathlib.Path(path)
+        journal = path.with_suffix(".jsonl")
+        payload = state | {"_journal_offset": journal.stat().st_size if journal.exists() else 0}
+        temporary = path.with_suffix(path.suffix + ".tmp")
+        temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        temporary.replace(path)
 
 
 def file_identity(path):
@@ -380,9 +384,10 @@ def gate_policy(args, state, space, vector):
         return True
     knobs = space.knobs(vector)
     key = json.dumps(knobs, sort_keys=True, separators=(",", ":"))
-    cache = state.setdefault("gates", {})
-    if key in cache:
-        return cache[key]["accepted"]
+    with STATE_LOCK:
+        cache = state.setdefault("gates", {})
+        if key in cache:
+            return cache[key]["accepted"]
     payload = {
         "engine": args.engine,
         "engine_args": args.engine_args,
@@ -406,12 +411,13 @@ def gate_policy(args, state, space, vector):
         raise RuntimeError(
             f"policy gate failed with status {process.returncode}:\n{output}")
     accepted = process.returncode == 0
-    cache[key] = {
-        "accepted": accepted,
-        "knobs": knobs,
-        "output": output[-2000:],
-        "seconds": time.perf_counter() - started,
-    }
+    with STATE_LOCK:
+        cache[key] = {
+            "accepted": accepted,
+            "knobs": knobs,
+            "output": output[-2000:],
+            "seconds": time.perf_counter() - started,
+        }
     print(f"[gate] {'accept' if accepted else 'reject'} "
           f"{cache[key]['seconds']:.2f}s {key}", flush=True)
     return accepted
@@ -869,17 +875,26 @@ async def optimize(args):
                 run_pair(args, slot, experiment, vector, opponent, opening, space))
             running[task] = slot
 
+    refill = None
     while completed < args.batches:
         expired = deadline is not None and time.monotonic() >= deadline
-        if not expired and len(experiments) <= args.queue_batches - args.refill_batches:
+        if (not expired and refill is None
+                and len(experiments) <= args.queue_batches - args.refill_batches):
             count = min(
                 args.queue_batches - len(experiments),
                 args.batches - completed - len(experiments))
-            await add_experiments(count)
+            refill = asyncio.create_task(add_experiments(count))
         start_queued()
-        if not running:
+        waiting = set(running)
+        if refill is not None:
+            waiting.add(refill)
+        if not waiting:
             break
-        done, _ = await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED)
+        done, _ = await asyncio.wait(waiting, return_when=asyncio.FIRST_COMPLETED)
+        if refill in done:
+            refill.result()
+            done.remove(refill)
+            refill = None
         for task in done:
             running.pop(task)
             number, wins, draws, losses = task.result()

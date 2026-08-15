@@ -373,6 +373,56 @@ class MixedAcquisitionTest(unittest.TestCase):
             ], check=True, stdout=subprocess.DEVNULL)
             self.assertEqual(len(load_state(state, 1)["batches"]), 1)
 
+    def test_policy_gates_do_not_block_queued_games(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            starts, intervals = root / "starts", root / "gates"
+            engine, manager, gate = root / "engine", root / "fastchess", root / "gate"
+            engine.write_text(
+                f"#!{sys.executable}\n"
+                "print('option name X type spin default 0 min 0 max 9')\n"
+                "print('uciok')\n")
+            manager.write_text(
+                f"#!{sys.executable}\n"
+                "import pathlib,time\n"
+                f"p=pathlib.Path({str(starts)!r})\n"
+                "with p.open('a') as f:f.write(f'{time.time()}\\n')\n"
+                "time.sleep(.08)\n"
+                "print('Score of candidate vs baseline: 1 - 0 - 1  [0.750] 2')\n")
+            gate.write_text(
+                f"#!{sys.executable}\n"
+                "import pathlib,time\n"
+                "start=time.time();time.sleep(.4)\n"
+                f"p=pathlib.Path({str(intervals)!r})\n"
+                "with p.open('a') as f:f.write(f'{start} {time.time()}\\n')\n")
+            for program in (engine, manager, gate):
+                program.chmod(0o755)
+            space = root / "space.json"
+            space.write_text(json.dumps({
+                "parameters": [{
+                    "name": "X", "type": "integer", "min": 0, "max": 9,
+                    "default": 0,
+                }],
+            }))
+            openings = root / "openings.fen"
+            openings.write_text("startpos\n")
+            subprocess.run([
+                sys.executable, str(pathlib.Path(__file__).with_name("adaptive_gp.py")),
+                "--fastchess", str(manager), "--engine", str(engine),
+                "--baseline-options", "default", "--space", str(space),
+                "--openings", str(openings), "--cycle-openings",
+                "--gate", str(gate), "--gate-workers", "3", "--slots", "1",
+                "--queue-batches", "3", "--refill-batches", "1",
+                "--initial-design", "9", "--batches", "4",
+                "--state", str(root / "state.json"), "--logs", str(root / "logs"),
+            ], check=True, stdout=subprocess.DEVNULL)
+            games = [float(value) for value in starts.read_text().splitlines()]
+            refills = [tuple(map(float, line.split()))
+                       for line in intervals.read_text().splitlines()
+                       if float(line.split()[0]) > games[0]]
+            self.assertTrue(refills)
+            self.assertLess(games[1], min(end for _, end in refills))
+
     def test_duels_keep_a_directly_anchored_opponent(self):
         anchored = self.space.canonical({"X": 0, "Y": 10})
         challenger = self.space.canonical({"X": 100, "Y": 10})
