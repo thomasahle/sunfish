@@ -722,7 +722,7 @@ async def optimize(args):
         args.baseline_options = space.knobs(space.default)
     bind_study(state, study_identity(args))
     if args.seed_state and not state["batches"]:
-        seed = json.loads(pathlib.Path(args.seed_state).read_text())
+        seed = load_state(args.seed_state, args.start)
         old_baseline = seed["study"]["baseline"]["options"]
         old_names = set(old_baseline)
         for batch in seed["batches"]:

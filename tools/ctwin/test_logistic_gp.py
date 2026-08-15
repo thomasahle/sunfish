@@ -524,6 +524,8 @@ class MixedAcquisitionTest(unittest.TestCase):
             result = load_state(state, 1)
             self.assertEqual(len(result["gates"]), 6)
             self.assertTrue(all(batch["knobs"]["X"] >= 3 for batch in result["batches"]))
+            result["batches"].append(result["batches"][-1])
+            save_state(state, result)
             resumed = root / "resumed.json"
             subprocess.run([
                 sys.executable, str(pathlib.Path(__file__).with_name("adaptive_gp.py")),
@@ -532,11 +534,12 @@ class MixedAcquisitionTest(unittest.TestCase):
                 "--openings", str(openings), "--cycle-openings",
                 "--gate", str(gate), "--gate-all", "--gate-workers", "3",
                 "--slots", "1", "--queue-batches", "1", "--refill-batches", "1",
-                "--initial-design", "2", "--batches", "1", "--start", "4",
+                "--initial-design", "2", "--batches", "1", "--start", "5",
                 "--seed-state", str(state), "--seed-selections", "3",
                 "--state", str(resumed), "--logs", str(root / "resumed-logs"),
             ], check=True, stdout=subprocess.DEVNULL)
             self.assertEqual(calls.read_text(), "x" * 6)
+            self.assertEqual(len(load_state(resumed, 1)["batches"]), 5)
 
     def test_duels_keep_a_directly_anchored_opponent(self):
         anchored = self.space.canonical({"X": 0, "Y": 10})
