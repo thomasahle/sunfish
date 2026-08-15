@@ -1,4 +1,5 @@
 import itertools
+import json
 import math
 import pathlib
 import sys
@@ -7,6 +8,7 @@ import unittest
 from types import SimpleNamespace
 
 import numpy as np
+import sunfish
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 
@@ -61,6 +63,53 @@ class MixedAcquisitionTest(unittest.TestCase):
         space = MixedSpace({"parameters": parameters, "max_candidates": 64})
         self.assertEqual(len(space.candidates), 64)
         self.assertIn(space.default, space.candidates)
+
+    def test_joint_eval_domain_preserves_mate_band_invariants(self):
+        path = pathlib.Path(__file__).with_name("pr202_joint_eval_valid_space.json")
+        parameters = {parameter["name"]: parameter for parameter in json.loads(
+            path.read_text())["parameters"]}
+        for parameter in parameters.values():
+            parameter["values"] = MixedSpace.parameter_values(parameter)
+        value_names = ["VALUE_N", "VALUE_B", "VALUE_R", "VALUE_Q"]
+        scale_names = [f"PST_{piece}" for piece in "PNBRQK"] + ["PST_KE"]
+        # Each inequality is monotone per coordinate, so the box's corners
+        # cover every discrete interior value as well.
+        values = [[parameter["values"][0], parameter["values"][-1]]
+                  for name in value_names for parameter in [parameters[name]]]
+        scales = [[parameter["values"][0], parameter["values"][-1]]
+                  for name in scale_names for parameter in [parameters[name]]]
+        squares = [rank * 10 + file for rank in range(2, 10) for file in range(1, 9)]
+
+        def scaled(value, percent):
+            product = value * percent
+            return int((product + (50 if product >= 0 else -50)) / 100)
+
+        for coordinates in itertools.product(*values, *scales):
+            knobs = dict(zip(value_names + scale_names, coordinates))
+            piece = sunfish.piece | dict(zip("NBRQ", coordinates))
+            tables = {
+                name: [piece[name] + scaled(
+                    sunfish.pst[name][square] - sunfish.piece[name],
+                    knobs[f"PST_{name}"])
+                    for square in squares]
+                for name in "PNBRQK"
+            }
+            king_end = [piece["K"] + scaled(
+                sunfish.K_END[square] - sunfish.piece["K"], knobs["PST_KE"])
+                for square in squares]
+            kings = tables["K"] + king_end
+            nonkings = sum((tables[name] for name in "PNBRQ"), [])
+            mate_lower = piece["K"] - 13 * piece["Q"]
+            army = (9 * max(tables["Q"]) + 2 * max(tables["R"])
+                    + 2 * max(tables["B"]) + 2 * max(tables["N"]))
+            drop = max(max(tables[name]) - min(tables[name]) for name in "PNBRQK")
+            promotion = min(tables[name][square] - tables["P"][square]
+                            for name in "NBRQ" for square in range(8))
+            self.assertGreaterEqual(min(nonkings), 0)
+            self.assertLess(max(kings) - min(kings) + 15 * max(nonkings), mate_lower)
+            self.assertLessEqual(mate_lower, min(kings) - army)
+            self.assertLess(mate_lower + drop, min(kings))
+            self.assertGreaterEqual(promotion, 0)
 
     def test_coordinate_search_matches_exhaustive_gp_ucb(self):
         domain = list(itertools.product(*self.space.coordinate_values))
