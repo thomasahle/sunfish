@@ -74,6 +74,7 @@ static int tables_loaded = 0;
 static int QS = 40;
 static int QS_A = 140;
 static int LMR = 75;
+static int GUIDE_LMR = 1;
 static int EVAL_ROUGHNESS = 15;
 static long TABLE_SIZE = 1000000;
 static int NULL_MARGIN = -200;   /* fuel-probe target margin (its own knob
@@ -906,7 +907,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
      * every node at or below IID_MIN_DEPTH pay no lookup at all. */
     Move guide = nomove;
     int have_guide = 0;
-    if (GUIDE_MODE && depth > GUIDE_MIN_DEPTH) {
+    if ((GUIDE_MODE && depth > GUIDE_MIN_DEPTH) || (GUIDE_LMR && guard)) {
         c_guide_lookup++;
         have_guide = tpo_get(pos, &guide);
         if (have_guide) {
@@ -936,7 +937,8 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         int val = value(pos, killers[kk]);
         if (val < val_lower) continue;
         int real;
-        int score = score_move(pos, killers[kk], val, gamma, depth, rd, guard, &real);
+        int reduce = guard && !(GUIDE_LMR && have_guide && move_eq(killers[kk], guide));
+        int score = score_move(pos, killers[kk], val, gamma, depth, rd, reduce, &real);
         PROCESS(real, killers[kk], score);
         if (done) goto after_moves;
     }
@@ -961,7 +963,8 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
             }
             if (!qstail) {
                 int real;
-                int score = score_move(pos, m, val, gamma, depth, rd, guard, &real);
+                int reduce = guard && !(GUIDE_LMR && have_guide && move_eq(m, guide));
+                int score = score_move(pos, m, val, gamma, depth, rd, reduce, &real);
                 PROCESS(real, m, score);
             } else {
                 Pos np = domove(pos, m);
@@ -1045,6 +1048,7 @@ static void search_setup(void) {
     nodes = 0;
     gen_calls = 0;
     map_clear(&tps);
+    if (GUIDE_LMR) { GUIDE_COPY = 1; promote_guide(); }
     /* Option 3: one guide for the whole search call.  The guide is the
      * previous root search's completed table and tp_score, cleared just
      * above, has exactly the same lifetime -- zero epoch churn. */
@@ -1328,6 +1332,7 @@ static int load_tables(const char *path) {
 struct knob { const char *name; int *ip; long *lp; };
 static struct knob KNOBS[] = {
     { "QS", &QS, NULL }, { "QS_A", &QS_A, NULL }, { "LMR", &LMR, NULL },
+    { "GUIDE_LMR", &GUIDE_LMR, NULL },
     { "EVAL_ROUGHNESS", &EVAL_ROUGHNESS, NULL },
     { "TABLE_SIZE", NULL, &TABLE_SIZE },
     { "NULL_MARGIN", &NULL_MARGIN, NULL },

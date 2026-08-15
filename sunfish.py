@@ -139,6 +139,7 @@ MATE_UPPER = piece["K"] + 10 * piece["Q"]
 QS = 40
 QS_A = 140
 LMR = 75
+GUIDE_LMR = 1
 EVAL_ROUGHNESS = 15
 # Target margin of the deep-null fuel probe (depth >= 6): the pass must
 # beat pos.score + NULL_MARGIN for real moves to burn two plies. Its own
@@ -156,6 +157,7 @@ opt_ranges = dict(
     QS = (0, 300),
     QS_A = (0, 300),
     LMR = (-200, 200),
+    GUIDE_LMR = (0, 1),
     EVAL_ROUGHNESS = (0, 50),
     NULL_MARGIN = (-300, 300),
     TABLE_SIZE = (10**4, 10**8),
@@ -295,7 +297,7 @@ Entry = namedtuple("Entry", "lower upper")
 
 class Searcher:
     def __init__(self):
-        self.tp_score, self.tp_move, self.history = {}, {}, set()
+        self.tp_score, self.tp_move, self.tp_old, self.history = {}, {}, {}, set()
         self.nodes, self.deadline = 0, 1 << 63
 
     def bound(self, pos, gamma, depth, root=False):
@@ -375,6 +377,7 @@ class Searcher:
             # We read this "killer move" before null-move in case it would get
             # evicted from the table or replaced with something else worse.
             killer = self.tp_move.get(pos)
+            guide = self.tp_old.get(pos) if depth >= 6 else None
 
             # First try not moving at all, i.e. the null move.
             # See https://chessprogramming.org/Null_Move for details.
@@ -430,7 +433,7 @@ class Searcher:
             # child report to the same fixed capped value.
             def score_move(move, val):
                 child = pos.move(move)
-                move_depth = d - 1 - (guard and val < LMR)
+                move_depth = d - 1 - (guard and move != guide and val < LMR)
                 if 2 <= depth <= 3 and pos.board[move.j] == "." and move.j != pos.ep and not move.prom:
                     cap = min(MATE_LOWER - 1, pos.score + val + (depth - 1) * QS_A)
                     if cap < gamma:
@@ -524,6 +527,7 @@ class Searcher:
     def search(self, history):
         """Iterative deepening MTD-bi search"""
         self.nodes, self.history = 0, set(history)
+        self.tp_old = self.tp_move.copy() if GUIDE_LMR else {}
         self.tp_score.clear()
         # Table choice is fixed for the whole search (and tp_score is
         # cleared above), so every bound targets one value function.
