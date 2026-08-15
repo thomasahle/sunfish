@@ -15,8 +15,8 @@ def report_domain(space, observed, gate_all):
     candidates = set(space.candidates)
     points = candidates if gate_all else candidates | {
         point for point in observed if space.contains(point)}
-    tested = {space.default, *(point for point in observed
-        if not gate_all or point in candidates)}
+    tested = {space.default, *(point for point in observed if space.contains(point)
+        and (not gate_all or point in candidates))}
     return sorted(points), sorted(tested)
 
 

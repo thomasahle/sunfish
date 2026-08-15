@@ -106,6 +106,7 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertNotIn(historical, tested)
         self.assertIn(self.space.default, tested)
         self.assertIn(historical, report_domain(self.space, [historical], False)[0])
+        self.assertNotIn((1000, 13), report_domain(self.space, [(1000, 13)], False)[1])
 
     def test_halton_design_handles_full_tuning_space(self):
         parameters = [
