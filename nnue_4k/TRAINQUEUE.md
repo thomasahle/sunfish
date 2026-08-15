@@ -164,6 +164,97 @@ VAL-probe-first):
 
 ## Log (newest first)
 
+- 2026-08-15 08:10 UTC: **THE DENSITY DIAL REVERSES under the fidelity rule
+  — 35 free bytes — and the n8/kb4 seams are PRICED and DECLINED as a
+  direction call, not queued.**
+
+  **`74` / `75`: the l1 sweep, measured end to end** (val on the pinned
+  split, bytes through `pack.sh` on the real ml2 entry):
+
+  | run | l1 | best val | zeros | **packed** |
+  |---|---|---|---|---|
+  | `75_gridste_l1_0003` | .0003 | 0.01354 | 39.3% | 3794 B |
+  | `70_gridste_ml2` | .0005 | **0.01347** | 57.1% | 3775 B |
+  | **`74_gridste_l1_001`** | **.001** | **0.01347** | **72.9%** | **3740 B** |
+
+  `74`'s pre-registration asked exactly this and the answer is the one it
+  named: **the float era's "density pays under products" line was an
+  artifact of the free-float read-out.** In the float era l1 .0005 beat
+  .001 (0.01280 vs 0.01286) and this ledger wrote density down as a win.
+  Under the exported-fidelity rule the two are a **dead heat on val** and
+  .001 buys **15.8 points more sparsity for 35 fewer bytes** — strictly
+  dominant, free. `75`'s denser point is worse on both axes, so the curve
+  is monotone and the direction is clear. **The family's ml2 operating
+  point moves to l1 = .001**; `77`/`79` below re-measure it on fresh seeds
+  before anything is called a default.
+
+  **The attractor is now six runs and twenty-four components**, spanning
+  l1 ∈ {.0003, .0005, .001}, clamp ∈ {400, 600}, rides ∈ {30, 60} — and
+  every single component still sits at half a grid step. `74` is the
+  tightest yet: `u2·scale` = [0.5000001, 0.4999989, 0.5000002, 0.4999986],
+  all four within **1.4e-6**. Only the seed remains unvaried (all six are
+  seed 0); `76` (running) and `77`/`79` close that.
+
+  **THE SEAM DECISION — priced first, then declined.** The header's two
+  remaining registered arms both need a seam agreement, so I priced them
+  before asking anyone anything (`make_proto_payload.py` real-shaped
+  streams through `pack.sh`, current code floor):
+
+  | arm | payload | at 72.9% zeros | 85% | 95% | 98% |
+  |---|---|---|---|---|---|
+  | reference (N=4, 768) | 778 ch | 3737 B | — | — | — |
+  | **#5 n8** (N=8, 768) | 1554 ch | **4199 — OVER by 103** | 4009 (87 spare) | 3596 | — |
+  | **#3 kb4** ternshared (shared + 3 delta blocks) | 3082 ch | — | — | 3952 (144 spare) | 3617 |
+
+  So n8 needs **≥ ~85%** payload sparsity to fit and kb4 needs **≥ ~95%**,
+  against the 72.9% the best trained net actually reaches. (Honest caveat
+  in the pessimistic direction: these are RANDOM-shaped stand-ins, and this
+  ledger has measured trained payloads compressing well below them — v1:
+  612 random → 382 trained on the same 777 chars. So n8 is plausibly
+  affordable; plausibly is not measured, which is the whole point of
+  price-first.)
+
+  **Decision: NOT queued — this is a direction call, not a technical one.**
+  `gridste` was resolvable by this lane because it was entirely
+  training-side: `gridste: 0` is the bit-exact identity and the shipped
+  artifact never changed. n8 and kb4 are the opposite — both change the
+  **entry's decoder**, which is (a) explicitly another lane's surface in
+  this very header ("codec seam is the GOLF LANE's; agree it before
+  training") and (b) a spend of the one resource that decides the
+  competition. That is owner/direction territory and this lane does not
+  take it.
+
+  **The seam question, stated crisply for the direction call** — and it is
+  bigger than "does it fit":
+
+  > Both remaining registered arms buy CAPACITY, and capacity is the axis
+  > the play record has already ruled out twice. The ledger's own line
+  > after the linear screens was "capacity was NOT the missing ingredient";
+  > the non-linear family then screened **worse** (−234, −300 vs the linear
+  > −107), and the export-faithful net — the one with every technical
+  > excuse removed — was the **worst of the three**. Spending the last
+  > ~350 B of headroom and a decoder change on a wider or bucketed net asks
+  > the campaign to double down on the losing axis. **The question for
+  > Thomas/the coordinator is not "may I have the n8 seam" but "should the
+  > replacement family spend anything further on capacity before it has one
+  > net that plays".** If the answer is yes, n8 is the cheaper of the two
+  > and needs the golf lane's byte savings plus a trained ≥85%-sparse
+  > stream; kb4 needs 95% and should wait behind it.
+
+  **Refill (depth 3 behind `76`, longest last), every question named in its
+  own registration:** `77_seed2_l1_001` (`4737ba6ee662`) attractor point 3 +
+  seed-stability of the free-byte result · `78_plain_seed1`
+  (`0007671c5d0f`) one-layer val variance — `71` and `72` both landed on
+  0.01378 to five decimals, and nobody has measured the seed noise that
+  every one-layer gap this ledger quotes would have to clear ·
+  `79_seed3_l1_001_long` (`79ce56feb412`) the 60-epoch tail, attractor
+  point 4 (seed and epochs together).
+
+  Context: Thomas merged #204, so `pool` TM is the classic driver default
+  on master. No training effect; noted because this lane's screens pin
+  **nnue-4k** revs (`c5534cd`, `5f16bae`) and never "current master", so
+  nothing here needs a rev correction.
+
 - 2026-08-15 06:55 UTC: **THE GRID ERA, all four runs — and the knife-edge
   is a HARD ATTRACTOR with a mechanism, not a curiosity.**
 

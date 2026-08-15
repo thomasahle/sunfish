@@ -1,0 +1,22 @@
+# seed2-l1-001 -- attractor seed-dependence, point 3 of 4, on the operating
+# point the density sweep just moved us to.
+#
+# NAMED QUESTION 1: does u2 park at the rounding tie for seeds OTHER than 0?
+# Six grid-era runs (60, 61, 70, 73, 74, 75) have parked all 24 read-out
+# components at half a grid step, but every one of them is seed 0.  76 gives
+# seed 1; this gives seed 2.  If the tie recurs across seeds it is a property
+# of the STE-on-a-coarse-grid recipe and the container needs more read-out
+# levels (a coordinator call, priced in TRAINQUEUE).  If it does not, the
+# parking was a seed artifact and six entries of this ledger need amending.
+#
+# NAMED QUESTION 2: is the l1 .001 operating point seed-stable?  74 measured
+# val 0.01347 at 72.9% zeros packing to 3740 B -- the SAME val as l1 .0005
+# for 35 fewer bytes.  A free-byte result is worth confirming on another seed
+# before the family moves its default onto it.
+name: seed2_l1_001
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406}
+model: {arch: ml2, N: 4, base: mat, ternary: 0.85, bm: 4, u2grid: 1, gridste: 1}
+loss: {l1: 0.001, satpen: 0.03, satthresh: 480.0}
+opt: {epochs: 30, batch: 8192, lr: 3.0e-3, seed: 2}
+notes: "attractor seed-dependence point 3 (seed 2) AND seed-stability of the
+  l1 .001 free-byte result (74: val 0.01347, 72.9% zeros, 3740 B)"

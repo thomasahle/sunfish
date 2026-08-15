@@ -1,0 +1,19 @@
+# seed3-l1-001-long -- the TAIL (~40 min, last), and attractor point 4.
+#
+# NAMED QUESTION: the attractor's two remaining free variables together --
+# seed 3 AND a 60-epoch ride.  73 showed doubling the ride at seed 0 pulls
+# the components TIGHTER onto the tie (within 2e-6, tighter than at 30
+# epochs).  If seed 3 at 60 epochs does the same, the attractor has survived
+# variation in seed, clamp, l1, epochs and flag combination, and the
+# container-resolution question in TRAINQUEUE.md is the only live reading.
+#
+# Report per the dense60 lesson: best-of-first-30 beside best-of-60, so a
+# lower minimum drawn from twice the epochs is not mistaken for a gain.
+# Placed last so a single upstream finish cannot drain the queue.
+name: seed3_l1_001_long
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406}
+model: {arch: ml2, N: 4, base: mat, ternary: 0.85, bm: 4, u2grid: 1, gridste: 1}
+loss: {l1: 0.001, satpen: 0.03, satthresh: 480.0}
+opt: {epochs: 60, batch: 8192, lr: 3.0e-3, seed: 3}
+notes: "tail (~40 min, last): attractor point 4 -- seed 3 at double the ride;
+  does the tie survive seed AND epochs together?"
