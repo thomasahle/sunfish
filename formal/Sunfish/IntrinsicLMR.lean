@@ -3,7 +3,8 @@ The local obligations introduced by intrinsic LMR.
 
 The null probe uses a fixed target, so valid fail-soft reports for the same
 child value determine the same hot bit under every caller window and table
-state. The `eligible` bit is merely the static null-move guard. A real edge
+state. At an interior node, the `eligible` bit is the static null-move guard;
+the unstored driver root supplies `false`. A real edge
 spends one ply normally, one more at a hot node, and one more for an
 intrinsically low move at an eligible node. Thus child depth is a function of the
 position, nominal depth, and move alone, and every real edge spends between
@@ -26,7 +27,8 @@ theorem intrinsicSpend_le_two (hot eligible low : Bool) :
   cases hot <;> cases eligible <;> cases low <;> decide
 
 /-- Exact correspondence with
-`d -= hot; move_depth = d - 1 - (eligible and low)` at the armed depths. -/
+`d -= hot; move_depth = d - 1 - (eligible and low)` at the armed depths,
+where the Python expression includes `not root` in `eligible`. -/
 theorem intrinsic_child_depth (depth : Nat) (hdepth : 3 ≤ depth)
     (hot eligible low : Bool) :
     depth - fuelBit hot - 1 - fuelBit (eligible && low) =

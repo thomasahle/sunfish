@@ -119,10 +119,11 @@ make bench      # C-vs-PyPy wall-time ratio at identical nodes
 Tuning knobs (no recompile): UCI `setoption name NAME value VALUE`, lab
 `set NAME VALUE`, `SF_NAME=` env, or `NAME=VALUE` argv after the table path —
 `QS QS_A LMR EVAL_ROUGHNESS TABLE_SIZE NULL_MARGIN NULL_MIN_DEPTH NULL_LIMIT
-NULL_RED IID_MIN_DEPTH IID_RED FUT_MAX MATE_DIST FUEL_NULL
+NULL_CUT_RED NULL_RED IID_MIN_DEPTH IID_RED FUT_MAX MATE_DIST FUEL_NULL
 FUEL_MIN_DEPTH` (`NULL_MARGIN` is the fuel-probe target margin,
-independent of `EVAL_ROUGHNESS`, which caps the shallow null), plus the
-tp_move battery: `EVICT_POLICY` (0 master root-guarded FIFO, 1 unguarded
+`NULL_CUT_RED` controls the shallow score candidate, and `NULL_RED` controls
+the deep fuel probe), plus the tp_move battery: `EVICT_POLICY` (0 master
+root-guarded FIFO, 1 unguarded
 evict-before-insert, 2 depth-stored bounded scan with `EVICT_SCAN_K`,
 3 hash-slot two-tier replace-if-deeper), `KILLER_COUNT` (1..3 most recent
 distinct killers), `USE_VARIANT` (Python-side transcription proof; no-op
