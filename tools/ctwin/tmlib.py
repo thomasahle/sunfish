@@ -351,10 +351,14 @@ GRID_I = [0.0, 0.05, 0.1, 0.2, 0.5, 1.0, 2.0, 3.0, 5.0]
 def _pinned_present(relpath, literal, roots):
     """Where is the pinned text still checked out?
 
-    EVERY root is searched, not the first one that happens to hold a file of
-    that name: `nnue_4k/pst_entry.py` exists in both checkouts and only the
-    packed one carries the shipped budget, so stopping at the first hit
-    reports a drift that is really a wrong-copy lookup.
+    `roots` is a list for callers that pass one explicitly, but verify()'s
+    OWN default is this checkout alone (job 2, 2026-08-15) -- a second,
+    sibling root used to be the default and made the verdict depend on that
+    other checkout's mutable state, which is not what a drift tripwire is
+    for. EVERY given root is still searched in order, not just the first:
+    `nnue_4k/pst_entry.py` can exist in more than one checkout with different
+    content, and stopping at the first hit would report a drift that is
+    really a wrong-copy lookup.
     """
     # Line by line and IN ORDER, on collapsed whitespace.  A multi-line
     # pinned block is a generator MOD in make_variants.py, i.e. it lives in
@@ -383,7 +387,13 @@ def _pinned_present(relpath, literal, roots):
 
 def verify(roots=(), verbose=True):
     """Grid-check every mirror against its pinned literal.  Returns coverage."""
-    roots = list(roots) or [ROOT, os.path.expanduser("~/repos/sunfish-packed")]
+    # Pinned to THIS checkout only (job 2, 2026-08-15): a verifier whose
+    # verdict depends on a SIBLING checkout's mutable state is broken --
+    # observed directly (PR #201's handoff): the same commit read green, then
+    # 4 drifted an hour later, purely because ~/repos/sunfish-packed moved
+    # underneath it. ROOT is already derived upward from __file__, so pinning
+    # to it is the whole fix; no env-var override is added; see it here.
+    roots = list(roots) or [ROOT]
     checked = drift = 0
     report = []
 
