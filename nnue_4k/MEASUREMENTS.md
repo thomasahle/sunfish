@@ -1077,12 +1077,20 @@ fixed in advance precisely so that a contaminated primary number could not
 be argued into acceptance after the fact, and that is exactly what it
 prevented.
 
+**FINAL COUNTS, harvested at completion:**
+
 | | |
 |---|---|
-| games | 283 / 300 at write time — **allowed to finish**, because completing preserves the per-move data |
-| **time forfeits** | **5**, all the **entry**, overruns **101-102 ms** (the arbiter-quantum starvation signature) |
+| games | **300 / 300** — allowed to finish, because completing preserves the per-move data |
+| **time forfeits** | **9**, **all nine the entry**, overruns **101-102 ms** (the arbiter-quantum starvation signature) |
+| terminations | 291 normal, 9 time forfeit |
 | illegal | **0** |
 | Elo | **deliberately UNREAD** — it is void, and a peek could only tempt someone to soften the void |
+
+**The forfeit count kept climbing as the contention persisted** — 5 at
+~281 games, 8 at 290, **9 at 300** — which is itself consistent with the
+venue explanation rather than a fixed per-game engine defect: the rate
+tracked the load, not the game count.
 
 ### The venue check, run honestly
 
@@ -1091,20 +1099,23 @@ answer, because a **quiet-window** forfeit would have been the far more
 important finding: it is the registered revisit condition for the shelved
 holdback fix. It is not what the data says.
 
+Final figures over all **300** games:
+
 | games | n | median foreign CPU in their play window | p25 | p75 |
 |---|---|---|---|---|
-| **forfeited** | 5 | **104%** | 84% | 194% |
-| **non-forfeited** | 278 | **35%** | 24% | 71% |
+| **forfeited** | **9** | **200%** | 104% | 299% |
+| **non-forfeited** | **291** | **36%** | 24% | 84% |
 
 **Every forfeit sat in a contended window; none in a quiet one.** The
-lowest forfeit-window median (84%) is above the 75th percentile of clean
-games. **The holdback-fix revisit condition is NOT met** — it stays
-registered-not-run.
+**lowest** forfeit-window median is **84%** — exactly the **75th
+percentile** of clean games. So every one of the nine sits at or above the
+top quartile of contention, and not one below. **The holdback-fix revisit
+condition is NOT met** — it stays registered-not-run.
 
-**Contention is necessary but not sufficient**: 63 of 278 games that
-finished normally (23%) also ran at ≥ 84%. A forfeit needs a bad enough
-starvation spike at the wrong moment, which is why the rate is a rate and
-not a certainty.
+**Contention is necessary but not sufficient**: 74 of 291 games that
+finished normally (**25%**) also ran at ≥ 84%. A forfeit needs a bad
+enough starvation spike at the wrong moment, which is why the rate is a
+rate and not a certainty — and why 291 games survived the same venue.
 
 ### The load timeline — and a correction to the coordinator's own account
 
