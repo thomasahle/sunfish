@@ -196,7 +196,7 @@ class VariantSearcher(Searcher):
 
             if not root and 2 < depth < 6 and any(c in pos.board for c in "RBNQ"):
                 score = min(pos.score + S.EVAL_ROUGHNESS,
-                    -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
+                    -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 7))
                 proof = score >= gamma and (self.tp_move.get(pos) or pos.king_capture())
                 yield (proof, MATE_UPPER) if proof and pos.value(proof) >= MATE_LOWER else (None, score)
 

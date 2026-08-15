@@ -305,12 +305,8 @@ profile put `QS=40` only 2.0 ± 8.6 Elo behind, so the validated production
 setting remains `QS=40`. A final independent block confirmed that corrected
 bundle at `228/113/159`, **+48.25 ± 27.03 Elo**, LOS 99.98%, over 500 games.
 The other selected settings are `QS_A=140`, `EVAL_ROUGHNESS=15`,
-`NULL_MARGIN=-200`, `LMR=75`, reduction 7 for the deep fuel probe, shallow
-capped null from depth 3 through 5, real-only fuel shaping from depth 6, and
-IID disabled. The study coupled the shallow and deep reductions at 7; the
-depth-six mate floor subsequently showed that this was invalid. Production
-retains the shallow candidate's three-ply reduction and exempts the unstored
-driver root from intrinsic LMR. Those corrections are measured separately.
+`NULL_MARGIN=-200`, `LMR=75`, null reduction 7, shallow capped null from depth
+3 through 5, real-only fuel shaping from depth 6, and IID disabled.
 `NULL_LIMIT=60000` in the tunable C instrument means no score guard on legal
 positions; Python expresses that result directly. This last independent
 confirmation, not the adaptive posterior estimate, is the landing evidence.
