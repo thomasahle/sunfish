@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **ARM (b) VERDICT: the POOL manager is +136.58 ± 35.24 at 60+1 — H1 accepted in 262 games, 142W-44L-76D (68.70%), PairsRatio 5.71, 0 forfeits, 0 illegal** | The risk arm was not the risk: the regime where the pool budgets 2.4× LESS per routine move beat the shipped curve by more than the 60+0 arm did. **The spend shape INVERTS between the two TCs and that is the finding**: 0.79× the median move at 60+0 but **1.09× at 60+1**, with a LOWER p90 (3.311 vs 3.655 s) and a 1.8× higher max (10.151 vs 5.509 s). The pool is a REDISTRIBUTION, not a spend-less manager — it moves time off the body of ordinary moves onto the few that need 10 s — and both directions won ~130 Elo. The pre-registered "2.4× less routinely" claim was the BUDGET ratio and is corrected here. Blind moves 0 on both arms (nobody floors at an increment TC); the increment-aware starvation band has pool 44.1% vs smooth 50.6%. Against it: pool ended **48 games under 2 s** to the incumbent's 0, which is why the deciding match carries a 1+0 zero-illegal hammer |
 | 2026-08-15 | **ML2 SECOND LAYER PRICED (coordinator task, the 0.01286 phase-net's machinery): +98 B code isolated (3315 vs the round-2 3217 floor), BIT-EXACT against packed_layers' int bridge, and the extra big-int multiply costs ~+11% time/node same-tree** | At the 1024-B payload budget ml2 builds to **4339-4343 = ~245 OVER**; what FITS with ml2 code is a **781 B payload (feats 990 = total 4096 exactly; ~750 at the 30-B margin)**; u2 payload seam = 4 offset-4050 digit pairs (+8 digits, ~6 B); derivation landed as packed/make_ml2_proto.py + ml2_check.py (self-deriving, self-checking); nps tax ≈ 0.90× ≈ −15 Elo timed at 100/doubling — the number the −0.0009 val win must beat |
 | 2026-08-15 | **CORRECTION + RANKING VERDICT: `min40_4` takes the classic-builtin venue (+147 [+86,+219] vs the incumbent at 60+0, AS A FLOOR) — and the "no park" claim in my own pre-registration is WRONG** | A park is **not** caused by a cap: at any increment TC the clock must rest where `spend + overhead == income`, so every manager parks, both candidates included. My reading was an artifact of charging O = 200 ms against a 100 ms increment; at the surrogate's 50 ms charge the rest point exists (`e2306d3`). Struck from tests and comments, surviving only at `winc == 0` where income is zero. The shape decides the **altitude**: one-max 6.17 s, incumbent 2.11 s (blind), **min40-4 0.22 s — the LOWEST of the three, below even the incumbent**, the thinnest flag margin in the field, and the reason its second arm is a flag hammer. It is still better than the incumbent because it reaches the floor on a POSITIVE budget where the incumbent's cap has gone negative. Ranking: `onemax` vs `min40_4` is −89 [−170,−16] at 60+0.1, ~0 at 30+1, +23 at 60+1 — min40-4 wins on Elo where they differ AND on the pre-fixed elegance tiebreak. **+147 is a FLOOR, not an estimate**: 594 of `legacy12`'s moves hit the structural-floor path where the surrogate substitutes a BETTER move than the real engine plays; the zero-substitution packed analogue read +228. **Against this lane:** the full `pool` beats min40-4 at every increment TC by +114 to +134 — min40-4 wins the ONE-LINE venue, not the field. Packed **3276 B (−2)**, source −7 B/−2 tokens. PR #196; one-max stays open as runner-up. Two arms STAGED in `tools/arena/`, GO-guarded, **neither launched** |
 | 2026-08-14 | **Two defects in the CLASSIC pool twin, fixed before any PR: the arm label and the opening ramp** | Found by the surrogate lane reading `tm-pool-manager` as a formula source; **arm (a)'s verdict and arm (b) in flight are unaffected — they play packed mods**. (1) `TM_MANAGER="smooth"` actually selected master's `/12`, not #188's rational — renamed to `legacy`, alias refused, and a test goes red when the smooth curve lands so the rename happens in that merge. (2) The opening ramp capped the POOL budget for 8 plies while the measured packed arm has no ramp — the classic pool was an unmeasured variant wearing a measured number's name. Ramp is now the incumbent's only; ply-0 60+1 through the driver: legacy 1.02 s vs pool 3.82 s. Recorded cost: `random()` was the only opening variety without a book, so a deployed pool must get variety from a book, never from a budget cut |
@@ -584,6 +585,82 @@ two branches off `origin/master`, `classic/tm-one-max-pool` and
 regime tables, the no-park recurrence, banked reserve in moves,
 monotonicity in both arguments, and the unit domain). **No PR is open** —
 per the owner ruling above, it opens carrying the surrogate's winner.
+
+## 2026-08-15 — ARM (b) VERDICT: the POOL manager is +136.6 ± 35.2 at 60+1, H1 in 262 games — the risk arm was not the risk
+
+The arm that had to WIN something won more than the arm that only had to not
+lose. This is the regime Thomas left open: at 60+1 the pool budgets **2.4x less**
+for a routine move than the shipped curve (2.27 s soft against a 5.40 s budget),
+and the whole design rests on the wall and the extensions buying that back.
+
+| | |
+|---|---|
+| arms | `pool` (`pooltm`, `cddf392e21449054`) vs `smooth` (base = HEAD entry, `14b69a606b743a37`) |
+| TC / book | 60+1, `book3k.pgn`, order=random, srand 20260817, no adjudication |
+| result | **142W 44L 76D of 262**, 68.70% |
+| Elo | **+136.58 ± 35.24** (nElo +181.25 ± 42.07), LOS 100.00% |
+| pentanomial | [3, 11, 37, 45, 35], PairsRatio **5.71**, WL/DD 2.70, draw ratio 28.2% |
+| SPRT | **LLR 2.96 > 2.94 — H1 accepted for [0, 10]** at 262 of a 600 cap, 2 h 09 m |
+| tripwires | **0 time forfeits, 0 illegal moves, 263/263 terminations `normal`** |
+
+(The PGN carries 263 games to fastchess's 262 — one pairing finished after the
+stop. The tally below reads all 263: 142W 44L 77D, 68.63%. The SPRT figures are
+quoted as fastchess computed them.)
+
+### Realized spend — the shape INVERTS between the two TCs, and that is the finding
+
+| TC | arm | median | mean | p90 | max |
+|---|---|---|---|---|---|
+| 60+0 | pool | 0.512 s | 0.718 s | 1.623 s | **5.534 s** |
+| 60+0 | smooth | 0.645 s | 0.687 s | 1.183 s | 1.664 s |
+| 60+1 | pool | **1.629 s** | 1.918 s | 3.311 s | **10.151 s** |
+| 60+1 | smooth | 1.488 s | 1.933 s | 3.655 s | 5.509 s |
+
+At 60+0 the pool spends **0.79x** the median move; at 60+1 it spends **1.09x** —
+*more* — while its p90 is **lower** (3.311 vs 3.655) and its maximum is **1.8x
+higher**. So the pool is not a "spend less" manager and never was: it is a
+**redistribution**. It moves time off the p90 body of ordinary moves and onto
+the handful that need 10 s, and it does that in opposite directions at the two
+TCs depending on where the increment lands. Both directions won by ~130 Elo,
+which is the strongest evidence in this ladder that the mechanism is the
+allocation shape and not the level.
+
+The pre-registered claim that the pool "spends 2.4x less routinely at 60+1" is
+therefore **wrong as stated** and is corrected here rather than quietly: that is
+the ratio of the BUDGETS, and the realized median moved the other way.
+
+### Drain and floor telemetry
+
+| arm | end clock median | mean | min | games < 2 s | first below 2.4 s | moves after |
+|---|---|---|---|---|---|---|
+| pool | 2.6 s | **4.7 s** | 1.4 s | **48** | move 53 (116 never) | 15 |
+| smooth | 2.7 s | 3.9 s | 2.1 s | **0** | move 67 (162 never) | 8 |
+
+**Blind moves: 0 for both arms, out of 15,851 and 15,810 moves.** At an
+increment TC nobody reaches the floor, which is why the starvation band is the
+reading that discriminates here (≤ 1.5 s = 1.5x the increment): **pool 44.1%
+starved against smooth's 50.6%** — the pool is the *less* starved arm despite
+running its clock lower.
+
+The one number that goes the incumbent's way: the pool ended **48 games under
+2 s** where the incumbent ended none, and it crosses 2.4 s at move 53 rather
+than 67. It converts that into a higher MEAN end-clock (4.7 vs 3.9) and zero
+forfeits, so at 60+1 it is spending the bank deliberately rather than draining
+it — but it is a genuinely tighter arm at the flag, and it is the reason the
+deciding match below carries a **1+0 zero-illegal hammer** rather than treating
+that as a formality.
+
+### Ladder status
+
+| arm | verdict |
+|---|---|
+| (a) 60+0 non-inferiority | **+119.94 ± 36.44**, H1, 274 games |
+| (b) 60+1 decisive | **+136.58 ± 35.24**, H1, 262 games |
+| (c) 30+1 / (d) phase-M | held for the surrogate; (c) is now folded into the deciding match below |
+
+Cotenancy: cotenant throughout at concurrency 8, nice 10, on a 96-core box at
+load 22-33 with other lanes' tournaments live; no `.boxlock` claimed, nothing of
+another lane touched.
 
 ## 2026-08-14 — Two defects in the CLASSIC pool twin, found by the surrogate lane and fixed before any PR
 
