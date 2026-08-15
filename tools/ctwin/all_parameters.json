@@ -23,10 +23,6 @@
      "off_values": [-70000], "scale": 40},
     {"name": "FUT_MAX", "type": "discrete", "default": 1,
      "values": [0, 1], "scale": 1},
-    {"name": "IID_MIN_DEPTH", "type": "discrete", "default": 99,
-     "values": [2, 3, 4, 5, 6, 99], "off_values": [99], "scale": 1.5},
-    {"name": "IID_RED", "type": "integer", "default": 3,
-     "min": 2, "max": 5, "scale": 1},
 
     {"name": "VALUE_N", "type": "discrete", "default": 280,
      "values": [270, 280, 290], "scale": 20},
@@ -58,7 +54,6 @@
   "interaction_order": 2,
   "structural_fraction": 0.20,
   "conditions": [
-    {"when": {"IID_MIN_DEPTH": [99]}, "reset": ["IID_RED"]},
     {"when": {"FUEL_MIN_DEPTH": [99]},
      "reset": ["NULL_MARGIN", "NULL_RED", "LMR"]},
     {"when": {"NULL_LIMIT": [0]},
@@ -70,7 +65,6 @@
     {"LMR": -70000},
     {"NULL_LIMIT": 0},
     {"NULL_MIN_DEPTH": 99, "FUEL_MIN_DEPTH": 99},
-    {"IID_MIN_DEPTH": 3},
     {"FUT_MAX": 0}
   ],
   "kernel_variance": 0.16,
