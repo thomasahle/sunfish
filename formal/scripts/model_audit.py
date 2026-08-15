@@ -22,7 +22,7 @@ reformatting of surrounding code does not fire):
   - Position.value       (KingCaptureValHigh / HighValIsKingCapture)
   - Position.gen_moves   (Game.moves, CaptureFirst's list)
   - Position.king_capture (the substitution/in-check scan, kp = 0 note)
-  - constants            (MATE_LOWER, MATE_UPPER, QS, QS_A,
+  - constants            (MATE_LOWER, MATE_UPPER, QS, QS_A, LMR,
                           EVAL_ROUGHNESS, NULL_MARGIN, TABLE_SIZE)
 
 Run from the repo root:  python formal/scripts/model_audit.py
@@ -37,8 +37,8 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SUNFISH = ROOT / "sunfish.py"
 
-CONSTANTS = ["MATE_LOWER", "MATE_UPPER", "QS", "QS_A", "EVAL_ROUGHNESS", "NULL_MARGIN",
-             "TABLE_SIZE"]
+CONSTANTS = ["MATE_LOWER", "MATE_UPPER", "QS", "QS_A", "LMR", "EVAL_ROUGHNESS",
+             "NULL_MARGIN", "TABLE_SIZE"]
 
 EXPECTED = {
     "Position.gen_moves": "3453dbe008109d3d",
@@ -46,9 +46,9 @@ EXPECTED = {
     "Position.move": "69bb2460cd611c9e",
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "11d52eaa8a661352",
-    "Searcher.bound": "40d38a1dad769e74",
+    "Searcher.bound": "c50b18af2b81235e",
     "Searcher.search": "f9aa8c81b84ff44b",
-    "constants": "9aaf6ed2785fecea",
+    "constants": "62b96e206341a2fb",
 }
 
 
@@ -97,13 +97,13 @@ def extract_regions():
 ANCHORS = [
     "def king_capture",
     "killer = self.tp_move.get(pos)",
-    "if not killer and depth > 3:",
     "if killer and pos.value(killer) >= val_lower:",
     "yield score_move(killer, pos.value(killer))",
-    "score = -self.bound(child, 1 - gamma, d - 1)",
-    "if not root and 2 < depth < 6 and",
+    "move_depth = d - 1 - (guard and val < LMR)",
+    "if not root and 2 < depth < 6 and any(c in pos.board for c in \"RBNQ\"):",
+    "guard = depth >= 6 and any(c in pos.board for c in \"RBNQ\")",
     "target = pos.score + NULL_MARGIN",
-    "if -self.bound(pos.rotate(nullmove=True), 1 - target, depth - 3) >= target:",
+    "d -= -self.bound(nullpos, 1 - target, depth - 7) >= target",
     "yield None, pos.score",
     "score = min(pos.score + EVAL_ROUGHNESS,",
     "if depth <= 1 and pos.score + val < gamma:",

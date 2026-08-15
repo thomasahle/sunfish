@@ -157,8 +157,8 @@ implementation of the historical rule.  Monotonicity lets one
 fail-soft child report bound the capped value; the second boundary
 probe is gone.  The local proof is
 \texttt{cappedNull\_report}, with the concrete guard-to-score-band fact
-\texttt{guardedStaticCap\_in\_scoreBand} and its positive-mate exclusion
-corollary \texttt{guardedCappedNull\_below\_positiveMate}, in
+\texttt{staticCap\_in\_scoreBand} and its positive-mate exclusion
+corollary \texttt{staticCappedNull\_below\_positiveMate}, in
 \texttt{CappedNull.lean}.  References below to the ``shipped''
 band-edge consumer describe the campaign snapshot retained as the
 historical full model; \texttt{formal/README.md} records the current
@@ -797,9 +797,9 @@ relabeling recovers the recursive extension.\\
 \texttt{cappedNull\_report} (via \texttt{WindowReport.cap}) & --- &
 Applying $\min(c, \cdot)$ to a valid fail-soft child report yields a
 valid report of the capped null value: one recursive probe suffices.\\
-\texttt{guardedStaticCap\_in\_scoreBand} \newline \texttt{guardedCappedNull\_below\_}\newline\texttt{positiveMate} & --- &
-Under the $|\mathrm{eval}| < 500$ guard and
-$\texttt{EVAL\_ROUGHNESS} = 15$ the cap sits strictly inside the score
+\texttt{staticCap\_in\_scoreBand} \newline \texttt{staticCappedNull\_below\_}\newline\texttt{positiveMate} & --- &
+Under the concrete static-evaluation bound and
+$\texttt{EVAL\_ROUGHNESS} = 15$, the cap sits strictly inside the score
 band, and the capped null value can never claim a \emph{positive}
 mate.\\
 \end{longtable}
@@ -2339,10 +2339,9 @@ capped value}, so the single recursive pass probe already bounds the
 declared null term on the correct side.  The second probe --- and the
 boundary-specific proof machinery behind it --- leaves the algorithm.
 The concrete guard facts are
-\texttt{guardedStaticCap\_in\_scoreBand} (from the
-$|\mathrm{pos.score}| < 500$ guard and
-$\texttt{EVAL\_ROUGHNESS} = 15$, the cap sits strictly below $\ML$
-and above $-\MU$) and \texttt{guardedCappedNull\_below\_positiveMate}
+\texttt{staticCap\_in\_scoreBand} (from the concrete evaluation bound
+and $\texttt{EVAL\_ROUGHNESS} = 15$, the cap sits strictly below $\ML$
+and above $-\MU$) and \texttt{staticCappedNull\_below\_positiveMate}
 (lifted through the $\min$: the capped null value can never claim a
 \emph{positive} mate).  A catastrophically bad pass may still retain a
 negative mate value; that is harmless and no negative clamp is
