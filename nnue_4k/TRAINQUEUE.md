@@ -164,6 +164,83 @@ VAL-probe-first):
 
 ## Log (newest first)
 
+- 2026-08-15 06:55 UTC: **THE GRID ERA, all four runs — and the knife-edge
+  is a HARD ATTRACTOR with a mechanism, not a curiosity.**
+
+  | run | arch | dial | best val | read-out | packed |
+  |---|---|---|---|---|---|
+  | `70_gridste_ml2` | ml2 | l1 .0005 | **0.01347** | [1, 1, 1, 0] | **3775 B** |
+  | `71_gridste_plain` | 1-layer | τ .85 | **0.01378** | n/a | **3570 B** |
+  | `72_replnet_tau11` | 1-layer | τ 1.1 | **0.01378** | n/a | **3571 B** |
+  | `73_gridste_ml2_long` | ml2 | l1 .0005, 60 ep | 0.01331 (see below) | [1, 1, 1, 0] | — |
+
+  All on the pinned split (`val_sha 0239a7b84ec6ba2f`, n_train 7 827 406).
+
+  **`71` — the control answers cleanly: the defect was ml2's alone.**
+  0.01378 is the linear 8Mv reference **exactly**, and the run is
+  *converged* (last-10 mean 0.01379). Snapping gains and biases onto the
+  payload's integer digits costs the one-layer family **nothing**: it is
+  fully grid-representable, and every historical linear val in this ledger
+  stands as written. Pre-registered criterion met.
+
+  **`70` — honest two-layer training recovers about a third.** 0.01347
+  against the linear 0.01378 and the float-ml2 0.01280: the ml2 family's
+  whole val win was 0.00098 and 0.00031 of it survives contact with the
+  grid — **31.6%**. Criterion met (non-zero read-out, val under the
+  u2-only run's 0.01362). **Caveat that must travel with the number:** the
+  two-layer grid runs *thrash* — `70` best 0.01347 against a last-10 mean
+  of **0.01430**, `60` 0.01362 against 0.01411 — while `71`/`72` sit still
+  (0.01378 / 0.01379). "Full grid beats u2-only" **reverses** on last-10
+  mean and is NOT established.
+
+  **`72` — registered arm 8 CLOSED by measurement.** τ 1.1 gives val
+  **0.01378**, identical to τ 0.85, and sparsity moves 46.1% → 46.7%. Its
+  pre-registration said bytes decide, and bytes were measured through the
+  real pack path: **3571 B vs 3570 B — plus one byte for nothing.** The
+  high side pays nothing; τ stays 0.85.
+
+  **`73` — the tail's question is answered, and it is the strong answer.**
+  Pre-registered as "does doubling the ride move `u2` off the tie?"
+  **No.** At 60 epochs all four components land within **2e-6** of the
+  boundary — [0.5000015, 0.5000011, 0.5000008, 0.4999979] — *tighter* than
+  the 30-epoch run's. And its 0.01331 is a best-of-60 selection artifact,
+  the `dense60` lesson repeating exactly: **best-of-first-30 is 0.01381**,
+  worse than `70`'s 0.01347 at matched budget, with a last-10 mean of
+  0.01436. Longer riding buys a lower minimum and nothing else.
+
+  **The attractor, across every grid-era ml2 run** (`u2 · scale`, where 1.0
+  is one grid step):
+
+  | run | components | digits |
+  |---|---|---|
+  | `60` | 0.5000003, 0.4967398, 0.5000005, 0.4996593 | [1, 0, 1, 0] |
+  | `61` | 0.5000057, 0.4954618, 0.5000003, 0.4992411 | [1, 0, 1, 0] |
+  | `70` | 0.5000051, 0.5074217, 0.5000017, 0.4999114 | [1, 1, 1, 0] |
+  | `73` | 0.5000015, 0.5000011, 0.5000008, 0.4999979 | [1, 1, 1, 0] |
+
+  Sixteen components, four runs, two clamps, two ride lengths — **every one
+  parked at half a grid step.** The mechanism is STE boundary chatter and
+  it is not mysterious: the forward is a step function, so above 0.5 the
+  digit is 1 and the layer fires at full strength (loss pushes down), below
+  0.5 the digit is 0 and the layer vanishes (loss pushes up). The optimizer
+  oscillates about the threshold instead of converging, and **the val
+  thrashing above is the same phenomenon read off the loss.** The net is
+  not refusing a second layer — **it is asking for a read-out strength
+  between 0 and 1 grid units, and the container cannot express one.** At
+  shift 4 the read-out has ~2 usable settings; the export sweep showed
+  shift 3 gives it [2.0, 2.03, 2.0, 2.0] and shift 2 gives [8, 8.1, 8, 8],
+  i.e. real resolution. **That is a container-design decision and it is the
+  coordinator's, not this lane's — recorded, not taken.**
+
+  **Play context, so none of these vals are misread:** `70` screened at
+  **−300.56 ± 71.33** (MEASUREMENTS, same date). Val ranks arms inside a
+  family and inverts across family boundaries — the linear net has the
+  worst val of the three and the best play.
+
+  Queue held at **depth 3** behind this (`74` l1 .001, `75` l1 .0003, `76`
+  seed-1 60-epoch tail). `76` is the seed replicate — `73` was **seed 0**,
+  so seed-dependence of the attractor is still open and `76` answers it.
+
 - 2026-08-15 05:12 UTC: **CLAMP 400 LOSES, the knife-edge REPLICATES, and
   the queue emptied a SECOND time — 31 minutes, same manual-refill cause.**
 
