@@ -128,7 +128,7 @@ def study_identity(args):
             for name in ("pair_weight", "exploration", "initial_design", "explore_start",
                          "explore_floor", "explore_half_life", "explore_optimism",
                          "duel_fraction", "inducing", "seed_selections",
-                         "acquisition_restarts")
+                         "acquisition_restarts", "update_batches")
         },
     }
 
@@ -155,7 +155,7 @@ def fixed_baseline_point(args, space):
     return None
 
 
-def aggregate(batches, pair_weight, space):
+def aggregate(batches, pair_weight, space, sparse=False):
     totals = {}
     points = set()
     for batch in batches:
@@ -174,15 +174,22 @@ def aggregate(batches, pair_weight, space):
         totals[key] = wins, trials
     points = sorted(points)
     indices = {point: index for index, point in enumerate(points)}
-    design = np.zeros((len(totals), len(points)))
+    left = []
+    right = []
     success = []
     trials = []
-    for row, ((left, right), (wins, games)) in enumerate(totals.items()):
-        design[row, indices[left]] = 1
-        if right is not None:
-            design[row, indices[right]] = -1
+    for (challenger, opponent), (wins, games) in totals.items():
+        left.append(indices[challenger])
+        right.append(indices[opponent] if opponent is not None else -1)
         success.append(wins)
         trials.append(games)
+    endpoints = np.asarray(left, dtype=int), np.asarray(right, dtype=int)
+    if sparse:
+        return points, endpoints, success, trials
+    design = np.zeros((len(totals), len(points)))
+    design[np.arange(len(totals)), endpoints[0]] = 1
+    mask = endpoints[1] >= 0
+    design[np.arange(len(totals))[mask], endpoints[1][mask]] = -1
     return points, design, success, trials
 
 
@@ -206,30 +213,46 @@ def source_prior(logs, battery, transfer, space):
 
 def inducing_basis(points, design, trials, space, count):
     """Keep the most-tested comparison endpoints, then cover the remainder."""
-    pool = sorted(set([*points, space.default]))
-    count = min(count, len(pool))
-    information = np.abs(design).T @ trials
+    if isinstance(design, tuple):
+        information = np.zeros(len(points))
+        np.add.at(information, design[0], trials)
+        mask = design[1] >= 0
+        np.add.at(information, design[1][mask], np.asarray(trials)[mask])
+    else:
+        information = np.abs(design).T @ trials
     ranked = sorted(range(len(points)), key=lambda i: (-information[i], points[i]))
     required = [space.default]
     required += [points[i] for i in ranked[:max(1, count // 2)]]
     required = list(dict.fromkeys(required))[:count]
     if isinstance(space, logistic_gp.MixedSpace):
+        pool = sorted(set([*space.candidates, *required]))
+        count = min(count, len(pool))
         return space.maximin(pool, required, count)
+    pool = sorted(set([*points, space.default]))
+    count = min(count, len(pool))
     remaining = [point for point in pool if point not in required]
     indices = np.linspace(0, len(remaining) - 1, count - len(required), dtype=int)
     return required + [remaining[index] for index in indices]
 
 
 def posterior(state, mean_function, pair_weight, space, inducing=0):
-    points, design, success, trials = aggregate(state["batches"], pair_weight, space)
+    points, design, success, trials = aggregate(
+        state["batches"], pair_weight, space, sparse=True)
     if not points:
         return None
     basis = None
-    if inducing and len(points) > inducing:
-        basis = inducing_basis(points, design, trials, space, inducing)
+    if inducing:
+        basis = (space.inducing_points(inducing)
+                 if isinstance(space, logistic_gp.MixedSpace)
+                 else inducing_basis(points, design, trials, space, inducing))
     return logistic_gp.LogisticGP(
         mean_function, space.kernel, space.kernel_diagonal, basis).fit_comparisons(
         points, design, success, trials)
+
+
+def update_posterior(model, batches, pair_weight, space):
+    points, design, success, trials = aggregate(batches, pair_weight, space, sparse=True)
+    return model.update_comparisons(points, design, success, trials) if points else model
 
 
 def design_variance(sites, candidates, space):
@@ -641,16 +664,30 @@ async def optimize(args):
     running = {}
     completed = 0
     allocation_model = None
+    modeled_batches = 0
 
     def add_experiment():
-        nonlocal allocation_model
+        nonlocal allocation_model, modeled_batches
+        if allocation_model is None:
+            allocation_model = posterior(
+                state, mean_function, args.pair_weight, space, args.inducing)
+            modeled_batches = len(state["batches"])
+        elif len(state["batches"]) - modeled_batches >= args.update_batches:
+            allocation_model = (update_posterior(
+                allocation_model, state["batches"][modeled_batches:],
+                args.pair_weight, space) if args.inducing else posterior(
+                    state, mean_function, args.pair_weight, space))
+            modeled_batches = len(state["batches"])
         pending = [
             (experiment["vector"], experiment["opponent"])
             for experiment in experiments.values()
         ]
-        if allocation_model is None:
-            allocation_model = posterior(
-                state, mean_function, args.pair_weight, space, args.inducing)
+        pending += [
+            (space.canonical(batch["knobs"]),
+             space.canonical(batch["opponent_knobs"])
+             if batch.get("opponent_knobs") is not None else None)
+            for batch in state["batches"][modeled_batches:]
+        ]
         rejected = {
             space.canonical(record["knobs"])
             for record in state.get("gates", {}).values()
@@ -744,7 +781,6 @@ async def optimize(args):
             })
             del experiments[number]
             completed += 1
-            allocation_model = None
             save_state(args.state, state)
             print(f"[experiment {number}] result "
                   f"{experiment['wins']}-{experiment['losses']}-{experiment['draws']}",
@@ -793,6 +829,8 @@ def main():
     parser.add_argument("--inducing", type=int, default=0,
         help="sparse GP size; exact inference is the default")
     parser.add_argument("--acquisition-restarts", type=int, default=8)
+    parser.add_argument("--update-batches", type=int, default=1,
+        help="completed pairs per online posterior update")
     parser.add_argument("--gate", help="command reading a policy JSON object on stdin")
     parser.add_argument("--gate-timeout", type=float, default=60)
     parser.add_argument("--gate-attempts", type=int, default=1000)
@@ -820,8 +858,8 @@ def main():
         parser.error("require 1 <= --refill-batches <= --queue-batches")
     if args.initial_design < 1 or args.explore_half_life <= 0:
         parser.error("--initial-design and --explore-half-life must be positive")
-    if args.inducing < 0 or args.acquisition_restarts < 1:
-        parser.error("--inducing cannot be negative; acquisition restarts must be positive")
+    if args.inducing < 0 or min(args.acquisition_restarts, args.update_batches) < 1:
+        parser.error("inducing must be nonnegative; acquisition and update counts must be positive")
     if args.explore_optimism < 0 or args.seed_selections < 0:
         parser.error("--explore-optimism and --seed-selections cannot be negative")
     asyncio.run(optimize(args))

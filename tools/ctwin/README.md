@@ -146,14 +146,15 @@ python3 adaptive_gp.py \
   --space all_parameters.json --openings openings.fen \
   --gate "python3 sunfish_gate.py" --cycle-openings \
   --slots 20 --queue-batches 20 --refill-batches 4 \
-  --pairs 1 --initial-design 256 --inducing 128 \
+  --pairs 1 --initial-design 256 --inducing 128 --update-batches 8 \
   --explore-start .5 --explore-floor .2 --duel-fraction .3 \
   --batches 100000
 ```
 
 `--baseline-options default` pins the exact default point to zero. Opening
 reuse is balanced by a fresh deterministic shuffle per epoch, and independent
-books remain mandatory for final confirmation.
+books remain mandatory for final confirmation. A fixed inducing basis permits
+online Laplace updates without rebuilding a quadratic comparison matrix.
 
 Game use: `position startpos moves …` / `position fen …`, then
 `go nodes N` (primary — clock-free surrogate games), `go depth D`,

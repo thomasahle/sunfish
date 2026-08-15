@@ -218,6 +218,37 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(success, [1])
         self.assertEqual(trials, [1])
 
+    def test_sparse_comparisons_match_the_dense_posterior(self):
+        batches = [
+            {"knobs": {"X": 0, "Y": 0}, "wins": 2, "draws": 0, "losses": 0},
+            {"knobs": {"X": 100, "Y": 20}, "opponent_knobs": {"X": 0, "Y": 0},
+             "wins": 0, "draws": 1, "losses": 1},
+        ]
+        points, dense, success, trials = aggregate(batches, 0.5, self.space)
+        _, sparse, _, _ = aggregate(batches, 0.5, self.space, sparse=True)
+        arguments = self.space.prior_mean, self.space.kernel, self.space.kernel_diagonal
+        dense_model = LogisticGP(*arguments).fit_comparisons(points, dense, success, trials)
+        sparse_model = LogisticGP(*arguments).fit_comparisons(points, sparse, success, trials)
+        dense_mean, dense_variance = dense_model.predict(self.space.candidates)
+        sparse_mean, sparse_variance = sparse_model.predict(self.space.candidates)
+        np.testing.assert_allclose(sparse_mean, dense_mean)
+        np.testing.assert_allclose(sparse_variance, dense_variance)
+
+    def test_online_updates_track_a_full_sparse_fit(self):
+        points = [(0, 0), (50, 10), (100, 20)]
+        basis = self.space.inducing_points(8)
+        arguments = self.space.prior_mean, self.space.kernel, self.space.kernel_diagonal
+        full = LogisticGP(*arguments, basis).fit_comparisons(
+            points, (np.array([0, 1, 2]), np.array([-1, 0, 1])),
+            [0.5, 1, 0], [1, 1, 1])
+        online = LogisticGP(*arguments, basis).fit_comparisons(
+            points[:1], (np.array([0]), np.array([-1])), [0.5], [1])
+        online.update_comparisons(
+            points, (np.array([1, 2]), np.array([0, 1])), [1, 0], [1, 1])
+        full_mean, _ = full.predict(self.space.candidates)
+        online_mean, _ = online.predict(self.space.candidates)
+        np.testing.assert_allclose(online_mean, full_mean, atol=2e-3)
+
     def test_aggregate_rejects_observations_outside_new_domain(self):
         valid = {"knobs": {"X": 50, "Y": 10}, "wins": 1, "draws": 1, "losses": 0}
         invalid = valid | {"knobs": {"X": -10, "Y": 10}}
@@ -354,6 +385,9 @@ class MixedAcquisitionTest(unittest.TestCase):
         basis = inducing_basis(points, design, trials, self.space, 2)
         self.assertIn(self.space.default, basis)
         self.assertIn((100, 10), basis)
+        sparse = inducing_basis(
+            points, (np.arange(3), np.full(3, -1)), trials, self.space, 2)
+        self.assertEqual(set(sparse), set(basis))
 
     def test_uci_option_parser_keeps_multiword_names(self):
         line = "option name Null threat margin type spin default 200"

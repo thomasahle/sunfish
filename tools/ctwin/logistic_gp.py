@@ -115,6 +115,7 @@ class MixedSpace:
         # whose categorical arms add code can opt into a simplicity prior.
         self.clause_prior = spec.get("clause_logit_prior", 0.0)
         self.structural_fraction = spec.get("structural_fraction")
+        self._inducing = {}
         choices = [parameter["values"] for parameter in self.parameters]
         self.default = self.canonical(self.defaults)
         maximum = spec.get("max_candidates")
@@ -162,6 +163,14 @@ class MixedSpace:
                 candidates += self.maximin(extremes, extreme_required, extreme_count)
                 candidates.sort()
         self.candidates = candidates
+
+    def inducing_points(self, count):
+        """A fixed basis makes online posterior updates order-stable and cheap."""
+        count = min(count, len(self.candidates))
+        if count not in self._inducing:
+            self._inducing[count] = self.maximin(
+                self.candidates, [self.default], count)
+        return self._inducing[count]
 
     @staticmethod
     def halton_design(names, choices, count):
@@ -436,41 +445,39 @@ class LogisticGP:
         x = np.asarray(x, dtype=float)
         return self.fit_comparisons(x, np.eye(len(x)), success, trials)
 
-    def fit_comparisons(self, x, design, success, trials):
-        """Fit binomial observations whose logits are rows of design @ f(x)."""
-        observations = np.asarray(x, dtype=float)
-        self.x = observations if self.inducing is None else np.asarray(self.inducing, dtype=float)
-        design = np.asarray(design, dtype=float)
-        success = np.asarray(success, dtype=float)
-        trials = np.asarray(trials, dtype=float)
-        covariance = self.kernel(self.x, self.x) + np.eye(len(self.x)) * 1e-6
-        self.precision = np.linalg.inv(covariance)
-        self.mean = self.mean_function(self.x)
-        features = (
-            np.eye(len(observations)) if self.inducing is None
-            else self.kernel(observations, self.x) @ self.precision)
-        reduced_design = design @ features
-        offset = design @ self.mean_function(observations)
+    @staticmethod
+    def comparison_features(features, means, design):
+        means = np.asarray(means, dtype=float)
+        if not isinstance(design, tuple):
+            design = np.asarray(design, dtype=float)
+            return design @ features, design @ means
+        left, right = design
+        reduced = features[left].copy()
+        offset = means[left].copy()
+        mask = right >= 0
+        reduced[mask] -= features[right[mask]]
+        offset[mask] -= means[right[mask]]
+        return reduced, offset
 
+    @staticmethod
+    def laplace(precision, design, offset, success, trials):
         def objective(centered):
-            logits = offset + reduced_design @ centered
+            logits = offset + design @ centered
             probability = expit(logits)
-            loss = 0.5 * centered @ self.precision @ centered
+            loss = 0.5 * centered @ precision @ centered
             loss += np.sum(trials * np.logaddexp(0, logits) - success * logits)
-            gradient = self.precision @ centered
-            gradient += reduced_design.T @ (trials * probability - success)
+            gradient = precision @ centered
+            gradient += design.T @ (trials * probability - success)
             return loss, gradient
 
-        centered = np.zeros(len(self.x))
+        centered = np.zeros(len(precision))
         for _ in range(30):
             loss, gradient = objective(centered)
-            probability = expit(offset + reduced_design @ centered)
+            probability = expit(offset + design @ centered)
             weight = trials * probability * (1 - probability)
-            hessian = self.precision + reduced_design.T @ (weight[:, None] * reduced_design)
+            hessian = precision + design.T @ (weight[:, None] * design)
             step = np.linalg.solve(hessian, gradient)
             decrement = gradient @ step
-            # The Newton decrement is already a squared local error measure.
-            # Stop before objective roundoff can make Armijo reject every step.
             if decrement < 1e-8:
                 break
             scale = 1
@@ -482,15 +489,51 @@ class LogisticGP:
             centered -= scale * step
         else:
             raise RuntimeError("logistic-GP Newton fit did not converge")
-        self.latent = self.mean + centered
-        probability = expit(offset + reduced_design @ centered)
+        probability = expit(offset + design @ centered)
         weight = trials * probability * (1 - probability)
-        self.posterior = np.linalg.inv(
-            self.precision + reduced_design.T @ (weight[:, None] * reduced_design))
-        self.alpha = self.precision @ centered
+        posterior = np.linalg.inv(precision + design.T @ (weight[:, None] * design))
+        return centered, posterior
+
+    def finish(self):
+        self.latent = self.mean + self.centered
+        self.alpha = self.precision @ self.centered
         self.variance_precision = (
             self.precision - self.precision @ self.posterior @ self.precision)
         return self
+
+    def fit_comparisons(self, x, design, success, trials):
+        """Fit binomial observations whose logits are rows of design @ f(x)."""
+        observations = np.asarray(x, dtype=float)
+        self.x = observations if self.inducing is None else np.asarray(self.inducing, dtype=float)
+        success = np.asarray(success, dtype=float)
+        trials = np.asarray(trials, dtype=float)
+        covariance = self.kernel(self.x, self.x) + np.eye(len(self.x)) * 1e-6
+        self.precision = np.linalg.inv(covariance)
+        self.mean = self.mean_function(self.x)
+        features = (
+            np.eye(len(observations)) if self.inducing is None
+            else self.kernel(observations, self.x) @ self.precision)
+        reduced, offset = self.comparison_features(
+            features, self.mean_function(observations), design)
+        self.centered, self.posterior = self.laplace(
+            self.precision, reduced, offset, success, trials)
+        return self.finish()
+
+    def update_comparisons(self, x, design, success, trials):
+        """Apply an online Laplace update to a fixed inducing-point posterior."""
+        if self.inducing is None:
+            raise ValueError("online updates require a fixed inducing basis")
+        observations = np.asarray(x, dtype=float)
+        success = np.asarray(success, dtype=float)
+        trials = np.asarray(trials, dtype=float)
+        features = self.kernel(observations, self.x) @ self.precision
+        reduced, offset = self.comparison_features(
+            features, self.mean_function(observations), design)
+        offset += reduced @ self.centered
+        delta, self.posterior = self.laplace(
+            np.linalg.inv(self.posterior), reduced, offset, success, trials)
+        self.centered += delta
+        return self.finish()
 
     def predict(self, x):
         x = np.asarray(x, dtype=float)
