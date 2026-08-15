@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **DECIDING MATCH 2 (1+0 hammer): GATE PASSED — 0 illegal, 0 `(none)`, 0 null moves, 100/100 normal — but the match found a −209.91 ± 60.11 CLIFF at a 1-second clock, and OUR OWN GATE SCRIPT reported a false FAILED** | Three things, not one. (1) The pre-registered gate passes: at a 1 s clock, where P is empty all game and the floor governs every move, the structural bestmove floor and the wall held perfectly. (2) The inline gate printed "HAMMER FAILED" on a clean run — `grep -c` prints 0 AND exits 1, so `|| echo 0` made `non` the two-line string "0\n0" and `[ -eq ]` errored into the else branch; the naive `0000` probe also matched the `+0000` timezone 200×. Fixed as a standalone `gate_check.sh`, re-run → PASSED, appended as a correction. Same defect class as the label and ramp defects, and it does not get a pass for being ours. (3) **The finding: `P = max(0, 1 − 8.4) = 0` for the WHOLE game, so soft = 0 and the pool plays depth-1 moves at 0.001 s against the incumbent's 0.013 s — 13× shallower, 23.00% score, never flagging (0.9 s median end-clock) and never illegal. `A/4 = 0.15 s` was reachable and safe the entire time: when P = 0 and A > 0 the soft limit collapses to zero and the safety clamp becomes unreachable.** Landing shape now has an OPEN QUESTION (scope the default / floor soft against A / land-and-document); this lane is not deciding it alone. 30+1 deciding match launched meanwhile |
 | 2026-08-15 | **PRE-REGISTERED: the pool's single real-clock confirmation — (1) 30+1 NON-INFERIORITY, elo0=−10 elo1=0, cap raised to 1750; (2) a 1+0 ZERO-ILLEGAL hammer, 100 games, zero required — plus THE LANDING SHAPE, fixed before either starts** | After two H1s the temptation to decide the landing shape from the result is at its highest, so it is written first. The cap goes 400 → 1750 on a recorded lesson: the smooth ladder's match 2 was an underpowered non-inferiority, the same defect class as the two just ledgered (~7 h at conc 8, affordable for THE deciding match). The 1+0 hammer is not a formality for THIS manager — it ended 48 of 262 games under 2 s at 60+1 and at 1+0 the whole game lives where P is empty and the floor governs. **If both pass:** `pooltm` becomes the entry default at its measured +57 B (mod retires in place with a tombstone; `oldtm`/`steptm` go with it), the classic driver ships the pool with `legacy` kept as the control arm, and **#188 closes SUPERSEDED — not wrong**: its negative-cap mechanism is what the A/2 wall exists to prevent. **If the hammer fails on one illegal move or `(none)`, landing is blocked outright regardless of the Elo** |
 | 2026-08-15 | **ARM (b) VERDICT: the POOL manager is +136.58 ± 35.24 at 60+1 — H1 accepted in 262 games, 142W-44L-76D (68.70%), PairsRatio 5.71, 0 forfeits, 0 illegal** | The risk arm was not the risk: the regime where the pool budgets 2.4× LESS per routine move beat the shipped curve by more than the 60+0 arm did. **The spend shape INVERTS between the two TCs and that is the finding**: 0.79× the median move at 60+0 but **1.09× at 60+1**, with a LOWER p90 (3.311 vs 3.655 s) and a 1.8× higher max (10.151 vs 5.509 s). The pool is a REDISTRIBUTION, not a spend-less manager — it moves time off the body of ordinary moves onto the few that need 10 s — and both directions won ~130 Elo. The pre-registered "2.4× less routinely" claim was the BUDGET ratio and is corrected here. Blind moves 0 on both arms (nobody floors at an increment TC); the increment-aware starvation band has pool 44.1% vs smooth 50.6%. Against it: pool ended **48 games under 2 s** to the incumbent's 0, which is why the deciding match carries a 1+0 zero-illegal hammer |
 | 2026-08-15 | **ML2 SECOND LAYER PRICED (coordinator task, the 0.01286 phase-net's machinery): +98 B code isolated (3315 vs the round-2 3217 floor), BIT-EXACT against packed_layers' int bridge, and the extra big-int multiply costs ~+11% time/node same-tree** | At the 1024-B payload budget ml2 builds to **4339-4343 = ~245 OVER**; what FITS with ml2 code is a **781 B payload (feats 990 = total 4096 exactly; ~750 at the 30-B margin)**; u2 payload seam = 4 offset-4050 digit pairs (+8 digits, ~6 B); derivation landed as packed/make_ml2_proto.py + ml2_check.py (self-deriving, self-checking); nps tax ≈ 0.90× ≈ −15 Elo timed at 100/doubling — the number the −0.0009 val win must beat |
@@ -586,6 +587,107 @@ two branches off `origin/master`, `classic/tm-one-max-pool` and
 regime tables, the no-park recurrence, banked reserve in moves,
 monotonicity in both arguments, and the unit domain). **No PR is open** —
 per the owner ruling above, it opens carrying the surrogate's winner.
+
+## 2026-08-15 — DECIDING MATCH 2 (1+0 hammer): the GATE PASSES, and the match found a −209.9 ± 60.1 CLIFF the pre-registration did not anticipate
+
+Three separate things came out of a twelve-second match, and they must not be
+collapsed into one headline.
+
+### 1. The pre-registered gate: PASSED
+
+| check | result |
+|---|---|
+| illegal-move mentions (PGN + log) | **0** |
+| `(none)` answers | **0** |
+| `0000` null-move tokens | **0** |
+| non-normal terminations | **0** of 100 |
+| time forfeits | 0 (reported, not the gate) |
+
+100 games at a **1-second** clock (`[TimeControl "1"]`), the regime where `P` is
+empty for the entire game and the 0.05 s floor governs every move. The
+structural bestmove floor and the wall held perfectly: **the driver never
+answered anything it could not play.** That is what this match was pre-registered
+to test, and it is a pass.
+
+### 2. The instrument failed, and it is ours
+
+The inline gate in `run6_hammer_1p0.sh` printed **"\*\*\* HAMMER FAILED \*\*\*"**
+on a run with zero illegal moves. The bug:
+
+```sh
+non=$(grep -c "(none)" "$PGN" || echo 0)
+```
+
+`grep -c` **prints "0" AND exits 1** when there are no matches, so `|| echo 0`
+appended a second line, `non` became the two-line string `"0\n0"`, and
+`[ "$non" -eq 0 ]` errored straight into the else branch. The stray bare `0` in
+the output is the fingerprint. The `forfeit/time` probe was wrong too — its
+`time` pattern matched fastchess's own `Total Time:` line and reported "1
+forfeit mention" on a run with none.
+
+**An instrument that reports something other than what it measured is the exact
+defect class this ladder has been ledgering** (the arm label, the ramp, the
+underpowered non-inferiority), and it does not get a pass for being ours. Fixed
+as a standalone re-runnable `gate_check.sh` — no `|| echo` after `grep -c`, and
+`(none)`/`0000` matched as MOVE TOKENS rather than substrings (the naive `0000`
+probe matched the `+0000` timezone in `GameStartTime` 200 times). Re-run over
+the same PGN: **GATE PASSED**, appended to `m6/RESULT.txt` as a correction rather
+than a rewrite. `run6` now calls the fixed file.
+
+### 3. The finding: the pool is −209.9 ± 60.1 at a 1-second clock
+
+| | pool | smooth |
+|---|---|---|
+| result | **5W 59L 36D of 100, 23.00%** | — |
+| Elo | **−209.91 ± 60.11** (nElo −305.64), LOS 0.00% | — |
+| pentanomial | [19, 18, 11, 2, 0], PairsRatio 0.05 | — |
+| median move | **0.001 s** | 0.013 s |
+| starved moves | 99.8% | 98.8% |
+| end clock | 0.9 s median | 0.4 s |
+
+**Mechanism, and it is the formula, not a bug.** At a 1 s clock
+`P = max(0, T + (M−1)·I − (M+2)·O) = max(0, 1 − 8.4) = 0` **for the whole game**,
+so `soft = min(P/M, A/4) = 0` and the search stops at the first converged
+iteration — a depth-1 move in about a millisecond. The incumbent still searches
+13 ms. The pool plays the entire game 13x shallower and loses three quarters of
+the points, while never flagging (0.9 s median end-clock vs the incumbent's 0.4)
+and never answering illegally.
+
+The design is *right* that 8.4 s cannot contain 40 more moves at 200 ms of
+overhead each. It is *wrong* to conclude from that that a move is worth a
+millisecond: `A/4 = 0.15 s` was reachable and safe the whole time, and the
+`A` clamps never got the chance to act because `min()` with a zero pool is zero.
+**When `P = 0` and `A > 0`, the soft limit collapses to zero and the safety
+clamp becomes unreachable.** That is the one structural hole this ladder has
+found in the design.
+
+### What this does to the landing shape — an OPEN QUESTION, not a decision
+
+The pre-registration made **illegal moves** the hammer's gate and explicitly said
+forfeits and Elo were "read and reported but not the gate". By that rule, which
+was written before the match: **the hammer passes and the 30+1 deciding match
+proceeds** — and it has been launched.
+
+But the pre-registered landing shape says the pool becomes the *default* manager
+for the driver and the entry, and a measured −210 at 1-second TCs is not
+something to land silently under a rule that was written without knowing it.
+This lane is not deciding that alone. Recorded for the coordinator and Thomas,
+with the options as they stand:
+
+1. **Scope the default.** Ship the pool wherever `P > 0` at the root and keep the
+   incumbent below it. Honest, and it needs no new screen.
+2. **Fix the collapse** (preferred by this lane, *not* applied): floor the soft
+   limit against what is reachable rather than against zero — e.g.
+   `soft = min(max(P/M, A/20), A/4)`, which gives ~30 ms at a 1 s clock instead
+   of 1 ms and is unchanged wherever `P > A·M/20`, i.e. at every TC this ladder
+   measured. It is a design change, so it gets its own pre-registration and its
+   own 1+0 screen; it must not be slipped into a landing.
+3. **Land as measured and document the cliff.** Cheapest, and the least honest
+   of the three unless bullet is genuinely out of scope — which it is not: the
+   classic bot accepts 1+0 challenges on lichess today.
+
+Nothing is landed until that is answered. The 30+1 match runs meanwhile, because
+it is the evidence for the decision-TC claim either way.
 
 ## 2026-08-15 — PRE-REGISTRATION: the pool's single real-clock confirmation, and the LANDING SHAPE it decides
 
