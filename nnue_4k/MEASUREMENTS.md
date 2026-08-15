@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **FINDING #1 (read-only, before any replication game): WE ARE IN THE CONTENTION WORLD, NOT THE INTRINSIC ONE — the pool ladder's arms ran the PACKED ARTIFACTS DIRECTLY on the builtin clock loop (`exec bin/e_pool.packed`, no driver), and they have 651 lifetime clean games. Plus a calibration that BREAKS my own stated mechanism: the 2048-node poll gap is 27.4 ms, and the observed overruns were 100 ms** | Verified from the bench box's own wrappers and PGNs, not from memory: `w_pool.sh`/`w_smooth.sh` are `exec …/e_pool.packed`, so the clock path under test is the same builtin loop my voided run used. Counted directly: **m2 60+1 = 263 games, m5 30+1 = 288, m6 1+0 hammer = 100 — 651 games, 0 forfeits, 0 illegal, every termination `normal`** — at **concurrency 8, nice 10, `timemargin 0`, adjudication NONE**, i.e. the same instrument settings at *higher* concurrency than my 2/41. So the packed clock path does **not** have ~41 lifetime games; it has ~692, and the 651 clean ones are on a different venue. **This lowers the fix's urgency substantially.** **The calibration is the sharper result**: measured nps on this laptop is **74 869 (conc 1)** and **74 799 (conc 4)** — *no* degradation at concurrency 4 — so one 2048-node poll gap is **27.4 ms at BOTH**, and cannot explain a 100 ms overrun. My stage-2 entry named the poll gap as the mechanism; it is **necessary but NOT sufficient**, corrected here. Worse for the simple story: the entry's maximum possible hard limit at a 60 s clock is `min(5·soft, A/2)` = **11 325 ms**, and a forfeited game contains a **12 100 ms** move — **775 ms past its own hard deadline, 28× the poll gap**. Arms caveat: box arms are `e_pool.packed` 3365 B @ `522931a`, mine is the landed entry 3405 B @ `5af840d` — same pool formula, different build. Venue differs in OS/arch, pypy build, nice level AND concurrency; replications A/B separate **concurrency only** |
 | 2026-08-15 | **STAGE 2 VOID by its OWN registered zero-forfeit tripwire at 41 games — and the reason is a REAL DEFECT IN THE SHIPPED ARTIFACT: the packed entry overruns a real clock by ~100 ms because its 5% polling holdback is applied ONLY on the `movetime` path, never on the wtime/winc path** | 2 time forfeits, **both the entry**, both games of round 20, overruns **100 ms and 101 ms**; 0 illegal, 39/41 normal. **No Elo is reported** — the tripwire I registered fired, and quoting a number from a run my own registration voided would be moving the bar after seeing it. **Mechanism confirmed in the artifact's source, not inferred**: `think = times.get("movetime", think)/1000` then `if "movetime" in times: think -= max(think*.05, .03)` — the holdback whose comment says it was "measured the hard way: 425 local fixed-node games, every single one a forfeit" **guards only the movetime branch**, while the clock branch's hard limit `min(5*soft, A/2)` gets none, and `searcher.deadline` is polled every 2048 nodes, so the search returns at `think + epsilon`. Classic's builtin loop keeps 20% slack via its `think * 0.8` soft break and did not forfeit once. **Invisible until now because every previous timed match ran SOURCES through `sunfish_ui`, which does its own deadline handling — this was the first timed match on the packed artifact.** Honest limit: 2 events cannot separate artifact overrun from concurrency-4 contention, so the MECHANISM is established and the RATE is not. Follow-ups registered, none run: concurrency-1 replication, a `timemargin` sweep to get the overrun distribution, and the source fix (holdback on the clock path) which is a build change needing its own screen. **Stage 1 is unaffected** — fixed nodes reads no clock |
 | 2026-08-15 | **+400 PROGRESS METER, STAGE 1: the 4k entry and sunfish-classic are INDISTINGUISHABLE at fixed nodes — −1.74 ± 27.93 over a fixed 400 games. Corrected for the registered 1.53× node asymmetry the entry's per-node edge is ≈ +60, which means its historical timed advantage is SPEED AND TIME MANAGEMENT, not per-node quality** | Fixed N=400 (no SPRT), nodes 20000, srand 20260816, book3k order=random, concurrency 4, 29 m 48 s. **158 W / 160 L / 82 D = 49.75%**, nElo −2.12 ± 34.05, LOS 45.14%, ptnml **[26, 31, 88, 29, 26]** over **200 complete pairs**, PairsRatio 0.96, DrawRatio 44.00%. **0 illegal, 0 time forfeits, 400/400 terminations** (279 adjudication, 121 normal — adjudication was ACTIVE and symmetric as registered, both arms emit `score cp`). Independent round-paired recompute reproduces fastchess to the digit. Arms verified by sha256: entry source `e27f9dff…` **==** `git show 5af840d:nnue_4k/pst_entry.py`, classic `329ae372…` **==** `git show 573d692:sunfish.py`; **entry.packed 3405 B hashes `5a207fdf9cf05f2e…`, bit-identical to the artifact the pooltm landing recorded**; classic packs to 3246 B. Driver pinned `DRIVER_VERSION 3` on both arms. **Progress toward +400: this is ~0 of 400, and the bias-corrected ≈ +60 is ~15% of it.** Context that must travel with the number: the **+187.0 ± 49.7** goal-line figure was the **256kb8@100M NNUE testbed engine, NOT the 4k entry** — the entry's own last number was `entry_kf` **+107.54 ± 31.64 at 10+0.1** (2026-08-13). Fixed nodes removes speed and TM from the comparison, which is exactly why it reads lower, and classic has since absorbed **#196 (min40-4, +147 [+86,+219])** — though that is a TM change and cannot have moved a fixed-node result |
 | 2026-08-15 | **AMENDMENT to the stage-2 registration, made BEFORE game 1: adjudication is REMOVED, because on packed arms it would be ASYMMETRIC — `entry.packed` emits 0 info lines and `classic.packed` emits 17, so `-resign score=500` could fire for classic ONLY** | Measured, not assumed: the entry's info output sits inside `# minifier-hide` and `pack.sh` strips it; classic's does not. A one-sided resign rule adjudicates losses for exactly one arm, which is a biased instrument, so stage 2 runs with `-resign`/`-draw` OFF and every game ends naturally. Two further packed-arm facts confirmed by direct test, both reproducing the **2026-08-13** harness findings rather than discovering them: (1) the builtin UCI loop **silently ignores `position fen`** — both artifacts answer `g1f3` to a black-to-move FEN — so stage 2 must use a **PGN book from the standard start** (`book3k`), never an EPD/FEN book, verified by a 4-game smoke where fastchess replayed the book as `position startpos moves …` with **0 illegal**; (2) `legality_gate.py` cannot gate a packed artifact at all (it drives FENs), so the substitute gate is a **20-game arbiter-verified smoke** at 2+0.05 on the same book, zero illegal required, plus the full-match tripwire. Stage 2 srand **20260817** |
@@ -526,6 +527,127 @@ written into `scratchpad/laptop-screen.lock`.
 
 **UPDATE, same day: stage 2 was VOIDED at 41 games by rule 3's sibling —
 its own registered zero-forfeit tripwire. See the entry below.**
+
+---
+
+## 2026-08-15 — FORFEIT REPLICATION: finding #1 answered read-only, the poll-gap arithmetic measured, and A/B registered before game 1
+
+Coordinator resume order. Everything below the first two sections is
+**registered before a single replication game is played**.
+
+### FINDING #1 — which world are we in? THE CONTENTION WORLD.
+
+The question was whether the pool ladder's packed arms ran the builtin
+clock loop or a driver. **They ran the artifacts directly.** From the
+bench box's own wrappers:
+
+```
+w_pool.sh   ->  exec "$(dirname "$0")/bin/e_pool.packed"
+w_smooth.sh ->  exec "$(dirname "$0")/bin/e_smooth.packed"
+```
+
+No `sunfish_ui`, no `.py`. The clock path under test there is exactly the
+builtin loop my voided run used. Counted from the box PGNs directly, not
+from the ledger's prose:
+
+| match | TC | games | illegal | forfeits | terminations |
+|---|---|---|---|---|---|
+| m2 | **60+1** | 263 | 0 | **0** | 263 normal |
+| m5 | **30+1** | 288 | 0 | **0** | 288 normal |
+| m6 | **1+0 hammer** | 100 | 0 | **0** | 100 normal |
+| **total** | | **651** | **0** | **0** | |
+
+…all at **concurrency 8, nice 10, `timemargin 0`, adjudication NONE** —
+the same instrument settings as my run, at *higher* concurrency, including
+the most clock-stressed regime this project runs (1+0).
+
+**So the packed clock path does not have ~41 lifetime games; it has ~692,
+and 651 of them are clean on another venue.** The defect is far more
+likely venue-conditioned than intrinsic, and **the fix's urgency drops
+accordingly** — which is exactly why this was checked before any code was
+touched.
+
+**Arm caveat, stated so it is not lost:** the box arms are
+`e_pool.packed` **3365 B** built at `522931a`; mine is the landed entry
+**3405 B** at `5af840d`. Same pool-TM formula, different build. The two
+venues also differ in OS/arch, pypy build (7.3.20 vs 7.3.23) and nice
+level (10 vs 5), so **replications A/B separate concurrency and nothing
+else.**
+
+### The poll-gap arithmetic, MEASURED — and it refutes my own stated mechanism
+
+The stage-2 void entry named the 2048-node poll granularity as the reason
+the search returns late. Measured on this laptop (source build through the
+driver, `go nodes 200000`; the artifact emits no `info` so nps is
+transferred, not observed — pack.sh changes no arithmetic):
+
+| concurrency | nps | one 2048-node poll gap |
+|---|---|---|
+| 1 | **74 869** | **27.4 ms** |
+| 4 | **74 799** | **27.4 ms** |
+
+Two things fall out, both against the simple story:
+
+1. **nps does not degrade at concurrency 4 at all** (74.8k vs 74.9k), so
+   "contention" on this laptop is not showing up as lost throughput.
+2. **27.4 ms cannot explain a 100 ms overrun.** The poll gap is
+   **necessary but not sufficient**; my stage-2 entry over-attributed and
+   is corrected here.
+
+And the voided PGNs contain something the poll gap explains even less. At
+a 60 s clock with 1 s increment the entry's own maximum hard limit is
+
+```
+P = 60000 + 39*1000 - 42*200 = 90600 ;  A = 59600
+soft = min(P/40, A/4) = 2265 ms ;  think = min(5*soft, A/2) = 11325 ms
+```
+
+and a forfeited game contains a **12 100 ms** move — **775 ms past the
+engine's own hard deadline, 28× the poll gap.** Whatever delays the
+return, it is not polling granularity alone. Candidates not separated by
+this evidence: a long single iteration, a pypy JIT/GC pause, or macOS
+scheduling a `nice`-d process onto an efficiency core.
+
+### Registered: Replication A and Replication B
+
+**Forfeits are the MEASUREMENT, not a gate.** Both arms record them and
+neither stops for them. **Only an illegal move stops a match** — that
+tripwire is unchanged and separate.
+
+| | **Replication A** | **Replication B** |
+|---|---|---|
+| question | does the forfeit reproduce at matched conditions, and at what rate? | does the rate collapse when contention is removed? |
+| concurrency | **4** (matches the void) | **1** |
+| N (fixed) | **100** | **60** |
+| TC | 60+1 | 60+1 |
+| arms | `entry.packed` 3405 B vs `classic.packed` 3246 B | same |
+| adjudication | **none** | none |
+| timemargin | **0** (matches both the void and the box) | 0 |
+| srand | **20260818** | **20260819** |
+| nice | 5 (matches the void) | 5 |
+| book | `book3k.pgn` order=random | same |
+| instrumentation | `-pgnout timeleft=true` — per-move clock left, so overrun is computed from the arbiter's own clock rather than reconstructed | same |
+| est. wall clock | ~85 min | ~2.6 h |
+
+**Why N=60 and not 30 for B:** power. The void rate is 2/41 ≈ 4.9%. At
+N=60, observing **zero** forfeits under that rate has p = 0.95^60 ≈
+**0.046** — a real result. At N=30 it is p ≈ 0.21, which would decide
+nothing and would waste the run. If B must be cut short, see the stop rule.
+
+**Stop rule, pre-committed:** an early stop is permitted for **wall clock
+or contention only, never because of the forfeit count**, and the
+harvester must state which. A forfeit *rate* read at a wall-clock-driven
+stop is unbiased; one read at a forfeit-driven stop is not.
+
+**The instrumentation upgrade over the voided run** is `timeleft=true`:
+the void run had per-move times but no clock state, so its overruns had to
+be reconstructed. A and B record the arbiter's remaining clock at every
+move, which makes overrun = (move time) − (clock left) a direct
+observable.
+
+**Not run, and deliberately so:** the `timemargin` sweep and the holdback
+fix stay **registered-not-run** until the rate and venue answers land. No
+engine source is touched by this work.
 
 ---
 
