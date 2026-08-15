@@ -1,7 +1,7 @@
 {
   "parameters": [
     {"name": "QS", "type": "integer", "default": 40,
-     "min": 20, "max": 100, "step": 10, "scale": 30},
+     "min": 0, "max": 100, "step": 10, "scale": 30},
     {"name": "QS_A", "type": "integer", "default": 140,
      "min": 80, "max": 220, "step": 20, "scale": 40},
     {"name": "EVAL_ROUGHNESS", "type": "discrete", "default": 15,
@@ -31,13 +31,13 @@
     {"name": "VALUE_N", "type": "discrete", "default": 280,
      "values": [270, 280, 290], "scale": 20},
     {"name": "VALUE_B", "type": "discrete", "default": 320,
-     "values": [310, 320, 330], "scale": 20},
+     "values": [290, 300, 310, 320, 330], "scale": 20},
     {"name": "VALUE_R", "type": "discrete", "default": 479,
      "values": [460, 470, 479, 480, 490], "scale": 20},
     {"name": "VALUE_Q", "type": "discrete", "default": 929,
      "values": [925, 929, 950, 975], "scale": 35},
     {"name": "PST_P", "type": "integer", "default": 100,
-     "min": 50, "max": 110, "step": 10, "scale": 30},
+     "min": 50, "max": 130, "step": 10, "scale": 30},
     {"name": "PST_N", "type": "integer", "default": 100,
      "min": 50, "max": 110, "step": 10, "scale": 30},
     {"name": "PST_B", "type": "integer", "default": 100,
@@ -47,9 +47,9 @@
     {"name": "PST_Q", "type": "integer", "default": 100,
      "min": 50, "max": 110, "step": 10, "scale": 30},
     {"name": "PST_K", "type": "integer", "default": 100,
-     "min": 50, "max": 110, "step": 10, "scale": 35},
+     "min": 50, "max": 120, "step": 10, "scale": 35},
     {"name": "PST_KE", "type": "integer", "default": 100,
-     "min": 50, "max": 110, "step": 10, "scale": 35}
+     "min": 30, "max": 110, "step": 10, "scale": 35}
   ],
   "max_candidates": 2048,
   "local_interactions": 512,
