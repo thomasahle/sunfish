@@ -55,7 +55,8 @@ The proof is generic in `C`; it does not depend on chess or mate constants.
 The production guard is:
 
 ```python
-not root and 2 < depth < 6 and any(c in pos.board for c in "RBNQ")
+(not root and 2 < depth < 6 and abs(pos.score) < 500
+    and any(c in pos.board for c in "RBNQ"))
 ```
 
 The pass is a score candidate only below depth 6. From depth 6 on it is a
@@ -78,8 +79,9 @@ min(C(pos), P) <= best legal real-move value
 ```
 
 It concerns the quality of the null approximation, not the fail-soft report
-transport. The non-pawn-piece guard excludes pawn-only zugzwangs. It is
-confined to `depth < 6`; above that the fuel oracle removes it.
+transport. The score guard avoids applying either null mechanism in
+statically unbalanced positions, while the non-pawn-piece guard excludes
+pawn-only zugzwangs.
 
 ## The deep-null fuel oracle
 
@@ -88,7 +90,8 @@ shapes only how much depth the real moves spend:
 
 ```python
 d = depth
-guard = depth >= 6 and any(c in pos.board for c in "RBNQ")
+guard = (depth >= 6 and abs(pos.score) < 500
+    and any(c in pos.board for c in "RBNQ"))
 if guard:
     nullpos = pos.rotate(nullmove=True)
     target = pos.score + NULL_MARGIN
