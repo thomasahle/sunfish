@@ -29,7 +29,7 @@ units of depth (C = 2 shipped).  Consequences proven here:
     bit is `(pos, depth)`-determined REGARDLESS of table state -- the
     probe only ever selects between two structurally recursive folds.
   * `fuelValueD2`: the declared value, general in the edge-cost
-    selector (`spend : Pos → Nat → Nat`, clamped so each edge costs
+    selector (`spend : Pos → Nat → Pos → Nat`, clamped so each edge costs
     `1 .. C`) -- Thomas's statement is heuristic-independent, so the
     theorem quantifies over ALL selectors and instantiates H = 6,
     C = 2 (`hotSpend`, `hotSpend_child_depth` pins the code shape).
@@ -127,7 +127,7 @@ theorem hot_bit_stable {target r1 r2 v : Int}
 `nullValueD2` (the capped pass as a score candidate, sub-band admitted
 and in-band suppressed).  From depth 6 on, a fold over REAL MOVES ONLY
 -- initial accumulator `LOSS`, no pass term -- where each edge consumes
-`1 + min (C-1) (spend p depth)` plies: between 1 and `C`, for ANY
+`1 + min (C-1) (spend p depth child)` plies: between 1 and `C`, for ANY
 selector `spend` (the clamp bakes Thomas's "between 1 and C units"
 into the definition, so the theorems are heuristic-independent).
 Admission stays keyed by NOMINAL depth (`val_lower (d+1)`), matching
@@ -137,7 +137,7 @@ unchanged at every depth.  `(pos, depth)`-determined and window-free
 (`hot_bit_determined` is what lets the code compute `spend` with a
 probe). -/
 def fuelValueD2 (G : QSGame) (guard : G.Pos → Bool) (C : Nat)
-    (spend : G.Pos → Nat → Nat) : Nat → G.Pos → Int
+    (spend : G.Pos → Nat → G.Pos → Nat) : Nat → G.Pos → Int
   | 0, p =>
     if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
     else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
@@ -150,12 +150,13 @@ def fuelValueD2 (G : QSGame) (guard : G.Pos → Bool) (C : Nat)
       foldMax (fun m => -(fuelValueD2 G guard C spend d m))
         (movesAbove G (val_lower (d + 1)) p)
         (if guard p = true ∧ 2 < d + 1 then
-          (if -(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
-            max LOSS (-(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)))
+          (if -(fuelValueD2 G guard C spend (d + 1 - 7) (G.pass p)) < MATE_LOWER then
+            max LOSS (-(fuelValueD2 G guard C spend (d + 1 - 7) (G.pass p)))
           else LOSS)
         else LOSS)
     else
-      foldMax (fun m => -(fuelValueD2 G guard C spend (d - min (C - 1) (spend p (d + 1))) m))
+      foldMax (fun m => -(fuelValueD2 G guard C spend
+          (d - min (C - 1) (spend p (d + 1) m)) m))
         (movesAbove G (val_lower (d + 1)) p) LOSS
 termination_by d _ => d
 decreasing_by all_goals omega
@@ -169,7 +170,7 @@ theorem fuel_edge_cost (C : Nat) (hC : 1 ≤ C) (s d : Nat) :
 /-! ### Branch lemmas -/
 
 theorem fuelValueD2_kingGone (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (d : Nat) (p : G.Pos) (h : G.eval p ≤ -MATE_LOWER) :
     fuelValueD2 G guard C spend d p = -MATE_UPPER := by
   cases d with
@@ -177,7 +178,7 @@ theorem fuelValueD2_kingGone (G : QSGame) (guard : G.Pos → Bool)
   | succ d => simp only [fuelValueD2]; rw [if_pos h]
 
 theorem fuelValueD2_of_capture (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (d : Nat) (p : G.Pos) (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : hasKingCapture G.toNullGame.toGame p = true) :
     fuelValueD2 G guard C spend d p = MATE_UPPER := by
@@ -186,7 +187,7 @@ theorem fuelValueD2_of_capture (G : QSGame) (guard : G.Pos → Bool)
   | succ d => simp only [fuelValueD2]; rw [if_neg hkg, if_pos hcap]
 
 theorem fuelValueD2_of_allIllegal (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (d : Nat) (p : G.Pos)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
@@ -195,24 +196,25 @@ theorem fuelValueD2_of_allIllegal (G : QSGame) (guard : G.Pos → Bool)
   simp only [fuelValueD2]
   rw [if_neg hkg, if_neg hcap, if_pos hai]
 
-/-- The regime fold: at `d + 1 ≥ 6`, real moves only, `LOSS` init. -/
+/-- The regime fold: at `d + 1 ≥ 8`, real moves only, `LOSS` init. -/
 theorem fuelValueD2_of_fold_regime (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (d : Nat) (p : G.Pos)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
     (hai : allIllegalB G p = false)
     (hd : 5 ≤ d) :
     fuelValueD2 G guard C spend (d + 1) p
-      = foldMax (fun m => -(fuelValueD2 G guard C spend (d - min (C - 1) (spend p (d + 1))) m))
+      = foldMax (fun m => -(fuelValueD2 G guard C spend
+          (d - min (C - 1) (spend p (d + 1) m)) m))
           (movesAbove G (val_lower (d + 1)) p) LOSS := by
   simp only [fuelValueD2]
   rw [if_neg hkg, if_neg hcap, if_neg (by simp [hai]), if_neg (by omega)]
 
 /-- The sub-horizon fold: below depth 6, the shipped capped-null shape,
-verbatim (children at `d`, the pass at `d + 1 - 3`). -/
+verbatim (children at `d`, the pass at `d + 1 - 7`). -/
 theorem fuelValueD2_of_fold_sub (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (d : Nat) (p : G.Pos)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
@@ -222,8 +224,8 @@ theorem fuelValueD2_of_fold_sub (G : QSGame) (guard : G.Pos → Bool)
       = foldMax (fun m => -(fuelValueD2 G guard C spend d m))
           (movesAbove G (val_lower (d + 1)) p)
           (if guard p = true ∧ 2 < d + 1 then
-            (if -(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
-              max LOSS (-(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)))
+            (if -(fuelValueD2 G guard C spend (d + 1 - 7) (G.pass p)) < MATE_LOWER then
+              max LOSS (-(fuelValueD2 G guard C spend (d + 1 - 7) (G.pass p)))
             else LOSS)
           else LOSS) := by
   simp only [fuelValueD2]
@@ -233,7 +235,7 @@ theorem fuelValueD2_of_fold_sub (G : QSGame) (guard : G.Pos → Bool)
 positive depth (regime-independent: the terminal branch precedes the
 regime split). -/
 theorem fuelValueD2_checkmated (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) {m : G.Pos}
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) {m : G.Pos}
     (hcap : hasKingCapture G.toNullGame.toGame m = false)
     (hmate : Checkmated G m) :
     ∀ d : Nat, 1 ≤ d → fuelValueD2 G guard C spend d m ≤ -MATE_LOWER := by
@@ -259,7 +261,7 @@ every interior proof node sits at depth `≥ 6` (the real-only regime,
 depth `≥ 4` (the finalizer's exact `-MATE_LOWER`).  `NoZugzwang` and
 mate-band agreement appear nowhere. -/
 theorem forcedMate_fuelValueD2 (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) (hC : 2 ≤ C)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
     (hF : ValFloor G 192)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, C * k + 4 ≤ D → MATE_LOWER ≤ fuelValueD2 G guard C spend D p := by
@@ -276,15 +278,15 @@ theorem forcedMate_fuelValueD2 (G : QSGame) (guard : G.Pos → Bool)
       by_cases hcap : hasKingCapture G.toNullGame.toGame p = true
       · rw [fuelValueD2_of_capture G guard C spend (d + 1) p hkg hcap]; omega
       · have hai : allIllegalB G p = false := allIllegalB_false_of_legal hm hleg
-        have hmin := Nat.min_le_left (C - 1) (spend p (d + 1))
         rw [fuelValueD2_of_fold_regime G guard C spend d p hkg hcap hai (by omega)]
         have hmem := mem_movesAbove_of_floor G hF (d := d + 1) (by omega) hm
         have hchild : fuelValueD2 G guard C spend
-            (d - min (C - 1) (spend p (d + 1))) m ≤ -MATE_LOWER :=
+            (d - min (C - 1) (spend p (d + 1) m)) m ≤ -MATE_LOWER :=
           fuelValueD2_checkmated G guard C spend hleg hmate _ (by omega)
-        have hfold : -(fuelValueD2 G guard C spend (d - min (C - 1) (spend p (d + 1))) m)
+        have hfold : -(fuelValueD2 G guard C spend
+              (d - min (C - 1) (spend p (d + 1) m)) m)
             ≤ foldMax (fun x => -(fuelValueD2 G guard C spend
-                  (d - min (C - 1) (spend p (d + 1))) x))
+                  (d - min (C - 1) (spend p (d + 1) x)) x))
                 (movesAbove G (val_lower (d + 1)) p) LOSS :=
           foldMax_le_of_mem _ _ _ _ hmem
         omega
@@ -297,13 +299,13 @@ theorem forcedMate_fuelValueD2 (G : QSGame) (guard : G.Pos → Bool)
       by_cases hcap : hasKingCapture G.toNullGame.toGame p = true
       · rw [fuelValueD2_of_capture G guard C spend (d + 1) p hkg hcap]; omega
       · have hai : allIllegalB G p = false := allIllegalB_false_of_legal hm hleg
-        have hmin := Nat.min_le_left (C - 1) (spend p (d + 1))
+        have hmin := Nat.min_le_left (C - 1) (spend p (d + 1) m)
         rw [fuelValueD2_of_fold_regime G guard C spend d p hkg hcap hai (by omega)]
         have hmem := mem_movesAbove_of_floor G hF (d := d + 1) (by omega) hm
         have hchild : fuelValueD2 G guard C spend
-            (d - min (C - 1) (spend p (d + 1))) m ≤ -MATE_LOWER := by
-          obtain ⟨dm, hdm⟩ : ∃ x, d - min (C - 1) (spend p (d + 1)) = x + 1 :=
-            ⟨d - min (C - 1) (spend p (d + 1)) - 1, by omega⟩
+            (d - min (C - 1) (spend p (d + 1) m)) m ≤ -MATE_LOWER := by
+          obtain ⟨dm, hdm⟩ : ∃ x, d - min (C - 1) (spend p (d + 1) m) = x + 1 :=
+            ⟨d - min (C - 1) (spend p (d + 1) m) - 1, by omega⟩
           rw [hdm]
           by_cases hkgm : G.eval m ≤ -MATE_LOWER
           · rw [fuelValueD2_kingGone G guard C spend (dm + 1) m hkgm]; omega
@@ -311,7 +313,7 @@ theorem forcedMate_fuelValueD2 (G : QSGame) (guard : G.Pos → Bool)
               (by simp [hleg]) hnt (by omega)]
             refine foldMax_le _ _ _ (fun m' hm' => ?_) (by omega)
             show -(fuelValueD2 G guard C spend
-              (dm - min (C - 1) (spend m (dm + 1))) m') ≤ -MATE_LOWER
+              (dm - min (C - 1) (spend m (dm + 1) m')) m') ≤ -MATE_LOWER
             have hm'' : m' ∈ G.moves m :=
               movesAbove_subset G _ m m' hm'
             have hkgm' : ¬ (G.eval m' ≤ -MATE_LOWER) := by
@@ -324,11 +326,13 @@ theorem forcedMate_fuelValueD2 (G : QSGame) (guard : G.Pos → Bool)
             | true =>
               rw [fuelValueD2_of_capture G guard C spend _ m' hkgm' hcm]; omega
             | false =>
-              have := ih m' hm'' hcm (dm - min (C - 1) (spend m (dm + 1))) (by omega)
+              have := ih m' hm'' hcm
+                (dm - min (C - 1) (spend m (dm + 1) m')) (by omega)
               omega
-        have hfold : -(fuelValueD2 G guard C spend (d - min (C - 1) (spend p (d + 1))) m)
+        have hfold : -(fuelValueD2 G guard C spend
+              (d - min (C - 1) (spend p (d + 1) m)) m)
             ≤ foldMax (fun x => -(fuelValueD2 G guard C spend
-                  (d - min (C - 1) (spend p (d + 1))) x))
+                  (d - min (C - 1) (spend p (d + 1) x)) x))
                 (movesAbove G (val_lower (d + 1)) p) LOSS :=
           foldMax_le_of_mem _ _ _ _ hmem
         omega
@@ -337,7 +341,7 @@ theorem forcedMate_fuelValueD2 (G : QSGame) (guard : G.Pos → Bool)
 `-MATE_LOWER` at every `D ≥ C·k + C + 4` (the top node is a defender
 node, so its own fold must be regime-seeded too). -/
 theorem forcedlyMated_fuelValueD2 (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) (hC : 2 ≤ C)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
     (hF : ValFloor G 192)
     {k : Nat} {q : G.Pos}
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
@@ -363,7 +367,8 @@ theorem forcedlyMated_fuelValueD2 (G : QSGame) (guard : G.Pos → Bool)
         obtain ⟨hai, hall⟩ := h
         rw [fuelValueD2_of_fold_regime G guard C spend d q hkg hcapq' hai (by omega)]
         refine foldMax_le _ _ _ (fun m hm => ?_) (by omega)
-        show -(fuelValueD2 G guard C spend (d - min (C - 1) (spend q (d + 1))) m)
+        show -(fuelValueD2 G guard C spend
+            (d - min (C - 1) (spend q (d + 1) m)) m)
           ≤ -MATE_LOWER
         have hm' : m ∈ G.moves q := movesAbove_subset G _ q m hm
         cases hcm : hasKingCapture G.toNullGame.toGame m with
@@ -377,14 +382,14 @@ theorem forcedlyMated_fuelValueD2 (G : QSGame) (guard : G.Pos → Bool)
           rw [fuelValueD2_of_capture G guard C spend _ m hkgm hcm]; omega
         | false =>
           have := forcedMate_fuelValueD2 G guard C spend hC hF
-            (hall m hm' hcm) (d - min (C - 1) (spend q (d + 1))) (by omega)
+            (hall m hm' hcm) (d - min (C - 1) (spend q (d + 1) m)) (by omega)
           omega
 
 /-- **The contract's payoff sentence**: every finite forced-mate proof
 is eventually recognized -- a depth bound exists for every `k` -- with
 no assumption on the edge-cost selector and no chess premise. -/
 theorem finite_mates_eventually_recognized (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) (hC : 2 ≤ C)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
     (hF : ValFloor G 192) :
     ∀ k : Nat, ∃ Dk : Nat, ∀ p : G.Pos, ForcedMate G k p →
       ∀ D : Nat, Dk ≤ D → MATE_LOWER ≤ fuelValueD2 G guard C spend D p :=
@@ -394,14 +399,14 @@ theorem finite_mates_eventually_recognized (G : QSGame) (guard : G.Pos → Bool)
 /-! ## The shipped instantiation: H = 6, C = 2 -/
 
 /-- The code's selector: the probe's hot bit spends the one extra ply. -/
-def hotSpend (G : QSGame) (hot : G.Pos → Nat → Bool) : G.Pos → Nat → Nat :=
-  fun p d => if hot p d then 1 else 0
+def hotSpend (G : QSGame) (hot : G.Pos → Nat → Bool) : G.Pos → Nat → G.Pos → Nat :=
+  fun p d _ => if hot p d then 1 else 0
 
 /-- With `C = 2` the clamped edge cost is exactly the code's
 `depth - (2 if hot else 1)` recursion. -/
 theorem hotSpend_child_depth (G : QSGame) (hot : G.Pos → Nat → Bool)
-    (p : G.Pos) (d : Nat) :
-    d - min (2 - 1) (hotSpend G hot p (d + 1))
+    (p m : G.Pos) (d : Nat) :
+    d - min (2 - 1) (hotSpend G hot p (d + 1) m)
       = d - (if hot p (d + 1) then 1 else 0) := by
   cases h : hot p (d + 1) <;> simp [hotSpend, h]
 
@@ -1019,7 +1024,7 @@ the fold is over real moves only, at the fuel-reduced child depth.
 Admission and the trigger read the NOMINAL depth; only the recursion is
 shortened.  `(pos, depth)`-determined and window-free. -/
 def fuelValueD2t (G : QSGame) (guard : G.Pos → Bool) (C : Nat)
-    (spend : G.Pos → Nat → Nat) : Nat → G.Pos → Int
+    (spend : G.Pos → Nat → G.Pos → Nat) : Nat → G.Pos → Int
   | 0, p =>
     if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
     else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
@@ -1031,29 +1036,30 @@ def fuelValueD2t (G : QSGame) (guard : G.Pos → Bool) (C : Nat)
     else if d + 1 < 6 then
       foldMax (fun m => -(fuelValueD2t G guard C spend d m)) (tailList G (d + 1) p)
         (if guard p = true ∧ 2 < d + 1 then
-          (if -(fuelValueD2t G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
-            max LOSS (-(fuelValueD2t G guard C spend (d + 1 - 3) (G.pass p)))
+          (if -(fuelValueD2t G guard C spend (d + 1 - 7) (G.pass p)) < MATE_LOWER then
+            max LOSS (-(fuelValueD2t G guard C spend (d + 1 - 7) (G.pass p)))
           else LOSS)
         else LOSS)
     else
-      foldMax (fun m => -(fuelValueD2t G guard C spend (d - min (C - 1) (spend p (d + 1))) m))
+      foldMax (fun m => -(fuelValueD2t G guard C spend
+          (d - min (C - 1) (spend p (d + 1) m)) m))
         (tailList G (d + 1) p) LOSS
 termination_by d _ => d
 decreasing_by all_goals omega
 
 /-- The sub-horizon pass term, named. -/
 def fuelTermD2t (G : QSGame) (guard : G.Pos → Bool) (C : Nat)
-    (spend : G.Pos → Nat → Nat) (d : Nat) (p : G.Pos) : Int :=
+    (spend : G.Pos → Nat → G.Pos → Nat) (d : Nat) (p : G.Pos) : Int :=
   if guard p = true ∧ 2 < d + 1 then
-    (if -(fuelValueD2t G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
-      max LOSS (-(fuelValueD2t G guard C spend (d + 1 - 3) (G.pass p)))
+    (if -(fuelValueD2t G guard C spend (d + 1 - 7) (G.pass p)) < MATE_LOWER then
+      max LOSS (-(fuelValueD2t G guard C spend (d + 1 - 7) (G.pass p)))
     else LOSS)
   else LOSS
 
 /-! ### Branch lemmas -/
 
 theorem fuelValueD2t_kingGone (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (d : Nat) (p : G.Pos) (h : G.eval p ≤ -MATE_LOWER) :
     fuelValueD2t G guard C spend d p = -MATE_UPPER := by
   cases d with
@@ -1061,7 +1067,7 @@ theorem fuelValueD2t_kingGone (G : QSGame) (guard : G.Pos → Bool)
   | succ d => simp only [fuelValueD2t]; rw [if_pos h]
 
 theorem fuelValueD2t_of_capture (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (d : Nat) (p : G.Pos) (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : hasKingCapture G.toNullGame.toGame p = true) :
     fuelValueD2t G guard C spend d p = MATE_UPPER := by
@@ -1070,7 +1076,7 @@ theorem fuelValueD2t_of_capture (G : QSGame) (guard : G.Pos → Bool)
   | succ d => simp only [fuelValueD2t]; rw [if_neg hkg, if_pos hcap]
 
 theorem fuelValueD2t_of_allIllegal (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (d : Nat) (p : G.Pos)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
@@ -1080,7 +1086,7 @@ theorem fuelValueD2t_of_allIllegal (G : QSGame) (guard : G.Pos → Bool)
   rw [if_neg hkg, if_neg hcap, if_pos hai]
 
 theorem fuelValueD2t_zero_eq_eval (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) (p : G.Pos)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (p : G.Pos)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true)) :
     fuelValueD2t G guard C spend 0 p = G.eval p := by
@@ -1088,7 +1094,7 @@ theorem fuelValueD2t_zero_eq_eval (G : QSGame) (guard : G.Pos → Bool)
   rw [if_neg hkg, if_neg hcap]
 
 theorem fuelValueD2t_of_fold_regime (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (d : Nat) (p : G.Pos)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
@@ -1096,13 +1102,13 @@ theorem fuelValueD2t_of_fold_regime (G : QSGame) (guard : G.Pos → Bool)
     (hd : 5 ≤ d) :
     fuelValueD2t G guard C spend (d + 1) p
       = foldMax (fun m => -(fuelValueD2t G guard C spend
-            (d - min (C - 1) (spend p (d + 1))) m))
+            (d - min (C - 1) (spend p (d + 1) m)) m))
           (tailList G (d + 1) p) LOSS := by
   simp only [fuelValueD2t]
   rw [if_neg hkg, if_neg hcap, if_neg (by simp [hai]), if_neg (by omega)]
 
 theorem fuelValueD2t_of_fold_sub (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (d : Nat) (p : G.Pos)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
@@ -1116,12 +1122,12 @@ theorem fuelValueD2t_of_fold_sub (G : QSGame) (guard : G.Pos → Bool)
   rfl
 
 theorem fuelTermD2t_ge_LOSS (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) (d : Nat) (p : G.Pos) :
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (d : Nat) (p : G.Pos) :
     LOSS ≤ fuelTermD2t G guard C spend d p := by
   simp only [fuelTermD2t]
   by_cases h1 : guard p = true ∧ 2 < d + 1
   · rw [if_pos h1]
-    by_cases h2 : -(fuelValueD2t G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER
+    by_cases h2 : -(fuelValueD2t G guard C spend (d + 1 - 7) (G.pass p)) < MATE_LOWER
     · rw [if_pos h2]; omega
     · rw [if_neg h2]; omega
   · rw [if_neg h1]; omega
@@ -1130,7 +1136,7 @@ theorem fuelTermD2t_ge_LOSS (G : QSGame) (guard : G.Pos → Bool)
 term can never reach the mate band, so a band-value fold always names a
 REAL move (in the regime the initial accumulator is `LOSS` outright). -/
 theorem fuelTermD2t_lt_ML (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) (d : Nat) (p : G.Pos) :
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (d : Nat) (p : G.Pos) :
     fuelTermD2t G guard C spend d p < MATE_LOWER := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
@@ -1138,14 +1144,14 @@ theorem fuelTermD2t_lt_ML (G : QSGame) (guard : G.Pos → Bool)
   simp only [fuelTermD2t]
   by_cases h1 : guard p = true ∧ 2 < d + 1
   · rw [if_pos h1]
-    by_cases h2 : -(fuelValueD2t G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER
+    by_cases h2 : -(fuelValueD2t G guard C spend (d + 1 - 7) (G.pass p)) < MATE_LOWER
     · rw [if_pos h2]; omega
     · rw [if_neg h2]; omega
   · rw [if_neg h1]; omega
 
 /-- A checkmated child is finalized exactly at any positive depth. -/
 theorem fuelValueD2t_checkmated (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) {m : G.Pos}
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) {m : G.Pos}
     (hcap : hasKingCapture G.toNullGame.toGame m = false)
     (hmate : Checkmated G m) :
     ∀ d : Nat, 1 ≤ d → fuelValueD2t G guard C spend d m ≤ -MATE_LOWER := by
@@ -1163,18 +1169,19 @@ theorem fuelValueD2t_checkmated (G : QSGame) (guard : G.Pos → Bool)
 
 /-- Any-branch defender bound, REGIME form: at a defender node in the
 real-only regime, whichever list the trigger selects its members are
-real moves, so a uniform bound over `G.moves` at the node's own child
+real moves, so a bound over `G.moves` at each move's selected child
 depth closes the fold.  The initial accumulator is `LOSS` outright --
 this is exactly what the fuel oracle bought: no pass term can hold the
 defender's value above the band. -/
 theorem fuelValueD2t_defender_le (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) {d : Nat} {m : G.Pos}
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) {d : Nat} {m : G.Pos}
     (hkgm : ¬ (G.eval m ≤ -MATE_LOWER))
     (hcapm : ¬ (hasKingCapture G.toNullGame.toGame m = true))
     (hnt : allIllegalB G m = false)
     (hd : 5 ≤ d)
     (hall : ∀ m' ∈ G.moves m,
-      -(fuelValueD2t G guard C spend (d - min (C - 1) (spend m (d + 1))) m')
+      -(fuelValueD2t G guard C spend
+          (d - min (C - 1) (spend m (d + 1) m')) m')
         ≤ -MATE_LOWER) :
     fuelValueD2t G guard C spend (d + 1) m ≤ -MATE_LOWER := by
   have hMU : MATE_UPPER = 69290 := rfl
@@ -1193,7 +1200,7 @@ the trigger takes (`mem_tailList_of_admitted`); the defender's fold is
 bounded member-by-member over the full move list, so the tail's extra
 options are harmless (they are refuted by the same derivation). -/
 theorem forcedMate_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) (hC : 2 ≤ C)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
     (hF : ValFloor G 192)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, C * k + 4 ≤ D → MATE_LOWER ≤ fuelValueD2t G guard C spend D p := by
@@ -1213,12 +1220,12 @@ theorem forcedMate_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
         have hmem : m ∈ tailList G (d + 1) p :=
           mem_tailList_of_admitted G (mem_movesAbove_of_floor G hF (d := d + 1) (by omega) hm)
         have hchild : fuelValueD2t G guard C spend
-            (d - min (C - 1) (spend p (d + 1))) m ≤ -MATE_LOWER :=
+            (d - min (C - 1) (spend p (d + 1) m)) m ≤ -MATE_LOWER :=
           fuelValueD2t_checkmated G guard C spend hleg hmate _ (by omega)
         have hfold : -(fuelValueD2t G guard C spend
-              (d - min (C - 1) (spend p (d + 1))) m)
+              (d - min (C - 1) (spend p (d + 1) m)) m)
             ≤ foldMax (fun x => -(fuelValueD2t G guard C spend
-                  (d - min (C - 1) (spend p (d + 1))) x))
+                  (d - min (C - 1) (spend p (d + 1) x)) x))
                 (tailList G (d + 1) p) LOSS :=
           foldMax_le_of_mem _ _ _ _ hmem
         omega
@@ -1234,11 +1241,10 @@ theorem forcedMate_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
         rw [fuelValueD2t_of_fold_regime G guard C spend d p hkg hcap hai (by omega)]
         have hmem : m ∈ tailList G (d + 1) p :=
           mem_tailList_of_admitted G (mem_movesAbove_of_floor G hF (d := d + 1) (by omega) hm)
-        have hmin1 : min (C - 1) (spend p (d + 1)) ≤ C - 1 := Nat.min_le_left _ _
         have hchild : fuelValueD2t G guard C spend
-            (d - min (C - 1) (spend p (d + 1))) m ≤ -MATE_LOWER := by
-          obtain ⟨dm, hdm⟩ : ∃ x, d - min (C - 1) (spend p (d + 1)) = x + 1 :=
-            ⟨d - min (C - 1) (spend p (d + 1)) - 1, by omega⟩
+            (d - min (C - 1) (spend p (d + 1) m)) m ≤ -MATE_LOWER := by
+          obtain ⟨dm, hdm⟩ : ∃ x, d - min (C - 1) (spend p (d + 1) m) = x + 1 :=
+            ⟨d - min (C - 1) (spend p (d + 1) m) - 1, by omega⟩
           rw [hdm]
           have hdmlb : d ≤ dm + C := by omega
           by_cases hkgm : G.eval m ≤ -MATE_LOWER
@@ -1254,22 +1260,23 @@ theorem forcedMate_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
             cases hcm : hasKingCapture G.toNullGame.toGame m' with
             | true =>
               rw [fuelValueD2t_of_capture G guard C spend
-                (dm - min (C - 1) (spend m (dm + 1))) m' hkgm' hcm]
+                (dm - min (C - 1) (spend m (dm + 1) m')) m' hkgm' hcm]
               omega
             | false =>
-              have := ih m' hm' hcm (dm - min (C - 1) (spend m (dm + 1))) (by omega)
+              have := ih m' hm' hcm
+                (dm - min (C - 1) (spend m (dm + 1) m')) (by omega)
               omega
         have hfold : -(fuelValueD2t G guard C spend
-              (d - min (C - 1) (spend p (d + 1))) m)
+              (d - min (C - 1) (spend p (d + 1) m)) m)
             ≤ foldMax (fun x => -(fuelValueD2t G guard C spend
-                  (d - min (C - 1) (spend p (d + 1))) x))
+                  (d - min (C - 1) (spend p (d + 1) x)) x))
                 (tailList G (d + 1) p) LOSS :=
           foldMax_le_of_mem _ _ _ _ hmem
         omega
 
 /-- The mated dual for the composed value. -/
 theorem forcedlyMated_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) (hC : 2 ≤ C)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
     (hF : ValFloor G 192)
     {k : Nat} {q : G.Pos}
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
@@ -1293,7 +1300,6 @@ theorem forcedlyMated_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
         omega
       | inr h =>
         obtain ⟨hai, hall⟩ := h
-        have hmin : min (C - 1) (spend q (d + 1)) ≤ C - 1 := Nat.min_le_left _ _
         refine fuelValueD2t_defender_le G guard C spend hkg hcapq' hai
           (by omega) (fun m hm => ?_)
         cases hcm : hasKingCapture G.toNullGame.toGame m with
@@ -1305,13 +1311,13 @@ theorem forcedlyMated_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
             rw [hcapq] at hc
             exact Bool.noConfusion hc
           rw [fuelValueD2t_of_capture G guard C spend
-            (d - min (C - 1) (spend q (d + 1))) m hkgm hcm]
+            (d - min (C - 1) (spend q (d + 1) m)) m hkgm hcm]
           omega
         | false =>
           -- the reduced child depth still clears the reply's own mate
           -- bound: `d - min ≥ (d + 1) - C ≥ C * k + 4`.
           have := forcedMate_fuelValueD2t G guard C spend hC hF
-            (hall m hm hcm) (d - min (C - 1) (spend q (d + 1))) (by omega)
+            (hall m hm hcm) (d - min (C - 1) (spend q (d + 1) m)) (by omega)
           omega
 
 /-! ### The honesty side: no false mates, `ValFloor` + `EvalQuiet` only -/
@@ -1324,7 +1330,7 @@ admitted move exists, whose quiet depth-0 value refutes the band claim
 on the spot).  `NoMaskedMobility` is not assumed; `EvalQuiet` is the
 only premise. -/
 theorem frontier_escape_ft (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (hQ : EvalQuiet G.toNullGame.toGame)
     {m : G.Pos}
     (hcapm : ¬ (hasKingCapture G.toNullGame.toGame m = true))
@@ -1371,7 +1377,7 @@ probed depth).  The tail closes the frontier by construction
 depths, which weakens the INDEX of the mate found -- recovered by
 `forcedMate_mono`. -/
 theorem forcedMate_of_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame) :
     ∀ (D : Nat) (p : G.Pos),
       hasKingCapture G.toNullGame.toGame p = false →
@@ -1414,7 +1420,7 @@ theorem forcedMate_of_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
             obtain ⟨m, hmem, hmv⟩ :=
               foldMax_failHigh_witness
                 (fun x => -(fuelValueD2t G guard C spend
-                  (d - min (C - 1) (spend p (d + 1))) x))
+                  (d - min (C - 1) (spend p (d + 1) x)) x))
                 (tailList G (d + 1) p) LOSS (by omega) hband
             exact ⟨_, by omega, m, tailList_subset G _ p m hmem, hmv⟩
           · rw [fuelValueD2t_of_fold_sub G guard C spend d p hkg hcap hai (by omega)]
@@ -1454,86 +1460,63 @@ theorem forcedMate_of_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
               rw [if_neg hic] at hchild
               omega
           | false =>
-            -- every reply in the child's folded list is in the band;
-            -- the grandchild depth is uniform across replies
-            obtain ⟨dg, hdg, hrep⟩ :
-                ∃ dg, dg ≤ dc' ∧ ∀ m' ∈ tailList G (dc' + 1) m,
-                  MATE_LOWER ≤ fuelValueD2t G guard C spend dg m' := by
+            -- Every reply in the child's folded list is in the band at
+            -- its own edge-selected depth.
+            have hrep : ∀ m' ∈ tailList G (dc' + 1) m,
+                ∃ dg, dg ≤ dc' ∧ MATE_LOWER ≤ fuelValueD2t G guard C spend dg m' := by
               by_cases hreg' : 5 ≤ dc'
               · rw [fuelValueD2t_of_fold_regime G guard C spend dc' m hkgm hcapm
                   hai' hreg'] at hchild
-                refine ⟨dc' - min (C - 1) (spend m (dc' + 1)), by omega, ?_⟩
                 intro m' hm'
+                refine ⟨dc' - min (C - 1) (spend m (dc' + 1) m'), by omega, ?_⟩
                 have hle : -(fuelValueD2t G guard C spend
-                      (dc' - min (C - 1) (spend m (dc' + 1))) m')
+                      (dc' - min (C - 1) (spend m (dc' + 1) m')) m')
                     ≤ foldMax (fun x => -(fuelValueD2t G guard C spend
-                        (dc' - min (C - 1) (spend m (dc' + 1))) x))
+                        (dc' - min (C - 1) (spend m (dc' + 1) x)) x))
                       (tailList G (dc' + 1) m) LOSS :=
                   foldMax_le_of_mem _ _ _ m' hm'
                 omega
               · rw [fuelValueD2t_of_fold_sub G guard C spend dc' m hkgm hcapm
                   hai' (by omega)] at hchild
-                refine ⟨dc', by omega, ?_⟩
                 intro m' hm'
+                refine ⟨dc', by omega, ?_⟩
                 have hle : -(fuelValueD2t G guard C spend dc' m')
                     ≤ foldMax (fun x => -(fuelValueD2t G guard C spend dc' x))
                       (tailList G (dc' + 1) m) (fuelTermD2t G guard C spend dc' m) :=
                   foldMax_le_of_mem _ _ _ m' hm'
                 omega
-            cases dg with
-            | zero =>
-              cases dc' with
-              | zero =>
-                exact (frontier_escape_ft G guard C spend hQ hcapm hai' hrep).elim
-              | succ dc'' =>
-                -- a deeper defender node whose replies were searched at
-                -- depth 0: every folded reply is a quiet leaf in the
-                -- band, which is the same contradiction shape.
-                exfalso
-                have hlist : ∀ m' ∈ tailList G (dc'' + 1 + 1) m,
-                    hasKingCapture G.toNullGame.toGame m' = true := by
-                  intro m' hm'
-                  have hv := hrep m' hm'
-                  have hm'm : m' ∈ G.moves m := tailList_subset G _ m m' hm'
-                  by_cases hkgm' : G.eval m' ≤ -MATE_LOWER
-                  · exact absurd
-                      ((hasKingCapture_iff G.toNullGame.toGame m).mpr ⟨m', hm'm, hkgm'⟩)
-                      hcapm
-                  · cases hcm' : hasKingCapture G.toNullGame.toGame m' with
-                    | true => rfl
-                    | false =>
-                      exfalso
-                      rw [fuelValueD2t_zero_eq_eval G guard C spend m' hkgm'
-                        (by simp [hcm'])] at hv
-                      have := hQ m' hkgm'
-                      omega
-                by_cases hmask : allAdmittedIllegalB G (dc'' + 1 + 1) m = true
-                · have hfull : tailList G (dc'' + 1 + 1) m = G.moves m := by
-                    simp only [tailList]; rw [if_pos hmask]
-                  rw [hfull] at hlist
-                  rw [allIllegalB_true_iff.mpr hlist] at hai'
-                  exact Bool.noConfusion hai'
-                · have hmask' : allAdmittedIllegalB G (dc'' + 1 + 1) m = false := by
-                    cases h : allAdmittedIllegalB G (dc'' + 1 + 1) m with
-                    | false => rfl
-                    | true => exact absurd h hmask
-                  obtain ⟨m0, hm00, hleg0⟩ := exists_legal_admitted hmask'
-                  have := hlist m0 (mem_tailList_of_admitted G hm00)
-                  rw [hleg0] at this
-                  exact Bool.noConfusion this
-            | succ dg' =>
-              refine forcedMate_mono G
-                (ForcedMate.step (k := dg' + 1) hkg hm hlegm hai' ?_) (d + 1) (by omega)
+            by_cases hdc0 : dc' = 0
+            · have hrep0 : ∀ m' ∈ tailList G 1 m,
+                  MATE_LOWER ≤ fuelValueD2t G guard C spend 0 m' := by
+                intro m' hm'
+                obtain ⟨dg, hdg, hv⟩ := hrep m' (by simpa [hdc0] using hm')
+                have : dg = 0 := by omega
+                simpa [this] using hv
+              exact (frontier_escape_ft G guard C spend hQ hcapm hai' hrep0).elim
+            · refine forcedMate_mono G
+                (ForcedMate.step (k := dc') hkg hm hlegm hai' ?_) (d + 1) (by omega)
               intro m' hm' hleg'
               have hmem' : m' ∈ tailList G (dc' + 1) m :=
                 mem_tailList_of_admitted G
                   (mem_movesAbove_of_floor G hF (d := dc' + 1) (by omega) hm')
-              exact ih (dg' + 1) (by omega) m' hleg' (hrep m' hmem')
+              obtain ⟨dg, hdg, hv⟩ := hrep m' hmem'
+              cases dg with
+              | zero =>
+                exfalso
+                have hkgm' : ¬ (G.eval m' ≤ -MATE_LOWER) := fun hh =>
+                  hcapm ((hasKingCapture_iff G.toNullGame.toGame m).mpr ⟨m', hm', hh⟩)
+                rw [fuelValueD2t_zero_eq_eval G guard C spend m' hkgm'
+                  (by simp [hleg'])] at hv
+                have := hQ m' hkgm'
+                omega
+              | succ dg' =>
+                exact forcedMate_mono G
+                  (ih (dg' + 1) (by omega) m' hleg' hv) dc' (by omega)
 
 /-- The mated-side honesty dual for the composed value: fidelity
 premises only. -/
 theorem forcedlyMated_of_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
     (D : Nat) (q : G.Pos)
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
@@ -1555,76 +1538,55 @@ theorem forcedlyMated_of_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
       rw [if_neg hic] at hlo
       omega
   | false =>
-    obtain ⟨dg, hdg, hrep⟩ :
-        ∃ dg, dg ≤ D ∧ ∀ m' ∈ tailList G (D + 1) q,
-          MATE_LOWER ≤ fuelValueD2t G guard C spend dg m' := by
+    have hrep : ∀ m' ∈ tailList G (D + 1) q,
+        ∃ dg, dg ≤ D ∧ MATE_LOWER ≤ fuelValueD2t G guard C spend dg m' := by
       by_cases hreg : 5 ≤ D
       · rw [fuelValueD2t_of_fold_regime G guard C spend D q hkgq hcapq' hai hreg]
           at hlo
-        refine ⟨D - min (C - 1) (spend q (D + 1)), by omega, ?_⟩
         intro m' hm'
+        refine ⟨D - min (C - 1) (spend q (D + 1) m'), by omega, ?_⟩
         have hle : -(fuelValueD2t G guard C spend
-              (D - min (C - 1) (spend q (D + 1))) m')
+              (D - min (C - 1) (spend q (D + 1) m')) m')
             ≤ foldMax (fun x => -(fuelValueD2t G guard C spend
-                (D - min (C - 1) (spend q (D + 1))) x))
+                (D - min (C - 1) (spend q (D + 1) x)) x))
               (tailList G (D + 1) q) LOSS :=
           foldMax_le_of_mem _ _ _ m' hm'
         omega
       · rw [fuelValueD2t_of_fold_sub G guard C spend D q hkgq hcapq' hai (by omega)]
           at hlo
-        refine ⟨D, by omega, ?_⟩
         intro m' hm'
+        refine ⟨D, by omega, ?_⟩
         have hle : -(fuelValueD2t G guard C spend D m')
             ≤ foldMax (fun x => -(fuelValueD2t G guard C spend D x))
               (tailList G (D + 1) q) (fuelTermD2t G guard C spend D q) :=
           foldMax_le_of_mem _ _ _ m' hm'
         omega
-    cases dg with
-    | zero =>
-      cases D with
-      | zero =>
-        exact (frontier_escape_ft G guard C spend hQ hcapq' hai hrep).elim
-      | succ D' =>
-        exfalso
-        have hlist : ∀ m' ∈ tailList G (D' + 1 + 1) q,
-            hasKingCapture G.toNullGame.toGame m' = true := by
-          intro m' hm'
-          have hv := hrep m' hm'
-          have hm'm : m' ∈ G.moves q := tailList_subset G _ q m' hm'
-          by_cases hkgm' : G.eval m' ≤ -MATE_LOWER
-          · exact absurd
-              ((hasKingCapture_iff G.toNullGame.toGame q).mpr ⟨m', hm'm, hkgm'⟩)
-              hcapq'
-          · cases hcm' : hasKingCapture G.toNullGame.toGame m' with
-            | true => rfl
-            | false =>
-              exfalso
-              rw [fuelValueD2t_zero_eq_eval G guard C spend m' hkgm'
-                (by simp [hcm'])] at hv
-              have := hQ m' hkgm'
-              omega
-        by_cases hmask : allAdmittedIllegalB G (D' + 1 + 1) q = true
-        · have hfull : tailList G (D' + 1 + 1) q = G.moves q := by
-            simp only [tailList]; rw [if_pos hmask]
-          rw [hfull] at hlist
-          rw [allIllegalB_true_iff.mpr hlist] at hai
-          exact Bool.noConfusion hai
-        · have hmask' : allAdmittedIllegalB G (D' + 1 + 1) q = false := by
-            cases h : allAdmittedIllegalB G (D' + 1 + 1) q with
-            | false => rfl
-            | true => exact absurd h hmask
-          obtain ⟨m0, hm00, hleg0⟩ := exists_legal_admitted hmask'
-          have := hlist m0 (mem_tailList_of_admitted G hm00)
-          rw [hleg0] at this
-          exact Bool.noConfusion this
-    | succ dg' =>
-      refine Or.inr ⟨hai, fun m' hm' hleg' => ?_⟩
+    by_cases hD0 : D = 0
+    · have hrep0 : ∀ m' ∈ tailList G 1 q,
+          MATE_LOWER ≤ fuelValueD2t G guard C spend 0 m' := by
+        intro m' hm'
+        obtain ⟨dg, hdg, hv⟩ := hrep m' (by simpa [hD0] using hm')
+        have : dg = 0 := by omega
+        simpa [this] using hv
+      exact (frontier_escape_ft G guard C spend hQ hcapq' hai hrep0).elim
+    · refine Or.inr ⟨hai, fun m' hm' hleg' => ?_⟩
       have hmem' : m' ∈ tailList G (D + 1) q :=
         mem_tailList_of_admitted G
           (mem_movesAbove_of_floor G hF (d := D + 1) (by omega) hm')
-      exact forcedMate_mono G
-        (forcedMate_of_fuelValueD2t G guard C spend hF hQ (dg' + 1) m'
-          hleg' (hrep m' hmem')) D (by omega)
+      obtain ⟨dg, hdg, hv⟩ := hrep m' hmem'
+      cases dg with
+      | zero =>
+        exfalso
+        have hkgm' : ¬ (G.eval m' ≤ -MATE_LOWER) := fun hh =>
+          hcapq' ((hasKingCapture_iff G.toNullGame.toGame q).mpr ⟨m', hm', hh⟩)
+        rw [fuelValueD2t_zero_eq_eval G guard C spend m' hkgm'
+          (by simp [hleg'])] at hv
+        have := hQ m' hkgm'
+        omega
+      | succ dg' =>
+        exact forcedMate_mono G
+          (forcedMate_of_fuelValueD2t G guard C spend hF hQ (dg' + 1) m' hleg' hv) D
+          (by omega)
 
 /-! ### The trichotomy, and the stability headline -/
 
@@ -1634,7 +1596,7 @@ The premise ledger is the goal state: `ValFloor` + `EvalQuiet`
 by the fuel oracle, `NoMaskedMobility` by the frontier tail -- NO chess
 premise appears in any arm. -/
 theorem eventual_classification_fuel_arms (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) (hC : 2 ≤ C)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
     (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
     (p : G.Pos)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)
@@ -1683,7 +1645,7 @@ Axioms: this wrapper's `D0` is chosen by case analysis on WHICH arm
 holds, which is `Classical.em` (a genuine, disclosed use -- the
 per-arm lemmas above and everything they rest on are choice-free). -/
 theorem eventual_classification_fuel (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) (hC : 2 ≤ C)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
     (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
     (p : G.Pos)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)
@@ -1747,7 +1709,7 @@ work.  This is the composed twin of `Classification.lean`'s
 /-- The bracket spec for the composed value, at a fixed depth/position:
 `bound`'s fail-soft contract, no chess premise. -/
 def FuelTailBracketSpec (G : QSGame) (guard : G.Pos → Bool) (C : Nat)
-    (spend : G.Pos → Nat → Nat) (probe : Nat → G.Pos → Int → Int) : Prop :=
+    (spend : G.Pos → Nat → G.Pos → Nat) (probe : Nat → G.Pos → Int → Int) : Prop :=
   ∀ (d : Nat) (p : G.Pos) (gamma : Int),
     -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
     (gamma ≤ probe d p gamma →
@@ -1758,7 +1720,7 @@ def FuelTailBracketSpec (G : QSGame) (guard : G.Pos → Bool) (C : Nat)
 /-- The composed value stays in the score band (needed to run the
 driver package). -/
 theorem fuelValueD2t_bounded (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (hB : Bounded G.toNullGame.toGame) :
     ∀ (d : Nat) (p : G.Pos),
       -MATE_UPPER ≤ fuelValueD2t G guard C spend d p ∧
@@ -1795,12 +1757,12 @@ theorem fuelValueD2t_bounded (G : QSGame) (guard : G.Pos → Bool)
             · rw [fuelValueD2t_of_fold_regime G guard C spend d p hkg hcap hai hreg]
               have hge := foldMax_ge_init
                 (fun m => -(fuelValueD2t G guard C spend
-                  (d - min (C - 1) (spend p (d + 1))) m))
+                  (d - min (C - 1) (spend p (d + 1) m)) m))
                 (tailList G (d + 1) p) LOSS
               constructor
               · omega
               · refine foldMax_le _ _ _ (fun m _ => ?_) (by omega)
-                have := ih (d - min (C - 1) (spend p (d + 1))) (by omega) m
+                have := ih (d - min (C - 1) (spend p (d + 1) m)) (by omega) m
                 omega
             · rw [fuelValueD2t_of_fold_sub G guard C spend d p hkg hcap hai (by omega)]
               have hTl := fuelTermD2t_ge_LOSS G guard C spend d p
@@ -1808,8 +1770,8 @@ theorem fuelValueD2t_bounded (G : QSGame) (guard : G.Pos → Bool)
                 simp only [fuelTermD2t]
                 by_cases h1 : guard p = true ∧ 2 < d + 1
                 · rw [if_pos h1]
-                  have := ih (d + 1 - 3) (by omega) (G.pass p)
-                  by_cases h2 : -(fuelValueD2t G guard C spend (d + 1 - 3) (G.pass p))
+                  have := ih (d + 1 - 7) (by omega) (G.pass p)
+                  by_cases h2 : -(fuelValueD2t G guard C spend (d + 1 - 7) (G.pass p))
                       < MATE_LOWER
                   · rw [if_pos h2]; omega
                   · rw [if_neg h2]; omega
@@ -1830,7 +1792,7 @@ slop on the certified side, and the draw case with no slop at all.
 Conditional on layer 1 for the composed search (`hspec`), which is the
 one recorded open obligation; every other premise is fidelity. -/
 theorem driver_sees_trichotomy_fuel (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) (hC : 2 ≤ C)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
     (probe : Nat → G.Pos → Int → Int)
     (hspec : FuelTailBracketSpec G guard C spend probe)
     (hB : Bounded G.toNullGame.toGame)
@@ -1990,7 +1952,7 @@ theorem foldMax_legal_tail_eq {α : Type _} (w : α → Int) (l sub : List α)
 which is the hypothesis `foldMax_legal_tail_eq` needs: from a legal
 parent, every illegal move reports the exact `MATE_UPPER`. -/
 theorem illegal_child_contributes_LOSS (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) (dc : Nat) {p m : G.Pos}
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (dc : Nat) {p m : G.Pos}
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
     (hm : m ∈ G.moves p)
     (hcm : hasKingCapture G.toNullGame.toGame m = true) :

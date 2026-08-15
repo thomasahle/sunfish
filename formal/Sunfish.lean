@@ -14,5 +14,6 @@ import Sunfish.CappedNull
 import Sunfish.CappedMove
 import Sunfish.Pruning
 import Sunfish.EventuallyWide
+import Sunfish.IntrinsicLMR
 import Sunfish.Repetition
 import Sunfish.EventuallyFinite

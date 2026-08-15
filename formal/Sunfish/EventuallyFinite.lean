@@ -240,7 +240,7 @@ and the masking sites of `forcedMate_of_fuelValueD2t` -- the
 unreachable.  `EvalQuiet` is not needed: no static evaluation is ever
 read at a node this argument visits. -/
 theorem forcedMate_of_fuelValueD2_ends (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) (hC : 1 ≤ C)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 1 ≤ C)
     (hF : ValFloor G 192) :
     ∀ (n D : Nat) (p : G.Pos),
       EndsWithin G n p →
@@ -279,20 +279,20 @@ theorem forcedMate_of_fuelValueD2_ends (G : QSGame) (guard : G.Pos → Bool)
     | false =>
       obtain ⟨n', rfl, hch⟩ := hE.children hai
       have hexp1 : C * (n' + 1) = C * n' + C * 1 := Nat.mul_add C n' 1
-      have hmin1 : min (C - 1) (spend p (d + 1)) ≤ C - 1 := Nat.min_le_left _ _
       -- the invariant keeps the node in the real-only regime
       rw [fuelValueD2_of_fold_regime G guard C spend d p hkg hcap hai (by omega)] at hband
       -- the band witness is a real move (the regime init is LOSS)
       obtain ⟨m, hm, hmv⟩ : ∃ m ∈ G.moves p,
           MATE_LOWER ≤ -(fuelValueD2 G guard C spend
-            (d - min (C - 1) (spend p (d + 1))) m) := by
+            (d - min (C - 1) (spend p (d + 1) m)) m) := by
         obtain ⟨m, hmem, hmv⟩ :=
           foldMax_failHigh_witness
-            (fun x => -(fuelValueD2 G guard C spend (d - min (C - 1) (spend p (d + 1))) x))
+            (fun x => -(fuelValueD2 G guard C spend
+              (d - min (C - 1) (spend p (d + 1) x)) x))
             (movesAbove G (val_lower (d + 1)) p) LOSS (by omega) hband
         exact ⟨m, movesAbove_subset G _ p m hmem, hmv⟩
       have hchild : fuelValueD2 G guard C spend
-          (d - min (C - 1) (spend p (d + 1))) m ≤ -MATE_LOWER := by omega
+          (d - min (C - 1) (spend p (d + 1) m)) m ≤ -MATE_LOWER := by omega
       have hkgm : ¬ (G.eval m ≤ -MATE_LOWER) := fun hh =>
         hcap ((hasKingCapture_iff G.toNullGame.toGame p).mpr ⟨m, hm, hh⟩)
       -- ... and a LEGAL one: an illegal witness would carry the sentinel
@@ -302,13 +302,13 @@ theorem forcedMate_of_fuelValueD2_ends (G : QSGame) (guard : G.Pos → Bool)
         | true =>
           exfalso
           rw [fuelValueD2_of_capture G guard C spend
-            (d - min (C - 1) (spend p (d + 1))) m hkgm hcm] at hchild
+            (d - min (C - 1) (spend p (d + 1) m)) m hkgm hcm] at hchild
           omega
       have hEm := hch m hm hlegm
-      obtain ⟨dc, hdcv⟩ : ∃ x, d - min (C - 1) (spend p (d + 1)) = x + 1 :=
-        ⟨d - min (C - 1) (spend p (d + 1)) - 1, by omega⟩
+      obtain ⟨dc, hdcv⟩ : ∃ x, d - min (C - 1) (spend p (d + 1) m) = x + 1 :=
+        ⟨d - min (C - 1) (spend p (d + 1) m) - 1, by omega⟩
       rw [hdcv] at hchild
-      have hdc6 : C * n' + 6 ≤ dc + 1 := by omega
+      have hdc4 : C * n' + 4 ≤ dc + 1 := by omega
       cases hai' : allIllegalB G m with
       | true =>
         -- terminal defender: the exact finalizer answers
@@ -324,37 +324,37 @@ theorem forcedMate_of_fuelValueD2_ends (G : QSGame) (guard : G.Pos → Bool)
         -- nonterminal defender: budget and regime both persist
         obtain ⟨n'', rfl, hch'⟩ := hEm.children hai'
         have hexp2 : C * (n'' + 1) = C * n'' + C * 1 := Nat.mul_add C n'' 1
-        have hmin2 : min (C - 1) (spend m (dc + 1)) ≤ C - 1 := Nat.min_le_left _ _
         rw [fuelValueD2_of_fold_regime G guard C spend dc m hkgm (by simp [hlegm]) hai'
           (by omega)] at hchild
         -- every legal reply is folded (nothing is filtered at depth ≥ 2)
-        -- and hence in the band at the uniform grandchild depth
+        -- and hence in the band at its own edge-selected depth
         have hrep : ∀ m' ∈ G.moves m, hasKingCapture G.toNullGame.toGame m' = false →
             MATE_LOWER ≤ fuelValueD2 G guard C spend
-              (dc - min (C - 1) (spend m (dc + 1))) m' := by
+              (dc - min (C - 1) (spend m (dc + 1) m')) m' := by
           intro m' hm' _hleg'
           have hmem' : m' ∈ movesAbove G (val_lower (dc + 1)) m :=
             mem_movesAbove_of_floor G hF (d := dc + 1) (by omega) hm'
           have hle : -(fuelValueD2 G guard C spend
-                (dc - min (C - 1) (spend m (dc + 1))) m')
+                (dc - min (C - 1) (spend m (dc + 1) m')) m')
               ≤ foldMax (fun x => -(fuelValueD2 G guard C spend
-                    (dc - min (C - 1) (spend m (dc + 1))) x))
+                    (dc - min (C - 1) (spend m (dc + 1) x)) x))
                   (movesAbove G (val_lower (dc + 1)) m) LOSS :=
             foldMax_le_of_mem _ _ _ m' hmem'
           omega
         refine forcedMate_mono G
-          (ForcedMate.step (k := dc - min (C - 1) (spend m (dc + 1))) hkg hm hlegm hai'
-            (fun m' hm' hleg' =>
-              ih n'' (by omega) (dc - min (C - 1) (spend m (dc + 1))) m'
-                (hch' m' hm' hleg') hleg' (by omega) (hrep m' hm' hleg')))
+          (ForcedMate.step (k := dc) hkg hm hlegm hai'
+            (fun m' hm' hleg' => forcedMate_mono G
+              (ih n'' (by omega) (dc - min (C - 1) (spend m (dc + 1) m')) m'
+                (hch' m' hm' hleg') hleg' (by omega) (hrep m' hm' hleg'))
+              dc (by omega)))
           (d + 1) (by omega)
 
 /-- The mated-side honesty dual under the budget: `ValFloor` and
 `EndsWithin` only.  The outer shell of the same argument -- the
-defender's regime fold puts every legal reply in the band at the
-uniform child depth, and the mate-side theorem prices each of them. -/
+defender's regime fold puts every legal reply in the band at its
+edge-selected child depth, and the mate-side theorem prices each of them. -/
 theorem forcedlyMated_of_fuelValueD2_ends (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) (hC : 1 ≤ C)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 1 ≤ C)
     (hF : ValFloor G 192)
     {n D : Nat} {q : G.Pos}
     (hE : EndsWithin G n q)
@@ -378,21 +378,21 @@ theorem forcedlyMated_of_fuelValueD2_ends (G : QSGame) (guard : G.Pos → Bool)
   | false =>
     obtain ⟨n', rfl, hch⟩ := hE.children hai
     have hexp1 : C * (n' + 1) = C * n' + C * 1 := Nat.mul_add C n' 1
-    have hmin1 : min (C - 1) (spend q (d + 1)) ≤ C - 1 := Nat.min_le_left _ _
     rw [fuelValueD2_of_fold_regime G guard C spend d q hkgq hcapq' hai (by omega)] at hlo
     refine Or.inr ⟨hai, fun m hm hleg => ?_⟩
     have hmem : m ∈ movesAbove G (val_lower (d + 1)) q :=
       mem_movesAbove_of_floor G hF (d := d + 1) (by omega) hm
-    have hle : -(fuelValueD2 G guard C spend (d - min (C - 1) (spend q (d + 1))) m)
+    have hle : -(fuelValueD2 G guard C spend
+          (d - min (C - 1) (spend q (d + 1) m)) m)
         ≤ foldMax (fun x => -(fuelValueD2 G guard C spend
-              (d - min (C - 1) (spend q (d + 1))) x))
+              (d - min (C - 1) (spend q (d + 1) x)) x))
             (movesAbove G (val_lower (d + 1)) q) LOSS :=
       foldMax_le_of_mem _ _ _ m hmem
     have hband : MATE_LOWER ≤ fuelValueD2 G guard C spend
-        (d - min (C - 1) (spend q (d + 1))) m := by omega
+        (d - min (C - 1) (spend q (d + 1) m)) m := by omega
     exact forcedMate_mono G
       (forcedMate_of_fuelValueD2_ends G guard C spend hC hF n'
-        (d - min (C - 1) (spend q (d + 1))) m (hch m hm hleg) hleg (by omega) hband)
+        (d - min (C - 1) (spend q (d + 1) m)) m (hch m hm hleg) hleg (by omega) hband)
       (d + 1) (by omega)
 
 /-! # The headline: eventual classification from finiteness -/
@@ -408,7 +408,7 @@ adjudication bound.  The wrapper is also choice-free -- no case
 analysis on which arm holds is needed, because the budget compresses
 every mate index below `N + 1`. -/
 theorem eventual_classification_fuel_finite (G : QSGame) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) (hC : 2 ≤ C)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
     (hF : ValFloor G 192)
     {N : Nat} (p : G.Pos)
     (hE : EndsWithin G N p)
@@ -542,7 +542,7 @@ the shipped sub-horizon shape.)  Together with `cexD_endsWithin`:
 `hFiniteDiameter` holds and the depth-1 report is still dishonest, so
 the finiteness variant buys the EVENTUAL claim only, and fixed-depth
 honesty still needs `NoMaskedMobility` or the #171 tail. -/
-theorem cexD_fuel_M1 (spend : CexD.Pos → Nat → Nat) :
+theorem cexD_fuel_M1 (spend : CexD.Pos → Nat → CexD.Pos → Nat) :
     fuelValueD2 CexD (fun _ => false) 2 spend 1 DPos.M = -MATE_UPPER := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
@@ -597,10 +597,10 @@ theorem cexD_M_not_mated (k : Nat) : ¬ ForcedlyMated CexD k DPos.M := by
 the effective bound `D0 = C*N + C + 6 = 10` the masked node is
 classified correctly -- strictly inside the band, as befits a draw of
 the ruleless game -- for every edge-cost selector.  Fixed-depth lie at
-depth 1 (`cexD_fuel_M1`), eventual truth from depth 10: the variant's
+depth 1 (`cexD_fuel_M1`), eventual truth from depth 12: the variant's
 eventual-only scope, exhibited end to end on one game. -/
-theorem cexD_M_eventually_classified (spend : CexD.Pos → Nat → Nat)
-    (D : Nat) (hD : 10 ≤ D) :
+theorem cexD_M_eventually_classified (spend : CexD.Pos → Nat → CexD.Pos → Nat)
+    (D : Nat) (hD : 12 ≤ D) :
     -MATE_LOWER < fuelValueD2 CexD (fun _ => false) 2 spend D DPos.M ∧
       fuelValueD2 CexD (fun _ => false) 2 spend D DPos.M < MATE_LOWER := by
   have h := (eventual_classification_fuel_finite CexD (fun _ => false) 2 spend
