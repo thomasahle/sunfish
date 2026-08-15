@@ -892,6 +892,59 @@ independently by reconstruction, which reaches **+5535 ms** — four orders
 of magnitude away from being explained by a 27.4 ms poll gap, and the
 quantity that actually matters.
 
+### THE MECHANISM: the engine is not overrunning, it is being STARVED OF CPU
+
+Replication A settles it, and the number is not subtle. Its worst
+self-overruns, verified against the raw PGN rather than trusted from the
+reconstruction:
+
+| spent | clock before | the engine's OWN deadline | overshoot |
+|---|---|---|---|
+| **33 760 ms** | 60 000 ms | **11 325 ms** | **+22 435 ms** |
+| 28 930 ms | 46 983 ms | 9 698 ms | +19 232 ms |
+| 25 304 ms | 30 786 ms | 7 673 ms | +17 631 ms |
+
+The raw movetext independently contains single moves of **33.760 s** and
+**60.056 s** — the latter is an engine consuming its entire clock — so
+these are real recorded times, not an artifact of reconstructing the clock.
+
+**A 33.8-second move against an 11.3-second self-imposed deadline is a 3×
+overshoot of the engine's own hard limit, and no amount of poll
+granularity explains it.** One 2048-node poll is 27.4 ms; even at 5×
+oversubscription it would be ~137 ms, not 22 seconds.
+
+**What does explain it: the process was not running.** The deadline test
+is `time.time() > self.deadline`, evaluated every 2048 nodes — it can only
+fire when the engine gets CPU. Under a machine at 900% foreign load with
+8 engine processes and `nice -n 5`, a niced process is descheduled for
+seconds at a stretch, cannot execute its own check, and returns whenever
+the scheduler lets it. Every observation fits this and nothing else does:
+bursty rather than steady, monotone in foreign load, absent on an
+uncontended bench box across 651 games, and orders of magnitude too large
+for any in-engine granularity.
+
+**The refinement that keeps this honest:** self-overrun does not vanish in
+the clean bucket. At 87 games — A still running — the split is:
+
+| venue | games | moves | past own deadline | worst |
+|---|---|---|---|---|
+| CLEAN (≤ 100% foreign) | 10 | 509 | **8.64%** | 1 520 ms |
+| CONTENDED (> 100%) | 63 | 2069 | **18.61%** | **22 435 ms** |
+
+So the artifact **does** run past its own deadline under modest load too —
+just never by enough to flag, which is why the *forfeit* rate was 0% in
+clean windows while the *overrun* rate was 8.6%. And "clean" here still
+permits a full core of foreign work; the session's foreign CPU median was
+**227%**, so a genuinely idle venue was never sampled. **B, waiting for
+quiet, is the only arm that will measure the true floor.**
+
+**Consequence for the fix.** The registered holdback fix would trim
+milliseconds. The effect that actually produced every forfeit is measured
+in seconds and lives outside the engine. **Fixing the holdback would not
+have prevented one of these forfeits** — which is precisely why it stays
+registered-not-run, and why the venue-exclusivity rule is the real
+remedy.
+
 ---
 
 ## 2026-08-15 — STAGE 2 VOID: the tripwire fired, and it found a real clock defect in the shipped artifact
