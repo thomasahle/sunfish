@@ -1023,10 +1023,17 @@ box-side — but **Thomas's own desktop use is outside any embargo anyone
 can order.** Measured while writing this: a Chrome renderer alone at
 **57.6%**, which is *by itself* above run 2's 40% gate threshold.
 
-> **IF run 2 voids on forfeits AND the sampler shows the contending load
-> was not produced by any of our lanes — i.e. it was user desktop load or
-> anything else outside the embargo — THEN the venue RELOCATES to the
-> bench box. No third laptop attempt.**
+> **RELOCATE to the bench box, without further deliberation, if EITHER:**
+> **(a) run 2 voids on forfeits, or**
+> **(b) run 2's quiet gate never passes tonight.**
+> **No third laptop attempt.**
+
+**The trigger was widened after the attribution closed**, and the reason
+is evidential rather than impatience: **the opener was user-desktop
+load**, which no embargo can reach. An embargo over our own lanes cannot
+therefore guarantee a clean laptop venue, so "the gate never passes" is
+not a delay to wait out — it is the same finding as a void, arriving
+before the four hours are spent instead of after.
 
 **Why the box is the right fallback and not just a different room:** it
 has **651 of 651 clean timed packed-arm games** (m2 60+1 263, m5 30+1 288,
@@ -1116,20 +1123,44 @@ The coordinator first attributed the exposure to lanes he authorized at
 and the **first forfeit was 18:24Z — 21 minutes before that window**, so
 the authorization made it worse but did not open it.
 
-**Attribution now closed, and BOTH sources were coordinator-spawned:**
+**Attribution closed, and it took THREE passes to get right — the first
+two accounts each named the wrong opener.** Final timeline, from the audit
+lane's verifiable command timestamps plus this lane's sampler:
 
-| from | source | how |
+| from | source | note |
 |---|---|---|
-| **~18:10-18:15Z** | **the PR-audit lane** — the OPENER | spawned to audit locally; three CPython 3.9 processes at ~96% each, one visibly running `./sunfish.py`. Its prompt fenced the laptop for *matches* but ambiguously offered local scratchpad for clones, and the lane computed there |
-| **~18:45Z** | the library-mode leanpy authorization | an explicit "survey-scale" exception to the venue rule, which made an already-contended machine worse |
+| **~18:15Z** | **USER-DESKTOP LOAD — the OPENER** | Thomas active at the machine; Chrome renderers measured **57-96%**. **Outside any embargo anyone can order.** |
+| 18:29Z, 18:44Z, 18:47Z→19:14Z | **audit-lane `pytest` + orphaned engine children** | coordinator prompt defect #2 — the lane's brief never named the lock convention, and it reports never knowing the lock existed. The 18:44Z leg was killed at a 120 s tool timeout, leaving engine children respawning per test until the 19:14Z reap |
+| 19:02-19:07Z | L1 battery | coordinator prompt defect #1 |
 
-**Verified independently at 19:1xZ rather than taken on report**: two of
-those CPython 3.9 processes were still live at **93.7% and 93.3%** when
-this was written, with total foreign CPU at **348%**.
+**The audit lane ran no difftest legs locally at all** — those went over
+ssh and their gate logs live box-side. Its only local footprint before
+18:29Z was a **3-second** uci probe at ~18:25Z.
 
-Recorded because attribution should follow the instrument, not the
-account — and here the instrument's timing is what identified the opener,
-after the first account named the wrong lane.
+**What this lane's own sampler independently confirms**, at per-minute
+resolution:
+
+- Forfeit 1's game (**18:24:59-18:28:13**) sat in **128.8 → 126.4 → 194.5
+  → 263.6 → 252.9%** foreign CPU, *sustained across all five minutes*.
+  A 3-second probe cannot produce that; **the load in forfeit 1's window
+  was not the audit lane.**
+- **`n_leanish` is FLAT at 6** from 18:10Z through 19:01Z, rising to 9-10
+  only at 19:02-19:06Z. The lean lanes were not the opener either.
+- The 18:10-18:14Z shape is **spiky** (285% → 11.9% → 32% → 29.5% → 93.9%)
+  — the signature of interactive desktop use, not a steady batch job.
+- **What the sampler cannot distinguish** is Chrome from audit-`pytest`,
+  since both are simply non-lean foreign CPU. That separation comes from
+  the audit lane's command timestamps, not from here — stated so the
+  evidence boundary is visible.
+
+**What does NOT change:** the void stands, because **every forfeit window
+measured contended regardless of which source produced the load**, and the
+holdback fix stays shelved for the same reason — the contention was real.
+
+**What DOES change is the relocation calculus.** The opener was load that
+**no embargo can reach**. An embargo over our own lanes is therefore not
+sufficient to guarantee a clean laptop venue, which is the argument the
+pre-registered relocation branch rests on.
 
 **The first ~200 games ran clean at 18-44% with zero forfeits** — a
 clean-venue record inside this very match, consistent with B's 60/60.
