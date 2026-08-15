@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **THE THIRD HYPOTHESIS HAS A NAMED CAUSE AND EVIDENCE: another workstream was running core-saturating `lake` builds on this laptop through both the voided run and replication A. The voided run's EXTREME overruns (3.5-5.5 s) land exactly on the build's write burst — and a NEW STANDING RULE follows: timed matches require VENUE EXCLUSIVITY across ALL workstreams, not just other matches** | Measured, not accepted on report: a live sampler shows **foreign CPU 320.5%** (~3.2 cores of non-match work) and 9 lean/lake processes *while replication A is playing*. Post-hoc on the void, from the other lane's own `.lake` artifact mtimes: build writes cluster at **09:10Z (196) and 09:15Z (1052)**, and the void's four largest self-overruns — **3780, 5535, 3552, 3700 ms** — occur in games starting **09:10, 09:11, 09:12, 09:12Z**. The first 5 minutes of the void (08:41-08:45Z) are **completely clean, 0 overruns**, then bursts begin. **Honest limit: `.lake` mtimes mark job COMPLETION, so a build's compile phase is invisible to this instrument** — the moderate bursts at 08:46-09:07Z are therefore neither confirmed nor excluded, only the extreme tail is aligned. **Replication A is consequently a MIXED arm** (cotenant early, clean later) and its verdict will be split by sampled window or else report the mixture as a limitation. **B gains a clean-venue start gate** (foreign CPU < 40% for 3 consecutive minutes) and becomes the clean-venue arm — its primary value now. Sampler defects fixed before trusting it, both the silent-zero class: **macOS `pgrep` has no `-c` flag**, so the first sampler printed a usage error and recorded 0 lean processes while a `lake exe` ran at 11% CPU, and a stale header mislabelled the columns |
 | 2026-08-15 | **FINDING #1 (read-only, before any replication game): WE ARE IN THE CONTENTION WORLD, NOT THE INTRINSIC ONE — the pool ladder's arms ran the PACKED ARTIFACTS DIRECTLY on the builtin clock loop (`exec bin/e_pool.packed`, no driver), and they have 651 lifetime clean games. Plus a calibration that BREAKS my own stated mechanism: the 2048-node poll gap is 27.4 ms, and the observed overruns were 100 ms** | Verified from the bench box's own wrappers and PGNs, not from memory: `w_pool.sh`/`w_smooth.sh` are `exec …/e_pool.packed`, so the clock path under test is the same builtin loop my voided run used. Counted directly: **m2 60+1 = 263 games, m5 30+1 = 288, m6 1+0 hammer = 100 — 651 games, 0 forfeits, 0 illegal, every termination `normal`** — at **concurrency 8, nice 10, `timemargin 0`, adjudication NONE**, i.e. the same instrument settings at *higher* concurrency than my 2/41. So the packed clock path does **not** have ~41 lifetime games; it has ~692, and the 651 clean ones are on a different venue. **This lowers the fix's urgency substantially.** **The calibration is the sharper result**: measured nps on this laptop is **74 869 (conc 1)** and **74 799 (conc 4)** — *no* degradation at concurrency 4 — so one 2048-node poll gap is **27.4 ms at BOTH**, and cannot explain a 100 ms overrun. My stage-2 entry named the poll gap as the mechanism; it is **necessary but NOT sufficient**, corrected here. Worse for the simple story: the entry's maximum possible hard limit at a 60 s clock is `min(5·soft, A/2)` = **11 325 ms**, and a forfeited game contains a **12 100 ms** move — **775 ms past its own hard deadline, 28× the poll gap**. Arms caveat: box arms are `e_pool.packed` 3365 B @ `522931a`, mine is the landed entry 3405 B @ `5af840d` — same pool formula, different build. Venue differs in OS/arch, pypy build, nice level AND concurrency; replications A/B separate **concurrency only** |
 | 2026-08-15 | **STAGE 2 VOID by its OWN registered zero-forfeit tripwire at 41 games — and the reason is a REAL DEFECT IN THE SHIPPED ARTIFACT: the packed entry overruns a real clock by ~100 ms because its 5% polling holdback is applied ONLY on the `movetime` path, never on the wtime/winc path** | 2 time forfeits, **both the entry**, both games of round 20, overruns **100 ms and 101 ms**; 0 illegal, 39/41 normal. **No Elo is reported** — the tripwire I registered fired, and quoting a number from a run my own registration voided would be moving the bar after seeing it. **Mechanism confirmed in the artifact's source, not inferred**: `think = times.get("movetime", think)/1000` then `if "movetime" in times: think -= max(think*.05, .03)` — the holdback whose comment says it was "measured the hard way: 425 local fixed-node games, every single one a forfeit" **guards only the movetime branch**, while the clock branch's hard limit `min(5*soft, A/2)` gets none, and `searcher.deadline` is polled every 2048 nodes, so the search returns at `think + epsilon`. Classic's builtin loop keeps 20% slack via its `think * 0.8` soft break and did not forfeit once. **Invisible until now because every previous timed match ran SOURCES through `sunfish_ui`, which does its own deadline handling — this was the first timed match on the packed artifact.** Honest limit: 2 events cannot separate artifact overrun from concurrency-4 contention, so the MECHANISM is established and the RATE is not. Follow-ups registered, none run: concurrency-1 replication, a `timemargin` sweep to get the overrun distribution, and the source fix (holdback on the clock path) which is a build change needing its own screen. **Stage 1 is unaffected** — fixed nodes reads no clock |
 | 2026-08-15 | **+400 PROGRESS METER, STAGE 1: the 4k entry and sunfish-classic are INDISTINGUISHABLE at fixed nodes — −1.74 ± 27.93 over a fixed 400 games. Corrected for the registered 1.53× node asymmetry the entry's per-node edge is ≈ +60, which means its historical timed advantage is SPEED AND TIME MANAGEMENT, not per-node quality** | Fixed N=400 (no SPRT), nodes 20000, srand 20260816, book3k order=random, concurrency 4, 29 m 48 s. **158 W / 160 L / 82 D = 49.75%**, nElo −2.12 ± 34.05, LOS 45.14%, ptnml **[26, 31, 88, 29, 26]** over **200 complete pairs**, PairsRatio 0.96, DrawRatio 44.00%. **0 illegal, 0 time forfeits, 400/400 terminations** (279 adjudication, 121 normal — adjudication was ACTIVE and symmetric as registered, both arms emit `score cp`). Independent round-paired recompute reproduces fastchess to the digit. Arms verified by sha256: entry source `e27f9dff…` **==** `git show 5af840d:nnue_4k/pst_entry.py`, classic `329ae372…` **==** `git show 573d692:sunfish.py`; **entry.packed 3405 B hashes `5a207fdf9cf05f2e…`, bit-identical to the artifact the pooltm landing recorded**; classic packs to 3246 B. Driver pinned `DRIVER_VERSION 3` on both arms. **Progress toward +400: this is ~0 of 400, and the bias-corrected ≈ +60 is ~15% of it.** Context that must travel with the number: the **+187.0 ± 49.7** goal-line figure was the **256kb8@100M NNUE testbed engine, NOT the 4k entry** — the entry's own last number was `entry_kf` **+107.54 ± 31.64 at 10+0.1** (2026-08-13). Fixed nodes removes speed and TM from the comparison, which is exactly why it reads lower, and classic has since absorbed **#196 (min40-4, +147 [+86,+219])** — though that is a TM change and cannot have moved a fixed-node result |
@@ -709,6 +710,104 @@ that; a transient venue condition (thermal state after the preceding
 the hypothesis A and B are now positioned to separate, and it is a
 *different* hypothesis from the concurrency one the order named — worth
 recording because neither A nor B fully isolates it.
+
+---
+
+## 2026-08-15 — THE THIRD HYPOTHESIS, NAMED AND EVIDENCED: another workstream's builds were on this laptop the whole time
+
+The bursty-overrun hypothesis had no candidate cause when it was recorded
+an hour ago. It has one now, and it was **not** discovered by this lane's
+instruments — the coordinator supplied it: a separate lean-surfaces
+workstream has been running full `lake build`s (3659 jobs, core-saturating)
+and 290-file corpus sweeps on this same laptop all morning.
+
+### It is not a report, it is measured — and it is happening NOW
+
+A one-minute sampler was started alongside the running replication A. Its
+first clean sample:
+
+| foreign CPU | lean/lake processes | match engines |
+|---|---|---|
+| **320.5%** (~3.2 cores of non-match work) | **9** | 8 |
+
+**Replication A is being played on a contended machine right now.** Per
+the order it is NOT voided; it is instrumented, and its verdict will carry
+this.
+
+**The sampler had to be fixed twice before it could be trusted**, both
+times the silent-zero class this ledger keeps recording:
+
+1. **macOS `pgrep` has no `-c` flag.** `pgrep -c -f pat` prints a usage
+   error to stderr and *nothing* to stdout, so `${n:-0}` made every sample
+   read **0 lean processes while a `lake exe leanmodels-run` was live at
+   11% CPU**. A sampler that reports a clean venue during contention is
+   worse than no sampler. Counting is now `pgrep -f … | wc -l`.
+2. **A header is written once per file**, so appending a new column layout
+   to an existing file silently mislabels every earlier row. Fresh file.
+
+The primary metric is now **foreign CPU** — the summed %CPU of everything
+that is not this match's own engines or arbiter — because it needs no
+process-name pattern to be correct, and the name-based version was exactly
+what failed.
+
+### Post-hoc on the voided run: the extreme tail aligns
+
+From the other lane's own `.lake` artifact mtimes (its build outputs are
+timestamped even though its logs are not in this scratchpad):
+
+| build write burst (UTC) | artifacts written |
+|---|---|
+| 09:10Z | 196 |
+| **09:15Z** | **1052** |
+| 09:35Z | 17 |
+
+And the voided run's entry-side self-overruns, by game start:
+
+| window (UTC) | pattern |
+|---|---|
+| 08:41 – 08:45 | **0 overruns in 5 games — completely clean** |
+| 08:46 – 09:07 | bursts begin: 15, 4, 6, 13, 19, 12, 10, 20, 15, 23 per game |
+| **09:10 – 09:12** | the **four largest** self-overruns of the entire run: **3780, 5535, 3552, 3700 ms** |
+
+**The extreme tail lands on the build's write burst.** The run's first five
+minutes, before the build activity, are perfectly clean.
+
+**The honest limit, stated rather than glossed:** `.lake` mtimes mark job
+**completion**, so a build's *compile* phase — the core-saturating part —
+writes nothing and is **invisible to this instrument**. The moderate bursts
+from 08:46 to 09:07Z are therefore **neither confirmed nor excluded**; only
+the extreme tail is temporally aligned. A build that finished its jobs at
+09:10-09:15Z was plausibly compiling through that earlier window, but this
+evidence does not prove it.
+
+### What this does to the three hypotheses
+
+- **Intrinsic defect** — still not excluded, but it now has to explain why
+  651 games on the bench box and the first five clean minutes here show
+  nothing. The *mechanism* (no holdback on the clock path) is real
+  regardless; its **rate** is what venue governs.
+- **Concurrency** — weakened further. The box ran concurrency 8 cleanly,
+  and this laptop's nps is identical at conc 1 and conc 4.
+- **Foreign core saturation** — now the leading candidate, with a named
+  cause and a partial temporal alignment.
+
+### STANDING RULE (coordinator-authorized, 2026-08-15): TIMED MATCHES REQUIRE VENUE EXCLUSIVITY
+
+> **The laptop screen lock covers builds and sweeps from ALL workstreams,
+> not just other matches.** Any timed match — real clock, movetime, or
+> anything where wall time decides a result — requires exclusive use of
+> the machine. A `lake build`, a corpus sweep, or any core-saturating job
+> from any lane invalidates a timed measurement on the same box, and the
+> lock is how that is prevented.
+>
+> **Fixed-node matches remain co-runnable**, because node counts are
+> deterministic and do not depend on wall time — subject to the existing
+> headroom check. Stage 1 of the +400 meter was fixed-node and is
+> **unaffected by any of this**.
+
+This rule is why the void was a void and not a verdict, and it is now the
+condition B waits for: B does not start until foreign CPU has been under
+40% for three consecutive minutes.
 
 ---
 
