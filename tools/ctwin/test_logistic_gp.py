@@ -39,6 +39,7 @@ from adaptive_gp import (
     validate_opening_budget,
 )
 from logistic_gp import ELO_PER_LOGIT, LogisticGP, MixedSpace
+from report_gp import report_domain
 
 
 class MixedAcquisitionTest(unittest.TestCase):
@@ -96,6 +97,15 @@ class MixedAcquisitionTest(unittest.TestCase):
             state, self.space.prior_mean, candidates, [], args, self.space, Model())
         self.assertIn(vector, candidates)
         self.assertNotEqual(vector, tuple(target))
+
+    def test_gate_all_report_excludes_seeded_points_outside_design(self):
+        historical = (37, 13)
+        self.assertNotIn(historical, self.space.candidates)
+        points, tested = report_domain(self.space, [historical], True)
+        self.assertNotIn(historical, points)
+        self.assertNotIn(historical, tested)
+        self.assertIn(self.space.default, tested)
+        self.assertIn(historical, report_domain(self.space, [historical], False)[0])
 
     def test_halton_design_handles_full_tuning_space(self):
         parameters = [

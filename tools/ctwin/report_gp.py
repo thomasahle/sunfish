@@ -10,6 +10,16 @@ import adaptive_gp
 import logistic_gp
 
 
+def report_domain(space, observed, gate_all):
+    """Keep recommendations inside an exhaustively gated finite design."""
+    candidates = set(space.candidates)
+    points = candidates if gate_all else candidates | {
+        point for point in observed if space.contains(point)}
+    tested = {space.default, *(point for point in observed
+        if not gate_all or point in candidates)}
+    return sorted(points), sorted(tested)
+
+
 def describe(label, point, model, space, counts):
     predicted, variance = model.predict([point])
     elo = predicted[0] * logistic_gp.ELO_PER_LOGIT
@@ -51,7 +61,7 @@ def main():
             observed.append(space.canonical(batch["opponent_knobs"]))
     counts = Counter(observed)
 
-    points = sorted(set([*space.candidates, *(point for point in observed if space.contains(point))]))
+    points, challengers = report_domain(space, observed, gate_all)
     if gate_all:
         mean = model.predict(points)[0]
         best = points[int(mean.argmax())]
@@ -59,16 +69,14 @@ def main():
         best = adaptive_gp.coordinate_maximum(
             space, points, lambda candidates: model.predict(candidates)[0],
             set(), None, restarts=16)
-    challengers = sorted(set(observed))
     challenger_mean = model.predict(challengers)[0]
     challenger_best = challengers[int(challenger_mean.argmax())]
-    tested = [space.default, *challengers]
-    tested_mean, tested_variance = model.predict(tested)
+    tested_mean, tested_variance = model.predict(challengers)
     # A noisy multiple-comparison maximum is a lead, not a recommendation.
     supported = tested_mean - 1.96 * tested_variance ** 0.5
-    tested_best = tested[int(supported.argmax())]
+    tested_best = challengers[int(supported.argmax())]
     describe("model maximum", best, model, space, counts)
-    describe("best tested challenger", challenger_best, model, space, counts)
+    describe("best tested policy", challenger_best, model, space, counts)
     describe("supported recommendation", tested_best, model, space, counts)
 
     axes = space.names if args.all_axes else state.get("new_axes") or [
@@ -81,7 +89,7 @@ def main():
             space.canonical(base | {name: value}) for value in parameter["values"]))
         if gate_all:
             points = [point for point in points if point in space.candidates]
-        if not points:
+        if len(points) < 2:
             continue
         predictions, variances = model.predict(points)
         index = int(predictions.argmax())
