@@ -37,7 +37,10 @@ def main():
     }
     print(f"winner {elo:+.1f} +/- {error:.1f} Elo {json.dumps(changed, sort_keys=True)}")
 
-    for name in state.get("new_axes", ()):
+    axes = state.get("new_axes") or [
+        name for name in space.names if name.startswith(("VALUE_", "PST_"))
+    ]
+    for name in axes:
         parameter = next(parameter for parameter in space.parameters if parameter["name"] == name)
         points = [space.canonical({name: value}) for value in parameter["values"]]
         predictions, variances = model.predict(points)
