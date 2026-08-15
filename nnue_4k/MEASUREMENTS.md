@@ -1012,6 +1012,51 @@ case gets the same scrutiny the dirty one did.
 Overnight authorized. Self-completing, lock taken at start with
 purpose text written at take time, released on completion.
 
+### PRE-REGISTERED CONTINGENCY: a second void RELOCATES the venue, it does not get re-argued
+
+Registered now, before run 2 plays, so that a second void converts into an
+action rather than a judgment call made while disappointed.
+
+**The embargo cannot cover everything.** All lanes are coordinator-ordered
+to run nothing above shell-trivial, and the PR-audit lane is moving
+box-side — but **Thomas's own desktop use is outside any embargo anyone
+can order.** Measured while writing this: a Chrome renderer alone at
+**57.6%**, which is *by itself* above run 2's 40% gate threshold.
+
+> **IF run 2 voids on forfeits AND the sampler shows the contending load
+> was not produced by any of our lanes — i.e. it was user desktop load or
+> anything else outside the embargo — THEN the venue RELOCATES to the
+> bench box. No third laptop attempt.**
+
+**Why the box is the right fallback and not just a different room:** it
+has **651 of 651 clean timed packed-arm games** (m2 60+1 263, m5 30+1 288,
+m6 1+0 100) at **concurrency 8**, i.e. under *heavier* cotenancy than this
+laptop ever saw, with zero forfeits. Its ~96 cores absorb what ~10 cannot.
+The failure mode this whole investigation diagnosed — a niced process
+descheduled for seconds — is a small-core-count phenomenon.
+
+**Relocation carries these conditions**, so the number stays comparable:
+
+1. **Same sha-pinned arms**, copied, and their sha256 re-verified box-side
+   (`5a207fdf9cf05f2e…` / `7bdbd6054f70622a…`) — a rebuild there would
+   change the toolchain and the artifact.
+2. **Same form**: N=300, 60+1, adjudication none, void-on-forfeit,
+   zero-illegal stop.
+3. **Concurrency may rise** to suit the box, stated in the registration;
+   node determinism does not apply at a real clock, so the concurrency
+   actually used is reported with the number.
+4. **A fresh srand**, named before game 1.
+5. **The box is READ-ONLY to this lane by standing rule** — relocation
+   therefore needs the owner's dispatch, and this contingency is a request
+   for it, not an authorisation of it.
+
+**Two further gate notes for run 2 on the laptop.** First, a start gate is
+necessary and not sufficient (run 1 proved it). Second, if user desktop
+load keeps foreign CPU above 40%, **the gate will simply never pass and
+run 2 will not start** — that is the correct outcome, not a failure. A
+match that never starts costs nothing; a match that starts dirty costs
+four hours and produces a number that must be thrown away.
+
 ---
 
 ## 2026-08-15 — THE +400 METER IS VOID, and the void is the registration working
@@ -1066,12 +1111,25 @@ Foreign CPU by 15-minute bucket across the match:
 | 18:45Z | **172%** | |
 | 19:00Z | 152% | lean process count rises 6 → 10 |
 
-The coordinator attributed the exposure to lanes he authorized at
-**18:45-19:00Z**. The sampler says the sustained load began at **~18:15Z**
-and the **first forfeit was 18:24Z — 21 minutes before that window**. The
-authorization made it worse; it did not open it. Recorded because
-attribution should follow the instrument, not the account, even when the
-account is an admission against interest.
+The coordinator first attributed the exposure to lanes he authorized at
+**18:45-19:00Z**. The sampler said the sustained load began at **~18:15Z**
+and the **first forfeit was 18:24Z — 21 minutes before that window**, so
+the authorization made it worse but did not open it.
+
+**Attribution now closed, and BOTH sources were coordinator-spawned:**
+
+| from | source | how |
+|---|---|---|
+| **~18:10-18:15Z** | **the PR-audit lane** — the OPENER | spawned to audit locally; three CPython 3.9 processes at ~96% each, one visibly running `./sunfish.py`. Its prompt fenced the laptop for *matches* but ambiguously offered local scratchpad for clones, and the lane computed there |
+| **~18:45Z** | the library-mode leanpy authorization | an explicit "survey-scale" exception to the venue rule, which made an already-contended machine worse |
+
+**Verified independently at 19:1xZ rather than taken on report**: two of
+those CPython 3.9 processes were still live at **93.7% and 93.3%** when
+this was written, with total foreign CPU at **348%**.
+
+Recorded because attribution should follow the instrument, not the
+account — and here the instrument's timing is what identified the opener,
+after the first account named the wrong lane.
 
 **The first ~200 games ran clean at 18-44% with zero forfeits** — a
 clean-venue record inside this very match, consistent with B's 60/60.
