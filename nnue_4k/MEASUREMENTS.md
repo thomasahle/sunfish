@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **PRE-REGISTERED: the +400 progress meter gets re-measured — entry vs sunfish-classic, and a HARNESS DEFECT is registered with it: at a nominal 20000-node cap classic actually searches 1.53× the entry's nodes** | Entry `nnue_4k/pst_entry.py` @ nnue-4k `5af840d`, packed **3405 B measured** (691 spare, `check_entry.sh` green) vs classic `sunfish.py` @ master **`573d692`** (packs to **3246 B**, reference only — classic is not a 4k entry). **Stage 1**: fixed-node 20000, **fixed N=400 games, NOT SPRT** (a magnitude measurement wants an unbiased number), book3k order=random, **srand 20260816** (fresh — 20260814/20260815 are spent), concurrency 4, adjudication copied from the ml2 config. **The asymmetry, measured on 24 opening positions BEFORE game 1**: the entry enforces the cap INSIDE the search (`self.nodes > self.node_cap: raise Stop`); classic@573d692's `Searcher` stores `node_cap` and never reads it, so it only stops between iterations and overshoots — median nodes **24247 vs 16866 (1.53× per position, max 4.41×)**, wall time 1.33×. **One-sided, in classic's favour**, so whatever stage 1 reports is a conservative FLOOR on the entry's equal-effort standing. **Stage 2** (conditional on a free laptop and a clean stage 1): 60+1, N=200, **PACKED ARTIFACTS both sides** — the only vehicle that carries the entry's `_pooltm`, which lives in the builtin loop the sunfish_ui driver bypasses. **Adjudication is ACTIVE here, NOT inert** — the standing inertness note does not apply: both arms emit `score cp` (verified), exactly as on the 8mv screen (229/320 adjudicated). Gates before games: node cap binds by SCALING on both arms (17×/21× for 100× the nodes), legality 200/200 both arms both paths, first-yield worst 582/2048, empty cwd, driver pinned to `DRIVER_VERSION 3` (the main-repo copy has **no `max_nodes`** — the pre-`go nodes` driver that voided 425 games). Zero-illegal tripwire on the full match |
 | 2026-08-15 | **PRE-REGISTERED (measurement lane, before a single number was computed): can a SHORT fixed-node mini-match rank candidates that val cannot? The three surviving screen PGNs get truncated to their first N games and asked to reproduce their own full-screen ranking** | Retrospective truncation of `replnet-8mv` (−107.06), `float-ml2` (−234.18), `grid-ml2 g70` (−300.56). Ladder **N ∈ {25, 50, 75, 100, 150, all} games, rounded DOWN to whole colour-swapped pairs** = {12, 25, 37, 50, 75, all} pairs. Truncation is by **ROUND number, never file order** (file order is completion order at concurrency 8 — the pairing defect that made `pendkhold2` read ±13.39 instead of ±6.97). **N\*** = smallest ladder rung where (a) all three point-estimate Elos are NEGATIVE, (b) the score-rate ranking is 8mv > float-ml2 > grid-ml2 matching the full screens, and (c) **both hold at that rung AND at every larger rung** (rank stability — the truncation-ladder form of "stable across N and N±25"). **N\*\*** = smallest rung that additionally separates the CROSS-FAMILY pair (8mv vs float-ml2) at one-sided z ≥ 1.645 on the score-rate difference, and holds for all larger rungs. **Stated in advance: non-overlap is known-impossible for the float/grid pair** — the full screens already overlap on [−289.26, −229.23] — so requiring it everywhere would set N\* = ∞ by construction, and any spec that comes out of this must say the selector cannot resolve adjacent near-ties. Cross-check: hand pentanomial at "all" must reproduce fastchess's reported Elo/ptnml on all three |
 | 2026-08-15 | **REGISTERED (hygiene lane, before fixing): `khold`/`khold2` in `make_variants.py` are already broken -- their sole anchor (the pre-landing king seam) was removed by `pend`'s landing (`61b1a51`), same mechanism as `oldtm`/`steptm` losing theirs to `5f16bae`. They fail loudly today (safe), but look like live, buildable variants and are not -- and the whole family they belong to is now closed by measurement: `kact` DROP (-33.07 +/- 15.98, `ec70bd8`), `kmid` UNDECIDED (+2.08 +/- 16.58, `ec70bd8`), `khold2` alone UNDECIDED (+2.43 +/- 7.24, `bbc1969`), `khold2` on `pend` LOSES (-10.78 +/- 6.96 [-17.75,-3.81], `78ff222`), `khold` itself FAILS the mate-conversion gate and was never screened (`ad292ae`)** | Fix: tombstone `khold`/`khold2` in one block, same pattern as `pend`/`pooltm`-trio, naming every closing verdict's ledger commit and the rev to rebuild from for reproduction. Also checked `kact`/`kmid` (disjoint anchors, unrelated to pend's seam) -- both still build; left alone. Gate: `khold`/`khold2` raise unknown-mod loudly; `kact`/`kmid` and every other remaining mod still build |
 | 2026-08-15 | **SCREEN VERDICT: the EXPORT-FAITHFUL ml2 net is −300.56 ± 71.33 — WORSE than the defective net it was built to replace, so honest training did NOT rescue the two-layer eval** | 178 games of a 1000 cap, SPRT H0, score **15.06%**, pentanomial **[58, 13, 13, 2, 2]** over 88 pairs, PairsRatio 0.034, **0 illegal / 0 forfeits / 178 normal terminations**, adjudication symmetrically inert (0 adjudications, neither arm emits `info` lines). Arm 3775 B vs entry 3405 B @ `c5534cd`. The pre-registered bad branch: fixing quantization did not recover the family. **Not** separated from float-ml2 ([−371.89,−229.23] vs [−289.26,−179.10] overlap) — directionally worse, not measurably. **The anti-predictive finding now has three points and a precise form: val ranks arms INSIDE a family and INVERTS across family boundaries** — linear has the worst val of the three (0.01378) and the best play (−107); within ml2, float 0.01280→−234 and grid 0.01347→−300 move together. Probes do not rescue it: `70` responds on more classes (passer +23.9 vs +2.8, bishop-pair +14.2 vs 0.0) and plays 194 Elo worse. Grid-era vals: `70` 0.01347, `71` **0.01378 = the linear reference exactly** (one-layer family is fully grid-representable), `72` τ=1.1 0.01378 at **+1 measured byte** — arm 8 closed |
@@ -265,6 +266,122 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-15 — PRE-REGISTRATION: the +400 progress meter, re-measured — and the fixed-node harness is NOT symmetric for this pairing
+
+The standing goal is the entry at **+400 over sunfish-classic**. The gap has
+not been measured since `pend` (+21.31) and the pool TM landed, and the last
+scoreboard number is the 2026-08-12 goal-line verdict, **+187.0 ± 49.7 at
+60+1**. This registers the re-measurement, and one harness finding that had
+to be measured *before* the match rather than discovered in the residuals.
+
+### Arms, bytes measured at registration
+
+| arm | source | packed |
+|---|---|---|
+| **entry** | `nnue_4k/pst_entry.py` @ nnue-4k **`5af840d`** | **3405 B** (691 spare; `check_entry.sh`: source matches generator) |
+| **classic** | `sunfish.py` @ master **`573d692`** (the #196-merged state) | **3246 B** — reference only, classic is not a 4k entry |
+
+Vehicle: **sources under pypy3 7.3.23**, both arms through the same pinned
+`sunfish_ui` driver, for the reason the ml2 screens recorded — the node cap
+lives inside `# minifier-hide`, so `pack.sh` strips it and a packed build
+ignores `go nodes` entirely. The packed bytes above are what the 4k budget
+cares about and are named here; they are not what plays stage 1.
+
+### THE HARNESS FINDING, registered before game 1
+
+**`go nodes 20000` is not equal effort for this pairing.** The entry stops
+inside the search:
+
+```
+if self.nodes % 2048 == 0 and self.nodes > self.node_cap: raise Stop
+```
+
+classic@`573d692` has no such line — the driver assigns `searcher.node_cap`
+and classic's `bound()` never reads it — so classic's only stop is the
+driver's **between-iteration** check and it finishes whatever iteration it is
+inside. Measured on 24 real opening positions at the cap this match uses:
+
+| arm | median nodes | p90 | max | median time |
+|---|---|---|---|---|
+| entry | **16 866** | 19 822 | 20 150 | 0.192 s |
+| classic | **24 247** | 52 850 | **72 442** | 0.256 s |
+
+Per-position ratio **min 1.02, median 1.53, max 4.41**; wall-time ratio 1.33×.
+This is **one-sided and it favours classic** — roughly "entry at 20k vs
+classic at ~30k". Every previous fixed-node screen in this ledger was
+within-family (both arms generated from the same source, both carrying the
+in-search cap), so the asymmetry is new and specific to classic.
+
+**It is disclosed, not fixed.** Adding the check to classic would modify a
+pinned arm. The consequence is stated instead: **stage 1's number is a
+conservative FLOOR on the entry's equal-effort standing**, and a positive
+result is robust to the bias while a negative one would not be.
+
+### Stage 1 — the verdict leg
+
+| | |
+|---|---|
+| form | fixed-node **20000**, **fixed N = 400 games**, **NOT SPRT** — the whole point is an unbiased magnitude |
+| book | `book3k.pgn`, order=random |
+| srand | **20260816** — fresh; 20260814 (8mv, float-ml2) and 20260815 (grid-ml2) are spent |
+| concurrency | 4, `nice -n 5` |
+| adjudication | copied from the ml2 screen config: `-draw movenumber=40 movecount=8 score=10 -resign movecount=4 score=500` |
+| tripwire | **zero illegal moves**; one ends the run and voids it |
+| arena | `scratchpad/arena-meas/` (lane-unique), laptop, lock held |
+
+**Adjudication is ACTIVE here and the standing inertness note DOES NOT
+APPLY.** That note covers packed artifacts, which emit no `info` lines. These
+arms run sources through the driver and **both emit `score cp`** — verified
+directly before registering — so `-resign`/`-draw` will fire, exactly as they
+did on the 8mv screen (229 of 320 games adjudicated). The rule is symmetric
+(both arms are subject to it) but not identical in meaning, since each engine
+applies the threshold to *its own* eval; the adjudication count is reported
+with the verdict.
+
+### Stage 2 — the real-clock leg (registered, conditional)
+
+Runs only if the laptop stays free and stage 1 completes clean: **60+1, fixed
+N = 200**, same two engines but **PACKED ARTIFACTS on both sides**.
+
+This is a deliberate departure from "same arms as stage 1", and the reason is
+mechanical: the entry's pool time manager `_pooltm` lives in the **builtin
+loop**, and the `sunfish_ui` driver computes its own `think` and bypasses it.
+A driver-vehicle timed match would therefore measure the *driver's* time
+formula on both sides and could not see the pool TM at all. The packed
+artifacts each run their own loop with their own manager — entry with the
+pool, classic with `wtime/40 + 0.9·winc` — which is what the two engines
+actually ship.
+
+**Comparability, stated in advance:** stage 2 is therefore **NOT** methodo-
+logically identical to the +187.0 ± 49.7 goal-line number, which deliberately
+put both sides on the same driver "so the time-formula gain cancels and this
+measures engine+eval only". Stage 2 includes the TM gain by design. The two
+numbers answer different questions and neither supersedes the other.
+
+### Gates, all green before registration
+
+- **Node cap BINDS by scaling** on both arms (100× the nodes costs 17.0×/21.1×
+  the time) — the check the 2026-08-12 void demanded, done by scaling rather
+  than by "a move came back".
+- **Legality 200/200** on each arm, both `go movetime 300` and `go nodes
+  20000` paths, 0 no-move, 0 illegal; first-yield worst **582** of a 2048
+  window, 0 over-budget.
+- **Empty cwd**: both wrappers `cd` into a dedicated empty directory and leave
+  it empty. This is not hygiene, it is the driver pin — `sunfish_ui` is
+  installed nowhere, so it resolves from exactly cwd and `PYTHONPATH`, and
+  **`/Users/ahle/repos/sunfish/sunfish_ui/uci.py` has `from_fen` but NO
+  `max_nodes`**: it is the pre-`go nodes` driver that voided 425 games. The
+  entry refuses it (`DRIVER_VERSION < 3` raises); **classic has no such
+  guard**, so an unpinned cwd would have silently given classic movetime
+  games. Verified: both arms resolve `DRIVER_VERSION 3`.
+
+**No bar.** This is a magnitude measurement against a standing goal, not a
+land/no-land test; the number is reported with its interval and its floor
+caveat, and "+400" is a target to report progress against, not a threshold
+anything passes.
 
 ---
 
