@@ -4,7 +4,6 @@
 import argparse
 import json
 import math
-import pathlib
 
 import adaptive_gp
 import logistic_gp
@@ -19,7 +18,7 @@ def main():
     parser.add_argument("--all-axes", action="store_true")
     args = parser.parse_args()
 
-    state = json.loads(pathlib.Path(args.state).read_text())
+    state = adaptive_gp.load_state(args.state, 1)
     space = logistic_gp.MixedSpace.load(args.space)
     space.condition(space.default)
     model = adaptive_gp.posterior(

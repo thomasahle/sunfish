@@ -15,16 +15,20 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from adaptive_gp import (
     aggregate,
     bind_study,
+    checkpoint_state,
     commit_selection,
     coordinate_maximum,
+    design_variance,
     engine_identity,
     exploration_probability,
     fantasy_variance,
     fixed_baseline_point,
     gate_policy,
     inducing_basis,
+    load_state,
     OpeningSchedule,
     selection_state,
+    save_state,
     UCI_OPTION,
     pending_configurations,
     validate_opening_budget,
@@ -307,6 +311,16 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertTrue(all(probability > 0.2 for probability in probabilities))
         self.assertLess(probabilities[-1], 0.22)
 
+    def test_design_variance_needs_only_the_kernel_diagonal(self):
+        candidates = self.space.candidates
+        sites = candidates[:3]
+        covariance = self.space.kernel(candidates, candidates)
+        cross = self.space.kernel(sites, candidates)
+        site_covariance = self.space.kernel(sites, sites) + np.eye(len(sites)) * 1e-6
+        expected = np.diag(covariance) - np.sum(
+            cross * np.linalg.solve(site_covariance, cross), axis=0)
+        np.testing.assert_allclose(design_variance(sites, candidates, self.space), expected)
+
     def test_pair_at_a_time_fills_every_lane(self):
         self.assertEqual(pending_configurations(10, 1), 10)
         self.assertEqual(pending_configurations(10, 3), 4)
@@ -411,6 +425,35 @@ class MixedAcquisitionTest(unittest.TestCase):
         bind_study(state, {"version": 1, "tc": "3+0.1"})
         with self.assertRaisesRegex(RuntimeError, "tc changed"):
             bind_study(state, {"version": 1, "tc": "5+0.1"})
+
+    def test_state_journal_replays_incrementally_across_checkpoints(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory, "state.json")
+            state = {"next_opening": 1, "batches": [], "allocations": {}}
+            save_state(path, state)
+            state["next_opening"] = 2
+            state["allocations"]["explore"] = 1
+            state["batches"].append({"wins": 1})
+            state["gates"] = {"a": {"accepted": True}}
+            save_state(path, state)
+            self.assertEqual(load_state(path, 1), state)
+            checkpoint_state(path, state)
+            state["batches"].append({"draws": 2})
+            save_state(path, state)
+            self.assertEqual(load_state(path, 1), state)
+
+    def test_state_journal_ignores_a_partial_last_event(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory, "state.json")
+            state = {"next_opening": 1, "batches": []}
+            save_state(path, state)
+            journal = path.with_suffix(".jsonl")
+            journal.write_text('{"batches":[')
+            self.assertEqual(load_state(path, 1), state)
+            self.assertEqual(journal.read_text(), "")
+            state["batches"].append({"wins": 1})
+            save_state(path, state)
+            self.assertEqual(load_state(path, 1), state)
 
     def test_identical_parameterized_baseline_is_not_an_arm(self):
         with tempfile.TemporaryDirectory() as directory:

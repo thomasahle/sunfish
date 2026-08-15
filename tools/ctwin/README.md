@@ -144,7 +144,7 @@ python3 adaptive_gp.py \
   --engine ./sunfish_c --engine-args ./tables_classic.txt \
   --baseline-options default \
   --space all_parameters.json --openings openings.fen \
-  --gate "python3 sunfish_gate.py" --cycle-openings \
+  --gate "python3 sunfish_gate.py" --gate-workers 4 --cycle-openings \
   --slots 20 --queue-batches 20 --refill-batches 4 \
   --pairs 1 --initial-design 256 --inducing 128 --update-batches 8 \
   --explore-start .5 --explore-floor .2 --duel-fraction .3 \
@@ -154,7 +154,11 @@ python3 adaptive_gp.py \
 `--baseline-options default` pins the exact default point to zero. Opening
 reuse is balanced by a fresh deterministic shuffle per epoch, and independent
 books remain mandatory for final confirmation. A fixed inducing basis permits
-online Laplace updates without rebuilding a quadratic comparison matrix.
+online Laplace updates without rebuilding a quadratic comparison matrix. Gate
+workers check proposals concurrently, but rejected policies consume neither
+games nor the reserved design/exploration allocation. Results append to a
+JSONL journal and compact into the JSON checkpoint every 1,000 pairs, avoiding
+quadratic checkpoint I/O while remaining restartable.
 
 Game use: `position startpos moves …` / `position fen …`, then
 `go nodes N` (primary — clock-free surrogate games), `go depth D`,

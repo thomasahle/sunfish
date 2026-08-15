@@ -14,6 +14,7 @@ discarding a region while still concentrating games around promising policies.
 
 import argparse
 import asyncio
+import copy
 import hashlib
 import json
 import math
@@ -25,6 +26,7 @@ import shlex
 import shutil
 import signal
 import subprocess
+import time
 from collections import deque
 
 import numpy as np
@@ -35,6 +37,7 @@ import logistic_gp
 SCORE = re.compile(
     r"Score of candidate vs (?:baseline|opponent):\s+(\d+)\s+-\s+(\d+)\s+-\s+(\d+)")
 UCI_OPTION = re.compile(r"^option name (.+?) type ")
+SAVED_STATES = {}
 
 
 def validate_options(command, arguments, required):
@@ -57,15 +60,75 @@ def validate_options(command, arguments, required):
 
 def load_state(path, start):
     path = pathlib.Path(path)
-    if path.exists():
-        return json.loads(path.read_text())
-    return {"next_opening": start, "batches": []}
+    if not path.exists():
+        return {"next_opening": start, "batches": []}
+    state = json.loads(path.read_text())
+    offset = state.pop("_journal_offset", 0)
+    journal = path.with_suffix(".jsonl")
+    if journal.exists():
+        with journal.open("rb+") as events:
+            events.seek(offset)
+            while line := events.readline():
+                start = events.tell() - len(line)
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    if not line.endswith(b"\n"):
+                        events.truncate(start)
+                        break
+                    raise
+                state["batches"].extend(event.get("batches", ()))
+                if event.get("gates"):
+                    state.setdefault("gates", {}).update(event["gates"])
+                state.update(event.get("meta", {}))
+    SAVED_STATES[str(path.resolve())] = state_snapshot(state)
+    return state
+
+
+def state_snapshot(state):
+    return {
+        "batches": len(state.get("batches", ())),
+        "gates": set(state.get("gates", ())),
+        "meta": copy.deepcopy({
+            key: value for key, value in state.items() if key not in {"batches", "gates"}
+        }),
+    }
 
 
 def save_state(path, state):
     path = pathlib.Path(path)
+    key = str(path.resolve())
+    if not path.exists():
+        path.with_suffix(".jsonl").unlink(missing_ok=True)
+        checkpoint_state(path, state)
+        SAVED_STATES[key] = state_snapshot(state)
+        return
+    old = SAVED_STATES.setdefault(key, state_snapshot(state))
+    new = state_snapshot(state)
+    event = {
+        "batches": state.get("batches", ())[old["batches"]:],
+        "gates": {
+            name: record for name, record in state.get("gates", {}).items()
+            if name not in old["gates"]
+        },
+        "meta": {
+            name: value for name, value in new["meta"].items()
+            if old["meta"].get(name) != value
+        },
+    }
+    if any(event.values()):
+        journal = path.with_suffix(".jsonl")
+        with journal.open("a") as events:
+            events.write(json.dumps(event, separators=(",", ":")) + "\n")
+    SAVED_STATES[key] = new
+
+
+def checkpoint_state(path, state):
+    path = pathlib.Path(path)
+    journal = path.with_suffix(".jsonl")
+    payload = state | {"_journal_offset": journal.stat().st_size if journal.exists() else 0}
     temporary = path.with_suffix(path.suffix + ".tmp")
-    temporary.write_text(json.dumps(state, indent=2, sort_keys=True) + "\n")
+    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
     temporary.replace(path)
 
 
@@ -128,7 +191,7 @@ def study_identity(args):
             for name in ("pair_weight", "exploration", "initial_design", "explore_start",
                          "explore_floor", "explore_half_life", "explore_optimism",
                          "duel_fraction", "inducing", "seed_selections",
-                         "acquisition_restarts", "update_batches")
+                         "acquisition_restarts", "update_batches", "gate_workers")
         },
     }
 
@@ -257,13 +320,13 @@ def update_posterior(model, batches, pair_weight, space):
 
 def design_variance(sites, candidates, space):
     """Residual prior variance after conditioning noiselessly on design sites."""
-    covariance = space.kernel(candidates, candidates)
+    variance = space.kernel_diagonal(candidates)
     if not sites:
-        return np.diag(covariance).copy()
+        return variance
     cross = space.kernel(sites, candidates)
     site_covariance = space.kernel(sites, sites) + np.eye(len(sites)) * 1e-6
     projection = np.linalg.solve(site_covariance, cross)
-    return np.maximum(np.diag(covariance) - np.sum(cross * projection, axis=0), 0)
+    return np.maximum(variance - np.sum(cross * projection, axis=0), 0)
 
 
 def exploration_probability(selections, start, floor, half_life):
@@ -311,6 +374,7 @@ def gate_policy(args, state, space, vector):
         "engine_args": args.engine_args,
         "options": knobs,
     }
+    started = time.perf_counter()
     process = subprocess.Popen(
         shlex.split(args.gate), text=True, stdin=subprocess.PIPE,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
@@ -332,8 +396,10 @@ def gate_policy(args, state, space, vector):
         "accepted": accepted,
         "knobs": knobs,
         "output": output[-2000:],
+        "seconds": time.perf_counter() - started,
     }
-    print(f"[gate] {'accept' if accepted else 'reject'} {key}", flush=True)
+    print(f"[gate] {'accept' if accepted else 'reject'} "
+          f"{cache[key]['seconds']:.2f}s {key}", flush=True)
     return accepted
 
 
@@ -666,7 +732,7 @@ async def optimize(args):
     allocation_model = None
     modeled_batches = 0
 
-    def add_experiment():
+    def refresh_model():
         nonlocal allocation_model, modeled_batches
         if allocation_model is None:
             allocation_model = posterior(
@@ -678,6 +744,8 @@ async def optimize(args):
                 args.pair_weight, space) if args.inducing else posterior(
                     state, mean_function, args.pair_weight, space))
             modeled_batches = len(state["batches"])
+
+    def pending_comparisons():
         pending = [
             (experiment["vector"], experiment["opponent"])
             for experiment in experiments.values()
@@ -688,24 +756,16 @@ async def optimize(args):
              if batch.get("opponent_knobs") is not None else None)
             for batch in state["batches"][modeled_batches:]
         ]
-        rejected = {
+        return pending
+
+    def rejected_configurations():
+        return {
             space.canonical(record["knobs"])
             for record in state.get("gates", {}).values()
             if not record["accepted"]
         }
-        forbidden = rejected | ({fixed} if fixed is not None else set())
-        for _ in range(args.gate_attempts):
-            trial = selection_state(state)
-            vector, diagnostics = choose(
-                trial, mean_function, candidates, pending, args, space,
-                allocation_model, forbidden)
-            if gate_policy(args, state, space, vector):
-                commit_selection(state, trial)
-                break
-            forbidden.add(vector)
-            save_state(args.state, state)
-        else:
-            raise RuntimeError(f"policy gate rejected {args.gate_attempts} consecutive proposals")
+
+    def schedule_experiment(vector, diagnostics):
         opponent = None
         if diagnostics["mode"] != "design":
             opponent = choose_opponent(
@@ -737,6 +797,56 @@ async def optimize(args):
             flush=True,
         )
 
+    async def add_experiments(count):
+        refresh_model()
+        pending = pending_comparisons()
+        forbidden = rejected_configurations() | ({fixed} if fixed is not None else set())
+        proposal_state = selection_state(state)
+        proposals = []
+        for _ in range(count):
+            reservation = selection_state(proposal_state)
+            trial = selection_state(reservation)
+            reservation_pending = list(pending)
+            vector, diagnostics = choose(
+                trial, mean_function, candidates, pending, args, space,
+                allocation_model, forbidden | {item[0] for item in proposals})
+            commit_selection(proposal_state, trial)
+            proposals.append([vector, diagnostics, reservation, 0, reservation_pending])
+            pending.append((vector, None))
+
+        while True:
+            unchecked = [item for item in proposals if item[3] >= 0]
+            if not unchecked:
+                break
+            for offset in range(0, len(unchecked), args.gate_workers):
+                group = unchecked[offset:offset + args.gate_workers]
+                accepted = await asyncio.gather(*(
+                    asyncio.to_thread(gate_policy, args, state, space, item[0])
+                    for item in group
+                ))
+                for item, passed in zip(group, accepted):
+                    if passed:
+                        item[3] = -1
+                        continue
+                    forbidden.add(item[0])
+                    item[3] += 1
+                    if item[3] >= args.gate_attempts:
+                        raise RuntimeError(
+                            f"policy gate rejected {args.gate_attempts} consecutive proposals")
+                    others = {other[0] for other in proposals if other is not item}
+                    trial = selection_state(item[2])
+                    item[0], replacement = choose(
+                        trial, mean_function, candidates, item[4], args, space,
+                        allocation_model, forbidden | others)
+                    if replacement["mode"] != item[1]["mode"]:
+                        raise AssertionError("gate replacement changed allocation mode")
+                    item[1] = replacement
+
+        commit_selection(state, proposal_state)
+        for vector, diagnostics, _, _, _ in proposals:
+            schedule_experiment(vector, diagnostics)
+        save_state(args.state, state)
+
     def start_queued():
         while queue and len(running) < args.slots:
             used = set(running.values())
@@ -748,11 +858,10 @@ async def optimize(args):
 
     while completed < args.batches:
         if len(experiments) <= args.queue_batches - args.refill_batches:
-            while (len(experiments) < args.queue_batches
-                    and completed + len(experiments) < args.batches):
-                add_experiment()
-                start_queued()
-                await asyncio.sleep(0)
+            count = min(
+                args.queue_batches - len(experiments),
+                args.batches - completed - len(experiments))
+            await add_experiments(count)
         start_queued()
         done, _ = await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED)
         for task in done:
@@ -782,9 +891,12 @@ async def optimize(args):
             del experiments[number]
             completed += 1
             save_state(args.state, state)
+            if completed % args.checkpoint_batches == 0:
+                checkpoint_state(args.state, state)
             print(f"[experiment {number}] result "
                   f"{experiment['wins']}-{experiment['losses']}-{experiment['draws']}",
                   flush=True)
+    checkpoint_state(args.state, state)
 
 
 def main():
@@ -831,9 +943,12 @@ def main():
     parser.add_argument("--acquisition-restarts", type=int, default=8)
     parser.add_argument("--update-batches", type=int, default=1,
         help="completed pairs per online posterior update")
+    parser.add_argument("--checkpoint-batches", type=int, default=1000,
+        help="pairs per compact JSON checkpoint; intervening results use a journal")
     parser.add_argument("--gate", help="command reading a policy JSON object on stdin")
     parser.add_argument("--gate-timeout", type=float, default=60)
     parser.add_argument("--gate-attempts", type=int, default=1000)
+    parser.add_argument("--gate-workers", type=int, default=4)
     parser.add_argument("--seed-selections", type=int, default=0,
         help="continue the allocation clock when importing a state")
     parser.add_argument("--safe-only", action="store_true")
@@ -848,7 +963,8 @@ def main():
         parser.error("require 0 <= --duel-fraction <= 0.40 to preserve the baseline anchor")
     if args.pair_weight <= 0:
         parser.error("--pair-weight must be positive")
-    if min(args.pairs, args.slots, args.batches, args.gate_timeout, args.gate_attempts) <= 0:
+    if min(args.pairs, args.slots, args.batches, args.gate_timeout,
+           args.gate_attempts, args.gate_workers) <= 0:
         parser.error("pair, slot, batch, and gate limits must be positive")
     if args.queue_batches is None:
         args.queue_batches = pending_configurations(args.slots, args.pairs)
@@ -858,7 +974,8 @@ def main():
         parser.error("require 1 <= --refill-batches <= --queue-batches")
     if args.initial_design < 1 or args.explore_half_life <= 0:
         parser.error("--initial-design and --explore-half-life must be positive")
-    if args.inducing < 0 or min(args.acquisition_restarts, args.update_batches) < 1:
+    if args.inducing < 0 or min(
+            args.acquisition_restarts, args.update_batches, args.checkpoint_batches) < 1:
         parser.error("inducing must be nonnegative; acquisition and update counts must be positive")
     if args.explore_optimism < 0 or args.seed_selections < 0:
         parser.error("--explore-optimism and --seed-selections cannot be negative")
