@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **+400 PROGRESS METER, STAGE 1: the 4k entry and sunfish-classic are INDISTINGUISHABLE at fixed nodes — −1.74 ± 27.93 over a fixed 400 games. Corrected for the registered 1.53× node asymmetry the entry's per-node edge is ≈ +60, which means its historical timed advantage is SPEED AND TIME MANAGEMENT, not per-node quality** | Fixed N=400 (no SPRT), nodes 20000, srand 20260816, book3k order=random, concurrency 4, 29 m 48 s. **158 W / 160 L / 82 D = 49.75%**, nElo −2.12 ± 34.05, LOS 45.14%, ptnml **[26, 31, 88, 29, 26]** over **200 complete pairs**, PairsRatio 0.96, DrawRatio 44.00%. **0 illegal, 0 time forfeits, 400/400 terminations** (279 adjudication, 121 normal — adjudication was ACTIVE and symmetric as registered, both arms emit `score cp`). Independent round-paired recompute reproduces fastchess to the digit. Arms verified by sha256: entry source `e27f9dff…` **==** `git show 5af840d:nnue_4k/pst_entry.py`, classic `329ae372…` **==** `git show 573d692:sunfish.py`; **entry.packed 3405 B hashes `5a207fdf9cf05f2e…`, bit-identical to the artifact the pooltm landing recorded**; classic packs to 3246 B. Driver pinned `DRIVER_VERSION 3` on both arms. **Progress toward +400: this is ~0 of 400, and the bias-corrected ≈ +60 is ~15% of it.** Context that must travel with the number: the **+187.0 ± 49.7** goal-line figure was the **256kb8@100M NNUE testbed engine, NOT the 4k entry** — the entry's own last number was `entry_kf` **+107.54 ± 31.64 at 10+0.1** (2026-08-13). Fixed nodes removes speed and TM from the comparison, which is exactly why it reads lower, and classic has since absorbed **#196 (min40-4, +147 [+86,+219])** — though that is a TM change and cannot have moved a fixed-node result |
 | 2026-08-15 | **AMENDMENT to the stage-2 registration, made BEFORE game 1: adjudication is REMOVED, because on packed arms it would be ASYMMETRIC — `entry.packed` emits 0 info lines and `classic.packed` emits 17, so `-resign score=500` could fire for classic ONLY** | Measured, not assumed: the entry's info output sits inside `# minifier-hide` and `pack.sh` strips it; classic's does not. A one-sided resign rule adjudicates losses for exactly one arm, which is a biased instrument, so stage 2 runs with `-resign`/`-draw` OFF and every game ends naturally. Two further packed-arm facts confirmed by direct test, both reproducing the **2026-08-13** harness findings rather than discovering them: (1) the builtin UCI loop **silently ignores `position fen`** — both artifacts answer `g1f3` to a black-to-move FEN — so stage 2 must use a **PGN book from the standard start** (`book3k`), never an EPD/FEN book, verified by a 4-game smoke where fastchess replayed the book as `position startpos moves …` with **0 illegal**; (2) `legality_gate.py` cannot gate a packed artifact at all (it drives FENs), so the substitute gate is a **20-game arbiter-verified smoke** at 2+0.05 on the same book, zero illegal required, plus the full-match tripwire. Stage 2 srand **20260817** |
 | 2026-08-15 | **TRUNCATION VERDICT: N\* = 50 GAMES — a 50-game fixed-node mini-match reproduces the three screens' full ranking and keeps it at every larger N. But the honest reading is narrower than "50 games ranks candidates": at a fixed 50-game budget the COMPLETE 3-way ordering is right only 72.4% of the time, while picking the BEST arm is right 96.8%** | Registered criterion (`52a4afb`) applied to the three surviving PGNs, truncated by ROUND. Cross-check passed first: all three "all" rungs reproduce fastchess exactly (8mv −107.06 ± 35.84 ptnml [51,27,58,12,11]; float-ml2 −234.18 ± 55.08 [51,19,23,1,3]; grid-ml2 −300.56 ± 71.33 [58,13,13,2,2]). **N\* = 50** (sign+rank hold at 50, 75, 100, 150, all; both FAIL at 25, where float-ml2 sits at exactly 50.00% and outranks 8mv). **N\*\* = 150** — the smallest rung where the CROSS-FAMILY pair also reaches one-sided z ≥ 1.645 (z: 25 −1.92, 50 0.12, 75 0.75, 100 0.82, **150 2.58**, all 4.09). **N\* has ZERO margin**: an unregistered fine scan puts the first-stable point at exactly 25 pairs — at 24 pairs the top two are an exact tie (39.58% vs 39.58%) and below that float-ml2 leads. **Bootstrap (4000 resamples of the pair pool) is the calibration that matters**: at N=50 pick-the-best **96.8%**, resolve the 127-Elo cross-family gap **96.0%**, full 3-way ordering **72.4%**, the 66-Elo adjacent pair only **76.2%**; at N=150 those are 99.9% / 99.9% / 90.8% / 90.8%. **As predicted at registration the adjacent ml2 pair never separates** (z 1.48 at 150, 1.52 at all). Selector resolution measured directly: 50 games resolve ~101 Elo at z=1.645, 150 games ~59 Elo. **SELECTOR SPEC written to TRAINQUEUE.md**: the mini-match returns a TOP PICK, never a ranking, and never a ledger Elo |
 | 2026-08-15 | **PRE-REGISTERED: the +400 progress meter gets re-measured — entry vs sunfish-classic, and a HARNESS DEFECT is registered with it: at a nominal 20000-node cap classic actually searches 1.53× the entry's nodes** | Entry `nnue_4k/pst_entry.py` @ nnue-4k `5af840d`, packed **3405 B measured** (691 spare, `check_entry.sh` green) vs classic `sunfish.py` @ master **`573d692`** (packs to **3246 B**, reference only — classic is not a 4k entry). **Stage 1**: fixed-node 20000, **fixed N=400 games, NOT SPRT** (a magnitude measurement wants an unbiased number), book3k order=random, **srand 20260816** (fresh — 20260814/20260815 are spent), concurrency 4, adjudication copied from the ml2 config. **The asymmetry, measured on 24 opening positions BEFORE game 1**: the entry enforces the cap INSIDE the search (`self.nodes > self.node_cap: raise Stop`); classic@573d692's `Searcher` stores `node_cap` and never reads it, so it only stops between iterations and overshoots — median nodes **24247 vs 16866 (1.53× per position, max 4.41×)**, wall time 1.33×. **One-sided, in classic's favour**, so whatever stage 1 reports is a conservative FLOOR on the entry's equal-effort standing. **Stage 2** (conditional on a free laptop and a clean stage 1): 60+1, N=200, **PACKED ARTIFACTS both sides** — the only vehicle that carries the entry's `_pooltm`, which lives in the builtin loop the sunfish_ui driver bypasses. **Adjudication is ACTIVE here, NOT inert** — the standing inertness note does not apply: both arms emit `score cp` (verified), exactly as on the 8mv screen (229/320 adjudicated). Gates before games: node cap binds by SCALING on both arms (17×/21× for 100× the nodes), legality 200/200 both arms both paths, first-yield worst 582/2048, empty cwd, driver pinned to `DRIVER_VERSION 3` (the main-repo copy has **no `max_nodes`** — the pre-`go nodes` driver that voided 425 games). Zero-illegal tripwire on the full match |
@@ -382,6 +383,102 @@ screens are mutually calibrated.
 a 50-game fixed-node mini-match against a common pinned base returns a **top
 pick**, not a ranking, and never a ledger Elo. Only a registered screen
 produces a number that enters this file.
+
+---
+
+## 2026-08-15 — +400 PROGRESS METER, STAGE 1: the entry and classic are indistinguishable at fixed nodes, and what that says about where the entry's Elo actually comes from
+
+The registered fixed-N magnitude measurement (`d519c4a`) ran to its full
+length and returned a number nobody can round up.
+
+| | |
+|---|---|
+| form | fixed-node **20000**, **fixed N = 400**, **no SPRT** — an unbiased magnitude, as registered |
+| Elo / nElo | **−1.74 ± 27.93** (95%, pentanomial) → **[−29.67, +26.19]**; nElo −2.12 ± 34.05 |
+| score | **49.75%** — 158 W / 160 L / 82 D |
+| pentanomial (entry pair score) | **[26, 31, 88, 29, 26]** over **200 complete pairs**, PairsRatio **0.96** |
+| draw ratio | 44.00%; LOS 45.14% |
+| **tripwires** | **0 illegal, 0 time forfeits, 400/400 `[Termination]`** — 279 adjudication, 121 normal |
+| arms | entry **3405 B** packed vs classic **3246 B** packed (classic's byte count is reference only) |
+| wall clock | 29 m 48 s, concurrency 4, srand 20260816, `book3k` order=random |
+
+**Cross-check.** The independent round-paired recompute (`pair_elo.py`)
+returns classic **+1.74 ± 27.93** over 200 pairs / 400 games — the exact
+mirror of fastchess's **−1.74 ± 27.93**. Pairing is by round; not one game
+was dropped.
+
+**Provenance, by hash rather than by claim.** The played entry source is
+sha256 `e27f9dff…`, identical to `git show 5af840d:nnue_4k/pst_entry.py`;
+the played classic is `329ae372…`, identical to `git show
+573d692:sunfish.py`. The packed entry hashes **`5a207fdf9cf05f2e…`** —
+**bit-identical to the artifact recorded when `pooltm` landed**, so the
+3405 B measured here is the same artifact the ledger already knows. Both
+arms resolved `DRIVER_VERSION 3`, verified from the arms' own empty cwd.
+
+**Adjudication was ACTIVE and symmetric**, as the registration said it
+would be (and contrary to the packed-artifact inertness note, which does
+not apply to source arms): both engines emit `score cp`, 279 of 400 games
+ended by adjudication, the same instrument the 8mv screen used.
+
+### What the number means, with the registered bias applied
+
+At **nominal** equal nodes the two engines are indistinguishable. But the
+registration measured, before game 1, that the nominal is not the actual:
+classic has no in-search node cap and searched a **median 1.53×** the
+entry's nodes. Applying this project's own speed model (~100 Elo per
+doubling, the constant the ledger uses everywhere):
+
+> 1.53× = 0.61 doublings ≈ **+61 Elo of unearned search for classic**, so
+> the entry's equal-effort standing is approximately **+59 Elo**.
+
+That is an **estimate**, not a measurement — it inherits all the slop in a
+single-constant speed model — but its **direction is certain**, because
+the asymmetry is one-sided by construction.
+
+### The finding worth keeping
+
+**The 4k entry's advantage over classic is not per-node quality.** Fixed
+nodes strips out speed and time management and leaves search+eval
+quality — and on that axis the entry is worth roughly **+60**, not the
+three digits the timed numbers suggest. The entry's own last timed figure
+was `entry_kf` **+107.54 ± 31.64 at 10+0.1** (2026-08-13 hole RR, 400
+games in that pairing), so the majority of that advantage is bought with
+**nps and the time manager**, which is precisely what this ledger's
+"SPEED IS ELO" finding predicted.
+
+**A number that is routinely misread, corrected here.** The **+187.0 ±
+49.7** goal-line verdict of 2026-08-12 was the **play king
+(256kb8@100M)** — the large NNUE testbed engine on the unbounded side —
+**not the 4k entry**. It is not this artifact's score against classic and
+should never be quoted as progress for the entry.
+
+### Progress toward +400, stated honestly
+
+**Measured: ~0 of 400 at fixed nodes. Bias-corrected estimate: ~+60, or
+about 15% of the target.** Even the entry's best historical timed number
+(+107.54) is about a quarter of the way.
+
+Three things make this worse rather than better, and all are on the
+record:
+
+1. **Classic is a moving target and it just moved again.** Master
+   `573d692` is the #196 merge — `min40-4`, measured **+147 [+86, +219]**
+   over its predecessor in the classic-builtin venue. That is a *time
+   manager*, so it cannot have moved this fixed-node result, but it will
+   be in the way of every timed measurement from now on.
+2. **The eval line that was supposed to close the gap has failed eight
+   times.** Every fitted eval — Texel, C1, d1, b1, 8mv, float-ml2,
+   grid-ml2 — lost, and the truncation study ledgered today exists
+   because selection itself was broken.
+3. **The remaining three-digit items are speed, not eval**, by this
+   ledger's own accounting. Nothing in the queue is worth +340.
+
+The honest summary: **+400 is not close, the gap is not mostly an eval
+gap, and the fixed-node instrument says the distilled PSTs and classic's
+hand-tuned tables are worth about the same per node.**
+
+Stage 2 (60+1, packed artifacts, the real-clock number including the pool
+TM) launched on completion of this leg.
 
 ---
 
