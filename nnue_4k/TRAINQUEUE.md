@@ -247,6 +247,95 @@ VAL-probe-first):
 
 ## Log (newest first)
 
+- 2026-08-15 16:15 UTC: **PROGRAM-WIDE COMPLETE-PENDING-DIRECTION — the
+  training program is formally handed to the owner's decision.**
+
+  ### Instrument verdict — the draw × seed 2×2 (one-layer, 30-epoch budget)
+
+  | | n | mean | sd | range |
+  |---|---|---|---|---|
+  | **draw A** (`perm_seed 0`) | 10 | **0.013747** | 3.43e-5 | [0.01368, 0.01378] |
+  | **draw B** (`perm_seed 1`) | 3 | **0.013900** | 3.46e-5 | [0.01388, 0.01394] |
+
+  **The draw effect IS separable from seed luck, decisively.** Offset
+  **1.53e-4**, t = 6.7, and — the robust statement that needs no
+  distributional assumption — **the two sets do not overlap at all**: draw
+  A's worst point (0.01378) is better than draw B's best (0.01388). Three
+  independent draw-B seeds, ten draw-A seeds, complete separation.
+
+  **The consequence is the sharpest instrument finding of the campaign:**
+  the draw offset is **4.5σ of the seed sd**, which makes *which 200 000
+  rows you validate on* a **larger effect than any dial this family ever
+  measured**. Val numbers are comparable only *within* a draw, and the whole
+  campaign ran on one draw — so its ladder was measuring a draw-specific
+  quantity all along. That is a property of the instrument, not of any net.
+
+  ### The tail's own question, answered by the tail
+
+  Seven firings, `tail001`–`tail007`, each an ordinary logged-and-archived
+  entry with the seed rotated (4, 5, 6, …), exactly as designed. Six
+  completed points extend the draw-A census from n=4 to n=10:
+
+  | seed | 4 | 5 | 6 | 7 | 8 | 9 |
+  |---|---|---|---|---|---|---|
+  | val | 0.01377 | 0.01377 | 0.01373 | 0.01378 | 0.01376 | 0.01376 |
+  | packed | 3569 B | 3571 B | 3577 B | 3564 B | 3574 B | 3577 B |
+
+  **Long-run seed variance does NOT accumulate or drift — it TIGHTENS:**
+  sd **4.43e-5 at n=4 → 3.43e-5 at n=10**. The process is stationary and
+  n=4 was mildly over-estimating it. The one-layer noise floor is now a
+  solid **3.4e-5 in val**, and **20 B (sd) over a 54 B range** in bytes.
+  (`tail007`, seed 10, was still mid-run at this reading and is excluded.)
+
+  With the firmer floor, the retroactive readings settle:
+
+  | claim | gap | verdict at n=10 |
+  |---|---|---|
+  | "data scale pays": 8Mv vs v1 | 7e-5 | **2.0σ — still not resolved**, and n=1 per side |
+  | c1024-cal 0.01388 vs 0.01378 | 1.0e-4 | 2.9σ — credible but single-seed |
+  | τ 1.1 vs 0.85 | <1e-5 | 0.3σ — tie, confirmed for the third time |
+
+  ### PROGRAM STATE: COMPLETE-PENDING-DIRECTION (both families)
+
+  Every dial either family can turn without a seam is measured — **l1 ×
+  clamp × τ × satpen × ride × seed × draw × fidelity-flags** — across ml2
+  and the one-layer replacement net. **Campaign-wide, exactly three effects
+  exceed their own noise floor:**
+
+  1. **The exported-fidelity rule** — float ml2 0.01280 → grid ml2 0.01344,
+     **6.4e-4 ≈ 5σ**. Real, and it *costs* val: honest training is more
+     expensive, not cheaper.
+  2. **satpen off breaks the run** — not a val delta but a divergence,
+     caught by the trainer's own anchor tripwire at epoch 21.
+  3. **The play numbers** — linear **−107**, float-ml2 **−234.18 ± 55.08**,
+     grid-ml2 **−300.56 ± 71.33**, pentanomial, gaps above 100 Elo.
+
+  Plus one instrument fact that is not about any net: **the val draw is
+  worth 1.53e-4**, more than any dial.
+
+  **Everything else this campaign ranked on sits inside its own noise.**
+  Selection therefore rests entirely on the **SELECTOR SPEC**'s
+  play-anchored 50-game mini-match — not as an improvement over val, but as
+  the only instrument either family has left.
+
+  **What remains needs the owner, not a run.** The two registered arms that
+  could still move capacity (#5 n8, #3 kb4) both require an **entry-decoder
+  seam** this lane declined on direction grounds — priced at 4199 B and
+  ~95%-sparsity-dependent respectively — and #12 is owner-gated. The
+  standing question put to Thomas is unchanged and now fully evidenced:
+  **should the replacement family spend anything further on capacity before
+  it has one net that plays?** Every capacity increase measured so far has
+  played worse, and the export-faithful net — the one with every technical
+  excuse removed — was the worst of the three.
+
+  **Queue state: tail-backed indefinitely.** `tail007` is running and
+  `tail.yaml` persists; the queue cannot go idle again without a human
+  choosing to remove it. **Nothing else is queued, deliberately** — there is
+  no remaining question either family can answer by itself, and queueing
+  work to look busy is what the tail exists to make unnecessary. Each future
+  firing buys another census point for the only family that ever beat a coin
+  flip in play.
+
 - 2026-08-15 13:20 UTC: **THE ONE-LAYER INSTRUMENT STORY CLOSES, and the
   always-training rule stops depending on me remembering.**
 
