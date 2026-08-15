@@ -138,7 +138,7 @@ MATE_UPPER = piece["K"] + 10 * piece["Q"]
 # Constants for tuning search
 QS = 40
 QS_A = 140
-LMR = 60
+LMR = 50
 THREAT_MARGIN = 500
 EVAL_ROUGHNESS = 15
 # Target margin of the deep-null fuel probe (depth >= 8): the pass must

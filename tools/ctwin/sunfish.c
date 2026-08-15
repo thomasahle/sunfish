@@ -73,7 +73,7 @@ static int tables_loaded = 0;
 /* Runtime knobs.  Defaults reproduce sunfish.py at the repo root. */
 static int QS = 40;
 static int QS_A = 140;
-static int LMR = 60;
+static int LMR = 50;
 static int THREAT_MARGIN = 500;
 static int EVAL_ROUGHNESS = 15;
 static long TABLE_SIZE = 1000000;
