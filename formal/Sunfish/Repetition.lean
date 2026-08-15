@@ -100,7 +100,7 @@ and keeps the sentinel exactly where every other theorem expects it.
 `hist` is fixed for the whole search, so the function remains
 `(pos, depth)`-determined. -/
 def fuelValueD2tH (G : QSGame) (hist : G.Pos → Bool) (guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) : Nat → G.Pos → Int
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) : Nat → G.Pos → Int
   | 0, p =>
     if G.eval p ≤ -MATE_LOWER then -MATE_UPPER
     else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
@@ -119,7 +119,7 @@ def fuelValueD2tH (G : QSGame) (hist : G.Pos → Bool) (guard : G.Pos → Bool)
         else LOSS)
     else
       foldMax (fun m => -(fuelValueD2tH G hist guard C spend
-          (d - min (C - 1) (spend p (d + 1))) m))
+          (d - min (C - 1) (spend p (d + 1) m)) m))
         (tailList G (d + 1) p) LOSS
 termination_by d _ => d
 decreasing_by all_goals omega
@@ -127,7 +127,7 @@ decreasing_by all_goals omega
 /-! ### Branch lemmas -/
 
 theorem fuelValueD2tH_kingGone (G : QSGame) (hist guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (d : Nat) (p : G.Pos) (h : G.eval p ≤ -MATE_LOWER) :
     fuelValueD2tH G hist guard C spend d p = -MATE_UPPER := by
   cases d with
@@ -135,7 +135,7 @@ theorem fuelValueD2tH_kingGone (G : QSGame) (hist guard : G.Pos → Bool)
   | succ d => simp only [fuelValueD2tH]; rw [if_pos h]
 
 theorem fuelValueD2tH_of_capture (G : QSGame) (hist guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (d : Nat) (p : G.Pos) (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : hasKingCapture G.toNullGame.toGame p = true) :
     fuelValueD2tH G hist guard C spend d p = MATE_UPPER := by
@@ -146,7 +146,7 @@ theorem fuelValueD2tH_of_capture (G : QSGame) (hist guard : G.Pos → Bool)
 /-- **The rule is exact**: at positive depth a game-history position is
 valued 0 -- no fold, no approximation, no debt. -/
 theorem fuelValueD2tH_of_history (G : QSGame) (hist guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (d : Nat) (p : G.Pos)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
@@ -156,7 +156,7 @@ theorem fuelValueD2tH_of_history (G : QSGame) (hist guard : G.Pos → Bool)
   rw [if_neg hkg, if_neg hcap, if_pos hh]
 
 theorem fuelValueD2tH_of_fold_regime (G : QSGame) (hist guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (d : Nat) (p : G.Pos)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
@@ -165,14 +165,14 @@ theorem fuelValueD2tH_of_fold_regime (G : QSGame) (hist guard : G.Pos → Bool)
     (hd : 7 ≤ d) :
     fuelValueD2tH G hist guard C spend (d + 1) p
       = foldMax (fun m => -(fuelValueD2tH G hist guard C spend
-            (d - min (C - 1) (spend p (d + 1))) m))
+            (d - min (C - 1) (spend p (d + 1) m)) m))
           (tailList G (d + 1) p) LOSS := by
   simp only [fuelValueD2tH]
   rw [if_neg hkg, if_neg hcap, if_neg (by simp [hh]), if_neg (by simp [hai]),
     if_neg (by omega)]
 
 theorem fuelValueD2tH_of_fold_sub (G : QSGame) (hist guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
     (d : Nat) (p : G.Pos)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
@@ -215,7 +215,7 @@ positive, in the regime, and `D - 1 ≥ 1` below the horizon.
 Premise: `ValFloor G 192` (fidelity, tables), which admits the repeating
 move through the QS filter at nominal depth ≥ 2.  No chess premise. -/
 theorem repetition_not_lost (G : QSGame) (hist guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) (hC : 2 ≤ C)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
     (hF : ValFloor G 192)
     {p m : G.Pos}
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
@@ -235,16 +235,16 @@ theorem repetition_not_lost (G : QSGame) (hist guard : G.Pos → Bool)
       mem_tailList_of_admitted G (mem_movesAbove_of_floor G hF (d := d + 1) (by omega) hm)
     by_cases hreg : 7 ≤ d
     · rw [fuelValueD2tH_of_fold_regime G hist guard C spend d p hkg hcap hh hai hreg]
-      obtain ⟨dc, hdc⟩ : ∃ x, d - min (C - 1) (spend p (d + 1)) = x + 1 :=
-        ⟨d - min (C - 1) (spend p (d + 1)) - 1, by omega⟩
+      obtain ⟨dc, hdc⟩ : ∃ x, d - min (C - 1) (spend p (d + 1) m) = x + 1 :=
+        ⟨d - min (C - 1) (spend p (d + 1) m) - 1, by omega⟩
       have hchild : fuelValueD2tH G hist guard C spend
-          (d - min (C - 1) (spend p (d + 1))) m = 0 := by
+          (d - min (C - 1) (spend p (d + 1) m)) m = 0 := by
         rw [hdc]
         exact fuelValueD2tH_of_history G hist guard C spend dc m hkgm hcapm hrep
       have hfold : -(fuelValueD2tH G hist guard C spend
-            (d - min (C - 1) (spend p (d + 1))) m)
+            (d - min (C - 1) (spend p (d + 1) m)) m)
           ≤ foldMax (fun x => -(fuelValueD2tH G hist guard C spend
-                (d - min (C - 1) (spend p (d + 1))) x))
+                (d - min (C - 1) (spend p (d + 1) x)) x))
               (tailList G (d + 1) p) LOSS :=
         foldMax_le_of_mem _ _ _ _ hmem
       omega
@@ -276,7 +276,7 @@ Below the horizon only the `≥ 0` half holds -- the capped pass sits in
 the initial accumulator and can hold the value above 0.  That gap is
 exactly the pruning debt the fuel oracle retires. -/
 theorem all_replies_repeat_forces_draw (G : QSGame) (hist guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) (hC : 2 ≤ C)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
     (hF : ValFloor G 192)
     {p m : G.Pos}
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
@@ -296,11 +296,8 @@ theorem all_replies_repeat_forces_draw (G : QSGame) (hist guard : G.Pos → Bool
     (hall m hm hleg) (d + 1) (by omega)
   rw [fuelValueD2tH_of_fold_regime G hist guard C spend d p hkg hcap hh hai hd]
   rw [fuelValueD2tH_of_fold_regime G hist guard C spend d p hkg hcap hh hai hd] at hlow
-  have hmin : min (C - 1) (spend p (d + 1)) ≤ C - 1 := Nat.min_le_left _ _
-  obtain ⟨dc, hdc⟩ : ∃ x, d - min (C - 1) (spend p (d + 1)) = x + 1 :=
-    ⟨d - min (C - 1) (spend p (d + 1)) - 1, by omega⟩
   have hup : foldMax (fun x => -(fuelValueD2tH G hist guard C spend
-        (d - min (C - 1) (spend p (d + 1))) x))
+        (d - min (C - 1) (spend p (d + 1) x)) x))
       (tailList G (d + 1) p) LOSS ≤ 0 := by
     refine foldMax_le _ _ _ (fun m' hm' => ?_) (by omega)
     have hm'm : m' ∈ G.moves p := tailList_subset G _ p m' hm'
@@ -309,14 +306,16 @@ theorem all_replies_repeat_forces_draw (G : QSGame) (hist guard : G.Pos → Bool
       have hkgm' : ¬ (G.eval m' ≤ -MATE_LOWER) := fun hle =>
         hcap ((hasKingCapture_iff G.toNullGame.toGame p).mpr ⟨m', hm'm, hle⟩)
       show -(fuelValueD2tH G hist guard C spend
-        (d - min (C - 1) (spend p (d + 1))) m') ≤ 0
+        (d - min (C - 1) (spend p (d + 1) m')) m') ≤ 0
       rw [fuelValueD2tH_of_capture G hist guard C spend
-        (d - min (C - 1) (spend p (d + 1))) m' hkgm' hcm]
+        (d - min (C - 1) (spend p (d + 1) m')) m' hkgm' hcm]
       omega
     | false =>
       obtain ⟨hkgm', hcapm'⟩ := legal_child_normal G hcap hm'm hcm
       show -(fuelValueD2tH G hist guard C spend
-        (d - min (C - 1) (spend p (d + 1))) m') ≤ 0
+        (d - min (C - 1) (spend p (d + 1) m')) m') ≤ 0
+      obtain ⟨dc, hdc⟩ : ∃ x, d - min (C - 1) (spend p (d + 1) m') = x + 1 :=
+        ⟨d - min (C - 1) (spend p (d + 1) m') - 1, by omega⟩
       rw [hdc, fuelValueD2tH_of_history G hist guard C spend dc m' hkgm' hcapm'
         (hall m' hm'm hcm)]
       omega
@@ -333,7 +332,7 @@ classification could only place in "no forced mate for either side" are
 now, in the modeled game with the repetition rule, DRAWS WITH A
 CERTIFICATE. -/
 theorem draw_arm_strengthened (G : QSGame) (hist guard : G.Pos → Bool)
-    (C : Nat) (spend : G.Pos → Nat → Nat) (hC : 2 ≤ C)
+    (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
     (hF : ValFloor G 192)
     {p m : G.Pos}
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))

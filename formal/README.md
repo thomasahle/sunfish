@@ -114,11 +114,12 @@ its edge cost, and no MTD window changes the declared tree.
 
 That is what buys the premise: a null cutoff gives every real move unbounded
 pruning debt, and discharging it is exactly what `NoZugzwang` was for. A
-bounded edge cost discharges it instead. `EventuallyWide.lean` proves the
-node-uniform fuel theorem below; `IntrinsicLMR.lean` proves the new
-move-dependent classifier and edge bound. Generalizing the declared fold's
-selector from nodes to edges remains the mechanical global proof obligation
-before this candidate may merge:
+bounded edge cost discharges it instead. `EventuallyWide.lean` now quantifies
+over an arbitrary move-dependent selector `spend(position, depth, child)`;
+the previous null-only policy is the special case that ignores `child`.
+`IntrinsicLMR.lean` instantiates this theorem with the fixed-target hot/safe
+classification and intrinsic low-value bit. Thus the global theorem applies
+directly with maximum edge cost three:
 
 ```text
 eventual_classification_fuel :
@@ -155,8 +156,9 @@ plies -- is true of adjudicated chess (50-move plus threefold under match
 adjudication) and false of the ruleless modeled game. At `D >= C*N + 8` every
 node the classification depends on is reached before the frontier, so the
 masking sites are unreachable and `NoMaskedMobility`, the tail, and even
-`EvalQuiet` all drop out. The bound is *effective* (`2N + 10` as shipped, no
-classical `exists D0`), and the file's entire footprint is
+`EvalQuiet` all drop out. The bound is *effective*: `2N + 10` for the
+null-only selector and `3N + 11` for intrinsic LMR (no classical `exists D0`).
+The file's entire footprint is
 `[propext, Quot.sound]`. The scope is eventual-only, by countermodel: `CexE`
 (the infinite masked chain) violates the premise (`cexE_not_finite`), while
 `CexD` satisfies it at budget 5 and still prices its drawable masked node in
