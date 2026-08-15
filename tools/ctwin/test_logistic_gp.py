@@ -422,6 +422,47 @@ class MixedAcquisitionTest(unittest.TestCase):
             self.assertLess(games[0], max(end for _, end in gates))
             self.assertLess(games[1], max(end for _, end in gates))
 
+    def test_gate_all_restricts_the_candidate_space(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            engine, manager, gate = root / "engine", root / "fastchess", root / "gate"
+            engine.write_text(
+                f"#!{sys.executable}\n"
+                "print('option name X type spin default 3 min 0 max 5')\n"
+                "print('uciok')\n")
+            manager.write_text(
+                f"#!{sys.executable}\n"
+                "print('Score of candidate vs baseline: 1 - 0 - 1  [0.750] 2')\n")
+            gate.write_text(
+                f"#!{sys.executable}\n"
+                "import json,sys\n"
+                "sys.exit(json.load(sys.stdin)['options']['X'] < 3)\n")
+            for program in (engine, manager, gate):
+                program.chmod(0o755)
+            space = root / "space.json"
+            space.write_text(json.dumps({
+                "parameters": [{
+                    "name": "X", "type": "integer", "min": 0, "max": 5,
+                    "default": 3,
+                }],
+            }))
+            openings = root / "openings.fen"
+            openings.write_text("startpos\n")
+            state = root / "state.json"
+            subprocess.run([
+                sys.executable, str(pathlib.Path(__file__).with_name("adaptive_gp.py")),
+                "--fastchess", str(manager), "--engine", str(engine),
+                "--baseline-options", "default", "--space", str(space),
+                "--openings", str(openings), "--cycle-openings",
+                "--gate", str(gate), "--gate-all", "--gate-workers", "3",
+                "--slots", "1", "--queue-batches", "2", "--refill-batches", "1",
+                "--initial-design", "2", "--batches", "3",
+                "--state", str(state), "--logs", str(root / "logs"),
+            ], check=True, stdout=subprocess.DEVNULL)
+            result = load_state(state, 1)
+            self.assertEqual(len(result["gates"]), 6)
+            self.assertTrue(all(batch["knobs"]["X"] >= 3 for batch in result["batches"]))
+
     def test_duels_keep_a_directly_anchored_opponent(self):
         anchored = self.space.canonical({"X": 0, "Y": 10})
         challenger = self.space.canonical({"X": 100, "Y": 10})

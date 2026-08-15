@@ -209,7 +209,8 @@ def study_identity(args):
             for name in ("pair_weight", "exploration", "initial_design", "explore_start",
                          "explore_floor", "explore_half_life", "explore_optimism",
                          "duel_fraction", "inducing", "seed_selections",
-                         "acquisition_restarts", "update_batches", "gate_workers")
+                         "acquisition_restarts", "update_batches", "gate_workers",
+                         "gate_all")
         },
     }
 
@@ -745,6 +746,20 @@ async def optimize(args):
         if not isinstance(space, logistic_gp.LegacySpace):
             raise ValueError("--safe-only applies only to the built-in Sunfish LMR space")
         candidates = [x for x in candidates if x[2] and not any(x[len(logistic_gp.NUMERIC):])]
+    if args.gate_all:
+        feasible = []
+        for offset in range(0, len(candidates), args.gate_workers):
+            group = candidates[offset:offset + args.gate_workers]
+            accepted = await asyncio.gather(*(
+                asyncio.to_thread(gate_policy, args, state, space, candidate)
+                for candidate in group
+            ))
+            feasible.extend(candidate for candidate, passed in zip(group, accepted) if passed)
+            save_state(args.state, state)
+        print(f"[gate] feasible candidate space: {len(feasible)}/{len(candidates)}", flush=True)
+        candidates = feasible
+    if not candidates:
+        raise ValueError("the policy gate rejected every challenger")
     deadline = time.monotonic() + args.wall_time if args.wall_time else None
     queue = deque()
     activity = asyncio.Event()
@@ -999,6 +1014,8 @@ def main():
     parser.add_argument("--gate-timeout", type=float, default=60)
     parser.add_argument("--gate-attempts", type=int, default=1000)
     parser.add_argument("--gate-workers", type=int, default=4)
+    parser.add_argument("--gate-all", action="store_true",
+        help="validate the finite candidate space before allocating games")
     parser.add_argument("--seed-selections", type=int, default=0,
         help="continue the allocation clock when importing a state")
     parser.add_argument("--safe-only", action="store_true")
@@ -1007,6 +1024,8 @@ def main():
     args.baseline_args = args.engine_args if args.baseline_args is None else args.baseline_args
     if args.source_logs and not args.battery:
         parser.error("--source-logs requires --battery")
+    if args.gate_all and not args.gate:
+        parser.error("--gate-all requires --gate")
     if not 0 <= args.explore_floor <= args.explore_start <= 1:
         parser.error("require 0 <= --explore-floor <= --explore-start <= 1")
     if not 0 <= args.duel_fraction <= 0.40:
