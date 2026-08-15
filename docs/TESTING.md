@@ -277,12 +277,14 @@ illegal moves, disconnects, stalls, or time losses.
 The posterior selected `QS=30`, but that setting regressed the WAC.004 tactical
 floor and the packed-engine tiny-clock test. Its one-dimensional posterior
 profile put `QS=40` only 2.0 ± 8.6 Elo behind, so the validated production
-setting remains `QS=40`. The other selected settings are `QS_A=140`, `EVAL_ROUGHNESS=15`,
-`NULL_MARGIN=-200`, `LMR=75`, null reduction 7, shallow capped null from
-depth 3 through 5, real-only fuel shaping from depth 6, and IID disabled.
+setting remains `QS=40`. A final independent block confirmed that corrected
+bundle at `228/113/159`, **+48.25 ± 27.03 Elo**, LOS 99.98%, over 500 games.
+The other selected settings are `QS_A=140`, `EVAL_ROUGHNESS=15`,
+`NULL_MARGIN=-200`, `LMR=75`, null reduction 7, shallow capped null from depth
+3 through 5, real-only fuel shaping from depth 6, and IID disabled.
 `NULL_LIMIT=60000` in the tunable C instrument means no score guard on legal
-positions; Python expresses that result directly. The independent confirmation,
-not the adaptive posterior estimate, is the landing evidence.
+positions; Python expresses that result directly. This last independent
+confirmation, not the adaptive posterior estimate, is the landing evidence.
 
 ## Testing the packed artifact
 
