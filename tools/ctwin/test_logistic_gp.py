@@ -1,7 +1,9 @@
+import argparse
 import itertools
 import json
 import math
 import pathlib
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -20,6 +22,7 @@ from adaptive_gp import (
     commit_selection,
     coordinate_maximum,
     design_variance,
+    duration,
     engine_identity,
     exploration_probability,
     fantasy_variance,
@@ -326,6 +329,49 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(pending_configurations(10, 1), 10)
         self.assertEqual(pending_configurations(10, 3), 4)
         self.assertEqual(pending_configurations(10, 10), 1)
+
+    def test_human_durations_are_seconds(self):
+        self.assertEqual(duration("3d"), 259200)
+        self.assertEqual(duration("1.5h"), 5400)
+        with self.assertRaises(argparse.ArgumentTypeError):
+            duration("later")
+
+    def test_wall_time_drains_the_reserved_pair(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            engine = root / "engine"
+            manager = root / "fastchess"
+            engine.write_text(
+                f"#!{sys.executable}\n"
+                "print('option name X type spin default 0 min 0 max 1')\n"
+                "print('uciok')\n")
+            manager.write_text(
+                f"#!{sys.executable}\n"
+                "import time\n"
+                "time.sleep(.6)\n"
+                "print('Score of candidate vs baseline: 1 - 0 - 1  [0.750] 2')\n")
+            engine.chmod(0o755)
+            manager.chmod(0o755)
+            space = root / "space.json"
+            space.write_text(json.dumps({
+                "parameters": [{
+                    "name": "X", "type": "integer", "min": 0, "max": 1,
+                    "default": 0,
+                }],
+            }))
+            openings = root / "openings.fen"
+            openings.write_text("startpos\n")
+            state = root / "state.json"
+            subprocess.run([
+                sys.executable, str(pathlib.Path(__file__).with_name("adaptive_gp.py")),
+                "--fastchess", str(manager), "--engine", str(engine),
+                "--baseline-options", "default", "--space", str(space),
+                "--openings", str(openings), "--cycle-openings",
+                "--slots", "1", "--queue-batches", "1", "--refill-batches", "1",
+                "--initial-design", "1", "--wall-time", "0.5s", "--batches", "100",
+                "--state", str(state), "--logs", str(root / "logs"),
+            ], check=True, stdout=subprocess.DEVNULL)
+            self.assertEqual(len(load_state(state, 1)["batches"]), 1)
 
     def test_duels_keep_a_directly_anchored_opponent(self):
         anchored = self.space.canonical({"X": 0, "Y": 10})

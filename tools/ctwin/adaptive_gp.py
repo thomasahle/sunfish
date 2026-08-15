@@ -40,6 +40,14 @@ UCI_OPTION = re.compile(r"^option name (.+?) type ")
 SAVED_STATES = {}
 
 
+def duration(value):
+    match = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)([smhd]?)", value)
+    if not match:
+        raise argparse.ArgumentTypeError(f"invalid duration: {value}")
+    number, unit = match.groups()
+    return float(number) * {"": 1, "s": 1, "m": 60, "h": 3600, "d": 86400}[unit]
+
+
 def validate_options(command, arguments, required):
     """Refuse silent fastchess option loss before spending any games."""
     if not required:
@@ -725,6 +733,7 @@ async def optimize(args):
         if not isinstance(space, logistic_gp.LegacySpace):
             raise ValueError("--safe-only applies only to the built-in Sunfish LMR space")
         candidates = [x for x in candidates if x[2] and not any(x[len(logistic_gp.NUMERIC):])]
+    deadline = time.monotonic() + args.wall_time if args.wall_time else None
     queue = deque()
     experiments = {}
     running = {}
@@ -855,12 +864,15 @@ async def optimize(args):
             running[task] = slot
 
     while completed < args.batches:
-        if len(experiments) <= args.queue_batches - args.refill_batches:
+        expired = deadline is not None and time.monotonic() >= deadline
+        if not expired and len(experiments) <= args.queue_batches - args.refill_batches:
             count = min(
                 args.queue_batches - len(experiments),
                 args.batches - completed - len(experiments))
             await add_experiments(count)
         start_queued()
+        if not running:
+            break
         done, _ = await asyncio.wait(running, return_when=asyncio.FIRST_COMPLETED)
         for task in done:
             running.pop(task)
@@ -926,6 +938,8 @@ def main():
     parser.add_argument("--refill-batches", type=int, default=1,
         help="refill the pending queue after this many completions")
     parser.add_argument("--batches", type=int, default=100)
+    parser.add_argument("--wall-time", type=duration, default=0,
+        help="stop allocating after this duration, e.g. 12h or 3d")
     parser.add_argument("--start", type=int, default=1)
     parser.add_argument("--exploration", type=float, default=1.0)
     parser.add_argument("--initial-design", type=int, default=12)

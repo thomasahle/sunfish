@@ -148,7 +148,7 @@ python3 adaptive_gp.py \
   --slots 20 --queue-batches 20 --refill-batches 4 \
   --pairs 1 --initial-design 256 --inducing 128 --update-batches 8 \
   --explore-start .5 --explore-floor .2 --duel-fraction .3 \
-  --batches 100000
+  --wall-time 3d --batches 1000000
 ```
 
 `--baseline-options default` pins the exact default point to zero. Opening
@@ -158,7 +158,8 @@ online Laplace updates without rebuilding a quadratic comparison matrix. Gate
 workers check proposals concurrently, but rejected policies consume neither
 games nor the reserved design/exploration allocation. Results append to a
 JSONL journal and compact into the JSON checkpoint every 1,000 pairs, avoiding
-quadratic checkpoint I/O while remaining restartable.
+quadratic checkpoint I/O while remaining restartable. At the wall-time limit,
+the scheduler finishes every reserved color pair before its final checkpoint.
 
 Game use: `position startpos moves …` / `position fen …`, then
 `go nodes N` (primary — clock-free surrogate games), `go depth D`,
