@@ -132,9 +132,12 @@ class TestCappedNullMove:
         searcher = sf.Searcher()
         searcher.root, searcher.history = pos, set()
         calls, bound = [], searcher.bound
+        nullpos = pos.rotate(nullmove=True)
 
         def observed(pos, gamma, depth, root=False):
             calls.append((gamma, depth, root))
+            if pos == nullpos and gamma == 1 and depth == 2:
+                return -sf.MATE_LOWER
             return bound(pos, gamma, depth, root)
 
         searcher.bound = observed
@@ -212,6 +215,73 @@ class TestFuelOracle:
             )
 
 
+class TestStaticMoveCap:
+    """Quiet depth-two and depth-three moves have a fixed static upper cap.
+
+    A cap below the current window proves fail-low without a child search.
+    Captures, promotions, and checks remain uncapped so forcing play and the
+    existing mate-distance guarantees stay intact.
+    """
+
+    def test_fail_low_caps_skip_all_starting_children(self):
+        pos = sf.Position(sf.initial, 0, (True, True), (True, True), 0, 0)
+        searcher = sf.Searcher()
+        searcher.root, searcher.history = pos, set()
+        score = searcher.bound(pos, 200, 2, root=True)
+        caps = [min(sf.MATE_LOWER - 1, pos.score + pos.value(m) + sf.QS_A)
+            for m in pos.gen_moves()]
+
+        assert score == max(caps) == 186
+        assert searcher.nodes == 1
+
+    def test_bk15_forcing_capture_stays_full_depth(self):
+        hist = hist_from_fen(
+            "2r3k1/1p2q1pp/2b1pr2/p1pp4/6Q1/1P1PP1R1/P1PN2PP/5RK1 w - - 0 1")
+        moves = [render(hist, move) for _, move in stop_scan(hist, 4) if move]
+
+        assert moves[-1] == "g4g7"
+
+    def test_en_passant_stays_full_depth(self):
+        pos = hist_from_fen("4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1")[-1]
+        ep = next(move for move in pos.gen_moves() if render([pos], move) == "e5d6")
+        child = pos.move(ep)
+        searcher = sf.Searcher()
+        searcher.root, searcher.history = pos, set()
+        calls, bound = [], searcher.bound
+
+        def observed(pos, gamma, depth, root=False):
+            calls.append(pos)
+            return bound(pos, gamma, depth, root)
+
+        searcher.bound = observed
+        searcher.bound(pos, 1000, 2, root=True)
+
+        assert child in calls
+
+
+class TestFilteredCheckEvasion:
+    """A filtered legal evasion must be searched before certifying mate."""
+
+    CHILD = "rnbq2nr/2p1bppp/p2p4/1p2p3/2P3k1/PP3P1N/3PP2P/RNQ1KB1R b KQ - 0 10"
+    PARENT = "rnbq2nr/2p1bppp/p2p4/1p2p3/2P3k1/PP5N/3PPP1P/RNQ1KB1R w KQ - 0 10"
+
+    def test_lazy_tail_removes_false_mate(self):
+        depth = 1
+        sf.pst["K"] = sf.K_MID
+        child = hist_from_fen(self.CHILD)[-1]
+        legal = [m for m in child.gen_moves() if not child.move(m).king_capture()]
+        assert sorted(child.value(m) for m in legal) == [-105, -105, -102]
+        assert max(child.value(m) for m in legal) < sf.QS - sf.QS_A
+
+        searcher = sf.Searcher()
+        searcher.root, searcher.history = child, set()
+        assert searcher.bound(child, 1 - sf.MATE_LOWER, depth, root=True) == 299
+        assert searcher.tp_move[child] in legal
+
+        parent = hist_from_fen(self.PARENT)[-1]
+        searcher = sf.Searcher()
+        searcher.root, searcher.history = parent, set()
+        assert searcher.bound(parent, sf.MATE_LOWER, depth + 1, root=True) == -243
 class TestNullSentinelMasking:
     """Audit finding A1: in pawn endings the null-move gate
     (abs(score) < 500) admits a "pass" that yields a normal material

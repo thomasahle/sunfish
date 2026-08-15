@@ -683,6 +683,32 @@ static int has_big_piece(const Pos *p) {       /* any(c in board for "RBNQ") */
         || memchr(p->b, 'N', 120) || memchr(p->b, 'Q', 120);
 }
 
+static int bound(const Pos *pos, int gamma, int depth, int root, int qstail);
+
+static int gives_check(const Pos *child) {
+    Pos before = rotate(child, 1);
+    return king_capture(&before, NULL);
+}
+
+static int score_move(const Pos *pos, Move move, int val, int gamma,
+        int depth, int rd, int *real) {
+    Pos child = domove(pos, move);
+    *real = 1;
+    if (2 <= depth && depth <= 3 && pos->b[move.j] == '.'
+            && move.j != pos->ep && !move.prom) {
+        int cap = pos->score + val + (depth - 1) * QS_A;
+        if (cap >= MATE_LOWER) cap = MATE_LOWER - 1;
+        if (cap < gamma) {
+            if (!gives_check(&child)) { *real = 0; return cap; }
+            return -bound(&child, 1 - gamma, rd - 1, 0, 0);
+        }
+        int full = -bound(&child, 1 - gamma, rd - 1, 0, 0);
+        if (full > cap && gives_check(&child)) return full;
+        return cap < full ? cap : full;
+    }
+    return -bound(&child, 1 - gamma, rd - 1, 0, 0);
+}
+
 /* ------------------------------------------------------------------ */
 /* bound(): transcription of Searcher.bound in sunfish.py.             */
 /* The generator phases run inline; PROCESS is the consumer loop body. */
@@ -779,13 +805,21 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         tpm_get_all(pos, killers, &nkill);
     }
 
+    if (!qstail && !QS_TAIL && depth == 1) {
+        int tail = pos->score + val_lower - 1;
+        if (tail < gamma) PROCESS(0, nomove, tail);
+        else val_lower = -MATE_UPPER;
+    }
+
     /* Killer(s) first, gated by the QS threshold, most recent first.
      * A qs_tail probe skips the killer phase. */
     if (!qstail)
     for (int kk = 0; kk < nkill; kk++) {
-        if (value(pos, killers[kk]) < val_lower) continue;
-        Pos np = domove(pos, killers[kk]);
-        PROCESS(1, killers[kk], -bound(&np, 1 - gamma, rd - 1, 0, 0));
+        int val = value(pos, killers[kk]);
+        if (val < val_lower) continue;
+        int real;
+        int score = score_move(pos, killers[kk], val, gamma, depth, rd, &real);
+        PROCESS(real, killers[kk], score);
         if (done) goto after_moves;
     }
 
@@ -807,8 +841,14 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
                 else PROCESS(0, nomove, pos->score + val);
                 break;                       /* Python breaks either way */
             }
-            Pos np = domove(pos, m);
-            PROCESS(1, m, -bound(&np, 1 - gamma, rd - 1, 0, 0));
+            if (!qstail) {
+                int real;
+                int score = score_move(pos, m, val, gamma, depth, rd, &real);
+                PROCESS(real, m, score);
+            } else {
+                Pos np = domove(pos, m);
+                PROCESS(1, m, -bound(&np, 1 - gamma, rd - 1, 0, 0));
+            }
             if (done) break;
         }
     }
@@ -816,7 +856,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
 after_moves:
     if (depth && !live) {
         if (!QS_TAIL) {
-            /* Only virtual evidence seen: classify mate/stalemate exactly. */
+            /* Classify mate/stalemate exactly. */
             struct termctx tc = { pos, 1 };
             gen_moves(pos, term_cb, &tc);
             if (tc.all) {
