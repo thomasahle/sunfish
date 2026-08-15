@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **PRE-REGISTERED: the pool TM's FIXED-N confirmation — N=300 at 30+1, no stopping rule, to earn the magnitude the three SPRT-stopped regime numbers cannot** | The oldest open follow-up on the landing lane's list. All three pool regime figures (+119.94 ± 36.44 at 60+0, +136.58 ± 35.24 at 60+1, **+124.50 ± 38.79** at 30+1) are **SPRT-stopped and therefore biased away from zero** — `pend` measured that bias at 42% on its own screen. This match has **no stopping rule**: 300 games, played out. Arms are the pinned m5 pair, shas **re-verified before registration** (`cddf392e2144…` pool, `14b69a606b74…` smooth, both built at `522931a`). 30+1, `book3k.pgn` order=random, **srand 20260820** (fresh), **adjudication NONE**, concurrency 8, nice 10. Zero illegal ends and voids the run; forfeits recorded either way — box history is 651/651 clean, so **any** forfeit here is a genuine holdback-revisit signal (unlike the laptop meter's 9). **#205 does not touch this**: both arms predate it and the measured quantity is the pool-vs-smooth TM difference, not anything-vs-classic |
 | 2026-08-15 | **RE-REGISTERED: THE +400 METER, RUN 2 — same form and the SAME sha-pinned arms, new srand **20260821**, void-on-forfeit again, and this time an ABSOLUTE venue embargo ordered across all lanes (nothing above shell-trivial on this laptop while it runs)** | Identical to run 1 so the two are the same measurement, not two different ones: fixed **N=300**, 60+1, concurrency 4, adjudication none, `book3k` order=random, entry **3405 B** `5a207fdf9cf05f2e…` vs classic **3246 B** `7bdbd6054f70622a…` — byte-identical arms to run 1 and to B, re-verified at registration. **Only the srand changes** (20260820 → **20260821**), so run 2 is an independent draw of the same quantity. **Void-on-forfeit stands unchanged** — it fired correctly once and is not being weakened because it cost a run. Quiet gate raised on run 1's evidence: run 1 started at a passing gate and was still overtaken 3 h later, so the gate is necessary but not sufficient and only the embargo closes it; the gate now also requires the venue to hold, with the sampler recording throughout and the per-window analysis run at harvest whatever the outcome. **Reading rules carry over verbatim** including no early stop on the score, and the Elo stays unread until the run is confirmed forfeit-free. Overnight run authorized; self-completing; ETA ~4 h from gate pass |
 | 2026-08-15 | **THE +400 METER IS VOID — 5 time forfeits, registered void condition fired, and the venue check comes back CONTENDED (not the more interesting answer). The registration DID ITS JOB: it caught contamination and protected the number instead of shipping it** | Void by the rule registered at `90fe032` before game 1: one forfeit voids, and there were five (all the **entry**, overruns 101-102 ms — the arbiter-quantum starvation signature). **The honest venue check, run without steering toward the convenient answer**: forfeited games' play windows had **median foreign CPU 104%** (p25 84%, p75 194%) against **35%** for the 278 non-forfeited games — every forfeit sat in a contended window and **none in a quiet one**, so the **holdback-fix revisit condition (a clean-venue forfeit) is NOT met** and that fix stays shelved. Contention is necessary but not sufficient: 63 of 278 clean-finishing games (23%) also ran at ≥84%. **Attribution corrected against the coordinator's own account**: sustained load began at **~18:15Z**, not the 18:45-19:00Z window he named — 15-min medians run 18-44% from 15:16Z to 18:00Z, then **129% / 104% / 172% / 152%** — and the first forfeit is **18:24Z**, 21 minutes before the authorization he blamed. **The first ~200 games (15:16-18:00Z) ran clean at median 18-44% with ZERO forfeits**, which is itself a clean-venue record consistent with B. Elo deliberately **UNREAD and unquotable**; **B's +325.17 ± 134.54 remains the only clean timed number.** Match allowed to finish (283/300 at write time) to preserve per-move data. Re-run registered with a new srand and an absolute venue embargo |
 | 2026-08-15 | **NEAR-MISS ON THE PRIMARY MEASUREMENT, and two liveness checks that BOTH misfire: another lane read this lane's STALE lock purpose text, concluded the lock was awaiting cleanup, and flagged the running meter's `fastchess` for reaping. New rule: a re-taken lock has its PURPOSE TEXT REWRITTEN AT TAKE TIME** | The barrier held and nothing was touched, but the cause was ours: the lock said "forfeit replications A and B" with A/B **COMPLETE** markers while a live N=300 match was playing under it. **Stale purpose text on a LIVE lock is how another lane politely kills your match.** Worse, the obvious liveness tests are both wrong and I hit **both** today: `ps -Ao comm \| grep -x fastchess` is a **FALSE NEGATIVE** — `comm` holds the FULL PATH, so it returned **0 while the meter was live and writing games** — and `pgrep -f fastchess` is a **FALSE POSITIVE**, matching the reader's own shell wrappers containing the word (it reported a match running at 15:08 when none was). A false negative is the dangerous one: it authorizes reaping a live match. The lock now carries a **tested** identity — the single `fastchess` whose **pgnout IS the meter arena file** — plus both anti-patterns named, an ETA computed from the PGN's own game timestamps rather than guessed (a first attempt produced a **negative rate** from a hand-typed epoch and was caught before it shipped), and a two-clause release condition. `run_meter.sh` writes this text **at take time** so a future re-take cannot inherit a stale purpose. Meter unaffected: **70/300, 0 forfeits, 0 illegal**, score deliberately unread |
@@ -1809,6 +1810,55 @@ fastchess's reported Elo and Ptnml on all three screens before any
 truncated number is believed.
 
 ---
+
+## 2026-08-15 — PRE-REGISTRATION: the pool TM's FIXED-N confirmation, and the magnitude the SPRT numbers were never allowed to be
+
+Registered before game 1. The box freed up when the owner's tuning campaign
+finished (#205 merged), and the oldest registered follow-up on the landing
+lane's list gets the capacity.
+
+**The problem it fixes.** The pool manager has three regime wins — +119.94 ±
+36.44 (60+0), +136.58 ± 35.24 (60+1), **+124.50 ± 38.79** (30+1) — and
+**every one of them is SPRT-stopped**, which biases the magnitude away from
+zero. `pend` measured that bias at **42%** on its own screen. The ladder has
+therefore established a *direction* three times and a *magnitude* zero times,
+and the landing lane's open item 5 registered exactly this match as the fix.
+
+| | |
+|---|---|
+| question | **magnitude only** — no hypothesis, no stopping rule |
+| N | **300 games, fixed**, played to the end (150 rounds × 2, `-repeat`) |
+| arms | `pool` = `pooltm` (`cddf392e214490548e1397271067da6f75146306d17c37ef61072b9f44fd60f2`, 3365 B) vs `smooth` = base (`14b69a606b743a377b84b6f99856c8593bf37e5d90d382496e4e4ea3580ede5b`, 3308 B), the pinned **m5** pair built at `522931a` |
+| sha check | **re-verified box-side before this entry was written**, both match the `629cba2` pre-registration |
+| TC / book | **30+1** (the decision TC), `book3k.pgn` order=random, **srand 20260820** (fresh — the decider used 20260818) |
+| adjudication | **NONE**, as in every arm of this ladder — the drained-clock endgames are the measurement |
+| run | concurrency 8, `nice -n 10`, `-recover`, `timeleft=true` |
+| stop condition | **zero illegal moves**; one ends the run and voids it |
+| forfeits | recorded either way. Box history is **651/651 clean**, so on this quiet box **any** forfeit is a genuine holdback-revisit signal — unlike the laptop meter's 9, which that lane's own entry attributes to the laptop |
+| expectation | ±~50 Elo at N=300; ~1–1.5 h at the current load |
+
+**What a fixed N buys that a stopped SPRT cannot.** The interval it produces
+is the interval it advertises. Whatever this reads becomes **the** pool
+magnitude at 30+1, and the three SPRT figures stay in the ledger labelled
+what they are — decisions, not magnitudes.
+
+**Cotenancy at registration** (recorded per `box-cotenancy-ban`'s amendment,
+which authorises capacity sharing when no other human needs the box): the
+box is **96 cores at load 17.4**, running **two** audit-lane matches, not one
+— PR190 at concurrency 5 and concurrency 10, both themselves 30+1 — plus this
+workstream's training tail. That is ~23 game slots of 96 cores before this
+match's 8, so the timed arms are not oversubscribed. **The census is recorded
+at launch and again at finish**, and the discrepancy with the tasking premise
+(one match, not two) is noted here rather than discovered later.
+
+**#205 context, and what it does and does not touch.** `#205` ("Land tuned
+null shaping and intrinsic LMR") is merged, so **classic is stronger on
+master now**. This match is unaffected: both arms predate #205 and the
+measured quantity is the **pool-vs-smooth TM difference**, not
+anything-vs-classic. What *is* affected: every **entry-vs-classic goal**
+measurement from today onward must re-arm against post-#205 master, and the
+meter currently running on the laptop measures **pre-#205 classic** by its
+pinned registration — its number carries that label.
 
 ## 2026-08-15 — SCREEN VERDICT: the EXPORT-FAITHFUL ml2 net is −300.56, WORSE than the one it fixed — honest training did not rescue the two-layer eval
 
