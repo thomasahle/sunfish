@@ -35,6 +35,8 @@ for _k in "PNBRQK":
  _t = [_v // 210 ** _i % 210 - 107 + piece[_k] for _i in range(64)]
  _v //= 210 ** 64
  pst[_k] = tuple([0] * 20 + sum(([0] + _t[_i * 8:_i * 8 + 8] + [0] for _i in range(8)), []) + [0] * 20)
+P_MID, P_END = pst["P"], tuple(x and x + (8 - i // 10) ** 2 * 2
+   for i, x in enumerate(pst["P"]))
 K_MID, K_END = pst["K"], tuple(piece["K"] + 70
    - 10 * (abs(2 * (i // 10) - 11) + abs(2 * (i % 10) - 9)) for i in range(120))
 
@@ -565,7 +567,9 @@ class Searcher:
         # leave DURING a game and one Searcher plays every move of it (a
         # new game gets a new Searcher; this was never about state
         # outliving a game).
-        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END
+        end = "Q" not in pos.board or "q" not in pos.board
+        pst["K"] = K_END if end else K_MID
+        pst["P"] = P_END if end else P_MID
         # The carried score was accumulated under the OTHER table: re-derive
         # it fresh so the swap leaves no stale constant behind (the entry's
         # kend+fresh pair; classic measured the constant harmless on the C

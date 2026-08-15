@@ -368,6 +368,31 @@ _golf_renames = [
     (r'namedtuple\("Position"', 'namedtuple("P"', 1),
     (r'namedtuple\("Entry"', 'namedtuple("E"', 1),
 ]
+# ---- P_END: the pawn table's queens-off variant (LANDED 2026-08-15) -------
+# Screened +36.71 and CONFIRMED +21.31 [+5.58, +37.04] over a fixed 800 games.
+# The queens-off seam already switches the KING table (K_MID/K_END); this adds
+# the pawn one at the SAME test, so it costs one tuple and no new branch: with
+# queens off, a pawn is worth (8 - rank)^2 * 2 more, steeply rewarding advanced
+# passers exactly when promotion is the winning plan.
+#
+# Applied HERE rather than in sunfish.py because it is a 4k-entry change, not a
+# classic one: `tables` is codec.emit's output and `src` is the engine body, so
+# both anchors are asserted to occur exactly once and a drift in either is a
+# hard build error rather than a silently unmodified entry.
+_pend = [
+    ('K_MID, K_END = pst["K"], tuple(piece["K"] + 70\n',
+     'P_MID, P_END = pst["P"], tuple(x and x + (8 - i // 10) ** 2 * 2\n'
+     '   for i, x in enumerate(pst["P"]))\n'
+     'K_MID, K_END = pst["K"], tuple(piece["K"] + 70\n'),
+    ('        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END\n',
+     '        end = "Q" not in pos.board or "q" not in pos.board\n'
+     '        pst["K"] = K_END if end else K_MID\n'
+     '        pst["P"] = P_END if end else P_MID\n'),
+]
+for _a, _b in _pend:
+    assert src.count(_a) == 1, "pend anchor %r occurs %d times" % (_a[:40], src.count(_a))
+    src = src.replace(_a, _b, 1)
+
 for _pat, _repl, _n in _golf_renames:
     src, _c = re.subn(_pat, _repl, src)
     assert _c == _n, "golf rename %r matched %d times, expected %d" % (_pat, _c, _n)
