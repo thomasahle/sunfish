@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **REPLICATION B VERDICT — THE FLOOR IS ZERO AND THE INVESTIGATION CLOSES: 60/60 clean-venue games, **0 forfeits**, and the worst self-overrun collapses **40×** from +22 435 ms (contended) to **+557 ms**. Pooled with A's clean games that is **0 in 74**, bounding the clean-venue forfeit rate below **3.97%**. B also produced the FIRST CLEAN REAL-CLOCK entry-vs-classic number: **+325.17 ± 134.54**** | 60+1, fixed N=60, concurrency 1, packed arms, srand 20260819, venue during B median **12%** foreign CPU. 0 illegal, 60/60 `normal`. **The decomposition is now clean**: the entry overruns its own deadline on ~10% of moves in BOTH venues (13.74% contended, 9.88% clean) — that part is intrinsic and **harmless**, since clean-venue worst is 557 ms against a minimum flag margin of **+503 ms**; what venue changes is the TAIL, 40× into multi-second territory where it flags. **Holdback fix DISPOSITION: stays registered-not-run, revisit ONLY if a forfeit ever appears at zero foreign load** — it would trim milliseconds off an effect that is harmless at ≤557 ms and, when it matters, is seconds of scheduler starvation the engine cannot see. **The timed number is a GLIMPSE, not the meter**: N=60 gives ±134.54, it is packed-vs-packed (entry `_pooltm` vs classic `min40-4`), and one match is not a campaign. But it is the first clean real-clock measurement this lane has ever had, the league plays real clocks, and **even the interval's low end (~+190) says the timed gap is large**. **Both numbers are true**: fixed-node **−1.74 ± 27.93** (per-node parity) and clean-clock **+325.17** (nps + time management dominate once a clock exists). The proper meter at N=300 is registered separately |
 | 2026-08-15 | **REPLICATION A VERDICT (100/100, 0 illegal): 25 time forfeits — 24 of them the ENTRY — and they are ENTIRELY a venue effect. ZERO forfeits in 14 clean-venue games; 31.1% under 100-250% foreign CPU and 39.3% above 250%. The Elo it produced (+96.19 ± 66.86 to the entry) is VENUE-DAMAGED and must not be quoted as the timed +400 number** | Fixed N=100 at 60+1, packed arms, adjudication off, srand 20260818, never stopped for forfeits (only illegal stops, and there were none). Dose-response over 87 sampler-covered games: **quiet <40% → 0/9, light 40-100% → 0/5, busy 100-250% → 14/45 (31.1%), saturated >250% → 11/28 (39.3%)**. Foreign CPU across A: median **193%**, p90 **411%**, max **903%** — A ran on a machine another workstream was saturating, so it is NOT the matched-conditions arm it was registered as, and its 25% headline rate is not comparable to the void's 4.9%. Clean bucket is 14 games, bounding the clean-venue rate below **18.9%** (exact one-sided 95%) — better than the 34.8% at the interim read, still not a floor. Self-overrun **565/4112 = 13.74%** of entry moves past its OWN deadline, **max +22 435 ms** (33 760 ms spent against an 11 325 ms deadline; the raw movetext independently carries 33.760 s and 60.056 s moves). **CORRECTION to my own quantization claim**: with 25 more samples the arbiter's reported overrun is 100-102 ms in **23 of 25** cases but **17 ms and 30 ms** in two, so it is *predominantly* a ~100 ms detection quantum rather than exclusively one — the conclusion that the magnitude does not measure the engine's multi-second overshoot is unchanged. **classic flagged once too** (1 of 25), which the CPU-starvation mechanism predicts and an entry-only defect does not |
 | 2026-08-15 | **CORRELATION CONFIRMED IN FLIGHT: replication A's forfeits land ONLY in contended windows — 5 forfeits in 17 games played under foreign CPU > 100% (29.4%), and ZERO in 7 games under a clean venue. Plus: the "100 ms overrun" was never the engine's overrun — all 7 across both runs fall in a 3 ms band (100-102), so it is the ARBITER'S detection quantum** | The forfeit reproduces at matched conditions (per the order the match was NOT stopped — forfeits are the measurement). All flagged games are the **entry**, and every flag moment sits inside the foreign-CPU spike: the four game-end times 09:54:08, 09:54:28, 09:55:16, 09:57:39 fall in the window where foreign CPU ran **240.8 → 534.6 → 172.8 → 222.2 → 192.1%** with 18-23 lean processes, while the quiet stretch before it (09:48-09:52, foreign CPU **16-53%**) produced **none**. 13 of 37 games predate the sampler and are excluded, never folded in. **The magnitude finding retires my own earlier arithmetic**: I treated "100 ms overrun" as the engine's overshoot and compared it against the 27.4 ms poll gap, but 7/7 observations across two independent runs sit in **100-102 ms** — a variable overrun cannot do that. It is the arbiter's polling granularity, so the magnitude carries **no** information about the engine and only the FACT of flagging does. (Inference from the 3 ms band, not from fastchess's source.) The engine's real overshoot is the separately-measured self-overrun, which reaches **+5535 ms** |
 | 2026-08-15 | **THE THIRD HYPOTHESIS HAS A NAMED CAUSE AND EVIDENCE: another workstream was running core-saturating `lake` builds on this laptop through both the voided run and replication A. The voided run's EXTREME overruns (3.5-5.5 s) land exactly on the build's write burst — and a NEW STANDING RULE follows: timed matches require VENUE EXCLUSIVITY across ALL workstreams, not just other matches** | Measured, not accepted on report: a live sampler shows **foreign CPU 320.5%** (~3.2 cores of non-match work) and 9 lean/lake processes *while replication A is playing*. Post-hoc on the void, from the other lane's own `.lake` artifact mtimes: build writes cluster at **09:10Z (196) and 09:15Z (1052)**, and the void's four largest self-overruns — **3780, 5535, 3552, 3700 ms** — occur in games starting **09:10, 09:11, 09:12, 09:12Z**. The first 5 minutes of the void (08:41-08:45Z) are **completely clean, 0 overruns**, then bursts begin. **Honest limit: `.lake` mtimes mark job COMPLETION, so a build's compile phase is invisible to this instrument** — the moderate bursts at 08:46-09:07Z are therefore neither confirmed nor excluded, only the extreme tail is aligned. **Replication A is consequently a MIXED arm** (cotenant early, clean later) and its verdict will be split by sampled window or else report the mixture as a limitation. **B gains a clean-venue start gate** (foreign CPU < 40% for 3 consecutive minutes) and becomes the clean-venue arm — its primary value now. Sampler defects fixed before trusting it, both the silent-zero class: **macOS `pgrep` has no `-c` flag**, so the first sampler printed a usage error and recorded 0 lean processes while a `lake exe` ran at 11% CPU, and a stale header mislabelled the columns |
@@ -945,6 +946,97 @@ in seconds and lives outside the engine. **Fixing the holdback would not
 have prevented one of these forfeits** — which is precisely why it stays
 registered-not-run, and why the venue-exclusivity rule is the real
 remedy.
+
+---
+
+## 2026-08-15 — REPLICATION B: the clean floor is ZERO, the forfeit investigation CLOSES, and we get the first clean real-clock number
+
+B ran its full registered length on a quiet machine — the arm the whole
+study was pointing at.
+
+| | |
+|---|---|
+| form | 60+1, **fixed N = 60**, **concurrency 1**, packed arms, adjudication off, srand 20260819 |
+| result | **60 / 60 games** |
+| **illegal** | **0** |
+| **time forfeits** | **0** |
+| terminations | **60 / 60 `normal`** |
+| venue during B | foreign CPU **median 12%**, p90 105%, max 459% |
+| Elo | entry **+325.17 ± 134.54** (classic scored 13.33%) |
+
+### The floor, and the decomposition it makes possible
+
+| | contended (A) | clean (B) |
+|---|---|---|
+| moves past the entry's own deadline | 13.74% | **9.88%** |
+| **worst self-overrun** | **+22 435 ms** | **+557 ms** |
+| minimum flag margin | −1030 ms (unreliable, see A) | **+503 ms** |
+| forfeits | 25 | **0** |
+
+**The rate barely moves; the TAIL collapses 40×.** That splits the defect
+cleanly in two, and only one half is ours:
+
+- **Intrinsic and harmless.** The entry runs past its own deadline on
+  roughly one move in ten *in both venues*. On a quiet machine the worst
+  case is **557 ms**, against a smallest observed flag margin of
+  **+503 ms** — it never threatens a flag.
+- **Venue, and decisive.** Foreign core saturation multiplies that tail
+  into **seconds**, which is what flags. The engine cannot defend against
+  it because a descheduled process cannot execute its own deadline check.
+
+**Pooled clean-venue evidence: 0 forfeits in 74 games** (B's 60 plus A's 14
+clean-classified), giving an exact one-sided 95% bound of **< 3.97%**.
+
+### THE FORFEIT INVESTIGATION IS CLOSED
+
+- **Mechanism:** CPU starvation of a niced process under foreign core
+  saturation. Established by dose-response, by the 40× tail collapse, by
+  651 clean games on an uncontended box, and by `classic` flagging once
+  too (an entry-only defect cannot do that).
+- **Clean floor:** zero forfeits, < 3.97%.
+- **Holdback fix — DISPOSITION: registered, NOT run, and it stays that
+  way.** It would trim milliseconds from a quantity that is harmless at
+  ≤ 557 ms, and it is powerless against seconds of scheduler starvation.
+  **Revisit only if a forfeit ever appears at zero foreign load** — that
+  observation, and nothing else, reopens it.
+- **The `timemargin` sweep** likewise stays registered-not-run: with a
+  clean floor of zero there is nothing for it to measure.
+- **What actually prevents recurrence** is the venue-exclusivity rule, not
+  an engine change.
+
+### The timed number: a GLIMPSE, with every caveat the registration promised
+
+**+325.17 ± 134.54.** What it is not:
+
+- **Not the meter.** N=60 buys ±135. The proper measurement is registered
+  separately at N=300.
+- **Packed-vs-packed**, so each side carries its own shipped time manager
+  — entry `_pooltm`, classic **min40-4** (the manager #196 landed at +147
+  over its predecessor). This is shipped-form, not engine+eval-only.
+- **One match, one srand, one venue.**
+
+What it nonetheless means, stated as honestly as the caveats:
+
+- It is the **first clean real-clock entry-vs-classic measurement this
+  lane has ever produced.** Every previous timed number was either a
+  different engine (the +187 was 256kb8@100M), a contaminated venue, or a
+  driver-vehicle match that bypassed the shipped time manager.
+- **The league plays real clocks.** Fixed nodes is an instrument, not the
+  competition.
+- **Even the interval's low end, ~+190, is a large gap.**
+
+### Both numbers are true, and together they say something specific
+
+| instrument | result | what it isolates |
+|---|---|---|
+| fixed-node 20000, N=400 | **−1.74 ± 27.93** | search + eval per node → **parity with classic** |
+| clean 60+1, N=60 | **+325.17 ± 134.54** | shipped form on a clock → **entry dominates** |
+
+The entry's advantage is **not** per-node quality; it is **nps and time
+management**, exactly as this ledger's "SPEED IS ELO" finding predicts and
+as stage 1 already implied. The distilled PSTs are worth about what
+classic's hand-tuned tables are worth per node — and the artifact wins
+anyway once a clock exists.
 
 ---
 
