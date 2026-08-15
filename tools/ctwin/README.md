@@ -144,7 +144,7 @@ python3 adaptive_gp.py \
   --engine ./sunfish_c --engine-args ./tables_classic.txt \
   --baseline-options default \
   --space all_parameters.json --openings openings.fen \
-  --gate "python3 sunfish_gate.py" --gate-all --gate-workers 20 --cycle-openings \
+  --gate "python3 sunfish_gate.py" --gate-workers 20 --cycle-openings \
   --slots 20 --queue-batches 60 --refill-batches 20 \
   --pairs 1 --initial-design 256 --inducing 128 --update-batches 8 \
   --explore-start .5 --explore-floor .2 --duel-fraction .3 \
@@ -157,13 +157,13 @@ books remain mandatory for final confirmation. A fixed inducing basis permits
 online Laplace updates without rebuilding a quadratic comparison matrix. The
 optimizer keeps its small matrix operations single-threaded so its 128-site
 model does not compete with the 20 game lanes. Its 2,048-point global design is
-gated once before play, so design, exploration, UCB, and inducing sites all
-stay inside the feasible set. It reserves 512 points for the default, every
-one-axis setting, and nearby two-axis combinations; the rest retain broad
-global coverage. Without `--gate-all`, coordinate refinements are
-gated on demand and rejected policies consume neither games nor allocation
-credit. Three reserved pairs per lane, replenished while two remain, hide
-proposal latency. Results
+used for the initial design, acquisition restarts, and inducing sites. It
+reserves 512 points for the default, every one-axis setting, and nearby two-axis
+combinations; the rest retain broad global coverage. Coordinate refinements
+are gated on demand, and rejected policies consume neither games nor allocation
+credit. Three reserved pairs per lane, replenished while two remain, hide that
+latency. `--gate-all` instead prevalidates the finite design and confines every
+acquisition to it; use that for a broad census, not the final joint refinement. Results
 append to a JSONL journal and compact every 1,000 pairs,
 avoiding quadratic checkpoint I/O while remaining restartable. At the
 wall-time limit, the scheduler finishes every reserved color pair before its
