@@ -25,7 +25,7 @@ def main():
         state, space.prior_mean, args.pair_weight, space, args.inducing)
     observed = [space.canonical(batch["knobs"]) for batch in state["batches"]]
 
-    points = sorted(set([*space.candidates, *observed]))
+    points = sorted(set([*space.candidates, *(point for point in observed if space.contains(point))]))
     means = model.predict(points)[0]
     best = points[int(means.argmax())]
     predicted, variance = model.predict([best])
