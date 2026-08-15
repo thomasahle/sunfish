@@ -142,6 +142,8 @@ def aggregate(batches, pair_weight, space):
         left = space.canonical(batch["knobs"])
         right = batch.get("opponent_knobs")
         right = space.canonical(right) if right is not None else None
+        if not space.contains(left) or right is not None and not space.contains(right):
+            continue
         points.add(left)
         if right is not None:
             points.add(right)
@@ -327,6 +329,7 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
     mean, variance = statistics(candidates)
 
     observed = {space.canonical(batch["knobs"]) for batch in state["batches"]}
+    observed = {point for point in observed if space.contains(point)}
     active = [left for left, _ in pending]
     sites = observed | set(active)
     selections = state.get("selections", len(state["batches"]))
@@ -406,6 +409,7 @@ def choose_opponent(state, mean_function, challenger, args, space, model=None):
         for batch in state["batches"]
         if batch.get("opponent_knobs") is None
     }
+    anchored = {point for point in anchored if space.contains(point)}
     anchored.discard(challenger)
     if not anchored:
         return None

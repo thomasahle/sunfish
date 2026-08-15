@@ -165,6 +165,17 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(success, [1])
         self.assertEqual(trials, [1])
 
+    def test_aggregate_rejects_observations_outside_new_domain(self):
+        valid = {"knobs": {"X": 50, "Y": 10}, "wins": 1, "draws": 1, "losses": 0}
+        invalid = valid | {"knobs": {"X": -10, "Y": 10}}
+        invalid_opponent = valid | {"opponent_knobs": {"X": 50, "Y": 30}}
+        points, design, success, trials = aggregate(
+            [valid, invalid, invalid_opponent], 0.5, self.space)
+        self.assertEqual(points, [self.space.default])
+        np.testing.assert_array_equal(design, [[1]])
+        self.assertEqual(success, [0.75])
+        self.assertEqual(trials, [1])
+
     def test_mixed_space_has_no_hidden_nondefault_penalty(self):
         spec = {
             "parameters": [{
