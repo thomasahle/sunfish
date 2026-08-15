@@ -247,6 +247,68 @@ VAL-probe-first):
 
 ## Log (newest first)
 
+- 2026-08-15 08:25 UTC: **THE SEED SWEEP WAS MEASURING ITSELF: `opt.seed`
+  moves the val SPLIT, not just the initialisation — caught by `val_sha`,
+  fixed, damage contained, and the attractor answer survives it.**
+
+  **`76_gridste_seed1_long` (seed 1, 60 epochs)** finished: best-of-60
+  **0.01340**, best-of-first-30 0.01396, last-10 mean 0.01484 — and
+  **`val_sha 96e37345a39624ce`**, against the `0239a7b84ec6ba2f` that every
+  other run in this campaign carries. **Its val number is withdrawn from
+  the ladder**: it was not measured on the same validation set, so it
+  cannot be compared to 0.01347 or to anything else here.
+
+  **The defect.** Under `legacy-perm`, `train.py` drew the split from the
+  same `random.Random(cfg.opt.seed)` that seeds initialisation, so a seed
+  replicate changes the validation set underneath the experiment. Measured
+  directly on the split logic: **the seed-0 and seed-1 val sets overlap
+  5.00%** — which is exactly the overlap of two independent 200 000-row
+  draws from 4 027 406, i.e. they are effectively disjoint samples. My
+  refill asked "how much of a val difference is seed noise?" with configs
+  that changed the measuring stick along with the thing being measured.
+  **The instrument caught it, and that is the only reason this entry is not
+  a wrong result:** `val_sha` exists precisely so that "same val set" is
+  checkable rather than asserted, and it was checked.
+
+  **Damage is contained, and the containment is the important part.** Every
+  run this campaign has compared — v1, 8Mv, the c1024 arms, 40/41, 50, 60,
+  61, 70–75 — ran at **seed 0** and therefore shares one val set. **No
+  existing comparison in this ledger is affected.** Exactly two runs sit
+  off the ladder: `76` (seed 1) and `77` (seed 2, running now, queued
+  before the fix).
+
+  **The fix** (`data.perm_seed`, training-side only, landed with this
+  entry): the split may be seeded independently of `opt.seed`.
+  `perm_seed: -1` is the default and reproduces history bit for bit — one
+  Random draws split then epoch shuffles, in `train_packed.py`'s original
+  order. Verified before deploying: default at seed 0 reproduces the
+  campaign's val ids exactly, and `perm_seed: 0` reproduces them for
+  `opt.seed` ∈ {1, 2, 3} while the old path does not.
+
+  **The attractor answer SURVIVES all of this**, because the parking is a
+  property of the trained weights and needs no val set at all. At **seed 1**
+  the read-out lands at `u2·scale` =
+  **[0.500031, 0.4999669, 0.5000135, 0.5078581]** — three of four within
+  **3e-5** of the tie. **The attractor is not a seed-0 artifact.** With
+  `76` the count is seven runs and twenty-eight components; `77` (seed 2)
+  makes it eight, and `80` (seed 3, 60 epochs) closes seed × ride.
+
+  **Requeued with the split pinned**, longest last: `78_plain_seed1`
+  (`ebaa41819de7`) one-layer val variance, now actually answerable ·
+  `79_seed2_l1_001_pinned` (`41a93306f637`) redoes `77`'s void val leg —
+  is the l1 .001 free-byte result seed-stable? · `80_seed3_l1_001_long`
+  (`559e3432f3b0`) the 60-epoch tail. `77` is left running: its attractor
+  leg is valid and costs nothing, its val leg is void and is not being
+  read.
+
+  **One consequence worth recording once:** `config_hash` covers the whole
+  config dict, so *adding a field rehashes every config*. The hashes quoted
+  in entries written before `gridste`, `u2grid` and now `perm_seed` existed
+  will not recompute under current code. Each run's own
+  `PROVENANCE.json` records the hash as computed at run time and remains
+  self-consistent — that file, not a quoted hash in prose, is the
+  authority.
+
 - 2026-08-15 08:10 UTC: **THE DENSITY DIAL REVERSES under the fidelity rule
   — 35 free bytes — and the n8/kb4 seams are PRICED and DECLINED as a
   direction call, not queued.**

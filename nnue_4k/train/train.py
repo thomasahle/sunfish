@@ -104,7 +104,13 @@ def main():
     # the exact call order train_packed.py drew from the global stream.
     torch.manual_seed(cfg.opt.seed)
     rng = random.Random(cfg.opt.seed)
-    train_ids, val_ids = datamod.make_split(ds, cfg.data, rng)
+    # data.perm_seed pins the SPLIT so a seed sweep varies initialisation and
+    # batch order and NOT the validation set.  Without it opt.seed feeds the
+    # split permutation too, and two seeds draw val sets that overlap 5% --
+    # i.e. the experiment changes its own measuring stick (run 76, 2026-08-15).
+    # Unset (-1) keeps the historical single-stream order bit for bit.
+    split_rng = rng if cfg.data.perm_seed < 0 else random.Random(cfg.data.perm_seed)
+    train_ids, val_ids = datamod.make_split(ds, cfg.data, split_rng)
     vsha = datamod.val_sha(ds, val_ids)
     print("split %s: %d train / %d val  val-sha %s"
           % (cfg.data.split, len(train_ids), len(val_ids), vsha), flush=True)

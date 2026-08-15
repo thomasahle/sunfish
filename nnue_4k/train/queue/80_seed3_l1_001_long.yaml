@@ -1,0 +1,20 @@
+# seed3-l1-001-long -- the TAIL (~40 min, last), attractor point 4, pinned.
+#
+# NAMED QUESTION: the attractor's two remaining free variables together --
+# seed 3 AND a 60-epoch ride.  73 showed doubling the ride at seed 0 pulls
+# the components TIGHTER onto the tie (within 2e-6).  76 showed the tie
+# survives a change of seed (three of four within 3e-5 at seed 1).  If seed 3
+# at 60 epochs parks too, the attractor has survived seed, clamp, l1, epochs
+# and flag combination, and the container-resolution reading in TRAINQUEUE.md
+# is the only one left standing.
+#
+# Split PINNED (perm_seed 0) so the val is on the ladder; report
+# best-of-first-30 beside best-of-60 per the dense60 lesson.  Placed last so
+# a single upstream finish cannot drain the queue.
+name: seed3_l1_001_long
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406, perm_seed: 0}
+model: {arch: ml2, N: 4, base: mat, ternary: 0.85, bm: 4, u2grid: 1, gridste: 1}
+loss: {l1: 0.001, satpen: 0.03, satthresh: 480.0}
+opt: {epochs: 60, batch: 8192, lr: 3.0e-3, seed: 3}
+notes: "tail (~40 min, last): attractor point 4 -- seed 3 at double the ride,
+  split pinned; does the tie survive seed AND epochs together?"

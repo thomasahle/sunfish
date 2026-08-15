@@ -1,0 +1,19 @@
+# seed2-l1-001-pinned -- redoes 77's VAL leg on the pinned split.
+#
+# 77 (running) answers the attractor at seed 2, which needs no val set at all
+# -- the parking is a property of the trained weights.  Its SECOND question
+# (is the l1 .001 free-byte result -- val 0.01347 at 72.9% zeros packing to
+# 3740 B -- seed-stable?) is void as asked, because opt.seed moved its val
+# set.  This run asks it properly: same recipe, seed 2, split PINNED to the
+# campaign's, so its val lands on the same ladder as 70/73/74/75.
+#
+# NAMED QUESTION: does l1 .001 reproduce val ~0.01347 and ~73% zeros on a
+# second initialisation?  A free-byte result the family is about to adopt as
+# its operating point should be confirmed once before it becomes a default.
+name: seed2_l1_001_pinned
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406, perm_seed: 0}
+model: {arch: ml2, N: 4, base: mat, ternary: 0.85, bm: 4, u2grid: 1, gridste: 1}
+loss: {l1: 0.001, satpen: 0.03, satthresh: 480.0}
+opt: {epochs: 30, batch: 8192, lr: 3.0e-3, seed: 2}
+notes: "seed-stability of the l1 .001 free-byte result, on the PINNED split so
+  the val is comparable to 70/73/74/75 (77's val leg was void)"

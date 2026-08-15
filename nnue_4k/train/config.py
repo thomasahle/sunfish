@@ -24,6 +24,16 @@ class DataCfg:
     split_seed: int = 20260813  # FEN-key hash seed (house rule, distill_train.py)
     val_mod: int = 20           # fenkey: hash %% val_mod == 0 is val (20 -> 5%)
     valn: int = 0               # legacy-perm: --valn pinning (0 = permute all)
+    perm_seed: int = -1         # legacy-perm: seed the SPLIT permutation
+    #                             independently of opt.seed.  -1 (default)
+    #                             reproduces history exactly -- one Random
+    #                             draws the split and then the epoch shuffles.
+    #                             Set it to PIN THE VAL SET across a seed
+    #                             sweep: under legacy-perm opt.seed moves the
+    #                             split, so a seed replicate otherwise changes
+    #                             the validation set underneath the experiment
+    #                             (caught 2026-08-15 by run 76's val_sha; seed
+    #                             0 and seed 1 val sets overlap 5%).
 
 
 @dataclass

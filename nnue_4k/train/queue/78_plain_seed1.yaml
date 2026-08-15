@@ -1,22 +1,23 @@
-# plain-seed1 -- how much of a one-layer val difference is NOISE?
+# plain-seed1 -- one-layer val variance, on a PINNED val set.
 #
 # NAMED QUESTION: 71 and 72 both landed on val 0.01378 -- to five decimals,
-# under different ternary thresholds -- and both were converged (last-10 mean
-# 0.01379).  That is either a real floor for the one-layer family on this
-# split or a coincidence this ledger is about to start reading as signal.
-# One more seed answers it, and the answer calibrates EVERY one-layer
-# comparison here: the campaign has been quoting 0.01378 vs 0.01385 vs
-# 0.01389 as if those gaps mean something, and nobody has measured the seed
-# variance they would have to clear.
+# under different ternary thresholds -- and both were converged.  Is that a
+# real floor for the one-layer family on this split, or a coincidence this
+# ledger is about to start reading as signal?  The campaign quotes 0.01378 vs
+# 0.01385 vs 0.01389 as if those gaps mean something; nobody has measured the
+# seed variance they would have to clear.
 #
-# Cheap (18 min), and it prices the family whose PLAY number is the best of
-# the three screened (-107 vs -234 and -300), which is where the campaign's
-# attention should be regardless of what val says.
+# perm_seed PINS THE SPLIT.  Under legacy-perm opt.seed feeds the split
+# permutation as well as the initialisation, so the first version of this
+# config would have answered a different question than the one it asked: seed
+# 0 and seed 1 val sets overlap 5% (run 76 caught it via val_sha).  With
+# perm_seed: 0 the val set is byte-identical to every seed-0 run in this
+# ledger, so the ONLY thing varying is initialisation and batch order --
+# which is what "seed variance" has to mean for the number to be usable.
 name: plain_seed1
-data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406}
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406, perm_seed: 0}
 model: {arch: residual, N: 4, base: mat, ternary: 0.85, gridste: 1}
 loss: {l1: 0.0005, satpen: 0.03, satthresh: 480.0}
 opt: {epochs: 30, batch: 8192, lr: 3.0e-3, seed: 1}
-notes: "one-layer val variance under seeds: is 0.01378 a seed-independent
-  floor (71 and 72 both hit it exactly) or a coincidence? calibrates every
-  one-layer val gap this ledger quotes"
+notes: "one-layer val variance with the split PINNED (perm_seed 0): is 0.01378
+  a seed-independent floor, or noise the ledger has been over-reading?"
