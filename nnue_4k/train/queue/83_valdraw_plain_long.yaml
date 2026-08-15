@@ -1,0 +1,25 @@
+# valdraw-plain-long -- the TAIL (~36 min, last), and the same instrument
+# question for the family that actually plays best.
+#
+# NAMED QUESTION: does the one-layer 0.01378 hold on an independent 200k val
+# draw?  This matters more than the ml2 version because the one-layer family
+# owns the best play number of the three screened (-107 against -234 and
+# -300), so it is the family a future candidate most likely comes from, and
+# its val ladder is the one that would select that candidate.
+#
+# Paired with 82 this gives a draw-sensitivity reading for BOTH families at
+# once, which is what calibrates the ledger: 78 measured that a SEED change
+# moves the one-layer val by 4e-5, and several gaps this ledger has treated
+# as real are 7e-5 to 1e-4.  If the DRAW moves it by a comparable amount, the
+# two noise sources together exceed most of what the campaign has been
+# ranking on.
+#
+# 60 epochs, last in the queue, split drawn with perm_seed 1, opt.seed 0.
+name: valdraw_plain_long
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406, perm_seed: 1}
+model: {arch: residual, N: 4, base: mat, ternary: 0.85, gridste: 1}
+loss: {l1: 0.0005, satpen: 0.03, satthresh: 480.0}
+opt: {epochs: 60, batch: 8192, lr: 3.0e-3, seed: 0}
+notes: "tail (~36 min, last): val-DRAW sensitivity of the one-layer family --
+  does 0.01378 hold on an independent draw? pairs with 82 to calibrate the
+  ledger's noise floor against the gaps it ranks on"

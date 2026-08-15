@@ -247,6 +247,87 @@ VAL-probe-first):
 
 ## Log (newest first)
 
+- 2026-08-15 09:10 UTC: **THE ONE-LAYER NOISE FLOOR IS ~4e-5 — and it is
+  the same size as gaps this ledger has been ranking on.**
+
+  **`78_plain_seed1`** (seed 1, split PINNED — `val_sha 0239a7b84ec6ba2f`,
+  the `perm_seed` fix's first real use and it worked): best val **0.01374**,
+  last-10 mean 0.01376, converged as the one-layer family always is.
+
+  | run | seed | τ | best val | last-10 mean |
+  |---|---|---|---|---|
+  | `71_gridste_plain` | 0 | 0.85 | 0.01378 | 0.01379 |
+  | `72_replnet_tau11` | 0 | 1.1 | 0.01378 | 0.01379 |
+  | **`78_plain_seed1`** | **1** | 0.85 | **0.01374** | 0.01376 |
+
+  **What the 71/72 tie actually was.** It was never evidence of a "floor" —
+  they shared **seed 0**, and the one-layer family is extremely stable
+  *given a seed*. Changing τ moved val by **< 1e-5** (identical to five
+  decimals); changing the **seed** moved it by **4e-5**. So the τ effect is
+  four times below the seed effect, which strengthens rather than weakens
+  arm 8's verdict: **τ 1.1 pays nothing, and its effect is below the noise
+  the measurement can even resolve.**
+
+  **The retroactive part, which is the uncomfortable one.** A 4e-5 seed
+  sensitivity is the same order as several differences this ledger has
+  reported as results:
+
+  | claim | gap | vs the 4e-5 observation |
+  |---|---|---|
+  | "data scale pays": 8Mv 0.01378 vs v1 0.01385 | 7e-5 | 1.8× |
+  | c1024-cal 0.01388 vs 0.01378 | 1.0e-4 | 2.5× |
+  | ml2 bm4 0.01286 vs bm2 0.01291 | 5e-5 | 1.3× |
+  | grid l1 .0005 0.01347 vs .0003 0.01354 | 7e-5 | 1.8× |
+
+  **This does not say any of those claims is wrong.** It says they are
+  **unresolved at the precision they were stated**, because each side is a
+  single seed and the one measured seed change is a comparable size. The
+  honest reading is that the campaign has been ranking arms on differences
+  it never showed to exceed its own noise — and that is exactly the failure
+  mode the SELECTOR SPEC above exists to end.
+
+  **Two caveats stated so this is not over-read in the other direction.**
+  (1) `n = 2` seeds: one difference of 4e-5 is a single *observation* of
+  seed sensitivity, **not a variance estimate** — no σ, no interval, and
+  the next seed could read anything. (2) The ml2 family is **noisier**, not
+  quieter: its best-vs-last-10 spreads run 5e-4 to 8e-4 against the
+  one-layer family's 2e-5, so an ml2 seed sensitivity is likely larger. The
+  runs now queued turn both caveats into measurements.
+
+  **A third finding, free with the first: the export shift is NOT a
+  property of the recipe.** `78` landed on **shift 3** (gains
+  [43, 42, 48, 45]) where `71`/`72` landed on **shift 4** (gains
+  [83, 87, 88, 82]) — same recipe, same data, different seed. Harmless for
+  a one-layer net. **For ml2 it is the whole ballgame**: the shift sets the
+  layer-2 read-out scale, and shift 4 versus 3 is the difference between
+  the dead read-out of runs 60/61 and a live one. A candidate whose second
+  layer survives export is therefore partly a **draw**, not purely a
+  recipe — which is one more reason nothing in this family should be
+  promoted on val.
+
+  **Promotion path, referencing the lane above rather than inventing one:**
+  any grid-era candidate that earns a look goes through the **SELECTOR
+  SPEC**'s 50-game fixed-node mini-match against the pinned entry first —
+  never straight to a screen, and never on val alone.
+
+  **Re-baselining, from the measurement lane's stage-1 gap:** the entry
+  measures **−1.74 ± 27.93 vs classic at equal nodes (~+60
+  bias-corrected)**. So a replacement net's target is not classic, it is
+  **the entry** — and the best net this campaign has produced is **107 Elo
+  short of it** (linear −107; the two ml2 arms −234 and −300). That is the
+  size of the hole, stated in the units that matter.
+
+  **Queued (depth 5, longest last), each with its question named:**
+  `81_satpen_off` — registered arm 11's **satpen half**, never varied since
+  the kbbil lesson made 0.03 default-on; byte-free, so pure val ·
+  `82_valdraw_ml2` and `83_valdraw_plain_long` — **is the ladder itself
+  stable?** Every val in this campaign comes from ONE 200 000-row draw, and
+  until `perm_seed` existed nobody could ask what a different draw says.
+  These ask it for both families: if the draw moves val by less than the
+  gaps we read, the ladder is sound; if by more, the campaign's val
+  differences are draw noise and the instrument, not any net, is the
+  finding.
+
 - 2026-08-15 08:25 UTC: **THE SEED SWEEP WAS MEASURING ITSELF: `opt.seed`
   moves the val SPLIT, not just the initialisation — caught by `val_sha`,
   fixed, damage contained, and the attractor answer survives it.**

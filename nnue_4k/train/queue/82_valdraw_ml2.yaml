@@ -1,0 +1,28 @@
+# valdraw-ml2 -- IS THE LADDER ITSELF STABLE?  A question the split defect
+# made newly askable, and the most load-bearing one left in the family.
+#
+# Every val number this campaign has compared -- 0.01280, 0.01347, 0.01378 --
+# comes from ONE 200,000-row draw (val_sha 0239a7b84ec6ba2f).  The ledger
+# reads gaps of 3e-5 to 1e-4 off that single draw as if the draw were the
+# population.  Until 2026-08-15 nobody could ask what a DIFFERENT draw would
+# say, because changing it meant changing the seed too; perm_seed separates
+# them, so the question is now one config field.
+#
+# NAMED QUESTION: does the l1 .001 operating point (74: val 0.01347) hold on
+# an independent 200k val draw?  If it moves by less than the gaps we read,
+# the ladder is sound and every comparison stands.  If it moves by MORE, then
+# the campaign's val differences are draw noise and the honest response is to
+# stop ranking arms by a single draw -- which is a finding about the
+# instrument, not about any net.
+#
+# opt.seed stays 0 so initialisation is the campaign's and the ONLY change is
+# the draw.  Note in advance: swapping the draw also swaps 200k rows between
+# train and val (2.6% of train), which is inherent -- you cannot move the val
+# set without moving its complement.
+name: valdraw_ml2
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406, perm_seed: 1}
+model: {arch: ml2, N: 4, base: mat, ternary: 0.85, bm: 4, u2grid: 1, gridste: 1}
+loss: {l1: 0.001, satpen: 0.03, satthresh: 480.0}
+opt: {epochs: 30, batch: 8192, lr: 3.0e-3, seed: 0}
+notes: "val-DRAW sensitivity of the ml2 operating point: does 0.01347 hold on
+  an independent 200k draw, or are the ledger's 3e-5..1e-4 gaps draw noise?"
