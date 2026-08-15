@@ -181,47 +181,58 @@ MODS = {
         "   for i, x in enumerate(K_MID))\n"
         "MATE_LOWER = 60000 - 13 * 929\n",
     ),
-    # `khold`: hold K_MID until BOTH queens are off. The base seam flips
-    # to K_END -- a table that actively pulls the king centre-ward at
-    # 10/step -- as soon as EITHER queen leaves, so trading our queen
-    # while theirs stays on sends our king marching toward the mating
-    # attack. That is H1 kact's recorded pre-mortem as a property of the
-    # baseline, and 17 of the 49 mated losses live in exactly that
-    # regime. One word: `and` -> `or`. Composes with kact (khold gates
-    # WHEN kact's steeper table applies) and with kmid (disjoint
-    # anchors). It does NOT dot-compose with pend -- both rewrite this
-    # seam line, and the generator raises loudly in either order; if both
-    # land, a combined `pendkhold` mod must be written and screened as
-    # its own arm (pre-registered as FORBIDDEN until then).
-    "khold": (
-        '        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END\n',
-        '        pst["K"] = K_MID if "Q" in pos.board or "q" in pos.board else K_END\n',
-    ),
-    # `khold2`: khold with a lone-queen escape hatch (pre-registered
-    # 2026-08-14, Thomas's KQK directive). Pure khold holds K_MID while
-    # EITHER queen is on -- which in KQK keeps the ATTACKING king passive
-    # at home, and the king is a mating piece there: no depth of search
-    # mates a bare king without it. khold2 keeps khold's guard in queenful
-    # middlegames but re-engages K_END when there is no attack left to
-    # hide from: K_END iff (both queens off) OR (root non-pawn, non-king
-    # material across BOTH sides <= piece["Q"] = 929). Given a queen on
-    # the board, heavy >= 929, so the material clause holds EXACTLY when
-    # the queen is the lone non-pawn piece -- KQK and its pawn-dressed
-    # forms (pawns deliberately uncounted: promotion races want the king
-    # out too, and a pawn is not a mating attack to hide from). Queen plus
-    # even the lightest minor (929 + 280 = 1209) stays K_MID. Root-only
-    # scan on the seam the kend+fresh fix already rebuilds -- one
-    # comprehension per SEARCH, hot-loop cost class ZERO. Composition:
-    # SUBSUMES khold (shared anchor, `khold2.khold` raises loudly);
-    # `khold2.pend` FORBIDDEN exactly as khold.pend (same seam line);
-    # composes with kmid/kact (disjoint anchors). The mate-conversion
-    # gate (tools/build/mate_conversion_gate.py) is the arbiter between
-    # khold and khold2 -- see the ledger's pre-registered expectation.
-    "khold2": (
-        '        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END\n',
-        '        heavy = sum(piece[c] for c in pos.board.upper() if c in "NBRQ")\n'
-        '        pst["K"] = K_MID if heavy > piece["Q"] and ("Q" in pos.board or "q" in pos.board) else K_END\n',
-    ),
+    # ===================================================================
+    # TOMBSTONE: `khold`, `khold2` -- FAMILY CLOSED 2026-08-15, neither
+    # ever lands. Both rewrote the SAME seam line pend's landing (61b1a51)
+    # also rewrote, so their shared anchor is gone the same way oldtm's
+    # and steptm's went with pooltm's landing (5f16bae) -- this is that
+    # same tombstone convention, not a new one.
+    #
+    # THE MATE-CONVERSION GATE DECIDED BETWEEN THEM FIRST (ad292ae, KQK
+    # directive: "promote king->center as soon as either queen leaves").
+    # `khold` FAILS kqk-approach (7/8: king a1->b1 then 18 moves of
+    # shuffle at halfmove-clock 36, and converts kqk-mid slower, 9 vs 6) --
+    # "khold drops to mechanism control and must never land." It never
+    # reached an independent Elo screen because of this: built and
+    # gate-checked only (6567bc4), "no Elo claimed; screen staged, not
+    # armed".
+    #
+    # `khold2` PASSED the same gate (8/8, move-for-move identical to base)
+    # and went on to TWO closed Elo screens:
+    #   ALONE   first attempt died at ~828 games -- shared-scratchpad
+    #           arena clobbered by another lane, numbers unrecoverable
+    #           (ec70bd8). Clean rerun (bbc1969): 1000 games, +2.43 +/-
+    #           7.24, LLR never left the middle -- UNDECIDED (LB -4.81, UB
+    #           +9.67), no land, no drop. Paired with kmid's own null
+    #           (+2.08 +/- 16.58, ec70bd8, kmid stays -- disjoint anchor,
+    #           still builds, NOT retired here): "the H2 king-safety seam
+    #           is not a source of Elo at this budget."
+    #   ON pend the pre-registered hand-written `pendkhold2` mod (built
+    #           because khold2 and pend share this same seam line and
+    #           cannot dot-compose) SCREENED AND LOST: -10.78 +/- 6.96,
+    #           95% [-17.75, -3.81], H0 accepted at 774 of a 1000-game cap
+    #           (78ff222) -- khold2's marginal contribution on top of the
+    #           landed pend is measurably NEGATIVE, not the expected
+    #           straddle.
+    # kact closed the same H1/H2 programme at -33.07 +/- 15.98, SPRT DROP
+    # (ec70bd8) -- every arm this programme raised on the king is now
+    # closed by measurement and none of them lands.
+    #
+    # LIVE ANCHOR, read before re-creating either: the shared anchor
+    # `pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else
+    # K_END` is GONE from the baseline -- pend's landing rewrote this
+    # exact line to the `end = ...` form. Re-creating `khold` or `khold2`
+    # raises there today: SAFE, the same designed failure as oldtm's and
+    # steptm's.
+    #
+    # TO REBUILD FOR REPRODUCTION: check out `5457f27` (the commit
+    # immediately before pend's landing at `61b1a51`) or earlier -- the
+    # anchor is intact there and both mods build. Verified directly at
+    # the two commits that actually measured `khold2` (`ad292ae`, its
+    # build, and `bbc1969`, its clean rerun): both predate `61b1a51` and
+    # both still have the anchor. Do not build either mod at or after
+    # `61b1a51`.
+    # ===================================================================
     # `pendkhold2`: THE HAND-WRITTEN COMBINATION, written because the pair
     # cannot dot-compose. `khold2` and `pend` both rewrite the queens-off seam
     # line, so `khold2.pend` and `pend.khold2` raise in either order and the
