@@ -477,8 +477,51 @@ The honest summary: **+400 is not close, the gap is not mostly an eval
 gap, and the fixed-node instrument says the distilled PSTs and classic's
 hand-tuned tables are worth about the same per node.**
 
-Stage 2 (60+1, packed artifacts, the real-clock number including the pool
-TM) launched on completion of this leg.
+### Stage 2 is LAUNCHED and SELF-COMPLETING — harvest instructions, written before the result exists
+
+Stage 2 started at **08:41 UTC** on completion of this leg and is **still
+running** as this entry is written. It is deliberately session-proof: the
+runner writes its own verdict block (tripwire counts, `pair_elo`
+recompute, fastchess totals) into `scratchpad/arena-meas/AB_stage2.txt`
+when it finishes, so the number survives whether or not this lane is
+still alive to read it.
+
+| | |
+|---|---|
+| arena | `scratchpad/arena-meas/`, runner `run_stage2.sh` |
+| form | 60+1, **fixed N = 200**, no SPRT, srand **20260817**, concurrency 4 |
+| arms | `entry.packed` **3405 B** (`5a207fdf9cf05f2e…`, carries `_pooltm`) vs `classic.packed` **3246 B** (min40-4) |
+| adjudication | **OFF** — amended before game 1, because it would have been one-sided (`entry.packed` emits no `info`) |
+| gate | 20-game arbiter-verified smoke PASSED: 0 illegal, 0 forfeits, 20/20 normal |
+| health at 7 games | 0 illegal, 0 forfeits; mean game 154 s → projected ~2.5-3 h |
+| ETA | ~11:30 UTC |
+
+**Reading rules, pre-committed now so the harvester cannot choose them
+after seeing the score:**
+
+1. **The registered form is fixed N = 200.** If it completed, report the
+   full 200 with the pentanomial interval.
+2. **If it was stopped early**, the count at the stop is still an
+   *unbiased* estimate at that N — but **only** if the stop was for
+   wall-clock or contention reasons and **not** because of the running
+   score. The harvester must state which, explicitly. A result-dependent
+   stop makes the number SPRT-like and biased away from zero, and it must
+   then be reported as such.
+3. **Zero illegal is still zero-tolerance.** One illegal move voids the
+   run regardless of how many games it cost.
+4. **This number is NOT comparable to the +187.0 ± 49.7 goal-line
+   figure**, which cancelled the time-formula gain by putting both sides
+   on the same driver. Stage 2 includes the TM gain by design, and it is
+   also a different engine from the one that scored +187 (that was
+   256kb8@100M, not the 4k entry).
+5. **It is not comparable to stage 1 either.** Different vehicle (packed
+   vs source), different limit (clock vs nodes), different adjudication
+   (off vs on). Stage 1 measures search+eval; stage 2 measures the shipped
+   artifacts on a clock.
+
+The laptop lock is deliberately **still held** while these games run — a
+timed match cannot share the machine — and its release condition is
+written into `scratchpad/laptop-screen.lock`.
 
 ---
 
