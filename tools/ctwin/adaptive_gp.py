@@ -565,8 +565,10 @@ async def optimize(args):
         )
 
     while completed < args.batches:
-        while len(experiments) < args.queue_batches and completed + len(experiments) < args.batches:
-            add_experiment()
+        if len(experiments) <= args.queue_batches - args.refill_batches:
+            while (len(experiments) < args.queue_batches
+                    and completed + len(experiments) < args.batches):
+                add_experiment()
         while queue and len(running) < args.slots:
             used = {value for value in running.values()}
             slot = next(x for x in range(args.slots) if x not in used)
@@ -601,12 +603,9 @@ async def optimize(args):
             completed += 1
             allocation_model = None
             save_state(args.state, state)
-            model = posterior(
-                state, mean_function, args.pair_weight, space, args.inducing)
-            mean, variance = model.predict([vector])
-            elo = mean[0] * logistic_gp.ELO_PER_LOGIT
-            error = 1.96 * math.sqrt(variance[0]) * logistic_gp.ELO_PER_LOGIT
-            print(f"[experiment {number}] posterior {elo:+.1f} ± {error:.1f} Elo", flush=True)
+            print(f"[experiment {number}] result "
+                  f"{experiment['wins']}-{experiment['losses']}-{experiment['draws']}",
+                  flush=True)
 
 
 def main():
@@ -631,6 +630,8 @@ def main():
     parser.add_argument("--slots", type=int, default=10)
     parser.add_argument("--queue-batches", type=int,
         help="pending configurations (default: enough to fill all slots)")
+    parser.add_argument("--refill-batches", type=int, default=1,
+        help="refill the pending queue after this many completions")
     parser.add_argument("--batches", type=int, default=100)
     parser.add_argument("--start", type=int, default=1)
     parser.add_argument("--exploration", type=float, default=1.0)
@@ -660,6 +661,8 @@ def main():
         args.queue_batches = pending_configurations(args.slots, args.pairs)
     elif args.queue_batches < 1:
         parser.error("--queue-batches must be positive")
+    if not 1 <= args.refill_batches <= args.queue_batches:
+        parser.error("require 1 <= --refill-batches <= --queue-batches")
     if args.initial_design < 1 or args.explore_half_life <= 0:
         parser.error("--initial-design and --explore-half-life must be positive")
     if args.inducing < 0:
