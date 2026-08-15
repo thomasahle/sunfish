@@ -46,6 +46,8 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **RE-REGISTERED: THE +400 METER, RUN 2 — same form and the SAME sha-pinned arms, new srand **20260821**, void-on-forfeit again, and this time an ABSOLUTE venue embargo ordered across all lanes (nothing above shell-trivial on this laptop while it runs)** | Identical to run 1 so the two are the same measurement, not two different ones: fixed **N=300**, 60+1, concurrency 4, adjudication none, `book3k` order=random, entry **3405 B** `5a207fdf9cf05f2e…` vs classic **3246 B** `7bdbd6054f70622a…` — byte-identical arms to run 1 and to B, re-verified at registration. **Only the srand changes** (20260820 → **20260821**), so run 2 is an independent draw of the same quantity. **Void-on-forfeit stands unchanged** — it fired correctly once and is not being weakened because it cost a run. Quiet gate raised on run 1's evidence: run 1 started at a passing gate and was still overtaken 3 h later, so the gate is necessary but not sufficient and only the embargo closes it; the gate now also requires the venue to hold, with the sampler recording throughout and the per-window analysis run at harvest whatever the outcome. **Reading rules carry over verbatim** including no early stop on the score, and the Elo stays unread until the run is confirmed forfeit-free. Overnight run authorized; self-completing; ETA ~4 h from gate pass |
+| 2026-08-15 | **THE +400 METER IS VOID — 5 time forfeits, registered void condition fired, and the venue check comes back CONTENDED (not the more interesting answer). The registration DID ITS JOB: it caught contamination and protected the number instead of shipping it** | Void by the rule registered at `90fe032` before game 1: one forfeit voids, and there were five (all the **entry**, overruns 101-102 ms — the arbiter-quantum starvation signature). **The honest venue check, run without steering toward the convenient answer**: forfeited games' play windows had **median foreign CPU 104%** (p25 84%, p75 194%) against **35%** for the 278 non-forfeited games — every forfeit sat in a contended window and **none in a quiet one**, so the **holdback-fix revisit condition (a clean-venue forfeit) is NOT met** and that fix stays shelved. Contention is necessary but not sufficient: 63 of 278 clean-finishing games (23%) also ran at ≥84%. **Attribution corrected against the coordinator's own account**: sustained load began at **~18:15Z**, not the 18:45-19:00Z window he named — 15-min medians run 18-44% from 15:16Z to 18:00Z, then **129% / 104% / 172% / 152%** — and the first forfeit is **18:24Z**, 21 minutes before the authorization he blamed. **The first ~200 games (15:16-18:00Z) ran clean at median 18-44% with ZERO forfeits**, which is itself a clean-venue record consistent with B. Elo deliberately **UNREAD and unquotable**; **B's +325.17 ± 134.54 remains the only clean timed number.** Match allowed to finish (283/300 at write time) to preserve per-move data. Re-run registered with a new srand and an absolute venue embargo |
 | 2026-08-15 | **NEAR-MISS ON THE PRIMARY MEASUREMENT, and two liveness checks that BOTH misfire: another lane read this lane's STALE lock purpose text, concluded the lock was awaiting cleanup, and flagged the running meter's `fastchess` for reaping. New rule: a re-taken lock has its PURPOSE TEXT REWRITTEN AT TAKE TIME** | The barrier held and nothing was touched, but the cause was ours: the lock said "forfeit replications A and B" with A/B **COMPLETE** markers while a live N=300 match was playing under it. **Stale purpose text on a LIVE lock is how another lane politely kills your match.** Worse, the obvious liveness tests are both wrong and I hit **both** today: `ps -Ao comm \| grep -x fastchess` is a **FALSE NEGATIVE** — `comm` holds the FULL PATH, so it returned **0 while the meter was live and writing games** — and `pgrep -f fastchess` is a **FALSE POSITIVE**, matching the reader's own shell wrappers containing the word (it reported a match running at 15:08 when none was). A false negative is the dangerous one: it authorizes reaping a live match. The lock now carries a **tested** identity — the single `fastchess` whose **pgnout IS the meter arena file** — plus both anti-patterns named, an ETA computed from the PGN's own game timestamps rather than guessed (a first attempt produced a **negative rate** from a hand-typed epoch and was caught before it shipped), and a two-clause release condition. `run_meter.sh` writes this text **at take time** so a future re-take cannot inherit a stale purpose. Meter unaffected: **70/300, 0 forfeits, 0 illegal**, score deliberately unread |
 | 2026-08-15 | **PRE-REGISTERED — THE +400 PROGRESS METER, PROPERLY: fixed N=300 at 60+1 on a clean venue, entry.packed 3405 B vs classic.packed 3246 B, both arms sha-IDENTICAL to the ones B played. This is the goal's primary progress number and it is registered before game 1** | Arms measured and hashed at registration: entry **3405 B** (`5a207fdf9cf05f2e…`, nnue-4k `4d37712`, `check_entry.sh` green, 691 spare) vs classic **3246 B** (`7bdbd6054f70622a…`, master **`2784dbf`**). **Verified rather than assumed: master's #204 "classic/tm-pool-package" left the packed classic BYTE-IDENTICAL to `573d692`'s** — its builtin-loop manager is still `min(wtime/40 + 0.9·winc, wtime/4)` = min40-4 — so the meter plays exactly the artifacts B played and is a **precision upgrade of B's glimpse, not a different measurement**. Form: **fixed N=300** (no SPRT — a magnitude measurement wants an unbiased number), 60+1, concurrency 4, adjudication **none**, fresh srand **20260820**, `book3k` order=random, expected **±50-60**. **ZERO-FORFEIT IS A VOID CONDITION this time**, reversing the replication study's rule on the stage-2 precedent: that study measured forfeits, this one measures Elo, and a flag decides a game by scheduler rather than chess — **one forfeit voids the run**. Zero-illegal remains the stop condition. **Venue-gated start** (foreign CPU < 40% for 3 consecutive minutes) and a live sampler throughout, so the ledger gets the load profile beside the number; **own-match load is not foreign**. Self-completing with reading rules committed before game 1. ETA ~5-6 h |
 | 2026-08-15 | **REPLICATION B VERDICT — THE FLOOR IS ZERO AND THE INVESTIGATION CLOSES: 60/60 clean-venue games, **0 forfeits**, and the worst self-overrun collapses **40×** from +22 435 ms (contended) to **+557 ms**. Pooled with A's clean games that is **0 in 74**, bounding the clean-venue forfeit rate below **3.97%**. B also produced the FIRST CLEAN REAL-CLOCK entry-vs-classic number: **+325.17 ± 134.54**** | 60+1, fixed N=60, concurrency 1, packed arms, srand 20260819, venue during B median **12%** foreign CPU. 0 illegal, 60/60 `normal`. **The decomposition is now clean**: the entry overruns its own deadline on ~10% of moves in BOTH venues (13.74% contended, 9.88% clean) — that part is intrinsic and **harmless**, since clean-venue worst is 557 ms against a minimum flag margin of **+503 ms**; what venue changes is the TAIL, 40× into multi-second territory where it flags. **Holdback fix DISPOSITION: stays registered-not-run, revisit ONLY if a forfeit ever appears at zero foreign load** — it would trim milliseconds off an effect that is harmless at ≤557 ms and, when it matters, is seconds of scheduler starvation the engine cannot see. **The timed number is a GLIMPSE, not the meter**: N=60 gives ±134.54, it is packed-vs-packed (entry `_pooltm` vs classic `min40-4`), and one match is not a campaign. But it is the first clean real-clock measurement this lane has ever had, the league plays real clocks, and **even the interval's low end (~+190) says the timed gap is large**. **Both numbers are true**: fixed-node **−1.74 ± 27.93** (per-node parity) and clean-clock **+325.17** (nps + time management dominate once a clock exists). The proper meter at N=300 is registered separately |
@@ -948,6 +950,138 @@ in seconds and lives outside the engine. **Fixing the holdback would not
 have prevented one of these forfeits** — which is precisely why it stays
 registered-not-run, and why the venue-exclusivity rule is the real
 remedy.
+
+---
+
+## 2026-08-15 — PRE-REGISTRATION: THE +400 METER, RUN 2 (clean re-run under an absolute embargo)
+
+Registered before game 1, as run 1 was. **The form does not move.** Run 1
+was voided by contamination, not by anything wrong with its design, so
+changing the design now would only make the two runs incomparable.
+
+| | run 1 (VOID) | **run 2** |
+|---|---|---|
+| N | 300 fixed, no SPRT | **300 fixed, no SPRT** |
+| TC | 60+1 | **60+1** |
+| concurrency | 4 | **4** |
+| adjudication | none | **none** |
+| book | `book3k` order=random | **`book3k` order=random** |
+| entry arm | 3405 B `5a207fdf9cf05f2e…` | **identical, re-verified** |
+| classic arm | 3246 B `7bdbd6054f70622a…` | **identical, re-verified** |
+| **srand** | 20260820 | **20260821** ← the only change |
+| forfeit rule | one = VOID | **one = VOID, unchanged** |
+
+**Only the srand changes**, so run 2 is an independent draw of the same
+quantity with the same binaries — not a different experiment.
+
+**The void-on-forfeit rule is NOT weakened.** It fired correctly, it cost
+a four-hour run, and that is what it is for. A rule that is relaxed the
+first time it is expensive was never a rule.
+
+### The venue condition, strengthened by run 1's own evidence
+
+Run 1 **passed its quiet gate at start** and was still overtaken three
+hours later. So:
+
+> **A start-time gate is necessary and NOT sufficient.** Foreign load can
+> arrive at any point in a 4-hour match, and this one arrived at 18:15Z
+> after 200 clean games.
+
+What closes the gap is not a better gate but an **absolute embargo**:
+coordinator-ordered, all lanes, **nothing above shell-trivial on this
+laptop while run 2 plays** — no builds, no sweeps, no model invocations,
+no "survey-scale" exceptions. The gate still runs (foreign CPU < 40% for
+3 consecutive minutes) as the start condition, the sampler records
+throughout, and the per-window forfeit/venue analysis is run at harvest
+**whatever the outcome** — including if it comes back clean, so the clean
+case gets the same scrutiny the dirty one did.
+
+### Reading rules — carried over verbatim
+
+1. **N=300 fixed.** Report the full 300 with the pentanomial interval.
+2. **No early stop on the running score.** Wall clock, contention or venue
+   only, and say which.
+3. **One forfeit voids.** Not "report with a caveat".
+4. **Shipped-form**: entry `_pooltm` vs classic `min40-4`. Not comparable
+   to the 2026-08-12 +187 (different engine, driver-cancelled TM).
+5. **Does not supersede the fixed-node −1.74 ± 27.93.** Different
+   instruments, both true.
+6. **The Elo stays unread until the run is confirmed forfeit-free** — the
+   discipline that kept run 1's void honest.
+
+Overnight authorized. Self-completing, lock taken at start with
+purpose text written at take time, released on completion.
+
+---
+
+## 2026-08-15 — THE +400 METER IS VOID, and the void is the registration working
+
+The meter took **5 time forfeits**. The condition registered at `90fe032`
+*before game 1* says one forfeit voids the run. Five did. **The run is
+void, its Elo is unread, and no number from it enters this ledger.**
+
+This is not a failure of the process — it is the process. The rule was
+fixed in advance precisely so that a contaminated primary number could not
+be argued into acceptance after the fact, and that is exactly what it
+prevented.
+
+| | |
+|---|---|
+| games | 283 / 300 at write time — **allowed to finish**, because completing preserves the per-move data |
+| **time forfeits** | **5**, all the **entry**, overruns **101-102 ms** (the arbiter-quantum starvation signature) |
+| illegal | **0** |
+| Elo | **deliberately UNREAD** — it is void, and a peek could only tempt someone to soften the void |
+
+### The venue check, run honestly
+
+The instruction was to check without steering toward the convenient
+answer, because a **quiet-window** forfeit would have been the far more
+important finding: it is the registered revisit condition for the shelved
+holdback fix. It is not what the data says.
+
+| games | n | median foreign CPU in their play window | p25 | p75 |
+|---|---|---|---|---|
+| **forfeited** | 5 | **104%** | 84% | 194% |
+| **non-forfeited** | 278 | **35%** | 24% | 71% |
+
+**Every forfeit sat in a contended window; none in a quiet one.** The
+lowest forfeit-window median (84%) is above the 75th percentile of clean
+games. **The holdback-fix revisit condition is NOT met** — it stays
+registered-not-run.
+
+**Contention is necessary but not sufficient**: 63 of 278 games that
+finished normally (23%) also ran at ≥ 84%. A forfeit needs a bad enough
+starvation spike at the wrong moment, which is why the rate is a rate and
+not a certainty.
+
+### The load timeline — and a correction to the coordinator's own account
+
+Foreign CPU by 15-minute bucket across the match:
+
+| window | median | note |
+|---|---|---|
+| 15:15Z – 18:00Z | **18 – 44%** | quiet; **~200 games, ZERO forfeits** |
+| **18:15Z** | **129%** | sustained load arrives |
+| 18:30Z | 104% | |
+| 18:45Z | **172%** | |
+| 19:00Z | 152% | lean process count rises 6 → 10 |
+
+The coordinator attributed the exposure to lanes he authorized at
+**18:45-19:00Z**. The sampler says the sustained load began at **~18:15Z**
+and the **first forfeit was 18:24Z — 21 minutes before that window**. The
+authorization made it worse; it did not open it. Recorded because
+attribution should follow the instrument, not the account, even when the
+account is an admission against interest.
+
+**The first ~200 games ran clean at 18-44% with zero forfeits** — a
+clean-venue record inside this very match, consistent with B's 60/60.
+
+### What still stands
+
+**B's +325.17 ± 134.54 remains the only clean real-clock entry-vs-classic
+number this lane has.** Stage 1's fixed-node **−1.74 ± 27.93** is
+untouched — a fixed-node match reads no clock and is co-runnable by
+design.
 
 ---
 
