@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **NEAR-MISS ON THE PRIMARY MEASUREMENT, and two liveness checks that BOTH misfire: another lane read this lane's STALE lock purpose text, concluded the lock was awaiting cleanup, and flagged the running meter's `fastchess` for reaping. New rule: a re-taken lock has its PURPOSE TEXT REWRITTEN AT TAKE TIME** | The barrier held and nothing was touched, but the cause was ours: the lock said "forfeit replications A and B" with A/B **COMPLETE** markers while a live N=300 match was playing under it. **Stale purpose text on a LIVE lock is how another lane politely kills your match.** Worse, the obvious liveness tests are both wrong and I hit **both** today: `ps -Ao comm \| grep -x fastchess` is a **FALSE NEGATIVE** — `comm` holds the FULL PATH, so it returned **0 while the meter was live and writing games** — and `pgrep -f fastchess` is a **FALSE POSITIVE**, matching the reader's own shell wrappers containing the word (it reported a match running at 15:08 when none was). A false negative is the dangerous one: it authorizes reaping a live match. The lock now carries a **tested** identity — the single `fastchess` whose **pgnout IS the meter arena file** — plus both anti-patterns named, an ETA computed from the PGN's own game timestamps rather than guessed (a first attempt produced a **negative rate** from a hand-typed epoch and was caught before it shipped), and a two-clause release condition. `run_meter.sh` writes this text **at take time** so a future re-take cannot inherit a stale purpose. Meter unaffected: **70/300, 0 forfeits, 0 illegal**, score deliberately unread |
 | 2026-08-15 | **PRE-REGISTERED — THE +400 PROGRESS METER, PROPERLY: fixed N=300 at 60+1 on a clean venue, entry.packed 3405 B vs classic.packed 3246 B, both arms sha-IDENTICAL to the ones B played. This is the goal's primary progress number and it is registered before game 1** | Arms measured and hashed at registration: entry **3405 B** (`5a207fdf9cf05f2e…`, nnue-4k `4d37712`, `check_entry.sh` green, 691 spare) vs classic **3246 B** (`7bdbd6054f70622a…`, master **`2784dbf`**). **Verified rather than assumed: master's #204 "classic/tm-pool-package" left the packed classic BYTE-IDENTICAL to `573d692`'s** — its builtin-loop manager is still `min(wtime/40 + 0.9·winc, wtime/4)` = min40-4 — so the meter plays exactly the artifacts B played and is a **precision upgrade of B's glimpse, not a different measurement**. Form: **fixed N=300** (no SPRT — a magnitude measurement wants an unbiased number), 60+1, concurrency 4, adjudication **none**, fresh srand **20260820**, `book3k` order=random, expected **±50-60**. **ZERO-FORFEIT IS A VOID CONDITION this time**, reversing the replication study's rule on the stage-2 precedent: that study measured forfeits, this one measures Elo, and a flag decides a game by scheduler rather than chess — **one forfeit voids the run**. Zero-illegal remains the stop condition. **Venue-gated start** (foreign CPU < 40% for 3 consecutive minutes) and a live sampler throughout, so the ledger gets the load profile beside the number; **own-match load is not foreign**. Self-completing with reading rules committed before game 1. ETA ~5-6 h |
 | 2026-08-15 | **REPLICATION B VERDICT — THE FLOOR IS ZERO AND THE INVESTIGATION CLOSES: 60/60 clean-venue games, **0 forfeits**, and the worst self-overrun collapses **40×** from +22 435 ms (contended) to **+557 ms**. Pooled with A's clean games that is **0 in 74**, bounding the clean-venue forfeit rate below **3.97%**. B also produced the FIRST CLEAN REAL-CLOCK entry-vs-classic number: **+325.17 ± 134.54**** | 60+1, fixed N=60, concurrency 1, packed arms, srand 20260819, venue during B median **12%** foreign CPU. 0 illegal, 60/60 `normal`. **The decomposition is now clean**: the entry overruns its own deadline on ~10% of moves in BOTH venues (13.74% contended, 9.88% clean) — that part is intrinsic and **harmless**, since clean-venue worst is 557 ms against a minimum flag margin of **+503 ms**; what venue changes is the TAIL, 40× into multi-second territory where it flags. **Holdback fix DISPOSITION: stays registered-not-run, revisit ONLY if a forfeit ever appears at zero foreign load** — it would trim milliseconds off an effect that is harmless at ≤557 ms and, when it matters, is seconds of scheduler starvation the engine cannot see. **The timed number is a GLIMPSE, not the meter**: N=60 gives ±134.54, it is packed-vs-packed (entry `_pooltm` vs classic `min40-4`), and one match is not a campaign. But it is the first clean real-clock measurement this lane has ever had, the league plays real clocks, and **even the interval's low end (~+190) says the timed gap is large**. **Both numbers are true**: fixed-node **−1.74 ± 27.93** (per-node parity) and clean-clock **+325.17** (nps + time management dominate once a clock exists). The proper meter at N=300 is registered separately |
 | 2026-08-15 | **REPLICATION A VERDICT (100/100, 0 illegal): 25 time forfeits — 24 of them the ENTRY — and they are ENTIRELY a venue effect. ZERO forfeits in 14 clean-venue games; 31.1% under 100-250% foreign CPU and 39.3% above 250%. The Elo it produced (+96.19 ± 66.86 to the entry) is VENUE-DAMAGED and must not be quoted as the timed +400 number** | Fixed N=100 at 60+1, packed arms, adjudication off, srand 20260818, never stopped for forfeits (only illegal stops, and there were none). Dose-response over 87 sampler-covered games: **quiet <40% → 0/9, light 40-100% → 0/5, busy 100-250% → 14/45 (31.1%), saturated >250% → 11/28 (39.3%)**. Foreign CPU across A: median **193%**, p90 **411%**, max **903%** — A ran on a machine another workstream was saturating, so it is NOT the matched-conditions arm it was registered as, and its 25% headline rate is not comparable to the void's 4.9%. Clean bucket is 14 games, bounding the clean-venue rate below **18.9%** (exact one-sided 95%) — better than the 34.8% at the interim read, still not a floor. Self-overrun **565/4112 = 13.74%** of entry moves past its OWN deadline, **max +22 435 ms** (33 760 ms spent against an 11 325 ms deadline; the raw movetext independently carries 33.760 s and 60.056 s moves). **CORRECTION to my own quantization claim**: with 25 more samples the arbiter's reported overrun is 100-102 ms in **23 of 25** cases but **17 ms and 30 ms** in two, so it is *predominantly* a ~100 ms detection quantum rather than exclusively one — the conclusion that the magnitude does not measure the engine's multi-second overshoot is unchanged. **classic flagged once too** (1 of 25), which the CPU-starvation mechanism predicts and an entry-only defect does not |
@@ -947,6 +948,64 @@ in seconds and lives outside the engine. **Fixing the holdback would not
 have prevented one of these forfeits** — which is precisely why it stays
 registered-not-run, and why the venue-exclusivity rule is the real
 remedy.
+
+---
+
+## 2026-08-15 — A NEAR-MISS ON THE PRIMARY MEASUREMENT: stale lock metadata, and two liveness checks that both misfire
+
+Nothing was damaged and the meter never stopped. This is recorded because
+the *cause* was this lane's, and because the two obvious ways to ask "is a
+match running?" are both wrong in opposite directions.
+
+### What happened
+
+Another lane read the laptop screen lock. Its purpose line still said
+**"forfeit replications A and B"** — the previous hold — and the body
+carried **A and B COMPLETE** markers. Reasonably, that lane concluded the
+lock was awaiting cleanup, identified the meter's `fastchess` as "one
+lingering process, the thing to reap", and flagged it. The barrier held.
+
+**A live N=300 match was playing under that lock at the time.**
+
+> **RULE: a re-taken lock must have its PURPOSE TEXT REWRITTEN AT TAKE
+> TIME.** Stale purpose text on a live lock is how another lane politely
+> kills your match. The holder is not enough; the *purpose*, the *ETA* and
+> the *release condition* must all describe the CURRENT hold.
+
+### Both liveness checks misfire, and I hit both today
+
+| check | verdict | evidence |
+|---|---|---|
+| `ps -Ao comm \| grep -x fastchess` | **FALSE NEGATIVE** | `comm` holds the **full path**, so the bare name never matches. It returned **0 while the meter was live and writing games.** |
+| `pgrep -f fastchess` | **FALSE POSITIVE** | Matches the *reader's own* shell wrappers containing the word. At 15:08 it reported a match running when none was. |
+
+**The false negative is the dangerous one** — it is exactly the reading
+that authorizes reaping a live match, and it is the reading the other lane
+would have gotten.
+
+**The tested replacement**, now written into the lock itself:
+
+```
+ps -Ao pid,args | grep "opponents/bin/fastchess-mac-arm64/fastchess" \
+                | grep "arena-meas/meter.pgn" | grep -v grep
+```
+
+It requires **both** the real binary path **and** the pgnout that identifies
+*this* match, and excludes itself. Verified: exactly one pid, no match
+against this lane's own shells.
+
+### Two smaller things caught in the same pass
+
+- **The first rewrite computed a negative rate** (−0.37 games/min, ETA
+  05:44Z) from a hand-typed start epoch. Caught before it shipped; the
+  lock's ETA is now derived from the PGN's own `GameStartTime` /
+  `GameEndTime` tags. **A wrong ETA on a lock is the same defect class as
+  a stale purpose** — metadata that invites a bad decision.
+- `run_meter.sh` now writes the full guard text **at take time**, so a
+  future re-take cannot inherit a stale purpose the way this one did.
+
+**Meter unaffected throughout: 70/300, 0 forfeits, 0 illegal** — and its
+score remains deliberately unread, per the registered no-early-stop rule.
 
 ---
 
