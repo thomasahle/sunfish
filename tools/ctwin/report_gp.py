@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Report the current posterior optimum and one-axis profiles."""
+"""Report exploratory, tested, and statistically supported parameter points."""
 
 import argparse
 from collections import Counter
@@ -51,10 +51,13 @@ def main():
     challenger_mean = model.predict(challengers)[0]
     challenger_best = challengers[int(challenger_mean.argmax())]
     tested = [space.default, *challengers]
-    tested_best = tested[int(model.predict(tested)[0].argmax())]
+    tested_mean, tested_variance = model.predict(tested)
+    # A noisy multiple-comparison maximum is a lead, not a recommendation.
+    supported = tested_mean - 1.96 * tested_variance ** 0.5
+    tested_best = tested[int(supported.argmax())]
     describe("model maximum", best, model, space, counts)
     describe("best tested challenger", challenger_best, model, space, counts)
-    describe("tested recommendation", tested_best, model, space, counts)
+    describe("supported recommendation", tested_best, model, space, counts)
 
     axes = space.names if args.all_axes else state.get("new_axes") or [
         name for name in space.names if name.startswith(("VALUE_", "PST_"))
