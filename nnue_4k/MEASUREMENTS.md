@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **SCREEN VERDICT: the EXPORT-FAITHFUL ml2 net is −300.56 ± 71.33 — WORSE than the defective net it was built to replace, so honest training did NOT rescue the two-layer eval** | 178 games of a 1000 cap, SPRT H0, score **15.06%**, pentanomial **[58, 13, 13, 2, 2]** over 88 pairs, PairsRatio 0.034, **0 illegal / 0 forfeits / 178 normal terminations**, adjudication symmetrically inert (0 adjudications, neither arm emits `info` lines). Arm 3775 B vs entry 3405 B @ `c5534cd`. The pre-registered bad branch: fixing quantization did not recover the family. **Not** separated from float-ml2 ([−371.89,−229.23] vs [−289.26,−179.10] overlap) — directionally worse, not measurably. **The anti-predictive finding now has three points and a precise form: val ranks arms INSIDE a family and INVERTS across family boundaries** — linear has the worst val of the three (0.01378) and the best play (−107); within ml2, float 0.01280→−234 and grid 0.01347→−300 move together. Probes do not rescue it: `70` responds on more classes (passer +23.9 vs +2.8, bishop-pair +14.2 vs 0.0) and plays 194 Elo worse. Grid-era vals: `70` 0.01347, `71` **0.01378 = the linear reference exactly** (one-layer family is fully grid-representable), `72` τ=1.1 0.01378 at **+1 measured byte** — arm 8 closed |
 | 2026-08-15 | **REGISTERED (hygiene lane, before fixing): `pend`'s mod was never retired from `make_variants.py` after it landed (61b1a51/902d9a2) — its second anchor fails safe today (the seam it targeted is gone), but its FIRST anchor (`K_MID, K_END = pst["K"], tuple(piece["K"] + 70`) still matches exactly once, so a future drift that removes only the second anchor's protection would let `pend` double-apply on top of the already-landed pend, silently** | Fix: retire `pend` with a tombstone naming both anchors' fates, same pattern as `pooltm`/`oldtm`/`steptm` in `5f16bae`. Gate: building the `pend` variant must fail LOUDLY (unknown-mod `SystemExit`, not a silent success); every remaining mod must still build |
 | 2026-08-15 | **SCREEN VERDICT: ml2 H0 ACCEPTED — the first NON-LINEAR replacement net is −234.18 ± 55.08 at fixed nodes, roughly twice as far behind the distilled PSTs as the linear one was — and the `u2` retrain shows the val win was bought with resolution the engine does not have** | 195 games of a 1000 cap, SPRT stopped early, score **20.62%**, pentanomial **[51, 19, 23, 1, 3]** over 97 pairs, PairsRatio 0.06, **0 illegal / 0 forfeits / 195 normal terminations**. Arm 3884 B vs entry 3405 B @ `5f16bae`: **+479 B for −234 Elo**. The played artifact sits 2.89 cp from the float model that scored 0.01280, so the coarser shift-2 head does not explain it. Adjudication was **symmetrically inert** — neither arm emits `info` lines, 0 adjudications, median game 93 plies. Retrain `60_ml2_u2grid` (u2 on the certified grid inside forward) lands at **val 0.01362 with a live read-out [1,0,1,0]**, every `u2` component parked at **12.50001 — the rounding knife-edge** (grid step 25.0): forced to train against real resolution the recipe gives back 0.00082 of the 0.00098 the whole ml2 family had won. Co-run with `pendkhold2`; lock handed back, not freed. Subsumption ablation still NOT run |
 | 2026-08-15 | **`pendkhold2` SCREEN: H0 accepted at 774 games — **−10.78 ± 6.96, 95% [−17.75, −3.81]**. The bar is not met and the result is not the expected straddle: khold2 on top of `pend` is measurably NEGATIVE** | Registered bar was a 95% **pentanomial LB > 0**; measured LB **−17.75**, and the **UPPER** bound is **−3.81**, so zero is excluded on the wrong side. Ptnml [9, 17, 350, 11, 0] over 387 pairs (350 pairs drawn-drawn — a seam mod that rarely changes play, and loses when it does). Zero illegal, zero forfeits, zero `(none)`. **Mechanism reading (hypothesis, not measured):** in the *exactly-one-queen-off* regime the base switches the pawn AND king tables on ONE test, so they stay coherent; khold2's whole purpose is to give the king a DIFFERENT test, which leaves the combined arm pushing pawns on an endgame table while holding the king home on a middlegame one — the promotion race without the king. The accidental coherence was load-bearing. **Instrument lesson, and it was OURS:** the first independent recompute disagreed with fastchess (±13.39 vs ±6.97) because it paired games by **PGN file order**, which is completion order at concurrency 4, not round order — that error alone would have reported this decisive loss as a straddle. Round-grouped pairing reproduces fastchess's pentanomial exactly. `khold2` stays closed; the H1/H2 programme's closure is unchanged |
@@ -264,6 +265,81 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-15 — SCREEN VERDICT: the EXPORT-FAITHFUL ml2 net is −300.56, WORSE than the one it fixed — honest training did not rescue the two-layer eval
+
+The arc closes, and it closes against the hypothesis. `70_gridste_ml2` —
+the first candidate whose shipped integer net **is** the function it was
+trained to compute — played the registered screen and lost by more than
+the defective net it was built to replace.
+
+| | |
+|---|---|
+| verdict | **H0 accepted**, stopped early at **178** of a 1000-game cap |
+| Elo / nElo | **−300.56 ± 71.33** (95%, pentanomial) → **[−371.89, −229.23]**; nElo −353.41 ± 51.33 |
+| score | **15.06%** — 17 W / 140 L / 19 D (176 games in fastchess's count; `pair_elo` scores 178 over 88 pairs, 2 unpaired dropped) |
+| pentanomial (g70 pair score) | **[58, 13, 13, 2, 2]**, PairsRatio **0.034** |
+| draw ratio | 10.67% |
+| **zero-illegal** | **0 illegal moves**, 0 time forfeits, **178/178 `[Termination "normal"]`** |
+| arms | g70 **3775 B** vs entry **3405 B** @ `c5534cd` |
+| game length | min 28, p10 55, **median 104**, p90 176, max 304, mean 111.7 plies |
+
+**Adjudication was symmetrically inert**, per the standing convention:
+fastchess logged *"No info line available to extract score"* for **both**
+arms (1173 g70, 69 entry), neither engine emits `info` lines at all, and
+the outcome confirms the blocks never fired — **0 adjudications in 178
+games**, no `-maxmoves`, every result natural.
+
+### The ladder, and what it actually licenses
+
+| arm | val | play |
+|---|---|---|
+| linear one-layer (`8Mv`) | 0.01378 | **−107** |
+| float ml2 (shift 2) | **0.01280** | −234.18 ± 55.08 |
+| **grid ml2 (`70`, export-faithful)** | 0.01347 | **−300.56 ± 71.33** |
+
+**The pre-registered reading is answered, and it is the bad branch.** The
+registration named three outcomes: near −107 would mean the export defect
+explained the ml2 collapse; near −234 would mean the two-layer eval is bad
+in play whatever its precision; better than −107 would be the first good
+news. **We got −300.56.** Fixing the quantization did not recover the
+family — the two-layer eval is bad in play *on its own merits*, and
+removing its worst technical excuse did not help.
+
+**What this does NOT license.** The two ml2 arms are **not separated**:
+[−371.89, −229.23] and [−289.26, −179.10] overlap on [−289.26, −229.23],
+and both numbers are SPRT-stopped and therefore biased away from zero.
+Grid-ml2 is **directionally** worse than float-ml2, not measurably worse.
+The claim that survives is the one against the linear net, where the gap
+is wide in both.
+
+**The anti-predictive finding, now with three points and stated
+precisely.** Two of the three pairwise comparisons invert, and the third
+does not — and the split is exactly along the family boundary:
+
+- **Across families, val INVERTS play.** Linear has the *worst* val of the
+  three (0.01378) and the *best* play (−107), beating both ml2 nets.
+- **Within the ml2 family, val is consistent.** float 0.01280 → −234,
+  grid 0.01347 → −300.56: worse val, worse play, same direction.
+
+So the honest rule is narrower and more useful than "val is useless":
+**val ranks arms inside a family and inverts across family boundaries at
+this budget.** Every cross-family val comparison this campaign has made is
+therefore inadmissible as evidence about play, and the six-plus play
+failures were not bad luck — they were the predictable result of selecting
+across families on a metric that reverses there.
+
+**The probe suite does not rescue it either.** `70` responds on more
+knowledge classes than the linear net and far more strongly on the ones
+the family objective cares about (passed-vs-opposed **+23.9** vs **+2.8**,
+bishop-pair **+14.2** vs **0.0**, rook-open-file **+13.3** vs **+5.1**) —
+and plays 194 Elo worse. Two of its classes carry the opposite sign to the
+linear net's (centralization −17.7 vs +26.4, pawn-advance −20.2 vs 0.0), so
+"knows more" is partly real and partly noise; what is not in doubt is that
+neither proxy predicted the play result.
+
+Lock released on completion. Subsumption ablation and any timed leg remain
+**registered, not run** — and at −300 there is nothing to confirm.
 
 ## 2026-08-15 — PRE-REGISTRATION: the first EXPORT-FAITHFUL net gets its play number, and val is now known to be ANTI-PREDICTIVE across family boundaries
 
