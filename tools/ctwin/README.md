@@ -157,10 +157,11 @@ books remain mandatory for final confirmation. A fixed inducing basis permits
 online Laplace updates without rebuilding a quadratic comparison matrix. The
 optimizer keeps its small matrix operations single-threaded so its 128-site
 model does not compete with the 20 game lanes. Its 2,048-point global design is
-gated once before play, so design, exploration seeds, and inducing sites use a
-feasible backbone. UCB's coordinate refinements are still gated on demand;
-rejected policies consume neither games nor allocation credit. Three reserved
-pairs per lane, replenished while two remain, hide proposal latency. Results
+gated once before play, so design, exploration, UCB, and inducing sites all
+stay inside the feasible set. Without `--gate-all`, coordinate refinements are
+gated on demand and rejected policies consume neither games nor allocation
+credit. Three reserved pairs per lane, replenished while two remain, hide
+proposal latency. Results
 append to a JSONL journal and compact every 1,000 pairs,
 avoiding quadratic checkpoint I/O while remaining restartable. At the
 wall-time limit, the scheduler finishes every reserved color pair before its
