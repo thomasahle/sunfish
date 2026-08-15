@@ -55,19 +55,17 @@ The proof is generic in `C`; it does not depend on chess or mate constants.
 The production guard is:
 
 ```python
-not root and 2 < depth < 8 and abs(pos.score) < 500 \
-    and any(c in pos.board for c in "RBNQ")
+not root and 2 < depth < 6 and any(c in pos.board for c in "RBNQ")
 ```
 
-The upper bound is new: the pass is a score candidate only *below* depth 8.
-From depth 8 on it is a fuel oracle instead -- see the next section.
+The pass is a score candidate only below depth 6. From depth 6 on it is a
+fuel oracle instead -- see the next section.
 
-With integer scores and `EVAL_ROUGHNESS = 15`, the score guard gives
-`C(pos) <= 514 < MATE_LOWER`. Theorems
-`guardedStaticCap_in_scoreBand` and
-`guardedCappedNull_below_positiveMate` prove that an enabled null move cannot
-claim a positive mate score. A catastrophically bad pass may retain a negative
-mate value; no lower clamp is intended.
+`EvalBounds.lean` proves that every reachable both-kings static evaluation is
+bounded by `EvalBounds.evalBound`. With `EVAL_ROUGHNESS = 15`, theorems
+`staticCap_in_scoreBand` and `staticCappedNull_below_positiveMate` prove that
+an enabled null move cannot claim a positive mate score. A catastrophically
+bad pass may retain a negative mate value; no lower clamp is intended.
 
 The remaining chess-strength premise is:
 
@@ -76,22 +74,21 @@ min(C(pos), P) <= best legal real-move value
 ```
 
 It concerns the quality of the null approximation, not the fail-soft report
-transport. The non-pawn-piece guard excludes pawn-only zugzwangs; the score
-guard and cap make null pruning more conservative in unbalanced positions.
-It is confined to `depth < 8`; above that the fuel oracle removes it.
+transport. The non-pawn-piece guard excludes pawn-only zugzwangs. It is
+confined to `depth < 6`; above that the fuel oracle removes it.
 
 ## The deep-null fuel oracle
 
-From depth 8 on the pass is not a score candidate at all. One fixed target
+From depth 6 on the pass is not a score candidate at all. One fixed target
 shapes only how much depth the real moves spend:
 
 ```python
 d = depth
-guard = depth >= 8 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ")
+guard = depth >= 6 and any(c in pos.board for c in "RBNQ")
 if guard:
     nullpos = pos.rotate(nullmove=True)
     target = pos.score + NULL_MARGIN
-    d -= -self.bound(nullpos, 1 - target, depth - 5) >= target
+    d -= -self.bound(nullpos, 1 - target, depth - 7) >= target
 
 move_depth = d - 1 - (guard and val < LMR)
 ```
@@ -146,16 +143,16 @@ holds when the game itself is finite (`EventuallyFinite.lean`):
 ```text
 eventual_classification_fuel_finite :
   ValFloor G 192 -> EndsWithin G N p -> (root legality) ->
-    forall D >= C*N + C + 8,  W / D / L read off the value, correctly
+    forall D >= C*N + C + 6,  W / D / L read off the value, correctly
 ```
 
 `EndsWithin G N p` -- every legal play from `p` reaches a terminal within `N`
 plies -- is true of adjudicated chess (50-move plus threefold under match
-adjudication) and false of the ruleless modeled game. At `D >= C*N + 8` every
+adjudication) and false of the ruleless modeled game. At `D >= C*N + 6` every
 node the classification depends on is reached before the frontier, so the
 masking sites are unreachable and `NoMaskedMobility`, the tail, and even
-`EvalQuiet` all drop out. The bound is *effective*: `2N + 10` for the
-null-only selector and `3N + 11` for intrinsic LMR (no classical `exists D0`).
+`EvalQuiet` all drop out. The bound is *effective*: `2N + 8` for the
+null-only selector and `3N + 9` for intrinsic LMR (no classical `exists D0`).
 The file's entire footprint is
 `[propext, Quot.sound]`. The scope is eventual-only, by countermodel: `CexE`
 (the infinite masked chain) violates the premise (`cexE_not_finite`), while
@@ -386,10 +383,11 @@ true, and it is true only because achievable distances have a fixed parity.
 At one point per ply the gap is 2 against a tolerance of 15 and the shipped
 driver can take the slower mate.
 
-**The `3` in the null reduction is load-bearing for this.**  Parity survives
-along every path because both depth steps are odd: a real move spends one ply
-per negation, the null option spends three (`nullValueD2`'s `d + 1 - 3`).
-Writing `d + 1 - 2` or `d + 1 - 4` would let one line reach a mate value of the
+**An odd null reduction is load-bearing for this.**  Parity survives along
+every path because both depth steps are odd: a real move spends one ply per
+negation, and the current null probe spends seven. The generic model uses
+three as the smallest nontrivial representative. An even reduction would let
+one line reach a mate value of the
 wrong rung parity, collapsing the separation gap to `EVAL_ROUGHNESS` -- exactly
 the width the driver cannot resolve.  No proof here mentions the null term (the
 parity lives in `ForcedMate`, whose `step` is two plies), but a change to that
@@ -625,9 +623,8 @@ the shipped driver could take the slower mate (`Shortest.lean`, where
 parity does the refunding).  At BAND level the same constant is
 irrelevant by three orders of magnitude, which is what lets
 `NearMaximalChoice` be dropped from classification results entirely.
-A change to the tempo would have to be re-argued in both places; a
-change to `depth - 5` in the null reduction would have to be
-re-argued in the first.
+A change to the tempo would have to be re-argued in both places; an even null
+reduction would have to be re-argued in the first.
 
 **The frontier premise, however, survives the weakening.**  Masking is
 genuinely local -- `val_lower 2 = -240` is below the tables' -192 move
@@ -762,11 +759,11 @@ at capturable nodes.
 |---|---|
 | recursive zero-window move search | `Bound.bound_spec` |
 | null child report negation | `WindowReport.negate` |
-| `min(pos.score + EVAL_ROUGHNESS, pass_report)` (depth < 8) | `cappedNull_report` |
-| `target = pos.score + NULL_MARGIN` fuel probe (depth >= 8) | `hot_bit_determined`, `hot_bit_stable`, `fuel_edge_cost` |
+| `min(pos.score + EVAL_ROUGHNESS, pass_report)` (depth < 6) | `cappedNull_report` |
+| `target = pos.score + NULL_MARGIN` fuel probe (depth >= 6) | `hot_bit_determined`, `hot_bit_stable`, `fuel_edge_cost` |
 | static LMR eligibility and intrinsic move reduction | `intrinsic_edge_cost` |
 | real-move recursion at the reduced `d - 1` | `fuelValueD2t`, `eventual_classification_fuel` |
-| score guard keeps the cap below positive mate | `guardedStaticCap_in_scoreBand`, `guardedCappedNull_below_positiveMate` |
+| static evaluation bound keeps the cap below positive mate | `staticCap_in_scoreBand`, `staticCappedNull_below_positiveMate` |
 | shallow static move cap and lazy fail-low | `cappedMove_failLow`, `cappedMove_report` |
 | cap mate-band properties | `shallowMoveCap_below_positiveMate`, `cappedMove_preserves_negativeMate` |
 | filtered move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
@@ -782,10 +779,6 @@ at capturable nodes.
 The model abstracts Python's board representation, move generation, sorting,
 and table implementation. The audit pins the corresponding source regions;
 tests and chess corpora validate those executable primitives.
-
-IID starts at depth 4 because quiescence cannot write `tp_move`.
-`CanNull.lean` keeps a uniform recurrence at depth 3; its depth-zero root
-transform is the identity, so the model and source are extensionally equal.
 
 ## Module guide
 

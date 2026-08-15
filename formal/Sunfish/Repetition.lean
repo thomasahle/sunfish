@@ -64,7 +64,7 @@ table keys use.
   trichotomy's own "neither" arm.
 
 **Where the horizon matters, honestly.**  The exact-0 theorem is stated
-for the real-only regime (`d ≥ 8`, `EventuallyWide.lean` Part I): below
+for the real-only regime (`d ≥ 6`, `EventuallyWide.lean` Part I): below
 the horizon the capped pass sits in the fold's initial accumulator and
 can hold the value ABOVE 0, so only the `≥ 0` half survives there.  That
 is precisely the pruning debt the fuel oracle retires -- the repetition
@@ -110,11 +110,11 @@ def fuelValueD2tH (G : QSGame) (hist : G.Pos → Bool) (guard : G.Pos → Bool)
     else if hasKingCapture G.toNullGame.toGame p = true then MATE_UPPER
     else if hist p = true then 0
     else if allIllegalB G p = true then terminalValue G (d + 1) p
-    else if d + 1 < 8 then
+    else if d + 1 < 6 then
       foldMax (fun m => -(fuelValueD2tH G hist guard C spend d m)) (tailList G (d + 1) p)
         (if guard p = true ∧ 2 < d + 1 then
-          (if -(fuelValueD2tH G hist guard C spend (d + 1 - 5) (G.pass p)) < MATE_LOWER then
-            max LOSS (-(fuelValueD2tH G hist guard C spend (d + 1 - 5) (G.pass p)))
+          (if -(fuelValueD2tH G hist guard C spend (d + 1 - 7) (G.pass p)) < MATE_LOWER then
+            max LOSS (-(fuelValueD2tH G hist guard C spend (d + 1 - 7) (G.pass p)))
           else LOSS)
         else LOSS)
     else
@@ -162,7 +162,7 @@ theorem fuelValueD2tH_of_fold_regime (G : QSGame) (hist guard : G.Pos → Bool)
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
     (hh : hist p = false)
     (hai : allIllegalB G p = false)
-    (hd : 7 ≤ d) :
+    (hd : 5 ≤ d) :
     fuelValueD2tH G hist guard C spend (d + 1) p
       = foldMax (fun m => -(fuelValueD2tH G hist guard C spend
             (d - min (C - 1) (spend p (d + 1) m)) m))
@@ -178,13 +178,13 @@ theorem fuelValueD2tH_of_fold_sub (G : QSGame) (hist guard : G.Pos → Bool)
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
     (hh : hist p = false)
     (hai : allIllegalB G p = false)
-    (hd : d < 7) :
+    (hd : d < 5) :
     fuelValueD2tH G hist guard C spend (d + 1) p
       = foldMax (fun m => -(fuelValueD2tH G hist guard C spend d m))
           (tailList G (d + 1) p)
           (if guard p = true ∧ 2 < d + 1 then
-            (if -(fuelValueD2tH G hist guard C spend (d + 1 - 5) (G.pass p)) < MATE_LOWER then
-              max LOSS (-(fuelValueD2tH G hist guard C spend (d + 1 - 5) (G.pass p)))
+            (if -(fuelValueD2tH G hist guard C spend (d + 1 - 7) (G.pass p)) < MATE_LOWER then
+              max LOSS (-(fuelValueD2tH G hist guard C spend (d + 1 - 7) (G.pass p)))
             else LOSS)
           else LOSS) := by
   simp only [fuelValueD2tH]
@@ -233,7 +233,7 @@ theorem repetition_not_lost (G : QSGame) (hist guard : G.Pos → Bool)
   | succ d =>
     have hmem : m ∈ tailList G (d + 1) p :=
       mem_tailList_of_admitted G (mem_movesAbove_of_floor G hF (d := d + 1) (by omega) hm)
-    by_cases hreg : 7 ≤ d
+    by_cases hreg : 5 ≤ d
     · rw [fuelValueD2tH_of_fold_regime G hist guard C spend d p hkg hcap hh hai hreg]
       obtain ⟨dc, hdc⟩ : ∃ x, d - min (C - 1) (spend p (d + 1) m) = x + 1 :=
         ⟨d - min (C - 1) (spend p (d + 1) m) - 1, by omega⟩
@@ -257,9 +257,9 @@ theorem repetition_not_lost (G : QSGame) (hist guard : G.Pos → Bool)
           ≤ foldMax (fun x => -(fuelValueD2tH G hist guard C spend d x))
               (tailList G (d + 1) p)
               (if guard p = true ∧ 2 < d + 1 then
-                (if -(fuelValueD2tH G hist guard C spend (d + 1 - 5) (G.pass p))
+                (if -(fuelValueD2tH G hist guard C spend (d + 1 - 7) (G.pass p))
                     < MATE_LOWER then
-                  max LOSS (-(fuelValueD2tH G hist guard C spend (d + 1 - 5) (G.pass p)))
+                  max LOSS (-(fuelValueD2tH G hist guard C spend (d + 1 - 7) (G.pass p)))
                 else LOSS)
               else LOSS) :=
         foldMax_le_of_mem _ _ _ _ hmem
@@ -267,7 +267,7 @@ theorem repetition_not_lost (G : QSGame) (hist guard : G.Pos → Bool)
 
 /-- **An outright proven draw**: above the fuel horizon, if every legal
 move repeats a game-history position then the value is EXACTLY 0.  The
-upper bound needs the regime (`7 ≤ d`), where the fold starts from
+upper bound needs the regime (`5 ≤ d`), where the fold starts from
 `LOSS`: illegal members contribute the negated sentinel (`LOSS`), legal
 ones the negated exact 0, so nothing can lift the fold above 0; the
 lower bound is `repetition_not_lost`'s witness.
@@ -287,7 +287,7 @@ theorem all_replies_repeat_forces_draw (G : QSGame) (hist guard : G.Pos → Bool
     (hleg : hasKingCapture G.toNullGame.toGame m = false)
     (hall : ∀ m' ∈ G.moves p,
       hasKingCapture G.toNullGame.toGame m' = false → hist m' = true) :
-    ∀ d : Nat, 7 ≤ d → C + 1 ≤ d →
+    ∀ d : Nat, 5 ≤ d → C + 1 ≤ d →
       fuelValueD2tH G hist guard C spend (d + 1) p = 0 := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
@@ -347,7 +347,7 @@ theorem draw_arm_strengthened (G : QSGame) (hist guard : G.Pos → Bool)
         ¬ (fuelValueD2tH G hist guard C spend D p ≤ -MATE_LOWER)) ∧
       ((∀ m' ∈ G.moves p,
           hasKingCapture G.toNullGame.toGame m' = false → hist m' = true) →
-        ∀ d : Nat, 7 ≤ d → C + 1 ≤ d →
+        ∀ d : Nat, 5 ≤ d → C + 1 ≤ d →
           fuelValueD2tH G hist guard C spend (d + 1) p = 0) := by
   have hML : MATE_LOWER = 47923 := rfl
   refine ⟨fun D hD => ?_, fun hall d hd hCd =>

@@ -138,13 +138,13 @@ MATE_UPPER = piece["K"] + 10 * piece["Q"]
 # Constants for tuning search
 QS = 40
 QS_A = 140
-LMR = 60
+LMR = 75
 EVAL_ROUGHNESS = 15
-# Target margin of the deep-null fuel probe (depth >= 8): the pass must
+# Target margin of the deep-null fuel probe (depth >= 6): the pass must
 # beat pos.score + NULL_MARGIN for real moves to burn two plies. Its own
 # parameter, not tied to EVAL_ROUGHNESS - the two knobs tune different
 # things (driver convergence vs reduction aggression).
-NULL_MARGIN = 15
+NULL_MARGIN = -200
 
 # Max entries kept in each transposition table, roughly 1GB per million.
 # Python dicts keep insertion order, so we cheaply evict the oldest entry
@@ -157,7 +157,7 @@ opt_ranges = dict(
     QS_A = (0, 300),
     LMR = (-200, 200),
     EVAL_ROUGHNESS = (0, 50),
-    NULL_MARGIN = (0, 200),
+    NULL_MARGIN = (-300, 300),
     TABLE_SIZE = (10**4, 10**8),
 )
 # minifier-hide end
@@ -349,7 +349,7 @@ class Searcher:
             return -MATE_UPPER
 
         # Look in the table if we have already searched this position before.
-        # Driver probes (the search root, and IID below) are UNSTORED: they
+        # Driver probes (the search root) are UNSTORED: they
         # skip the table in both directions, the repetition-0 and the null
         # option, and store nothing - so every entry in the table describes
         # ONE value function, determined by (pos, depth) alone, and the key
@@ -384,11 +384,11 @@ class Searcher:
             # (K+P endings). Capping the pass at static evaluation plus one
             # score bucket also keeps its value monotone and below the positive
             # mate band, so one child report is enough to bound it. No null at
-            # root, so we can always return a move. Below depth 8 only: from
-            # depth 8 on the pass is never a score candidate (see below).
-            if not root and 2 < depth < 8 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
+            # root, so we can always return a move. Below depth 6 only: from
+            # depth 6 on the pass is never a score candidate (see below).
+            if not root and 2 < depth < 6 and any(c in pos.board for c in "RBNQ"):
                 score = min(pos.score + EVAL_ROUGHNESS,
-                    -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 5))
+                    -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 7))
                 # A king capture substitutes the exact MATE_UPPER for a
                 # virtual fail-high; the cached move is a capture certificate.
                 proof = score >= gamma and (self.tp_move.get(pos) or pos.king_capture())
@@ -397,27 +397,16 @@ class Searcher:
             # A fixed-target null probe reduces hot nodes. Its static guard also
             # limits intrinsic LMR to positions where passing is meaningful.
             d = depth
-            guard = depth >= 8 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ")
+            guard = depth >= 6 and any(c in pos.board for c in "RBNQ")
             if guard:
                 nullpos = pos.rotate(nullmove=True)
                 target = pos.score + NULL_MARGIN
-                d -= -self.bound(nullpos, 1 - target, depth - 5) >= target
+                d -= -self.bound(nullpos, 1 - target, depth - 7) >= target
 
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else. (Note depth at root is always > 0.)
             if depth == 0:
                 yield None, pos.score
-
-            # Back to killer moves: This heuristic is so good, that if there
-            # is no registered move, it's worth it to run a shallow search to find one.
-            # See https://chessprogramming.org/Internal_Iterative_Deepening for detais.
-            # This is known as Internal Iterative Deepening (IID). The probe
-            # runs as a driver probe (root=True): no null cutoff that would
-            # end it without storing a move, no repetition truncation, and
-            # no table entry under deviant semantics.
-            if not killer and depth > 3:
-                self.bound(pos, gamma, depth - 3, root=True)
-                killer = self.tp_move.get(pos)
 
             # We only generate moves with an intrinsic score above some treshold
             # that decreases with depth. This is a generalization of Quiescent Search,

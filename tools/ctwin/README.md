@@ -19,9 +19,9 @@ appears, report the first divergent probe and fix the twin — never
 approximate around it.
 
 **Reference:** `sunfish.py` at the repo root of the checkout the harness
-runs in — the twin lives on master and that is master's engine (capped
-null move below depth 8, fuel-oracle null from depth 8,
-mate-distance scoring, IID at `depth > 3`). The reference is imported
+runs in — the twin's defaults reproduce that engine (capped null below
+depth 6, fuel-oracle null from depth 6, intrinsic LMR, mate-distance
+scoring, and no IID). The reference is imported
 live by `pyref.py`, so drift in the Python file shows up as a harness
 failure, not silent staleness — re-pass the gate, re-tune the flavor
 knob defaults, and re-pin variants.py's drift hashes when the search
@@ -50,11 +50,10 @@ in the git history of this file.
   K-table is a different key in Python too).
 - **Generator laziness.** `bound()`'s move phases run in Python's exact
   order — killer read *before* the null-move search, the null proof
-  re-reading the table, IID only when the early read found nothing, the
-  killer re-searched before the sorted list exists, the sorted list
+  re-reading the table, the killer re-searched before the sorted list exists, the sorted list
   never built if the killer cuts.
 - **Node counting.** `nodes` increments at exactly one site: `bound()`
-  entry, including driver probes, IID probes and TT-hit returns.
+  entry, including driver probes and TT-hit returns.
 - **Module state.** `pst["K"]` swaps to the endgame table per search and
   *stays* swapped for subsequent position parsing, exactly like the
   Python module globals. `reset` reproduces a fresh interpreter.
@@ -116,9 +115,8 @@ Tuning knobs (no recompile): UCI `setoption name NAME value VALUE`, lab
 `set NAME VALUE`, `SF_NAME=` env, or `NAME=VALUE` argv after the table path —
 `QS QS_A LMR EVAL_ROUGHNESS TABLE_SIZE NULL_MARGIN NULL_MIN_DEPTH NULL_LIMIT
 NULL_RED IID_MIN_DEPTH IID_RED FUT_MAX MATE_DIST FUEL_NULL
-FUEL_MIN_DEPTH` (`NULL_MARGIN` is the fuel-probe target margin, master's
-own knob since #192, independent of `EVAL_ROUGHNESS`, which still caps
-the classic sub-depth-8 null), plus the
+FUEL_MIN_DEPTH` (`NULL_MARGIN` is the fuel-probe target margin,
+independent of `EVAL_ROUGHNESS`, which caps the shallow null), plus the
 tp_move battery: `EVICT_POLICY` (0 master root-guarded FIFO, 1 unguarded
 evict-before-insert, 2 depth-stored bounded scan with `EVICT_SCAN_K`,
 3 hash-slot two-tier replace-if-deeper), `KILLER_COUNT` (1..3 most recent

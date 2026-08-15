@@ -46,9 +46,9 @@ EXPECTED = {
     "Position.move": "69bb2460cd611c9e",
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "11d52eaa8a661352",
-    "Searcher.bound": "8529af1cfad1b356",
+    "Searcher.bound": "c50b18af2b81235e",
     "Searcher.search": "f9aa8c81b84ff44b",
-    "constants": "c2157b7c45988f7c",
+    "constants": "62b96e206341a2fb",
 }
 
 
@@ -97,14 +97,13 @@ def extract_regions():
 ANCHORS = [
     "def king_capture",
     "killer = self.tp_move.get(pos)",
-    "if not killer and depth > 3:",
     "if killer and pos.value(killer) >= val_lower:",
     "yield score_move(killer, pos.value(killer))",
     "move_depth = d - 1 - (guard and val < LMR)",
-    "if not root and 2 < depth < 8 and",
-    "guard = depth >= 8 and abs(pos.score) < 500 and any(c in pos.board for c in \"RBNQ\")",
+    "if not root and 2 < depth < 6 and any(c in pos.board for c in \"RBNQ\"):",
+    "guard = depth >= 6 and any(c in pos.board for c in \"RBNQ\")",
     "target = pos.score + NULL_MARGIN",
-    "d -= -self.bound(nullpos, 1 - target, depth - 5) >= target",
+    "d -= -self.bound(nullpos, 1 - target, depth - 7) >= target",
     "yield None, pos.score",
     "score = min(pos.score + EVAL_ROUGHNESS,",
     "if depth <= 1 and pos.score + val < gamma:",

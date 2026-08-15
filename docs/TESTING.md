@@ -254,6 +254,36 @@ nodes scoring ~50%, plus reproduction of two knob-expressible pairs whose
 Elo gap is already known from real matches. Until then, treat twin output
 as directional.
 
+### Joint search-parameter tuning (2026-08)
+
+The consolidated null/LMR candidate was selected by tuning eleven knobs
+together: `QS`, `QS_A`, `EVAL_ROUGHNESS`, `NULL_MARGIN`, `NULL_LIMIT`, `LMR`,
+`NULL_RED`, `NULL_MIN_DEPTH`, `FUEL_MIN_DEPTH`, `IID_MIN_DEPTH`, and `IID_RED`.
+The tuner used an additive logistic Gaussian process over paired game outcomes,
+an exact default-policy anchor, persistent random exploration, and occasional
+candidate-versus-candidate duels. One color-swapped opening pair was one
+posterior update; repeated pairs were not used as a substitute for a robust
+noise model.
+
+The study accumulated 4,655 paired observations (9,310 games) over 1,434
+distinct joint policies. The first posterior winner was neutral on untouched
+openings (`191/121/188`, +2.08 ± 26.57 Elo over 500 games), an explicit
+winner's-curse check. A second candidate passed (`211/129/160`,
++35.56 ± 26.37), and the final exact policy was confirmed on a later untouched
+opening block: `218/135/147`, **+49.67 ± 26.24 Elo**, LOS 99.99%, over 500
+games at the calibrated C-twin `3+0.1` search surrogate. There were no crashes,
+illegal moves, disconnects, stalls, or time losses.
+
+The posterior selected `QS=30`, but that setting regressed the WAC.004 tactical
+floor and the packed-engine tiny-clock test. Its one-dimensional posterior
+profile put `QS=40` only 2.0 ± 8.6 Elo behind, so the validated production
+setting remains `QS=40`. The other selected settings are `QS_A=140`, `EVAL_ROUGHNESS=15`,
+`NULL_MARGIN=-200`, `LMR=75`, null reduction 7, shallow capped null from
+depth 3 through 5, real-only fuel shaping from depth 6, and IID disabled.
+`NULL_LIMIT=60000` in the tunable C instrument means no score guard on legal
+positions; Python expresses that result directly. The independent confirmation,
+not the adaptive posterior estimate, is the landing evidence.
+
 ## Testing the packed artifact
 
 `tools/build/pack.sh` inlines a minimal UCI loop that handles `position startpos

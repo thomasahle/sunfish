@@ -73,17 +73,17 @@ static int tables_loaded = 0;
 /* Runtime knobs.  Defaults reproduce sunfish.py at the repo root. */
 static int QS = 40;
 static int QS_A = 140;
-static int LMR = 60;
+static int LMR = 75;
 static int EVAL_ROUGHNESS = 15;
 static long TABLE_SIZE = 1000000;
-static int NULL_MARGIN = 15;     /* fuel-probe target margin (its own knob
+static int NULL_MARGIN = -200;   /* fuel-probe target margin (its own knob
                                     since #192, deliberately NOT tied to
-                                    EVAL_ROUGHNESS; the classic sub-depth-8
+                                    EVAL_ROUGHNESS; the shallow capped
                                     null keeps following EVAL_ROUGHNESS) */
 static int NULL_MIN_DEPTH = 2;   /* null move when depth > this */
-static int NULL_LIMIT = 500;     /* |score| bound for trying null */
-static int NULL_RED = 5;         /* null move depth reduction */
-static int IID_MIN_DEPTH = 3;    /* IID when depth > this (master: 2) */
+static int NULL_LIMIT = 60000;   /* |score| bound; inactive on legal positions */
+static int NULL_RED = 7;         /* null move depth reduction */
+static int IID_MIN_DEPTH = 99;   /* tuned off; retained as a lab knob */
 static int IID_RED = 3;          /* IID depth reduction */
 static int FUT_MAX = 1;          /* futility pruning when depth <= this */
 static int MATE_DIST = 1;        /* mate scores carry distance (master: 0) */
@@ -137,7 +137,7 @@ static int FUEL_NULL = 1;        /* DEFAULT since #192 merged the fuel
                                     (historical comparisons only -- no
                                     longer difftest-provable against the
                                     live reference) */
-static int FUEL_MIN_DEPTH = 8;
+static int FUEL_MIN_DEPTH = 6;
 static int DERIVE_FRESH = 0;
 
 /* ------------------------------------------------------------------ */
@@ -798,8 +798,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         if (done) goto after_moves;
     }
 
-    /* Internal iterative deepening (driver probe: root=1, unstored).
-     * A qs_tail probe (PR #171) never runs IID. */
+    /* Optional lab IID (driver probe: root=1, unstored). */
     if (!qstail && nkill == 0 && depth > IID_MIN_DEPTH) {
         bound(pos, gamma, depth - IID_RED, 1, 0);
         tpm_get_all(pos, killers, &nkill);

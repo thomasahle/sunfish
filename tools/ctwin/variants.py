@@ -45,9 +45,9 @@ import sunfish as S
 from sunfish import Entry, MATE_LOWER, MATE_UPPER, Searcher, Stop
 
 _PINNED = {
-    # fuel-oracle null (classic null bounded 2<depth<8,
-    # fuel probe from depth 8 at pos.score + NULL_MARGIN, real moves at d-1)
-    "bound": "4daa5a2aef837aa1fb8be62f66ff2428c94995b8238333044b7c450fbfaffdd8",
+    # fuel-oracle null (classic null bounded 2<depth<6,
+    # fuel probe from depth 6 at pos.score + NULL_MARGIN, real moves at d-1)
+    "bound": "f68416f19ca4effeb3108fa28158664ea92e6e4059ffc86d21ff81346a06146c",
     "search": "ffae8dfd56348310dd38a86126a2291b7111870b8bc66bced4b2d724ed1ee721",
 }
 for _name, _want in _PINNED.items():
@@ -194,26 +194,22 @@ class VariantSearcher(Searcher):
         def moves():
             killers = self.tp_move.get_all(pos)
 
-            if not root and 2 < depth < 8 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
+            if not root and 2 < depth < 6 and any(c in pos.board for c in "RBNQ"):
                 score = min(pos.score + S.EVAL_ROUGHNESS,
-                    -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 5))
+                    -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 7))
                 proof = score >= gamma and (self.tp_move.get(pos) or pos.king_capture())
                 yield (proof, MATE_UPPER) if proof and pos.value(proof) >= MATE_LOWER else (None, score)
 
             # Fuel oracle (master since #192): a fuel decision, never a
             # score candidate; real moves below recurse to d - 1.
             d = depth
-            if depth >= 8 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
+            if depth >= 6 and any(c in pos.board for c in "RBNQ"):
                 target = pos.score + S.NULL_MARGIN
-                if -self.bound(pos.rotate(nullmove=True), 1 - target, depth - 5) >= target:
+                if -self.bound(pos.rotate(nullmove=True), 1 - target, depth - 7) >= target:
                     d = depth - 1
 
             if depth == 0:
                 yield None, pos.score
-
-            if not killers and depth > 3:
-                self.bound(pos, gamma, depth - 3, root=True)
-                killers = self.tp_move.get_all(pos)
 
             val_lower = S.QS - depth * S.QS_A
 
