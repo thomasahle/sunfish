@@ -136,7 +136,7 @@ class TestCappedNullMove:
 
         def observed(pos, gamma, depth, root=False):
             calls.append((gamma, depth, root))
-            if pos == nullpos and gamma == 1 and depth == 2:
+            if pos == nullpos and gamma == 1 and depth <= 0:
                 return -sf.MATE_LOWER
             return bound(pos, gamma, depth, root)
 
@@ -174,7 +174,7 @@ class TestFuelOracle:
             return bound(p, g, depth, root)
 
         searcher.bound = observed
-        bound(pos, gamma, 6)
+        bound(pos, gamma, 8)
         return seen
 
     def test_probe_window_is_gamma_free(self):
@@ -183,9 +183,9 @@ class TestFuelOracle:
         windows = [self.probe_windows(g) for g in (0, 200, -200, sf.MATE_LOWER)]
         for gamma, seen in zip((0, 200, -200, sf.MATE_LOWER), windows):
             assert seen, f"gamma {gamma}: the fuel probe never ran"
-            assert all(g == 1 - target and d == 3 for g, d in seen), (
+            assert all(g == 1 - target and d == 1 for g, d in seen), (
                 f"gamma {gamma}: probe windows {seen} - expected only "
-                f"({1 - target}, 3), the gamma-free fixed target"
+                f"({1 - target}, 1), the gamma-free fixed target"
             )
         assert len({tuple(w) for w in windows}) == 1, (
             f"the probe window moved with gamma: {windows}"
@@ -196,7 +196,7 @@ class TestFuelOracle:
         # the deep null can no longer fail high on its own.
         pos = hist_from_fen("8/6p1/6R1/k7/2K5/8/8/8 w - - 0 1")[-1]
         passed = pos.rotate(nullmove=True)
-        for depth, want in ((5, True), (6, False), (7, False)):
+        for depth, want in ((3, True), (4, True), (5, True), (6, False), (7, False)):
             searcher = sf.Searcher()
             searcher.root, searcher.history = pos, set()
             seen, bound = [], searcher.bound
@@ -213,6 +213,58 @@ class TestFuelOracle:
                 f"depth {depth}: pass probed at the caller's window "
                 f"{'unexpectedly' if scored else 'never'} ({seen})"
             )
+
+
+class TestIntrinsicLMR:
+    """Deep moves below one fixed intrinsic threshold spend an extra ply.
+
+    The edge cost depends only on position, nominal depth, and move value.
+    A cached killer must therefore receive exactly the same depth as that
+    move receives later in the intrinsic ordering.
+    """
+
+    FEN = "4k3/8/8/3p4/4P3/8/8/N3K3 w - - 0 1"
+
+    def observed_depths(self, depth, pass_score, fen=FEN):
+        pos = hist_from_fen(fen)[-1]
+        passed = pos.rotate(nullmove=True)
+        moves = list(pos.gen_moves())
+        children = {pos.move(move): move for move in moves}
+        killer = next(move for move in moves if pos.value(move) < sf.LMR)
+        searcher = sf.Searcher()
+        searcher.root, searcher.history = pos, set()
+        searcher.tp_move[pos] = killer
+        seen = []
+
+        def observed(child, gamma, child_depth, root=False):
+            if child == passed:
+                return -pass_score
+            if child in children:
+                seen.append((children[child], child_depth))
+            return 0
+
+        searcher.bound = observed
+        sf.Searcher.bound(searcher, pos, sf.MATE_UPPER, depth, root=True)
+        assert seen[0][0] == killer
+        return pos, moves, seen
+
+    def test_edge_cost_is_intrinsic_and_killer_independent(self):
+        cases = (
+            (self.FEN, 5, 0),
+            (self.FEN, 6, 0),
+            (self.FEN, 6, sf.NULL_MARGIN),
+            ("4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1", 6, sf.NULL_MARGIN),
+            ("4k3/8/8/8/8/8/8/Q3K3 w - - 0 1", 6, sf.NULL_MARGIN),
+        )
+        for fen, depth, offset in cases:
+            pos = hist_from_fen(fen)[-1]
+            pass_score = pos.score + offset
+            pos, moves, seen = self.observed_depths(depth, pass_score, fen)
+            guard = depth >= 6 and any(c in pos.board for c in "RBNQ")
+            hot = guard and pass_score >= pos.score + sf.NULL_MARGIN
+            for move in moves:
+                expected = depth - hot - 1 - (guard and pos.value(move) < sf.LMR)
+                assert {d for m, d in seen if m == move} == {expected}
 
 
 class TestStaticMoveCap:
@@ -262,26 +314,22 @@ class TestStaticMoveCap:
 class TestFilteredCheckEvasion:
     """A filtered legal evasion must be searched before certifying mate."""
 
-    CHILD = "rnbq2nr/2p1bppp/p2p4/1p2p3/2P3k1/PP3P1N/3PP2P/RNQ1KB1R b KQ - 0 10"
-    PARENT = "rnbq2nr/2p1bppp/p2p4/1p2p3/2P3k1/PP5N/3PPP1P/RNQ1KB1R w KQ - 0 10"
+    CHILD = "8/8/8/8/8/8/1Q6/K1k5 b - - 0 1"
 
     def test_lazy_tail_removes_false_mate(self):
         depth = 1
         sf.pst["K"] = sf.K_MID
         child = hist_from_fen(self.CHILD)[-1]
         legal = [m for m in child.gen_moves() if not child.move(m).king_capture()]
-        assert sorted(child.value(m) for m in legal) == [-105, -105, -102]
+        assert [child.value(m) for m in legal] == [-159]
         assert max(child.value(m) for m in legal) < sf.QS - sf.QS_A
 
         searcher = sf.Searcher()
         searcher.root, searcher.history = child, set()
-        assert searcher.bound(child, 1 - sf.MATE_LOWER, depth, root=True) == 299
+        assert searcher.bound(child, 1 - sf.MATE_LOWER, depth, root=True) == -1108
         assert searcher.tp_move[child] in legal
 
-        parent = hist_from_fen(self.PARENT)[-1]
-        searcher = sf.Searcher()
-        searcher.root, searcher.history = parent, set()
-        assert searcher.bound(parent, sf.MATE_LOWER, depth + 1, root=True) == -243
+
 class TestNullSentinelMasking:
     """Audit finding A1: in pawn endings the null-move gate
     (abs(score) < 500) admits a "pass" that yields a normal material

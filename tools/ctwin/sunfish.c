@@ -73,16 +73,17 @@ static int tables_loaded = 0;
 /* Runtime knobs.  Defaults reproduce sunfish.py at the repo root. */
 static int QS = 40;
 static int QS_A = 140;
+static int LMR = 75;
 static int EVAL_ROUGHNESS = 15;
 static long TABLE_SIZE = 1000000;
-static int NULL_MARGIN = 15;     /* fuel-probe target margin (its own knob
+static int NULL_MARGIN = -200;   /* fuel-probe target margin (its own knob
                                     since #192, deliberately NOT tied to
-                                    EVAL_ROUGHNESS; the classic sub-depth-6
+                                    EVAL_ROUGHNESS; the shallow capped
                                     null keeps following EVAL_ROUGHNESS) */
 static int NULL_MIN_DEPTH = 2;   /* null move when depth > this */
-static int NULL_LIMIT = 500;     /* |score| bound for trying null */
-static int NULL_RED = 3;         /* null move depth reduction */
-static int IID_MIN_DEPTH = 3;    /* IID when depth > this (master: 2) */
+static int NULL_LIMIT = 60000;   /* |score| bound; inactive on legal positions */
+static int NULL_RED = 7;         /* null move depth reduction */
+static int IID_MIN_DEPTH = 99;   /* tuned off; retained as a lab knob */
 static int IID_RED = 3;          /* IID depth reduction */
 static int FUT_MAX = 1;          /* futility pruning when depth <= this */
 static int MATE_DIST = 1;        /* mate scores carry distance (master: 0) */
@@ -691,8 +692,9 @@ static int gives_check(const Pos *child) {
 }
 
 static int score_move(const Pos *pos, Move move, int val, int gamma,
-        int depth, int rd, int *real) {
+        int depth, int rd, int guard, int *real) {
     Pos child = domove(pos, move);
+    int move_depth = rd - 1 - (guard && val < LMR);
     *real = 1;
     if (2 <= depth && depth <= 3 && pos->b[move.j] == '.'
             && move.j != pos->ep && !move.prom) {
@@ -700,13 +702,13 @@ static int score_move(const Pos *pos, Move move, int val, int gamma,
         if (cap >= MATE_LOWER) cap = MATE_LOWER - 1;
         if (cap < gamma) {
             if (!gives_check(&child)) { *real = 0; return cap; }
-            return -bound(&child, 1 - gamma, rd - 1, 0, 0);
+            return -bound(&child, 1 - gamma, move_depth, 0, 0);
         }
-        int full = -bound(&child, 1 - gamma, rd - 1, 0, 0);
+        int full = -bound(&child, 1 - gamma, move_depth, 0, 0);
         if (full > cap && gives_check(&child)) return full;
         return cap < full ? cap : full;
     }
-    return -bound(&child, 1 - gamma, rd - 1, 0, 0);
+    return -bound(&child, 1 - gamma, move_depth, 0, 0);
 }
 
 /* ------------------------------------------------------------------ */
@@ -778,14 +780,12 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         if (done) goto after_moves;
     }
 
-    /* Fuel oracle (master since #192) -- never a score candidate, only a
-     * fuel decision: real moves below recurse to rd - 1.  Placement and
-     * semantics exactly master's (between the classic null and the stand
-     * pat; no root gate; target = pos.score + NULL_MARGIN, master's own
-     * knob, independent of EVAL_ROUGHNESS). */
+    /* Fuel oracle -- its fixed target reduces the node.  Its static guard
+     * also limits intrinsic LMR to positions where passing is meaningful. */
     int rd = depth;
-    if (FUEL_NULL && depth >= FUEL_MIN_DEPTH && iabs(pos->score) < NULL_LIMIT
-            && has_big_piece(pos)) {
+    int guard = FUEL_NULL && depth >= FUEL_MIN_DEPTH
+        && iabs(pos->score) < NULL_LIMIT && has_big_piece(pos);
+    if (guard) {
         int target = pos->score + NULL_MARGIN;
         Pos rp = rotate(pos, 1);
         if (-bound(&rp, 1 - target, depth - NULL_RED, 0, 0) >= target)
@@ -798,8 +798,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         if (done) goto after_moves;
     }
 
-    /* Internal iterative deepening (driver probe: root=1, unstored).
-     * A qs_tail probe (PR #171) never runs IID. */
+    /* Optional lab IID (driver probe: root=1, unstored). */
     if (!qstail && nkill == 0 && depth > IID_MIN_DEPTH) {
         bound(pos, gamma, depth - IID_RED, 1, 0);
         tpm_get_all(pos, killers, &nkill);
@@ -818,7 +817,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         int val = value(pos, killers[kk]);
         if (val < val_lower) continue;
         int real;
-        int score = score_move(pos, killers[kk], val, gamma, depth, rd, &real);
+        int score = score_move(pos, killers[kk], val, gamma, depth, rd, guard, &real);
         PROCESS(real, killers[kk], score);
         if (done) goto after_moves;
     }
@@ -843,7 +842,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
             }
             if (!qstail) {
                 int real;
-                int score = score_move(pos, m, val, gamma, depth, rd, &real);
+                int score = score_move(pos, m, val, gamma, depth, rd, guard, &real);
                 PROCESS(real, m, score);
             } else {
                 Pos np = domove(pos, m);
@@ -1180,7 +1179,7 @@ static int load_tables(const char *path) {
 
 struct knob { const char *name; int *ip; long *lp; };
 static struct knob KNOBS[] = {
-    { "QS", &QS, NULL }, { "QS_A", &QS_A, NULL },
+    { "QS", &QS, NULL }, { "QS_A", &QS_A, NULL }, { "LMR", &LMR, NULL },
     { "EVAL_ROUGHNESS", &EVAL_ROUGHNESS, NULL },
     { "TABLE_SIZE", NULL, &TABLE_SIZE },
     { "NULL_MARGIN", &NULL_MARGIN, NULL },
@@ -1293,6 +1292,12 @@ int main(int argc, char **argv) {
             else puts("err knob");
         }
 
+        else if (!strcmp(tok[0], "setoption")) {
+            if (ntok < 5 || strcmp(tok[1], "name") || strcmp(tok[3], "value")
+                    || !set_knob(tok[2], atol(tok[4])))
+                fprintf(stderr, "ctwin: bad UCI option\n");
+        }
+
         else if (!strcmp(tok[0], "position")) {
             if (ntok >= 2 && !strcmp(tok[1], "startpos")) {
                 reset_ok:
@@ -1338,11 +1343,27 @@ int main(int argc, char **argv) {
         }
 
         else if (!strcmp(tok[0], "go")) {
-            long gnodes = 0; double mt = 0; int gdepth = 0;
+            long gnodes = 0, wtime = -1, btime = -1, winc = 0, binc = 0;
+            double mt = 0;
+            int gdepth = 0, movestogo = 0;
             for (int k = 1; k + 1 < ntok; k += 2) {
                 if (!strcmp(tok[k], "depth")) gdepth = atoi(tok[k + 1]);
                 else if (!strcmp(tok[k], "nodes")) gnodes = atol(tok[k + 1]);
                 else if (!strcmp(tok[k], "movetime")) mt = atol(tok[k + 1]) / 1000.0;
+                else if (!strcmp(tok[k], "wtime")) wtime = atol(tok[k + 1]);
+                else if (!strcmp(tok[k], "btime")) btime = atol(tok[k + 1]);
+                else if (!strcmp(tok[k], "winc")) winc = atol(tok[k + 1]);
+                else if (!strcmp(tok[k], "binc")) binc = atol(tok[k + 1]);
+                else if (!strcmp(tok[k], "movestogo")) movestogo = atoi(tok[k + 1]);
+            }
+            if (mt == 0 && (wtime >= 0 || btime >= 0)) {
+                int black = (side0 == 'b') ^ ((nhist - 1) % 2);
+                double remain = (black ? btime : wtime) / 1000.0;
+                double inc = (black ? binc : winc) / 1000.0;
+                mt = movestogo ? remain / movestogo + inc : remain / 12 + 0.9 * inc;
+                double cap = remain / 2 - 1;
+                if (cap < mt) mt = cap;
+                if (mt < 0.05) mt = 0.05;
             }
             if (gdepth && !gnodes && mt == 0) go_depth(gdepth);
             else go_game(gnodes, mt, gdepth ? gdepth : 999);
@@ -1350,6 +1371,11 @@ int main(int argc, char **argv) {
 
         else if (!strcmp(tok[0], "uci")) {
             puts("id name sunfish ctwin");
+            for (struct knob *k = KNOBS; k->name; k++) {
+                long value = k->ip ? *k->ip : *k->lp;
+                printf("option name %s type spin default %ld min -1000000000 max 1000000000\n",
+                       k->name, value);
+            }
             puts("uciok");
         }
         else if (!strcmp(tok[0], "isready")) puts("readyok");

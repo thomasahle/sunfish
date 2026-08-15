@@ -82,6 +82,11 @@ fastchess \
    final confirmation of a winner stays at 60+1. A handful of time losses
    over hundreds of games is normal; dozens mean the TC is too fast.
 
+   For search-only changes, the node-identical C twin may screen at `3+0.1`:
+   it applies the same clock formula while making long parameter screens
+   affordable. Treat it as a provisional surrogate for Python `30+1` until
+   the calibration plan below reproduces known Python Elo effects. It cannot
+   validate time-management or Python-throughput changes.
 7. **Adjudicate finished games** (`-draw`/`-resign` flags above) — sunfish has
    no resign logic and weak endgames, so unadjudicated games drag on and waste
    most of the wall time on decided positions.
@@ -222,6 +227,8 @@ fastchess \
    overhead cannot certify. Surrogate output is never a verdict on its own,
    and the surrogate may rank nothing until its calibration gate passes
    (`tools/ctwin/README.md`, "Time management on a virtual clock").
+   Search-only changes may screen at C `3+0.1`, subject to the calibration
+   gate below; that compares search quality and throughput, not time managers.
    For TM validation itself, order the spend by stress per game-minute:
    sudden-death drain is an *absolute-clock* pathology, so short sudden
    death (60+0, or a 1+0 hammer) stresses the mechanism harder per minute
@@ -261,12 +268,48 @@ outside PST-shaped eval is invisible to it. Rule 12 also applies with full
 force: fixed-node results hold search effort constant, so they screen;
 only a wall-clock match on the real engine decides.
 
+The twin also accepts UCI clocks for calibrated `3+0.1` search screens. That
+fixed budget policy is not a model of the shipping time manager; use `vmatch.py`
+to compare time policies and a real-clock match to validate the winner.
+
 **Before believing twin match numbers**, the calibration plan staged in
 [`tools/ctwin/README.md`](../tools/ctwin/README.md) (section "Calibration
 plan") must have passed: a sanity match of ctwin vs pypy classic at fixed
 nodes scoring ~50%, plus reproduction of two knob-expressible pairs whose
 Elo gap is already known from real matches. Until then, treat twin output
 as directional.
+
+### Joint search-parameter tuning (2026-08)
+
+The consolidated null/LMR candidate was selected by tuning eleven knobs
+together: `QS`, `QS_A`, `EVAL_ROUGHNESS`, `NULL_MARGIN`, `NULL_LIMIT`, `LMR`,
+`NULL_RED`, `NULL_MIN_DEPTH`, `FUEL_MIN_DEPTH`, `IID_MIN_DEPTH`, and `IID_RED`.
+The tuner used an additive logistic Gaussian process over paired game outcomes,
+an exact default-policy anchor, persistent random exploration, and occasional
+candidate-versus-candidate duels. One color-swapped opening pair was one
+posterior update; repeated pairs were not used as a substitute for a robust
+noise model.
+
+The study accumulated 4,655 paired observations (9,310 games) over 1,434
+distinct joint policies. The first posterior winner was neutral on untouched
+openings (`191/121/188`, +2.08 ± 26.57 Elo over 500 games), an explicit
+winner's-curse check. A second candidate passed (`211/129/160`,
++35.56 ± 26.37), and the final exact policy was confirmed on a later untouched
+opening block: `218/135/147`, **+49.67 ± 26.24 Elo**, LOS 99.99%, over 500
+games at the calibrated C-twin `3+0.1` search surrogate. There were no crashes,
+illegal moves, disconnects, stalls, or time losses.
+
+The posterior selected `QS=30`, but that setting regressed the WAC.004 tactical
+floor and the packed-engine tiny-clock test. Its one-dimensional posterior
+profile put `QS=40` only 2.0 ± 8.6 Elo behind, so the validated production
+setting remains `QS=40`. A final independent block confirmed that corrected
+bundle at `228/113/159`, **+48.25 ± 27.03 Elo**, LOS 99.98%, over 500 games.
+The other selected settings are `QS_A=140`, `EVAL_ROUGHNESS=15`,
+`NULL_MARGIN=-200`, `LMR=75`, null reduction 7, shallow capped null from depth
+3 through 5, real-only fuel shaping from depth 6, and IID disabled.
+`NULL_LIMIT=60000` in the tunable C instrument means no score guard on legal
+positions; Python expresses that result directly. This last independent
+confirmation, not the adaptive posterior estimate, is the landing evidence.
 
 ## Testing the packed artifact
 

@@ -16,6 +16,9 @@ by the current source.
 -/
 
 import Sunfish.Driver
+import Sunfish.EvalBounds
+
+set_option maxRecDepth 4096
 
 namespace Sunfish
 
@@ -47,7 +50,7 @@ theorem WindowReport.cap (cap gamma report value : Int)
     split <;> split <;> omega
 
 /-- The exact local proof obligation of the Python expression
-`min(cap, -bound(pass, 1 - gamma, depth - 3))`. -/
+`min(cap, -bound(pass, 1 - gamma, depth - 7))`. -/
 theorem cappedNull_report (cap gamma childReport childValue : Int)
     (h : WindowReport (1 - gamma) childReport childValue) :
     WindowReport gamma
@@ -64,22 +67,21 @@ theorem cappedNull_below_positiveMate (cap passValue : Int)
   simp only [Int.min_def]
   split <;> omega
 
-/-- The concrete balance guard keeps the fixed static cap
+/-- The concrete evaluation bound keeps the fixed static cap
 `eval + EVAL_ROUGHNESS` strictly inside the ordinary score band.  The next
 theorem states the one-sided consequence for the capped null value. -/
-theorem guardedStaticCap_in_scoreBand (eval : Int)
-    (h : -500 < eval ∧ eval < 500) :
+theorem staticCap_in_scoreBand (eval : Int)
+    (h : -EvalBounds.evalBound ≤ eval ∧ eval ≤ EvalBounds.evalBound) :
     -MATE_UPPER < eval + EVAL_ROUGHNESS ∧
       eval + EVAL_ROUGHNESS < MATE_LOWER := by
-  have hMU : MATE_UPPER = 69290 := rfl
-  have hML : MATE_LOWER = 47923 := rfl
-  have hE : EVAL_ROUGHNESS = 15 := rfl
+  have hlo : -MATE_UPPER < -EvalBounds.evalBound + EVAL_ROUGHNESS := by decide
+  have hhi : EvalBounds.evalBound + EVAL_ROUGHNESS < MATE_LOWER := by decide
   omega
 
-/-- The exact positive-mate exclusion used by the guarded Python null move. -/
-theorem guardedCappedNull_below_positiveMate (eval passValue : Int)
-    (h : -500 < eval ∧ eval < 500) :
+/-- The exact positive-mate exclusion used by the Python null move. -/
+theorem staticCappedNull_below_positiveMate (eval passValue : Int)
+    (h : -EvalBounds.evalBound ≤ eval ∧ eval ≤ EvalBounds.evalBound) :
     min (eval + EVAL_ROUGHNESS) passValue < MATE_LOWER :=
-  cappedNull_below_positiveMate _ _ (guardedStaticCap_in_scoreBand eval h).2
+  cappedNull_below_positiveMate _ _ (staticCap_in_scoreBand eval h).2
 
 end Sunfish
