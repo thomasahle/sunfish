@@ -391,8 +391,8 @@ class MixedAcquisitionTest(unittest.TestCase):
                 "print('Score of candidate vs baseline: 1 - 0 - 1  [0.750] 2')\n")
             gate.write_text(
                 f"#!{sys.executable}\n"
-                "import pathlib,time\n"
-                "start=time.time();time.sleep(.4)\n"
+                "import json,pathlib,sys,time\n"
+                "start=time.time();time.sleep(.1+.2*json.load(sys.stdin)['options']['X'])\n"
                 f"p=pathlib.Path({str(intervals)!r})\n"
                 "with p.open('a') as f:f.write(f'{start} {time.time()}\\n')\n")
             for program in (engine, manager, gate):
@@ -411,15 +411,15 @@ class MixedAcquisitionTest(unittest.TestCase):
                 "--fastchess", str(manager), "--engine", str(engine),
                 "--baseline-options", "default", "--space", str(space),
                 "--openings", str(openings), "--cycle-openings",
-                "--gate", str(gate), "--gate-workers", "1", "--slots", "1",
+                "--gate", str(gate), "--gate-workers", "3", "--slots", "1",
                 "--queue-batches", "3", "--refill-batches", "1",
-                "--initial-design", "9", "--batches", "4",
+                "--initial-design", "9", "--batches", "3",
                 "--state", str(root / "state.json"), "--logs", str(root / "logs"),
             ], check=True, stdout=subprocess.DEVNULL)
             games = [float(value) for value in starts.read_text().splitlines()]
             gates = sorted(tuple(map(float, line.split()))
                            for line in intervals.read_text().splitlines())
-            self.assertLess(games[0], gates[2][1])
+            self.assertLess(games[0], max(end for _, end in gates))
 
     def test_duels_keep_a_directly_anchored_opponent(self):
         anchored = self.space.canonical({"X": 0, "Y": 10})

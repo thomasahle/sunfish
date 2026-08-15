@@ -836,14 +836,22 @@ async def optimize(args):
                 proposals.append([vector, diagnostics, reservation, 0, reservation_pending])
                 pending.append((vector, None))
 
-            while group := [item for item in proposals if item[3] >= 0]:
-                accepted = await asyncio.gather(*(
-                    asyncio.to_thread(gate_policy, args, state, space, item[0])
-                    for item in group
-                ))
-                for item, passed in zip(group, accepted):
+            commit_selection(state, proposal_state)
+            tasks = {
+                asyncio.create_task(asyncio.to_thread(
+                    gate_policy, args, state, space, item[0])): item
+                for item in proposals
+            }
+            while tasks:
+                done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                released = False
+                for task in done:
+                    item = tasks.pop(task)
+                    passed = task.result()
                     if passed:
                         item[3] = -1
+                        schedule_experiment(item[0], item[1])
+                        released = True
                         continue
                     forbidden.add(item[0])
                     item[3] += 1
@@ -858,12 +866,11 @@ async def optimize(args):
                     if replacement["mode"] != item[1]["mode"]:
                         raise AssertionError("gate replacement changed allocation mode")
                     item[1] = replacement
-
-            commit_selection(state, proposal_state)
-            for vector, diagnostics, _, _, _ in proposals:
-                schedule_experiment(vector, diagnostics)
-            save_state(args.state, state)
-            start_queued()
+                    tasks[asyncio.create_task(asyncio.to_thread(
+                        gate_policy, args, state, space, item[0]))] = item
+                if released:
+                    save_state(args.state, state)
+                    start_queued()
 
     def start_queued():
         while queue and len(running) < args.slots:
