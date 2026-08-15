@@ -35,6 +35,13 @@ def main():
     state = adaptive_gp.load_state(args.state, 1)
     space = logistic_gp.MixedSpace.load(args.space)
     space.condition(space.default)
+    gate_all = state["study"]["allocation"].get("gate_all")
+    if gate_all:
+        accepted = {
+            space.canonical(record["knobs"])
+            for record in state.get("gates", {}).values() if record["accepted"]
+        }
+        space.candidates = [point for point in space.candidates if point in accepted]
     model = adaptive_gp.posterior(
         state, space.prior_mean, args.pair_weight, space, args.inducing)
     observed = []
@@ -45,8 +52,13 @@ def main():
     counts = Counter(observed)
 
     points = sorted(set([*space.candidates, *(point for point in observed if space.contains(point))]))
-    best = adaptive_gp.coordinate_maximum(
-        space, points, lambda candidates: model.predict(candidates)[0], set(), None, restarts=16)
+    if gate_all:
+        mean = model.predict(points)[0]
+        best = points[int(mean.argmax())]
+    else:
+        best = adaptive_gp.coordinate_maximum(
+            space, points, lambda candidates: model.predict(candidates)[0],
+            set(), None, restarts=16)
     challengers = sorted(set(observed))
     challenger_mean = model.predict(challengers)[0]
     challenger_best = challengers[int(challenger_mean.argmax())]
@@ -67,6 +79,10 @@ def main():
         parameter = next(parameter for parameter in space.parameters if parameter["name"] == name)
         points = list(dict.fromkeys(
             space.canonical(base | {name: value}) for value in parameter["values"]))
+        if gate_all:
+            points = [point for point in points if point in space.candidates]
+        if not points:
+            continue
         predictions, variances = model.predict(points)
         index = int(predictions.argmax())
         value = space.knobs(points[index])[name]
