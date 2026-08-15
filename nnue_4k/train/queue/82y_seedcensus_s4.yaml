@@ -1,0 +1,28 @@
+# ml2 seed census, point 4 of 4 -- because 79 just showed the ml2 val
+# ladder may not be readable at all.
+#
+# WHAT 79 FOUND.  Same recipe, same pinned val set, one seed apart:
+#   74 (seed 0)  val 0.01347      79 (seed 2)  val 0.01329
+# a gap of 1.8e-4 from initialisation ALONE.  That is 4.5x the one-layer
+# family's measured seed sensitivity (4e-5, run 78) -- confirming the caveat
+# 78's entry stated in advance, that ml2 is noisier and not quieter.  And it
+# is LARGER than essentially every ml2 val distinction this campaign has
+# drawn: float .0005 vs .001 (6e-5), bm4 vs bm2 (5e-5), grid .0005 vs .0003
+# (7e-5), u2grid-only vs full grid (1.5e-4).
+#
+# NAMED QUESTION: what is the ml2 val seed spread at n=4, and does it exceed
+# the gaps the ledger ranks on?  n=2 gives a difference, not a spread; two
+# more seeds give a range that can be quoted honestly beside every ml2 number
+# in this file.  If the spread is ~2e-4, then the ml2 ladder cannot resolve
+# anything this campaign has used it to decide, and the SELECTOR SPEC's
+# play-anchored mini-match is not an improvement on val -- it is the only
+# instrument the family has.
+#
+# Identical to 74 and 79 in every field but opt.seed; split pinned.
+name: seedcensus_s4
+data: {source: ../cache_repl8M.pkl, kind: legacy-pkl, split: legacy-perm, valn: 4027406, perm_seed: 0}
+model: {arch: ml2, N: 4, base: mat, ternary: 0.85, bm: 4, u2grid: 1, gridste: 1}
+loss: {l1: 0.001, satpen: 0.03, satthresh: 480.0}
+opt: {epochs: 30, batch: 8192, lr: 3.0e-3, seed: 4}
+notes: "ml2 seed census point (seed 4) at the l1 .001 operating point: 74/79
+  differ by 1.8e-4 on seed alone; n=4 turns that into a quotable spread"

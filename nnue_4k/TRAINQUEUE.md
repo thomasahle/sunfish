@@ -247,6 +247,71 @@ VAL-probe-first):
 
 ## Log (newest first)
 
+- 2026-08-15 09:30 UTC: **THE ml2 VAL LADDER CANNOT RESOLVE WHAT THIS
+  CAMPAIGN USED IT TO DECIDE: seed alone moves it 1.8e-4.**
+
+  **`79_seed2_l1_001_pinned`** — the `perm_seed` fix's first ml2 use, and it
+  worked (`val_sha 0239a7b84ec6ba2f`, on the ladder). Its named question was
+  "is the l1 .001 free-byte result seed-stable?" The answer splits:
+
+  | | `74` (seed 0) | `79` (seed 2) |
+  |---|---|---|
+  | best val | 0.01347 | **0.01329** |
+  | zeros | 72.9% | 70.0% |
+  | read-out | [1, 0, 1, 0] | [1, 0, 1, 0] |
+
+  **Sparsity is stable (2.9 points); val is not — 1.8e-4 from
+  initialisation alone.** That is **4.5× the one-layer family's 4e-5**
+  (run 78) and confirms, as a measurement, the caveat that entry stated in
+  advance: ml2 is noisier, not quieter.
+
+  **What 1.8e-4 does to the ledger.** It is larger than essentially every
+  ml2 val distinction this campaign has drawn:
+
+  | distinction | gap | vs 1.8e-4 |
+  |---|---|---|
+  | float ml2 l1 .0005 (0.01280) vs .001 (0.01286) — "density pays" | 6e-5 | **0.3×** |
+  | float ml2 bm4 (0.01286) vs bm2 (0.01291) | 5e-5 | **0.3×** |
+  | grid l1 .0005 (0.01347) vs .0003 (0.01354) | 7e-5 | **0.4×** |
+  | u2grid-only (0.01362) vs full grid (0.01347) | 1.5e-4 | **0.8×** |
+  | **my own "recovers ⅓ of the win"**: linear 0.01378 vs grid ml2 0.01347 | 3.1e-4 | 1.7× |
+
+  **Every one of those is at or under the noise, including my own headline
+  from this morning.** The "⅓ recovery" figure is 1.7× a single-seed
+  observation — the least unresolved of the set and still not resolved. I
+  wrote it as a result; it is a direction at best, and this entry corrects
+  it rather than leaving it to be quoted.
+
+  **What is NOT affected, stated so the correction is not over-read.**
+  (1) **The play numbers**: −107, −234.18 ± 55.08, −300.56 ± 71.33 carry
+  pentanomial intervals and gaps above 100 Elo — the anti-predictive
+  finding stands untouched, and this entry strengthens its motivation.
+  (2) **The byte measurements**: 3740 / 3775 / 3794 B and the +1 B τ
+  result are deterministic through `pack.sh`, no seed involved — l1 .001's
+  **35 free bytes stand**, and sparsity's stability across seeds (72.9% vs
+  70.0%) is now evidence for it. (3) **The attractor**: it is a property of
+  trained weights, not of a val set.
+
+  **Attractor census, recounted properly** (nine FINISHED ml2 runs, spanning
+  seeds 0/1/2/3, l1 {.0003,.0005,.001}, clamp {400,600}, rides {30,60}):
+  **36 components, 29 within 1e-4 of the tie, all 36 within 1.9e-2.**
+  Tightest are `74` and `79` at max 1.4e-6 and 1.8e-6.
+
+  **`80` is NOT in that census and is not being read**: it is mid-flight at
+  epoch 3, and its intermediate checkpoint has `u2·scale ≈ 0.12` simply
+  because `u2` starts at zero and climbs. Reading an in-progress checkpoint
+  as "the attractor broke" is exactly the mistake this ledger keeps
+  catching; it waits for the run to finish.
+
+  **Queued to depth 6, 60-epoch tail still last:** `81_satpen_off`,
+  `82_valdraw_ml2`, **`82x_seedcensus_s1`** and **`82y_seedcensus_s4`** (new
+  — n=2 gives a difference, n=4 gives a spread that can be quoted beside
+  every ml2 number in this file), `83_valdraw_plain_long`. If the spread
+  lands near 2e-4, the honest conclusion is that the ml2 val ladder cannot
+  decide anything this campaign used it for, and the **SELECTOR SPEC**'s
+  play-anchored mini-match is not an improvement on val — it is the only
+  instrument the family has.
+
 - 2026-08-15 09:10 UTC: **THE ONE-LAYER NOISE FLOOR IS ~4e-5 — and it is
   the same size as gaps this ledger has been ranking on.**
 
