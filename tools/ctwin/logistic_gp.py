@@ -146,6 +146,17 @@ class MixedSpace:
                               *parameter.get("off_values", [])]
             ]
             required += explicit
+            if local_count := spec.get("local_interactions"):
+                mutations = [
+                    (parameter["name"], value)
+                    for parameter in self.parameters
+                    for value in parameter["values"]
+                    if value != parameter["default"]
+                ]
+                local = [self.canonical(defaults | dict(pair))
+                         for pair in itertools.combinations(mutations, 2)
+                         if pair[0][0] != pair[1][0]]
+                required = self.maximin(sorted(set(local + required)), required, local_count)
             candidates = sorted(set(candidates + required))
             fraction = self.structural_fraction
             if fraction is None:

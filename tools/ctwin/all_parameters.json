@@ -52,6 +52,7 @@
      "min": 50, "max": 110, "step": 10, "scale": 35}
   ],
   "max_candidates": 2048,
+  "local_interactions": 512,
   "design_oversample": 8,
   "interaction_fraction": 0.15,
   "interaction_order": 2,

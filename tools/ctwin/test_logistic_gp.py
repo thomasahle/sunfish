@@ -117,6 +117,22 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(len(space.candidates), 64)
         self.assertIn(space.default, space.candidates)
 
+    def test_local_design_reserves_pairwise_combinations(self):
+        parameters = [
+            {"name": name, "type": "discrete", "values": [0, 1, 2], "default": 0}
+            for name in "XYZ"
+        ]
+        space = MixedSpace({
+            "parameters": parameters,
+            "max_candidates": 10,
+            "local_interactions": 10,
+        })
+        distances = [sum(value != 0 for value in point) for point in space.candidates]
+        self.assertEqual(distances.count(0), 1)
+        self.assertEqual(distances.count(1), 6)
+        self.assertEqual(distances.count(2), 3)
+        self.assertNotIn(3, distances)
+
     def test_joint_eval_domain_preserves_mate_band_invariants(self):
         path = pathlib.Path(__file__).with_name("all_parameters.json")
         parameters = {parameter["name"]: parameter for parameter in json.loads(
