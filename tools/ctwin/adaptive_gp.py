@@ -818,27 +818,25 @@ async def optimize(args):
 
     async def add_experiments(count):
         refresh_model()
-        pending = pending_comparisons()
-        forbidden = rejected_configurations() | ({fixed} if fixed is not None else set())
-        proposal_state = selection_state(state)
-        proposals = []
-        for _ in range(count):
-            reservation = selection_state(proposal_state)
-            trial = selection_state(reservation)
-            reservation_pending = list(pending)
-            vector, diagnostics = choose(
-                trial, mean_function, candidates, pending, args, space,
-                allocation_model, forbidden | {item[0] for item in proposals})
-            commit_selection(proposal_state, trial)
-            proposals.append([vector, diagnostics, reservation, 0, reservation_pending])
-            pending.append((vector, None))
+        while count:
+            size = min(count, args.gate_workers)
+            count -= size
+            pending = pending_comparisons()
+            forbidden = rejected_configurations() | ({fixed} if fixed is not None else set())
+            proposal_state = selection_state(state)
+            proposals = []
+            for _ in range(size):
+                reservation = selection_state(proposal_state)
+                trial = selection_state(reservation)
+                reservation_pending = list(pending)
+                vector, diagnostics = choose(
+                    trial, mean_function, candidates, pending, args, space,
+                    allocation_model, forbidden | {item[0] for item in proposals})
+                commit_selection(proposal_state, trial)
+                proposals.append([vector, diagnostics, reservation, 0, reservation_pending])
+                pending.append((vector, None))
 
-        while True:
-            unchecked = [item for item in proposals if item[3] >= 0]
-            if not unchecked:
-                break
-            for offset in range(0, len(unchecked), args.gate_workers):
-                group = unchecked[offset:offset + args.gate_workers]
+            while group := [item for item in proposals if item[3] >= 0]:
                 accepted = await asyncio.gather(*(
                     asyncio.to_thread(gate_policy, args, state, space, item[0])
                     for item in group
@@ -861,10 +859,11 @@ async def optimize(args):
                         raise AssertionError("gate replacement changed allocation mode")
                     item[1] = replacement
 
-        commit_selection(state, proposal_state)
-        for vector, diagnostics, _, _, _ in proposals:
-            schedule_experiment(vector, diagnostics)
-        save_state(args.state, state)
+            commit_selection(state, proposal_state)
+            for vector, diagnostics, _, _, _ in proposals:
+                schedule_experiment(vector, diagnostics)
+            save_state(args.state, state)
+            start_queued()
 
     def start_queued():
         while queue and len(running) < args.slots:

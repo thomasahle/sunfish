@@ -411,17 +411,15 @@ class MixedAcquisitionTest(unittest.TestCase):
                 "--fastchess", str(manager), "--engine", str(engine),
                 "--baseline-options", "default", "--space", str(space),
                 "--openings", str(openings), "--cycle-openings",
-                "--gate", str(gate), "--gate-workers", "3", "--slots", "1",
+                "--gate", str(gate), "--gate-workers", "1", "--slots", "1",
                 "--queue-batches", "3", "--refill-batches", "1",
                 "--initial-design", "9", "--batches", "4",
                 "--state", str(root / "state.json"), "--logs", str(root / "logs"),
             ], check=True, stdout=subprocess.DEVNULL)
             games = [float(value) for value in starts.read_text().splitlines()]
-            refills = [tuple(map(float, line.split()))
-                       for line in intervals.read_text().splitlines()
-                       if float(line.split()[0]) > games[0]]
-            self.assertTrue(refills)
-            self.assertLess(games[1], min(end for _, end in refills))
+            gates = sorted(tuple(map(float, line.split()))
+                           for line in intervals.read_text().splitlines())
+            self.assertLess(games[0], gates[2][1])
 
     def test_duels_keep_a_directly_anchored_opponent(self):
         anchored = self.space.canonical({"X": 0, "Y": 10})
