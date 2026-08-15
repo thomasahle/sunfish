@@ -309,10 +309,10 @@ The other selected settings are `QS_A=140`, `EVAL_ROUGHNESS=15`,
 capped null from depth 3 through 5, real-only fuel shaping from depth 6, and
 IID disabled. The study coupled the shallow and deep reductions at 7; the
 depth-six mate floor subsequently showed that this was invalid. Production
-retains the shallow candidate's three-ply reduction and exempts the unstored
-driver root from intrinsic LMR. Those corrections are measured separately.
-`NULL_LIMIT=60000` in the tunable C instrument means no score guard on legal
-positions; Python expresses that result directly. This last independent
+retains the shallow candidate's three-ply reduction, the `abs(score) < 500`
+guard for both null mechanisms, and exempts the unstored driver root from
+intrinsic LMR. The depth-eight mate floor invalidated removal of the score
+guard. Those corrections are measured separately. This last independent
 confirmation, not the adaptive posterior estimate, is the landing evidence.
 
 ## Testing the packed artifact

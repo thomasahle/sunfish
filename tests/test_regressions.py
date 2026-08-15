@@ -260,7 +260,7 @@ class TestIntrinsicLMR:
             pos = hist_from_fen(fen)[-1]
             pass_score = pos.score + offset
             pos, moves, seen = self.observed_depths(depth, pass_score, fen)
-            guard = depth >= 6 and any(c in pos.board for c in "RBNQ")
+            guard = depth >= 6 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ")
             hot = guard and pass_score >= pos.score + sf.NULL_MARGIN
             for move in moves:
                 expected = depth - hot - 1 - (guard and pos.value(move) < sf.LMR)
