@@ -47,6 +47,7 @@ how much effort it cost.
 | Date | Experiment | Verdict |
 |---|---|---|
 | 2026-08-15 | **ML2 EXPORT VERDICT: the artifact FITS (3884 B measured, 212 spare) and is BIT-EXACT — but the trained layer-2 read-out QUANTIZES TO ZERO on the certified grid, so the default export ships a SILENT second layer** | `U2_k = u2_k·2^10/(100·2^(2·shift))` = [0.171, 0.084, 0.136, 0.108] → **[0,0,0,0]** at the export's own shift 4, while the float L2 term carries **mean 60.50 cp vs L1's 24.08 cp** — the eval's larger half, deleted. Root cause is the recorded **quant-error-compounding** wall, hit where `packed_layers.py` says not to: `u2` trains as a free float with no in-forward grid STE (the ternary weights have one). The L1 shift is the only knob (U2 ×4 per unit dropped, gains ÷2); measured end-to-end vs the float model: shift 4 **60.95 cp**, shift 3 13.91, **shift 2 2.89**, shift 1 4.81, shift 0 7.44. A shift-2 build gates CLEAN end to end (bit-exact, 200/200 legal, 8/8 mate-in-1, 8/8 KQK/KRK conversion, first-yield max 108 nodes, standalone smoke) at **3884 B**. Coordinator ruling: the shift is **val-side model selection** (it minimises |Δcp| against the float model on training-side data, the same class of choice as picking l1=.0005 by family val — no play outcome informed it), so the registered bar stands and the screen is **LAUNCHED**; the `u2`-on-the-grid retrain is queued in parallel. Queue harvest of the same date is in TRAINQUEUE.md |
+| 2026-08-15 | **`pendkhold2` HAND-WRITTEN, PRICED **+37 B** (3340 → 3377) and its composition PROVED — the orphaned screen's arm, built entirely at the 902d9a2 pin** | The pair cannot dot-compose (both parents rewrite the queens-off seam line, and all four orders raise), so the ledger's standing rule applies: a combined mod is WRITTEN and screened as its own arm. **Attribution proved mechanically, not asserted** — four generated sources (BASE0 @5457f27, +pend, +khold2, and the shipped base @902d9a2), and every one of the arm's 6 added lines maps to exactly one parent (3 pend, 2 khold2, plus pend's table pair), the 1 removed line is the shared seam line both parents delete, both parents' decisions survive, and the shared line resolves to khold2's **because `pend` never changed the king's condition — it only re-expressed it so the pawn table could share the test**. `khold2` cost +27 B on the pre-pend base and **+37 B here** — measured-never-composed, fourth instance. Gates on BOTH arms: legality 200/200 at both budget paths, first-yield 582/2048, standalone empty-dir smoke, and **mate-conversion 8/8 on 5/5 runs each — khold2's KQK survives composition with pend**. Everything pinned at 902d9a2 including the packer (`2c95b7a80757…`); the pinned base reproduces the landed 3340 B artifact sha-for-sha |
 | 2026-08-15 | **`pooltm` LANDS as the entry's DEFAULT time manager — measured **+65 packed bytes** (3340 → 3405, 691 spare), NOT the +57 the pre-registration quoted** | Both pass-conditions of the registered landing shape (`fb0f7b9`) are met, so the shape executes verbatim. The mod moves into `tools/build/make_pst_entry.py` as `_pooltm` and retires from `make_variants.py` with a tombstone; `oldtm`/`steptm` retire with it because their shared anchor — the smooth budget line — stops existing. **+57 was measured against the pre-pend 3308 base; on the post-pend 3340 base the same edits cost +65** — measured-never-composed, third instance. **Equivalence proved twice, not asserted:** the landed entry packs to a **sha256-IDENTICAL artifact** to the old-way `pooltm` mod arm built from the same HEAD (`5a207fdf9cf05f2e…`), and against the arm that actually PLAYED the deciding match every executable difference is exactly `pend` — everything else is comments (packer-stripped) and the generator provenance header. Gate ladder: `check_entry` green, mate-conversion **8/8 on 5/5 runs**, legality 200/200 source + 200/200 packed at both budget paths (0 no-move, 0 illegal), first-yield worst 582 vs 2048, standalone empty-dir smoke plays `g1f3` and leaves nothing behind, 20-position fixed-node probe 20/20 identical. **The −210 cliff is landed AS DISCLOSED, not fixed:** P>0-scoping and flooring `soft` against `A` are design changes needing their own screen, and the artifact that ships is the artifact that was measured. Cliff mechanism reproduced on the landed artifact: 1 s clock → answer in 0.04 s, 60 s clock → 2.16 s |
 | 2026-08-15 | **DECIDING MATCH 1 (30+1 non-inferiority): H1 ACCEPTED in 288 games — the non-inferiority question returned outright superiority, +124.50 ± 38.79, and the pool wins a THIRD regime** | SPRT elo0=−10 elo1=0 with engine1=pool, cap 1750: **LLR 2.97 crossed +2.94 at 288 games** (1 h 47 m of a budgeted ~7 h), 156W 57L 75D = 67.19%, nElo +140.89 ± 40.13, pentanomial **[10, 14, 31, 45, 44]**, PairsRatio 3.71, WL/DD 2.88, LOS 100.00%. Tripwires all zero: **0 illegal, 0 loses-on-time, 0 forfeits, 288/288 terminations `normal`**, 0 blind moves out of 17,487 pool / 17,436 smooth. Arm sha256s verified against the log header (`cddf392e…` pool = `pooltm`, `14b69a60…` smooth = base, both built at `522931a` per the `629cba2` prereg). **Read honestly: all three regime numbers are SPRT-stopped and therefore biased high** — `pend` measured that bias at 42% on its own screen — so the direction is what is established, not the altitude. The registered warning ("if match 1 reads ~0 that is a PASS, never a third win") binds the ~0 case; this is not it, but no fixed-N confirmation exists at any TC. Spend is near-identical (median 1.276 vs 1.239 s, ratio **1.03×**) — at 30+1 the redistribution the 60-second regimes showed has flattened out, and the pool wins on shape at equal spend. The one number against it is unchanged: **77 games ended under 2 s of clock to smooth's 0** |
 | 2026-08-15 | **DECIDING MATCH 2 (1+0 hammer): GATE PASSED — 0 illegal, 0 `(none)`, 0 null moves, 100/100 normal — but the match found a −209.91 ± 60.11 CLIFF at a 1-second clock, and OUR OWN GATE SCRIPT reported a false FAILED** | Three things, not one. (1) The pre-registered gate passes: at a 1 s clock, where P is empty all game and the floor governs every move, the structural bestmove floor and the wall held perfectly. (2) The inline gate printed "HAMMER FAILED" on a clean run — `grep -c` prints 0 AND exits 1, so `|| echo 0` made `non` the two-line string "0\n0" and `[ -eq ]` errored into the else branch; the naive `0000` probe also matched the `+0000` timezone 200×. Fixed as a standalone `gate_check.sh`, re-run → PASSED, appended as a correction. Same defect class as the label and ramp defects, and it does not get a pass for being ours. (3) **The finding: `P = max(0, 1 − 8.4) = 0` for the WHOLE game, so soft = 0 and the pool plays depth-1 moves at 0.001 s against the incumbent's 0.013 s — 13× shallower, 23.00% score, never flagging (0.9 s median end-clock) and never illegal. `A/4 = 0.15 s` was reachable and safe the entire time: when P = 0 and A > 0 the soft limit collapses to zero and the safety clamp becomes unreachable.** Landing shape now has an OPEN QUESTION (scope the default / floor soft against A / land-and-document); this lane is not deciding it alone. 30+1 deciding match launched meanwhile |
@@ -410,6 +411,70 @@ subsume the hand-built terms it is meant to replace rather than merely to
 coexist with them. Registered here, NOT run.
 
 ---
+## 2026-08-15 — `pendkhold2` HAND-WRITTEN and PRICED +37 B: the composition is PROVED to be pend + khold2 and not a third thing
+
+The orphaned screen's arm, built to its original registration. `khold2` and
+`pend` both rewrite the queens-off seam line, so all four dot-compositions raise
+(`khold2.pend`, `pend.khold2`, and now `pendkhold2.pend`, `pendkhold2.khold2`),
+and the standing rule from the H1 pre-registration applies: **a combined mod is
+WRITTEN and screened as its own arm.** `pend` has since landed, so the arm is
+khold2's MARGINAL contribution on top of the shipped seam.
+
+### The composition question, answered rather than asserted
+
+A hand-written combination of two mods that collide is exactly where a third
+thing gets created by accident, so the arm is checked against both parents
+mechanically (`attribute.py` in the lane arena). Four GENERATED sources, none
+hand-edited: `BASE0` = entry @5457f27 (pre-pend, pre-khold2), `BASE0+pend`,
+`BASE0+khold2`, and the shipped base @902d9a2.
+
+| check | result |
+|---|---|
+| shipped base @902d9a2 == BASE0 + pend | **True** — pend landed unchanged |
+| every line the arm ADDS over BASE0 | 6 lines: 4 attribute to `pend`, 2 to `khold2`, **0 orphans** |
+| every line the arm REMOVES from BASE0 | 1 line — the shared seam line, which BOTH parents delete |
+| both parents' decisions present | pend's pawn-table swap and `P_MID`/`P_END` tables; khold2's material scan and king condition |
+| the shared line resolves to | **khold2's**, and pend's `end` binding survives for the pawn line it was introduced for |
+
+**Why khold2 wins the shared line is the whole argument, and it is a semantic
+one, not a merge convention:** the two parents touch the same line but not the
+same DECISION. `pend`'s predicate (`end` = at least one queen off) governs the
+PAWN table; khold2's (at least one queen on AND root non-pawn material above
+`piece["Q"]`) governs the KING table. `pend` never changed the king's condition
+— it only re-expressed the base condition through `end` so the pawn table could
+share the test — while khold2 changes the king's condition and nothing else. So
+each parent keeps its own predicate and the combination is their union.
+
+The mod's anchor deliberately stops **before** the `pst["P"]` line, so that line
+is untouched text rather than text this mod re-asserts: if pend's pawn line ever
+moves, the arm raises instead of silently reinstating a stale copy of it.
+
+### Price and gates, both arms
+
+| | base (@902d9a2) | comb (+pendkhold2) |
+|---|---|---|
+| packed | **3340 B** | **3377 B (+37)** |
+| legality, both budget paths | 200/200, 0 no-move, 0 illegal | 200/200, 0 no-move, 0 illegal |
+| first yield | 582 / 2048 | 582 / 2048 |
+| **mate-conversion ×5** | **8/8 on 5/5 runs** | **8/8 on 5/5 runs** |
+| standalone empty-dir smoke | plays `g1f3` | plays `g1f3` |
+
+`khold2` cost **+27 B** on the pre-pend base and **+37 B** here. Measured-never-
+composed, fourth instance in this ledger.
+
+The mate-conversion column is the one that had to be run rather than assumed:
+khold2 exists BECAUSE pure `khold` fails `kqk-approach`, and its 8/8 is the
+reason it replaced khold in every composition row. Composing it with pend could
+have cost that, and did not.
+
+### Pinning
+
+Everything is built at **902d9a2** — the arms from that revision's
+`make_variants.py` and `pst_entry.py`, packed by that revision's `pack.sh`
+(`2c95b7a80757…`), per the BAKEOFF_PACK_REV discipline adopted after a
+working-tree packer silently moved every artifact in a bake-off. The pin
+verifies itself: the pinned base packs to `94c90da36cb76d0f…`, byte-for-byte the
+3340 B artifact the landed `pend` entry produces.
 
 ## 2026-08-15 — DECIDING MATCH 1 VERDICT: 30+1 non-inferiority is ESTABLISHED, and the question came back as a third regime win
 

@@ -197,6 +197,45 @@ MODS = {
         '        heavy = sum(piece[c] for c in pos.board.upper() if c in "NBRQ")\n'
         '        pst["K"] = K_MID if heavy > piece["Q"] and ("Q" in pos.board or "q" in pos.board) else K_END\n',
     ),
+    # `pendkhold2`: THE HAND-WRITTEN COMBINATION, written because the pair
+    # cannot dot-compose. `khold2` and `pend` both rewrite the queens-off seam
+    # line, so `khold2.pend` and `pend.khold2` raise in either order and the
+    # standing rule (ledger, the H1 pre-registration) is that a combined mod
+    # must be WRITTEN and screened as its own arm. `pend` has since LANDED, so
+    # this mod is that combination expressed as khold2's MARGINAL contribution
+    # on top of the shipped pend seam -- build it as `pendkhold2` on `base`.
+    #
+    # IT IS EXACTLY pend + khold2, AND NOTHING ELSE. The two parents touch the
+    # same line but not the same DECISION, and the composition keeps each
+    # parent's own predicate:
+    #
+    #   `end` (pend's)   = at least one queen OFF   -> governs the PAWN table
+    #   khold2's clause  = at least one queen ON, AND root non-pawn material
+    #                      above piece["Q"]         -> governs the KING table
+    #
+    # These are different predicates, and that is the whole point of the pair:
+    # `pend` never changed the king's CONDITION (it only re-expressed the base
+    # condition through `end` so the pawn table could share the test), while
+    # khold2 changes the king's condition and nothing else. So on the shared
+    # line khold2 wins, `end` survives for the pawn line it was introduced for,
+    # and every line below attributes to exactly one parent:
+    #
+    #   end = ...            pend      (unchanged from the landed seam)
+    #   heavy = ...          khold2    (its first replacement line, verbatim)
+    #   pst["K"] = ...       khold2    (its second replacement line, verbatim)
+    #   pst["P"] = ...       pend      (unchanged, below the anchor)
+    #
+    # The anchor deliberately stops before the `pst["P"]` line so that line is
+    # untouched text rather than text this mod re-asserts -- if `pend`'s pawn
+    # line ever moves, this mod raises instead of silently reinstating an old
+    # copy of it.
+    "pendkhold2": (
+        '        end = "Q" not in pos.board or "q" not in pos.board\n'
+        '        pst["K"] = K_END if end else K_MID\n',
+        '        end = "Q" not in pos.board or "q" not in pos.board\n'
+        '        heavy = sum(piece[c] for c in pos.board.upper() if c in "NBRQ")\n'
+        '        pst["K"] = K_MID if heavy > piece["Q"] and ("Q" in pos.board or "q" in pos.board) else K_END\n',
+    ),
     # ---- SEARCH: the root gamma seed. THIS IS NOT AN EVAL MOD -------------
     # `search()` starts every search at gamma = 0 and bisects. The root stores a
     # move ONLY on a fail-high, so the node count of the first root fail-high --
