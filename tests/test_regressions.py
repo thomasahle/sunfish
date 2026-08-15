@@ -249,12 +249,12 @@ class TestIntrinsicLMR:
         return pos, moves, seen
 
     def test_edge_cost_is_intrinsic_and_killer_independent(self):
-        for depth, offset in ((5, 0), (6, 0), (6, -sf.THREAT_MARGIN - 1), (6, sf.NULL_MARGIN)):
+        for depth, offset in ((7, 0), (8, 0), (8, -sf.THREAT_MARGIN - 1), (8, sf.NULL_MARGIN)):
             pos = hist_from_fen(self.FEN)[-1]
             pass_score = pos.score + offset
             pos, moves, seen = self.observed_depths(depth, pass_score)
-            hot = depth >= 6 and pass_score >= pos.score + sf.NULL_MARGIN
-            safe = depth >= 6 and pass_score >= pos.score - sf.THREAT_MARGIN
+            hot = depth >= 8 and pass_score >= pos.score + sf.NULL_MARGIN
+            safe = depth >= 8 and pass_score >= pos.score - sf.THREAT_MARGIN
             for move in moves:
                 expected = depth - hot - 1 - (safe and pos.value(move) < sf.LMR)
                 assert {d for m, d in seen if m == move} == {expected}
