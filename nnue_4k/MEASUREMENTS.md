@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-15 | **SCREEN VERDICT: ml2 H0 ACCEPTED — the first NON-LINEAR replacement net is −234.18 ± 55.08 at fixed nodes, roughly twice as far behind the distilled PSTs as the linear one was — and the `u2` retrain shows the val win was bought with resolution the engine does not have** | 195 games of a 1000 cap, SPRT stopped early, score **20.62%**, pentanomial **[51, 19, 23, 1, 3]** over 97 pairs, PairsRatio 0.06, **0 illegal / 0 forfeits / 195 normal terminations**. Arm 3884 B vs entry 3405 B @ `5f16bae`: **+479 B for −234 Elo**. The played artifact sits 2.89 cp from the float model that scored 0.01280, so the coarser shift-2 head does not explain it. Adjudication was **symmetrically inert** — neither arm emits `info` lines, 0 adjudications, median game 93 plies. Retrain `60_ml2_u2grid` (u2 on the certified grid inside forward) lands at **val 0.01362 with a live read-out [1,0,1,0]**, every `u2` component parked at **12.50001 — the rounding knife-edge** (grid step 25.0): forced to train against real resolution the recipe gives back 0.00082 of the 0.00098 the whole ml2 family had won. Co-run with `pendkhold2`; lock handed back, not freed. Subsumption ablation still NOT run |
 | 2026-08-15 | **ML2 EXPORT VERDICT: the artifact FITS (3884 B measured, 212 spare) and is BIT-EXACT — but the trained layer-2 read-out QUANTIZES TO ZERO on the certified grid, so the default export ships a SILENT second layer** | `U2_k = u2_k·2^10/(100·2^(2·shift))` = [0.171, 0.084, 0.136, 0.108] → **[0,0,0,0]** at the export's own shift 4, while the float L2 term carries **mean 60.50 cp vs L1's 24.08 cp** — the eval's larger half, deleted. Root cause is the recorded **quant-error-compounding** wall, hit where `packed_layers.py` says not to: `u2` trains as a free float with no in-forward grid STE (the ternary weights have one). The L1 shift is the only knob (U2 ×4 per unit dropped, gains ÷2); measured end-to-end vs the float model: shift 4 **60.95 cp**, shift 3 13.91, **shift 2 2.89**, shift 1 4.81, shift 0 7.44. A shift-2 build gates CLEAN end to end (bit-exact, 200/200 legal, 8/8 mate-in-1, 8/8 KQK/KRK conversion, first-yield max 108 nodes, standalone smoke) at **3884 B**. Coordinator ruling: the shift is **val-side model selection** (it minimises |Δcp| against the float model on training-side data, the same class of choice as picking l1=.0005 by family val — no play outcome informed it), so the registered bar stands and the screen is **LAUNCHED**; the `u2`-on-the-grid retrain is queued in parallel. Queue harvest of the same date is in TRAINQUEUE.md |
 | 2026-08-15 | **`pendkhold2` HAND-WRITTEN, PRICED **+37 B** (3340 → 3377) and its composition PROVED — the orphaned screen's arm, built entirely at the 902d9a2 pin** | The pair cannot dot-compose (both parents rewrite the queens-off seam line, and all four orders raise), so the ledger's standing rule applies: a combined mod is WRITTEN and screened as its own arm. **Attribution proved mechanically, not asserted** — four generated sources (BASE0 @5457f27, +pend, +khold2, and the shipped base @902d9a2), and every one of the arm's 6 added lines maps to exactly one parent (3 pend, 2 khold2, plus pend's table pair), the 1 removed line is the shared seam line both parents delete, both parents' decisions survive, and the shared line resolves to khold2's **because `pend` never changed the king's condition — it only re-expressed it so the pawn table could share the test**. `khold2` cost +27 B on the pre-pend base and **+37 B here** — measured-never-composed, fourth instance. Gates on BOTH arms: legality 200/200 at both budget paths, first-yield 582/2048, standalone empty-dir smoke, and **mate-conversion 8/8 on 5/5 runs each — khold2's KQK survives composition with pend**. Everything pinned at 902d9a2 including the packer (`2c95b7a80757…`); the pinned base reproduces the landed 3340 B artifact sha-for-sha |
 | 2026-08-15 | **`pooltm` LANDS as the entry's DEFAULT time manager — measured **+65 packed bytes** (3340 → 3405, 691 spare), NOT the +57 the pre-registration quoted** | Both pass-conditions of the registered landing shape (`fb0f7b9`) are met, so the shape executes verbatim. The mod moves into `tools/build/make_pst_entry.py` as `_pooltm` and retires from `make_variants.py` with a tombstone; `oldtm`/`steptm` retire with it because their shared anchor — the smooth budget line — stops existing. **+57 was measured against the pre-pend 3308 base; on the post-pend 3340 base the same edits cost +65** — measured-never-composed, third instance. **Equivalence proved twice, not asserted:** the landed entry packs to a **sha256-IDENTICAL artifact** to the old-way `pooltm` mod arm built from the same HEAD (`5a207fdf9cf05f2e…`), and against the arm that actually PLAYED the deciding match every executable difference is exactly `pend` — everything else is comments (packer-stripped) and the generator provenance header. Gate ladder: `check_entry` green, mate-conversion **8/8 on 5/5 runs**, legality 200/200 source + 200/200 packed at both budget paths (0 no-move, 0 illegal), first-yield worst 582 vs 2048, standalone empty-dir smoke plays `g1f3` and leaves nothing behind, 20-position fixed-node probe 20/20 identical. **The −210 cliff is landed AS DISCLOSED, not fixed:** P>0-scoping and flooring `soft` against `A` are design changes needing their own screen, and the artifact that ships is the artifact that was measured. Cliff mechanism reproduced on the landed artifact: 1 s clock → answer in 0.04 s, 60 s clock → 2.16 s |
@@ -259,6 +260,95 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-15 — SCREEN VERDICT: ml2 H0 ACCEPTED at −234, and the u2 retrain shows the val win was bought with resolution the engine does not have
+
+The first NON-linear replacement net played, and it played worse than the
+linear one. Both halves of the coordinator's ruling ran; they agree.
+
+**The screen** (fixed-node 20k SPRT elo0=0 elo1=10, srand 20260814,
+`book3k.pgn`, laptop, arena `scratchpad/arena-ml2export/`, 03:51→04:32
+UTC):
+
+| | |
+|---|---|
+| verdict | **H0 accepted**, LLR −2.94 (bounds ±2.94), stopped early at 195 of a 1000-game cap |
+| Elo / nElo | **−234.18 ± 55.08** (95%, pentanomial) → **[−289.26, −179.10]**; nElo −281.54 ± 48.89 |
+| score | **20.62%** — 27 W / 141 L / 26 D over the 194 paired games |
+| pentanomial (ml2 pair score) | **[51, 19, 23, 1, 3]** over 97 pairs (1 unpaired game dropped), PairsRatio **0.06** |
+| draw ratio | 13.85% |
+| **zero-illegal** | **0 illegal moves**, 0 time forfeits, **195/195 `[Termination "normal"]`** — the tripwire never fired |
+| arms | ml2 **3884 B** (`21_phase_ml2_dense` @ shift 2) vs entry **3405 B** @ `5f16bae` |
+
+The arm spends **+479 bytes** and gives back **234 Elo**. For scale, the
+one-layer linear `replnet-8mv` lost 107 at the same budget against a
+smaller base: **the non-linear candidate is roughly twice as far behind
+the distilled PSTs as the linear one was.**
+
+**Confound, bounded and measured rather than waved at:** the shift-2 arm
+carries a coarser L1 head (gains [16,17,17,16] against the default
+shift's [65,67,68,64]), so "non-linear eval" and "coarse L1" are not
+separated by construction. What bounds it is the export measurement: the
+played artifact sits **2.89 cp mean** from the float model that scored
+0.01280, i.e. it IS a faithful realization of the net whose val was the
+reason to screen. A 2.89 cp head error does not buy 234 Elo.
+
+**Instrument transparency, obligations recorded with the verdict:**
+
+- **Adjudication was symmetrically inert.** fastchess logged *"No info
+  line available to extract score from engine …"* for **both** arms (869
+  ml2, 26 entry). Probed directly, **neither engine emits a single `info`
+  line** at `go nodes 20000` — both run the built-in loop, whose info
+  output is inside a `# minifier-hide` block. So the config's
+  score-based blocks (`-draw score=10`, `-resign score=500`) could never
+  fire for either side, and the outcome confirms it: **0 adjudications in
+  195 games**, every result natural. No `-maxmoves` was set, so nothing
+  truncated the tail either. Game lengths: min 23, p10 51, **median 93**,
+  p90 154, max 321, mean 100.3 plies. The config was NOT touched
+  mid-match; this is disclosure, not a change.
+- **Co-run.** The `pendkhold2` screen ran concurrently on the same laptop
+  from 03:51 UTC (lock race; see the landing lane's entry for the fuller
+  note). Fixed-node play is deterministic, so the contention was
+  wall-clock only and neither result is affected. On finishing I did not
+  free the lock — `pendkhold2` was still playing (its PGN advanced 427 →
+  443 over a 45 s sample), so the lock was **rewritten to name that lane
+  as holder** and handed back.
+- Both arms passed the legality gate **at the playing budget** before
+  game 1 (0 illegal, 0 no-move, movetime and `go nodes 20000` paths).
+
+**The retrain agrees, and explains the val number.** `60_ml2_u2grid`
+(rc=0, 20 min) trained the same recipe with `u2` snapped on the certified
+integer grid inside forward:
+
+| | free float (`21_phase_ml2_dense`) | **on the grid (`60_ml2_u2grid`)** |
+|---|---|---|
+| best val | 0.01280 | **0.01362** |
+| exported read-out | [0, 0, 0, 0] — silent | **[1, 0, 1, 0]** — alive |
+| trained `u2` | [4.27, 2.10, 3.39, 2.69] | **[12.50001, 12.41849, 12.50001, 12.49148]** |
+
+The pre-registered criterion was a non-zero read-out **and** val ≤
+0.01280: **the first is met, the second is not.** And the way it failed is
+the finding. The grid step at shift 4 is exactly 25.0, and every `u2`
+component converged to **12.5 — the rounding knife-edge, to five decimal
+places.** The optimizer walked `u2` up to the boundary and stopped: past
+it lies a read-out the loss does not want, short of it lies zero.
+
+Put beside the ladder, that closes the loop. The ml2 family's whole val
+win over the linear net was 0.01378 → 0.01280 = **0.00098**. Forced to
+train against the resolution the artifact actually has, the same recipe
+lands at 0.01362 — **giving back 0.00082 of that 0.00098**. The
+non-linear win was bought, almost entirely, with read-out precision the
+engine cannot carry; and the one realization that *does* carry it plays
+at −234.
+
+**What this lane is NOT concluding:** that the ml2 line is dead. It is
+two data points — one screen of one checkpoint, one 30-epoch grid
+retrain. `61_replnet_clamp` (CLAMP 400, byte-free, one field apart) is
+running behind it. The subsumption ablation (net-vs-net+pend) remains a
+**registered follow-up obligation, not run**. No landing talk; the timed
+leg and the merged ml2+`pooltm` build are moot at −234.
 
 ---
 
