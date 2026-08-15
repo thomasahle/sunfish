@@ -747,6 +747,7 @@ async def optimize(args):
         candidates = [x for x in candidates if x[2] and not any(x[len(logistic_gp.NUMERIC):])]
     deadline = time.monotonic() + args.wall_time if args.wall_time else None
     queue = deque()
+    activity = asyncio.Event()
     experiments = {}
     running = {}
     completed = 0
@@ -880,6 +881,7 @@ async def optimize(args):
             task = asyncio.create_task(
                 run_pair(args, slot, experiment, vector, opponent, opening, space))
             running[task] = slot
+            activity.set()
 
     refill = None
     while completed < args.batches:
@@ -891,12 +893,21 @@ async def optimize(args):
                 args.batches - completed - len(experiments))
             refill = asyncio.create_task(add_experiments(count))
         start_queued()
+        activity.clear()
         waiting = set(running)
+        wake = None
         if refill is not None:
             waiting.add(refill)
+            wake = asyncio.create_task(activity.wait())
+            waiting.add(wake)
         if not waiting:
             break
         done, _ = await asyncio.wait(waiting, return_when=asyncio.FIRST_COMPLETED)
+        if wake is not None:
+            if wake in done:
+                done.remove(wake)
+            else:
+                wake.cancel()
         if refill in done:
             refill.result()
             done.remove(refill)

@@ -420,6 +420,7 @@ class MixedAcquisitionTest(unittest.TestCase):
             gates = sorted(tuple(map(float, line.split()))
                            for line in intervals.read_text().splitlines())
             self.assertLess(games[0], max(end for _, end in gates))
+            self.assertLess(games[1], max(end for _, end in gates))
 
     def test_duels_keep_a_directly_anchored_opponent(self):
         anchored = self.space.canonical({"X": 0, "Y": 10})
