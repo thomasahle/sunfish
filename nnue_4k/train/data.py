@@ -42,11 +42,15 @@ class Dataset:
     """Tensor core: feats/offs/lens (ragged sparse features), pstc, matc,
     y, kb4/kb8/kb16, fenhash (None for legacy caches)."""
 
-    def __init__(self, feats, offs, pstc, y, kb4, kb8, kb16, fenhash, meta):
+    def __init__(self, feats, offs, pstc, y, kb4, kb8, kb16, fenhash, meta,
+                 outcome=None):
         self.feats = feats                     # long (total_feats,)
         self.offs = offs                       # long (n,)
         self.pstc = pstc                       # float32 (n,) classic pst base
         self.y = y                             # float32 (n,) cp, white-to-move POV
+        self.outcome = outcome                 # float32 (n,) game result in the
+        #                                        SAME white-to-move POV as y, or
+        #                                        None for corpora without results
         self.kb4, self.kb8, self.kb16 = kb4, kb8, kb16   # long (n,) packed own/opp
         self.fenhash = fenhash                 # uint32 np array or None
         self.meta = meta
@@ -177,6 +181,52 @@ def parse_labeled_npz(path, split_seed=20260813, limit=0):
     return FEATS, OFFS, PSTC, Y, KB4, KB8, KB16, FH
 
 
+def parse_lambda_npz(path, split_seed=20260813, limit=0):
+    """The lambda corpus (build_lambda_corpus.py): fens + cp + outcome.
+
+    FRAME, and it is the opposite of parse_labeled_npz's -- read this before
+    editing.  That function takes y in WHITE POV and negates it for black, to
+    land in the mover frame the features use.  OUR cp comes from the twin,
+    which scores SIDE TO MOVE, and our outcome is stored side-to-move too, so
+    both channels are ALREADY in the mover frame: the board is flipped, the
+    labels are NOT touched.
+
+    Applying the white-POV flip here (which the first version did, by analogy)
+    puts the label in the opposite frame from the base on exactly the
+    black-to-move half of the corpus.  Measured cost: corr(matc, y) fell from
+    0.834 to 0.002 and all three lambda arms early-killed at epoch 2 with the
+    control dying identically.  The `corr` gate at the end of load() exists so
+    that failure can never be silent again."""
+    d = np.load(path, allow_pickle=False)
+    fens = [str(f) for f in d["fens"]]
+    ys = (d["y"] if "y" in d.files else d["cp"]).astype(np.int64)
+    ocs = d["outcome"].astype(np.float32)
+    if limit:
+        fens, ys, ocs = fens[:limit], ys[:limit], ocs[:limit]
+    FEATS, OFFS, PSTC, Y = array("i"), array("q"), array("i"), array("i")
+    KB4, KB8, KB16, FH, OUT = array("h"), array("h"), array("h"), array("L"), array("f")
+    off = 0
+    for fen, cp, oc in zip(fens, ys, ocs):
+        parts = fen.split()
+        board = features.fen_to_board120(parts[0])
+        oc = float(oc)
+        if parts[1] == "b":
+            # board only: cp and oc are already mover-relative (see docstring)
+            board = board[::-1].swapcase()
+        fe, ps, kbs = features.extract(board)
+        FEATS.extend(fe)
+        OFFS.append(off)
+        off += len(fe)
+        PSTC.append(ps)
+        Y.append(int(cp))
+        OUT.append(oc)
+        KB4.append(kbs[0])
+        KB8.append(kbs[1])
+        KB16.append(kbs[2])
+        FH.append(fen_hash(fen, split_seed))
+    return (FEATS, OFFS, PSTC, Y, KB4, KB8, KB16, FH), OUT
+
+
 # --------------------------------------------------------------- caches
 CACHE_VERSION = 1
 
@@ -280,6 +330,10 @@ def load(cfg):
     if kind == "dump":
         arrays = parse_dump(cfg.source, cfg.limit, cfg.cpmax, cfg.quiet,
                             cfg.workers, cfg.split_seed)
+    elif kind == "lambda-npz":
+        # the lambda corpus carries a second label channel (game outcome);
+        # everything else in the pipeline is identical to an npz set
+        arrays, outc = parse_lambda_npz(cfg.source, cfg.split_seed, cfg.limit)
     elif kind == "npz":
         arrays = parse_labeled_npz(cfg.source, cfg.split_seed, cfg.limit)
     elif kind == "binpack":
@@ -288,9 +342,34 @@ def load(cfg):
     else:
         raise ValueError("unknown data kind %r" % kind)
     if cfg.cache:
+        if kind == "lambda-npz":
+            raise ValueError("the lambda corpus carries a second label channel "
+                             "(outcome) that save_cache's format does not hold; "
+                             "caching it would silently drop the channel and turn "
+                             "every lambda<1 arm into the lam=1 control -- run it "
+                             "uncached")
         save_cache(cfg.cache, arrays, meta)
         print("cached -> %s" % cfg.cache, flush=True)
-    return _from_arrays(*arrays, meta)
+    ds = _from_arrays(*arrays, meta)
+    if kind == "lambda-npz":
+        ds.outcome = torch.tensor(outc, dtype=torch.float32)
+        # FRAME GATE.  The base and the label must live in the same frame; if
+        # they do not, every arm trains against a base uncorrelated with its
+        # target and the failure looks like "the idea does not work".  A
+        # material base and a search label agree strongly on real chess
+        # positions -- measured 0.834 here -- so anything near zero is a frame
+        # or alignment bug, not a property of the data.
+        n = min(20000, len(ds.y))
+        r = float(np.corrcoef(ds.matc[:n].numpy(), ds.y[:n].numpy())[0, 1])
+        print("lambda corpus: %d positions, outcome channel present, "
+              "corr(base, label) = %.3f" % (len(ds.outcome), r), flush=True)
+        if not r > 0.5:
+            raise SystemExit(
+                "FRAME GATE FAILED: corr(material base, label) = %.3f, expected "
+                ">0.5.  The label and the base are in different frames (the twin "
+                "scores side-to-move; parse_labeled_npz-style white-POV negation "
+                "breaks exactly the black-to-move half).  Refusing to train." % r)
+    return ds
 
 
 # --------------------------------------------------------------- splits

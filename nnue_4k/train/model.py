@@ -340,6 +340,19 @@ def build_model(cfg):
     return ResidualNet(cfg)
 
 
+def lambda_loss(pred, y, outcome, K, p, lam):
+    """|target - sigmoid(pred/K)|^p with target = lam*sigmoid(y/K) + (1-lam)*outcome.
+
+    lam=1 reproduces sigmoid_loss EXACTLY (the control must be the incumbent
+    experiment, not a near-copy of it), and at lam=1 the outcome tensor is
+    never read -- so a corpus without results still trains the control."""
+    q = torch.sigmoid(pred / K)
+    t = torch.sigmoid(y / K)
+    if lam < 1.0:
+        t = lam * t + (1.0 - lam) * outcome
+    return ((t - q).abs() ** p).mean()
+
+
 def sigmoid_loss(pred, y, K, p):
     """|sigmoid(pred/K) - sigmoid(y/K)|^p, mean.  K=400 house scale;
     p=2.6 is the wide-net house value (nnue-pytorch's finding), the

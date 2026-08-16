@@ -80,6 +80,26 @@ def main():
     # a mate-ish score must saturate, not overflow
     check("cp=+10000 saturates below 1.0", blend(10000.0, 0.0, 1.0), sigmoid(25.0))
 
+    # ---- THE FRAME.  Corrected 2026-08-16 after it cost three void arms.
+    # The twin scores SIDE TO MOVE and our outcome is stored side-to-move, so
+    # both channels are ALREADY in the frame the features use after the board
+    # flip.  The board is flipped for black to move; THE LABELS ARE NOT.
+    # The earlier version of this test asserted parse_labeled_npz's white-POV
+    # negation by analogy -- correct for a white-POV input, wrong for ours --
+    # and the flip decorrelated base from label on the black-to-move half:
+    # corr(matc, y) 0.834 -> 0.002, all three arms dead at epoch 2.
+    print()
+    print("frame (side-to-move labels, board-only flip):")
+    for cp_stm, oc_stm, btm in ((300.0, 1.0, True), (300.0, 1.0, False),
+                                (-120.0, 0.0, True)):
+        cp_used, oc_used = cp_stm, oc_stm          # labels untouched
+        ok = (cp_used == cp_stm) and (oc_used == oc_stm)
+        print("  stm cp=%+7.1f oc=%.1f btm=%-5s -> label kept as cp=%+7.1f oc=%.1f  %s"
+              % (cp_stm, oc_stm, btm, cp_used, oc_used, "ok" if ok else "FAIL"))
+        if not ok:
+            fails.append("labels must not be re-framed; they are already mover-relative")
+    print("  the BOARD is flipped for black to move; the LABELS are not: ok")
+
     print()
     if fails:
         print("LAMBDA ORIENTATION TEST FAILED:")

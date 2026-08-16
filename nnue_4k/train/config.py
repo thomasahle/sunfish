@@ -83,6 +83,12 @@ class LossCfg:
     losspow: float = 2.0        # |sig(pred)-sig(y)|^p
     satpen: float = 0.03        # saturation penalty -- DEFAULT ON (kbbil lesson)
     satthresh: float = 480.0    # cp where the penalty starts
+    lam: float = 1.0            # label blend, win-prob space.  lam=1 is PURE CP
+    #                             (the incumbent, and the campaign's only ever
+    #                             target); lam=0 is PURE GAME OUTCOME.  Asserted
+    #                             by test_lambda_orientation.py, which exists
+    #                             because the two reference trainers use
+    #                             OPPOSITE conventions for this dial.
     l1: float = 0.0             # sparsity pressure on pre-ternarization |u|
     rate: float = 0.0           # payload-rate pressure, val-units per est. BYTE
     rate_T: float = 8.0         # softness of the rate term's trit occupancy

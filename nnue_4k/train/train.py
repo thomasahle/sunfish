@@ -36,7 +36,7 @@ import export as exportmod        # noqa: E402
 import features                   # noqa: E402
 import provenance                 # noqa: E402
 import field_budget               # noqa: E402
-from model import build_model, sigmoid_loss  # noqa: E402
+from model import build_model, lambda_loss  # noqa: E402
 
 
 def repro_arm1_config(source):
@@ -153,18 +153,35 @@ def main():
     # also the early-kill reference (see module docstring).
     vc = torch.tensor(val_ids)
     vy, vb = ds.y[vc], base[vc]
+    # THE TARGET IS THE TRAINED TARGET, in val and in the anchors alike.  A
+    # lambda<1 arm is trained toward outcomes, so scoring it against a pure-cp
+    # target measures the wrong thing -- and the EARLY-KILL anchors, computed
+    # in cp space, killed a correctly-training lam=0 arm at epoch 2 in the
+    # smoke.  Blending both keeps the tripwire meaningful.  NOTE: val is then
+    # NOT comparable ACROSS lambda arms (different targets); the judge is the
+    # selector, and the lambda is printed on every val line so nobody stacks
+    # them up later by mistake.
+    _lam = cfg.loss.lam
     sy = torch.sigmoid(vy / K)
+    if _lam < 1.0:
+        sy = _lam * sy + (1.0 - _lam) * ds.outcome[vc]
     zero_anchor = ((torch.sigmoid(vy * 0) - sy) ** 2).mean().item()
     base_anchor = ((torch.sigmoid(vb / K) - sy) ** 2).mean().item()
-    print("val anchors: zero %.5f  %s %.5f  (val %d positions)"
-          % (zero_anchor, cfg.model.base, base_anchor, len(val_ids)), flush=True)
+    print("val anchors: zero %.5f  %s %.5f  (val %d positions, lam %g)"
+          % (zero_anchor, cfg.model.base, base_anchor, len(val_ids), _lam), flush=True)
 
     for epoch in range(start_epoch, cfg.opt.epochs):
         model.train()
         tl = tn = 0
         for fi, mi, fo, c in datamod.batches(ds, train_ids, cfg.opt.batch, ext, rng):
             pred = model(fi, mi, fo, base[c])
-            loss = sigmoid_loss(pred, ds.y[c], K, cfg.loss.losspow)
+            oc = ds.outcome[c] if getattr(ds, "outcome", None) is not None else None
+            if cfg.loss.lam < 1.0 and oc is None:
+                raise SystemExit("loss.lam=%g needs a game-outcome channel and this "
+                                 "corpus has none -- refusing to silently train the "
+                                 "lam=1 control under a lambda label"
+                                 % cfg.loss.lam)
+            loss = lambda_loss(pred, ds.y[c], oc, K, cfg.loss.losspow, cfg.loss.lam)
             if cfg.loss.satpen:
                 loss = loss + constraints.saturation_penalty(
                     model.pre, cfg.loss.satpen, cfg.loss.satthresh)
@@ -190,7 +207,10 @@ def main():
             for fi, mi, fo, c in datamod.batches(ds, val_ids, cfg.opt.batch, ext):
                 pred = model(fi, mi, fo, base[c])
                 y = ds.y[c]
-                se = (torch.sigmoid(pred / K) - torch.sigmoid(y / K)) ** 2
+                t = torch.sigmoid(y / K)
+                if _lam < 1.0:
+                    t = _lam * t + (1.0 - _lam) * ds.outcome[c]
+                se = (torch.sigmoid(pred / K) - t) ** 2
                 vl += se.mean().item() * len(c)
                 mae += (pred - y).abs().clamp(max=1000).mean().item() * len(c)
                 sat += ((pred - base[c]).abs() >= CLAMP - 0.5).sum().item()
