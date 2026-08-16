@@ -538,6 +538,45 @@ sha-verified after transfer to the box rather than rebuilt there:
 played: `nred2` and `nred5` bracket it and two points beat three on one axis
 when the third is the midpoint.
 
+### A SECOND registration, made while round 1 was still playing and BEFORE any of its results were read: `er40` gets a 1000-game screen regardless of where it ranks
+
+Written at 01:14 UTC with three of ten arms scored and `er40` not among them.
+
+The reason is arithmetic, and it is a criticism of the instrument this lane is
+using. **The SELECTOR SPEC cannot resolve a search constant, and its own
+calibration says so.** It was validated on gaps of **127 and 66 Elo** — cross-
+FAMILY eval differences — where pick-the-best is 96.8% and 76.2%
+respectively. Now compare the size of things that actually move this engine:
+
+| landed change | magnitude |
+|---|---|
+| LMR, the whole mechanism | +38.9 ± 19.1 (fixed-node) |
+| IIR (`iirk.noiid`), the whole mechanism | +22.3 ± 16.0 |
+| `pend`, a whole eval feature | +21.31 ± 15.73 |
+
+Whole MECHANISMS in this engine are worth 20–40 Elo. A single constant moved
+inside a mechanism that already works must be worth less than the mechanism
+itself. So the effects being hunted sit at or below ~20 Elo, against an
+instrument whose resolution is **~101 Elo at 50 games**. That is a factor of
+five in the wrong direction, and no amount of arm design fixes it: **a
+50-game mini-match is the wrong tool for constants, and round 1 will
+therefore almost certainly return "unresolved" rather than "flat".** Those are
+different claims and only the first will be earned.
+
+So one arm is promoted on MECHANISM rather than on rank, chosen and named
+before its games were scored: **`er40`**. It is the only arm in the cohort
+that buys depth while REDUCING instability (MTD crossings 1 → 0, because the
+bisection stop width is a driver property and not part of any table key), it
+gives a byte back, and it is the one experiment that can separate #205's two
+possible readings — "bought depth does not convert" versus "bought depth does
+not convert WHEN IT IS PAID FOR WITH INSTABILITY". #205 bought 2.20 plies for
+13 crossings and got +5.91 ± 17.25; `er40` buys 0.29 plies for −1 crossing.
+
+Screen: fixed-node 20000, SPRT elo0=0 elo1=10 alpha=beta=0.05, cap 1000,
+srand 20260860, same runner and same driver abort as #205 so the two verdicts
+are directly comparable at the same ~17 Elo resolution. This registration
+stands whether `er40` finishes first or last in round 1.
+
 ### What a NULL result would mean, said in advance
 
 If no arm clears the promotion rule, that is not a wasted round. Ten live
