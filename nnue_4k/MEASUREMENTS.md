@@ -392,6 +392,32 @@ not be read before N was verified at 300; the runner now *enforces* that rather
 than merely stating it. Arms, srand, book, concurrency, tripwire and reading
 are all unchanged. Launch 2 is the run.
 
+### The classifier was unit-tested mid-run, and the SAME failure shape turned up again
+
+With launch 2 playing, the branch classifier was tested against controlled
+ground truth rather than trusted — four synthetic PGNs with known forfeit
+ownership. Three passed: `poll4096` flagging → exit 6 (MEASUREMENT), `base`
+flagging → exit 5 (VOID), both flagging → exit 5 (venue dominates).
+
+**The fourth failed.** A `time forfeit` game somehow scored as a draw was
+counted "unattributable", *printed as such* — and then the classifier exited
+**0, SAFE**. The runner branches on the exit code, so the report was cosmetic
+and a real forfeit could have walked through the safety gate.
+
+That is **launch 1's bug again in a different place**, and the pattern is the
+point: **an inverted tripwire makes "no forfeits" the PASS condition, so every
+uncertainty must fall to the conservative side or it silently becomes a pass.**
+Fixed: an unattributable forfeit now exits 5 (VOID). We cannot rule out that
+the flagging side was the base, and the registration already makes base-forfeit
+dominate, so unknown ownership falls to venue. Re-tested: 6 / 5 / 5 / 5.
+
+This changed only the post-hoc analysis script, in the conservative direction,
+and it is recorded here **before any result existed** — the live PGN at the
+time held 161 games, all `normal`, zero forfeits. Match parameters untouched.
+
+Adjudication is confirmed genuinely off from the live data: 161/161
+terminations `normal`, zero `adjudication`, as registered.
+
 ---
 
 ## 2026-08-16 — `er40` SCREEN VERDICT: **−21.22 ± 18.60**, interval EXCLUDING zero. Depth bought at ZERO instability cost still does not convert — it COSTS. This closes #205's open question
