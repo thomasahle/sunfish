@@ -373,6 +373,12 @@ class MixedAcquisitionTest(unittest.TestCase):
         depth = next(parameter for parameter in spec["parameters"]
                      if parameter["name"] == "FUT_CAP_DEPTH")
         self.assertEqual((depth["min"], depth["max"]), (2, 4))
+        mate = next(parameter for parameter in spec["parameters"]
+                    if parameter["name"] == "MATE_DIST")
+        self.assertEqual(mate["values"], [0, 1])
+        space = MixedSpace(spec)
+        conditioned = space.knobs(space.canonical({"EVAL_ROUGHNESS": 0, "MATE_DIST": 0}))
+        self.assertEqual(conditioned["MATE_DIST"], 1)
 
     def test_joint_space_anchors_master_and_covers_search_ranges(self):
         path = pathlib.Path(__file__).with_name("all_parameters.json")

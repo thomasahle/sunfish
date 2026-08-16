@@ -33,6 +33,8 @@
      "values": [0, 1, 2], "off_values": [0]},
     {"name": "FUT_CAP_DEPTH", "type": "integer", "default": 3,
      "min": 2, "max": 4, "scale": 1},
+    {"name": "MATE_DIST", "type": "categorical", "default": 1,
+     "values": [0, 1], "off_values": [0]},
 
     {"name": "VALUE_N", "type": "discrete", "default": 280,
      "values": [250, 260, 270, 280, 290], "scale": 20},
@@ -66,6 +68,8 @@
   "conditions": [
     {"when": {"FUT_CAP": [0]},
      "reset": ["FUT_CAP_DEPTH"]},
+    {"when": {"EVAL_ROUGHNESS": [0]},
+     "reset": ["MATE_DIST"]},
     {"when": {"NULL_MIN_DEPTH": [99]},
      "reset": ["NULL_CAP_MARGIN", "NULL_CUT_RED"]},
     {"when": {"FUEL_MIN_DEPTH": [99]},
@@ -80,6 +84,7 @@
     {"NULL_LIMIT": 0},
     {"NULL_LIMIT": 500},
     {"NULL_MIN_DEPTH": 99, "FUEL_MIN_DEPTH": 99},
+    {"MATE_DIST": 0, "NULL_LIMIT": 500},
     {"FUT_MAX": 0},
     {"FUT_CAP": 0}
   ],
