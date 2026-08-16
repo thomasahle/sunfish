@@ -10,13 +10,16 @@ import adaptive_gp
 import logistic_gp
 
 
-def report_domain(space, observed, gate_all):
-    """Keep recommendations inside an exhaustively gated finite design."""
+def report_domain(space, observed, gate_all, rejected=()):
+    """Exclude invalid policies and distinguish the tested recommendation set."""
     candidates = set(space.candidates)
     points = candidates if gate_all else candidates | {
         point for point in observed if space.contains(point)}
-    tested = {space.default, *(point for point in observed if space.contains(point)
-        and (not gate_all or point in candidates))}
+    points -= set(rejected)
+    tested = {
+        point for point in observed if point != space.default and space.contains(point)
+        and point in points and (not gate_all or point in candidates)
+    }
     return sorted(points), sorted(tested)
 
 
@@ -46,11 +49,12 @@ def main():
     space = logistic_gp.MixedSpace.load(args.space)
     space.condition(space.default)
     gate_all = state["study"]["allocation"].get("gate_all")
+    accepted = set()
+    rejected = set()
+    for record in state.get("gates", {}).values():
+        point = space.canonical(record["knobs"])
+        (accepted if record["accepted"] else rejected).add(point)
     if gate_all:
-        accepted = {
-            space.canonical(record["knobs"])
-            for record in state.get("gates", {}).values() if record["accepted"]
-        }
         space.candidates = [point for point in space.candidates if point in accepted]
     model = adaptive_gp.posterior(
         state, space.prior_mean, args.pair_weight, space, args.inducing)
@@ -61,34 +65,43 @@ def main():
             observed.append(space.canonical(batch["opponent_knobs"]))
     counts = Counter(observed)
 
-    points, challengers = report_domain(space, observed, gate_all)
+    points, challengers = report_domain(space, observed, gate_all, rejected)
+    if not challengers:
+        raise RuntimeError("the study has no tested challenger to report")
     if gate_all:
         mean = model.predict(points)[0]
         best = points[int(mean.argmax())]
     else:
         best = adaptive_gp.coordinate_maximum(
             space, points, lambda candidates: model.predict(candidates)[0],
-            set(), None, restarts=16)
+            rejected, None, restarts=16)
     challenger_mean = model.predict(challengers)[0]
     challenger_best = challengers[int(challenger_mean.argmax())]
     tested_mean, tested_variance = model.predict(challengers)
     # A noisy multiple-comparison maximum is a lead, not a recommendation.
     supported = tested_mean - 1.96 * tested_variance ** 0.5
     tested_best = challengers[int(supported.argmax())]
-    describe("model maximum", best, model, space, counts)
+    safe = accepted | set(challengers)
+    label = "model maximum" if best in safe else "model lead (gate pending)"
+    describe(label, best, model, space, counts)
     describe("best tested policy", challenger_best, model, space, counts)
-    describe("supported recommendation", tested_best, model, space, counts)
+    if supported.max() > 0:
+        describe("supported recommendation", tested_best, model, space, counts)
+    else:
+        print("supported recommendation: none (no tested lower bound exceeds master)")
 
     axes = space.names if args.all_axes else state.get("new_axes") or [
         name for name in space.names if name.startswith(("VALUE_", "PST_"))
     ]
-    base = space.knobs(best)
+    base = space.knobs(challenger_best)
     for name in axes:
         parameter = next(parameter for parameter in space.parameters if parameter["name"] == name)
         points = list(dict.fromkeys(
             space.canonical(base | {name: value}) for value in parameter["values"]))
-        if gate_all:
-            points = [point for point in points if point in space.candidates]
+        points = [
+            point for point in points
+            if point not in rejected and (not gate_all or point in space.candidates)
+        ]
         if len(points) < 2:
             continue
         predictions, variances = model.predict(points)

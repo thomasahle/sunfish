@@ -233,9 +233,16 @@ class MixedAcquisitionTest(unittest.TestCase):
         points, tested = report_domain(self.space, [historical], True)
         self.assertNotIn(historical, points)
         self.assertNotIn(historical, tested)
-        self.assertIn(self.space.default, tested)
+        self.assertNotIn(self.space.default, tested)
         self.assertIn(historical, report_domain(self.space, [historical], False)[0])
         self.assertNotIn((1000, 13), report_domain(self.space, [(1000, 13)], False)[1])
+
+    def test_report_domain_excludes_known_rejections(self):
+        rejected = self.space.candidates[-1]
+        points, tested = report_domain(
+            self.space, [rejected, self.space.candidates[0]], False, {rejected})
+        self.assertNotIn(rejected, points)
+        self.assertNotIn(rejected, tested)
 
     def test_halton_design_handles_full_tuning_space(self):
         parameters = [
