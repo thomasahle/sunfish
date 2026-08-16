@@ -437,6 +437,28 @@ MODS = {
     "er12": ("\nEVAL_ROUGHNESS = 15\n", "\nEVAL_ROUGHNESS = 12\n"),
     "lmr30": ("\nLMR = 60\n", "\nLMR = 30\n"),
     "lmr50": ("\nLMR = 60\n", "\nLMR = 50\n"),
+    # --- INTERNAL ITERATIVE REDUCTION, the two constants round 1 missed ---
+    # `if depth > 2 and killer is None: depth -= 1` carries a min-depth AND a
+    # reduction amount, and neither was in the round-1 cohort -- an honest
+    # omission, found while round 1 was already running and therefore held
+    # back rather than slipped in. IIR is a MEASURED mechanism here (+22.3
+    # +/- 16.0, `iirk.noiid`, 2026-08-13) whose own constants are untuned.
+    #
+    # BUT THE WHOLE IIR AXIS IS OFF THE ZERO-BYTE GRID. Measured, every
+    # neighbour (packed, base 3405):
+    #     depth -= 2                    3406  +1
+    #     depth -= 3                    3406  +1
+    #     depth > 1                     3406  +1
+    #     depth > 3 / > 4               3407  +2
+    #     depth > 3 and depth -= 2      3408  +3
+    # Not one free value. These two are kept as BUILT-BUT-UNPLAYED candidates:
+    # at 691 spare bytes a +1 arm is affordable, but affordable is a different
+    # question from free and it is the coordinator's to answer, not this
+    # generator's. Do not slip them into a zero-byte cohort.
+    "iird2": ("if depth > 2 and killer is None: depth -= 1",
+              "if depth > 2 and killer is None: depth -= 2"),
+    "iirmin4": ("if depth > 2 and killer is None: depth -= 1",
+                "if depth > 4 and killer is None: depth -= 1"),
     # =====================================================================
     # THE #205 PORT: classic's tuned null shaping, and its intrinsic LMR gate.
     #

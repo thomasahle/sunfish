@@ -474,6 +474,34 @@ broken by val; that inversion is why this spec exists.
 voids that arm (the zero-illegal bestmove floor is inviolable). A time forfeit
 is impossible by construction here — there is no clock.
 
+#### The rule's own false-positive rate, computed BEFORE any result
+
+A ten-arm cohort read by its maximum is a multiplicity problem, and the spec
+was calibrated on THREE arms, not ten. So the null behaviour of this exact
+rule was simulated before the games finished: 200,000 trials, ten arms, 25
+pairs each, pair outcomes drawn from the #205 screen's own near-null
+pentanomial [55, 82, 219, 79, 65].
+
+| under a COMPLETE null (all ten arms identical to base) | 50 games | 150 games |
+|---|---|---|
+| P(top pick scores above 50%) | **99.9%** | 100.0% |
+| null top-of-ten score%, mean / median / p95 | **59.6 / 59.0 / 65.0** | 55.9 / 55.7 / 59.3 |
+| null 1st−2nd gap, mean / p95 | 3.04 / 8.00 pts | 1.76 / 4.67 pts |
+| **P(the full rule fires)** | **1.72%** | **0.03%** |
+
+Three things follow, and all three are registered now rather than discovered
+later:
+
+1. **The "above 50%" clause is worth nothing at ten arms** — it fires 99.9% of
+   the time under a pure null. The winner's curse guarantees a winner.
+2. **A top pick reading ~60% is EXACTLY what the null predicts** (mean 59.6).
+   No score% from this round may be quoted as an effect size, and the spec's
+   "never a ledger Elo" is not a formality here — it is the difference between
+   a result and an artefact.
+3. **The gap > 10 clause is the entire test**, and it is a good one: 1.72%
+   false-positive. Escalation to N\*\* = 150 takes that to 0.03%, which is why
+   the tie branch escalates rather than promoting both.
+
 srand, fixed and recorded, one per arm and fresh: `fut3` 20260830, `fut2`
 20260831, `fut0` 20260832, `lred4` 20260833, `lred3` 20260834, `nred5`
 20260835, `nred2` 20260836, `cnt0` 20260837, `qs60` 20260838, `er40` 20260839.
