@@ -46,7 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
-| 2026-08-16 | **TUPLE MOVES LAND, and the speed campaign's running total is +29.59% nps at 3405 → 3376 B (−29, 720 spare): a projected ≈ +38 Elo at 60+1, still with NO Elo screen because the search is still bit-identical** | The registered candidate from the profile pass, executed as its own full pass. **THE UNBLOCK CAME FIRST AND WAS GATED SEPARATELY**: `sunfish_ui/uci.py` is shared infrastructure and it pinned every engine to one move representation for its own convenience — it built moves with `sunfish.Move(i, j, prom)`, read them with `.i`/`.j`/`.prom`, and listed `"Move"` in `ENGINE_API`, so an entry without the class was refused before it could play. Not one line: **four couplings in one file**. The driver now builds a plain tuple and destructures on read; `"Move"` leaves `ENGINE_API` because the dependency it named is **gone**, not because the check was relaxed. **Classic-side gate, the one that had to hold**: full suite before → after **identical** (1 failed / 371 passed / 2 skipped, and the single failure `test_go_depth_promotion::test_terminal_fail_high_reports_exact_score_before_none` is **PRE-EXISTING on nnue-4k**, fails identically before and after, and touches neither changed file), plus classic under the driver **BIT-IDENTICAL on five probes** at `go nodes 20000` — startpos, startpos+moves, a white-to-move FEN, a BLACK-to-move FEN (where render/parse flip `119 - i`, so a wrong field order shows as a mirrored move, not a crash) and a promotion (`a7a8q`, the `.prom` path). **THEN the entry landing**: a move stops being a namedtuple, ~27 built per node, `__new__` a Python-level call each. Node-identical because **a namedtuple IS a tuple** — the `(val, move)` sort still tie-breaks field by field and the futility break still sees a descending list — verified against the **TRUE pre-speed entry** (`d947986fe9eca2bb…`, 904,848 nodes) on laptop **and** box. **THE STACKED ARITHMETIC IS MEASURED, NOT ADDED**, because this lane's own finding is that per-edit deltas do not compose under a tracing JIT: both stacks were run against the SAME pre-speed baseline in ONE interleaved local-A/B session — **stack 2 (with tuple moves) +29.59% (six reps: 23.46 / 26.27 / 27.43 / 31.75 / 33.08 / 39.49), stack 1 +23.07% (20.29 / 20.30 / 23.03 / 23.12 / 23.51 / 26.37)**, so the tuple increment is **+5.30%**, NOT the +22.57% it measured standalone. Gates all green: check_entry 3376 B, legality 130/130 zero illegal, first-yield MAX 676/2048, mate-conversion 8/8, packed boot smoke in an empty dir **including a promotion through the shipped artifact** (`a7b8q` — the `prom` destructure in the builtin loop), entry resolves `v3 nodes fen` with no `Move` class at all. **Elo is a PROJECTION, not a measurement**: 102·log₂(1.2959) ≈ **+38** at 60+1, on the warrant that node-identical + faster is strictly better under a clock (the meter: fixed-node −1.74 ± 27.93, clean-clock +244.47 ± 39.23) |
+| 2026-08-16 | **TUPLE MOVES LAND, and the speed campaign's running total is +29.59% nps at 3405 → 3376 B (−29, 720 spare): a projected ≈ +38 Elo at 60+1, still with NO Elo screen because the search is still bit-identical** | The registered candidate from the profile pass, executed as its own full pass. **THE UNBLOCK CAME FIRST AND WAS GATED SEPARATELY**: `sunfish_ui/uci.py` is shared infrastructure and it pinned every engine to one move representation for its own convenience — it built moves with `sunfish.Move(i, j, prom)`, read them with `.i`/`.j`/`.prom`, and listed `"Move"` in `ENGINE_API`, so an entry without the class was refused before it could play. Not one line: **four couplings in one file**. The driver now builds a plain tuple and destructures on read; `"Move"` leaves `ENGINE_API` because the dependency it named is **gone**, not because the check was relaxed. **Classic-side gate, the one that had to hold**: full suite before → after **identical** (1 failed / 371 passed / 2 skipped, and the single failure `test_go_depth_promotion::test_terminal_fail_high_reports_exact_score_before_none` is **PRE-EXISTING on nnue-4k**, fails identically before and after, and touches neither changed file), plus classic under the driver **BIT-IDENTICAL on five probes** at `go nodes 20000` — startpos, startpos+moves, a white-to-move FEN, a BLACK-to-move FEN (where render/parse flip `119 - i`, so a wrong field order shows as a mirrored move, not a crash) and a promotion (`a7a8q`, the `.prom` path). **THEN the entry landing**: a move stops being a namedtuple, ~27 built per node, `__new__` a Python-level call each. Node-identical because **a namedtuple IS a tuple** — the `(val, move)` sort still tie-breaks field by field and the futility break still sees a descending list — verified against the **TRUE pre-speed entry** (`d947986fe9eca2bb…`, 904,848 nodes) on laptop **and** box. **THE STACKED ARITHMETIC IS MEASURED, NOT ADDED**, because this lane's own finding is that per-edit deltas do not compose under a tracing JIT: both stacks were run against the SAME pre-speed baseline in ONE interleaved local-A/B session — **stack 2 (with tuple moves) +29.59% (six reps: 23.46 / 26.27 / 27.43 / 31.75 / 33.08 / 39.49), stack 1 +23.07% (20.29 / 20.30 / 23.03 / 23.12 / 23.51 / 26.37)**, so the tuple increment is **+5.30%** — against the +22.57% it was REGISTERED at, which was never this edit's value but an n=1 laptop reading of a whole different stack (`land6`), mislabelled; the edit alone measured −1.63% there. Gates all green: check_entry 3376 B, legality 130/130 zero illegal, first-yield MAX 676/2048, mate-conversion 8/8, packed boot smoke in an empty dir **including a promotion through the shipped artifact** (`a7b8q` — the `prom` destructure in the builtin loop), entry resolves `v3 nodes fen` with no `Move` class at all. **Elo is a PROJECTION, not a measurement**: 102·log₂(1.2959) ≈ **+38** at 60+1, on the warrant that node-identical + faster is strictly better under a clock (the meter: fixed-node −1.74 ± 27.93, clean-clock +244.47 ± 39.23) |
 | 2026-08-16 | **THE ENTRY'S FIRST PROFILE, and the node-identical speedups it points at: the artifact is **+25.69% nps** (box, cpu-time, local A/B) at **3405 → 3398 B**, ≈ **+34 Elo** at 60+1 with **no Elo screen needed** — the search is bit-identical** | The lane's primary axis after the meter (whole edge = nps + TM: fixed-node −1.74 ± 27.93, clean-clock +244.47 ± 39.23), and nobody had profiled the entry. **THE BUDGET**, two instruments with opposite distortions read as the bracket they form — sampled `perf_counter` brackets (over-read by a roughly FIXED ~1-3 µs/bracket, proven by sweeping the sample period: `wall(p) = 16.02 + 6.20/p`) and exact per-node call counts × microbenchmarked per-op cost (each primitive at its floor): **`gen_moves` 27.7% of wall, `pos.move()` 14.7%, `value()` 9.9%, sort 4.0%, and EVERY transposition-table operation together 3.0%** — which kills the cheaper-table family before it is tried, and both table candidates that were tried anyway measured negative. **LANDED**: 8 edits, all NODE-IDENTICAL (60 positions × depth 6, every MTD probe `(depth, gamma, score, killer)` and node count, byte-identical on laptop AND box, ref sha `d947986fe9eca2bb…`, 904,848 nodes) — `sorted(genexp)`→`sorted(listcomp)`, `q in "pnbrqk"`→`q != "."`, `q in " \nPNBRQK"`→`q not in ".pnbrqk"`, `any(genexp)`→four `in` tests, `itertools.count`→`while`, `abs(x)<2`→`-2<x<2`, `Entry` namedtuple→plain pair, and **`gen_moves` stops being a generator** (the single biggest win, +19.01% alone). **NO ELO SCREEN, and that is a claim about the instrument**: node identity means a fixed-node screen compares the engine with itself, and under a clock the only thing that moved is how many identical nodes fit the budget — the exact channel the meter measured as the entry's whole advantage. Gates all green: check_entry 3398 B (698 spare), legality 130/130 zero illegal at `go nodes 20000`, first-yield MAX 676/2048, mate-conversion 8/8, packed boot smoke in an empty dir. **THE NEGATIVES ARE THE HALF WORTH KEEPING**: the classic CPython hot-loop playbook is NEGATIVE under a tracing JIT — hoisting `self.board` −1.6%, collapsing a char scan + `directions[p]` into one `dict.get` **−10.9%** (the worst result measured), hoisting the loop-invariant `p == "P"` −1.4%, hoisting the `dict.get` default object −1.9%. PyPy already does those; what pays is what it cannot fix, **iterator boundaries into builtins and per-operation allocation**. **THE INSTRUMENT NEEDED TWO REBUILDS** and both failures travel: wall clock on a shared box is unusable (±7%; `process_time` is not), and BOTH venues drift MONOTONICALLY through a long benchmark — 25% across thirty consecutive runs on the box, 12% across nine on the laptop — which round-interleaving cannot cancel because the drift is WITHIN a round. Every number here is a local A/B triple, base-arm-base, seconds apart |
 | 2026-08-16 | **DEADLINE-POLL VERDICT: the SAFE branch fired. `nodes % 4096` is SAFE at 60+1 — **zero time forfeits in 300 games** — and **Elo-NEUTRAL at +1.16 ± 22.46**. The test delivered the safety answer it was registered to deliver, and no Elo claim** | Gates read in the registered order before any number: **count 300/300** (the gate launch 1 lacked), **illegal 0**, forfeit attribution **base 0 / poll4096 0** → SAFE. Terminations **300/300 `normal`**, zero adjudication as registered. Only then: **50.17%**, ptnml **[6, 25, 86, 28, 5]** over 150 pairs 0 unpaired, 95% **[−21.30, +23.62]**, recomputed independently (pair total 150.5 reproduces exactly). **ESTABLISHED**: halving the clock-read frequency does not eat the shipped `pooltm`'s margin at 60+1; the box's clean-timed record extends **1251 → 1551**. **NOT ESTABLISHED**: any gain — ±22.46 is uninformative against an effect of a few Elo and the interval spans zero. Being exact about the registered wording, "safe AND the Elo interval is non-negative": the **point estimate** is non-negative, the **interval** is not (lower bound −21.30), so the honest verdict is **safe and neutral**, and nothing here justifies landing 4096 on Elo grounds. Follow-up **registered, NOT run** at **10+0.1** (same arms, same inverted tripwire) and justified on mechanism, not on this Elo: the poll saves one `time.time()` per N nodes, a rounding error against 60+1's ~1.5 s/move, and clock-read frequency binds hardest when the clock is shortest. `poll8192` stays registered-not-run behind BOTH results. **Two instrument bugs found and fixed, both the same failure shape** — with an inverted tripwire "no forfeits" is the PASS condition, so launch 1's empty PGN printed "SAFE", and the classifier turned an unattributable forfeit into SAFE (caught by unit test before any result existed). Neither cost a game. Standing rule: **when absence of evidence is your pass condition, every uncertainty must fail closed** |
 | 2026-08-16 | **PRE-REGISTERED before game 1: the DEADLINE POLL at 60+1 (`nodes % 2048` → `4096`), N=300 fixed, adjudication NONE — with the safety tripwire INVERTED, both branches fixed in advance** | The one search constant a fixed-node instrument **cannot** see: it only governs how often the in-search clock is read, so under `go nodes` it is exactly inert and round 1 was structurally blind to it — and it is the only constant left touching **nps**. **It ships, checked in the payload not reasoned about**: `xz -d` finds exactly one `nodes%2048` in the base artifact and one `nodes%4096` in the arm, with the minifier-hidden node-cap poll correctly absent from both. **Both pack to 3405 B — zero byte delta**; base sha `5a207fdf9cf05f2e…` is **bit-identical to the artifact that measured +244.47 ± 39.23**. PACKED arms, not sources, and that is load-bearing: only the packed artifact runs the shipped builtin loop and shipped `pooltm`, whose overrun margin is the thing under test — so the driver check takes its packed form (**must boot AND must print NO `info string driver`**). **TRIPWIRE**: a **BASE** forfeit is a VENUE SIGNAL and **voids** (box record 1251/1251, so it means the machine); a **POLL4096** forfeit is **THE MEASUREMENT** — "4096 unsafe at 60+1", a result, not a void — and the lead then closes at 2048 with the safety evidence banked; both forfeiting reads as venue first; any illegal move stops everything. Attribution is mechanical via `classify.py` exit code, never by eye. Reading fixed in advance: safe + non-negative interval means the nps gain is real but small at 60+1, so **this test mostly measures SAFETY**, and a pass **registers (does not run)** a 10+0.1 follow-up where clock-read frequency actually binds. srand 20260870, conc 8, `book3k.pgn`, arena `~/sunfish-bench/poll-20260816`. Elo unread until N=300 |
@@ -367,11 +367,15 @@ pypy3 7.3.20, nice 10, cpu-time, `base, arm, base` triples, six reps):
 | stack 1 (profile pass, 8 edits) | **+23.07** | 20.29 / 20.30 / 23.03 / 23.12 / 23.51 / 26.37 | 3398 (−7) |
 | **stack 2 (+ tuple moves)** | **+29.59** | 23.46 / 26.27 / 27.43 / 31.75 / 33.08 / 39.49 | **3376 (−29)** |
 
-**The tuple increment is +5.30%, not the +22.57% it measured standalone on the
-laptop.** Both numbers are real; they answer different questions, and the one
-that governs is the stack's. Five of stack 2's six reps sit above stack 1's
-best rep, so the ordering is not in doubt even though the box's spread is
-wide.
+**The tuple increment is +5.30%.** The figure this candidate was registered
+under — `+22.57%` — was never the value of plain-tuple moves: it was the
+`land6` WHOLE STACK against the pre-speed baseline, at **n=1** on the laptop,
+and the register mislabelled it as the edit's own worth. The edit measured
+alone on that same laptop sweep was **−1.63%**, also n=1. So the lesson is not
+merely that deltas fail to compose; it is that **an n=1 stack reading got
+quoted as a per-edit value and set an expectation four times the truth.** Five
+of stack 2's six reps sit above stack 1's best rep, so the ordering here is not
+in doubt, even though the box's spread is wide.
 
 Stack 1's own earlier figure was +25.69% in a different session; it re-measures
 at +23.07% here. That is session-to-session box variance, and it is why the two
@@ -566,30 +570,71 @@ close the remaining ~155 Elo to +400, but the ceiling is not small.
 
 ### THE CANDIDATE TABLE — bench box, pypy3 7.3.20, cpu-nps, local A/B, depth 5
 
-| arm | cpu-nps % | range | bytes | verdict |
-|---|---|---|---|---|
-| **`land9` = the landed stack** | **+25.69** | +23.60 … +27.78 | **−7** | **LANDED** |
-| `land8` (stack minus `nocount`) | +21.31 | +17.28 … +25.34 | +7 | registered |
-| `land7` (stack minus `plainentry`, `qcomp`) | +21.09 | +18.78 … +23.40 | −3 | registered |
-| `genlist` (gen_moves returns a list) | +19.01 | +15.53 … +22.49 | +10 | **in the stack** |
-| `land3` (the stack without `genlist`) | +4.65 | +1.32 … +7.98 | −16 | registered |
-| `orderlc` (`sorted(listcomp)`) | +3.07 | +0.74 … +7.06 | ±0 | **in the stack** |
-| `qbreak` (`q in "pnbrqk"` → `q != "."`) | +3.01 | +1.62 … +4.40 | ±0 | **in the stack** |
-| `noabs` (`abs(x)<2` → `-2<x<2`) | +2.32 | +0.99 … +3.64 | −2 | **in the stack** |
-| `nullpiece` (`any(genexp)` → four `in`) | +0.62 | −0.35 … +1.59 | −1 | **in the stack** |
-| `nocount` (`itertools.count` → `while`) | −5.62 | −5.79 … −5.45 | −12 | **in the stack** |
+**READ THE `n` COLUMN FIRST.** Every arm here is **two A/B triples** (three
+for `orderlc`): tier 1 was stopped early at two reps to free the box for the
+combination arms. So the "median" of an n=2 arm is the mean of two numbers and
+the "range" is literally those two numbers — not an interval. These figures
+support DIRECTION and rough ordering. They do not support their own second
+digit, and no landing decision rests on one of them alone.
+*(The `n` column was added 2026-08-16, shortly after this entry was first
+written: the counts were omitted, which made the table read stronger than it
+is. The numbers are unchanged.)*
 
-**Per-edit deltas do not add, and `nocount` is the proof.** Alone it is
-−5.6%; the stack that contains it (`land9`, +25.69) beats the stack that omits
-it (`land8`, +21.31). Under a tracing JIT an edit changes which traces get
-compiled, so isolated deltas are indicative and only the **stack's** number is
-the one that governs. That is why the landing was decided on `land9`'s own
-measurement and not on a sum of parts.
+| arm | cpu-nps % | range | n | bytes | verdict |
+|---|---|---|---|---|---|
+| **`land9` = the landed stack** | **+25.69** | +23.60 … +27.78 | 2 | **−7** | **LANDED** |
+| `land8` (stack minus `nocount`) | +21.31 | +17.28 … +25.34 | 2 | +7 | registered |
+| `land7` (stack minus `plainentry`, `qcomp`) | +21.09 | +18.78 … +23.40 | 2 | −3 | registered |
+| `genlist` (gen_moves returns a list) | +19.01 | +15.53 … +22.49 | 2 | +10 | **in the stack** |
+| `land3` (the stack without `genlist`) | +4.65 | +1.32 … +7.98 | 2 | −16 | registered |
+| `orderlc` (`sorted(listcomp)`) | +3.07 | +0.74 … +7.06 | 3 | ±0 | **in the stack** |
+| `qbreak` (`q in "pnbrqk"` → `q != "."`) | +3.01 | +1.62 … +4.40 | 2 | ±0 | **in the stack** |
+| `noabs` (`abs(x)<2` → `-2<x<2`) | +2.32 | +0.99 … +3.64 | 2 | −2 | **in the stack** |
+| `nullpiece` (`any(genexp)` → four `in`) | +0.62 | −0.35 … +1.59 | 2 | −1 | **in the stack** |
+| `nocount` (`itertools.count` → `while`) | −5.62 | −5.79 … −5.45 | 2 | −12 | **in the stack** |
+
+**The landed stack does have a stronger number than its row shows**: `land9`
+was re-measured at **n=6** against the same pre-speed baseline in the
+tuple-move session below, at **+23.07%** (20.29 / 20.30 / 23.03 / 23.12 /
+23.51 / 26.37). That is the figure to lean on for stack 1; the +25.69 above is
+the n=2 reading that decided the landing at the time.
+
+**Per-edit deltas do not add, and `nocount` is the illustration** — the word
+"proof" stood here and is withdrawn, because both sides of the comparison are
+n=2. Alone `nocount` measures −5.6%; the stack that contains it (`land9`,
++25.69) reads higher than the stack that omits it (`land8`, +21.31). At n=2
+each that ordering is suggestive, not established, and the honest statement is
+narrower: **`nocount` is clearly negative in isolation and clearly not
+harmful in the stack.** Under a tracing JIT an edit changes which traces get
+compiled, so isolated deltas are indicative and only the **stack's** number
+governs — which is why the landing was decided on `land9`'s own measurement
+and not on a sum of parts.
+
+The non-composition finding itself does not rest on these n=2 rows. It is
+established much more strongly by the tuple-move landing below, where the
+plain-tuple edit contributed **+5.30%** to the stack at n=6 — against a
+registered expectation of +22.57% that turned out to be an n=1 reading of a
+whole DIFFERENT stack, mislabelled as the edit's own value.
 
 ### Cross-check and the rest of the field — laptop pypy3, cpu-nps, local A/B, depth 5
 
 Same instrument, different machine and architecture. It reproduces the
 ranking, which is what it is for.
+
+**These are n=1 — a SINGLE A/B triple per arm** (six arms reached n=2:
+`andmask`, `cheaphash`, `hoistboard`, `entrydefault`, `microbound`, `dirget`).
+The laptop sweep was stopped at that point to free the machine for the gate
+ladder. A single triple is a screening signal and nothing more: it fixes the
+sign of a large effect and orders the extremes, and it should not be quoted as
+a magnitude. *(This paragraph was added 2026-08-16 shortly after the entry was
+first written; the counts had been omitted. No number changed.)*
+
+Two rows carry a further trap, spelled out because one of them steered a
+decision. `land6` and `land5` are **whole stacks measured against the
+pre-speed baseline**, not single edits — they sit in this table only because
+that is where they were run. Reading `land6`'s +22.57% as the value of
+plain-tuple moves is a category error, and the row below that it should be
+read against is `movetuple`, the edit on its own, at **−1.63%**.
 
 | arm | cpu-nps % | bytes | | arm | cpu-nps % | bytes |
 |---|---|---|---|---|---|---|
@@ -688,13 +733,22 @@ really identical", which is exactly what the battery is for, on two machines.
 
 ### REGISTERED, NOT LANDED
 
-- **`land6` / `movetuple` — plain-tuple moves.** `+22.57%` at **−19 B** on the
-  laptop, node-identical (a namedtuple IS a tuple, so sort order and tie-breaks
-  are unchanged). BLOCKED only because `sunfish_ui/uci.py` reads `move.i`,
-  `move.j`, `move.prom` by name, and that driver is the lane's own instrument.
-  The unblock is one line there — `i, j, prom = move` works for classic's
-  namedtuple too — but it is a change outside the entry and wants its own gate
-  pass. **This is the best remaining node-identical win on the table.**
+- **`land6` / `movetuple` — plain-tuple moves.** Node-identical (a namedtuple
+  IS a tuple, so sort order and tie-breaks are unchanged). BLOCKED because
+  `sunfish_ui/uci.py` reads `move.i`, `move.j`, `move.prom` by name AND builds
+  moves with `sunfish.Move(...)` AND lists `"Move"` in `ENGINE_API` — four
+  couplings, not the one line this bullet first claimed — and that driver is
+  the lane's own instrument, shared with classic, so it wants its own gate
+  pass.
+  **On the numbers, read this bullet carefully.** The `land6` stack measured
+  `+22.57%` at −19 B, but that is a WHOLE STACK against the pre-speed baseline
+  at **n=1**, not the value of plain-tuple moves; the edit alone measured
+  **−1.63%**, also n=1. Quoting +22.57% as the candidate's worth — which the
+  first version of this bullet did — conflates the two. *(Corrected
+  2026-08-16, same day, after the follow-up pass measured the truth.)*
+  **What it was actually worth**, measured at n=6 against the same baseline
+  once the driver was unblocked: **+5.30%** on top of stack 1. See the
+  tuple-move entry above.
 - `land8` (+21.31%, +7 B) and `land7` (+21.09%, −3 B): dominated by `land9`.
 - `genlist2` (binding `res.append` once): +14.81% for **+14 B**, versus
   `genlist`'s +19.01% for +10 B. The cheaper-looking spelling is both slower
