@@ -151,6 +151,12 @@ point is current master: `NULL_LIMIT=60000` makes the score guard inactive;
 `500` is the separately tested PR #207 policy. The correctness gate applies
 to challengers, not the fixed opponent: master itself misses two mate-floor
 positions that the guarded candidates must recover.
+The numeric search domains cover the source's declared tuning ranges, except
+that `QS_A=0` is excluded because it would permanently filter moves instead
+of eventually widening the real tree. Evaluation ranges are limited by the
+corner-checked mate-band, promotion, and nonnegative-table invariants; a
+posterior maximum on one of those boundaries is a proof constraint, not an
+invitation to sample an invalid table.
 
 ```sh
 python3 adaptive_gp.py \
