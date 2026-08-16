@@ -903,19 +903,19 @@ async def optimize(args):
         ]
         return pending
 
+    def gated_configurations(accepted):
+        with STATE_LOCK:
+            return {
+                space.canonical(record["knobs"])
+                for record in state.get("gates", {}).values()
+                if record["accepted"] == accepted
+            }
+
     def rejected_configurations():
-        return {
-            space.canonical(record["knobs"])
-            for record in state.get("gates", {}).values()
-            if not record["accepted"]
-        }
+        return gated_configurations(False)
 
     def validated_configurations():
-        return {
-            space.canonical(record["knobs"])
-            for record in state.get("gates", {}).values()
-            if record["accepted"]
-        }
+        return gated_configurations(True)
 
     def schedule_experiment(vector, diagnostics):
         opponent = choose_opponent(
