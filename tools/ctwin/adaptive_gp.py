@@ -666,12 +666,12 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
             if not plausible:
                 plausible.add(pool[int(np.argmax(
                     pool_mean + confidence * np.sqrt(pool_variance)))])
+            design = [point for point in candidates
+                if point not in sites and point not in forbidden and (
+                stratum is None or space.is_structural(point) == stratum)]
             matching = [point for point in pool if point in plausible and (
                 stratum is None or space.is_structural(point) == stratum)]
-            pool = matching or [point for point in pool if point in plausible]
-            # Exploration buys coverage; UCB is free to buy more evidence at old points.
-            unseen = [point for point in pool if point not in sites]
-            pool = unseen or pool
+            pool = design or matching or [point for point in pool if point in plausible]
             values = score(pool)
             vector = min(zip(values, pool), key=lambda item: (-item[0], item[1]))[1]
         elif args.gate_all or validated_only:

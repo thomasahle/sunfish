@@ -267,7 +267,7 @@ class MixedAcquisitionTest(unittest.TestCase):
         vector, diagnostics = choose(
             state, self.space.prior_mean, [weak, plausible], [], args,
             self.space, Model(), validated={weak, plausible},
-            observation_counts=Counter({plausible: 1}))
+            observation_counts=Counter({weak: 1, plausible: 1}))
         self.assertEqual(diagnostics["mode"], "explore")
         self.assertEqual(vector, plausible)
 
