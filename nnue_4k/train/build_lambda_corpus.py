@@ -47,6 +47,7 @@ import numpy as np
 BOOK_PLIES = 8          # drop the opening book; our books are 8-ply
 SAMPLE_EVERY = 3        # decorrelate consecutive plies (texel_data used 7)
 MIN_PIECES = 6          # skip dead-drawn shells
+CPMAX = 1000            # registered option (a): drop |cp| above this
 
 
 def fenkey(fen):
@@ -142,34 +143,89 @@ def scan(out, pgnglob, maxpos):
 
 def label(out, engine, tables, depth, nproc):
     """Twin-label every position at fixed depth.  cp is SIDE-TO-MOVE
-    relative, matching the outcome channel."""
+    relative, matching the outcome channel.
+
+    WORKERS TALK THROUGH FILES, NOT PIPES.  The first version of this
+    streamed each worker's FENs into its stdin and read results back from
+    stdout, and it DEADLOCKED at full scale: ~1.7 MB of FENs does not fit
+    the 64 KB pipe buffer, so the parent blocked in `pipe_write` on worker 0
+    while worker 0 -- whose own stdout had filled, unread -- blocked in
+    `print`.  Only one worker was ever spawned and the run produced nothing
+    for seven hours.  The 300-position smoke passed because 5 KB fits the
+    buffer, which is exactly why a smoke must be sized to the failure mode
+    and not to convenience.  Files have no such coupling."""
     d = np.load(out, allow_pickle=True)
     fens = list(d["fens"])
-    print("labelling %d positions at depth %d with %d workers"
+    tmp = out + ".work"
+    os.makedirs(tmp, exist_ok=True)
+    print("labelling %d positions at depth %d with %d workers (file IO)"
           % (len(fens), depth, nproc), flush=True)
-    chunks = [fens[i::nproc] for i in range(nproc)]
-    idx = [list(range(i, len(fens), nproc)) for i in range(nproc)]
     procs = []
     for w in range(nproc):
-        p = subprocess.Popen([sys.executable, __file__, "_worker", engine, tables,
-                              str(depth)], stdin=subprocess.PIPE,
-                             stdout=subprocess.PIPE, text=True, bufsize=1)
-        p.stdin.write("\n".join(chunks[w]) + "\n")
-        p.stdin.close()
-        procs.append(p)
-    cp = np.zeros(len(fens), dtype=np.float32)
-    for w, p in enumerate(procs):
-        for j, line in enumerate(p.stdout):
-            cp[idx[w][j]] = float(line.strip())
+        fin, fout = os.path.join(tmp, "in%02d" % w), os.path.join(tmp, "out%02d" % w)
+        with open(fin, "w") as f:
+            f.write("\n".join(fens[w::nproc]) + "\n")
+        procs.append((w, fout, subprocess.Popen(
+            [sys.executable, __file__, "_worker", engine, tables, str(depth)],
+            stdin=open(fin), stdout=open(fout, "w"))))
+    t0 = time.time()
+    for w, fout, p in procs:
         p.wait()
+    cp = np.zeros(len(fens), dtype=np.float32)
+    for w, fout, p in procs:
+        vals = [int(x) for x in open(fout).read().split()]
+        idx = list(range(w, len(fens), nproc))
+        if len(vals) != len(idx):
+            raise SystemExit("worker %d returned %d of %d labels -- refusing to "
+                             "write a partially-labelled corpus"
+                             % (w, len(vals), len(idx)))
+        cp[idx] = vals
+    # ---- CPMAX FILTER (registered option (a), the house default).
+    # WHY: the twin returns MATE scores, not evaluations, for forced lines --
+    # measured on a 20k sample, 75 positions (0.38%) sit at |cp| > 10,000 with
+    # extremes of -47,998 / +47,968 against a sane core of mean -6.5, sd 223
+    # inside +-1000.  In win-prob space a squared loss would let that handful
+    # dominate every gradient, and the failure would masquerade as "lambda
+    # does not work" rather than "the labels were poisoned".  config's cpmax
+    # is 1000 and every prior corpus in this campaign used it.
+    # lambda=0 (pure outcome) is invariant to this, and all three arms see the
+    # IDENTICAL surviving set, which is the shared-corpus property the
+    # experiment rests on.
+    # FUTURE READER: clamping instead of dropping may return when teacher-data
+    # arms arrive (Leela values saturate differently).  That is a NEW
+    # registration, not a reopening of this one.
+    keep = np.abs(cp) <= CPMAX
+    n_mate = int((np.abs(cp) > 10000).sum())
+    n_drop = int((~keep).sum())
+    fens, outc = np.asarray(d["fens"])[keep], np.asarray(d["outcome"])[keep]
+    fhash, cp = np.asarray(d["fenhash"])[keep], cp[keep]
+    print("cpmax filter: dropped %d of %d (%.2f%%), of which %d were mate-class "
+          "(|cp|>10000); kept %d" % (n_drop, len(keep), 100.0 * n_drop / len(keep),
+                                     n_mate, len(cp)))
+
+    # ---- TWO VAL DRAWS, keyed on the POSITION (the standing law).  Disjoint
+    # by construction; the judge is the selector, but training-time validation
+    # still gets two independent draws so a val gap can be checked against
+    # draw noise -- this campaign measured the draw worth more than any dial.
+    hh = np.array([int(h[:8], 16) for h in fhash])
+    val_a, val_b = (hh % 20 == 0), (hh % 20 == 1)
     sha = hashlib.sha256(open(engine, "rb").read()).hexdigest()[:24]
-    np.savez_compressed(out, fens=d["fens"], outcome=d["outcome"],
-                        fenhash=d["fenhash"], cp=cp,
+    csha = hashlib.sha256(cp.tobytes() + outc.tobytes()).hexdigest()[:16]
+    np.savez_compressed(out, fens=fens, outcome=outc, fenhash=fhash, cp=cp,
+                        val_a=val_a, val_b=val_b,
                         meta=json.dumps({**json.loads(str(d["meta"])),
                                          "label_depth": depth,
                                          "labeller_sha": sha,
-                                         "labeller": os.path.basename(engine)}))
-    print("labelled; cp mean %.1f  min %.0f  max %.0f" % (cp.mean(), cp.min(), cp.max()))
+                                         "labeller": os.path.basename(engine),
+                                         "cpmax": CPMAX, "cp_dropped": n_drop,
+                                         "cp_mate_class": n_mate,
+                                         "n_final": int(len(cp)),
+                                         "val_a": int(val_a.sum()),
+                                         "val_b": int(val_b.sum()),
+                                         "corpus_sha": csha}))
+    print("labelled+filtered %d in %.0fs; cp mean %.1f sd %.1f; val draws %d / %d; "
+          "corpus_sha %s" % (len(cp), time.time() - t0, cp.mean(), cp.std(),
+                             val_a.sum(), val_b.sum(), csha))
 
 
 def _worker(engine, tables, depth):
