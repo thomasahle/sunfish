@@ -1244,7 +1244,7 @@ static int set_knob(const char *name, long v) {
     if (!strcmp(name, "QS_TAIL") && (v < 0 || v > 1)) return 0;
     if (!strcmp(name, "FUEL_NULL") && (v < 0 || v > 2)) return 0;
     if (!strcmp(name, "FUT_CAP") && (v < 0 || v > 2)) return 0;
-    if (!strcmp(name, "FUT_CAP_DEPTH") && (v < 2 || v > 4)) return 0;
+    if (!strcmp(name, "FUT_CAP_DEPTH") && (v < 2 || v > 6)) return 0;
     if (!strcmp(name, "FUEL_MIN_DEPTH") && v < 1) return 0;
     if (!strcmp(name, "DERIVE_FRESH") && (v < 0 || v > 1)) return 0;
     for (struct knob *k = KNOBS; k->name; k++)

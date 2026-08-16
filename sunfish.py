@@ -157,7 +157,7 @@ opt_ranges = dict(
     QS_A = (0, 300),
     LMR = (-200, 200),
     EVAL_ROUGHNESS = (0, 50),
-    NULL_MARGIN = (-300, 300),
+    NULL_MARGIN = (-400, 800),
     TABLE_SIZE = (10**4, 10**8),
 )
 # minifier-hide end

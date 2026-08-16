@@ -410,7 +410,7 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(cap["values"], [0, 1, 2])
         depth = next(parameter for parameter in spec["parameters"]
                      if parameter["name"] == "FUT_CAP_DEPTH")
-        self.assertEqual((depth["min"], depth["max"]), (2, 4))
+        self.assertEqual((depth["min"], depth["max"]), (2, 6))
         mate = next(parameter for parameter in spec["parameters"]
                     if parameter["name"] == "MATE_DIST")
         self.assertEqual(mate["values"], [0, 1])
@@ -434,7 +434,8 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertLessEqual(min(value for value in values("LMR") if value > -1000), -200)
         self.assertEqual(max(values("LMR")), 200)
         self.assertLessEqual(min(values("NULL_MARGIN")), -300)
-        self.assertGreaterEqual(max(values("NULL_MARGIN")), 300)
+        self.assertGreaterEqual(max(values("NULL_MARGIN")), 800)
+        self.assertLessEqual(min(values("VALUE_R")), 400)
 
     def test_coordinate_search_matches_exhaustive_gp_ucb(self):
         domain = list(itertools.product(*self.space.coordinate_values))
