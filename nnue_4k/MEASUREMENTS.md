@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **PRE-REGISTERED — SETTLER CONTINUATION to a FIXED TOTAL N=1068: the ambiguous branch's own registered response, executed. 768 new games (384 rounds, srand **20260825**) pooled with the existing 300, ONE read at completion, never interim** | Legitimate as a continuation **only** because it was the pre-registered response to the AMBIGUOUS branch and **the new total is fixed before game 301** — that is what separates it from the sequential testing the settler verdict warned against. Same arms, sha re-verified (prespeed **3405 B** `5a207fdf…`, speed **3376 B** `a997b137…`), same form (60+1, conc 8, adjudication none, zero-forfeit=VOID, zero-illegal=stop, box gate ≥24 free cores). N is **1068, not 1067** — 767 is an odd number of games and a half-pair is a biased pair, so it rounds UP to 384 whole rounds. **Power recomputed by SCALING THE OBSERVED se, not by re-deriving from a draw-rate model** — that modelling is exactly what made ±24.5 optimistic when the truth was ±31.12, so the observed 32.67% draw rate and the real pair correlation are carried implicitly: se 15.88 → **8.42, i.e. ≈ ±16.5**. **The branch RULES are unchanged and stay in INTERVAL terms** (HOLDS = interval excludes 0 and point ≥ +20; DISCOUNTED = upper < +33; else STILL-AMBIGUOUS) rather than being hardcoded to the expected power — if the new block disperses differently the rules must still bind. Their expected translation at ±16.5: **HOLDS ⟺ point ≥ +20.0, DISCOUNTED ⟺ point < +16.5, STILL-AMBIGUOUS ⟺ [+16.5, +20.0)** — a **3.5-Elo sliver**, down from the settler's wide-open window. **FOURTH BRANCH REGISTERED NOW, and there is NO fifth continuation**: if it is still ambiguous at 1068, the finding is **"the effect is smaller than the axis needs"** and every speed projection is thereafter quoted as **≤ the pooled upper bound**. Design B and all speed figures stay labelled **unvalidated-model-estimates** until this reads |
 | 2026-08-16 | **SETTLER VERDICT: AMBIGUOUS — the third branch fired, and it is the one that saved the reading. Speed arm **+23.20 ± 31.12** → **[−7.92, +54.32]**, an interval that contains 0, the +3.8 residual lean, AND the +33 projection. It arbitrates NOTHING, and the point estimate of +23 in "the twenties" is exactly what would have been misread as confirmation** | 300/300, **0 forfeits, 0 illegal**, arms sha-verified (prespeed 3405 B `5a207fdf…` vs speed 3376 B `a997b137…`), venue gate passed with 76 free cores, srand 20260824, 2 h 26 m. 53.33% — 99 W / 79 L / 122 D, ptnml **[10, 35, 49, 37, 19]** over 150 pairs, DrawRatio 32.67%, **LOS 92.91%**. **The three registered readings applied exactly**: HOLDS needs the interval to exclude 0 — it does not (lo = −7.92) — so it **does NOT fire despite the point estimate clearing +20**; DISCOUNTED needs upper < +33 — upper is +54.32 — so it **does NOT fire**; **AMBIGUOUS fires.** Registered response is **more games on this pairing, never narration**, and that is what this entry recommends. **Implied slope: 0.92 ± 1.23 Elo per 1% nps** against the modeled **1.46** — the model is inside the interval and so is **zero**, so the axis is **still uncalibrated**. **Design B's ≈+25-30 is therefore NOT discounted — and NOT confirmed**; it remains an unvalidated projection and should be quoted as such. **My own power estimate was optimistic**: I registered ±24.5 and got **±31.12** (draws ran 32.67%), which is why the ambiguous branch was needed at all. Cost to finish the job, read ONCE at a fixed N: **~240 more games** to establish the effect is above zero, **~767 more** to separate +33 from 0 |
 | 2026-08-16 | **PRE-REGISTERED — THE SPEED-STACK SETTLER: entry-vs-entry, timed, to arbitrate the +33 projection against meter 3's ≈+4 residual. Pre-speed **3405 B** `5a207fdf…` vs current **3376 B** `a997b137…` — deliberately NOT Design B's 3410, so it isolates exactly the stack the +33 covered** | Both arms already exist bit-preserved and were re-verified at registration (3405 B `5a207fdf9cf05f2e…`, the landed meter's arm; 3376 B `a997b137e1e4a655…`, meter 3's arm; confirmed non-identical). Form as meter 3 so it inherits a proven venue: **fixed N=300**, 60+1, **conc 8**, srand **20260824** (fresh), adjudication none, **zero-forfeit = VOID**, zero-illegal = stop, box gate **≥ 24 free cores**. Elo is reported for the **SPEED arm relative to pre-speed**, so positive = the stack helped. **POWER, COMPUTED AND REGISTERED BEFORE GAME 1 — and it forces a third branch the order did not name**: near 50% this design gives **≈ ±24.5 Elo**, which separates **+33 from 0 at only ~2.3σ and CANNOT separate +33 from +15**. So the readings are fixed as: **RELATION HOLDS** = interval excludes 0 **and** point ≥ +20; **RELATION DISCOUNTED** = interval excludes +33 (upper bound < +33); **AMBIGUOUS** = anything else — reported as ambiguous, never spun toward either. **Stakes:** a discount hits **Design B's ≈+25-30 projection too**, which is why this runs BEFORE the next meter is read rather than after |
 | 2026-08-16 | **METER 3 VERDICT (post-#207-classic): the entry is **+200.24 ± 38.35** at 60+1 — 300/300, ZERO forfeits, ZERO illegal. The point estimate lands BELOW my pre-registered +220-280 band, and the honest reading is that NEITHER projection is convicted: the whole change is inside noise** | Gates read first and both passed before the Elo: forfeits **0**, illegal **0**, 300/300 `normal`; arms sha-verified box-side (entry **3376 B** `a997b137…` nnue-4k `1b6b94d`, classic **3392 B** `6bbac98a…` master `f4f06d4`), venue gate passed with **69 free cores**, srand 20260823, conc 8, 2 h 06 m. **76.00%** — 195 W / 39 L / 66 D, nElo **+255.71 ± 39.32**, ptnml **[1, 11, 33, 41, 64]** over 150 pairs, PairsRatio 8.75, DrawRatio 22.00%, LOS 100%. Independent recompute mirrors fastchess. **Against the band, reported as registered**: the point estimate **+200.24 is below +220**, but the 95% interval **[161.89, 238.59] overlaps the band** on [220, 238.59], and the change from the landed **+244.47** is **−44.23 ± 54.86 — not significant (z = 1.58)** and **consistent with the predicted −15 (z = 1.04)**. So the registration's "which projection was wrong" question has a disciplined answer: **neither is convicted.** The point-estimate decomposition **leans** to the speed stack under-delivering (**+3.8 rather than +33** if classic's −48 holds; classic would have to have gained −77 for +33 to hold) — but each figure carries ±55, so this is a **lean, not a finding**. **The 2026-08-16 settler tested it directly and came back AMBIGUOUS** (+23.20 ± 31.12, an interval containing 0, +3.8 and +33 alike), so the lean is neither confirmed nor refuted. **Design B (+16-20% nps) landed AFTER these arms were pinned and rides the NEXT meter** (and per the 2026-08-16 settler its Elo projection is **unvalidated** — the nps→Elo axis measured 0.92 ± 1.23 vs a modeled 1.46, excluding neither the model nor zero), which is the clean test of the speed thesis. **Progress toward +400: 50%** (upper bound 60%) — the goal moved further away because classic got stronger, not because the entry got weaker |
@@ -2951,6 +2952,99 @@ in seconds and lives outside the engine. **Fixing the holdback would not
 have prevented one of these forfeits** — which is precisely why it stays
 registered-not-run, and why the venue-exclusivity rule is the real
 remedy.
+
+---
+
+## 2026-08-16 — PRE-REGISTRATION: SETTLER CONTINUATION to a fixed total N=1068
+
+Registered before game 301. This is the AMBIGUOUS branch's **own**
+registered response being executed, not a new idea prompted by a
+disappointing number.
+
+### Why this is a legitimate continuation and not sequential testing
+
+The settler verdict flagged the hazard itself: *adding games to a pairing
+and re-reading until it clears inflates the false-positive rate.* Two
+things make this different, and both were fixed in advance:
+
+1. **It was the pre-registered response** to the ambiguous branch, written
+   before the settler played a game.
+2. **The new total is fixed before game 301** — 1068, decided now, read
+   **once** at completion. No interim reads, no stopping when it looks
+   good.
+
+If either were untrue this would be exactly the thing the verdict warned
+about.
+
+### Form — everything the same except more of it
+
+| | |
+|---|---|
+| new games | **768** (384 rounds), srand **20260825** (fresh) |
+| existing | 300 (srand 20260824), **pooled** |
+| **FIXED TOTAL** | **N = 1068** |
+| arms | unchanged, sha re-verified: prespeed **3405 B** `5a207fdf…`, speed **3376 B** `a997b137…` |
+| everything else | 60+1, conc 8, adjudication none, zero-forfeit = VOID, zero-illegal = stop, box gate ≥ 24 free cores |
+
+**N = 1068, not the 1067 requested**: 767 is an odd number of games, and
+half a colour-swapped pair is a biased pair. It rounds **up** to whole
+rounds.
+
+Pooling across two srands is sound — same arms, same book, same form, and
+independent opening draws — and it is slightly better than one long block
+because it spreads the result over two disjoint opening samples.
+
+### Power, recomputed the way the last one should have been
+
+The settler's ±24.5 estimate came from a **draw-rate model** and the truth
+was **±31.12**. So this time the *observed* standard error is scaled
+directly, which carries the real 32.67% draw rate and the real pair
+correlation without modelling either:
+
+> se 15.88 (at N=300) → **8.42 at N=1068** → **≈ ±16.5 Elo**.
+
+### The branch rules — unchanged, and deliberately still in INTERVAL terms
+
+The rules are **not** rewritten as point-estimate thresholds, because the
+expected ±16.5 may not materialise; if the new block disperses differently
+the rules must still bind:
+
+| branch | rule (unchanged) |
+|---|---|
+| **HOLDS** | pooled interval excludes 0 **and** point ≥ +20 |
+| **DISCOUNTED** | pooled upper bound < +33 |
+| **STILL-AMBIGUOUS** | anything else |
+
+Their **expected translation** at ±16.5, for orientation only:
+
+| pooled point | branch |
+|---|---|
+| **≥ +20.0** | HOLDS |
+| **< +16.5** | DISCOUNTED |
+| **[+16.5, +20.0)** | STILL-AMBIGUOUS — a **3.5-Elo sliver** |
+
+The ambiguous window collapses from the settler's wide-open range to 3.5
+Elo. That is the whole point of spending 768 games.
+
+### THE FOURTH BRANCH — registered now, and there is no fifth continuation
+
+> **If the pooled read at N=1068 is STILL AMBIGUOUS, the registered
+> finding is: the effect is smaller than the axis needs.** From that point
+> every speed projection is quoted as **≤ the pooled upper bound**, not as
+> its modelled value.
+
+**No further continuation.** If ~1000 games cannot separate a projection
+from zero, the projection is not the size the roadmap has been assuming,
+and continuing to chase it with games would cost more than the answer is
+worth. Writing that down now removes the temptation to ask for another
+768 tomorrow.
+
+### Standing status until this reads
+
+**Design B (≈+25-30) and every queued speed figure remain labelled
+unvalidated-model-estimates.** The nps→Elo axis is currently measured at
+**0.92 ± 1.23 Elo per 1% nps** against a modelled 1.46 — an interval that
+contains both the model and zero.
 
 ---
 
