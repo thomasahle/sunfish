@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **CONSTANT SELECTOR ROUND 1: NO WINNER — and the cohort is SIGNIFICANTLY WORSE THAN NOISE. 500 games, 0 illegal, 0 forfeits. The entry sits at a local optimum of its own search constants** | Top pick `cnt0` 53.00%, tied with `qs60` at **53.00% exactly — a 0.00-point gap against a required 10** — so the pre-registered rule does not fire and nothing is promoted on rank. **The informative part is the aggregate**: the null calibration registered BEFORE the games said top-of-ten reads 59.6% on average (median 59.0, p95 65.0) under a pure null, and the observed top is **53.0%** — **P(top-of-ten ≤ 53.0%) = 2.13%**, with the ten-arm mean at 46.5% where noise gives 50% (P ≤ 46.5% = 0.83%, post-hoc). Every zero-byte perturbation of every live constant, in BOTH directions, makes the entry worse on average. Full map (score%): cnt0 53, qs60 53, nred5 51, fut3 50, lred3 49, lred4 49, er40 44, nred2 41, fut0 40, fut2 35. **#205's central finding reproduced on ten fresh points**: corr(Δdepth, score%) = **+0.252** (p≈0.46) — the four arms buying ≥0.94 plies average 45.8%, the three SPENDING depth average 44.7%, statistically indistinguishable, so **buying plies at fixed nodes is worth ~nothing**. Instrument amendment offered: **the selector ranks FAMILIES, not CONSTANTS** — it resolves ~101 Elo at N\*=50 and ~59 at N\*\*=150, against constant effects ≤20 Elo, so the tie is deliberately NOT escalated (it would buy nothing) and both leaders are registered-not-run for screens. Individual intervals span ±64..±93 and 8 of 10 contain zero: this rules out large wins, it does not prove the constants tuned |
 | 2026-08-16 | **PRE-REGISTERED before game 1: ENTRY-NATIVE CONSTANT SELECTOR, round 1. Ten arms, each ONE value change to a search constant the entry INHERITED from classic and never tuned here, every one verified ZERO-BYTE by pack (≤ 3405 B, three of them −1 B). 50-game fixed-node mini-matches vs the pinned entry, per the standing SELECTOR SPEC** | **A LIVENESS MAP WAS BUILT FIRST, and it already answers one open question at ZERO games**: 21 zero-byte deviations were probed for bestmove divergence vs the base at the screen's own 20000-node budget, and **`LMR` is a DEAD KNOB across its whole zero-byte band — deadest exactly where classic's tuning points**. Over the full 505-position first-yield suite: **`LMR = 75` changes ONE move in 505 (0.2%)**, 50 → 3, 40 → 9, 30 → 18 (3.6%). The threshold sits in a value dead zone — quiet moves carry PST deltas under 40, captures carry material over 100, so every threshold in 50..75 selects the same set. **This retires #205's deferred `LMR = 75` follow-up without a game**, and implies `LMR`'s measured +38.9 ± 19.1 belongs to the reduction MECHANISM, not the threshold. Also dead: **`QS_A = 160` at 0/505 exactly** — the only zero-byte value on that knob, so the QS slope axis is closed at zero cost — and the null static guard (900 → 8/505 = 1.6%; `abs(pos.score) < 500` almost never binds). Cohort chosen from the LIVE remainder, mechanism registered in advance (Δ mean depth / MTD crossings / diff-moves per 60): `fut3` +1.59/1/12, `fut2` +1.05/3/15, `lred4` +1.44/1/11, `lred3` +0.94/1/10, `nred5` +0.75/1/6, `cnt0` +0.30/1/8, `er40` +0.29/**0**/9, `qs60` −0.05/2/12, `nred2` −0.51/2/12, `fut0` −0.65/1/6. Base is 9.98 plies, 1 crossing. **`er40` is the one arm that buys depth at ZERO instability** (crossings 1 → 0), the cleanest available test of #205's "bought depth does not convert". Gate ladder green on all 11 builds; driver v3 + black-FEN abort armed (the #205 run-1 void condition). Decision rule fixed in advance: top pick must exceed **50%** AND lead 2nd by **> 10 points**, else escalate that pair to N\*\* = 150; one illegal move stops the cohort |
 | 2026-08-16 | **#205 PORT SCREEN VERDICT: UNDECIDED at the 1000-game cap — **+5.91 ± 17.25**, 95% **[−11.33, +23.17]**, 0 illegal, 0 forfeits. The interval EXCLUDES classic's own **+48.25 ± 27.03**, so classic-tuned search does NOT transfer to the entry — and at **+71 B** it fails the byte bar outright. DO NOT LAND** | LLR 0.20 of (−2.94, 2.94) = 6.7% of a decision; 500 pairs 0 unpaired, ptnml **[55, 82, 219, 79, 65]**, 50.85%, adjudication symmetric (679/1000, same driver both arms), median 225 plies, 54 m on the box at conc 8. Pentanomial **recomputed from the PGN independently** and reproduces fastchess to the digit. **The negative is informative because the mechanism DID transfer**: same 20000 nodes, the arm is deeper on **53/60** positions and shallower on **0**, **+2.20 plies** — the depth was bought and did not convert. Decomposition says why it might not: fuel oracle alone = **1.87 plies for 2** MTD crossings, intrinsic gate alone = **0.27 for 4**, together **2.20 for 13** — depth additive, **instability superadditive**. Byte economics settle it: **0.08 Elo/byte** at the point estimate (0.33 at the 95% upper bound) against LMR's ~1.8. `LMR = 75` was pre-registered as dropped and the decomposition bounds that gap — the whole intrinsic half is 0.27 of 2.20 plies, a poor place for a hidden +40. No timed confirmation is spent. Landing shape was still verified end to end (byte-identical artifact `f56119a7…`; golf count `nullmove` 7→8; **3 of 6 anchors survive landing**, incl. the fuel oracle itself — the `iirk` silent-double trap) |
 | 2026-08-16 | **#205 PORT RUN 1 VOID BY INSTRUMENT at 868 games — `sunfish_ui/` was not staged in the arena, so BOTH arms fell through to the builtin UCI loop, which silently ignores `position fen`, and answered an EPD book from the START POSITION. 868 illegal moves, all `g1f3`, **434 base / 434 n205 — exactly symmetric**. NO Elo exists and the arms are innocent** | The entry resolves its driver from THIS FILE'S GRANDPARENT (`arena/bin/` → `arena/`), which had no `sunfish_ui/`. A documented trap (2026-08-15 stage-2 amendment says it verbatim) that I walked into because `tools/screens/ab_fixednode.sh` still specifies an EPD book — it predates the finding and its wrappers assumed an arena with `sunfish_ui/` beside `bin/`. The gate ladder never saw it: the gates drive FENs through `sunfish_ui` in-process and passed 130/130 zero-illegal on both arms. **Fixed so it cannot recur silently**: driver v3 staged beside `bin/`, and the runner now ABORTS before game 1 unless both arms print `v3 nodes fen` AND answer a black-to-move FEN with `g8f6` rather than `g1f3` — verified, not assumed. Run 2 re-registered with **srand 20260825** (20260824 burned) and adjudication reclassified from structurally-inert to **ACTIVE and symmetric**, since the driver makes both arms emit `score cp`. Cost: ~3 minutes of 8 slots |
@@ -287,6 +288,134 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-16 — ROUND-1 RESULT: NO WINNER, and the interesting part is that the cohort is significantly WORSE than noise. The entry sits at a local optimum of its own constants
+
+500 games, **0 illegal, 0 forfeits**, 10 arms × 50 games, ~28 minutes on the
+box at concurrency 8. The pre-registered rule does not fire.
+
+| arm | change | score% | Elo (pentanomial — NOT a verdict) | ptnml | Δ depth | cross | diff/60 |
+|---|---|---|---|---|---|---|---|
+| `cnt0` | LMR gate `cnt > 2` → `> 0` | **53.00** | +20.9 ± 83.7 | [4,1,11,6,3] | +0.30 | 1 | 8 |
+| `qs60` | `QS` 40 → 60 | **53.00** | +20.9 ± 64.1 | [1,4,13,5,2] | −0.05 | 2 | 12 |
+| `nred5` | null `depth − 3` → `− 5` | 51.00 | +6.9 ± 83.8 | [3,5,8,6,3] | +0.75 | 1 | 6 |
+| `fut3` | futility `depth <= 1` → `<= 3` | 50.00 | −0.0 ± 92.2 | [4,5,7,5,4] | +1.59 | 1 | 12 |
+| `lred3` | LMR reduction 1 → 2 plies | 49.00 | −6.9 ± 88.7 | [4,5,7,6,3] | +0.94 | 1 | 10 |
+| `lred4` | LMR reduction 1 → 3 plies | 49.00 | −6.9 ± 93.3 | [4,5,9,2,5] | +1.44 | 1 | 11 |
+| `er40` | `EVAL_ROUGHNESS` 15 → 40 | 44.00 | −41.9 ± 92.0 | [6,3,10,3,3] | +0.29 | **0** | 9 |
+| `nred2` | null `depth − 3` → `− 2` | 41.00 | −63.2 ± 64.7 | [3,7,11,4,0] | −0.51 | 2 | 12 |
+| `fut0` | futility `depth <= 1` → `<= 0` | 40.00 | −70.4 ± 83.7 | [4,9,7,3,2] | −0.65 | 1 | 6 |
+| `fut2` | futility `depth <= 1` → `<= 2` | 35.00 | −107.5 ± 79.6 | [6,6,11,1,1] | +1.05 | 3 | 15 |
+
+**The rule, applied as written**: top pick `cnt0` at 53.00% clears the
+above-50% clause, and then fails the separation clause outright — `qs60` is at
+**53.00% exactly, a gap of 0.00 points against a required 10**. NOT SEPARATED.
+No arm is promoted on rank.
+
+### The finding is not "no signal". It is a SIGNIFICANTLY NEGATIVE cohort
+
+The null calibration was registered before the games precisely so this could be
+read honestly. It said: under a complete null, the top of ten 50-game arms
+reads **59.6% on average, median 59.0, p95 65.0**.
+
+**The observed top is 53.0%.**
+
+| test against the registered null | value |
+|---|---|
+| P(top-of-ten ≤ 53.0%) | **2.13%** |
+| P(cohort mean ≤ 46.5%) — *post-hoc statistic, labelled as such* | **0.83%** |
+
+The cohort's *best* arm is in the bottom 2% of what pure noise produces, and
+the ten-arm mean is 46.5% where noise gives 50%. So the neighbourhood does not
+merely fail to contain a winner — **it tilts downward, and significantly.**
+Every zero-byte perturbation of every live search constant, in both directions,
+makes the entry worse on average.
+
+This is the aggregate test the individual arms could never give. One 50-game
+arm resolves ~101 Elo and is hopeless for a ≤20 Elo effect; but **500 games
+pooled across ten arms is a well-powered test of a different and better
+question** — "is the incumbent at a local optimum?" — and the answer is yes.
+
+### Depth does not convert, reproduced on ten fresh points
+
+#205 concluded that bought depth does not convert, from one arm that bought
+2.20 plies and returned +5.91 ± 17.25. This round says the same thing from ten
+arms spanning −0.65 to +1.59 plies:
+
+| relationship across the 10 arms | Pearson r | approx p |
+|---|---|---|
+| Δ mean depth vs score% | **+0.252** | 0.46 |
+| MTD bracket crossings vs score% | −0.428 | 0.18 |
+| move divergence /60 vs score% | −0.304 | 0.37 |
+
+- the four arms that bought the most depth (≥ 0.94 plies) average **45.8%**;
+- the three arms that SPENT depth average **44.7%**.
+
+Statistically indistinguishable. **Buying plies at a fixed node budget is worth
+approximately nothing in this engine**, and that now rests on eleven arms
+across two independent registrations rather than one. The two nuisance
+correlations both point the same way as #205's decomposition — more instability
+is worse, more behavioural change is worse — but neither reaches significance
+at n = 10 and neither is claimed.
+
+### What was NOT learned, stated plainly
+
+Every individual arm's interval spans ±64 to ±93 Elo, and **8 of 10 contain
+zero**. This round therefore does NOT establish that any particular constant is
+optimal. It rules out large single-constant wins (≥ ~80 Elo) and establishes
+the aggregate tilt; it cannot see a +15 Elo constant and never could. Reported
+as "no arm separated", never as "the constants are tuned".
+
+### The instrument finding, which outlives this round
+
+The SELECTOR SPEC was validated on cross-FAMILY eval gaps of 127 and 66 Elo.
+Search constants are not that. Whole MECHANISMS in this engine are worth 20–40
+Elo (LMR +38.9 ± 19.1, IIR +22.3 ± 16.0, `pend` +21.31 ± 15.73), so a constant
+moved inside a working mechanism is worth less again — against an instrument
+that resolves ~101 Elo at N\* = 50 and ~59 Elo at N\*\* = 150. It is five times
+too coarse and no arm design fixes it.
+
+> **Amendment offered to the SELECTOR SPEC: the selector ranks FAMILIES, not
+> CONSTANTS.** Below ~50 Elo of expected effect it cannot select at N\* or
+> N\*\*. Constants need screen-class budgets (1000 games ≈ ±17 Elo) — or, far
+> more efficiently, a posterior-based tuner spending thousands of cheap games
+> across the whole space at once. That machinery **already exists and is
+> running on this box against the C twin** (`optimizer-all-3d-20260815`, a
+> 24-parameter space including `EVAL_ROUGHNESS`/`QS`/`QS_A`/`LMR`/`NULL_*`,
+> ~6,650 experiments deep). Pointing it at the ENTRY is the efficient path,
+> and it is an owner decision, not this lane's.
+
+Consequently the tie is **NOT** escalated to N\*\* = 150: the registered
+calibration says 150 games resolve ~59 Elo, so 300 more games on `cnt0`/`qs60`
+would buy an interval that still spans their +20.9 point estimates. Spending
+them would be going through the motions. Both are **registered for a screen**
+below instead.
+
+### Registered, not run: the `cnt0` / `qs60` screens
+
+Both tied leaders are registered for 1000-game fixed-node screens (SPRT
+elo0=0 elo1=10, cap 1000, srand 20260861 and 20260862, same runner and driver
+abort). They are NOT run tonight: 2000 games is ~110 minutes on a box shared
+with the owner's tuner, and after a round whose aggregate says the
+neighbourhood tilts downward, that spend is the coordinator's call rather than
+this lane's. The arms are built, gated and sha-recorded, so the screens are a
+one-line launch whenever it is wanted:
+`run_screen.sh cnt0 20260861` and `run_screen.sh qs60 20260862`.
+
+### A zero-byte nps lead, handed to the timed lane
+
+One constant in the shipped search is invisible to a fixed-node instrument by
+construction: the deadline poll interval, `if self.nodes % 2048 == 0 and
+time.time() > self.deadline`. It only affects how often the clock is read, so
+under `go nodes` it is exactly inert — and this lane cannot measure it. It is
+**free at 1024, 4096 and 8192** (all pack to 3405 B, measured). Since both
+standing instruments say the entry's remaining advantage is speed and time
+management, this is the one constant left worth a TIMED test. Caveat attached:
+a longer poll increases worst-case overrun past the deadline, and this engine
+has a forfeit history, so 4096 is the conservative step and 8192 should not be
+tried without a forfeit gate.
 
 ---
 
