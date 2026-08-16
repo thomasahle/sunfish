@@ -130,6 +130,28 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(diagnostics["mode"], "explore")
         self.assertEqual(vector, safe)
 
+    def test_exploration_falls_back_to_ucb_without_a_validated_challenger(self):
+        class Model:
+            @staticmethod
+            def predict(points):
+                return np.zeros(len(points)), np.ones(len(points))
+
+        default = self.space.default
+        state = {"batches": [], "selections": 1}
+        args = SimpleNamespace(
+            pair_weight=.5, inducing=0, initial_design=1,
+            explore_start=1, explore_floor=1, explore_half_life=1,
+            exploration=1, explore_optimism=0, pairs=1,
+            gate_all=False, acquisition_restarts=4,
+        )
+        vector, diagnostics = choose(
+            state, self.space.prior_mean, self.space.candidates, [], args,
+            self.space, Model(), forbidden={default}, validated={default},
+            observation_counts=Counter({default: 1}))
+        self.assertEqual(diagnostics["mode"], "ucb")
+        self.assertNotEqual(vector, default)
+        self.assertEqual(state["exploration_credit"], 1)
+
     def test_exploration_drops_supportedly_dominated_points(self):
         weak = self.space.canonical({"X": 100, "Y": 20})
         plausible = self.space.canonical({"X": 0, "Y": 10})
