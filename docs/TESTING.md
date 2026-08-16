@@ -400,7 +400,7 @@ hardware- and version-sensitive and are documentation, not gates.
 - **Consistency**: ladder and full-driver crossing scans over 35+ positions,
   **0 crossed table entries** (master: 28 driver / 35 ladder on the same set).
 - **Suites**: terminal bench 148/148 (master 130); stalemate2 17/130, floor
-  raised 13 -> 17; mate1 8/8, mate2 20/20, mate3 5/5.
+  raised 13 -> 17; mate1 8/8, mate2 20/20, mate3 12/14.
 - **Cost**: +5.3% wall on a 32-position depth-5 battery. Note the node count
   reads 99.6% of master, which is *not* a cost saving: the legality oracle is
   now a board predicate rather than a depth-0 search, so its work no longer
