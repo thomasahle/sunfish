@@ -245,6 +245,105 @@ VAL-probe-first):
 - **trainable K_MID / K_END seam tables.** Currently hand-kept classic
   tables. Same treatment: in the graph, on the grid, through the codec.
 
+## TRAINER STUDY — bmdanielsson/nnue-trainer (NNUE-V2 Phase A, 2026-08-16)
+
+**LICENSE FIRST, and it is the strict case.** The repo has **no LICENSE file**
+and GitHub's API reports **`license: null`** — i.e. no grant at all, so it is
+"all rights reserved" by default, which is *more* restrictive than the GPLv3
+lineage it descends from (its README says "Training code is based on
+glinscott/nnue-pytorch"). **IDEAS ONLY, independent reimplementation, zero
+transplanted code** — our standing rule for rival engines, and here it is also
+the only lawful reading. Nothing below is copied; these are recipe facts read
+off a public repo (main branch, last pushed 2024-05-25).
+
+### The recipe, as read
+
+**1 — Data: they GENERATE, they do not harvest.**
+
+| knob | their value |
+|---|---|
+| source | self-play, two engine instances over UCI |
+| per-move budget | `--depth` **or** `--nodes` (mutually exclusive), `MAX_TIME = 30` s cap |
+| opening diversity | `RANDOM_PLIES = [16]` random plies before engine play (a `2moves_v2.epd` book also ships) |
+| target scale | `--npositions` default **100,000,000** |
+| **quiet filter** | keep only if **not promotion, not capture, not en-passant, not in check, and the move does not give check** |
+| decisiveness cutoff | `EVAL_LIMIT = 10000` adjudicates the game out |
+| game caps | `MAX_PLY = 400`; draw adjudication `DRAW_SCORE 10` / `DRAW_COUNT 10` after `MIN_DRAW_PLY 80` |
+| **dedup** | Zobrist-hash set, duplicates skipped |
+
+**2 — Labels: interpolated eval↔outcome, in win-probability space.**
+`wdl_value_target = wdl_eval_target*(1−wdl) + outcome*wdl`, with **`--wdl`
+default `1.0`** — and their own help text says `0.0` trains on evaluations
+while `1.0` trains on **game results**. Scaling: model output → win prob via
+`pred*600.0/361`, label via `score/410`. A separate
+`rescore_training_data.py` **re-labels existing positions with a fresh search
+at `--depth` default 8**, touching the eval field only and leaving outcomes
+alone.
+
+**3 — Loss + schedule.** Squared error **in win-prob space**
+(`|target − pred|²`, sigmoids on both sides — not a centipawn loss).
+**RAdam** lr 1e-3, betas (.95, .999), eps 1e-5, weight_decay 0; **batch
+16384**; **`ReduceLROnPlateau`** factor 0.3, patience 1, min_lr 1e-6; **no
+fixed epoch count — `while True`**, the plateau schedule ends the run.
+
+**4 — Quantization: post-hoc, and SILENT.** `model.py` contains **no weight
+clipping and no quantization constants**; `quantize.py` runs **after**
+training on a saved checkpoint (`NNUE2SCORE 600`, `MAX_QUANTIZED_ACTIVATION
+127`, `WEIGHT_SCALE_BITS 6`, `OUTPUT_SCALE 16`; input layer → int16, output
+weights → int8). Output weights are **clamped to ≈±1.68 with no warning and
+no assert** when they exceed the representable range.
+
+**5 — Architecture.** `NUM_INPUTS = 64*12 = 768` (plain piece-square, not
+HalfKP), **L1 = 1024** per perspective, output layer over `2*L1 = 2048`,
+activation `clamp(0,1)` (clipped ReLU), one output neuron.
+
+### What this changes for V2 — follow, or state the departure
+
+**FOLLOW (evidence-backed, and it answers the mix question):**
+
+- **Generate, don't harvest.** Their entire dataset is self-play; our 92,912
+  archived games (~10.2 M plies pre-filter, and far fewer after quiet-filter
+  and dedup) are two-plus orders of magnitude short of their 1e8 target and
+  are correlated with the very engines we test. **Proposed mix: generated
+  self-play as the training set; the match archive held out as a
+  distribution check**, not as training data — it is the right set for asking
+  "is the net off-distribution for the engines we actually play?".
+- **Their exact quiet filter and Zobrist dedup**, both of which our
+  `data.py`/config already have analogues for (`quiet`, `cpmax`, fenkey).
+- **Depth-8 re-scoring** as the prior for our approved label-depth
+  calibration — it brackets the range to sweep rather than guessing it.
+- **Plateau LR scheduling instead of a fixed epoch count.** Our own
+  `dense60` finding (60 epochs buys a noise-level minimum) is what a fixed
+  epoch budget looks like without a plateau rule.
+
+**DEPART, with the reason:**
+
+- **Width.** Their accumulator alone is 768×1024 int16 ≈ 3 MB. Our entire
+  artifact is 4096 B and our payload ~800 B — a ~4000× gap. Every
+  architectural choice they make scales down catastrophically; ours stays
+  ps768 × N=4. This is the departure that defines the project.
+- **Quantization — and here we are genuinely ahead.** They clip silently
+  post-hoc with no assert. We hit exactly that failure and diagnosed it: the
+  float-ml2 net trained a `u2` its container could not express and the export
+  rounded it to **[0,0,0,0]**. Our `gridste`/`u2grid` snap **inside forward**
+  by STE so the loss sees the real resolution, and `export.py` **refuses** an
+  all-zero read-out and prints the price sheet. Keep ours; do not adopt
+  theirs. (Fair note: the upstream `nnue-pytorch` lineage *does* clip weights
+  to quantization ranges — this derivative appears to have dropped it. The
+  claim is about this trainer, not about NNUE practice generally.)
+
+**THE ONE THAT MAY EXPLAIN OUR CAMPAIGN — ingredient 2 revised.** We train
+**purely on centipawn eval agreement**; we have no WDL term at all. Their
+default is the opposite extreme: **`wdl = 1.0`, pure game outcome.** Our
+headline finding this week is that **val (eval-agreement) is anti-predictive
+of play across family boundaries** — linear val 0.01378 played −107, better-val
+float-ml2 0.01280 played −234. A loss that optimises agreement with a cp
+oracle is not optimising the thing we score, and this trainer's default says
+the reference practice trains toward **results**. **Proposal: V2 carries a
+`wdl` interpolation term as a first-class dial, swept early** — it is cheap,
+it is the sharpest available lever on the anti-predictive problem, and it
+costs zero bytes.
+
 ## Log (newest first)
 
 - 2026-08-16 02:10 UTC: **THE FORFEIT TRIPWIRE FIRED, CORRECTLY — and the
