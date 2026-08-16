@@ -35,6 +35,7 @@ from adaptive_gp import (
     OpeningSchedule,
     selection_state,
     save_state,
+    state_file_identity,
     UCI_OPTION,
     pending_configurations,
     validate_opening_budget,
@@ -434,6 +435,16 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(duration("1.5h"), 5400)
         with self.assertRaises(argparse.ArgumentTypeError):
             duration("later")
+
+    def test_seed_identity_includes_the_journal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = pathlib.Path(directory, "study.json")
+            state.write_text("{}")
+            journal = state.with_suffix(".jsonl")
+            journal.write_text("first\n")
+            before = state_file_identity(state)
+            journal.write_text("second\n")
+            self.assertNotEqual(before, state_file_identity(state))
 
     def test_wall_time_drains_the_reserved_pair(self):
         with tempfile.TemporaryDirectory() as directory:

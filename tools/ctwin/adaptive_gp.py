@@ -159,6 +159,16 @@ def file_identity(path):
     return {"path": str(path), "sha256": digest.hexdigest()}
 
 
+def state_file_identity(path):
+    """Identify both halves of an append-journaled state."""
+    path = pathlib.Path(path)
+    files = [file_identity(path)]
+    journal = path.with_suffix(".jsonl")
+    if journal.exists():
+        files.append(file_identity(journal))
+    return files
+
+
 def engine_identity(command, arguments, options):
     executable = shutil.which(command) or command
     files = []
@@ -202,7 +212,7 @@ def study_identity(args):
         "gate": command_identity(args.gate),
         "gate_timeout": args.gate_timeout,
         "space": file_identity(args.space) if args.space else "legacy",
-        "seed_state": file_identity(args.seed_state) if args.seed_state else None,
+        "seed_state": state_file_identity(args.seed_state) if args.seed_state else None,
         "tc": args.tc,
         "allocation": {
             name: getattr(args, name)
