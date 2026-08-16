@@ -401,7 +401,8 @@ class MixedAcquisitionTest(unittest.TestCase):
         spec = json.loads(path.read_text())
         fuel = next(parameter for parameter in spec["parameters"]
                     if parameter["name"] == "FUEL_NULL")
-        self.assertEqual(fuel["values"], [1, 2])
+        self.assertEqual(fuel["values"], [0, 1, 2])
+        self.assertEqual(fuel["off_values"], [0])
         disabled = next(condition for condition in spec["conditions"]
                         if condition["when"] == {"FUEL_MIN_DEPTH": [99]})
         self.assertIn("FUEL_NULL", disabled["reset"])

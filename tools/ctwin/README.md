@@ -128,7 +128,8 @@ NULL_MIN_DEPTH NULL_LIMIT NULL_CUT_RED NULL_RED IID_MIN_DEPTH IID_RED FUT_MAX FU
 MATE_DIST FUEL_NULL FUEL_MIN_DEPTH` (`NULL_CAP_MARGIN=-1` follows
 `EVAL_ROUGHNESS`, `NULL_MARGIN` is the fuel-probe target margin, and the two
 `NULL_*_RED` knobs control the shallow and deep probes; `FUEL_NULL` controls
-the hot node's extra depth cost). `FUT_CAP` selects no shallow cap, the
+the hot node's extra depth cost, while zero skips the probe but retains the
+static intrinsic-LMR guard). `FUT_CAP` selects no shallow cap, the
 current quiet-move cap, or the simpler negative-`value()` cap;
 `FUT_CAP_DEPTH` selects its horizon. `VALUE_N VALUE_B
 VALUE_R VALUE_Q` tune material, while

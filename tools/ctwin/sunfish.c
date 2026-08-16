@@ -783,9 +783,9 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
     /* Fuel oracle -- its fixed target reduces the node.  Its static guard
      * also limits intrinsic LMR to positions where passing is meaningful. */
     int rd = depth;
-    int guard = FUEL_NULL && depth >= FUEL_MIN_DEPTH
+    int guard = depth >= FUEL_MIN_DEPTH
         && iabs(pos->score) < NULL_LIMIT && has_big_piece(pos);
-    if (guard) {
+    if (guard && FUEL_NULL) {
         int target = pos->score + NULL_MARGIN;
         Pos rp = rotate(pos, 1);
         if (-bound(&rp, 1 - target, depth - NULL_RED, 0, 0) >= target)
