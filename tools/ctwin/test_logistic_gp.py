@@ -30,6 +30,7 @@ from adaptive_gp import (
     fantasy_variance,
     fixed_baseline_point,
     gate_policy,
+    import_seed_batches,
     inducing_basis,
     load_state,
     OpeningSchedule,
@@ -299,6 +300,29 @@ class MixedAcquisitionTest(unittest.TestCase):
             ],
         }
         self.assertEqual(compatible_seed_batches(seed, self.space), seed["batches"][:1])
+
+    def test_seed_copy_preserves_the_old_coupled_parameter(self):
+        space = MixedSpace({
+            "parameters": [
+                {"name": "X", "type": "integer", "min": 0, "max": 20,
+                 "default": 10},
+                {"name": "Y", "type": "integer", "min": 0, "max": 20,
+                 "default": 10},
+            ],
+            "seed_copies": {"Y": "X"},
+        })
+        seed = {
+            "study": {"baseline": {"options": {"X": 10}}},
+            "batches": [
+                {"knobs": {"X": 5}, "opponent_knobs": None},
+                {"knobs": {"X": 15}, "opponent_knobs": {"X": 20}},
+            ],
+        }
+        imported = import_seed_batches(seed, space)
+        self.assertEqual(imported[0]["knobs"], {"X": 5, "Y": 5})
+        self.assertEqual(imported[0]["opponent_knobs"], {"X": 10, "Y": 10})
+        self.assertEqual(imported[1]["knobs"], {"X": 15, "Y": 15})
+        self.assertEqual(imported[1]["opponent_knobs"], {"X": 20, "Y": 20})
 
     def test_one_won_pair_does_not_collapse_uncertainty(self):
         point = [(0,) * 9]

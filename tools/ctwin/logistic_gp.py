@@ -93,6 +93,10 @@ class MixedSpace:
         self.defaults = {
             parameter["name"]: parameter["default"] for parameter in self.parameters
         }
+        self.seed_copies = spec.get("seed_copies", {})
+        unknown_copies = (set(self.seed_copies) | set(self.seed_copies.values())) - set(self.names)
+        if unknown_copies:
+            raise ValueError(f"unknown seed-copy parameters: {sorted(unknown_copies)}")
         self.conditions = spec.get("conditions", [])
         unknown = {
             name

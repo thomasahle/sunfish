@@ -300,6 +300,25 @@ def compatible_seed_batches(seed, space):
     ]
 
 
+def import_seed_batches(seed, space):
+    """Filter old observations and give newly split axes their old semantics."""
+    baseline = seed["study"]["baseline"]["options"]
+
+    def migrate(knobs):
+        knobs = dict(knobs)
+        for target, source in space.seed_copies.items():
+            knobs.setdefault(target, knobs.get(source, baseline[source]))
+        return knobs
+
+    return [
+        batch | {
+            "knobs": migrate(batch["knobs"]),
+            "opponent_knobs": migrate(batch.get("opponent_knobs") or baseline),
+        }
+        for batch in compatible_seed_batches(seed, space)
+    ]
+
+
 def source_prior(logs, battery, transfer, space):
     if not logs:
         return space.prior_mean
@@ -758,12 +777,8 @@ async def optimize(args):
         for batch in seed["batches"]:
             old_names.update(batch["knobs"])
             old_names.update(batch.get("opponent_knobs") or ())
-        imported = compatible_seed_batches(seed, space)
-        state["batches"] = [
-            batch | {"opponent_knobs": old_baseline}
-            if batch.get("opponent_knobs") is None else batch
-            for batch in imported
-        ]
+        imported = import_seed_batches(seed, space)
+        state["batches"] = imported
         print(f"[seed] imported {len(imported)}/{len(seed['batches'])} compatible batches",
               flush=True)
         state["next_experiment"] = len(state["batches"])
