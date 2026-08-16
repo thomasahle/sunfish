@@ -29,6 +29,8 @@
      "values": [0, 1], "scale": 1},
     {"name": "FUT_CAP", "type": "categorical", "default": 1,
      "values": [0, 1, 2], "off_values": [0]},
+    {"name": "FUT_CAP_DEPTH", "type": "integer", "default": 3,
+     "min": 2, "max": 4, "scale": 1},
 
     {"name": "VALUE_N", "type": "discrete", "default": 280,
      "values": [270, 280, 290], "scale": 20},
@@ -60,6 +62,8 @@
   "interaction_order": 2,
   "structural_fraction": 0.20,
   "conditions": [
+    {"when": {"FUT_CAP": [0]},
+     "reset": ["FUT_CAP_DEPTH"]},
     {"when": {"NULL_MIN_DEPTH": [99]},
      "reset": ["NULL_CAP_MARGIN", "NULL_CUT_RED"]},
     {"when": {"FUEL_MIN_DEPTH": [99]},

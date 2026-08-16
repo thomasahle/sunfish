@@ -320,6 +320,9 @@ class MixedAcquisitionTest(unittest.TestCase):
         cap = next(parameter for parameter in spec["parameters"]
                    if parameter["name"] == "FUT_CAP")
         self.assertEqual(cap["values"], [0, 1, 2])
+        depth = next(parameter for parameter in spec["parameters"]
+                     if parameter["name"] == "FUT_CAP_DEPTH")
+        self.assertEqual((depth["min"], depth["max"]), (2, 4))
 
     def test_coordinate_search_matches_exhaustive_gp_ucb(self):
         domain = list(itertools.product(*self.space.coordinate_values))
