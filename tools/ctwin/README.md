@@ -161,11 +161,12 @@ model does not compete with the 20 game lanes. Its 2,048-point global design is
 used for the initial design, acquisition restarts, and inducing sites. It
 reserves 512 points for the default, every one-axis setting, and nearby two-axis
 combinations; the rest retain broad global coverage. Coordinate refinements
-are gated on demand, and rejected policies consume neither games nor allocation
-credit. Three reserved pairs per lane, replenished while two remain, hide that
-latency. `--gate-all` instead prevalidates the finite design and confines every
-acquisition to it; use that for a broad census, not the final joint refinement. Results
-append to a JSONL journal and compact every 1,000 pairs,
+are gated on demand. The pure-variance arm explores only validated policies,
+while UCB may expand the validated region; rejected policies consume neither
+games nor allocation credit. Three reserved pairs per lane, replenished while
+two remain, hide that latency. `--gate-all` instead prevalidates the finite
+design and confines every acquisition to it; use that for a broad census, not
+the final joint refinement. Results append to a JSONL journal and compact every 1,000 pairs,
 avoiding quadratic checkpoint I/O while remaining restartable. At the
 wall-time limit, the scheduler finishes every reserved color pair before its
 final checkpoint. `--seed-state` replays that journal and inherits its
