@@ -281,9 +281,9 @@ as directional.
 
 ### Joint search-parameter tuning (2026-08)
 
-The consolidated null/LMR candidate was selected by tuning eleven knobs
-together: `QS`, `QS_A`, `EVAL_ROUGHNESS`, `NULL_MARGIN`, `NULL_LIMIT`, `LMR`,
-`NULL_RED`, `NULL_MIN_DEPTH`, `FUEL_MIN_DEPTH`, `IID_MIN_DEPTH`, and `IID_RED`.
+The remaining null/LMR parameters were selected by tuning them jointly:
+`QS`, `QS_A`, `EVAL_ROUGHNESS`, `NULL_MARGIN`, `NULL_LIMIT`, `LMR`,
+`NULL_MIN_DEPTH`, `FUEL_MIN_DEPTH`, `IID_MIN_DEPTH`, and `IID_RED`.
 The tuner used an additive logistic Gaussian process over paired game outcomes,
 an exact default-policy anchor, persistent random exploration, and occasional
 candidate-versus-candidate duels. One color-swapped opening pair was one
@@ -305,10 +305,12 @@ profile put `QS=40` only 2.0 ± 8.6 Elo behind, so the validated production
 setting remains `QS=40`. A final independent block confirmed that corrected
 bundle at `228/113/159`, **+48.25 ± 27.03 Elo**, LOS 99.98%, over 500 games.
 The other selected settings are `QS_A=140`, `EVAL_ROUGHNESS=15`,
-`NULL_MARGIN=-200`, `LMR=75`, reduction 7 for the deep fuel probe, shallow
+`NULL_MARGIN=-200`, `LMR=75`, a QSearch-only deep fuel probe, shallow
 capped null from depth 3 through 5, real-only fuel shaping from depth 6, and
-IID disabled. The study coupled the shallow and deep reductions at 7; the
-depth-six mate floor subsequently showed that this was invalid. Production
+IID disabled. An isolated follow-up replaced the depth-dependent deep probe
+with QSearch: 400 wins, 363 losses, and 237 draws over 1,000 games at `3+0.1`,
+**+12.86 ± 16.55 Elo**, LOS 93.64%. At fixed depth, QSearch changed nodes by
+-0.002% at depth 8 and -0.021% at depth 9 over 49 positions. Production
 retains the shallow candidate's three-ply reduction, the `abs(score) < 750`
 guard for both null mechanisms, and exempts the unstored driver root from
 intrinsic LMR. The depth-eight mate floor invalidated removal of the score

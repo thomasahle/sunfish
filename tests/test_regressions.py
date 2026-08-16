@@ -183,9 +183,9 @@ class TestFuelOracle:
         windows = [self.probe_windows(g) for g in (0, 200, -200, sf.MATE_LOWER)]
         for gamma, seen in zip((0, 200, -200, sf.MATE_LOWER), windows):
             assert seen, f"gamma {gamma}: the fuel probe never ran"
-            assert all(g == 1 - target and d == 1 for g, d in seen), (
+            assert all(g == 1 - target and d == 0 for g, d in seen), (
                 f"gamma {gamma}: probe windows {seen} - expected only "
-                f"({1 - target}, 1), the gamma-free fixed target"
+                f"({1 - target}, 0), the gamma-free QSearch target"
             )
         assert len({tuple(w) for w in windows}) == 1, (
             f"the probe window moved with gamma: {windows}"

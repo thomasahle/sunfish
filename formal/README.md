@@ -63,8 +63,8 @@ The pass is a score candidate only below depth 6. From depth 6 on it is a
 fuel oracle instead -- see the next section.
 
 The shallow candidate retains its original three-ply reduction. The deep
-fuel probe has a different role and may use a more aggressive reduction;
-sharing one reduction between them changes the declared shallow value.
+fuel probe has a different role and reads only the null position's QSearch
+value; sharing one reduction between them changes the declared shallow value.
 
 `EvalBounds.lean` proves that every reachable both-kings static evaluation is
 bounded by `EvalBounds.evalBound`. With `EVAL_ROUGHNESS = 15`, theorems
@@ -85,28 +85,33 @@ pawn-only zugzwangs.
 
 ## The deep-null fuel oracle
 
-From depth 6 on the pass is not a score candidate at all. One fixed target
-shapes only how much depth the real moves spend:
+From depth 6 on the pass is not a score candidate at all. A fixed-target
+QSearch of the null position shapes only how much depth the real moves spend:
 
 ```python
 d = depth
 guard = (depth >= 6 and abs(pos.score) < 750
     and any(c in pos.board for c in "RBNQ"))
 if guard:
-    nullpos = pos.rotate(nullmove=True)
     target = pos.score + NULL_MARGIN
-    d -= -self.bound(nullpos, 1 - target, depth - 7) >= target
+    d -= -self.bound(pos.rotate(nullmove=True), 1 - target, 0) >= target
 
 move_depth = d - 1 - (not root and guard and val < LMR)
 ```
 
-The target depends on `(pos, depth)` alone -- `gamma` does not enter. Table
+The target and QSearch child depend on `pos` alone -- `gamma` does not enter. Table
 state may still change the numeric report. Stability therefore uses the normal
-TT invariant: every reused interval reports on the same null-child value.
+TT invariant: every reused interval reports on the same null-child QSearch value.
 Given valid reports, side-exactness makes the hot classification stable under
 different caller windows and table states (`hot_bit_stable`). A fixed target
 alone would not repair an invalid or cross-semantics TT entry. Move reduction
 uses only the static null-eligibility guard, so it needs no report theorem.
+
+`EventuallyWide.lean` already quantifies over an arbitrary fixed `hot`
+selector, so replacing the old depth-dependent probe with this stronger
+position-only selector changes no eventual-completeness obligation. The local
+report proof is still exactly `hot_bit_determined`; only its child value is now
+the depth-zero value.
 
 Nominal `depth` still keys the tables and QS admission; intrinsic move value
 only selects the recursion depth. Every real edge spends one to three plies,
@@ -714,7 +719,7 @@ value function, the frontier tail is the only route left to retiring
 | ... and no repeated position anywhere | `cexE_acyclic` | `propext` |
 | ... which the failing premise is `NoMaskedMobility` | `cexE_masked` | `propext` |
 | a read-time clamp does not rescue it | `cexE_clamp_no_help` | `propext, Quot.sound` |
-| **the eventual trichotomy still needs the frontier premise** | `eventual_classification_needs_frontier` | `propext, Quot.sound` |
+| **eventual trichotomy needs frontier** | `eventual_classification_needs_frontier` | `propext, Quot.sound` |
 | the frontier tail classifies the same root correctly | `cexE_t_honest` | `propext, Quot.sound` |
 | both directions at once | `eventual_classification_verdict` | `propext, Quot.sound` |
 
@@ -772,10 +777,10 @@ at capturable nodes.
 | recursive zero-window move search | `Bound.bound_spec` |
 | null child report negation | `WindowReport.negate` |
 | `min(pos.score + EVAL_ROUGHNESS, pass_report)` (depth < 6) | `cappedNull_report` |
-| `target = pos.score + NULL_MARGIN` fuel probe (depth >= 6) | `hot_bit_determined`, `hot_bit_stable`, `fuel_edge_cost` |
+| fixed-target null QSearch (depth >= 6) | `hot_bit_determined`, `hot_bit_stable`, `fuel_edge_cost` |
 | static LMR eligibility and intrinsic move reduction | `intrinsic_edge_cost` |
 | real-move recursion at the reduced `d - 1` | `fuelValueD2t`, `eventual_classification_fuel` |
-| static evaluation bound keeps the cap below positive mate | `staticCap_in_scoreBand`, `staticCappedNull_below_positiveMate` |
+| static cap stays below positive mate | `staticCap_in_scoreBand`, `staticCappedNull_below_positiveMate` |
 | shallow static move cap and lazy fail-low | `cappedMove_failLow`, `cappedMove_report` |
 | cap mate-band properties | `shallowMoveCap_below_positiveMate`, `cappedMove_preserves_negativeMate` |
 | filtered move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
