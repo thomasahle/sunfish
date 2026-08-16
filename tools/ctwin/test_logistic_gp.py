@@ -226,6 +226,7 @@ class MixedAcquisitionTest(unittest.TestCase):
             state, self.space.prior_mean, candidates, [], args, self.space,
             Model(), observation_counts=Counter({observed: 7}))
         self.assertEqual(diagnostics["unique"], 1)
+        self.assertEqual(diagnostics["coverage"], 0)
 
     def test_seeded_new_axis_is_designed_after_a_mature_clock(self):
         class Model:

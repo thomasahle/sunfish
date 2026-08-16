@@ -691,6 +691,7 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
         "mean": selected_mean[0],
         "sd": math.sqrt(selected_variance[0]),
         "exact_batches": exact_batches,
+        "coverage": len(observed & set(candidates)),
         "unique": len(observed),
         "stratum": "structural" if stratum else "ordinary" if stratum is not None else "free",
     }
@@ -938,7 +939,8 @@ async def optimize(args):
             f"p_explore={diagnostics['explore_probability']:.2f} "
             f"posterior={elo:+.1f} ± {error:.1f} Elo "
             f"exact_batches={diagnostics['exact_batches']} "
-            f"coverage={diagnostics['unique']}/{len(candidates)} "
+            f"coverage={diagnostics['coverage']}/{len(candidates)} "
+            f"observed={diagnostics['unique']} "
             f"{json.dumps(space.knobs(vector), sort_keys=True)}",
             flush=True,
         )
