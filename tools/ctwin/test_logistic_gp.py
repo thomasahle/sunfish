@@ -21,6 +21,7 @@ from adaptive_gp import (
     choose,
     choose_opponent,
     commit_selection,
+    compatible_seed_batches,
     coordinate_maximum,
     design_variance,
     duration,
@@ -285,6 +286,18 @@ class MixedAcquisitionTest(unittest.TestCase):
         })
         off = space.canonical({"MARGIN": 2, "MODE": 99})
         self.assertEqual(space.knobs(off), {"MARGIN": 0, "MODE": 99})
+
+    def test_seed_drops_observations_from_removed_nondefault_knobs(self):
+        seed = {
+            "study": {"baseline": {"options": {"X": 50, "Y": 10, "OLD": 0}}},
+            "batches": [
+                {"knobs": {"X": 0, "Y": 10, "OLD": 0}, "opponent_knobs": None},
+                {"knobs": {"X": 0, "Y": 10, "OLD": 1}, "opponent_knobs": None},
+                {"knobs": {"X": 0, "Y": 10, "OLD": 0},
+                 "opponent_knobs": {"X": 50, "Y": 10, "OLD": 1}},
+            ],
+        }
+        self.assertEqual(compatible_seed_batches(seed, self.space), seed["batches"][:1])
 
     def test_one_won_pair_does_not_collapse_uncertainty(self):
         point = [(0,) * 9]

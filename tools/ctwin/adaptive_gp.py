@@ -275,6 +275,21 @@ def aggregate(batches, pair_weight, space, sparse=False):
     return points, design, success, trials
 
 
+def compatible_seed_batches(seed, space):
+    """Keep observations that match the new engine on every removed knob."""
+    baseline = seed["study"]["baseline"]["options"]
+    removed = {name: value for name, value in baseline.items() if name not in space.names}
+
+    def compatible(knobs):
+        return all(knobs.get(name, value) == value for name, value in removed.items())
+
+    return [
+        batch for batch in seed["batches"]
+        if compatible(batch["knobs"])
+        and (batch.get("opponent_knobs") is None or compatible(batch["opponent_knobs"]))
+    ]
+
+
 def source_prior(logs, battery, transfer, space):
     if not logs:
         return space.prior_mean
@@ -733,11 +748,14 @@ async def optimize(args):
         for batch in seed["batches"]:
             old_names.update(batch["knobs"])
             old_names.update(batch.get("opponent_knobs") or ())
+        imported = compatible_seed_batches(seed, space)
         state["batches"] = [
             batch | {"opponent_knobs": old_baseline}
             if batch.get("opponent_knobs") is None else batch
-            for batch in seed["batches"]
+            for batch in imported
         ]
+        print(f"[seed] imported {len(imported)}/{len(seed['batches'])} compatible batches",
+              flush=True)
         state["next_experiment"] = len(state["batches"])
         state["selections"] = (seed.get("selections", len(seed["batches"]))
             if args.seed_selections is None else args.seed_selections)
