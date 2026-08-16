@@ -406,6 +406,23 @@ class MixedAcquisitionTest(unittest.TestCase):
         disabled = next(condition for condition in spec["conditions"]
                         if condition["when"] == {"FUEL_MIN_DEPTH": [99]})
         self.assertIn("FUEL_NULL", disabled["reset"])
+        no_probe = next(condition for condition in spec["conditions"]
+                        if condition["when"] == {"FUEL_NULL": [0]})
+        self.assertEqual(no_probe["reset"], ["NULL_MARGIN", "NULL_RED"])
+        space = MixedSpace({
+            "parameters": [
+                {"name": "FUEL_NULL", "type": "discrete", "default": 1,
+                 "values": [0, 1, 2]},
+                {"name": "NULL_MARGIN", "type": "discrete", "default": -200,
+                 "values": [-200, 800]},
+                {"name": "NULL_RED", "type": "discrete", "default": 7,
+                 "values": [3, 7]},
+            ],
+            "conditions": [no_probe],
+        })
+        lmr_only = space.canonical({"FUEL_NULL": 0, "NULL_MARGIN": 800, "NULL_RED": 3})
+        self.assertEqual(space.knobs(lmr_only)["NULL_MARGIN"], -200)
+        self.assertEqual(space.knobs(lmr_only)["NULL_RED"], 7)
         cap = next(parameter for parameter in spec["parameters"]
                    if parameter["name"] == "FUT_CAP")
         self.assertEqual(cap["values"], [0, 1, 2])

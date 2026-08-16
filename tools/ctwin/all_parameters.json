@@ -69,6 +69,8 @@
      "reset": ["NULL_CAP_MARGIN", "NULL_CUT_RED"]},
     {"when": {"FUEL_MIN_DEPTH": [99]},
      "reset": ["NULL_MARGIN", "NULL_RED", "FUEL_NULL", "LMR"]},
+    {"when": {"FUEL_NULL": [0]},
+     "reset": ["NULL_MARGIN", "NULL_RED"]},
     {"when": {"NULL_LIMIT": [0]},
      "reset": ["NULL_CAP_MARGIN", "NULL_MARGIN", "NULL_CUT_RED", "NULL_RED",
                "NULL_MIN_DEPTH", "FUEL_MIN_DEPTH", "FUEL_NULL", "LMR"]}
