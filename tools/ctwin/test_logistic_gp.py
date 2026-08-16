@@ -14,6 +14,7 @@ import numpy as np
 import sunfish
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
+import sunfish_gate
 
 from adaptive_gp import (
     aggregate,
@@ -486,6 +487,8 @@ class MixedAcquisitionTest(unittest.TestCase):
 
     def test_mate_gate_rejects_flat_mate_policies_before_running_engine(self):
         gate = pathlib.Path(__file__).with_name("sunfish_gate.py")
+        self.assertEqual(sunfish_gate.SUITES,
+            (("mate2.fen", 6, 20, 20), ("mate3.fen", 8, 14, 12)))
         for options in ({"MATE_DIST": 0}, {"EVAL_ROUGHNESS": 0}):
             request = json.dumps({
                 "engine": "/does/not/exist",

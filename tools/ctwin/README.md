@@ -82,8 +82,8 @@ in the git history of this file.
   illegal moves).
 - `adaptive_gp.py`, `logistic_gp.py`, `all_parameters.json` — an
   asynchronous logistic-GP game tuner and its mixed search/evaluation space.
-  `sunfish_gate.py` prevents policies that lose the deterministic mate floors
-  from consuming games.
+  `sunfish_gate.py` prevents policies below the fixed-depth mate floors
+  (20/20 mate-in-two and 12/14 mate-in-three) from consuming games.
 - `tmlib.py`, `tmsim.py`, `vmatch.py`, `tmmatrix.py`, `npsprofile.py`,
   `npsmodel.json` — the TIME-MANAGEMENT surrogate (see below): the formula
   mirrors, the stage-0 trajectory simulator, the virtual-clock match driver,

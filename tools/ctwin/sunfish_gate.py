@@ -12,7 +12,7 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 INFO = re.compile(r"info depth (\d+) .* score (-?\d+)")
-SUITES = (("mate2.fen", 6, 20), ("mate3.fen", 8, 5))
+SUITES = (("mate2.fen", 6, 20, 20), ("mate3.fen", 8, 14, 12))
 
 
 def wait_for(process, prefix):
@@ -60,9 +60,9 @@ def main():
     argv = [request["engine"], *shlex.split(request["engine_args"])]
     argv += [f"{name}={value}" for name, value in sorted(options.items())]
     results = {name: mate_floor(argv, name, depth, limit)
-               for name, depth, limit in SUITES}
+               for name, depth, limit, floor in SUITES}
     print(" ".join(f"{name}:{found}/{total}" for name, (found, total) in results.items()))
-    return int(any(found < total for found, total in results.values()))
+    return int(any(results[name][0] < floor for name, depth, limit, floor in SUITES))
 
 
 if __name__ == "__main__":
