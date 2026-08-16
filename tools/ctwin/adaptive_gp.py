@@ -673,7 +673,8 @@ def choose_opponent(state, mean_function, challenger, args, space, model=None):
     anchored = {
         space.canonical(batch["knobs"])
         for batch in state["batches"]
-        if batch.get("opponent_knobs") is None
+        if (batch.get("opponent_knobs") is None
+            or space.canonical(batch["opponent_knobs"]) == space.default)
     }
     anchored = {point for point in anchored if space.contains(point)}
     anchored.discard(challenger)

@@ -637,6 +637,21 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(opponents.count(anchored), 3)
         self.assertEqual(opponents.count(None), 7)
 
+    def test_explicit_default_opponents_are_anchored(self):
+        anchored = self.space.canonical({"X": 0, "Y": 10})
+        challenger = self.space.canonical({"X": 100, "Y": 10})
+        state = {
+            "batches": [{
+                "knobs": self.space.knobs(anchored),
+                "opponent_knobs": self.space.knobs(self.space.default),
+                "wins": 1, "draws": 0, "losses": 1,
+            }],
+        }
+        args = SimpleNamespace(duel_fraction=1, pair_weight=0.5, inducing=0)
+        opponent = choose_opponent(
+            state, self.space.prior_mean, challenger, args, self.space)
+        self.assertEqual(opponent, anchored)
+
     def test_opening_epochs_are_balanced_and_reproducible(self):
         with tempfile.TemporaryDirectory() as directory:
             book = pathlib.Path(directory, "book.epd")
