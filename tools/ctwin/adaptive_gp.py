@@ -34,7 +34,7 @@ import signal
 import subprocess
 import threading
 import time
-from collections import deque
+from collections import Counter, deque
 
 import numpy as np
 
@@ -564,7 +564,7 @@ def fantasy_variance(model, space, pending, points, variance, effective_trials):
 
 
 def choose(state, mean_function, candidates, pending, args, space, model=None,
-           forbidden=(), validated=()):
+           forbidden=(), validated=(), observation_counts=None):
     if model is None:
         model = posterior(
             state, mean_function, args.pair_weight, space, getattr(args, "inducing", 0))
@@ -578,11 +578,15 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
 
     mean, variance = statistics(candidates)
 
-    observed = {space.canonical(batch["knobs"]) for batch in state["batches"]}
-    observed = {point for point in observed if space.contains(point)}
+    if observation_counts is None:
+        observation_counts = Counter(
+            space.canonical(batch["knobs"]) for batch in state["batches"])
+    observed = {point for point in observation_counts if space.contains(point)}
     active = [left for left, _ in pending]
     sites = observed | set(active)
-    selections = state.get("selections", len(state["batches"]))
+    selections = state.get("selections")
+    if selections is None:
+        selections = sum(observation_counts.values())
     probability = exploration_probability(
         selections, args.explore_start, args.explore_floor, args.explore_half_life)
     new_axes = set(state.get("new_axes", ()))
@@ -660,8 +664,7 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
             raise RuntimeError("no available acquisition point")
         vector = candidates[int(np.argmax(acquisition))]
     selected_mean, selected_variance = statistics([vector])
-    exact_batches = sum(
-        space.canonical(batch["knobs"]) == vector for batch in state["batches"])
+    exact_batches = observation_counts[vector]
     diagnostics = {
         "mode": mode,
         "explore_probability": probability,
@@ -674,14 +677,16 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
     return vector, diagnostics
 
 
-def choose_opponent(state, mean_function, challenger, args, space, model=None):
+def choose_opponent(state, mean_function, challenger, args, space, model=None,
+                    anchored=None):
     """Choose an anchored, informative rival for a parameter duel."""
-    anchored = {
-        space.canonical(batch["knobs"])
-        for batch in state["batches"]
-        if (batch.get("opponent_knobs") is None
-            or space.canonical(batch["opponent_knobs"]) == space.default)
-    }
+    if anchored is None:
+        anchored = {
+            space.canonical(batch["knobs"])
+            for batch in state["batches"]
+            if (batch.get("opponent_knobs") is None
+                or space.canonical(batch["opponent_knobs"]) == space.default)
+        }
     anchored = {point for point in anchored if space.contains(point)}
     anchored.discard(challenger)
     if not anchored:
@@ -840,6 +845,14 @@ async def optimize(args):
     completed = 0
     allocation_model = None
     modeled_batches = 0
+    observation_counts = Counter(
+        space.canonical(batch["knobs"]) for batch in state["batches"])
+    anchored = {
+        space.canonical(batch["knobs"])
+        for batch in state["batches"]
+        if (batch.get("opponent_knobs") is None
+            or space.canonical(batch["opponent_knobs"]) == space.default)
+    }
 
     def refresh_model():
         nonlocal allocation_model, modeled_batches
@@ -883,7 +896,7 @@ async def optimize(args):
 
     def schedule_experiment(vector, diagnostics):
         opponent = choose_opponent(
-            state, mean_function, vector, args, space, allocation_model)
+            state, mean_function, vector, args, space, allocation_model, anchored)
         number = state.get("next_experiment", 0)
         state["next_experiment"] = number + 1
         sequence = state["next_opening"]
@@ -918,8 +931,8 @@ async def optimize(args):
             count -= size
             pending = pending_comparisons()
             forbidden = rejected_configurations() | ({fixed} if fixed is not None else set())
+            counts = observation_counts.copy()
             proposal_state = selection_state(state)
-            proposal_state["batches"] = list(state["batches"])
             proposals = []
             for _ in range(size):
                 reservation = selection_state(proposal_state)
@@ -928,7 +941,7 @@ async def optimize(args):
                 vector, diagnostics = await asyncio.to_thread(
                     choose, trial, mean_function, candidates, pending, args, space,
                     allocation_model, forbidden | {item[0] for item in proposals},
-                    validated_configurations())
+                    validated_configurations(), counts)
                 commit_selection(proposal_state, trial)
                 proposals.append([vector, diagnostics, reservation, 0, reservation_pending])
                 pending.append((vector, None))
@@ -959,7 +972,8 @@ async def optimize(args):
                     trial = selection_state(item[2])
                     item[0], replacement = await asyncio.to_thread(
                         choose, trial, mean_function, candidates, item[4], args, space,
-                        allocation_model, forbidden | others, validated_configurations())
+                        allocation_model, forbidden | others, validated_configurations(),
+                        counts)
                     if replacement["mode"] != item[1]["mode"]:
                         raise AssertionError("gate replacement changed allocation mode")
                     item[1] = replacement
@@ -1032,6 +1046,9 @@ async def optimize(args):
                     space.knobs(experiment["opponent"])
                     if experiment["opponent"] is not None else None),
             })
+            observation_counts[vector] += 1
+            if experiment["opponent"] is None or experiment["opponent"] == space.default:
+                anchored.add(vector)
             del experiments[number]
             completed += 1
             save_state(args.state, state)

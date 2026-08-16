@@ -1,4 +1,5 @@
 import argparse
+from collections import Counter
 import itertools
 import json
 import math
@@ -128,6 +129,26 @@ class MixedAcquisitionTest(unittest.TestCase):
             Model(), validated={safe})
         self.assertEqual(diagnostics["mode"], "explore")
         self.assertEqual(vector, safe)
+
+    def test_acquisition_uses_incremental_observation_counts(self):
+        class Model:
+            @staticmethod
+            def predict(points):
+                return np.zeros(len(points)), np.ones(len(points))
+
+        observed = self.space.candidates[0]
+        state = {"batches": None, "selections": 1}
+        args = SimpleNamespace(
+            pair_weight=.5, inducing=0, initial_design=1,
+            explore_start=0, explore_floor=0, explore_half_life=1,
+            exploration=1, explore_optimism=0, pairs=1,
+            gate_all=True, acquisition_restarts=4,
+        )
+        candidates = [point for point in self.space.candidates if point != observed]
+        _, diagnostics = choose(
+            state, self.space.prior_mean, candidates, [], args, self.space,
+            Model(), observation_counts=Counter({observed: 7}))
+        self.assertEqual(diagnostics["unique"], 1)
 
     def test_seeded_new_axis_is_designed_after_a_mature_clock(self):
         class Model:
