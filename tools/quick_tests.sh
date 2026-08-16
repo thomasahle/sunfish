@@ -51,7 +51,7 @@ echo
 echo "Regression floors (fixed depth, deterministic; raise when improved)..."
 $T "$1" ${2:-"--quiet"} mate $TESTF/mate1.fen --depth 2 --floor 8
 $T "$1" ${2:-"--quiet"} mate $TESTF/mate2.fen --depth 6 --limit 20 --floor 20
-$T "$1" ${2:-"--quiet"} mate $TESTF/mate3.fen --depth 8 --limit 5 --floor 5
+$T "$1" ${2:-"--quiet"} mate $TESTF/mate3.fen --depth 8 --limit 14 --floor 12
 $T "$1" ${2:-"--quiet"} mate $TESTF/mate4.fen --depth 8 --limit 10 --floor 1
 $T "$1" ${2:-"--quiet"} draw $TESTF/stalemate0.fen --depth 3 --floor 4
 $T "$1" ${2:-"--quiet"} draw $TESTF/stalemate1.fen --depth 4 --floor 2
