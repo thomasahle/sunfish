@@ -89,6 +89,7 @@ static int NULL_RED = 7;         /* deep fuel-probe reduction */
 static int IID_MIN_DEPTH = 99;   /* tuned off; retained as a lab knob */
 static int IID_RED = 3;          /* IID depth reduction */
 static int FUT_MAX = 1;          /* futility pruning when depth <= this */
+static int FUT_CAP = 1;          /* 0 off, 1 quiet moves, 2 negative value */
 static int MATE_DIST = 1;        /* mate scores carry distance (master: 0) */
 /* Replacement-policy battery knobs (tp_move only; tp_score untouched).
  * EVICT_POLICY 0: master/branch root-guarded FIFO insert-then-evict (>).
@@ -694,8 +695,9 @@ static int score_move(const Pos *pos, Move move, int val, int gamma,
     Pos child = domove(pos, move);
     int move_depth = rd - 1 - (!root && guard && val < LMR);
     *real = 1;
-    if (2 <= depth && depth <= 3 && pos->b[move.j] == '.'
-            && move.j != pos->ep && !move.prom) {
+    int capped = FUT_CAP == 1 ? pos->b[move.j] == '.'
+        && move.j != pos->ep && !move.prom : FUT_CAP == 2 && val < 0;
+    if (2 <= depth && depth <= 3 && capped) {
         int cap = pos->score + val + (depth - 1) * QS_A;
         if (cap >= MATE_LOWER) cap = MATE_LOWER - 1;
         if (cap < gamma) {
@@ -1219,6 +1221,7 @@ static struct knob KNOBS[] = {
     { "IID_MIN_DEPTH", &IID_MIN_DEPTH, NULL },
     { "IID_RED", &IID_RED, NULL },
     { "FUT_MAX", &FUT_MAX, NULL },
+    { "FUT_CAP", &FUT_CAP, NULL },
     { "MATE_DIST", &MATE_DIST, NULL },
     { "EVICT_POLICY", &EVICT_POLICY, NULL },
     { "EVICT_SCAN_K", &EVICT_SCAN_K, NULL },
@@ -1238,6 +1241,7 @@ static int set_knob(const char *name, long v) {
     if (!strcmp(name, "KILLER_COUNT") && (v < 1 || v > MAXKILL)) return 0;
     if (!strcmp(name, "QS_TAIL") && (v < 0 || v > 1)) return 0;
     if (!strcmp(name, "FUEL_NULL") && (v < 0 || v > 2)) return 0;
+    if (!strcmp(name, "FUT_CAP") && (v < 0 || v > 2)) return 0;
     if (!strcmp(name, "FUEL_MIN_DEPTH") && v < 1) return 0;
     if (!strcmp(name, "DERIVE_FRESH") && (v < 0 || v > 1)) return 0;
     for (struct knob *k = KNOBS; k->name; k++)

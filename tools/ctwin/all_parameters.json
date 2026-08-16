@@ -27,6 +27,8 @@
      "off_values": [-70000], "scale": 40},
     {"name": "FUT_MAX", "type": "discrete", "default": 1,
      "values": [0, 1], "scale": 1},
+    {"name": "FUT_CAP", "type": "categorical", "default": 1,
+     "values": [0, 1, 2], "off_values": [0]},
 
     {"name": "VALUE_N", "type": "discrete", "default": 280,
      "values": [270, 280, 290], "scale": 20},
@@ -71,7 +73,8 @@
     {"LMR": -70000},
     {"NULL_LIMIT": 0},
     {"NULL_MIN_DEPTH": 99, "FUEL_MIN_DEPTH": 99},
-    {"FUT_MAX": 0}
+    {"FUT_MAX": 0},
+    {"FUT_CAP": 0}
   ],
   "kernel_variance": 0.16,
   "clause_logit_prior": 0,

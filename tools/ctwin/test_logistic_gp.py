@@ -317,6 +317,9 @@ class MixedAcquisitionTest(unittest.TestCase):
         disabled = next(condition for condition in spec["conditions"]
                         if condition["when"] == {"FUEL_MIN_DEPTH": [99]})
         self.assertIn("FUEL_NULL", disabled["reset"])
+        cap = next(parameter for parameter in spec["parameters"]
+                   if parameter["name"] == "FUT_CAP")
+        self.assertEqual(cap["values"], [0, 1, 2])
 
     def test_coordinate_search_matches_exhaustive_gp_ucb(self):
         domain = list(itertools.product(*self.space.coordinate_values))
