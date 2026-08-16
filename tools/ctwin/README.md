@@ -145,7 +145,7 @@ For long joint studies, one color-swapped opening pair is one posterior
 update. Forty engine processes means twenty scheduler slots:
 
 `all_parameters.json` covers every live search/evaluation constant, including
-the null-oracle fuel amount and a mate-distance ablation. It excludes
+the null-oracle fuel amount. It excludes
 `TABLE_SIZE` (a memory budget) and
 the historical or PR-only flavor selectors above; those belong in separate
 ablation matches, not in the production-parameter posterior. Its default
