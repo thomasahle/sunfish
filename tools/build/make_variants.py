@@ -309,6 +309,135 @@ MODS = {
     # Late move reductions off. Threshold-triggered (val < LMR), so setting the
     # threshold to 0 disables it without touching the loop.
     "nolmr": ("\nLMR = 60\n", "\nLMR = 0\n"),
+    # =====================================================================
+    # ENTRY-NATIVE CONSTANT COHORT, round 1 (2026-08-16). Ten arms, each ONE
+    # value change and NOTHING else -- no line added, no line removed, source
+    # byte count IDENTICAL to the baseline's 46244 on every one of them.
+    #
+    # WHY THIS COHORT EXISTS. The entry's search constants are all INHERITED
+    # from classic and none was ever tuned HERE: QS/QS_A/EVAL_ROUGHNESS are
+    # byte-identical to sunfish.py's (40/140/15), the null guard is classic's
+    # `abs(pos.score) < 500` and R=3, and `LMR = 60` was measured only
+    # ON-vs-OFF (+38.9 +/- 19.1, 2026-08-13) -- never scanned. Meanwhile the
+    # search around them changed completely: IIR replaced IID, LMR arrived,
+    # `pend`/`kend` changed the eval's endgame, `pooltm` changed the clock,
+    # and MTD-bi replaced classic's driver. Constants tuned for one pruning
+    # envelope are not tuned for another.
+    #
+    # THE ZERO-BYTE RULE, and what it costs. Only values that pack at
+    # <= 3405 B are admitted; the packed size is what the 4096 ceiling
+    # measures, and lzma is context-sensitive, so a same-length digit swap
+    # can still cost +1..+3 B. Measured over the WHOLE neighbourhood
+    # (scan 2026-08-16): `EVAL_ROUGHNESS` 20/25/30 cost +1/+2/+2 while 10/12
+    # are free and 40 GIVES a byte; every `QS` but 60 costs +2; every `QS_A`
+    # but 160 costs +2; the null MIN-DEPTH (`depth > 2`) costs +3 at every
+    # value and is therefore EXCLUDED from this cohort entirely. The zero-byte
+    # rule is thus a real constraint on the grid, not a formality -- it is why
+    # the down-steps here are short (ER cannot go below 10 in two digits) and
+    # why the cohort is not a symmetric lattice. Recorded so a reader does not
+    # mistake the gaps for a design choice.
+    #
+    # Each arm is standalone; they are NOT meant to compose (two of them touch
+    # the same LMR line and would raise, as designed).
+    #
+    # --- EVAL_ROUGHNESS: the MTD-bi bisection stop width -----------------
+    # `while lower < upper - EVAL_ROUGHNESS` is how many root probes a depth
+    # costs. Coarser = fewer probes = more depth for the same 20000 nodes, and
+    # -- unlike #205's fuel oracle -- it adds NO table-state dependence: the
+    # width is a driver property, not part of any key. It is the cleanest test
+    # available of the #205 finding that bought depth does not convert, since
+    # here the depth is bought with no instability at all.
+    "er40": ("\nEVAL_ROUGHNESS = 15\n", "\nEVAL_ROUGHNESS = 40\n"),
+    "er10": ("\nEVAL_ROUGHNESS = 15\n", "\nEVAL_ROUGHNESS = 10\n"),
+    # --- QS admission: val_lower = QS - depth * QS_A ----------------------
+    # QS is the depth-0 intercept, so it governs the QSearch nodes that
+    # dominate the budget: 60 admits only clearly-winning captures. 60 is the
+    # ONLY zero-byte value on this knob.
+    "qs60": ("\nQS = 40\nQS_A", "\nQS = 60\nQS_A"),
+    # QS_A is the per-ply slope; larger makes val_lower MORE negative, i.e.
+    # admits MORE quiet moves from depth 1 up (-100 -> -120 at depth 1).
+    # 160 is the ONLY zero-byte value on this knob.
+    "qsa160": ("\nQS_A = 140\n", "\nQS_A = 160\n"),
+    # --- LMR threshold: reduce quiet moves with static value below it -----
+    # 75 is the value classic tuned out of its 9,310-game campaign and that
+    # the #205 port DELIBERATELY DROPPED ("the cheap decomposition follow-up
+    # if this arm wins"). The port lost, but the constant was never the thing
+    # tested -- it arrives here standalone, at ZERO bytes instead of the
+    # port's +71, with the entry's own verified reduction left intact.
+    "lmr75": ("\nLMR = 60\n", "\nLMR = 75\n"),
+    # The opposite sign, and the control for it: fewer moves qualify.
+    "lmr40": ("\nLMR = 60\n", "\nLMR = 40\n"),
+    # --- the null-move static guard --------------------------------------
+    # `abs(pos.score) < 500` blocks the null in lopsided positions. #205
+    # deleted it outright and the composite failed, but the decomposition put
+    # the damage on the fuel oracle (13 MTD crossings vs the gate's 4), not on
+    # the guard. Widening it to 900 buys more null cuts and adds NO new
+    # table-state dependence -- |pos.score| is a function of the position.
+    "nlim900": ("abs(pos.score) < 500", "abs(pos.score) < 900"),
+    # --- the null reduction, BOTH probe sites ----------------------------
+    # R 3 -> 4 on the cut probe AND on the mate-band verification probe. They
+    # move together on purpose: the verification certifies the SAME claim the
+    # cut probe made, so leaving it at depth - 3 would verify a different
+    # search than the one being trusted. Two sites, one deviation.
+    "nred4": [
+        ("                score = -self.bound(pos.rotate(n=True), 1 - gamma, depth - 3)\n",
+         "                score = -self.bound(pos.rotate(n=True), 1 - gamma, depth - 4)\n"),
+        ("                elif score < gamma or self.bound(pos.rotate(n=True),\n"
+         "                        1 - MATE_LOWER, depth - 3) >= 1 - MATE_LOWER:\n",
+         "                elif score < gamma or self.bound(pos.rotate(n=True),\n"
+         "                        1 - MATE_LOWER, depth - 4) >= 1 - MATE_LOWER:\n"),
+    ],
+    # --- futility pruning depth ------------------------------------------
+    # The largest pruning-envelope step available at zero bytes: extend the
+    # sorted-descending futility break from depth <= 1 to depth <= 2, so a
+    # whole extra ply discards its tail once pos.score + val < gamma. High
+    # variance in both directions, which is exactly what a 50-game selector
+    # CAN resolve.
+    "fut2": ("if depth <= 1 and pos.score + val < gamma",
+             "if depth <= 2 and pos.score + val < gamma"),
+    # --- the LMR count gate ----------------------------------------------
+    # `cnt > 2` -> `cnt > 0`: reduce from the SECOND move rather than the
+    # fourth. This is #205's intrinsic-gate DIRECTION (reduce earlier) asked
+    # in the entry's own count condition instead of importing classic's null
+    # guard -- zero bytes against the port's +71, and no new table-state
+    # dependence beyond the `cnt` term the baseline already has.
+    "cnt0": ("red = LMR and depth > 2 and cnt > 2 and val < LMR",
+             "red = LMR and depth > 2 and cnt > 0 and val < LMR"),
+    # --- the rest of the zero-byte pool, kept for the liveness map --------
+    # These were generated and probed (60 first-yield positions, 20000 nodes,
+    # bestmove-divergence vs the base) BEFORE any arm was chosen, so that no
+    # game is spent on a constant that cannot change a move. The map is in
+    # nnue_4k/MEASUREMENTS.md under the round-1 pre-registration.
+    "fut0": ("if depth <= 1 and pos.score + val < gamma",
+             "if depth <= 0 and pos.score + val < gamma"),
+    "fut3": ("if depth <= 1 and pos.score + val < gamma",
+             "if depth <= 3 and pos.score + val < gamma"),
+    "lred3": ("1 - gamma, depth - 2 if red else depth - 1",
+              "1 - gamma, depth - 3 if red else depth - 1"),
+    "lred4": ("1 - gamma, depth - 2 if red else depth - 1",
+              "1 - gamma, depth - 4 if red else depth - 1"),
+    "nred2": [
+        ("                score = -self.bound(pos.rotate(n=True), 1 - gamma, depth - 3)\n",
+         "                score = -self.bound(pos.rotate(n=True), 1 - gamma, depth - 2)\n"),
+        ("                elif score < gamma or self.bound(pos.rotate(n=True),\n"
+         "                        1 - MATE_LOWER, depth - 3) >= 1 - MATE_LOWER:\n",
+         "                elif score < gamma or self.bound(pos.rotate(n=True),\n"
+         "                        1 - MATE_LOWER, depth - 2) >= 1 - MATE_LOWER:\n"),
+    ],
+    "nred5": [
+        ("                score = -self.bound(pos.rotate(n=True), 1 - gamma, depth - 3)\n",
+         "                score = -self.bound(pos.rotate(n=True), 1 - gamma, depth - 5)\n"),
+        ("                elif score < gamma or self.bound(pos.rotate(n=True),\n"
+         "                        1 - MATE_LOWER, depth - 3) >= 1 - MATE_LOWER:\n",
+         "                elif score < gamma or self.bound(pos.rotate(n=True),\n"
+         "                        1 - MATE_LOWER, depth - 5) >= 1 - MATE_LOWER:\n"),
+    ],
+    "nlim250": ("abs(pos.score) < 500", "abs(pos.score) < 250"),
+    "nlim300": ("abs(pos.score) < 500", "abs(pos.score) < 300"),
+    "er12": ("\nEVAL_ROUGHNESS = 15\n", "\nEVAL_ROUGHNESS = 12\n"),
+    "lmr30": ("\nLMR = 60\n", "\nLMR = 30\n"),
+    "lmr50": ("\nLMR = 60\n", "\nLMR = 50\n"),
+    # =====================================================================
     # THE #205 PORT: classic's tuned null shaping, and its intrinsic LMR gate.
     #
     # SCREENED AND NOT LANDED, 2026-08-16. Fixed-node SPRT, 1000 games at the

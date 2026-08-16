@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **PRE-REGISTERED before game 1: ENTRY-NATIVE CONSTANT SELECTOR, round 1. Ten arms, each ONE value change to a search constant the entry INHERITED from classic and never tuned here, every one verified ZERO-BYTE by pack (≤ 3405 B, three of them −1 B). 50-game fixed-node mini-matches vs the pinned entry, per the standing SELECTOR SPEC** | **A LIVENESS MAP WAS BUILT FIRST, and it already answers one open question at ZERO games**: 21 zero-byte deviations were probed for bestmove divergence vs the base at the screen's own 20000-node budget, and **`LMR` is a DEAD KNOB across its whole zero-byte band — deadest exactly where classic's tuning points**. Over the full 505-position first-yield suite: **`LMR = 75` changes ONE move in 505 (0.2%)**, 50 → 3, 40 → 9, 30 → 18 (3.6%). The threshold sits in a value dead zone — quiet moves carry PST deltas under 40, captures carry material over 100, so every threshold in 50..75 selects the same set. **This retires #205's deferred `LMR = 75` follow-up without a game**, and implies `LMR`'s measured +38.9 ± 19.1 belongs to the reduction MECHANISM, not the threshold. Also dead: **`QS_A = 160` at 0/505 exactly** — the only zero-byte value on that knob, so the QS slope axis is closed at zero cost — and the null static guard (900 → 8/505 = 1.6%; `abs(pos.score) < 500` almost never binds). Cohort chosen from the LIVE remainder, mechanism registered in advance (Δ mean depth / MTD crossings / diff-moves per 60): `fut3` +1.59/1/12, `fut2` +1.05/3/15, `lred4` +1.44/1/11, `lred3` +0.94/1/10, `nred5` +0.75/1/6, `cnt0` +0.30/1/8, `er40` +0.29/**0**/9, `qs60` −0.05/2/12, `nred2` −0.51/2/12, `fut0` −0.65/1/6. Base is 9.98 plies, 1 crossing. **`er40` is the one arm that buys depth at ZERO instability** (crossings 1 → 0), the cleanest available test of #205's "bought depth does not convert". Gate ladder green on all 11 builds; driver v3 + black-FEN abort armed (the #205 run-1 void condition). Decision rule fixed in advance: top pick must exceed **50%** AND lead 2nd by **> 10 points**, else escalate that pair to N\*\* = 150; one illegal move stops the cohort |
 | 2026-08-16 | **#205 PORT SCREEN VERDICT: UNDECIDED at the 1000-game cap — **+5.91 ± 17.25**, 95% **[−11.33, +23.17]**, 0 illegal, 0 forfeits. The interval EXCLUDES classic's own **+48.25 ± 27.03**, so classic-tuned search does NOT transfer to the entry — and at **+71 B** it fails the byte bar outright. DO NOT LAND** | LLR 0.20 of (−2.94, 2.94) = 6.7% of a decision; 500 pairs 0 unpaired, ptnml **[55, 82, 219, 79, 65]**, 50.85%, adjudication symmetric (679/1000, same driver both arms), median 225 plies, 54 m on the box at conc 8. Pentanomial **recomputed from the PGN independently** and reproduces fastchess to the digit. **The negative is informative because the mechanism DID transfer**: same 20000 nodes, the arm is deeper on **53/60** positions and shallower on **0**, **+2.20 plies** — the depth was bought and did not convert. Decomposition says why it might not: fuel oracle alone = **1.87 plies for 2** MTD crossings, intrinsic gate alone = **0.27 for 4**, together **2.20 for 13** — depth additive, **instability superadditive**. Byte economics settle it: **0.08 Elo/byte** at the point estimate (0.33 at the 95% upper bound) against LMR's ~1.8. `LMR = 75` was pre-registered as dropped and the decomposition bounds that gap — the whole intrinsic half is 0.27 of 2.20 plies, a poor place for a hidden +40. No timed confirmation is spent. Landing shape was still verified end to end (byte-identical artifact `f56119a7…`; golf count `nullmove` 7→8; **3 of 6 anchors survive landing**, incl. the fuel oracle itself — the `iirk` silent-double trap) |
 | 2026-08-16 | **#205 PORT RUN 1 VOID BY INSTRUMENT at 868 games — `sunfish_ui/` was not staged in the arena, so BOTH arms fell through to the builtin UCI loop, which silently ignores `position fen`, and answered an EPD book from the START POSITION. 868 illegal moves, all `g1f3`, **434 base / 434 n205 — exactly symmetric**. NO Elo exists and the arms are innocent** | The entry resolves its driver from THIS FILE'S GRANDPARENT (`arena/bin/` → `arena/`), which had no `sunfish_ui/`. A documented trap (2026-08-15 stage-2 amendment says it verbatim) that I walked into because `tools/screens/ab_fixednode.sh` still specifies an EPD book — it predates the finding and its wrappers assumed an arena with `sunfish_ui/` beside `bin/`. The gate ladder never saw it: the gates drive FENs through `sunfish_ui` in-process and passed 130/130 zero-illegal on both arms. **Fixed so it cannot recur silently**: driver v3 staged beside `bin/`, and the runner now ABORTS before game 1 unless both arms print `v3 nodes fen` AND answer a black-to-move FEN with `g8f6` rather than `g1f3` — verified, not assumed. Run 2 re-registered with **srand 20260825** (20260824 burned) and adjudication reclassified from structurally-inert to **ACTIVE and symmetric**, since the driver makes both arms emit `score cp`. Cost: ~3 minutes of 8 slots |
 | 2026-08-16 | **PRE-REGISTERED before game 1: the #205 PORT into the 4k entry — classic's tuned null shaping (two-regime null + fuel oracle, `NULL_MARGIN = -200`, `depth - 7` probe, `abs(pos.score) < 500` guard dropped) plus the intrinsic LMR GATE, at **+71 B measured** (3405 → 3476, 620 spare). Fixed-node SPRT, srand 20260824, cap 1000, gate ladder ALL GREEN** | `LMR = 75` is **deliberately DROPPED** and said so before the result: 60 already governs measured entry behaviour (+38.9 ± 19.1) and classic tuned 75 for a reduction classic did not previously have — port constants that arrive WITH a mechanism, never overwrite constants that already govern measured behaviour. #205's IID removal is **already done here and better** (`iirk.noiid`, IIR, +22.3 ± 16.0), so the arm cannot reproduce classic's +48.25 ± 27.03 — a share of that is classic acquiring an LMR the entry already has. Gates: mate-conversion **8/8 both arms** (the test that matters — KQK/KRK are exactly what the deleted guard used to shield), legality **130/130, 0 illegal** on laptop AND box at `go nodes 20000`, first-yield MAX **676/2048 identical**, empty-dir smoke both. **Mechanism confirmed and a cost registered in advance**: same 20000-node budget, the arm reaches a deeper final depth on **53/60** positions and shallower on **0** (mean **9.93 → 12.13 plies**), while the MTD bracket-crossing tripwire goes **1 → 13**. That tripwire also corrects upstream's own comment: the fuel probe's *window* is (pos, depth)-fixed but the *probe* reads `bound()`, which can answer from the table, so `d` is TABLE-STATE dependent — a real new break of one-value-per-key, clamped by the MTD guards. Claiming position-determinism would be a model/code divergence, so the mod's comment was rewritten instead |
@@ -286,6 +287,238 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-16 — PRE-REGISTRATION: the ENTRY-NATIVE CONSTANT SELECTOR, round 1. Ten zero-byte arms, and a liveness map that retires `LMR = 75` before game 1
+
+Written and committed **before a single game**. Nothing below is a result.
+
+### Why constants, and why now
+
+The funnel is narrow. Fitted evals are dead (8/8 lost in play). Classic-search
+PORTS do not transfer (#205: +5.91 ± 17.25 over 1000 games, interval excluding
+classic's own +48.25 ± 27.03, at +71 B). Node savings do not convert (#190).
+The two instruments that stand say the remaining distance is speed and time
+management: fixed-node **−1.74 ± 27.93** against classic (per-node parity) and
+clean-clock **+244.47 ± 39.23** at 60+1.
+
+What has never been tried is the cheapest thing in the campaign: **tuning the
+entry's own search constants, in the entry's own context, at zero bytes.**
+Every one of them is INHERITED and none was tuned here.
+
+| constant | entry | classic | ever tuned here? |
+|---|---|---|---|
+| `QS` | 40 | 40 | no — byte-identical to `sunfish.py` |
+| `QS_A` | 140 | 140 | no — byte-identical |
+| `EVAL_ROUGHNESS` | 15 | 15 | no — byte-identical |
+| `LMR` | 60 | (classic has no LMR) | **on/off only** (+38.9 ± 19.1, 2026-08-13); the VALUE was never scanned |
+| null static guard | `abs(pos.score) < 500` | same | no |
+| null reduction | `depth - 3`, both probes | `depth - 3` | no |
+| null min depth | `depth > 2` | same | no |
+| futility depth | `depth <= 1` | same | no |
+| LMR count gate | `cnt > 2` | n/a | no |
+| LMR reduction | `depth - 2` | n/a | no |
+| `PROBE_CAP` | 40 | n/a | safety cap, not a strength knob |
+| `TABLE_SIZE` | 10**6 | 10**6 | never reached at a 20000-node budget |
+
+Meanwhile the search AROUND those constants was rebuilt: IIR replaced IID,
+LMR arrived, `kend`/`fresh`/`pend` changed the eval, `pooltm` changed the
+clock, and MTD-bi with instability guards replaced classic's driver. Constants
+tuned for one pruning envelope are not tuned for another — and these were not
+tuned for either.
+
+### The zero-byte rule is a real constraint, measured not assumed
+
+Only value changes. No line added, no line removed: **source is byte-identical
+at 46244 B on every arm**. But the binding number is the PACKED size, and lzma
+is context-sensitive, so a same-length digit swap can still cost bytes. The
+whole neighbourhood was packed (base = **3405 B**, 691 spare):
+
+- `EVAL_ROUGHNESS`: 10 and 12 are free, **40 gives a byte back**, but 20/25/30
+  cost **+1/+2/+2**.
+- `QS`: **only 60** is free; 20/25/30/70/80/90 all cost **+2**.
+- `QS_A`: **only 160** is free; 100/110/120/180/200/220 all cost **+2**.
+- null MIN-DEPTH (`depth > 2`): **+3 at every value** — excluded entirely.
+- `LMR` 30/50/75 free, 40 gives a byte, 80/90/99 cost +1.
+- the null guard, the null reduction, the futility depth, the LMR count gate
+  and the LMR reduction amount are free across their useful ranges.
+
+So the grid is ragged by construction. The down-steps are short (ER cannot go
+below 10 in two digits), and the cohort is not a symmetric lattice. That is
+the constraint's fault, not a design choice, and it is recorded here so the
+gaps are not read as intent.
+
+### A LIVENESS MAP CAME FIRST — and it already kills one open question
+
+A 50-game selector spends real games. Spending them on a constant that cannot
+change a move is spending them on nothing. So before choosing arms, all 21
+zero-byte deviations were driven over the 60 first-yield positions at the
+screen's own 20000-node budget and scored on **bestmove divergence from the
+base**, plus mean final depth and MTD bracket crossings. Base: **9.98 plies,
+1 crossing**.
+
+| arm | change | Δ depth | crossings | diff moves /60 | packed B |
+|---|---|---|---|---|---|
+| `fut3` | futility `depth <= 1` → `<= 3` | **+1.59** | 1 | 12 | 3405 |
+| `lred4` | LMR reduction 1 → 3 plies | +1.44 | 1 | 11 | 3405 |
+| `fut2` | futility `depth <= 1` → `<= 2` | +1.05 | 3 | **15** | 3405 |
+| `lred3` | LMR reduction 1 → 2 plies | +0.94 | 1 | 10 | 3405 |
+| `nred5` | null `depth - 3` → `- 5`, both probes | +0.75 | 1 | 6 | 3405 |
+| `cnt0` | LMR count gate `cnt > 2` → `> 0` | +0.30 | 1 | 8 | 3405 |
+| `er40` | `EVAL_ROUGHNESS` 15 → 40 | +0.29 | **0** | 9 | **3404** |
+| `qs60` | `QS` 40 → 60 | −0.05 | 2 | 12 | 3405 |
+| `nred2` | null `depth - 3` → `- 2`, both probes | −0.51 | 2 | 12 | 3405 |
+| `fut0` | futility `depth <= 1` → `<= 0` | −0.65 | 1 | 6 | **3404** |
+| — DEAD BELOW THIS LINE — | | | | | |
+| `er12` | `EVAL_ROUGHNESS` 15 → 12 | −0.03 | 1 | 3 | 3405 |
+| `er10` | `EVAL_ROUGHNESS` 15 → 10 | −0.06 | 1 | 3 | 3405 |
+| `nlim250` | null guard 500 → 250 | −0.10 | 2 | 2 | 3405 |
+| `nlim300` | null guard 500 → 300 | −0.10 | 1 | 2 | 3405 |
+| `lmr30` | `LMR` 60 → 30 | −0.05 | 1 | 1 | 3405 |
+| `nlim900` | null guard 500 → 900 | +0.02 | 1 | 1 | 3405 |
+| `lmr40` | `LMR` 60 → 40 | −0.01 | 1 | **0** | 3404 |
+| `lmr50` | `LMR` 60 → 50 | +0.00 | 1 | **0** | 3405 |
+| `lmr75` | `LMR` 60 → 75 | +0.02 | 1 | **0** | 3405 |
+| `qsa160` | `QS_A` 140 → 160 | +0.00 | 1 | **0** | 3405 |
+
+The three zeros were then **re-measured at n = 505** — the whole first-yield
+suite, not the 60-position head — because "0 of 60" is a claim worth eight
+times the evidence before it retires an open question:
+
+| arm | diff /60 | **diff /505** | rate |
+|---|---|---|---|
+| `qsa160` | 0 | **0** | **0.0%** — exactly dead |
+| `lmr75` | 0 | **1** | 0.2% |
+| `lmr50` | 0 | 3 | 0.6% |
+| `nlim900` | 1 | 8 | 1.6% |
+| `lmr40` | 0 | 9 | 1.8% |
+| `lmr30` | 1 | 18 | 3.6% |
+
+**`LMR` is a dead knob across its zero-byte band, and it is deadest exactly
+where classic's tuning points.** `LMR = 75` changes ONE move in 505; 50 changes
+three. The mechanism is plain once seen: `LMR` is compared against
+`pos.value(move)`, and the entry's move values are bimodal — quiet moves carry
+PST deltas well under 40, captures carry material well over 100 — so every
+threshold in 50..75 selects the same set, and the knob only begins to wake
+going DOWN (30 → 3.6%). **This retires the `LMR = 75` follow-up that #205
+explicitly deferred ("the cheap decomposition follow-up if this arm wins"), at
+zero games**: classic tuned 75 out of a 9,310-game campaign for a reduction
+classic did not previously have, and in this engine the constant has nothing
+to bite on. The honest reading of the whole band is that `LMR`'s measured
++38.9 ± 19.1 is the reduction MECHANISM's, not the threshold's.
+
+**`QS_A = 160` is exactly dead, 0 of 505** — and it is the only zero-byte value
+on that knob, so the QS slope axis is closed at zero cost, definitively. The
+null static guard is nearly dead at every zero-byte value (250/300 → 2/60,
+900 → 8/505 = 1.6%): `abs(pos.score) < 500` almost never binds at these
+depths, which independently bounds how much #205's guard-deletion could ever
+have contributed.
+
+Those seven arms are **NOT PLAYED**. Recording them as measured-inert is the
+result; spending 350 games to learn it again is not.
+
+### The cohort, and what each arm asks
+
+Ten arms, the live remainder, each ONE deviation, each vs the pinned entry:
+
+1. **`fut2`**, **`fut3`**, **`fut0`** — the futility depth, three points on the
+   entry's single most responsive knob. Extending the sorted-descending break
+   from depth ≤ 1 to ≤ 2 buys **+1.05 plies** for the same nodes and to ≤ 3
+   buys **+1.59**; ≤ 0 spends 0.65 plies to keep depth-1 accuracy. Three points
+   are how a slope is told from a local optimum.
+2. **`lred3`**, **`lred4`** — the LMR reduction AMOUNT (1 → 2 → 3 plies). The
+   threshold is dead but the depth it removes is not, and the entry's verified
+   re-search is left intact, so a bad reduction still costs only a re-search.
+3. **`nred2`**, **`nred5`** — the null reduction, both ends. Both probe sites
+   move together on purpose: the mate-band verification certifies the SAME
+   claim the cut probe made, so leaving it at `depth - 3` would verify a
+   different search than the one being trusted.
+4. **`cnt0`** — reduce from the second move rather than the fourth. This is
+   #205's intrinsic-gate DIRECTION asked in the entry's own count condition
+   instead of importing classic's null guard: **zero bytes against the port's
+   +71**, and no new table-state dependence beyond the `cnt` term already
+   there.
+5. **`qs60`** — the QS admission intercept, the only zero-byte value available.
+   QS nodes dominate the budget, so this is the nps knob.
+6. **`er40`** — the MTD-bi bisection stop width. **The one arm that buys depth
+   at zero instability: crossings 1 → 0**, because the width is a driver
+   property and not part of any table key. It is the cleanest test the entry
+   can run of #205's finding that bought depth does not convert, since here
+   there is no instability to pay for it with.
+
+### Instrument, and the decision rule — both fixed before game 1
+
+Per the standing SELECTOR SPEC (`nnue_4k/TRAINQUEUE.md`): **50 games = 25
+colour-swapped pairs, fixed nodes 20000, sources under pypy3, one pinned base
+for the whole cohort, fresh srand per candidate, statistic score%.** It returns
+a **TOP PICK and never a ranking** — measured pick-the-best 96.8%, full
+ordering only 72.4%, so positions 2..10 of the table will be NOISE and must not
+be read as an order. No SPRT: a mini-match is fixed-N, and an early stop would
+bias the statistic it reads.
+
+**Declared deviation from the spec**: the spec names `book3k.pgn`, which does
+not exist on this box. `openings_2k.epd` is used instead — the book every
+recent fixed-node screen here used, including #205. An EPD book is exactly
+what voided #205's run 1, so the driver check is not optional (below).
+
+**Promotion rule, fixed now**: the top pick is promoted to a registered
+1000-game fixed-node screen (SPRT elo0=0 elo1=10) only if it **scores above
+50%** — it must beat the pinned entry, not merely top a table of losers — AND
+**leads second place by more than 10 percentage points**, the spec's measured
+resolution floor. If the top two are inside 10 points the mini-match has not
+separated them and that PAIR is extended to **N\*\* = 150**. Ties are never
+broken by val; that inversion is why this spec exists.
+
+**Stop conditions**: one illegal move by any arm stops the whole cohort and
+voids that arm (the zero-illegal bestmove floor is inviolable). A time forfeit
+is impossible by construction here — there is no clock.
+
+srand, fixed and recorded, one per arm and fresh: `fut3` 20260830, `fut2`
+20260831, `fut0` 20260832, `lred4` 20260833, `lred3` 20260834, `nred5`
+20260835, `nred2` 20260836, `cnt0` 20260837, `qs60` 20260838, `er40` 20260839.
+
+### Gates, all green before game 1
+
+Every one of the 11 builds (base + 10):
+
+- **driver v3 + black-FEN abort** — each arm must print
+  `sunfish_ui/uci.py v3 nodes fen` AND answer a black-to-move FEN with `g8f6`,
+  a black move, before it is allowed to play. This is the #205 run-1 void
+  condition, checked rather than assumed.
+- **legality gate at the screen's own budget** (`--nodes=20000`), zero illegal,
+  zero no-move.
+- **mate-conversion gate** — the suite that matters whenever null or futility
+  pruning is widened.
+- **`depth = max(depth, 0)`** already clamps the recursion, so `lred4`'s
+  `depth - 4` at depth 3 lands in QSearch rather than at a negative depth.
+
+Arena `~/sunfish-bench/entry-consts-20260816` on the bench box, concurrency 8,
+`nice -n 10`, cotenancy census at launch and at finish. The owner's tuner and
+the training tail share the box and are never touched; ops are by PID only.
+
+Arm sha256[:12], generated by `tools/build/make_variants.py` from
+`nnue_4k/pst_entry.py` (single source, occurs-exactly-once anchors), and
+sha-verified after transfer to the box rather than rebuilt there:
+
+`base 61d20d765429` · `fut3 fc41221f2f0c` · `fut2 5a37f577bbc3` ·
+`fut0 c7a6e5ffbaec` · `lred4 740f644b0d57` · `lred3 db6869021dfb` ·
+`nred5 345849f92426` · `nred2 997fabeb3635` · `cnt0 3a5661b37d6d` ·
+`qs60 ff97f652d0f9` · `er40 66d838c4532b`
+
+`nred4 9efb184cc136` was built and probed (+0.40 plies, 6/60) but is NOT
+played: `nred2` and `nred5` bracket it and two points beat three on one axis
+when the third is the midpoint.
+
+### What a NULL result would mean, said in advance
+
+If no arm clears the promotion rule, that is not a wasted round. Ten live
+deviations spanning every tunable constant in the entry's search, each moving
+the search measurably (6 to 15 of 60 positions play a different move), all
+landing inside a 10-point band would say the entry **sits at a local optimum
+of its own constants** — and would redirect the remaining ~155 Elo squarely
+onto nps and time management, which is where both standing instruments already
+point. That conclusion is registered here so it cannot be invented afterwards.
 
 ---
 
