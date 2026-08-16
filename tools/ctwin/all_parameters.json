@@ -56,6 +56,8 @@
   "interaction_order": 2,
   "structural_fraction": 0.20,
   "conditions": [
+    {"when": {"NULL_MIN_DEPTH": [99]},
+     "reset": ["NULL_CAP_MARGIN", "NULL_CUT_RED"]},
     {"when": {"FUEL_MIN_DEPTH": [99]},
      "reset": ["NULL_MARGIN", "NULL_RED", "LMR"]},
     {"when": {"NULL_LIMIT": [0]},
