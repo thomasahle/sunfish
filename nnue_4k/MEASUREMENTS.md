@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **DEADLINE-POLL VERDICT: the SAFE branch fired. `nodes % 4096` is SAFE at 60+1 — **zero time forfeits in 300 games** — and **Elo-NEUTRAL at +1.16 ± 22.46**. The test delivered the safety answer it was registered to deliver, and no Elo claim** | Gates read in the registered order before any number: **count 300/300** (the gate launch 1 lacked), **illegal 0**, forfeit attribution **base 0 / poll4096 0** → SAFE. Terminations **300/300 `normal`**, zero adjudication as registered. Only then: **50.17%**, ptnml **[6, 25, 86, 28, 5]** over 150 pairs 0 unpaired, 95% **[−21.30, +23.62]**, recomputed independently (pair total 150.5 reproduces exactly). **ESTABLISHED**: halving the clock-read frequency does not eat the shipped `pooltm`'s margin at 60+1; the box's clean-timed record extends **1251 → 1551**. **NOT ESTABLISHED**: any gain — ±22.46 is uninformative against an effect of a few Elo and the interval spans zero. Being exact about the registered wording, "safe AND the Elo interval is non-negative": the **point estimate** is non-negative, the **interval** is not (lower bound −21.30), so the honest verdict is **safe and neutral**, and nothing here justifies landing 4096 on Elo grounds. Follow-up **registered, NOT run** at **10+0.1** (same arms, same inverted tripwire) and justified on mechanism, not on this Elo: the poll saves one `time.time()` per N nodes, a rounding error against 60+1's ~1.5 s/move, and clock-read frequency binds hardest when the clock is shortest. `poll8192` stays registered-not-run behind BOTH results. **Two instrument bugs found and fixed, both the same failure shape** — with an inverted tripwire "no forfeits" is the PASS condition, so launch 1's empty PGN printed "SAFE", and the classifier turned an unattributable forfeit into SAFE (caught by unit test before any result existed). Neither cost a game. Standing rule: **when absence of evidence is your pass condition, every uncertainty must fail closed** |
 | 2026-08-16 | **PRE-REGISTERED before game 1: the DEADLINE POLL at 60+1 (`nodes % 2048` → `4096`), N=300 fixed, adjudication NONE — with the safety tripwire INVERTED, both branches fixed in advance** | The one search constant a fixed-node instrument **cannot** see: it only governs how often the in-search clock is read, so under `go nodes` it is exactly inert and round 1 was structurally blind to it — and it is the only constant left touching **nps**. **It ships, checked in the payload not reasoned about**: `xz -d` finds exactly one `nodes%2048` in the base artifact and one `nodes%4096` in the arm, with the minifier-hidden node-cap poll correctly absent from both. **Both pack to 3405 B — zero byte delta**; base sha `5a207fdf9cf05f2e…` is **bit-identical to the artifact that measured +244.47 ± 39.23**. PACKED arms, not sources, and that is load-bearing: only the packed artifact runs the shipped builtin loop and shipped `pooltm`, whose overrun margin is the thing under test — so the driver check takes its packed form (**must boot AND must print NO `info string driver`**). **TRIPWIRE**: a **BASE** forfeit is a VENUE SIGNAL and **voids** (box record 1251/1251, so it means the machine); a **POLL4096** forfeit is **THE MEASUREMENT** — "4096 unsafe at 60+1", a result, not a void — and the lead then closes at 2048 with the safety evidence banked; both forfeiting reads as venue first; any illegal move stops everything. Attribution is mechanical via `classify.py` exit code, never by eye. Reading fixed in advance: safe + non-negative interval means the nps gain is real but small at 60+1, so **this test mostly measures SAFETY**, and a pass **registers (does not run)** a 10+0.1 follow-up where clock-read frequency actually binds. srand 20260870, conc 8, `book3k.pgn`, arena `~/sunfish-bench/poll-20260816`. Elo unread until N=300 |
 | 2026-08-16 | **`er40` SCREEN VERDICT: `EVAL_ROUGHNESS` 15 → 40 is **−21.22 ± 18.60**, 95% **[−39.88, −2.68]** — an interval EXCLUDING ZERO. Depth bought at ZERO instability cost still does not convert; it COSTS. #205's open question is closed** | 1000 games, **0 illegal, 0 forfeits**, 500 pairs 0 unpaired, ptnml **[83, 96, 178, 85, 58]**, 46.95% (359W/420L/221D), nElo −24.68 ± 21.53, adjudication symmetric 687/1000, 54 m at conc 8. Pentanomial **recomputed from the PGN independently** and reproduces fastchess to the digit. SPRT is UNDECIDED at cap (LLR −2.45 of −2.94, 83.1% toward H0) because the hypotheses were 0 vs 10 and the truth is ≈ −21, below both — so "undecided" means **not better**, not unknown, and unlike #205's straddling [−11.33, +23.17] this interval is entirely negative. **This was registered ON MECHANISM before `er40`'s own mini-match was scored, and run despite its 7th-place finish**: it is the only zero-byte arm that buys depth while REDUCING instability (+0.29 plies, MTD crossings **1 → 0**). #205's decomposition left open that instability, not depth, was the problem; removing the instability entirely and still losing 21 Elo **refutes that reading**. Extra plies at a fixed node budget are worth ~nothing here however paid for — the MTD driver's **value resolution is worth more than the depth its probes could buy**. Depth-does-not-convert now rests on **twelve arms across three registrations**. Bonus calibration: the 50-game mini-match said −41.9 ± 92.0 where the screen says −21.2 ± 18.6 — the point estimate was wrong by 100% of the effect, which is exactly why the spec forbids quoting one |
 | 2026-08-16 | **CONSTANT SELECTOR ROUND 1: NO WINNER — and the cohort tilts NEGATIVE, suggestively. 500 games, 0 illegal, 0 forfeits. The entry sits at or near a local optimum of its own search constants** | Top pick `cnt0` 53.00%, tied with `qs60` at **53.00% exactly — a 0.00-point gap against a required 10** — so the pre-registered rule does not fire and nothing is promoted on rank. **The informative part is the aggregate**: the null calibration registered BEFORE the games said top-of-ten reads 59.6% on average under a pure null, and the observed top is **53.0%**. Pooling all 250 pairs directly: **−24.36 Elo, 95% [−50.05, +1.07], two-sided p = 0.060**; P(top-of-ten ≤ 53.0%) = **2.75%** against this round's own variance. **A published-then-corrected number is on the record**: this entry first said 2.13% / 0.83% and "significantly", computed from the registered null's #205 pentanomial, whose 43.8% draw rate is higher than this round's 37.6% — narrower null, p-values biased toward significance. Corrected within the hour, before anything was built on it; the finding is **suggestive, not significant**. Every zero-byte perturbation of every live constant, in BOTH directions, makes the entry worse on average. Full map (score%): cnt0 53, qs60 53, nred5 51, fut3 50, lred3 49, lred4 49, er40 44, nred2 41, fut0 40, fut2 35. **#205's central finding reproduced on ten fresh points**: corr(Δdepth, score%) = **+0.252** (p≈0.46) — the four arms buying ≥0.94 plies average 45.8%, the three SPENDING depth average 44.7%, statistically indistinguishable, so **buying plies at fixed nodes is worth ~nothing**. Instrument amendment offered: **the selector ranks FAMILIES, not CONSTANTS** — it resolves ~101 Elo at N\*=50 and ~59 at N\*\*=150, against constant effects ≤20 Elo, so the tie is deliberately NOT escalated (it would buy nothing) and both leaders are registered-not-run for screens. Individual intervals span ±64..±93 and 8 of 10 contain zero: this rules out large wins, it does not prove the constants tuned |
@@ -290,6 +291,89 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-16 — DEADLINE-POLL VERDICT: **SAFE branch. 4096 is safe at 60+1** — zero forfeits in 300 games — and **Elo-NEUTRAL at +1.16 ± 22.46**. The test delivered exactly what it was registered to deliver: a safety answer, not an Elo one
+
+The registered SAFE branch fired. 2 h 27 m on the box at concurrency 8.
+
+| gate, read in the registered order | result |
+|---|---|
+| **count** | **300 / 300** — the gate that launch 1 lacked |
+| **illegal** | **0** |
+| **forfeit attribution** | **base 0, poll4096 0** → **SAFE branch** |
+| terminations | **300/300 `normal`**, zero adjudication (as registered) |
+
+Only then was Elo read:
+
+| | |
+|---|---|
+| `poll4096` | **+1.16 ± 22.46**, 95% **[−21.30, +23.62]** |
+| score | **50.17%**, 150.5 / 300 points |
+| ptnml | **[6, 25, 86, 28, 5]** over **150 pairs, 0 unpaired** |
+| venue | load 23.37 at launch, 19.30 at finish |
+| arena / srand / PID | `~/sunfish-bench/poll-20260816` / 20260870 / 162164 |
+
+Recomputed independently from the PGN; the pentanomial reproduces the pair
+total exactly (0·6 + 0.5·25 + 1·86 + 1.5·28 + 2·5 = 150.5).
+
+### What this establishes, and what it does not
+
+**ESTABLISHED — the safety question, which was the point.** `nodes % 4096`
+produced **zero time forfeits in 300 real-clock games** against a base that
+also produced zero. The worst-case overrun from halving the clock-read
+frequency does not eat the shipped `pooltm`'s margin at 60+1. The box's
+clean-timed record extends **1251 → 1551 games**.
+
+**NOT ESTABLISHED — any Elo gain.** ±22.46 against an expected effect of a few
+Elo is an uninformative interval, and it spans zero. The registration said in
+advance that this test *mostly measures SAFETY*, and that is precisely how it
+must be read: **+1.16 ± 22.46 is Elo-neutral, not a win.** Worth being exact
+about the registered wording — "safe AND the Elo interval is non-negative" —
+because the point estimate is non-negative but the *interval* is not: its lower
+bound is −21.30. The honest verdict is **safe and neutral**, and nothing here
+justifies landing 4096 on Elo grounds. It also does not cost anything: zero
+bytes, and no measured regression.
+
+### Consequently: the follow-up is registered, NOT run — and it is justified on mechanism, not on this Elo
+
+The reason to keep going is arithmetic, not the +1.16. The poll saves one
+`time.time()` per N nodes, so its benefit is a roughly fixed fraction of nps —
+but at 60+1 a move gets ~1.5 s of thinking, and a saved clock read is a
+rounding error against that. Clock-read frequency binds *hardest when the clock
+is shortest*. So:
+
+| registered, NOT run | |
+|---|---|
+| arms | identical, sha-pinned `5a207fdf…` vs `7b46f333…`, zero byte delta |
+| tc | **10+0.1** |
+| form | N = 300 fixed, adjudication NONE, conc 8, fresh srand |
+| tripwire | **the same inversion**: base forfeit = venue = void; `poll4096` forfeit = the measurement ("4096 unsafe at 10+0.1") |
+| stated risk | 10+0.1 sits far closer to the TM's blind-play floor, so forfeits are more likely on BOTH arms — the void branch is correspondingly more likely to fire, and the venue evidence must be read before anything else |
+
+`poll8192` remains **registered-not-run behind BOTH results**. Tonight licenses
+it at 60+1 only, and 8192 doubles exactly the quantity that binds hardest at
+the short clock; it may only be considered if 4096 is also safe at 10+0.1.
+
+### The instrument story of this test is worth more than its Elo
+
+Two bugs were found and fixed, and **both were the same failure shape**: with an
+INVERTED tripwire, "no forfeits" is the PASS condition, so anything that
+produces no forfeit data reads as a pass.
+
+1. **Launch 1** died at game 1 (wrappers written without `#!/bin/sh`) and the
+   runner printed "SAFE — zero forfeits" over an **empty PGN**. Fixed by a
+   count gate that aborts and explicitly refuses every branch.
+2. **The classifier** turned an unattributable forfeit into exit 0 = SAFE,
+   found by unit test on synthetic PGNs *before any result existed*. Fixed to
+   exit VOID, since unknown ownership cannot be ruled out as the base.
+
+Neither cost a game. The generalisable rule, which belongs on any future
+inverted-tripwire design: **when absence of evidence is your PASS condition,
+every uncertainty must be wired to fail closed** — an empty match, an
+unparseable result, a missing arm, an unattributable event. Enumerate them at
+design time, because none of them will announce itself.
 
 ---
 
