@@ -2,13 +2,35 @@
 
 Every experiment this lane runs — verdicts, negatives, prices, and the
 reasoning that follows from them. **Newest first.** Append a dated entry
-for each measurement; never rewrite an old one (corrections get their own
-entry that says what changed).
+for each measurement; never rewrite an old one.
 
 An entry carries the numbers with their error bars, the game/position
 counts behind them, what the result means, and what happens next. Negatives
 are recorded with the same care as wins — most of the value in this file is
 knowing what was already tried and priced.
+
+**Quote the count at the point of quotation, not only where it was measured.**
+A screening number and a decision number are the same instrument at different
+`n`, and a figure that travels into another entry, a registration or a task
+brief without its `n` attached will be read as the second when it was the
+first. This rule is written here because the lane broke it: a `+22.57%`
+carried a GO decision on 2026-08-16 and was an n=1 reading of a different
+object (see the correction dated 2026-08-16).
+
+**Corrections preserve what they replace.** Two admissible forms:
+
+- **(a) Append a correction entry, leaving the original entry intact.**
+  REQUIRED when the erroneous text carried a decision — a registration, a
+  GO, a landing, an authorisation. An auditor asking *why was that call
+  made* must be able to read the basis **in situ**, and an in-place edit
+  destroys that even when it is honestly marked, because the reader can no
+  longer see what the decider saw.
+- **(b) Edit in place, ONLY if the marking states the replaced text
+  VERBATIM.** For non-decision-carrying repairs: a missing count, a
+  mislabelled column, a withdrawn adjective. Describing the change
+  ("the first version said otherwise") does not satisfy this — quote it.
+
+When in doubt, (a). It costs a few lines and cannot lose anything.
 
 Entries dated 2026-08-09 through 2026-08-12 were backfilled from the commit
 messages that served as the ledger before this file existed (`git log
@@ -46,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **CORRECTION: the `+22.57%` that authorised the tuple-move GO was an n=1 reading of a DIFFERENT object — the candidate's real contribution is +5.30% (n=6), a ~4× over-statement, and the decision was made against the wrong number** | Filed as its own entry, not an in-place edit, because the text corrected **carried a decision**; the superseded bullet is quoted VERBATIM there so an auditor can read the basis in situ. Three defects: `+22.57%` was the **`land6` WHOLE STACK** (ten edits) against the pre-speed baseline, not plain-tuple moves; it was **n=1**, a single A/B triple on the laptop; and "the unblock is one line" was wrong — `sunfish_ui/uci.py` had **four** couplings (`ENGINE_API` listing `"Move"`, `parse_move` constructing it, `render_move` reading `.i`/`.j`/`.prom`, `can_kill_king` reading `m.j`). The edit measured ALONE sat one row below at **−1.63%** in the same table: both numbers were in front of me and I quoted the flattering one under the other's meaning. **NOT AFFECTED: the landing**, decided on the shipped stack's own n=6 number (+29.59%), artifact unchanged at 3376 B and node-identical on both machines — had the registration said +5.30% the candidate still qualifies (byte-negative, node-identical, above the 2% bar), so the decision survives its basis being wrong, **which is luck, not process**, and is why this is filed rather than patched. **CONVENTIONS WRITTEN INTO THE PREAMBLE**: quote the count at the point of quotation, not only where it was measured; and corrections preserve what they replace — **(a)** append an entry, REQUIRED when the text carried a decision, or **(b)** edit in place only if the marking quotes the replaced text VERBATIM (describing it does not count) |
 | 2026-08-16 | **TUPLE MOVES LAND, and the speed campaign's running total is +29.59% nps at 3405 → 3376 B (−29, 720 spare): a projected ≈ +38 Elo at 60+1, still with NO Elo screen because the search is still bit-identical** | The registered candidate from the profile pass, executed as its own full pass. **THE UNBLOCK CAME FIRST AND WAS GATED SEPARATELY**: `sunfish_ui/uci.py` is shared infrastructure and it pinned every engine to one move representation for its own convenience — it built moves with `sunfish.Move(i, j, prom)`, read them with `.i`/`.j`/`.prom`, and listed `"Move"` in `ENGINE_API`, so an entry without the class was refused before it could play. Not one line: **four couplings in one file**. The driver now builds a plain tuple and destructures on read; `"Move"` leaves `ENGINE_API` because the dependency it named is **gone**, not because the check was relaxed. **Classic-side gate, the one that had to hold**: full suite before → after **identical** (1 failed / 371 passed / 2 skipped, and the single failure `test_go_depth_promotion::test_terminal_fail_high_reports_exact_score_before_none` is **PRE-EXISTING on nnue-4k**, fails identically before and after, and touches neither changed file), plus classic under the driver **BIT-IDENTICAL on five probes** at `go nodes 20000` — startpos, startpos+moves, a white-to-move FEN, a BLACK-to-move FEN (where render/parse flip `119 - i`, so a wrong field order shows as a mirrored move, not a crash) and a promotion (`a7a8q`, the `.prom` path). **THEN the entry landing**: a move stops being a namedtuple, ~27 built per node, `__new__` a Python-level call each. Node-identical because **a namedtuple IS a tuple** — the `(val, move)` sort still tie-breaks field by field and the futility break still sees a descending list — verified against the **TRUE pre-speed entry** (`d947986fe9eca2bb…`, 904,848 nodes) on laptop **and** box. **THE STACKED ARITHMETIC IS MEASURED, NOT ADDED**, because this lane's own finding is that per-edit deltas do not compose under a tracing JIT: both stacks were run against the SAME pre-speed baseline in ONE interleaved local-A/B session — **stack 2 (with tuple moves) +29.59% (six reps: 23.46 / 26.27 / 27.43 / 31.75 / 33.08 / 39.49), stack 1 +23.07% (20.29 / 20.30 / 23.03 / 23.12 / 23.51 / 26.37)**, so the tuple increment is **+5.30%** — against the +22.57% it was REGISTERED at, which was never this edit's value but an n=1 laptop reading of a whole different stack (`land6`), mislabelled; the edit alone measured −1.63% there. Gates all green: check_entry 3376 B, legality 130/130 zero illegal, first-yield MAX 676/2048, mate-conversion 8/8, packed boot smoke in an empty dir **including a promotion through the shipped artifact** (`a7b8q` — the `prom` destructure in the builtin loop), entry resolves `v3 nodes fen` with no `Move` class at all. **Elo is a PROJECTION, not a measurement**: 102·log₂(1.2959) ≈ **+38** at 60+1, on the warrant that node-identical + faster is strictly better under a clock (the meter: fixed-node −1.74 ± 27.93, clean-clock +244.47 ± 39.23) |
 | 2026-08-16 | **THE ENTRY'S FIRST PROFILE, and the node-identical speedups it points at: the artifact is **+25.69% nps** (box, cpu-time, local A/B) at **3405 → 3398 B**, ≈ **+34 Elo** at 60+1 with **no Elo screen needed** — the search is bit-identical** | The lane's primary axis after the meter (whole edge = nps + TM: fixed-node −1.74 ± 27.93, clean-clock +244.47 ± 39.23), and nobody had profiled the entry. **THE BUDGET**, two instruments with opposite distortions read as the bracket they form — sampled `perf_counter` brackets (over-read by a roughly FIXED ~1-3 µs/bracket, proven by sweeping the sample period: `wall(p) = 16.02 + 6.20/p`) and exact per-node call counts × microbenchmarked per-op cost (each primitive at its floor): **`gen_moves` 27.7% of wall, `pos.move()` 14.7%, `value()` 9.9%, sort 4.0%, and EVERY transposition-table operation together 3.0%** — which kills the cheaper-table family before it is tried, and both table candidates that were tried anyway measured negative. **LANDED**: 8 edits, all NODE-IDENTICAL (60 positions × depth 6, every MTD probe `(depth, gamma, score, killer)` and node count, byte-identical on laptop AND box, ref sha `d947986fe9eca2bb…`, 904,848 nodes) — `sorted(genexp)`→`sorted(listcomp)`, `q in "pnbrqk"`→`q != "."`, `q in " \nPNBRQK"`→`q not in ".pnbrqk"`, `any(genexp)`→four `in` tests, `itertools.count`→`while`, `abs(x)<2`→`-2<x<2`, `Entry` namedtuple→plain pair, and **`gen_moves` stops being a generator** (the single biggest win, +19.01% alone). **NO ELO SCREEN, and that is a claim about the instrument**: node identity means a fixed-node screen compares the engine with itself, and under a clock the only thing that moved is how many identical nodes fit the budget — the exact channel the meter measured as the entry's whole advantage. Gates all green: check_entry 3398 B (698 spare), legality 130/130 zero illegal at `go nodes 20000`, first-yield MAX 676/2048, mate-conversion 8/8, packed boot smoke in an empty dir. **THE NEGATIVES ARE THE HALF WORTH KEEPING**: the classic CPython hot-loop playbook is NEGATIVE under a tracing JIT — hoisting `self.board` −1.6%, collapsing a char scan + `directions[p]` into one `dict.get` **−10.9%** (the worst result measured), hoisting the loop-invariant `p == "P"` −1.4%, hoisting the `dict.get` default object −1.9%. PyPy already does those; what pays is what it cannot fix, **iterator boundaries into builtins and per-operation allocation**. **THE INSTRUMENT NEEDED TWO REBUILDS** and both failures travel: wall clock on a shared box is unusable (±7%; `process_time` is not), and BOTH venues drift MONOTONICALLY through a long benchmark — 25% across thirty consecutive runs on the box, 12% across nine on the laptop — which round-interleaving cannot cancel because the drift is WITHIN a round. Every number here is a local A/B triple, base-arm-base, seconds apart |
 | 2026-08-16 | **DEADLINE-POLL VERDICT: the SAFE branch fired. `nodes % 4096` is SAFE at 60+1 — **zero time forfeits in 300 games** — and **Elo-NEUTRAL at +1.16 ± 22.46**. The test delivered the safety answer it was registered to deliver, and no Elo claim** | Gates read in the registered order before any number: **count 300/300** (the gate launch 1 lacked), **illegal 0**, forfeit attribution **base 0 / poll4096 0** → SAFE. Terminations **300/300 `normal`**, zero adjudication as registered. Only then: **50.17%**, ptnml **[6, 25, 86, 28, 5]** over 150 pairs 0 unpaired, 95% **[−21.30, +23.62]**, recomputed independently (pair total 150.5 reproduces exactly). **ESTABLISHED**: halving the clock-read frequency does not eat the shipped `pooltm`'s margin at 60+1; the box's clean-timed record extends **1251 → 1551**. **NOT ESTABLISHED**: any gain — ±22.46 is uninformative against an effect of a few Elo and the interval spans zero. Being exact about the registered wording, "safe AND the Elo interval is non-negative": the **point estimate** is non-negative, the **interval** is not (lower bound −21.30), so the honest verdict is **safe and neutral**, and nothing here justifies landing 4096 on Elo grounds. Follow-up **registered, NOT run** at **10+0.1** (same arms, same inverted tripwire) and justified on mechanism, not on this Elo: the poll saves one `time.time()` per N nodes, a rounding error against 60+1's ~1.5 s/move, and clock-read frequency binds hardest when the clock is shortest. `poll8192` stays registered-not-run behind BOTH results. **Two instrument bugs found and fixed, both the same failure shape** — with an inverted tripwire "no forfeits" is the PASS condition, so launch 1's empty PGN printed "SAFE", and the classifier turned an unattributable forfeit into SAFE (caught by unit test before any result existed). Neither cost a game. Standing rule: **when absence of evidence is your pass condition, every uncertainty must fail closed** |
@@ -293,6 +316,82 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-16 — CORRECTION: the `+22.57%` that authorised the tuple-move GO was an n=1 reading of a different object
+
+Filed as its own entry, per the convention at the top of this file, because
+the text it corrects **carried a decision**: it is what the coordinator was
+handed when the tuple-move follow-up was authorised. An in-place edit was made
+first and was not enough — it described the change instead of quoting it, so
+the decision basis stopped being readable where the decision was made. That
+edit stands, pointing here; this entry holds the original.
+
+### THE SUPERSEDED TEXT, VERBATIM
+
+From the 2026-08-16 profile entry, section "REGISTERED, NOT LANDED", as it
+stood at commit `1d71aec`:
+
+> - **`land6` / `movetuple` — plain-tuple moves.** `+22.57%` at **−19 B** on the
+>   laptop, node-identical (a namedtuple IS a tuple, so sort order and tie-breaks
+>   are unchanged). BLOCKED only because `sunfish_ui/uci.py` reads `move.i`,
+>   `move.j`, `move.prom` by name, and that driver is the lane's own instrument.
+>   The unblock is one line there — `i, j, prom = move` works for classic's
+>   namedtuple too — but it is a change outside the entry and wants its own gate
+>   pass. **This is the best remaining node-identical win on the table.**
+
+### WHAT IS WRONG WITH IT
+
+Three defects, in descending order of consequence.
+
+1. **`+22.57%` was never the value of plain-tuple moves.** It is the `land6`
+   WHOLE STACK — ten stacked edits — measured against the pre-speed baseline.
+   Attributing a stack's number to one of its members is a category error, and
+   nothing in the bullet flagged it.
+2. **It was n=1.** A single A/B triple, on the laptop. The laptop sweep was
+   stopped at one rep per arm to free the machine for the gate ladder, and no
+   count appeared anywhere in that table.
+3. **"The unblock is one line"** was wrong: `sunfish_ui/uci.py` had **four**
+   couplings to the move type — `ENGINE_API` listing `"Move"`, `parse_move`
+   constructing `sunfish.Move(...)`, `render_move` reading `.i`/`.j`/`.prom`,
+   and `can_kill_king` reading `m.j`.
+
+The same laptop sweep measured the edit **alone** at **−1.63%** (also n=1),
+one row below `land6` in the same table. Both numbers were in front of me; I
+quoted the flattering one and labelled it with the other's meaning.
+
+### WHAT IS TRUE
+
+| quantity | value | n |
+|---|---|---|
+| plain-tuple moves, contribution to the shipped stack | **+5.30%** | 6 |
+| `land6` whole stack vs pre-speed (what +22.57% actually measured) | +22.57% | **1** |
+| plain-tuple moves alone, laptop | −1.63% | **1** |
+| the unblock | four couplings in one shared file | — |
+
+So the registered figure over-stated this candidate's worth by roughly **4×**,
+and the follow-up was authorised against it.
+
+### WHAT IS NOT AFFECTED
+
+**The landing.** It was decided on the shipped stack's own n=6 measurement
+against the pre-speed baseline (+29.59%, six reps listed in the tuple-move
+entry), never on the registered figure. The artifact is unchanged at 3376 B
+and node-identical to the pre-speed reference on both machines. Had the
+registration said +5.30% instead of +22.57%, the candidate would still have
+qualified — byte-negative, node-identical, above the 2% bar — so the decision
+survives its own basis being wrong. **That is luck, not process**, and it is
+the reason this is filed rather than quietly patched.
+
+### WHAT CHANGED SO IT DOES NOT RECUR
+
+The quotation rule now sits at the top of this file: **quote the count at the
+point of quotation, not only where it was measured.** A number that travels
+into a registration or a task brief without its `n` will be read as a decision
+number regardless of what it was. Both speed tables now carry their counts,
+and the two stack-vs-edit rows that invited the confusion are labelled as
+stacks.
 
 ---
 
@@ -745,7 +844,9 @@ really identical", which is exactly what the battery is for, on two machines.
   at **n=1**, not the value of plain-tuple moves; the edit alone measured
   **−1.63%**, also n=1. Quoting +22.57% as the candidate's worth — which the
   first version of this bullet did — conflates the two. *(Corrected
-  2026-08-16, same day, after the follow-up pass measured the truth.)*
+  2026-08-16. This bullet carried a decision, so the superseded text is
+  preserved VERBATIM in its own entry — "CORRECTION: the `+22.57%` that
+  authorised the tuple-move GO" — rather than only described here.)*
   **What it was actually worth**, measured at n=6 against the same baseline
   once the driver was unblocked: **+5.30%** on top of stack 1. See the
   tuple-move entry above.
