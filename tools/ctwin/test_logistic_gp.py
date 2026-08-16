@@ -560,6 +560,21 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(imported[1]["knobs"], {"X": 15, "Y": 15})
         self.assertEqual(imported[1]["opponent_knobs"], {"X": 20, "Y": 20})
 
+    def test_seed_drops_values_outside_a_narrowed_axis(self):
+        seed = {
+            "study": {"baseline": {"options": {"X": 50, "Y": 10}}},
+            "batches": [
+                {"knobs": {"X": 0, "Y": 10}, "opponent_knobs": None},
+                {"knobs": {"X": -10, "Y": 10}, "opponent_knobs": None},
+                {"knobs": {"X": 0, "Y": 10},
+                 "opponent_knobs": {"X": 50, "Y": 30}},
+            ],
+        }
+        self.assertEqual(import_seed_batches(seed, self.space), [{
+            "knobs": {"X": 0, "Y": 10},
+            "opponent_knobs": {"X": 50, "Y": 10},
+        }])
+
     def test_one_won_pair_does_not_collapse_uncertainty(self):
         point = [(0,) * 9]
         model = LogisticGP().fit(point, [1], [1])

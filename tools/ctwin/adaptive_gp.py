@@ -311,13 +311,16 @@ def import_seed_batches(seed, space):
             knobs.setdefault(target, knobs.get(source, baseline[source]))
         return knobs
 
-    return [
+    imported = [
         batch | {
             "knobs": migrate(batch["knobs"]),
             "opponent_knobs": migrate(batch.get("opponent_knobs") or baseline),
         }
         for batch in compatible_seed_batches(seed, space)
     ]
+    return [batch for batch in imported
+            if space.contains(space.canonical(batch["knobs"]))
+            and space.contains(space.canonical(batch["opponent_knobs"]))]
 
 
 def source_prior(logs, battery, transfer, space):
