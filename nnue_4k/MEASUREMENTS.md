@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **PRE-REGISTERED — METER 3, the post-#207 goal-tracking number: BOTH arms moved since the landed +244.47, so it is re-measured against the classic that actually exists today. Entry **3376 B** (−29, the speed stack) vs classic **3392 B** (+146, #205/#206/#207) — the packed classic is now LARGER than the 4k entry** | Arms rebuilt, byte-measured and sha-pinned at registration: entry `a997b137e1e4a655…` **3376 B, 720 spare**, nnue-4k **`1b6b94d`**, `check_entry.sh` green; classic `6bbac98a40c5f90d…` **3392 B**, master **`f4f06d4`** (post-#205/#206/#207, mate-floor guard restored). Form identical to the landed meter so the two stay comparable: **fixed N=300**, 60+1, adjudication none, **concurrency 8 declared**, srand **20260823** (fresh), **zero-forfeit = VOID**, zero-illegal = stop. Venue the box, gate **re-expressed in FREE CORES** because the laptop's "foreign CPU < 40%" is meaningless on 96 cores: **require ≥ 24 free** (3× the match's ~8-core need). Census at registration: **3162% = 32 of 96 cores in use, 64 free** — owner's `optimizer-refine-20260816` **19 cores**, training lane 7, our matches 0.7. **The meter yields to the owner's work and never contends with it**; at nice 10 with ~56 cores still free once it starts, it does not. **EXPECTATIONS REGISTERED BEFORE GAME 1 so the reading cannot drift**: it should read **LOWER** than +244.47 (classic gained ~+48 on its own ladder) and **HIGHER** by the speed stack's **≈+33** projection (idle-venue, n=8) → central ≈ **+230**, band **+220-280** plausible — **and the number that comes out is the number.** Label: **post-#207-classic** |
 | 2026-08-16 | **QUIET-VENUE RE-MEASURE closes the magnitude caveat: the landed stack is **+25.28% (n=8, spread 2.9 points)** on an idle venue, against **+29.59% (n=6, spread 16.0)** on the loaded bench box. The box median was inflated by its own load tail; best estimate of the true magnitude is ≈ **+25%**** | Same instrument, same arms, same local-A/B triples, cpu-time, depth 5, pre-speed baseline vs the landed 3376 stack. **Idle venue: load 1.75 → 2.91, eight reps 23.51 / 24.30 / 24.84 / 25.20 / 25.36 / 25.60 / 26.34 / 26.38.** Loaded box: load 30.6–41.5 sustained across nine readings, foreign CPU 782–4970%, six reps 23.46 / 26.27 / 27.43 / 31.75 / 33.08 / 39.49 — **the box's top three reps have no counterpart in the quiet venue at all**, which is what a load tail looks like. **SECOND VENUE, NOT A REPLACEMENT**: the venues differ in pypy (7.3.23 vs 7.3.20) AND architecture (arm64 vs x86_64), so the deployment number remains the box's, to be re-measured there whenever it goes genuinely quiet. **The tempting over-claim is refused**: quiet does NOT simply mean tighter — stack 1's spread is *wider* on the idle venue (11.9 pts) than on the loaded box (6.1), so the precision here is arm- and session-specific, not a property of the venue. Elo projection ≈ **+33** (idle) vs +38 (box), both projections, no games |
 | 2026-08-16 | **10+0.1 POLL FOLLOW-UP: fully prepared, arms verified, and HELD ON VENUE — not launched. The box is running TWO foreign timed matches; launching would risk voiding mine and would contaminate theirs** | The follow-up the 60+1 poll test registered. **RE-VERIFY, NOT RE-REGISTER**, and the distinction is stated: the form is unchanged (same two arms one constant apart, same inverted tripwire with both branches fixed, same count gate that aborts, same zero-illegal stop, same mechanical attribution by classifier exit code, packed arms, packed driver check, N=300, Elo unread until the count verifies) — only the base engine moved, because the speed stack landed after the originals. Runner **derived by parameter substitution from the registered 60+1 script** so the tripwire is inherited verbatim rather than retyped; `bash -n` clean. **Arms rebuilt on the current 3376 entry and verified**: sha `a997b137…` / `72fd725a…`, transfer confirmed sha-for-sha; payload check per the registered form finds **exactly one `nodes%2048` in the base and one `nodes%4096` in the arm** with the minifier-hidden node-cap poll absent from both; boot smoke 3/3 and **driver-line 0** on both at the 10+0.1 clock. **Byte delta is +1 (3376 vs 3377), NOT the zero the 3405 pair had** — stated rather than claimed. **ONE GENUINELY NEW DECISION, registered before any game: concurrency 4, not 8**, because concurrency moves the forfeit rate and the forfeit rate IS the measurement; at 10+0.1 the shipped pooltm gives a **687.5 ms wall against 11,325 ms at 60+1, 16.5× tighter**, and the expensive failure is the void branch. **HOLD REASONING IS QUANTITATIVE**: a 4096-node poll gap is 7.9% of the wall at quiet speed, 24% at a third of a core, 50% at a sixth — and the 60+1 run's worst clean-venue self-overrun (+557 ms) already exceeds this TC's entire per-move wall. Launch condition: a quiet census immediately before game 1. srand 20260871 (20260870 burned) |
 | 2026-08-16 | **CORRECTION: the `+22.57%` that authorised the tuple-move GO was an n=1 reading of a DIFFERENT object — the candidate's real contribution is +5.30% (n=6), a ~4× over-statement, and the decision was made against the wrong number** | Filed as its own entry, not an in-place edit, because the text corrected **carried a decision**; the superseded bullet is quoted VERBATIM there so an auditor can read the basis in situ. Three defects: `+22.57%` was the **`land6` WHOLE STACK** (ten edits) against the pre-speed baseline, not plain-tuple moves; it was **n=1**, a single A/B triple on the laptop; and "the unblock is one line" was wrong — `sunfish_ui/uci.py` had **four** couplings (`ENGINE_API` listing `"Move"`, `parse_move` constructing it, `render_move` reading `.i`/`.j`/`.prom`, `can_kill_king` reading `m.j`). The edit measured ALONE sat one row below at **−1.63%** in the same table: both numbers were in front of me and I quoted the flattering one under the other's meaning. **NOT AFFECTED: the landing**, decided on the shipped stack's own n=6 number (+29.59%), artifact unchanged at 3376 B and node-identical on both machines — had the registration said +5.30% the candidate still qualifies (byte-negative, node-identical, above the 2% bar), so the decision survives its basis being wrong, **which is luck, not process**, and is why this is filed rather than patched. **CONVENTIONS WRITTEN INTO THE PREAMBLE**: quote the count at the point of quotation, not only where it was measured; and corrections preserve what they replace — **(a)** append an entry, REQUIRED when the text carried a decision, or **(b)** edit in place only if the marking quotes the replaced text VERBATIM (describing it does not count) |
@@ -2784,6 +2785,89 @@ in seconds and lives outside the engine. **Fixing the holdback would not
 have prevented one of these forfeits** — which is precisely why it stays
 registered-not-run, and why the venue-exclusivity rule is the real
 remedy.
+
+---
+
+## 2026-08-16 — PRE-REGISTRATION: METER 3, the post-#207 goal-tracking number
+
+Registered before game 1. The landed **+244.47 ± 39.23** measured a pair of
+artifacts that **no longer exists**: both arms moved on the same day.
+
+### Both arms moved, and one of them is a milestone in itself
+
+| arm | then (landed meter) | **now (meter 3)** | delta |
+|---|---|---|---|
+| entry | 3405 B `5a207fdf…` | **3376 B** `a997b137e1e4a655…` | **−29 B**, and it gained the speed stack |
+| classic | 3246 B `7bdbd605…` | **3392 B** `6bbac98a40c5f90d…` | **+146 B** from #205/#206/#207 |
+
+Entry at nnue-4k **`1b6b94d`**, `check_entry.sh` green, **720 spare**.
+Classic at master **`f4f06d4`**, post-#205/#206/#207 with the mate-floor
+guard restored.
+
+**Worth stating plainly: the packed classic (3392 B) is now LARGER than
+the 4k entry (3376 B).** The entry got faster *and* smaller while its
+reference engine grew past it.
+
+### Form — identical to the landed meter, so the numbers stay comparable
+
+| | |
+|---|---|
+| N | **fixed 300**, no SPRT |
+| TC | **60+1** |
+| adjudication | none |
+| concurrency | **8, declared** |
+| srand | **20260823** (fresh) |
+| tripwires | **zero forfeit = VOID**, zero illegal = STOP |
+| label | **post-#207-classic** |
+
+### Venue gate, re-expressed for a 96-core box
+
+The laptop's gate was "foreign CPU < 40%". **That threshold is meaningless
+here** — this box idles with thousands of percent of legitimate work. The
+gate is therefore **free cores**:
+
+> **Require ≥ 24 free cores** at start — 3× the match's ~8-core need.
+
+**Census at registration:** 3162% = **32 of 96 cores in use, 64 free**.
+
+| consumer | cores |
+|---|---|
+| owner's `optimizer-refine-20260816` (+ `adaptive_gp`) | **19** |
+| training lane `train.py` | 7 |
+| our existing matches | 0.7 |
+
+**The meter yields to the owner's work and must never contend with it.**
+At nice 10, with ~56 cores still free once it starts, it does not — and if
+the census ever drops below 24 free, the rule is **hold and report**, not
+relocate. The laptop is not a meter venue; the forfeit saga settled that.
+
+### EXPECTATIONS, registered before game 1 so the reading cannot drift
+
+Two known forces point in opposite directions:
+
+| force | direction | size |
+|---|---|---|
+| classic gained #205 + #206 + #207 | **down** | ~**−48** on its own ladder |
+| the entry's speed stack | **up** | ≈ **+33** projected (idle-venue, n=8) |
+
+> **Central expectation ≈ +230, with +220-280 plausible.**
+
+**And the number that comes out is the number.** This is written down
+precisely so that a result outside the band is reported as a result and
+not massaged toward the projection — the band is a prediction under test,
+not a target. If it lands outside, the interesting question becomes which
+of the two projections was wrong, and that is worth more than a
+comfortable confirmation.
+
+**What this measurement is for:** it converts the speed stack's projection
+into a play measurement, and it resets the +400 progress meter against
+**the classic that actually exists today** rather than yesterday's.
+
+### Harvest rules — unchanged and already proven
+
+Forfeits first; Elo only if clean; full pentanomial with 95% interval;
+both arms' provenance chains cited. Execution is the training lane's (this
+lane is read-only on the box); **harvest authority stays here.**
 
 ---
 
