@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **METER 3 VERDICT (post-#207-classic): the entry is **+200.24 ± 38.35** at 60+1 — 300/300, ZERO forfeits, ZERO illegal. The point estimate lands BELOW my pre-registered +220-280 band, and the honest reading is that NEITHER projection is convicted: the whole change is inside noise** | Gates read first and both passed before the Elo: forfeits **0**, illegal **0**, 300/300 `normal`; arms sha-verified box-side (entry **3376 B** `a997b137…` nnue-4k `1b6b94d`, classic **3392 B** `6bbac98a…` master `f4f06d4`), venue gate passed with **69 free cores**, srand 20260823, conc 8, 2 h 06 m. **76.00%** — 195 W / 39 L / 66 D, nElo **+255.71 ± 39.32**, ptnml **[1, 11, 33, 41, 64]** over 150 pairs, PairsRatio 8.75, DrawRatio 22.00%, LOS 100%. Independent recompute mirrors fastchess. **Against the band, reported as registered**: the point estimate **+200.24 is below +220**, but the 95% interval **[161.89, 238.59] overlaps the band** on [220, 238.59], and the change from the landed **+244.47** is **−44.23 ± 54.86 — not significant (z = 1.58)** and **consistent with the predicted −15 (z = 1.04)**. So the registration's "which projection was wrong" question has a disciplined answer: **neither is convicted.** The point-estimate decomposition **leans** to the speed stack under-delivering (**+3.8 rather than +33** if classic's −48 holds; classic would have to have gained −77 for +33 to hold) — but each figure carries ±55, so this is a **lean, not a finding**. **Design B (+16-20% nps) landed AFTER these arms were pinned and rides the NEXT meter**, which is the clean test of the speed thesis. **Progress toward +400: 50%** (upper bound 60%) — the goal moved further away because classic got stronger, not because the entry got weaker |
 | 2026-08-16 | **THE MIRRORED BOARD LANDS: stop RECOMPUTING the rotation and make-move drops 92% of its cost — **+20.17% nps (quiet, n=8)** / **+16.17% (box, n=8)** for **+34 B**, node-identical — and the campaign now measures **+54.51% end-to-end** against the pre-speed artifact. AND THE MUTABLE BOARD IS CLOSED PERMANENTLY at +0.3 Elo** | Archaeology first: `0622039` on `nnue-mutable-board` had the right interface (`@contextmanager` do/undo) and the wrong body — `list(self.board)` plus feature-vector copies then `''.join` back, strictly MORE allocation than the immutable splices, with a dead `put()`+undo-stack that was never wired. `c39c8d4` had already re-priced it +71..+110 → +15 on the NNUE engine. **Neither price transfers to the entry, and reusing either would repeat the exact error c39c8d4 exists to record**, so make-move was decomposed on the shipped artifact: 1,578 ns of a 6,660 ns node (23.7% of wall), of which **`board[::-1].swapcase()` is 1,436 ns = 92%** and the splices a mutable board removes are **21 ns = 1.3%** (`.translate()` is 8× WORSE under pypy; rejected). **So the mutable board is +0.3 Elo behind a Zobrist rewrite — 106× smaller than the alternative — and is closed for the third and last time.** What landed instead: carry `r`, the board mirrored and case-swapped, apply every put to BOTH orientations (index `x` and `119-x`, case swapped), and `rotate()` becomes a field swap. **Node-identical because the representation is CACHED, not abandoned** — dropping rotation outright would change black's scan order and the index-based sort tie-break, hence the tree; that variant is explicitly NOT this one. Verified on 1,959 child boards before implementation, then by identity_gate at depth 6 on **laptop AND box**, plus a new **derived-field invariant** now in the gate battery (holds on 275,543 positions; a deliberately corrupted mirror is CAUGHT, 4,709 violations). **MEMORY GATE, the flagged killer, measured both loads**: game-like (fresh process, tp_move at 107k) **+1.2 MB (+0.4%)**; saturated table (one search, `self.t` at TABLE_SIZE=10⁶) **740 MB → 1,017 MB, +277 MB (+37%)**. Box has 371 GB, so even 16 concurrent processes is ~4% of RAM — **PASSES**, with the caveat recorded that no memory limit is documented in the 4k rules and a ~1 GB/process cap would bind. **PREDICTION vs MEASURED, stated as required: predicted +27.4%, measured +20.2/+16.2** — the component arithmetic treated the whole 1,436 ns as removable, but that figure includes ALLOCATING two 120-char strings and the mirrored design still allocates two; only the reverse-and-case-swap COMPUTATION is removed. Same error family as c39c8d4 in new dress |
 | 2026-08-16 | **STAGED-SCRIPT DEFECT #2, caught by the executing lane before a single game: `run_meter3_box.sh` shipped with NO free-core gate — the exact non-negotiable its own registration and handoff both named. Cause is SCRIPT REUSE, twice running, and the class is now closed by a mechanical staging gate** | Mine, and the hold was correct. Mechanism: a `sed` renamed the banner and produced the doubled string `"+400 METER METER 3"`, so the follow-up `replace()` anchor `"+400 METER 3"` **matched nothing and inserted the gate silently** — the same silent-no-op class this campaign keeps recording — and the header still read "RUN 2, RELOCATED". **My verification did grep for the gate patterns and I skim-read only the head of the output**, so I confirmed four patterns and never noticed the two that were absent. **Absence is what eyeballs miss.** Fixes: the script is **rewritten fresh, not patched** (reuse is the common cause of both defects — meter 2's harvest section died silently, meter 3's gate never existed), and staging now runs **`verify_staged.sh`**, which exits non-zero on any missing non-negotiable and separately flags predecessor text left by reuse. Negative control: against the broken draft it reports MISSING on all three gate patterns plus two STALE headers; against the rewrite, **STAGING GATE PASSED**. One honest note on the gate itself — its first run failed on `tries -ge 60`, which was **my regex missing a quote character, not a missing feature**; I checked the code before relaxing the pattern, because a checklist that gets loosened whenever it complains is worse than none |
 | 2026-08-16 | **PRE-REGISTERED — METER 3, the post-#207 goal-tracking number: BOTH arms moved since the landed +244.47, so it is re-measured against the classic that actually exists today. Entry **3376 B** (−29, the speed stack) vs classic **3392 B** (+146, #205/#206/#207) — the packed classic is now LARGER than the 4k entry** | Arms rebuilt, byte-measured and sha-pinned at registration: entry `a997b137e1e4a655…` **3376 B, 720 spare**, nnue-4k **`1b6b94d`**, `check_entry.sh` green; classic `6bbac98a40c5f90d…` **3392 B**, master **`f4f06d4`** (post-#205/#206/#207, mate-floor guard restored). Form identical to the landed meter so the two stay comparable: **fixed N=300**, 60+1, adjudication none, **concurrency 8 declared**, srand **20260823** (fresh), **zero-forfeit = VOID**, zero-illegal = stop. Venue the box, gate **re-expressed in FREE CORES** because the laptop's "foreign CPU < 40%" is meaningless on 96 cores: **require ≥ 24 free** (3× the match's ~8-core need). Census at registration: **3162% = 32 of 96 cores in use, 64 free** — owner's `optimizer-refine-20260816` **19 cores**, training lane 7, our matches 0.7. **The meter yields to the owner's work and never contends with it**; at nice 10 with ~56 cores still free once it starts, it does not. **EXPECTATIONS REGISTERED BEFORE GAME 1 so the reading cannot drift**: it should read **LOWER** than +244.47 (classic gained ~+48 on its own ladder) and **HIGHER** by the speed stack's **≈+33** projection (idle-venue, n=8) → central ≈ **+230**, band **+220-280** plausible — **and the number that comes out is the number.** Label: **post-#207-classic** |
@@ -98,7 +99,7 @@ how much effort it cost.
 | 2026-08-15 | **THE THIRD HYPOTHESIS HAS A NAMED CAUSE AND EVIDENCE: another workstream was running core-saturating `lake` builds on this laptop through both the voided run and replication A. The voided run's EXTREME overruns (3.5-5.5 s) land exactly on the build's write burst — and a NEW STANDING RULE follows: timed matches require VENUE EXCLUSIVITY across ALL workstreams, not just other matches** | Measured, not accepted on report: a live sampler shows **foreign CPU 320.5%** (~3.2 cores of non-match work) and 9 lean/lake processes *while replication A is playing*. Post-hoc on the void, from the other lane's own `.lake` artifact mtimes: build writes cluster at **09:10Z (196) and 09:15Z (1052)**, and the void's four largest self-overruns — **3780, 5535, 3552, 3700 ms** — occur in games starting **09:10, 09:11, 09:12, 09:12Z**. The first 5 minutes of the void (08:41-08:45Z) are **completely clean, 0 overruns**, then bursts begin. **Honest limit: `.lake` mtimes mark job COMPLETION, so a build's compile phase is invisible to this instrument** — the moderate bursts at 08:46-09:07Z are therefore neither confirmed nor excluded, only the extreme tail is aligned. **Replication A is consequently a MIXED arm** (cotenant early, clean later) and its verdict will be split by sampled window or else report the mixture as a limitation. **B gains a clean-venue start gate** (foreign CPU < 40% for 3 consecutive minutes) and becomes the clean-venue arm — its primary value now. Sampler defects fixed before trusting it, both the silent-zero class: **macOS `pgrep` has no `-c` flag**, so the first sampler printed a usage error and recorded 0 lean processes while a `lake exe` ran at 11% CPU, and a stale header mislabelled the columns |
 | 2026-08-15 | **FINDING #1 (read-only, before any replication game): WE ARE IN THE CONTENTION WORLD, NOT THE INTRINSIC ONE — the pool ladder's arms ran the PACKED ARTIFACTS DIRECTLY on the builtin clock loop (`exec bin/e_pool.packed`, no driver), and they have 651 lifetime clean games. Plus a calibration that BREAKS my own stated mechanism: the 2048-node poll gap is 27.4 ms, and the observed overruns were 100 ms** | Verified from the bench box's own wrappers and PGNs, not from memory: `w_pool.sh`/`w_smooth.sh` are `exec …/e_pool.packed`, so the clock path under test is the same builtin loop my voided run used. Counted directly: **m2 60+1 = 263 games, m5 30+1 = 288, m6 1+0 hammer = 100 — 651 games, 0 forfeits, 0 illegal, every termination `normal`** — at **concurrency 8, nice 10, `timemargin 0`, adjudication NONE**, i.e. the same instrument settings at *higher* concurrency than my 2/41. So the packed clock path does **not** have ~41 lifetime games; it has ~692, and the 651 clean ones are on a different venue. **This lowers the fix's urgency substantially.** **The calibration is the sharper result**: measured nps on this laptop is **74 869 (conc 1)** and **74 799 (conc 4)** — *no* degradation at concurrency 4 — so one 2048-node poll gap is **27.4 ms at BOTH**, and cannot explain a 100 ms overrun. My stage-2 entry named the poll gap as the mechanism; it is **necessary but NOT sufficient**, corrected here. Worse for the simple story: the entry's maximum possible hard limit at a 60 s clock is `min(5·soft, A/2)` = **11 325 ms**, and a forfeited game contains a **12 100 ms** move — **775 ms past its own hard deadline, 28× the poll gap**. Arms caveat: box arms are `e_pool.packed` 3365 B @ `522931a`, mine is the landed entry 3405 B @ `5af840d` — same pool formula, different build. Venue differs in OS/arch, pypy build, nice level AND concurrency; replications A/B separate **concurrency only** |
 | 2026-08-15 | **STAGE 2 VOID by its OWN registered zero-forfeit tripwire at 41 games — and the reason is a REAL DEFECT IN THE SHIPPED ARTIFACT: the packed entry overruns a real clock by ~100 ms because its 5% polling holdback is applied ONLY on the `movetime` path, never on the wtime/winc path** | 2 time forfeits, **both the entry**, both games of round 20, overruns **100 ms and 101 ms**; 0 illegal, 39/41 normal. **No Elo is reported** — the tripwire I registered fired, and quoting a number from a run my own registration voided would be moving the bar after seeing it. **Mechanism confirmed in the artifact's source, not inferred**: `think = times.get("movetime", think)/1000` then `if "movetime" in times: think -= max(think*.05, .03)` — the holdback whose comment says it was "measured the hard way: 425 local fixed-node games, every single one a forfeit" **guards only the movetime branch**, while the clock branch's hard limit `min(5*soft, A/2)` gets none, and `searcher.deadline` is polled every 2048 nodes, so the search returns at `think + epsilon`. Classic's builtin loop keeps 20% slack via its `think * 0.8` soft break and did not forfeit once. **Invisible until now because every previous timed match ran SOURCES through `sunfish_ui`, which does its own deadline handling — this was the first timed match on the packed artifact.** Honest limit: 2 events cannot separate artifact overrun from concurrency-4 contention, so the MECHANISM is established and the RATE is not. Follow-ups registered, none run: concurrency-1 replication, a `timemargin` sweep to get the overrun distribution, and the source fix (holdback on the clock path) which is a build change needing its own screen. **Stage 1 is unaffected** — fixed nodes reads no clock |
-| 2026-08-15 | **+400 PROGRESS METER, STAGE 1: the 4k entry and sunfish-classic are INDISTINGUISHABLE at fixed nodes — −1.74 ± 27.93 over a fixed 400 games. Corrected for the registered 1.53× node asymmetry the entry's per-node edge is ≈ +60, which means its historical timed advantage is SPEED AND TIME MANAGEMENT, not per-node quality** | Fixed N=400 (no SPRT), nodes 20000, srand 20260816, book3k order=random, concurrency 4, 29 m 48 s. **158 W / 160 L / 82 D = 49.75%**, nElo −2.12 ± 34.05, LOS 45.14%, ptnml **[26, 31, 88, 29, 26]** over **200 complete pairs**, PairsRatio 0.96, DrawRatio 44.00%. **0 illegal, 0 time forfeits, 400/400 terminations** (279 adjudication, 121 normal — adjudication was ACTIVE and symmetric as registered, both arms emit `score cp`). Independent round-paired recompute reproduces fastchess to the digit. Arms verified by sha256: entry source `e27f9dff…` **==** `git show 5af840d:nnue_4k/pst_entry.py`, classic `329ae372…` **==** `git show 573d692:sunfish.py`; **entry.packed 3405 B hashes `5a207fdf9cf05f2e…`, bit-identical to the artifact the pooltm landing recorded**; classic packs to 3246 B. Driver pinned `DRIVER_VERSION 3` on both arms. **Progress toward +400 at fixed nodes: ~0 of 400, bias-corrected ≈ +60.** (The TIMED meter later landed at **+244.47 ± 39.23 = 61%** — fixed nodes reads low because it removes exactly the speed and TM the entry wins on.) Context that must travel with the number: the **+187.0 ± 49.7** goal-line figure was the **256kb8@100M NNUE testbed engine, NOT the 4k entry** — the entry's own last number was `entry_kf` **+107.54 ± 31.64 at 10+0.1** (2026-08-13). Fixed nodes removes speed and TM from the comparison, which is exactly why it reads lower, and classic has since absorbed **#196 (min40-4, +147 [+86,+219])** — though that is a TM change and cannot have moved a fixed-node result |
+| 2026-08-15 | **+400 PROGRESS METER, STAGE 1: the 4k entry and sunfish-classic are INDISTINGUISHABLE at fixed nodes — −1.74 ± 27.93 over a fixed 400 games. Corrected for the registered 1.53× node asymmetry the entry's per-node edge is ≈ +60, which means its historical timed advantage is SPEED AND TIME MANAGEMENT, not per-node quality** | Fixed N=400 (no SPRT), nodes 20000, srand 20260816, book3k order=random, concurrency 4, 29 m 48 s. **158 W / 160 L / 82 D = 49.75%**, nElo −2.12 ± 34.05, LOS 45.14%, ptnml **[26, 31, 88, 29, 26]** over **200 complete pairs**, PairsRatio 0.96, DrawRatio 44.00%. **0 illegal, 0 time forfeits, 400/400 terminations** (279 adjudication, 121 normal — adjudication was ACTIVE and symmetric as registered, both arms emit `score cp`). Independent round-paired recompute reproduces fastchess to the digit. Arms verified by sha256: entry source `e27f9dff…` **==** `git show 5af840d:nnue_4k/pst_entry.py`, classic `329ae372…` **==** `git show 573d692:sunfish.py`; **entry.packed 3405 B hashes `5a207fdf9cf05f2e…`, bit-identical to the artifact the pooltm landing recorded**; classic packs to 3246 B. Driver pinned `DRIVER_VERSION 3` on both arms. **Progress toward +400 at fixed nodes: ~0 of 400, bias-corrected ≈ +60.** (The TIMED meter landed at **+244.47 ± 39.23 = 61%** vs pre-#205 classic and **+200.24 ± 38.35 = 50%** vs post-#207 classic — fixed nodes reads low because it removes exactly the speed and TM the entry wins on.) Context that must travel with the number: the **+187.0 ± 49.7** goal-line figure was the **256kb8@100M NNUE testbed engine, NOT the 4k entry** — the entry's own last number was `entry_kf` **+107.54 ± 31.64 at 10+0.1** (2026-08-13). Fixed nodes removes speed and TM from the comparison, which is exactly why it reads lower, and classic has since absorbed **#196 (min40-4, +147 [+86,+219])** — though that is a TM change and cannot have moved a fixed-node result |
 | 2026-08-15 | **AMENDMENT to the stage-2 registration, made BEFORE game 1: adjudication is REMOVED, because on packed arms it would be ASYMMETRIC — `entry.packed` emits 0 info lines and `classic.packed` emits 17, so `-resign score=500` could fire for classic ONLY** | Measured, not assumed: the entry's info output sits inside `# minifier-hide` and `pack.sh` strips it; classic's does not. A one-sided resign rule adjudicates losses for exactly one arm, which is a biased instrument, so stage 2 runs with `-resign`/`-draw` OFF and every game ends naturally. Two further packed-arm facts confirmed by direct test, both reproducing the **2026-08-13** harness findings rather than discovering them: (1) the builtin UCI loop **silently ignores `position fen`** — both artifacts answer `g1f3` to a black-to-move FEN — so stage 2 must use a **PGN book from the standard start** (`book3k`), never an EPD/FEN book, verified by a 4-game smoke where fastchess replayed the book as `position startpos moves …` with **0 illegal**; (2) `legality_gate.py` cannot gate a packed artifact at all (it drives FENs), so the substitute gate is a **20-game arbiter-verified smoke** at 2+0.05 on the same book, zero illegal required, plus the full-match tripwire. Stage 2 srand **20260817** |
 | 2026-08-15 | **TRUNCATION VERDICT: N\* = 50 GAMES — a 50-game fixed-node mini-match reproduces the three screens' full ranking and keeps it at every larger N. But the honest reading is narrower than "50 games ranks candidates": at a fixed 50-game budget the COMPLETE 3-way ordering is right only 72.4% of the time, while picking the BEST arm is right 96.8%** | Registered criterion (`52a4afb`) applied to the three surviving PGNs, truncated by ROUND. Cross-check passed first: all three "all" rungs reproduce fastchess exactly (8mv −107.06 ± 35.84 ptnml [51,27,58,12,11]; float-ml2 −234.18 ± 55.08 [51,19,23,1,3]; grid-ml2 −300.56 ± 71.33 [58,13,13,2,2]). **N\* = 50** (sign+rank hold at 50, 75, 100, 150, all; both FAIL at 25, where float-ml2 sits at exactly 50.00% and outranks 8mv). **N\*\* = 150** — the smallest rung where the CROSS-FAMILY pair also reaches one-sided z ≥ 1.645 (z: 25 −1.92, 50 0.12, 75 0.75, 100 0.82, **150 2.58**, all 4.09). **N\* has ZERO margin**: an unregistered fine scan puts the first-stable point at exactly 25 pairs — at 24 pairs the top two are an exact tie (39.58% vs 39.58%) and below that float-ml2 leads. **Bootstrap (4000 resamples of the pair pool) is the calibration that matters**: at N=50 pick-the-best **96.8%**, resolve the 127-Elo cross-family gap **96.0%**, full 3-way ordering **72.4%**, the 66-Elo adjacent pair only **76.2%**; at N=150 those are 99.9% / 99.9% / 90.8% / 90.8%. **As predicted at registration the adjacent ml2 pair never separates** (z 1.48 at 150, 1.52 at all). Selector resolution measured directly: 50 games resolve ~101 Elo at z=1.645, 150 games ~59 Elo. **SELECTOR SPEC written to TRAINQUEUE.md**: the mini-match returns a TOP PICK, never a ranking, and never a ledger Elo |
 | 2026-08-15 | **PRE-REGISTERED: the +400 progress meter gets re-measured — entry vs sunfish-classic, and a HARNESS DEFECT is registered with it: at a nominal 20000-node cap classic actually searches 1.53× the entry's nodes** | Entry `nnue_4k/pst_entry.py` @ nnue-4k `5af840d`, packed **3405 B measured** (691 spare, `check_entry.sh` green) vs classic `sunfish.py` @ master **`573d692`** (packs to **3246 B**, reference only — classic is not a 4k entry). **Stage 1**: fixed-node 20000, **fixed N=400 games, NOT SPRT** (a magnitude measurement wants an unbiased number), book3k order=random, **srand 20260816** (fresh — 20260814/20260815 are spent), concurrency 4, adjudication copied from the ml2 config. **The asymmetry, measured on 24 opening positions BEFORE game 1**: the entry enforces the cap INSIDE the search (`self.nodes > self.node_cap: raise Stop`); classic@573d692's `Searcher` stores `node_cap` and never reads it, so it only stops between iterations and overshoots — median nodes **24247 vs 16866 (1.53× per position, max 4.41×)**, wall time 1.33×. **One-sided, in classic's favour**, so whatever stage 1 reports is a conservative FLOOR on the entry's equal-effort standing. **Stage 2** (conditional on a free laptop and a clean stage 1): 60+1, N=200, **PACKED ARTIFACTS both sides** — the only vehicle that carries the entry's `_pooltm`, which lives in the builtin loop the sunfish_ui driver bypasses. **Adjudication is ACTIVE here, NOT inert** — the standing inertness note does not apply: both arms emit `score cp` (verified), exactly as on the 8mv screen (229/320 adjudicated). Gates before games: node cap binds by SCALING on both arms (17×/21× for 100× the nodes), legality 200/200 both arms both paths, first-yield worst 582/2048, empty cwd, driver pinned to `DRIVER_VERSION 3` (the main-repo copy has **no `max_nodes`** — the pre-`go nodes` driver that voided 425 games). Zero-illegal tripwire on the full match |
@@ -2951,6 +2952,113 @@ remedy.
 
 ---
 
+## 2026-08-16 — METER 3 VERDICT: +200.24 ± 38.35 against today's classic, and the band question answered honestly
+
+The goal-tracking number, re-measured against the classic that actually
+exists. Gates first, as registered.
+
+| gate | result |
+|---|---|
+| **time forfeits** (VOID) | **0** |
+| **illegal moves** (STOP) | **0** |
+| terminations | **300 / 300 `normal`** |
+
+**Only then** was the Elo computed.
+
+### The result
+
+| | |
+|---|---|
+| **Elo** | **+200.24 ± 38.35** (95%, pentanomial) → **[+161.89, +238.59]** |
+| nElo | **+255.71 ± 39.32** |
+| score | **76.00%** — 195 W / 39 L / 66 D |
+| pentanomial | **[1, 11, 33, 41, 64]** over **150 pairs**; PairsRatio 8.75 |
+| draw ratio | 22.00%; LOS 100.00% |
+| arms | entry **3376 B** `a997b137…` (nnue-4k `1b6b94d`) vs classic **3392 B** `6bbac98a…` (master `f4f06d4`) — sha-verified box-side, transferred not rebuilt |
+| venue | box, **69 free cores** at gate pass, conc 8 declared, srand 20260823, 2 h 06 m |
+| label | **post-#207-classic** |
+
+Independent round-paired recompute mirrors fastchess to the digit.
+
+### Against the pre-registered band — and I am not allowed to dodge this
+
+The registration said: *in-band confirms both projections; out-of-band gets
+reported as **which projection was wrong**.* The point estimate is out of
+band, so here is the answer, and it is not the dramatic one:
+
+| | |
+|---|---|
+| pre-registered band | **[+220, +280]**, central ≈ +230 |
+| measured | **+200.24**, interval **[+161.89, +238.59]** |
+| verdict on the band | **point estimate BELOW it** — but the interval **overlaps** it on [220, 238.59] |
+
+And the change that the band was really a prediction about:
+
+| | |
+|---|---|
+| observed change vs the landed +244.47 | **−44.23 ± 54.86** |
+| significant? | **No — z = 1.58** |
+| predicted change (−48 classic, +33 speed) | **−15** |
+| observed vs predicted | **z = 1.04 — consistent within noise** |
+
+> **NEITHER PROJECTION IS CONVICTED.** The measurement is out of band on
+> its point estimate and inside it on its interval; the movement from the
+> previous meter is not statistically distinguishable from zero, let alone
+> from the −15 that was predicted.
+
+**The lean, labelled as a lean.** Taking point estimates at face value and
+holding classic's −48 fixed, the speed stack delivered **+3.8, not +33**.
+Holding the speed stack's +33 fixed instead, classic would have had to
+gain **−77, not −48**. Each of those carries **±55**, so this is a
+direction to test, **not a finding to bank** — and the honest summary is
+that a single 300-game meter cannot resolve a 30-Elo attribution question
+between two ~40-Elo effects.
+
+**What would resolve it** is already available and was not run here: the
+speed stack's projection came from nps on n=8 idle-venue samples, which is
+the weaker of the two inputs — classic's −48 is a play measurement on its
+own ladder. A direct entry-vs-entry screen across the speed stack would
+settle it in one match, and costs far less than another 300-game meter.
+
+### Design B rides the NEXT meter, not this one
+
+**Design B (+16-20% nps) landed AFTER these arms were pinned**, so it is
+absent from `a997b137…` and contributes nothing to +200.24. That makes the
+next meter the clean test of the speed thesis: if nps converts, the next
+number should rise against an unchanged classic — the first time this
+campaign will have a speed change measured in isolation rather than
+tangled with a classic gain.
+
+### The three timed numbers, in order
+
+| # | classic | entry | result | note |
+|---|---|---|---|---|
+| B (N=60) | pre-#205 | 3405 B | +325.17 ± 134.54 | clean glimpse |
+| landed (N=300) | pre-#205 | 3405 B | **+244.47 ± 39.23** | confirmed and tightened B |
+| **meter 3 (N=300)** | **post-#207** | **3376 B** | **+200.24 ± 38.35** | **today's number** |
+
+The entry did not get worse — **it got smaller and faster.** The gap
+narrowed because **classic got stronger**, which is the same "moving
+baseline" this ledger recorded at the +187 goal-line entry and is
+inconvenient for the scoreboard rather than bad for the engine.
+
+### Progress toward +400
+
+> **+200.24 of 400 = 50%.** Upper bound +238.59 = **60%**. Roughly **200
+> Elo** remain to the point estimate.
+
+The target receded this week: it is measured against a classic that
+absorbed #205, #206 and #207. Against the pre-#205 classic the same lane
+measured +244.47, and against the classic of the goal's origin it would be
+higher still — none of which changes the fact that **the goal is stated
+against current classic and is half met.**
+
+The fixed-node reading is untouched and still the other half of the
+picture: **−1.74 ± 27.93**, per-node parity. The entry's advantage remains
+entirely speed and time management.
+
+---
+
 ## 2026-08-16 — PRE-REGISTRATION: METER 3, the post-#207 goal-tracking number
 
 Registered before game 1. The landed **+244.47 ± 39.23** measured a pair of
@@ -3087,8 +3195,9 @@ precision.
 
 ### Progress toward +400, stated against the interval
 
-> **+244.47 ± 39.23 is 61% of the target. The interval's upper bound,
-> +283.70, is 71% — still short of +400.**
+> **+244.47 ± 39.23 is 61% of the target** against the **pre-#205** classic.
+> **SUPERSEDED 2026-08-16**: re-measured against post-#207 classic the number
+> is **+200.24 ± 38.35 = 50%**. This entry's arms no longer exist on either side.
 
 The goal is not met and the gap is not a rounding error: roughly **155
 Elo** remain to the point estimate, and at least **116** even at the most
@@ -3119,7 +3228,9 @@ come from: another eval fit.
   and this meter — the same two artifacts throughout, so every number in
   this campaign refers to the same pair of binaries.
 
-**This supersedes B's +325.17 ± 134.54 as the lane's timed number.** It
+**This superseded B's +325.17 ± 134.54 — and is itself superseded by meter 3's
++200.24 ± 38.35 against post-#207 classic.** Both remain valid for the classic
+they were measured against; only meter 3 describes today's. It
 does **not** supersede the fixed-node −1.74 ± 27.93, which measures a
 different thing, and it is **not** comparable to the 2026-08-12 +187
 (different engine, driver-cancelled TM).
