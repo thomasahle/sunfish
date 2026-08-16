@@ -437,6 +437,23 @@ MODS = {
     "er12": ("\nEVAL_ROUGHNESS = 15\n", "\nEVAL_ROUGHNESS = 12\n"),
     "lmr30": ("\nLMR = 60\n", "\nLMR = 30\n"),
     "lmr50": ("\nLMR = 60\n", "\nLMR = 50\n"),
+    # --- THE DEADLINE POLL, the one search constant a fixed-node instrument
+    # CANNOT see. `self.nodes % 2048` decides how often the in-search clock is
+    # read, so under `go nodes` it is exactly inert and round 1 was structurally
+    # blind to it. It is also the only constant left that touches nps, which is
+    # where both standing instruments say the entry's remaining edge lives.
+    #
+    # It SHIPS: unlike the node-cap poll on the line above it, this one is NOT
+    # inside `# minifier-hide`, so it is in the artifact. Verified, not assumed.
+    #
+    # Free at 1024, 4096 and 8192 (all pack to 3405 B, measured). 4096 is the
+    # conservative step and the only one played: a longer poll widens the
+    # worst-case overrun past `searcher.deadline`, and this engine has a
+    # forfeit history, so 8192 stays registered-not-run pending 4096's result.
+    "poll4096": ("if self.nodes % 2048 == 0 and time.time() > self.deadline: raise Stop",
+                 "if self.nodes % 4096 == 0 and time.time() > self.deadline: raise Stop"),
+    "poll8192": ("if self.nodes % 2048 == 0 and time.time() > self.deadline: raise Stop",
+                 "if self.nodes % 8192 == 0 and time.time() > self.deadline: raise Stop"),
     # --- INTERNAL ITERATIVE REDUCTION, the two constants round 1 missed ---
     # `if depth > 2 and killer is None: depth -= 1` carries a min-depth AND a
     # reduction amount, and neither was in the round-1 cohort -- an honest

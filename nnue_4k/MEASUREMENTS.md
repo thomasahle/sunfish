@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **PRE-REGISTERED before game 1: the DEADLINE POLL at 60+1 (`nodes % 2048` → `4096`), N=300 fixed, adjudication NONE — with the safety tripwire INVERTED, both branches fixed in advance** | The one search constant a fixed-node instrument **cannot** see: it only governs how often the in-search clock is read, so under `go nodes` it is exactly inert and round 1 was structurally blind to it — and it is the only constant left touching **nps**. **It ships, checked in the payload not reasoned about**: `xz -d` finds exactly one `nodes%2048` in the base artifact and one `nodes%4096` in the arm, with the minifier-hidden node-cap poll correctly absent from both. **Both pack to 3405 B — zero byte delta**; base sha `5a207fdf9cf05f2e…` is **bit-identical to the artifact that measured +244.47 ± 39.23**. PACKED arms, not sources, and that is load-bearing: only the packed artifact runs the shipped builtin loop and shipped `pooltm`, whose overrun margin is the thing under test — so the driver check takes its packed form (**must boot AND must print NO `info string driver`**). **TRIPWIRE**: a **BASE** forfeit is a VENUE SIGNAL and **voids** (box record 1251/1251, so it means the machine); a **POLL4096** forfeit is **THE MEASUREMENT** — "4096 unsafe at 60+1", a result, not a void — and the lead then closes at 2048 with the safety evidence banked; both forfeiting reads as venue first; any illegal move stops everything. Attribution is mechanical via `classify.py` exit code, never by eye. Reading fixed in advance: safe + non-negative interval means the nps gain is real but small at 60+1, so **this test mostly measures SAFETY**, and a pass **registers (does not run)** a 10+0.1 follow-up where clock-read frequency actually binds. srand 20260870, conc 8, `book3k.pgn`, arena `~/sunfish-bench/poll-20260816`. Elo unread until N=300 |
 | 2026-08-16 | **`er40` SCREEN VERDICT: `EVAL_ROUGHNESS` 15 → 40 is **−21.22 ± 18.60**, 95% **[−39.88, −2.68]** — an interval EXCLUDING ZERO. Depth bought at ZERO instability cost still does not convert; it COSTS. #205's open question is closed** | 1000 games, **0 illegal, 0 forfeits**, 500 pairs 0 unpaired, ptnml **[83, 96, 178, 85, 58]**, 46.95% (359W/420L/221D), nElo −24.68 ± 21.53, adjudication symmetric 687/1000, 54 m at conc 8. Pentanomial **recomputed from the PGN independently** and reproduces fastchess to the digit. SPRT is UNDECIDED at cap (LLR −2.45 of −2.94, 83.1% toward H0) because the hypotheses were 0 vs 10 and the truth is ≈ −21, below both — so "undecided" means **not better**, not unknown, and unlike #205's straddling [−11.33, +23.17] this interval is entirely negative. **This was registered ON MECHANISM before `er40`'s own mini-match was scored, and run despite its 7th-place finish**: it is the only zero-byte arm that buys depth while REDUCING instability (+0.29 plies, MTD crossings **1 → 0**). #205's decomposition left open that instability, not depth, was the problem; removing the instability entirely and still losing 21 Elo **refutes that reading**. Extra plies at a fixed node budget are worth ~nothing here however paid for — the MTD driver's **value resolution is worth more than the depth its probes could buy**. Depth-does-not-convert now rests on **twelve arms across three registrations**. Bonus calibration: the 50-game mini-match said −41.9 ± 92.0 where the screen says −21.2 ± 18.6 — the point estimate was wrong by 100% of the effect, which is exactly why the spec forbids quoting one |
 | 2026-08-16 | **CONSTANT SELECTOR ROUND 1: NO WINNER — and the cohort tilts NEGATIVE, suggestively. 500 games, 0 illegal, 0 forfeits. The entry sits at or near a local optimum of its own search constants** | Top pick `cnt0` 53.00%, tied with `qs60` at **53.00% exactly — a 0.00-point gap against a required 10** — so the pre-registered rule does not fire and nothing is promoted on rank. **The informative part is the aggregate**: the null calibration registered BEFORE the games said top-of-ten reads 59.6% on average under a pure null, and the observed top is **53.0%**. Pooling all 250 pairs directly: **−24.36 Elo, 95% [−50.05, +1.07], two-sided p = 0.060**; P(top-of-ten ≤ 53.0%) = **2.75%** against this round's own variance. **A published-then-corrected number is on the record**: this entry first said 2.13% / 0.83% and "significantly", computed from the registered null's #205 pentanomial, whose 43.8% draw rate is higher than this round's 37.6% — narrower null, p-values biased toward significance. Corrected within the hour, before anything was built on it; the finding is **suggestive, not significant**. Every zero-byte perturbation of every live constant, in BOTH directions, makes the entry worse on average. Full map (score%): cnt0 53, qs60 53, nred5 51, fut3 50, lred3 49, lred4 49, er40 44, nred2 41, fut0 40, fut2 35. **#205's central finding reproduced on ten fresh points**: corr(Δdepth, score%) = **+0.252** (p≈0.46) — the four arms buying ≥0.94 plies average 45.8%, the three SPENDING depth average 44.7%, statistically indistinguishable, so **buying plies at fixed nodes is worth ~nothing**. Instrument amendment offered: **the selector ranks FAMILIES, not CONSTANTS** — it resolves ~101 Elo at N\*=50 and ~59 at N\*\*=150, against constant effects ≤20 Elo, so the tie is deliberately NOT escalated (it would buy nothing) and both leaders are registered-not-run for screens. Individual intervals span ±64..±93 and 8 of 10 contain zero: this rules out large wins, it does not prove the constants tuned |
 | 2026-08-16 | **PRE-REGISTERED before game 1: ENTRY-NATIVE CONSTANT SELECTOR, round 1. Ten arms, each ONE value change to a search constant the entry INHERITED from classic and never tuned here, every one verified ZERO-BYTE by pack (≤ 3405 B, three of them −1 B). 50-game fixed-node mini-matches vs the pinned entry, per the standing SELECTOR SPEC** | **A LIVENESS MAP WAS BUILT FIRST, and it already answers one open question at ZERO games**: 21 zero-byte deviations were probed for bestmove divergence vs the base at the screen's own 20000-node budget, and **`LMR` is a DEAD KNOB across its whole zero-byte band — deadest exactly where classic's tuning points**. Over the full 505-position first-yield suite: **`LMR = 75` changes ONE move in 505 (0.2%)**, 50 → 3, 40 → 9, 30 → 18 (3.6%). The threshold sits in a value dead zone — quiet moves carry PST deltas under 40, captures carry material over 100, so every threshold in 50..75 selects the same set. **This retires #205's deferred `LMR = 75` follow-up without a game**, and implies `LMR`'s measured +38.9 ± 19.1 belongs to the reduction MECHANISM, not the threshold. Also dead: **`QS_A = 160` at 0/505 exactly** — the only zero-byte value on that knob, so the QS slope axis is closed at zero cost — and the null static guard (900 → 8/505 = 1.6%; `abs(pos.score) < 500` almost never binds). Cohort chosen from the LIVE remainder, mechanism registered in advance (Δ mean depth / MTD crossings / diff-moves per 60): `fut3` +1.59/1/12, `fut2` +1.05/3/15, `lred4` +1.44/1/11, `lred3` +0.94/1/10, `nred5` +0.75/1/6, `cnt0` +0.30/1/8, `er40` +0.29/**0**/9, `qs60` −0.05/2/12, `nred2` −0.51/2/12, `fut0` −0.65/1/6. Base is 9.98 plies, 1 crossing. **`er40` is the one arm that buys depth at ZERO instability** (crossings 1 → 0), the cleanest available test of #205's "bought depth does not convert". Gate ladder green on all 11 builds; driver v3 + black-FEN abort armed (the #205 run-1 void condition). Decision rule fixed in advance: top pick must exceed **50%** AND lead 2nd by **> 10 points**, else escalate that pair to N\*\* = 150; one illegal move stops the cohort |
@@ -289,6 +290,81 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-16 — PRE-REGISTRATION: the DEADLINE POLL at 60+1, with the safety tripwire INVERTED. Both branches fixed before game 1
+
+Coordinator-authorized. Written and committed **before a single game**.
+Nothing below is a result.
+
+### The one search constant a fixed-node instrument cannot see
+
+`if self.nodes % 2048 == 0 and time.time() > self.deadline: raise Stop`
+decides how often the in-search clock is read. Under `go nodes` it is
+**exactly inert**, so the round-1 constant selector was structurally blind to
+it — and it is the only constant left that touches **nps**, which is where
+both standing instruments say the entry's remaining edge lives (fixed-node
+−1.74 ± 27.93 against classic, clean-clock +244.47 ± 39.23).
+
+**It ships, and that was checked rather than reasoned about.** Unlike the
+node-cap poll on the adjacent line, this one is NOT inside `# minifier-hide`.
+Decompressing each artifact (`tail -c +75 | xz -d`) finds **exactly one
+`nodes%2048` in the base and exactly one `nodes%4096` in the arm**, and the
+minifier-hidden node-cap poll is correctly absent from both.
+
+| | |
+|---|---|
+| arms | `base` = poll 2048 (shipped) vs `poll4096` = poll 4096, one value |
+| bytes | **both 3405 B — ZERO delta**, verified by pack (1024 and 8192 are also free) |
+| base sha256 | `5a207fdf9cf05f2e…` — **bit-identical to the artifact that measured +244.47 ± 39.23** at 60+1 |
+| arm sha256 | `7b46f333e052a0ce…` |
+| form | **N = 300 fixed** (150 colour-swapped pairs), **60+1**, conc 8, `nice -n 10`, srand **20260870**, book `book3k.pgn` order=random |
+| adjudication | **NONE** — games play out; a TM test must not have its endings truncated |
+| arena | `~/sunfish-bench/poll-20260816`, fastchess PID recorded to `fastchess.pid` |
+
+**PACKED artifacts, not sources, and that is load-bearing.** The quantity under
+test is the overrun past `searcher.deadline`, and the deadline is set by
+whichever driver runs. Only the packed artifact runs the shipped builtin loop
+and the shipped `pooltm`; sources under `sunfish_ui` would measure a different
+time manager. The driver-resolution check therefore takes its **packed form**:
+each arm must boot AND must print **no `info string driver` line**, positively
+proving the builtin loop is what plays. `8192` is **registered-not-run**
+pending this result.
+
+### THE TRIPWIRE, inverted — both branches fixed now so neither can be reinterpreted later
+
+- **A forfeit by the BASE arm is a VENUE SIGNAL and VOIDS the match.** The base
+  is the shipped artifact with the shipped TM and the box's clean-timed record
+  stands at 1251/1251, so a base forfeit means the machine, not the engine. No
+  Elo is read or quotable. (This is the +400 meter's rule, which fired once and
+  was right to.)
+- **A forfeit by the POLL4096 arm is THE MEASUREMENT, not a void.** It means the
+  coarser poll's worst-case overrun exceeds the TM's margin under real
+  conditions, and the verdict is **"4096 UNSAFE at 60+1" — a result.** The lead
+  then closes at 2048 with the safety evidence banked.
+- **Both arms forfeiting reads as venue first**: base-forfeit dominates and the
+  match is void, because a contended box can starve either side.
+- **Any illegal move by any arm stops everything.** The zero-illegal bestmove
+  floor is inviolable and is not part of this trade.
+
+Attribution is mechanical, not by eye (`classify.py`): a `time forfeit` game is
+lost by the side that flagged, so `1-0` means Black forfeited and `0-1` means
+White did; a forfeit game that is somehow drawn is reported as unattributable
+rather than silently dropped. The classifier's exit code selects the branch.
+
+### The reading, also fixed in advance
+
+If 4096 is **SAFE** (zero arm forfeits) and the Elo interval is **non-negative**,
+the nps gain is real but small at 60+1 — and the honest framing is that **this
+test mostly measures SAFETY**, not Elo. Clock-read frequency binds harder as the
+clock shortens, so a pass here **registers (does not run)** a 10+0.1-style
+follow-up where the nps payoff would actually show. A negative interval at
+60+1 closes the lead regardless of forfeits.
+
+**Elo is not read until the game count is verified at 300.** The gates run in
+the registered order — count, illegal, forfeit-attribution — and only then, and
+only on the branches that permit it, is a number computed.
 
 ---
 
