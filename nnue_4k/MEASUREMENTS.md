@@ -68,8 +68,9 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **SETTLER VERDICT: AMBIGUOUS — the third branch fired, and it is the one that saved the reading. Speed arm **+23.20 ± 31.12** → **[−7.92, +54.32]**, an interval that contains 0, the +3.8 residual lean, AND the +33 projection. It arbitrates NOTHING, and the point estimate of +23 in "the twenties" is exactly what would have been misread as confirmation** | 300/300, **0 forfeits, 0 illegal**, arms sha-verified (prespeed 3405 B `5a207fdf…` vs speed 3376 B `a997b137…`), venue gate passed with 76 free cores, srand 20260824, 2 h 26 m. 53.33% — 99 W / 79 L / 122 D, ptnml **[10, 35, 49, 37, 19]** over 150 pairs, DrawRatio 32.67%, **LOS 92.91%**. **The three registered readings applied exactly**: HOLDS needs the interval to exclude 0 — it does not (lo = −7.92) — so it **does NOT fire despite the point estimate clearing +20**; DISCOUNTED needs upper < +33 — upper is +54.32 — so it **does NOT fire**; **AMBIGUOUS fires.** Registered response is **more games on this pairing, never narration**, and that is what this entry recommends. **Implied slope: 0.92 ± 1.23 Elo per 1% nps** against the modeled **1.46** — the model is inside the interval and so is **zero**, so the axis is **still uncalibrated**. **Design B's ≈+25-30 is therefore NOT discounted — and NOT confirmed**; it remains an unvalidated projection and should be quoted as such. **My own power estimate was optimistic**: I registered ±24.5 and got **±31.12** (draws ran 32.67%), which is why the ambiguous branch was needed at all. Cost to finish the job, read ONCE at a fixed N: **~240 more games** to establish the effect is above zero, **~767 more** to separate +33 from 0 |
 | 2026-08-16 | **PRE-REGISTERED — THE SPEED-STACK SETTLER: entry-vs-entry, timed, to arbitrate the +33 projection against meter 3's ≈+4 residual. Pre-speed **3405 B** `5a207fdf…` vs current **3376 B** `a997b137…` — deliberately NOT Design B's 3410, so it isolates exactly the stack the +33 covered** | Both arms already exist bit-preserved and were re-verified at registration (3405 B `5a207fdf9cf05f2e…`, the landed meter's arm; 3376 B `a997b137e1e4a655…`, meter 3's arm; confirmed non-identical). Form as meter 3 so it inherits a proven venue: **fixed N=300**, 60+1, **conc 8**, srand **20260824** (fresh), adjudication none, **zero-forfeit = VOID**, zero-illegal = stop, box gate **≥ 24 free cores**. Elo is reported for the **SPEED arm relative to pre-speed**, so positive = the stack helped. **POWER, COMPUTED AND REGISTERED BEFORE GAME 1 — and it forces a third branch the order did not name**: near 50% this design gives **≈ ±24.5 Elo**, which separates **+33 from 0 at only ~2.3σ and CANNOT separate +33 from +15**. So the readings are fixed as: **RELATION HOLDS** = interval excludes 0 **and** point ≥ +20; **RELATION DISCOUNTED** = interval excludes +33 (upper bound < +33); **AMBIGUOUS** = anything else — reported as ambiguous, never spun toward either. **Stakes:** a discount hits **Design B's ≈+25-30 projection too**, which is why this runs BEFORE the next meter is read rather than after |
-| 2026-08-16 | **METER 3 VERDICT (post-#207-classic): the entry is **+200.24 ± 38.35** at 60+1 — 300/300, ZERO forfeits, ZERO illegal. The point estimate lands BELOW my pre-registered +220-280 band, and the honest reading is that NEITHER projection is convicted: the whole change is inside noise** | Gates read first and both passed before the Elo: forfeits **0**, illegal **0**, 300/300 `normal`; arms sha-verified box-side (entry **3376 B** `a997b137…` nnue-4k `1b6b94d`, classic **3392 B** `6bbac98a…` master `f4f06d4`), venue gate passed with **69 free cores**, srand 20260823, conc 8, 2 h 06 m. **76.00%** — 195 W / 39 L / 66 D, nElo **+255.71 ± 39.32**, ptnml **[1, 11, 33, 41, 64]** over 150 pairs, PairsRatio 8.75, DrawRatio 22.00%, LOS 100%. Independent recompute mirrors fastchess. **Against the band, reported as registered**: the point estimate **+200.24 is below +220**, but the 95% interval **[161.89, 238.59] overlaps the band** on [220, 238.59], and the change from the landed **+244.47** is **−44.23 ± 54.86 — not significant (z = 1.58)** and **consistent with the predicted −15 (z = 1.04)**. So the registration's "which projection was wrong" question has a disciplined answer: **neither is convicted.** The point-estimate decomposition **leans** to the speed stack under-delivering (**+3.8 rather than +33** if classic's −48 holds; classic would have to have gained −77 for +33 to hold) — but each figure carries ±55, so this is a **lean, not a finding**. **Design B (+16-20% nps) landed AFTER these arms were pinned and rides the NEXT meter**, which is the clean test of the speed thesis. **Progress toward +400: 50%** (upper bound 60%) — the goal moved further away because classic got stronger, not because the entry got weaker |
+| 2026-08-16 | **METER 3 VERDICT (post-#207-classic): the entry is **+200.24 ± 38.35** at 60+1 — 300/300, ZERO forfeits, ZERO illegal. The point estimate lands BELOW my pre-registered +220-280 band, and the honest reading is that NEITHER projection is convicted: the whole change is inside noise** | Gates read first and both passed before the Elo: forfeits **0**, illegal **0**, 300/300 `normal`; arms sha-verified box-side (entry **3376 B** `a997b137…` nnue-4k `1b6b94d`, classic **3392 B** `6bbac98a…` master `f4f06d4`), venue gate passed with **69 free cores**, srand 20260823, conc 8, 2 h 06 m. **76.00%** — 195 W / 39 L / 66 D, nElo **+255.71 ± 39.32**, ptnml **[1, 11, 33, 41, 64]** over 150 pairs, PairsRatio 8.75, DrawRatio 22.00%, LOS 100%. Independent recompute mirrors fastchess. **Against the band, reported as registered**: the point estimate **+200.24 is below +220**, but the 95% interval **[161.89, 238.59] overlaps the band** on [220, 238.59], and the change from the landed **+244.47** is **−44.23 ± 54.86 — not significant (z = 1.58)** and **consistent with the predicted −15 (z = 1.04)**. So the registration's "which projection was wrong" question has a disciplined answer: **neither is convicted.** The point-estimate decomposition **leans** to the speed stack under-delivering (**+3.8 rather than +33** if classic's −48 holds; classic would have to have gained −77 for +33 to hold) — but each figure carries ±55, so this is a **lean, not a finding**. **The 2026-08-16 settler tested it directly and came back AMBIGUOUS** (+23.20 ± 31.12, an interval containing 0, +3.8 and +33 alike), so the lean is neither confirmed nor refuted. **Design B (+16-20% nps) landed AFTER these arms were pinned and rides the NEXT meter** (and per the 2026-08-16 settler its Elo projection is **unvalidated** — the nps→Elo axis measured 0.92 ± 1.23 vs a modeled 1.46, excluding neither the model nor zero), which is the clean test of the speed thesis. **Progress toward +400: 50%** (upper bound 60%) — the goal moved further away because classic got stronger, not because the entry got weaker |
 | 2026-08-16 | **THE MIRRORED BOARD LANDS: stop RECOMPUTING the rotation and make-move drops 92% of its cost — **+20.17% nps (quiet, n=8)** / **+16.17% (box, n=8)** for **+34 B**, node-identical — and the campaign now measures **+54.51% end-to-end** against the pre-speed artifact. AND THE MUTABLE BOARD IS CLOSED PERMANENTLY at +0.3 Elo** | Archaeology first: `0622039` on `nnue-mutable-board` had the right interface (`@contextmanager` do/undo) and the wrong body — `list(self.board)` plus feature-vector copies then `''.join` back, strictly MORE allocation than the immutable splices, with a dead `put()`+undo-stack that was never wired. `c39c8d4` had already re-priced it +71..+110 → +15 on the NNUE engine. **Neither price transfers to the entry, and reusing either would repeat the exact error c39c8d4 exists to record**, so make-move was decomposed on the shipped artifact: 1,578 ns of a 6,660 ns node (23.7% of wall), of which **`board[::-1].swapcase()` is 1,436 ns = 92%** and the splices a mutable board removes are **21 ns = 1.3%** (`.translate()` is 8× WORSE under pypy; rejected). **So the mutable board is +0.3 Elo behind a Zobrist rewrite — 106× smaller than the alternative — and is closed for the third and last time.** What landed instead: carry `r`, the board mirrored and case-swapped, apply every put to BOTH orientations (index `x` and `119-x`, case swapped), and `rotate()` becomes a field swap. **Node-identical because the representation is CACHED, not abandoned** — dropping rotation outright would change black's scan order and the index-based sort tie-break, hence the tree; that variant is explicitly NOT this one. Verified on 1,959 child boards before implementation, then by identity_gate at depth 6 on **laptop AND box**, plus a new **derived-field invariant** now in the gate battery (holds on 275,543 positions; a deliberately corrupted mirror is CAUGHT, 4,709 violations). **MEMORY GATE, the flagged killer, measured both loads**: game-like (fresh process, tp_move at 107k) **+1.2 MB (+0.4%)**; saturated table (one search, `self.t` at TABLE_SIZE=10⁶) **740 MB → 1,017 MB, +277 MB (+37%)**. Box has 371 GB, so even 16 concurrent processes is ~4% of RAM — **PASSES**, with the caveat recorded that no memory limit is documented in the 4k rules and a ~1 GB/process cap would bind. **PREDICTION vs MEASURED, stated as required: predicted +27.4%, measured +20.2/+16.2** — the component arithmetic treated the whole 1,436 ns as removable, but that figure includes ALLOCATING two 120-char strings and the mirrored design still allocates two; only the reverse-and-case-swap COMPUTATION is removed. Same error family as c39c8d4 in new dress |
 | 2026-08-16 | **STAGED-SCRIPT DEFECT #2, caught by the executing lane before a single game: `run_meter3_box.sh` shipped with NO free-core gate — the exact non-negotiable its own registration and handoff both named. Cause is SCRIPT REUSE, twice running, and the class is now closed by a mechanical staging gate** | Mine, and the hold was correct. Mechanism: a `sed` renamed the banner and produced the doubled string `"+400 METER METER 3"`, so the follow-up `replace()` anchor `"+400 METER 3"` **matched nothing and inserted the gate silently** — the same silent-no-op class this campaign keeps recording — and the header still read "RUN 2, RELOCATED". **My verification did grep for the gate patterns and I skim-read only the head of the output**, so I confirmed four patterns and never noticed the two that were absent. **Absence is what eyeballs miss.** Fixes: the script is **rewritten fresh, not patched** (reuse is the common cause of both defects — meter 2's harvest section died silently, meter 3's gate never existed), and staging now runs **`verify_staged.sh`**, which exits non-zero on any missing non-negotiable and separately flags predecessor text left by reuse. Negative control: against the broken draft it reports MISSING on all three gate patterns plus two STALE headers; against the rewrite, **STAGING GATE PASSED**. One honest note on the gate itself — its first run failed on `tries -ge 60`, which was **my regex missing a quote character, not a missing feature**; I checked the code before relaxing the pattern, because a checklist that gets loosened whenever it complains is worse than none |
 | 2026-08-16 | **PRE-REGISTERED — METER 3, the post-#207 goal-tracking number: BOTH arms moved since the landed +244.47, so it is re-measured against the classic that actually exists today. Entry **3376 B** (−29, the speed stack) vs classic **3392 B** (+146, #205/#206/#207) — the packed classic is now LARGER than the 4k entry** | Arms rebuilt, byte-measured and sha-pinned at registration: entry `a997b137e1e4a655…` **3376 B, 720 spare**, nnue-4k **`1b6b94d`**, `check_entry.sh` green; classic `6bbac98a40c5f90d…` **3392 B**, master **`f4f06d4`** (post-#205/#206/#207, mate-floor guard restored). Form identical to the landed meter so the two stay comparable: **fixed N=300**, 60+1, adjudication none, **concurrency 8 declared**, srand **20260823** (fresh), **zero-forfeit = VOID**, zero-illegal = stop. Venue the box, gate **re-expressed in FREE CORES** because the laptop's "foreign CPU < 40%" is meaningless on 96 cores: **require ≥ 24 free** (3× the match's ~8-core need). Census at registration: **3162% = 32 of 96 cores in use, 64 free** — owner's `optimizer-refine-20260816` **19 cores**, training lane 7, our matches 0.7. **The meter yields to the owner's work and never contends with it**; at nice 10 with ~56 cores still free once it starts, it does not. **EXPECTATIONS REGISTERED BEFORE GAME 1 so the reading cannot drift**: it should read **LOWER** than +244.47 (classic gained ~+48 on its own ladder) and **HIGHER** by the speed stack's **≈+33** projection (idle-venue, n=8) → central ≈ **+230**, band **+220-280** plausible — **and the number that comes out is the number.** Label: **post-#207-classic** |
@@ -2950,6 +2951,99 @@ in seconds and lives outside the engine. **Fixing the holdback would not
 have prevented one of these forfeits** — which is precisely why it stays
 registered-not-run, and why the venue-exclusivity rule is the real
 remedy.
+
+---
+
+## 2026-08-16 — SETTLER VERDICT: AMBIGUOUS, and the third branch is what saved the reading
+
+Gates first, both passed: **0 forfeits, 0 illegal, 300/300 `normal`**. Arms
+sha-verified box-side (prespeed **3405 B** `5a207fdf…` vs speed **3376 B**
+`a997b137…`), venue gate passed with 76 free cores, srand 20260824, 2 h 26 m.
+
+### The result, from the speed arm's perspective
+
+| | |
+|---|---|
+| **Elo (speed vs pre-speed)** | **+23.20 ± 31.12** → **[−7.92, +54.32]** |
+| nElo | +29.47 ± 39.32 |
+| score | **53.33%** — 99 W / 79 L / 122 D |
+| pentanomial | **[10, 35, 49, 37, 19]** over 150 pairs; PairsRatio 1.24 |
+| draw ratio | **32.67%**; **LOS 92.91%** |
+
+### The three pre-registered readings, applied exactly
+
+| # | rule | fires? |
+|---|---|---|
+| 1 | **HOLDS** — interval excludes 0 **and** point ≥ +20 | **NO** — point is +23.20 ✓ but the interval includes 0 (lo = −7.92) ✗ |
+| 2 | **DISCOUNTED** — upper bound < +33 | **NO** — upper is +54.32 |
+| 3 | **AMBIGUOUS** — anything else | **YES** |
+
+> **VERDICT: AMBIGUOUS.** The registered response is **more games on this
+> pairing, never narration.**
+
+**This is the case the third branch was written for.** A point estimate of
+**+23** sits squarely in "the +20s-30s", and under the original two-reading
+scheme it would have been announced as *RELATION HOLDS* — a confirmation of
+the +33 projection. It is not one. The interval contains **everything the
+match was supposed to choose between**:
+
+| hypothesis | value | inside [−7.92, +54.32]? |
+|---|---|---|
+| no effect at all | 0 | **yes** |
+| meter-3 residual lean | +3.8 | **yes** |
+| the projection | +33 | **yes** |
+| the model, 1.46 × 25.3% | +36.9 | **yes** |
+
+A test that cannot exclude any of its own hypotheses has not arbitrated;
+it has only narrowed the range a little. **LOS 92.91%** says the speed arm
+is *probably* ahead — suggestive, and below the bar this ledger uses.
+
+### The implied nps→Elo slope — the number the axis actually needs
+
+Dividing the observed Elo by the stack's measured **+25.3%** nps
+(quiet-venue, n=8):
+
+> **empirical 0.92 ± 1.23 Elo per 1% nps**, against the modeled **1.46**.
+
+**Both the model and zero sit inside that interval.** The axis the
+remaining ~200 Elo leans on is **still uncalibrated** — this match moved
+the error bar, not the answer.
+
+### Consequence for Design B and every queued speed figure
+
+**Design B's ≈+25-30 is NOT discounted** — the DISCOUNTED branch did not
+fire, and applying its arithmetic anyway would be exactly the narration the
+registration forbids. **But it is not confirmed either.** The honest status
+of every speed projection in the queue is unchanged from before this match:
+**an unvalidated model estimate**, and it should be quoted with that label
+rather than as an expected gain.
+
+### My own power estimate was optimistic, and that is why the branch existed
+
+I registered **±24.5**; the match delivered **±31.12** — 27% wider, because
+draws ran **32.67%** against the ~25% my slope calculation implicitly
+assumed. Had I trusted the tighter figure and skipped the ambiguous branch,
+this result would have been read as a confirmation. **The lesson is to
+register the branch you expect not to need.**
+
+### What finishing the job costs — read ONCE, at a fixed N
+
+| goal | total N | additional games |
+|---|---|---|
+| establish the effect is above zero | ~540 | **~240 more** |
+| separate +33 from 0 | ~1067 | **~767 more** |
+
+**Sequential-testing hazard, stated so it is not walked into:** adding games
+to this pairing and re-reading until it clears is not a fixed-N measurement
+and would inflate the false-positive rate. Any continuation must
+**pre-register a fixed total and read once** — the same rule that made
+meter 3 and this settler trustworthy.
+
+**Recommendation:** if the axis matters enough to calibrate — and with ~200
+Elo of the goal leaning on it, it does — the ~540-game continuation is the
+cheap version and answers "did it help at all". The ~1067-game version is
+what actually calibrates the slope, and at 2 h 26 m per 300 games on the box
+that is roughly 8-9 hours.
 
 ---
 
