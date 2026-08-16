@@ -478,6 +478,160 @@ for _pat, _repl, _n in _golf_renames:
     src, _c = re.subn(_pat, _repl, src)
     assert _c == _n, "golf rename %r matched %d times, expected %d" % (_pat, _c, _n)
 
+# ---- SPEED, and only speed (LANDED 2026-08-16) ----------------------------
+# Five edits that leave the search BIT-IDENTICAL -- same moves in the same
+# order, same table keys, same cutoffs, same node counts -- and make it run
+# faster. Verified rather than argued: a 60-position depth-6 battery compares
+# every MTD probe the driver yields (depth, gamma, score, killer move) plus
+# the node count at each, and all 60 transcripts match the incumbent byte for
+# byte. Bestmove alone would not do -- two engines can agree on the move and
+# search different trees.
+#
+# WHY THERE IS NO ELO SCREEN, stated so the next reader does not think one
+# was skipped: node-identical means the tree is unchanged, so at fixed nodes
+# these arms ARE the incumbent, and a fixed-node screen can only measure
+# noise. Under a clock the only thing that changed is how many of those
+# identical nodes fit in the budget. The meter measured exactly that channel
+# and found it is the entry's whole advantage -- fixed-node -1.74 +/- 27.93
+# against classic (per-node parity), clean-clock +244.47 +/- 39.23 at 60+1 --
+# so strictly-faster is strictly-better here by construction, not by
+# assumption. At the lane's speed model (102 Elo per doubling of nps) the
+# stack below is worth roughly +18 Elo at 60+1.
+#
+# Measured on the bench box (pypy3 7.3.20, nice 10, concurrency 1), 60
+# positions searched to a fixed depth, PAIRED per round with the arms run in
+# palindrome order so neither between-round nor within-round box drift lands
+# on one arm. Bytes are packed by the real packer, never composed.
+#
+# APPLIED AFTER the golf renames on purpose: every anchor below is a line of
+# the FINAL artifact source, which is also the text the identity battery ran
+# against, so the thing asserted here is the thing that was measured.
+#
+# ENTRY-ONLY, like _pend and _pooltm. Four of the five (everything but the
+# `abs` in value()) sit in text sunfish_nnue.py shares verbatim and would be
+# node-identical there too -- but that file is another lane's artifact and
+# has not been measured, so it stays where the measurement is.
+_speed = [
+    # 1. THE ORDERING EXPRESSION: a generator expression inside sorted()
+    #    becomes a LIST comprehension inside sorted(). One character, `(` ->
+    #    `[`, so it is byte-neutral -- and it is the single biggest win in
+    #    the engine. sorted() has to build a list either way; feeding it a
+    #    genexp makes the JIT pump the iterator protocol across a builtin
+    #    call boundary once per move, where a listcomp is a loop it compiles
+    #    straight through with gen_moves inlined into it.
+    ("            for cnt, (val, move) in enumerate(sorted(((v, m) for m in pos.gen_moves()\n"
+     "                                     if (v:=pos.value(m)) >= val_lower), reverse=True)):\n",
+     "            for cnt, (val, move) in enumerate(sorted([(v, m) for m in pos.gen_moves()\n"
+     "                                     if (v:=pos.value(m)) >= val_lower], reverse=True)):\n"),
+
+    # 2. THE RAY-BREAK TEST, in the innermost loop of the whole engine. Three
+    #    lines above, `q in " \nPNBRQK"` already broke out for padding and for
+    #    our own men, so by here q is '.' or one of theirs -- and "is this a
+    #    capture" is one character comparison, not a six-character scan.
+    ("                    # Stop crawlers from sliding, and sliding after captures\n"
+     '                    if p in "PNK" or q in "pnbrqk":\n',
+     "                    # Stop crawlers from sliding, and sliding after captures.\n"
+     "                    # The break above already rejected padding and our own men,\n"
+     '                    # so "q is a capture" is exactly "q is not empty".\n'
+     '                    if p in "PNK" or q != ".":\n'),
+
+    # 3. THE ZUGZWANG GUARD built a generator object to run four substring
+    #    scans, at every node deep enough to try a null move. Same four
+    #    scans, same short-circuit order, no generator.
+    ('            if not root and depth > 2 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):\n',
+     "            if not root and depth > 2 and abs(pos.score) < 500 and (\n"
+     '                    "R" in pos.board or "B" in pos.board or "N" in pos.board or "Q" in pos.board):\n'),
+
+    # 4. itertools.count allocated an object per (piece, direction) pair --
+    #    around a hundred per movegen -- to produce an arithmetic sequence.
+    #    The while loop is the same sequence and the same breaks, and it
+    #    takes the import out with it, which is where most of the bytes come
+    #    from.
+    ("                for j in count(i + d, d):\n",
+     "                j = i + d\n"
+     "                while True:\n"),
+    ('                    if i == H1 and self.board[j + W] == "K" and self.wc[1]:\n'
+     '                        yield Move(j + W, j + E, "")\n',
+     '                    if i == H1 and self.board[j + W] == "K" and self.wc[1]:\n'
+     '                        yield Move(j + W, j + E, "")\n'
+     "                    j += d\n"),
+    ("from itertools import count\n", ""),
+
+    # 5. abs() is a builtin CALL, and on integers the band test is the same
+    #    predicate: |x| < 2 iff -2 < x < 2. Both sites run per move.
+    ("        if abs(j - self.kp) < 2:\n",
+     "        if -2 < j - self.kp < 2:\n"),
+    ('                     if self.board[m.j] == "k" or abs(m.j - self.kp) < 2), None)\n',
+     '                     if self.board[m.j] == "k" or -2 < m.j - self.kp < 2), None)\n'),
+
+    # 6. gen_moves STOPS BEING A GENERATOR. The single largest speedup in this
+    #    lane, and the same shape as #1 and #3: a Python generator is resumed
+    #    and suspended once per move, ~27 times per node, across a boundary
+    #    the JIT will not collapse. Every consumer wanted the whole list
+    #    anyway -- the ordering comprehension sorts it, the terminal check
+    #    exhausts it, the bestmove floor walks it -- and the ONE consumer that
+    #    could stop early, k(), is called 0.031 times per node, so the work it
+    #    now does eagerly is already inside the measured number.
+    #    Order matters: this must run AFTER edit 4, which appends `j += d`
+    #    below the last yield it rewrites.
+    ("        # these checks run millions of times per search.\n"
+     "        for i, p in enumerate(self.board):\n",
+     "        # these checks run millions of times per search.\n"
+     "        # NB: this returns a LIST, not a generator. Every caller wants all\n"
+     "        # of it, and being a generator cost a resume/suspend per move.\n"
+     "        res = []\n"
+     "        for i, p in enumerate(self.board):\n"),
+    ("                                yield Move(i, j, prom)\n",
+     "                                res.append(Move(i, j, prom))\n"),
+    ('                    yield Move(i, j, "")\n',
+     '                    res.append(Move(i, j, ""))\n'),
+    ('                        yield Move(j + E, j + W, "")\n',
+     '                        res.append(Move(j + E, j + W, ""))\n'),
+    ('                        yield Move(j + W, j + E, "")\n',
+     '                        res.append(Move(j + W, j + E, ""))\n'),
+    ("    def rotate(self, n=False):\n",
+     "        return res\n"
+     "\n"
+     "    def rotate(self, n=False):\n"),
+
+    # 7. The score table's value stops being a namedtuple. Its two fields are
+    #    read by name in three places, all of them in this file, and a
+    #    namedtuple's __new__ is a Python-level call paid once per store --
+    #    plus one more per PROBE, because dict.get evaluates its default
+    #    eagerly and throws it away on the ~85% that hit. A plain pair costs
+    #    3 bytes less and drops the class.
+    ('# lower <= s(pos) <= upper\nEntry = namedtuple("E", "l u")\n',
+     "# lower <= s(pos) <= upper. A plain pair: the two fields are read by name\n"
+     "# nowhere outside this file, and a namedtuple's __new__ is a Python-level\n"
+     "# call on every store AND on every probe (dict.get builds its default\n"
+     "# eagerly, then discards it on the ~85% of probes that hit).\n"
+     "EMPTY = (-MATE_UPPER, MATE_UPPER)\n"),
+    ("            entry = self.t.get((pos, depth), Entry(-MATE_UPPER, MATE_UPPER))\n"
+     "            if entry.l >= gamma: return entry.l\n"
+     "            if entry.u < gamma: return entry.u\n",
+     "            entry = self.t.get((pos, depth), EMPTY)\n"
+     "            if entry[0] >= gamma: return entry[0]\n"
+     "            if entry[1] < gamma: return entry[1]\n"),
+    ("            self.t[pos, depth] = Entry(best, entry.u) if best >= gamma else Entry(entry.l, best)\n",
+     "            self.t[pos, depth] = (best, entry[1]) if best >= gamma else (entry[0], best)\n"),
+
+    # 8. The FIRST ray test, complemented. The board alphabet is exactly
+    #    { ' ', '\n', '.', PNBRQK, pnbrqk }, so "stop: off the board or our
+    #    own man" is the complement of "empty or theirs" -- and spelling it
+    #    that way puts '.', the overwhelmingly common case, at offset 0 of
+    #    the scan instead of off the end of it.
+    ("                    # Stay inside the board, and off friendly pieces\n"
+     '                    if q in " \\nPNBRQK":\n',
+     "                    # Stay inside the board, and off friendly pieces. The board\n"
+     "                    # alphabet is exactly { ' ', '\\n', '.', PNBRQK, pnbrqk }, so\n"
+     '                    # this is the complement of "empty or theirs" -- spelled that\n'
+     "                    # way so '.', the common case, is found at offset 0.\n"
+     '                    if q not in ".pnbrqk":\n'),
+]
+for _a, _b in _speed:
+    assert src.count(_a) == 1, "speed anchor %r occurs %d times" % (_a[:50], src.count(_a))
+    src = src.replace(_a, _b, 1)
+
 open(OUT, "w").write(src)
 try:
     compile(src, OUT, "exec")

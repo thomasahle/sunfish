@@ -11,7 +11,6 @@ exit 1
 
 import os
 import time
-from itertools import count
 from collections import namedtuple
 
 version = "sunfish 2026-packed"
@@ -167,14 +166,21 @@ class Position(namedtuple("P", "board score wc bc ep kp")):
         # NB: `in <literal-str>` is ~30% faster than the equivalent .isupper() /
         # .isspace() / .islower() method calls in CPython; this matters because
         # these checks run millions of times per search.
+        # NB: this returns a LIST, not a generator. Every caller wants all
+        # of it, and being a generator cost a resume/suspend per move.
+        res = []
         for i, p in enumerate(self.board):
             if p not in "PNBRQK":
                 continue
             for d in directions[p]:
-                for j in count(i + d, d):
+                j = i + d
+                while True:
                     q = self.board[j]
-                    # Stay inside the board, and off friendly pieces
-                    if q in " \nPNBRQK":
+                    # Stay inside the board, and off friendly pieces. The board
+                    # alphabet is exactly { ' ', '\n', '.', PNBRQK, pnbrqk }, so
+                    # this is the complement of "empty or theirs" -- spelled that
+                    # way so '.', the common case, is found at offset 0.
+                    if q not in ".pnbrqk":
                         break
                     # Pawn move, double move and capture
                     if p == "P":
@@ -190,18 +196,23 @@ class Position(namedtuple("P", "board score wc bc ep kp")):
                         # If we move to the last row, we can be anything
                         if A8 <= j <= H8:
                             for prom in "NBRQ":
-                                yield Move(i, j, prom)
+                                res.append(Move(i, j, prom))
                             break
                     # Move it
-                    yield Move(i, j, "")
-                    # Stop crawlers from sliding, and sliding after captures
-                    if p in "PNK" or q in "pnbrqk":
+                    res.append(Move(i, j, ""))
+                    # Stop crawlers from sliding, and sliding after captures.
+                    # The break above already rejected padding and our own men,
+                    # so "q is a capture" is exactly "q is not empty".
+                    if p in "PNK" or q != ".":
                         break
                     # Castling, by sliding the rook next to the king
                     if i == A1 and self.board[j + E] == "K" and self.wc[0]:
-                        yield Move(j + E, j + W, "")
+                        res.append(Move(j + E, j + W, ""))
                     if i == H1 and self.board[j + W] == "K" and self.wc[1]:
-                        yield Move(j + W, j + E, "")
+                        res.append(Move(j + W, j + E, ""))
+                    j += d
+
+        return res
 
     def rotate(self, n=False):
         """Rotates the board, preserving enpassant, unless n.
@@ -256,7 +267,7 @@ class Position(namedtuple("P", "board score wc bc ep kp")):
         if q in "pnbrqk":
             score += pst[q.upper()][119 - j]
         # Castling check detection
-        if abs(j - self.kp) < 2:
+        if -2 < j - self.kp < 2:
             score += pst["K"][119 - j]
         # Castling
         if p == "K" and abs(i - j) == 2:
@@ -279,7 +290,7 @@ class Position(namedtuple("P", "board score wc bc ep kp")):
         witness the search substitutes for a virtual cutoff; found from
         the null-rotation it says the side to move is in check."""
         return next((m for m in self.gen_moves()
-                     if self.board[m.j] == "k" or abs(m.j - self.kp) < 2), None)
+                     if self.board[m.j] == "k" or -2 < m.j - self.kp < 2), None)
 
 
 ###############################################################################
@@ -290,8 +301,11 @@ class Position(namedtuple("P", "board score wc bc ep kp")):
 class Stop(Exception): pass
 
 
-# lower <= s(pos) <= upper
-Entry = namedtuple("E", "l u")
+# lower <= s(pos) <= upper. A plain pair: the two fields are read by name
+# nowhere outside this file, and a namedtuple's __new__ is a Python-level
+# call on every store AND on every probe (dict.get builds its default
+# eagerly, then discards it on the ~85% of probes that hit).
+EMPTY = (-MATE_UPPER, MATE_UPPER)
 
 
 class Searcher:
@@ -384,9 +398,9 @@ class Searcher:
         # same two numbers the entry held.) At the root 'entry' stays
         # unbound - its only other reader is the store below, also skipped.
         if not root:
-            entry = self.t.get((pos, depth), Entry(-MATE_UPPER, MATE_UPPER))
-            if entry.l >= gamma: return entry.l
-            if entry.u < gamma: return entry.u
+            entry = self.t.get((pos, depth), EMPTY)
+            if entry[0] >= gamma: return entry[0]
+            if entry[1] < gamma: return entry[1]
 
             # Let's not repeat positions. We don't chat
             # - at the root (a driver probe) since it is in history, but not a draw.
@@ -426,7 +440,8 @@ class Searcher:
             # an older 300-game test on the NNUE eval was flat, which by the
             # (feature, eval) rule does not settle it here). Until that lands,
             # this comment describes the code as written.
-            if not root and depth > 2 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
+            if not root and depth > 2 and abs(pos.score) < 500 and (
+                    "R" in pos.board or "B" in pos.board or "N" in pos.board or "Q" in pos.board):
                 score = -self.bound(pos.rotate(n=True), 1 - gamma, depth - 3)
                 # A fail high is a virtual claim, and needs verification
                 # before it may cut: if the king is capturable the capture is
@@ -475,8 +490,8 @@ class Searcher:
             # value. A history-credit order key tried here scrambled that
             # order and paid -449 Elo (ledger 5f5f34d); made sound, the
             # history table measured a 1.01 node ratio -- worthless.
-            for cnt, (val, move) in enumerate(sorted(((v, m) for m in pos.gen_moves()
-                                     if (v:=pos.value(m)) >= val_lower), reverse=True)):
+            for cnt, (val, move) in enumerate(sorted([(v, m) for m in pos.gen_moves()
+                                     if (v:=pos.value(m)) >= val_lower], reverse=True)):
                 # If the new score is less than gamma, the opponent will for sure just
                 # stand pat, since ""pos.score + val < gamma === -(pos.score + val) >= 1-gamma""
                 # This is known as futility pruning.
@@ -548,7 +563,7 @@ class Searcher:
         # incomparable evaluations of a move breaks this - that is a bug,
         # not a configuration; see formal/README.md.
         if not root:
-            self.t[pos, depth] = Entry(best, entry.u) if best >= gamma else Entry(entry.l, best)
+            self.t[pos, depth] = (best, entry[1]) if best >= gamma else (entry[0], best)
         if len(self.t) > TABLE_SIZE:
             del self.t[next(iter(self.t))]
 

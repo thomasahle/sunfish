@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **THE ENTRY'S FIRST PROFILE, and the node-identical speedups it points at: the artifact is **+25.69% nps** (box, cpu-time, local A/B) at **3405 → 3398 B**, ≈ **+34 Elo** at 60+1 with **no Elo screen needed** — the search is bit-identical** | The lane's primary axis after the meter (whole edge = nps + TM: fixed-node −1.74 ± 27.93, clean-clock +244.47 ± 39.23), and nobody had profiled the entry. **THE BUDGET**, two instruments with opposite distortions read as the bracket they form — sampled `perf_counter` brackets (over-read by a roughly FIXED ~1-3 µs/bracket, proven by sweeping the sample period: `wall(p) = 16.02 + 6.20/p`) and exact per-node call counts × microbenchmarked per-op cost (each primitive at its floor): **`gen_moves` 27.7% of wall, `pos.move()` 14.7%, `value()` 9.9%, sort 4.0%, and EVERY transposition-table operation together 3.0%** — which kills the cheaper-table family before it is tried, and both table candidates that were tried anyway measured negative. **LANDED**: 8 edits, all NODE-IDENTICAL (60 positions × depth 6, every MTD probe `(depth, gamma, score, killer)` and node count, byte-identical on laptop AND box, ref sha `d947986fe9eca2bb…`, 904,848 nodes) — `sorted(genexp)`→`sorted(listcomp)`, `q in "pnbrqk"`→`q != "."`, `q in " \nPNBRQK"`→`q not in ".pnbrqk"`, `any(genexp)`→four `in` tests, `itertools.count`→`while`, `abs(x)<2`→`-2<x<2`, `Entry` namedtuple→plain pair, and **`gen_moves` stops being a generator** (the single biggest win, +19.01% alone). **NO ELO SCREEN, and that is a claim about the instrument**: node identity means a fixed-node screen compares the engine with itself, and under a clock the only thing that moved is how many identical nodes fit the budget — the exact channel the meter measured as the entry's whole advantage. Gates all green: check_entry 3398 B (698 spare), legality 130/130 zero illegal at `go nodes 20000`, first-yield MAX 676/2048, mate-conversion 8/8, packed boot smoke in an empty dir. **THE NEGATIVES ARE THE HALF WORTH KEEPING**: the classic CPython hot-loop playbook is NEGATIVE under a tracing JIT — hoisting `self.board` −1.6%, collapsing a char scan + `directions[p]` into one `dict.get` **−10.9%** (the worst result measured), hoisting the loop-invariant `p == "P"` −1.4%, hoisting the `dict.get` default object −1.9%. PyPy already does those; what pays is what it cannot fix, **iterator boundaries into builtins and per-operation allocation**. **THE INSTRUMENT NEEDED TWO REBUILDS** and both failures travel: wall clock on a shared box is unusable (±7%; `process_time` is not), and BOTH venues drift MONOTONICALLY through a long benchmark — 25% across thirty consecutive runs on the box, 12% across nine on the laptop — which round-interleaving cannot cancel because the drift is WITHIN a round. Every number here is a local A/B triple, base-arm-base, seconds apart |
 | 2026-08-16 | **DEADLINE-POLL VERDICT: the SAFE branch fired. `nodes % 4096` is SAFE at 60+1 — **zero time forfeits in 300 games** — and **Elo-NEUTRAL at +1.16 ± 22.46**. The test delivered the safety answer it was registered to deliver, and no Elo claim** | Gates read in the registered order before any number: **count 300/300** (the gate launch 1 lacked), **illegal 0**, forfeit attribution **base 0 / poll4096 0** → SAFE. Terminations **300/300 `normal`**, zero adjudication as registered. Only then: **50.17%**, ptnml **[6, 25, 86, 28, 5]** over 150 pairs 0 unpaired, 95% **[−21.30, +23.62]**, recomputed independently (pair total 150.5 reproduces exactly). **ESTABLISHED**: halving the clock-read frequency does not eat the shipped `pooltm`'s margin at 60+1; the box's clean-timed record extends **1251 → 1551**. **NOT ESTABLISHED**: any gain — ±22.46 is uninformative against an effect of a few Elo and the interval spans zero. Being exact about the registered wording, "safe AND the Elo interval is non-negative": the **point estimate** is non-negative, the **interval** is not (lower bound −21.30), so the honest verdict is **safe and neutral**, and nothing here justifies landing 4096 on Elo grounds. Follow-up **registered, NOT run** at **10+0.1** (same arms, same inverted tripwire) and justified on mechanism, not on this Elo: the poll saves one `time.time()` per N nodes, a rounding error against 60+1's ~1.5 s/move, and clock-read frequency binds hardest when the clock is shortest. `poll8192` stays registered-not-run behind BOTH results. **Two instrument bugs found and fixed, both the same failure shape** — with an inverted tripwire "no forfeits" is the PASS condition, so launch 1's empty PGN printed "SAFE", and the classifier turned an unattributable forfeit into SAFE (caught by unit test before any result existed). Neither cost a game. Standing rule: **when absence of evidence is your pass condition, every uncertainty must fail closed** |
 | 2026-08-16 | **PRE-REGISTERED before game 1: the DEADLINE POLL at 60+1 (`nodes % 2048` → `4096`), N=300 fixed, adjudication NONE — with the safety tripwire INVERTED, both branches fixed in advance** | The one search constant a fixed-node instrument **cannot** see: it only governs how often the in-search clock is read, so under `go nodes` it is exactly inert and round 1 was structurally blind to it — and it is the only constant left touching **nps**. **It ships, checked in the payload not reasoned about**: `xz -d` finds exactly one `nodes%2048` in the base artifact and one `nodes%4096` in the arm, with the minifier-hidden node-cap poll correctly absent from both. **Both pack to 3405 B — zero byte delta**; base sha `5a207fdf9cf05f2e…` is **bit-identical to the artifact that measured +244.47 ± 39.23**. PACKED arms, not sources, and that is load-bearing: only the packed artifact runs the shipped builtin loop and shipped `pooltm`, whose overrun margin is the thing under test — so the driver check takes its packed form (**must boot AND must print NO `info string driver`**). **TRIPWIRE**: a **BASE** forfeit is a VENUE SIGNAL and **voids** (box record 1251/1251, so it means the machine); a **POLL4096** forfeit is **THE MEASUREMENT** — "4096 unsafe at 60+1", a result, not a void — and the lead then closes at 2048 with the safety evidence banked; both forfeiting reads as venue first; any illegal move stops everything. Attribution is mechanical via `classify.py` exit code, never by eye. Reading fixed in advance: safe + non-negative interval means the nps gain is real but small at 60+1, so **this test mostly measures SAFETY**, and a pass **registers (does not run)** a 10+0.1 follow-up where clock-read frequency actually binds. srand 20260870, conc 8, `book3k.pgn`, arena `~/sunfish-bench/poll-20260816`. Elo unread until N=300 |
 | 2026-08-16 | **`er40` SCREEN VERDICT: `EVAL_ROUGHNESS` 15 → 40 is **−21.22 ± 18.60**, 95% **[−39.88, −2.68]** — an interval EXCLUDING ZERO. Depth bought at ZERO instability cost still does not convert; it COSTS. #205's open question is closed** | 1000 games, **0 illegal, 0 forfeits**, 500 pairs 0 unpaired, ptnml **[83, 96, 178, 85, 58]**, 46.95% (359W/420L/221D), nElo −24.68 ± 21.53, adjudication symmetric 687/1000, 54 m at conc 8. Pentanomial **recomputed from the PGN independently** and reproduces fastchess to the digit. SPRT is UNDECIDED at cap (LLR −2.45 of −2.94, 83.1% toward H0) because the hypotheses were 0 vs 10 and the truth is ≈ −21, below both — so "undecided" means **not better**, not unknown, and unlike #205's straddling [−11.33, +23.17] this interval is entirely negative. **This was registered ON MECHANISM before `er40`'s own mini-match was scored, and run despite its 7th-place finish**: it is the only zero-byte arm that buys depth while REDUCING instability (+0.29 plies, MTD crossings **1 → 0**). #205's decomposition left open that instability, not depth, was the problem; removing the instability entirely and still losing 21 Elo **refutes that reading**. Extra plies at a fixed node budget are worth ~nothing here however paid for — the MTD driver's **value resolution is worth more than the depth its probes could buy**. Depth-does-not-convert now rests on **twelve arms across three registrations**. Bonus calibration: the 50-game mini-match said −41.9 ± 92.0 where the screen says −21.2 ± 18.6 — the point estimate was wrong by 100% of the effect, which is exactly why the spec forbids quoting one |
@@ -291,6 +292,297 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-16 — THE ENTRY'S TIME BUDGET, and the node-identical speedups that land on it
+
+Nobody had ever profiled the 4k entry. The meter had just established that
+its entire advantage over classic is **nps and time management** — fixed-node
+**−1.74 ± 27.93**, clean-clock **+244.47 ± 39.23** at 60+1 — which makes
+"where does the time actually go" the primary open question of this lane, and
+makes a **node-identical** speedup the one kind of change that needs no Elo
+screen at all.
+
+### The workload, and the gate every arm passes before it is timed
+
+60 positions — `tools/ctwin/difftest.py`'s sources and even-stride sampling,
+with the per-file takes scaled from 26 up to 60 — searched to a **fixed
+depth** through `Searcher.search()` directly: no clock, no driver, no time
+manager, so the work is a deterministic function of (position, depth).
+
+**THE IRON GATE**: an arm is admissible only if it is NODE-IDENTICAL. The
+battery compares, for all 60 positions, **every MTD probe the driver yields**
+— `(depth, gamma, score, killer move)` — and the node count at each, to depth
+6. Bestmove alone would not do: two engines can agree on the move and search
+different trees. Reference transcript sha256 `d947986fe9eca2bb…`, 904,848
+nodes, and it reproduces byte-for-byte on the laptop **and** on the bench box.
+**Every arm in every table below passed it**, including the profiling
+instrument itself.
+
+### Method, and what is wrong with it
+
+`cProfile` under pypy profiles the profiler. Two instruments were built
+instead, whose distortions point in OPPOSITE directions, and the profile is
+read as the bracket they form.
+
+**A — sampled brackets.** Every 61st node (prime, to avoid aliasing with any
+period in the search) pays for a `perf_counter` pair around each
+recursion-free region of `bound()`.
+
+*Its distortion was measured rather than waved away.* Accounted time comes to
+**140% of wall**, which is impossible, so the brackets over-read. Sweeping the
+sample period p over {61, 13, 5} fits `wall(p) = 16.02 s + 6.20 s/p` almost
+exactly — the brackets add 6.2 s of JIT de-optimisation to a 16.6 s run.
+Worse for a profile, the excess is a roughly **FIXED ~1.0–3.3 µs per
+bracket**, nearly independent of what the bracket contains, because a
+`perf_counter` call breaks the trace whatever sits between the two calls. So A
+systematically **over-weights frequent-but-cheap regions** — it prices one
+dict probe at 1.9 µs — and is close to unbiased on expensive ones.
+
+**B — exact counts × microbenchmarked per-op cost.** Counting wrappers give
+EXACT call counts per node (a count is not a time, so the wrappers' own cost
+is irrelevant). Each primitive is then timed in a tight loop over a corpus of
+628 positions the search really visits — inputs differ every iteration so
+nothing is common-subexpression-eliminated, but the loop is monomorphic and
+warm, so the JIT does its best possible job. B therefore reads each primitive
+at its **floor**, and accounts for 60% of wall.
+
+### Exact per-node call counts (depth 6, 1,249,559 nodes)
+
+| primitive | calls per node |
+|---|---|
+| `value()` | 26.98 |
+| moves generated | 26.60 |
+| moves past the QS gate (the sort's input) | 6.54 |
+| `Position.__hash__` | 3.02 |
+| `pos.move()` | 1.01 |
+| `bound()` | 1.00 |
+| `gen_moves()` | 0.81 |
+| `Position.__eq__` | 0.39 |
+| `k()` | 0.031 |
+| `rotate()` | 0.019 |
+
+### THE TIME BUDGET
+
+13,305 ns per node (16.626 s / 1,249,559 nodes, 75.2k nps), bench box,
+pypy3 7.3.20, nice 10.
+
+| component | ns/node (B, floor) | share of wall (B) | share of accounted (A) |
+|---|---|---|---|
+| **`gen_moves()`** | **3,686** | **27.7%** | **26.0%** |
+| **`pos.move()`** | **1,962** | **14.7%** | **15.1%** |
+| **`pos.value()`** | **1,322** | **9.9%** | **20.3%** |
+| `sort(reverse=True)` | 528 | 4.0% | 9.6% |
+| score table `get` | 153 | 1.1% | 9.8% |
+| score table store | 128 | 1.0% | 5.8% |
+| killer table `get` | 93 | 0.7% | 6.0% |
+| `rotate()` (null child) | 40 | 0.3% | 0.5% |
+| `k()` net of its own movegen | 22 | 0.2% | — |
+| killer table store | 19 | 0.1% | 0.7% |
+| repetition `pos in h` | 14 | 0.1% | 1.4% |
+| terminal `all(move.k())` | — | — | 3.4% |
+| **modelled** | **7,967** | **59.9%** | **100%** |
+| residual | 5,338 | 40.1% | — |
+
+The residual is `bound()`'s own control flow, the `moves()` closure and
+generator object, the `Entry` default built on every probe, the
+`(pos, depth)` tuple keys, recursion, and the premium in-situ code pays over
+a microbenchmark loop.
+
+**The move-ordering path — `gen_moves` + `value` + `sort` — is 42% of wall on
+the floor model and 56% of accounted on the bracket model. Make-move is 15%.
+Every transposition-table operation together is 3%.** That last number is the
+one worth carrying: A prices the tables at 22%, B at 3%, and the
+fixed-cost-per-bracket diagnosis says B is right. A whole family of "cheaper
+table" ideas is dead before it is tried — and the two table candidates that
+were tried anyway (a tuple-free `__hash__`, a hoisted `dict.get` default) both
+measured NEGATIVE.
+
+### What a speedup is worth, in Elo
+
+At this lane's speed model, **ΔElo = 102·log₂(nps ratio)** — so **1% of nps ≈
+1.46 Elo** at 60+1. Assumptions, stated: (i) the 102 Elo/doubling coefficient
+measured inside this lane transfers to 60+1 (the fitted version is 109 ± 35);
+(ii) the fixed-depth position mix stands in for 60+1 play; (iii) node identity
+makes the nps gain a pure depth gain at the same budget — the one assumption
+that is guaranteed rather than argued.
+
+Applied to the budget: **10% off movegen ≈ +4.1 Elo**; 10% off the whole
+ordering path ≈ +6.3 Elo; halving movegen ≈ +22 Elo. Speed alone will not
+close the remaining ~155 Elo to +400, but the ceiling is not small.
+
+### THE INSTRUMENT NEEDED TWO REBUILDS, and both failures travel
+
+1. **Wall clock on a shared box is unusable.** Run-to-run spread on the same
+   binary reached ±7%. `time.process_time()` — CPU time of the process,
+   immune to being descheduled — removes the scheduler component entirely
+   (wall and CPU then agree to 1%).
+2. **BOTH venues drift MONOTONICALLY through a long benchmark, and the drift
+   is bigger than every effect being measured.** Thirty consecutive runs on
+   the box degrade ~**25%** first to last (a cotenant's gate ramping up); nine
+   consecutive runs on the laptop degrade **12%** (sustained-load clock
+   throttling). Round-interleaving does NOT fix this: it cancels drift
+   *between* rounds and this is drift *within* one. Read naively, the data
+   ranks arms in exactly the order they were run — and it did, twice, in two
+   opposite directions.
+   The fix is **local A/B**: every arm is measured as `base, arm, base`, three
+   runs seconds apart, estimate `mean(pre, post)/arm`, which cancels any
+   locally linear drift. Costs 3× the runs and buys a number that survives the
+   venue. Every figure below is a local A/B triple.
+3. A **warm-up prefix** (the first 8 positions run untimed) removes most of
+   the fresh-JIT trace-selection variance from each run.
+
+### THE CANDIDATE TABLE — bench box, pypy3 7.3.20, cpu-nps, local A/B, depth 5
+
+| arm | cpu-nps % | range | bytes | verdict |
+|---|---|---|---|---|
+| **`land9` = the landed stack** | **+25.69** | +23.60 … +27.78 | **−7** | **LANDED** |
+| `land8` (stack minus `nocount`) | +21.31 | +17.28 … +25.34 | +7 | registered |
+| `land7` (stack minus `plainentry`, `qcomp`) | +21.09 | +18.78 … +23.40 | −3 | registered |
+| `genlist` (gen_moves returns a list) | +19.01 | +15.53 … +22.49 | +10 | **in the stack** |
+| `land3` (the stack without `genlist`) | +4.65 | +1.32 … +7.98 | −16 | registered |
+| `orderlc` (`sorted(listcomp)`) | +3.07 | +0.74 … +7.06 | ±0 | **in the stack** |
+| `qbreak` (`q in "pnbrqk"` → `q != "."`) | +3.01 | +1.62 … +4.40 | ±0 | **in the stack** |
+| `noabs` (`abs(x)<2` → `-2<x<2`) | +2.32 | +0.99 … +3.64 | −2 | **in the stack** |
+| `nullpiece` (`any(genexp)` → four `in`) | +0.62 | −0.35 … +1.59 | −1 | **in the stack** |
+| `nocount` (`itertools.count` → `while`) | −5.62 | −5.79 … −5.45 | −12 | **in the stack** |
+
+**Per-edit deltas do not add, and `nocount` is the proof.** Alone it is
+−5.6%; the stack that contains it (`land9`, +25.69) beats the stack that omits
+it (`land8`, +21.31). Under a tracing JIT an edit changes which traces get
+compiled, so isolated deltas are indicative and only the **stack's** number is
+the one that governs. That is why the landing was decided on `land9`'s own
+measurement and not on a sum of parts.
+
+### Cross-check and the rest of the field — laptop pypy3, cpu-nps, local A/B, depth 5
+
+Same instrument, different machine and architecture. It reproduces the
+ranking, which is what it is for.
+
+| arm | cpu-nps % | bytes | | arm | cpu-nps % | bytes |
+|---|---|---|---|---|---|---|
+| `land6` (land9 + plain-tuple moves) | +22.57 | −19 | | `kloop` | −0.42 | −4 |
+| `land5` | +20.80 | ±0 | | `onealloc` (one string build) | −1.16 | +30 |
+| `genlist2` (bound `append`) | +14.81 | +14 | | `cheaphash` (tuple-free `__hash__`) | −1.28 | +10 |
+| `land4` | +7.31 | −37 | | `ptest` (hoist `p == "P"`) | −1.36 | +5 |
+| `orderlist` (list + `.sort()`) | +5.76 | +5 | | `putout` (hoist the `put` lambda) | −1.49 | +1 |
+| `orderlist2` | +3.76 | +13 | | `movetuple` (plain-tuple moves) | −1.63 | −6 |
+| `qcomp` | +2.10 | −3 | | `entrydefault` (hoist the `get` default) | −1.94 | +6 |
+| `crawl` | +2.10 | +4 | | `microbound` (`max()` → `if`) | −2.09 | +1 |
+| `pstlocal` (`pst[p]` once) | +1.61 | +4 | | `eptest` (drop a 4-tuple per step) | −2.50 | +1 |
+| `plainentry` | +0.66 | −3 | | `putp` | −4.84 | −1 |
+| `slicescan` (`board[21:99]`) | +0.60 | +7 | | `mg_all` (all movegen edits) | −10.06 | −7 |
+| `putinline` | +0.54 | +12 | | `dirget` (`directions.get(p, ())`) | −10.91 | −9 |
+| `andmask` (`% 2048` → `& 2047`) | +0.15 | −2 | | | | |
+| `swaprev` (`.swapcase()[::-1]`) | +0.09 | +1 | | | | |
+
+### THE NEGATIVES ARE THE HALF WORTH KEEPING
+
+Every classic CPython hot-loop move in the playbook was tried, and the
+playbook is **wrong here**. PyPy's tracing JIT already performs these
+transforms, and writing them into the source only gets in its way:
+
+- **Hoist `self.board` to a local** in `gen_moves` (5 attribute loads in the
+  hottest loop in the engine): **−1.6%**. The JIT already resolves the
+  namedtuple field inside the trace.
+- **Replace `p not in "PNBRQK"` plus `directions[p]` with one
+  `directions.get(p, ())`** — two operations collapsed into one, 9 bytes
+  cheaper: **−10.9%**, the worst result in the whole table. A scan against a
+  string constant is something the JIT specialises; a dict probe is a real
+  hash-and-probe it cannot.
+- **Hoist the loop-invariant `p == "P"`** out of the ray loop: **−1.4%**. The
+  trace is specialised on the *value* of `p`, so the test is free where the
+  hoisted variable is a real loop-carried value.
+- **Hoist the `dict.get` default `Entry(...)`** — a namedtuple built on every
+  probe and discarded on the ~85% that hit — to a module constant: **−1.9%**.
+  A local object that dies immediately is virtualised away entirely; a global
+  read is a real load. (Deleting the class instead, `plainentry`, is +0.7%.)
+- **One string build instead of two in make-move** (`onealloc`, +30 bytes):
+  **−1.2%**. String concatenation is not where make-move's time goes.
+- **A tuple-free `Position.__hash__`** (+10 bytes): **−1.3%**, and the budget
+  says why — every table operation together is 3% of wall.
+- **`mg_all`, every movegen edit stacked**: **−10.1%**. Stacking losers
+  compounds them.
+
+What DOES pay is the category the JIT cannot fix: **iterator and generator
+boundaries into builtins**, and **objects allocated per operation**. Three of
+the four biggest wins are exactly that shape — a genexp inside `sorted()`, a
+genexp inside `any()`, and `gen_moves` being a generator at all. That is the
+transferable lesson, and it is the opposite of the one a CPython profile would
+have taught.
+
+### WHAT LANDED, and why it needs no games
+
+Eight edits, applied as `_speed` in `tools/build/make_pst_entry.py`
+(entry-only, like `_pend` and `_pooltm`, and applied AFTER the golf renames so
+every anchor is a line of the final artifact source — the same text the
+identity battery ran against):
+
+1. `sorted(genexp)` → `sorted(listcomp)` in the move-ordering path. One
+   character, `(` → `[`.
+2. The ray-break capture test `q in "pnbrqk"` → `q != "."`, valid because the
+   line three above already broke out for padding and for our own men.
+3. The zugzwang guard's `any(c in pos.board for c in "RBNQ")` → four explicit
+   `in` tests, same order, no generator object.
+4. `itertools.count(i + d, d)` → a `while` loop, taking the import with it.
+5. `abs(x) < 2` → `-2 < x < 2` at both per-move sites.
+6. **`gen_moves` returns a list instead of yielding** — the single biggest
+   win. Every consumer wanted the whole list anyway, and the one that could
+   stop early, `k()`, runs 0.031 times per node.
+7. The score table's `Entry` namedtuple → a plain pair.
+8. The first ray test `q in " \nPNBRQK"` → `q not in ".pnbrqk"`, which puts
+   `.` — the overwhelmingly common case — at offset 0 of the scan.
+
+**3405 → 3398 B (−7, 698 spare). +25.69% cpu-nps on the box ⇒ ≈ +34 Elo at
+60+1** by the speed model above.
+
+| gate | result |
+|---|---|
+| node identity, 60 positions × depth 6, every MTD probe + node count | **IDENTICAL**, laptop **and** box |
+| `check_entry.sh` (source == generator, artifact ≤ 4096) | **PASS**, 3398 B, 698 spare |
+| legality gate, `go nodes 20000` + `go movetime 300` | **130/130, 0 illegal, 0 no-move** |
+| first-yield gate, 505 positions | **MAX 676 / 2048**, 0 over, 0 never-yields |
+| mate-conversion gate | **8/8 converted** |
+| packed boot smoke in an empty directory | uciok / readyok / bestmove, no `info string driver` |
+
+**NO ELO SCREEN, and that is a claim about the instrument, not a shortcut.**
+Node identity means the searched tree is unchanged, so a fixed-node screen
+compares an engine with itself and can only report noise. Under a clock the
+only variable that moved is how many of those identical nodes fit in the
+budget — and the meter measured precisely that channel as the entry's whole
+advantage over classic. Faster and identical is therefore better under a clock
+by construction. The residual risk is not "does it play worse" but "is it
+really identical", which is exactly what the battery is for, on two machines.
+
+### REGISTERED, NOT LANDED
+
+- **`land6` / `movetuple` — plain-tuple moves.** `+22.57%` at **−19 B** on the
+  laptop, node-identical (a namedtuple IS a tuple, so sort order and tie-breaks
+  are unchanged). BLOCKED only because `sunfish_ui/uci.py` reads `move.i`,
+  `move.j`, `move.prom` by name, and that driver is the lane's own instrument.
+  The unblock is one line there — `i, j, prom = move` works for classic's
+  namedtuple too — but it is a change outside the entry and wants its own gate
+  pass. **This is the best remaining node-identical win on the table.**
+- `land8` (+21.31%, +7 B) and `land7` (+21.09%, −3 B): dominated by `land9`.
+- `genlist2` (binding `res.append` once): +14.81% for **+14 B**, versus
+  `genlist`'s +19.01% for +10 B. The cheaper-looking spelling is both slower
+  and larger.
+- Everything in the negative half of the cross-check table is registered as
+  **priced and rejected**, which is the point of recording it.
+
+### WHERE THE NEXT SPEED WORK SHOULD GO
+
+The budget says `pos.move()` is 14.7% of wall and essentially untouched — the
+two candidates aimed at it (`onealloc`, `putinline`) both failed. It is four
+120-character string builds per move against an immutable board, and the only
+ideas that can move it are structural (a mutable board, or a move
+representation that avoids the rotate), which are **not** node-identical and
+belong to a different kind of change. `value()` at 9.9% is the other standing
+target, and the one credible node-identical idea left there is fusing its
+computation into `gen_moves`, which duplicates the logic and costs bytes.
+After this landing the cheap wins are spent: the remaining ones all trade
+bytes or leave node-identity behind.
 
 ---
 
