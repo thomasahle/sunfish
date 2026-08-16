@@ -9,7 +9,7 @@ audit of sunfish.py lines 285-518 at that commit.
 * INTERIOR calls (`root=False`, the default -- every child search, the
   null pass, the stalemate probe): semantics are uniform.  The null
   yield is gated by position-determined tests alone
-  (`depth > 2 and abs(pos.score) < 500`, lines 364-365; the pass is
+  (`depth > 2 and abs(pos.score) < 750`, lines 364-365; the pass is
   searched at `depth - 3` as an interior call, so sunfish still permits
   CONSECUTIVE null moves -- reproduced exactly); the repetition gate
   (`depth > 0 and pos in self.history`, line 341) is always on; lookups
@@ -103,11 +103,11 @@ namespace Sunfish
 
 /-! ### The gamma-free null-move guard and the value functions -/
 
-/-- `abs(pos.score) < 500` (line 364): the zugzwang heuristic.  Crucially
+/-- `abs(pos.score) < 750` (line 364): the zugzwang heuristic.  Crucially
 gamma-free: whether the pass option EXISTS does not depend on the window,
 only its search does. -/
 def nullGuard (G : Game) (p : G.Pos) : Prop :=
-  -500 < G.eval p ∧ G.eval p < 500
+  -750 < G.eval p ∧ G.eval p < 750
 
 instance (G : Game) (p : G.Pos) : Decidable (nullGuard G p) := by
   unfold nullGuard; infer_instance

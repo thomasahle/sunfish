@@ -260,7 +260,7 @@ class TestIntrinsicLMR:
             pos = hist_from_fen(fen)[-1]
             pass_score = pos.score + offset
             pos, moves, seen = self.observed_depths(depth, pass_score, fen)
-            guard = depth >= 6 and any(c in pos.board for c in "RBNQ")
+            guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
             hot = guard and pass_score >= pos.score + sf.NULL_MARGIN
             for move in moves:
                 expected = depth - hot - 1 - (guard and pos.value(move) < sf.LMR)
@@ -359,7 +359,7 @@ class TestFilteredCheckEvasion:
 
 class TestNullSentinelMasking:
     """Audit finding A1: in pawn endings the null-move gate
-    (abs(score) < 500) admits a "pass" that yields a normal material
+    (abs(score) < 750) admits a "pass" that yields a normal material
     score, masking the -MATE_UPPER stalemate sentinel. Consequences on
     unfixed engines: contradictory root bounds (lower > upper) in a KPK
     probe, and a thrown KPK race (the winning side stalemates the bare

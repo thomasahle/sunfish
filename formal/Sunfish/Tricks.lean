@@ -46,7 +46,7 @@ theorem soften_null_window (ML gamma r : Int) (hML : 0 ≤ ML)
 sunfish.py lines 364-365 (since `eda66ee` the gate is position-determined
 plus the driver flag `root`, which never reaches the table):
 
-    if depth > 2 and not root and abs(pos.score) < 500:
+    if depth > 2 and not root and abs(pos.score) < 750:
         score = -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3)
 
 Null-move pruning bets that *doing nothing is never your best option*: if
@@ -54,7 +54,7 @@ even passing the turn fails high, some real move surely does too.  That bet
 is exactly `NullOK` below.  Its negation is zugzwang: a non-terminal
 position in which every legal move is strictly worse than passing.  So the
 correctness statement `boundNull_spec` is *conditional* -- this is why
-sunfish guards the trick with `abs(pos.score) < 500` (line 322-330: the
+sunfish guards the trick with `abs(pos.score) < 750` (line 322-330: the
 FIXME about zugzwang and king-capture) rather than using it everywhere.
 
 Modeling choice: sunfish also reduces the null search by 3 plies

@@ -44,7 +44,7 @@ turned up three things that are easy to miss when reading the Python:
     invariant that its entry at a king-capturable position is itself a
     king capture, so the killer path also reports the exact sentinel.
     The residual exception is the null-move yield, harmless only because
-    of its `abs(pos.score) < 500` guard
+    of its `abs(pos.score) < 750` guard
     (`NullGuardBlocksAtCaptures` in `Sunfish/Killer.lean`).
 
 3.  **Even with the sentinel invariant and in-band windows the faithful,
@@ -929,7 +929,7 @@ def NullBetQS (G : QSGame) (nully : Nat → G.Pos → Int → Int)
     nully d p gamma < MATE_LOWER → nully d p gamma ≤ negamaxQS G d p
 
 /-- The A1 null-use test: the engine guard (`can_null` and
-`abs(pos.score) < 500`, abstracted as `guard`), the `depth > 2` gate of
+`abs(pos.score) < 750`, abstracted as `guard`), the `depth > 2` gate of
 line 371, and the A1 suppression `rn < MATE_LOWER`. -/
 def useNull (G : QSGame) (nully : Nat → G.Pos → Int → Int)
     (guard : G.Pos → Bool) (d : Nat) (p : G.Pos) (gamma : Int) : Bool :=
@@ -1672,7 +1672,7 @@ theorem cexQ_gated_ok :
 
 Master's loop lets the null yield update the same `best` the sentinel
 test reads.  Take a single genuinely stalemated position `s` (no moves,
-not in check, quiet eval -50 -- well inside the `abs(pos.score) < 500`
+not in check, quiet eval -50 -- well inside the `abs(pos.score) < 750`
 null guard) and a perfectly well-behaved null oracle that returns -50 (a
 sound, fail-low report; `NullBetQS` holds).  At depth 4, `gamma = -20`:
 the null yield sets `best = -50 ≠ -MATE_UPPER`, the sentinel test never
@@ -2010,7 +2010,7 @@ def NullAtStalemateNonpositive (G : QSGame) (nully : Nat → G.Pos → Int → I
 A one-position game: a genuinely stalemated position with a POSITIVE
 static score -- the material-up stalemate trap, the abstract shape of
 the real `8/8/8/5k1p/3b1P1P/1p1P1P1P/pN1P1P2/K7 w` witness.  `eval =
-30` fits the engine's `abs(pos.score) < 500` null guard; the null
+30` fits the engine's `abs(pos.score) < 750` null guard; the null
 oracle answers +30 (exactly what an honest pass search reports when the
 material-down opponent cannot reach 0 either); every non-bet hypothesis
 of `boundA1_spec` holds.  Yet the enabled null scores ABOVE the
@@ -2590,7 +2590,7 @@ def nullVerify (G : QSGame) (kill : G.Pos → Bool) (rn gamma bp : Int) (p : G.P
       ∨ (gamma ≤ rn ∧ rn < MATE_LOWER ∧ bp < 1 - MATE_LOWER)
   then -MATE_UPPER else rn
 
-/-- The null-use gate: the engine guard (`abs(pos.score) < 500` and the
+/-- The null-use gate: the engine guard (`abs(pos.score) < 750` and the
 piece test, abstracted as `guard`), the `depth > 2` gate of line 379,
 and the A1 mate-band suppression of line 386 applied to the VERIFIED
 yield -- in the code the suppression is the fold-identity form

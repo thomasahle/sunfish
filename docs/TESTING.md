@@ -268,7 +268,7 @@ outside PST-shaped eval is invisible to it. Rule 12 also applies with full
 force: fixed-node results hold search effort constant, so they screen;
 only a wall-clock match on the real engine decides.
 
-The twin also accepts UCI clocks for calibrated `3+0.1` search screens. That
+The twin also accepts UCI clocks for provisional `3+0.1` search screens. That
 fixed budget policy is not a model of the shipping time manager; use `vmatch.py`
 to compare time policies and a real-clock match to validate the winner.
 
@@ -296,8 +296,8 @@ openings (`191/121/188`, +2.08 ± 26.57 Elo over 500 games), an explicit
 winner's-curse check. A second candidate passed (`211/129/160`,
 +35.56 ± 26.37), and the final exact policy was confirmed on a later untouched
 opening block: `218/135/147`, **+49.67 ± 26.24 Elo**, LOS 99.99%, over 500
-games at the calibrated C-twin `3+0.1` search surrogate. There were no crashes,
-illegal moves, disconnects, stalls, or time losses.
+games at the C-twin `3+0.1` search surrogate. There were no crashes, illegal
+moves, disconnects, stalls, or time losses.
 
 The posterior selected `QS=30`, but that setting regressed the WAC.004 tactical
 floor and the packed-engine tiny-clock test. Its one-dimensional posterior
@@ -309,10 +309,13 @@ The other selected settings are `QS_A=140`, `EVAL_ROUGHNESS=15`,
 capped null from depth 3 through 5, real-only fuel shaping from depth 6, and
 IID disabled. The study coupled the shallow and deep reductions at 7; the
 depth-six mate floor subsequently showed that this was invalid. Production
-retains the shallow candidate's three-ply reduction and exempts the unstored
-driver root from intrinsic LMR. Those corrections are measured separately.
-`NULL_LIMIT=60000` in the tunable C instrument means no score guard on legal
-positions; Python expresses that result directly. This last independent
+retains the shallow candidate's three-ply reduction, the `abs(score) < 750`
+guard for both null mechanisms, and exempts the unstored driver root from
+intrinsic LMR. The depth-eight mate floor invalidated removal of the score
+guard. A complete threshold sweep retained 12/14 mate-in-three positions
+through 775, then fell to 11/14 at 800 and 10/14 at 850. At 20,000 fixed
+nodes, 750 scored +2.43 ± 4.35 Elo against 500 and -0.35 ± 3.79 Elo
+against unguarded master over 3,000 games per match. This last independent
 confirmation, not the adaptive posterior estimate, is the landing evidence.
 
 ## Testing the packed artifact
@@ -400,7 +403,7 @@ hardware- and version-sensitive and are documentation, not gates.
 - **Consistency**: ladder and full-driver crossing scans over 35+ positions,
   **0 crossed table entries** (master: 28 driver / 35 ladder on the same set).
 - **Suites**: terminal bench 148/148 (master 130); stalemate2 17/130, floor
-  raised 13 -> 17; mate1 8/8, mate2 20/20, mate3 5/5.
+  raised 13 -> 17; mate1 8/8, mate2 20/20, mate3 12/14.
 - **Cost**: +5.3% wall on a 32-position depth-5 battery. Note the node count
   reads 99.6% of master, which is *not* a cost saving: the legality oracle is
   now a board predicate rather than a depth-0 search, so its work no longer
