@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **TUPLE MOVES LAND, and the speed campaign's running total is +29.59% nps at 3405 → 3376 B (−29, 720 spare): a projected ≈ +38 Elo at 60+1, still with NO Elo screen because the search is still bit-identical** | The registered candidate from the profile pass, executed as its own full pass. **THE UNBLOCK CAME FIRST AND WAS GATED SEPARATELY**: `sunfish_ui/uci.py` is shared infrastructure and it pinned every engine to one move representation for its own convenience — it built moves with `sunfish.Move(i, j, prom)`, read them with `.i`/`.j`/`.prom`, and listed `"Move"` in `ENGINE_API`, so an entry without the class was refused before it could play. Not one line: **four couplings in one file**. The driver now builds a plain tuple and destructures on read; `"Move"` leaves `ENGINE_API` because the dependency it named is **gone**, not because the check was relaxed. **Classic-side gate, the one that had to hold**: full suite before → after **identical** (1 failed / 371 passed / 2 skipped, and the single failure `test_go_depth_promotion::test_terminal_fail_high_reports_exact_score_before_none` is **PRE-EXISTING on nnue-4k**, fails identically before and after, and touches neither changed file), plus classic under the driver **BIT-IDENTICAL on five probes** at `go nodes 20000` — startpos, startpos+moves, a white-to-move FEN, a BLACK-to-move FEN (where render/parse flip `119 - i`, so a wrong field order shows as a mirrored move, not a crash) and a promotion (`a7a8q`, the `.prom` path). **THEN the entry landing**: a move stops being a namedtuple, ~27 built per node, `__new__` a Python-level call each. Node-identical because **a namedtuple IS a tuple** — the `(val, move)` sort still tie-breaks field by field and the futility break still sees a descending list — verified against the **TRUE pre-speed entry** (`d947986fe9eca2bb…`, 904,848 nodes) on laptop **and** box. **THE STACKED ARITHMETIC IS MEASURED, NOT ADDED**, because this lane's own finding is that per-edit deltas do not compose under a tracing JIT: both stacks were run against the SAME pre-speed baseline in ONE interleaved local-A/B session — **stack 2 (with tuple moves) +29.59% (six reps: 23.46 / 26.27 / 27.43 / 31.75 / 33.08 / 39.49), stack 1 +23.07% (20.29 / 20.30 / 23.03 / 23.12 / 23.51 / 26.37)**, so the tuple increment is **+5.30%**, NOT the +22.57% it measured standalone. Gates all green: check_entry 3376 B, legality 130/130 zero illegal, first-yield MAX 676/2048, mate-conversion 8/8, packed boot smoke in an empty dir **including a promotion through the shipped artifact** (`a7b8q` — the `prom` destructure in the builtin loop), entry resolves `v3 nodes fen` with no `Move` class at all. **Elo is a PROJECTION, not a measurement**: 102·log₂(1.2959) ≈ **+38** at 60+1, on the warrant that node-identical + faster is strictly better under a clock (the meter: fixed-node −1.74 ± 27.93, clean-clock +244.47 ± 39.23) |
 | 2026-08-16 | **THE ENTRY'S FIRST PROFILE, and the node-identical speedups it points at: the artifact is **+25.69% nps** (box, cpu-time, local A/B) at **3405 → 3398 B**, ≈ **+34 Elo** at 60+1 with **no Elo screen needed** — the search is bit-identical** | The lane's primary axis after the meter (whole edge = nps + TM: fixed-node −1.74 ± 27.93, clean-clock +244.47 ± 39.23), and nobody had profiled the entry. **THE BUDGET**, two instruments with opposite distortions read as the bracket they form — sampled `perf_counter` brackets (over-read by a roughly FIXED ~1-3 µs/bracket, proven by sweeping the sample period: `wall(p) = 16.02 + 6.20/p`) and exact per-node call counts × microbenchmarked per-op cost (each primitive at its floor): **`gen_moves` 27.7% of wall, `pos.move()` 14.7%, `value()` 9.9%, sort 4.0%, and EVERY transposition-table operation together 3.0%** — which kills the cheaper-table family before it is tried, and both table candidates that were tried anyway measured negative. **LANDED**: 8 edits, all NODE-IDENTICAL (60 positions × depth 6, every MTD probe `(depth, gamma, score, killer)` and node count, byte-identical on laptop AND box, ref sha `d947986fe9eca2bb…`, 904,848 nodes) — `sorted(genexp)`→`sorted(listcomp)`, `q in "pnbrqk"`→`q != "."`, `q in " \nPNBRQK"`→`q not in ".pnbrqk"`, `any(genexp)`→four `in` tests, `itertools.count`→`while`, `abs(x)<2`→`-2<x<2`, `Entry` namedtuple→plain pair, and **`gen_moves` stops being a generator** (the single biggest win, +19.01% alone). **NO ELO SCREEN, and that is a claim about the instrument**: node identity means a fixed-node screen compares the engine with itself, and under a clock the only thing that moved is how many identical nodes fit the budget — the exact channel the meter measured as the entry's whole advantage. Gates all green: check_entry 3398 B (698 spare), legality 130/130 zero illegal at `go nodes 20000`, first-yield MAX 676/2048, mate-conversion 8/8, packed boot smoke in an empty dir. **THE NEGATIVES ARE THE HALF WORTH KEEPING**: the classic CPython hot-loop playbook is NEGATIVE under a tracing JIT — hoisting `self.board` −1.6%, collapsing a char scan + `directions[p]` into one `dict.get` **−10.9%** (the worst result measured), hoisting the loop-invariant `p == "P"` −1.4%, hoisting the `dict.get` default object −1.9%. PyPy already does those; what pays is what it cannot fix, **iterator boundaries into builtins and per-operation allocation**. **THE INSTRUMENT NEEDED TWO REBUILDS** and both failures travel: wall clock on a shared box is unusable (±7%; `process_time` is not), and BOTH venues drift MONOTONICALLY through a long benchmark — 25% across thirty consecutive runs on the box, 12% across nine on the laptop — which round-interleaving cannot cancel because the drift is WITHIN a round. Every number here is a local A/B triple, base-arm-base, seconds apart |
 | 2026-08-16 | **DEADLINE-POLL VERDICT: the SAFE branch fired. `nodes % 4096` is SAFE at 60+1 — **zero time forfeits in 300 games** — and **Elo-NEUTRAL at +1.16 ± 22.46**. The test delivered the safety answer it was registered to deliver, and no Elo claim** | Gates read in the registered order before any number: **count 300/300** (the gate launch 1 lacked), **illegal 0**, forfeit attribution **base 0 / poll4096 0** → SAFE. Terminations **300/300 `normal`**, zero adjudication as registered. Only then: **50.17%**, ptnml **[6, 25, 86, 28, 5]** over 150 pairs 0 unpaired, 95% **[−21.30, +23.62]**, recomputed independently (pair total 150.5 reproduces exactly). **ESTABLISHED**: halving the clock-read frequency does not eat the shipped `pooltm`'s margin at 60+1; the box's clean-timed record extends **1251 → 1551**. **NOT ESTABLISHED**: any gain — ±22.46 is uninformative against an effect of a few Elo and the interval spans zero. Being exact about the registered wording, "safe AND the Elo interval is non-negative": the **point estimate** is non-negative, the **interval** is not (lower bound −21.30), so the honest verdict is **safe and neutral**, and nothing here justifies landing 4096 on Elo grounds. Follow-up **registered, NOT run** at **10+0.1** (same arms, same inverted tripwire) and justified on mechanism, not on this Elo: the poll saves one `time.time()` per N nodes, a rounding error against 60+1's ~1.5 s/move, and clock-read frequency binds hardest when the clock is shortest. `poll8192` stays registered-not-run behind BOTH results. **Two instrument bugs found and fixed, both the same failure shape** — with an inverted tripwire "no forfeits" is the PASS condition, so launch 1's empty PGN printed "SAFE", and the classifier turned an unattributable forfeit into SAFE (caught by unit test before any result existed). Neither cost a game. Standing rule: **when absence of evidence is your pass condition, every uncertainty must fail closed** |
 | 2026-08-16 | **PRE-REGISTERED before game 1: the DEADLINE POLL at 60+1 (`nodes % 2048` → `4096`), N=300 fixed, adjudication NONE — with the safety tripwire INVERTED, both branches fixed in advance** | The one search constant a fixed-node instrument **cannot** see: it only governs how often the in-search clock is read, so under `go nodes` it is exactly inert and round 1 was structurally blind to it — and it is the only constant left touching **nps**. **It ships, checked in the payload not reasoned about**: `xz -d` finds exactly one `nodes%2048` in the base artifact and one `nodes%4096` in the arm, with the minifier-hidden node-cap poll correctly absent from both. **Both pack to 3405 B — zero byte delta**; base sha `5a207fdf9cf05f2e…` is **bit-identical to the artifact that measured +244.47 ± 39.23**. PACKED arms, not sources, and that is load-bearing: only the packed artifact runs the shipped builtin loop and shipped `pooltm`, whose overrun margin is the thing under test — so the driver check takes its packed form (**must boot AND must print NO `info string driver`**). **TRIPWIRE**: a **BASE** forfeit is a VENUE SIGNAL and **voids** (box record 1251/1251, so it means the machine); a **POLL4096** forfeit is **THE MEASUREMENT** — "4096 unsafe at 60+1", a result, not a void — and the lead then closes at 2048 with the safety evidence banked; both forfeiting reads as venue first; any illegal move stops everything. Attribution is mechanical via `classify.py` exit code, never by eye. Reading fixed in advance: safe + non-negative interval means the nps gain is real but small at 60+1, so **this test mostly measures SAFETY**, and a pass **registers (does not run)** a 10+0.1 follow-up where clock-read frequency actually binds. srand 20260870, conc 8, `book3k.pgn`, arena `~/sunfish-bench/poll-20260816`. Elo unread until N=300 |
@@ -292,6 +293,133 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-16 — TUPLE MOVES: the speed campaign reaches +29.59% nps at −29 bytes
+
+The candidate the profile pass registered and could not land, executed as its
+own pass. It came with a blocker that was described in the register as "one
+line in `sunfish_ui/uci.py`" and turned out to be **four couplings in one
+file**, so the unblock was gated on its own terms before the entry was touched
+at all.
+
+### Part 1 — the driver stops caring how an engine spells a move
+
+`sunfish_ui/uci.py` is shared infrastructure: classic `sunfish.py` and the 4k
+entry both resolve it as their driver. It pinned every engine to ONE move
+representation for its own convenience:
+
+1. `ENGINE_API` listed `"Move"`, so `check_engine_module` refused any engine
+   without that exact attribute **before it could play a game**;
+2. `parse_move` **built** engine moves with `sunfish.Move(i, j, prom)`;
+3. `render_move` read them back with `.i` / `.j` / `.prom`;
+4. `can_kill_king` read `m.j`.
+
+None of it was a real requirement. A move is (from, to, promotion). The driver
+now builds a plain tuple and destructures on read, which every engine here
+already accepts — classic's `Position.move` and `value` both begin
+`i, j, prom = move`, and **a namedtuple IS a tuple**, so moves the ENGINE
+produces still arrive unchanged and still compare and hash equal to the ones
+the driver produces. Mixed representations coexist in one `hist` and one
+`tp_move` without anything noticing. `"Move"` leaves `ENGINE_API` because the
+dependency it named is **gone**, not because the check was relaxed.
+
+**The classic side is the thing that had to not move, so it was measured, not
+argued:**
+
+| check | result |
+|---|---|
+| full suite, before → after | **identical**: 1 failed, 371 passed, 2 skipped |
+| the one failure | `test_go_depth_promotion::test_terminal_fail_high_reports_exact_score_before_none` — **PRE-EXISTING on nnue-4k**, fails identically before and after, and touches neither changed file. Recorded here so nobody attributes it to this work. |
+| classic under the driver, `go nodes 20000` | **BIT-IDENTICAL** on five probes |
+
+The five probes are chosen for what they can catch, not for coverage theatre:
+startpos, startpos+moves, a white-to-move FEN, a **black-to-move** FEN (where
+render/parse flip `119 - i`, so a wrong field order shows up as a *mirrored
+legal move* rather than a crash — the failure mode a smoke test misses), and a
+**promotion** (`a7a8q`, which is the `.prom` path). All five answer the same
+move before and after.
+
+### Part 2 — the entry landing
+
+A move stops being a namedtuple. ~27 are built per node and a namedtuple's
+`__new__` is a Python-level call wrapping `tuple.__new__`. Ordering is
+untouched for the same reason the driver change is safe: the `(val, move)`
+sort still tie-breaks field by field on a value tie, and the futility break
+still sees a descending list.
+
+**Node identity was checked against the TRUE pre-speed entry** — the 3405 B
+artifact that predates this whole campaign, not against the intermediate
+landing — reference `d947986fe9eca2bb…`, 904,848 nodes over 60 positions, and
+it matches on the **laptop and the box**.
+
+### THE STACKED ARITHMETIC IS MEASURED, NOT ADDED
+
+This lane's own finding from the profile pass is that per-edit deltas do not
+compose under a tracing JIT, so the honest way to state a running total is to
+re-measure the whole stack against the original baseline. Both stacks were run
+against the SAME pre-speed base in ONE interleaved local-A/B session (box,
+pypy3 7.3.20, nice 10, cpu-time, `base, arm, base` triples, six reps):
+
+| stack | cpu-nps % vs pre-speed | the six reps | bytes |
+|---|---|---|---|
+| stack 1 (profile pass, 8 edits) | **+23.07** | 20.29 / 20.30 / 23.03 / 23.12 / 23.51 / 26.37 | 3398 (−7) |
+| **stack 2 (+ tuple moves)** | **+29.59** | 23.46 / 26.27 / 27.43 / 31.75 / 33.08 / 39.49 | **3376 (−29)** |
+
+**The tuple increment is +5.30%, not the +22.57% it measured standalone on the
+laptop.** Both numbers are real; they answer different questions, and the one
+that governs is the stack's. Five of stack 2's six reps sit above stack 1's
+best rep, so the ordering is not in doubt even though the box's spread is
+wide.
+
+Stack 1's own earlier figure was +25.69% in a different session; it re-measures
+at +23.07% here. That is session-to-session box variance, and it is why the two
+stacks are compared **within one session** rather than across the ledger.
+
+### Elo — a PROJECTION, not a measurement
+
+Marked as such deliberately: no games were played, and none are owed. At the
+lane's speed model `ΔElo = 102·log₂(nps ratio)`:
+
+| | nps ratio | projected Elo at 60+1 |
+|---|---|---|
+| stack 1 | 1.2307 | ≈ +30.5 |
+| **stack 2 (shipped)** | **1.2959** | **≈ +38.1** |
+| the tuple increment alone | 1.0530 | ≈ +7.6 |
+
+The warrant is unchanged from the profile pass and is a claim about the
+instrument rather than a shortcut: node identity means a fixed-node screen
+compares the engine with itself and can only report noise, while under a clock
+the only variable that moved is how many identical nodes fit the budget — the
+exact channel the meter measured as the entry's whole advantage over classic
+(fixed-node **−1.74 ± 27.93**, clean-clock **+244.47 ± 39.23**). Faster and
+identical is better under a clock by construction.
+
+### Gate ladder
+
+| gate | result |
+|---|---|
+| node identity vs the **pre-speed** entry, 60 × depth 6, every MTD probe + node count | **IDENTICAL**, laptop **and** box |
+| `check_entry.sh` | **PASS**, 3376 B, **720 spare** |
+| legality gate, `go nodes 20000` + `go movetime 300` | **130/130, 0 illegal, 0 no-move** |
+| first-yield gate, 505 positions | **MAX 676 / 2048**, 0 over, 0 never-yields |
+| mate-conversion gate | **8/8 converted** |
+| full suite (entry + repo) | failure set **unchanged** from baseline |
+| entry under the driver, **with no `Move` class at all** | resolves `v3 nodes fen`, answers all five probes |
+| packed boot smoke, empty directory | uciok / readyok / bestmove, no `info string driver` |
+| **promotion through the SHIPPED artifact** | `bestmove a7b8q` — the `prom` destructure in the builtin loop, exercised in the thing that actually plays |
+
+### Running total of the speed campaign
+
+**3405 B → 3376 B (−29, 720 spare) and +29.59% nps**, entirely node-identical,
+across two landings and zero games. Projected ≈ **+38 Elo** at 60+1.
+
+The cheap wins are now spent. What the budget still shows untouched is
+`pos.move()` at 14.7% of wall — four 120-character string builds per move
+against an immutable board — and the only ideas that move it (a mutable board,
+a representation without the rotate) are **not** node-identical and belong to
+a different kind of change with a different gate.
 
 ---
 

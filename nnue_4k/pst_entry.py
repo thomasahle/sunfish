@@ -128,9 +128,6 @@ opt_ranges = dict(
 ###############################################################################
 
 
-Move = namedtuple("M", "i j prom")
-
-
 class Position(namedtuple("P", "board score wc bc ep kp")):
     """A state of a chess game
     board -- a 120 char representation of the board
@@ -196,10 +193,10 @@ class Position(namedtuple("P", "board score wc bc ep kp")):
                         # If we move to the last row, we can be anything
                         if A8 <= j <= H8:
                             for prom in "NBRQ":
-                                res.append(Move(i, j, prom))
+                                res.append((i, j, prom))
                             break
                     # Move it
-                    res.append(Move(i, j, ""))
+                    res.append((i, j, ""))
                     # Stop crawlers from sliding, and sliding after captures.
                     # The break above already rejected padding and our own men,
                     # so "q is a capture" is exactly "q is not empty".
@@ -207,9 +204,9 @@ class Position(namedtuple("P", "board score wc bc ep kp")):
                         break
                     # Castling, by sliding the rook next to the king
                     if i == A1 and self.board[j + E] == "K" and self.wc[0]:
-                        res.append(Move(j + E, j + W, ""))
+                        res.append((j + E, j + W, ""))
                     if i == H1 and self.board[j + W] == "K" and self.wc[1]:
-                        res.append(Move(j + W, j + E, ""))
+                        res.append((j + W, j + E, ""))
                     j += d
 
         return res
@@ -290,7 +287,7 @@ class Position(namedtuple("P", "board score wc bc ep kp")):
         witness the search substitutes for a virtual cutoff; found from
         the null-rotation it says the side to move is in check."""
         return next((m for m in self.gen_moves()
-                     if self.board[m.j] == "k" or -2 < m.j - self.kp < 2), None)
+                     if self.board[m[1]] == "k" or -2 < m[1] - self.kp < 2), None)
 
 
 ###############################################################################
@@ -729,7 +726,7 @@ def main():
                 i, j, prom = parse(move[:2]), parse(move[2:4]), move[4:].upper()
                 if ply % 2 == 1:
                     i, j = 119 - i, 119 - j
-                hist.append(hist[-1].move(Move(i, j, prom)))
+                hist.append(hist[-1].move((i, j, prom)))
 
         elif args[0] == "go":
             # The times may come in any order and combination, e.g. "go wtime 100 btime 100"
@@ -852,10 +849,10 @@ def main():
                     # it would crash, and there is nothing to play anyway;
                     # the floor below answers for terminal roots.
                     if score >= gamma and move:
-                        i, j = move.i, move.j
+                        i, j, prom = move
                         if len(hist) % 2 == 0:
                             i, j = 119 - i, 119 - j
-                        cand = render(i) + render(j) + move.prom.lower()
+                        cand = render(i) + render(j) + prom.lower()
                     if score >= gamma: lo = max(lo, score)
                     else: up = min(up, score)
                     if not lo < up - EVAL_ROUGHNESS:
@@ -880,10 +877,10 @@ def main():
                 pos = hist[-1]
                 for m in pos.gen_moves():
                     if not pos.move(m).k():
-                        i, j = m.i, m.j
+                        i, j, prom = m
                         if len(hist) % 2 == 0:
                             i, j = 119 - i, 119 - j
-                        cand = render(i) + render(j) + m.prom.lower()
+                        cand = render(i) + render(j) + prom.lower()
                         break
             print("bestmove", best or cand or '(none)')
 

@@ -627,6 +627,41 @@ _speed = [
      '                    # this is the complement of "empty or theirs" -- spelled that\n'
      "                    # way so '.', the common case, is found at offset 0.\n"
      '                    if q not in ".pnbrqk":\n'),
+
+    # 9. A MOVE STOPS BEING A NAMEDTUPLE. One is built per generated move --
+    #    ~27 per node -- and a namedtuple's __new__ is a Python-level call
+    #    wrapping tuple.__new__. Ordering is untouched because a namedtuple
+    #    IS a tuple: the (val, move) sort compares moves field by field on a
+    #    value tie exactly as before, and the futility break still sees a
+    #    descending list.
+    #
+    #    THIS NEEDED sunfish_ui/uci.py FIRST. That driver used to build moves
+    #    with `sunfish.Move(...)`, read them with `.i` / `.j` / `.prom`, and
+    #    demand "Move" in ENGINE_API -- so an entry without the class was
+    #    refused before it could play. The driver now builds a plain tuple and
+    #    destructures on read (landed separately, with the classic side
+    #    verified bit-identical), which is why this is landable here.
+    ('Move = namedtuple("M", "i j prom")\n\n\n', ""),
+    ("                                res.append(Move(i, j, prom))\n",
+     "                                res.append((i, j, prom))\n"),
+    ('                    res.append(Move(i, j, ""))\n',
+     '                    res.append((i, j, ""))\n'),
+    ('                        res.append(Move(j + E, j + W, ""))\n',
+     '                        res.append((j + E, j + W, ""))\n'),
+    ('                        res.append(Move(j + W, j + E, ""))\n',
+     '                        res.append((j + W, j + E, ""))\n'),
+    ('                     if self.board[m.j] == "k" or -2 < m.j - self.kp < 2), None)\n',
+     '                     if self.board[m[1]] == "k" or -2 < m[1] - self.kp < 2), None)\n'),
+    ("                hist.append(hist[-1].move(Move(i, j, prom)))\n",
+     "                hist.append(hist[-1].move((i, j, prom)))\n"),
+    ("                        i, j = move.i, move.j\n",
+     "                        i, j, prom = move\n"),
+    ("                        cand = render(i) + render(j) + move.prom.lower()\n",
+     "                        cand = render(i) + render(j) + prom.lower()\n"),
+    ("                        i, j = m.i, m.j\n",
+     "                        i, j, prom = m\n"),
+    ("                        cand = render(i) + render(j) + m.prom.lower()\n",
+     "                        cand = render(i) + render(j) + prom.lower()\n"),
 ]
 for _a, _b in _speed:
     assert src.count(_a) == 1, "speed anchor %r occurs %d times" % (_a[:50], src.count(_a))
