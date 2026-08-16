@@ -542,16 +542,21 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
     probability = exploration_probability(
         selections, args.explore_start, args.explore_floor, args.explore_half_life)
     new_axes = set(state.get("new_axes", ()))
-    fresh_design = new_axes and selections < args.initial_design
-    if fresh_design:
-        mode = "design"
-        acquisition = variance.copy()
-        for index, candidate in enumerate(candidates):
+    fresh = set()
+    if new_axes:
+        for candidate in candidates:
             changed = [
                 name for name, value, default in zip(space.names, candidate, space.default)
                 if value != default
             ]
-            if len(changed) != 1 or changed[0] not in new_axes or candidate in sites:
+            if len(changed) == 1 and changed[0] in new_axes and candidate not in sites:
+                fresh.add(candidate)
+    fresh_design = bool(fresh)
+    if fresh_design:
+        mode = "design"
+        acquisition = variance.copy()
+        for index, candidate in enumerate(candidates):
+            if candidate not in fresh:
                 acquisition[index] = -np.inf
     elif len(sites) < min(args.initial_design, len(candidates)):
         mode = "design"
