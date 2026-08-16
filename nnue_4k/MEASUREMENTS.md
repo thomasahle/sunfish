@@ -68,6 +68,8 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **QUIET-VENUE RE-MEASURE closes the magnitude caveat: the landed stack is **+25.28% (n=8, spread 2.9 points)** on an idle venue, against **+29.59% (n=6, spread 16.0)** on the loaded bench box. The box median was inflated by its own load tail; best estimate of the true magnitude is ≈ **+25%**** | Same instrument, same arms, same local-A/B triples, cpu-time, depth 5, pre-speed baseline vs the landed 3376 stack. **Idle venue: load 1.75 → 2.91, eight reps 23.51 / 24.30 / 24.84 / 25.20 / 25.36 / 25.60 / 26.34 / 26.38.** Loaded box: load 30.6–41.5 sustained across nine readings, foreign CPU 782–4970%, six reps 23.46 / 26.27 / 27.43 / 31.75 / 33.08 / 39.49 — **the box's top three reps have no counterpart in the quiet venue at all**, which is what a load tail looks like. **SECOND VENUE, NOT A REPLACEMENT**: the venues differ in pypy (7.3.23 vs 7.3.20) AND architecture (arm64 vs x86_64), so the deployment number remains the box's, to be re-measured there whenever it goes genuinely quiet. **The tempting over-claim is refused**: quiet does NOT simply mean tighter — stack 1's spread is *wider* on the idle venue (11.9 pts) than on the loaded box (6.1), so the precision here is arm- and session-specific, not a property of the venue. Elo projection ≈ **+33** (idle) vs +38 (box), both projections, no games |
+| 2026-08-16 | **10+0.1 POLL FOLLOW-UP: fully prepared, arms verified, and HELD ON VENUE — not launched. The box is running TWO foreign timed matches; launching would risk voiding mine and would contaminate theirs** | The follow-up the 60+1 poll test registered. **RE-VERIFY, NOT RE-REGISTER**, and the distinction is stated: the form is unchanged (same two arms one constant apart, same inverted tripwire with both branches fixed, same count gate that aborts, same zero-illegal stop, same mechanical attribution by classifier exit code, packed arms, packed driver check, N=300, Elo unread until the count verifies) — only the base engine moved, because the speed stack landed after the originals. Runner **derived by parameter substitution from the registered 60+1 script** so the tripwire is inherited verbatim rather than retyped; `bash -n` clean. **Arms rebuilt on the current 3376 entry and verified**: sha `a997b137…` / `72fd725a…`, transfer confirmed sha-for-sha; payload check per the registered form finds **exactly one `nodes%2048` in the base and one `nodes%4096` in the arm** with the minifier-hidden node-cap poll absent from both; boot smoke 3/3 and **driver-line 0** on both at the 10+0.1 clock. **Byte delta is +1 (3376 vs 3377), NOT the zero the 3405 pair had** — stated rather than claimed. **ONE GENUINELY NEW DECISION, registered before any game: concurrency 4, not 8**, because concurrency moves the forfeit rate and the forfeit rate IS the measurement; at 10+0.1 the shipped pooltm gives a **687.5 ms wall against 11,325 ms at 60+1, 16.5× tighter**, and the expensive failure is the void branch. **HOLD REASONING IS QUANTITATIVE**: a 4096-node poll gap is 7.9% of the wall at quiet speed, 24% at a third of a core, 50% at a sixth — and the 60+1 run's worst clean-venue self-overrun (+557 ms) already exceeds this TC's entire per-move wall. Launch condition: a quiet census immediately before game 1. srand 20260871 (20260870 burned) |
 | 2026-08-16 | **CORRECTION: the `+22.57%` that authorised the tuple-move GO was an n=1 reading of a DIFFERENT object — the candidate's real contribution is +5.30% (n=6), a ~4× over-statement, and the decision was made against the wrong number** | Filed as its own entry, not an in-place edit, because the text corrected **carried a decision**; the superseded bullet is quoted VERBATIM there so an auditor can read the basis in situ. Three defects: `+22.57%` was the **`land6` WHOLE STACK** (ten edits) against the pre-speed baseline, not plain-tuple moves; it was **n=1**, a single A/B triple on the laptop; and "the unblock is one line" was wrong — `sunfish_ui/uci.py` had **four** couplings (`ENGINE_API` listing `"Move"`, `parse_move` constructing it, `render_move` reading `.i`/`.j`/`.prom`, `can_kill_king` reading `m.j`). The edit measured ALONE sat one row below at **−1.63%** in the same table: both numbers were in front of me and I quoted the flattering one under the other's meaning. **NOT AFFECTED: the landing**, decided on the shipped stack's own n=6 number (+29.59%), artifact unchanged at 3376 B and node-identical on both machines — had the registration said +5.30% the candidate still qualifies (byte-negative, node-identical, above the 2% bar), so the decision survives its basis being wrong, **which is luck, not process**, and is why this is filed rather than patched. **CONVENTIONS WRITTEN INTO THE PREAMBLE**: quote the count at the point of quotation, not only where it was measured; and corrections preserve what they replace — **(a)** append an entry, REQUIRED when the text carried a decision, or **(b)** edit in place only if the marking quotes the replaced text VERBATIM (describing it does not count) |
 | 2026-08-16 | **TUPLE MOVES LAND, and the speed campaign's running total is +29.59% nps at 3405 → 3376 B (−29, 720 spare): a projected ≈ +38 Elo at 60+1, still with NO Elo screen because the search is still bit-identical** | The registered candidate from the profile pass, executed as its own full pass. **THE UNBLOCK CAME FIRST AND WAS GATED SEPARATELY**: `sunfish_ui/uci.py` is shared infrastructure and it pinned every engine to one move representation for its own convenience — it built moves with `sunfish.Move(i, j, prom)`, read them with `.i`/`.j`/`.prom`, and listed `"Move"` in `ENGINE_API`, so an entry without the class was refused before it could play. Not one line: **four couplings in one file**. The driver now builds a plain tuple and destructures on read; `"Move"` leaves `ENGINE_API` because the dependency it named is **gone**, not because the check was relaxed. **Classic-side gate, the one that had to hold**: full suite before → after **identical** (1 failed / 371 passed / 2 skipped, and the single failure `test_go_depth_promotion::test_terminal_fail_high_reports_exact_score_before_none` is **PRE-EXISTING on nnue-4k**, fails identically before and after, and touches neither changed file), plus classic under the driver **BIT-IDENTICAL on five probes** at `go nodes 20000` — startpos, startpos+moves, a white-to-move FEN, a BLACK-to-move FEN (where render/parse flip `119 - i`, so a wrong field order shows as a mirrored move, not a crash) and a promotion (`a7a8q`, the `.prom` path). **THEN the entry landing**: a move stops being a namedtuple, ~27 built per node, `__new__` a Python-level call each. Node-identical because **a namedtuple IS a tuple** — the `(val, move)` sort still tie-breaks field by field and the futility break still sees a descending list — verified against the **TRUE pre-speed entry** (`d947986fe9eca2bb…`, 904,848 nodes) on laptop **and** box. **THE STACKED ARITHMETIC IS MEASURED, NOT ADDED**, because this lane's own finding is that per-edit deltas do not compose under a tracing JIT: both stacks were run against the SAME pre-speed baseline in ONE interleaved local-A/B session — **stack 2 (with tuple moves) +29.59% (six reps: 23.46 / 26.27 / 27.43 / 31.75 / 33.08 / 39.49), stack 1 +23.07% (20.29 / 20.30 / 23.03 / 23.12 / 23.51 / 26.37)**, so the tuple increment is **+5.30%** — against the +22.57% it was REGISTERED at, which was never this edit's value but an n=1 laptop reading of a whole different stack (`land6`), mislabelled; the edit alone measured −1.63% there. Gates all green: check_entry 3376 B, legality 130/130 zero illegal, first-yield MAX 676/2048, mate-conversion 8/8, packed boot smoke in an empty dir **including a promotion through the shipped artifact** (`a7b8q` — the `prom` destructure in the builtin loop), entry resolves `v3 nodes fen` with no `Move` class at all. **Elo is a PROJECTION, not a measurement**: 102·log₂(1.2959) ≈ **+38** at 60+1, on the warrant that node-identical + faster is strictly better under a clock (the meter: fixed-node −1.74 ± 27.93, clean-clock +244.47 ± 39.23) |
 | 2026-08-16 | **THE ENTRY'S FIRST PROFILE, and the node-identical speedups it points at: the artifact is **+25.69% nps** (box, cpu-time, local A/B) at **3405 → 3398 B**, ≈ **+34 Elo** at 60+1 with **no Elo screen needed** — the search is bit-identical** | The lane's primary axis after the meter (whole edge = nps + TM: fixed-node −1.74 ± 27.93, clean-clock +244.47 ± 39.23), and nobody had profiled the entry. **THE BUDGET**, two instruments with opposite distortions read as the bracket they form — sampled `perf_counter` brackets (over-read by a roughly FIXED ~1-3 µs/bracket, proven by sweeping the sample period: `wall(p) = 16.02 + 6.20/p`) and exact per-node call counts × microbenchmarked per-op cost (each primitive at its floor): **`gen_moves` 27.7% of wall, `pos.move()` 14.7%, `value()` 9.9%, sort 4.0%, and EVERY transposition-table operation together 3.0%** — which kills the cheaper-table family before it is tried, and both table candidates that were tried anyway measured negative. **LANDED**: 8 edits, all NODE-IDENTICAL (60 positions × depth 6, every MTD probe `(depth, gamma, score, killer)` and node count, byte-identical on laptop AND box, ref sha `d947986fe9eca2bb…`, 904,848 nodes) — `sorted(genexp)`→`sorted(listcomp)`, `q in "pnbrqk"`→`q != "."`, `q in " \nPNBRQK"`→`q not in ".pnbrqk"`, `any(genexp)`→four `in` tests, `itertools.count`→`while`, `abs(x)<2`→`-2<x<2`, `Entry` namedtuple→plain pair, and **`gen_moves` stops being a generator** (the single biggest win, +19.01% alone). **NO ELO SCREEN, and that is a claim about the instrument**: node identity means a fixed-node screen compares the engine with itself, and under a clock the only thing that moved is how many identical nodes fit the budget — the exact channel the meter measured as the entry's whole advantage. Gates all green: check_entry 3398 B (698 spare), legality 130/130 zero illegal at `go nodes 20000`, first-yield MAX 676/2048, mate-conversion 8/8, packed boot smoke in an empty dir. **THE NEGATIVES ARE THE HALF WORTH KEEPING**: the classic CPython hot-loop playbook is NEGATIVE under a tracing JIT — hoisting `self.board` −1.6%, collapsing a char scan + `directions[p]` into one `dict.get` **−10.9%** (the worst result measured), hoisting the loop-invariant `p == "P"` −1.4%, hoisting the `dict.get` default object −1.9%. PyPy already does those; what pays is what it cannot fix, **iterator boundaries into builtins and per-operation allocation**. **THE INSTRUMENT NEEDED TWO REBUILDS** and both failures travel: wall clock on a shared box is unusable (±7%; `process_time` is not), and BOTH venues drift MONOTONICALLY through a long benchmark — 25% across thirty consecutive runs on the box, 12% across nine on the laptop — which round-interleaving cannot cancel because the drift is WITHIN a round. Every number here is a local A/B triple, base-arm-base, seconds apart |
@@ -316,6 +318,150 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-16 — QUIET-VENUE RE-MEASURE: the landed stack is +25.28%, and the box median was load-inflated
+
+The tuple-move entry shipped with a caveat attached by its own author: the
++29.59% was a median over six reps spanning +23.5% to +39.5% on a box running
+two other lanes, and "the magnitude deserves a quiet venue before it's leaned
+on". This is that measurement.
+
+Same instrument throughout — local A/B triples (`base, arm, base`), cpu-time,
+depth 5, 60 positions with an 8-position warm-up prefix, pre-speed baseline
+(3405 B) against the landed stack (3376 B).
+
+| venue | interpreter | arch | load | stack 2 median | spread | n |
+|---|---|---|---|---|---|---|
+| **idle** | pypy 7.3.23 | arm64 | **1.75 → 2.91** | **+25.28%** | **2.9 pts** | **8** |
+| bench box | pypy 7.3.20 | x86_64 | 30.6 – 41.5 sustained | +29.59% | 16.0 pts | 6 |
+
+Per-rep, because a median over 6–8 points is worth nothing without them:
+
+- **idle, stack 2:** 23.51 / 24.30 / 24.84 / 25.20 / 25.36 / 25.60 / 26.34 / 26.38
+- box, stack 2: 23.46 / 26.27 / 27.43 / 31.75 / 33.08 / 39.49
+- idle, stack 1: 14.43 / 19.22 / 19.92 / 20.65 / 21.57 / 21.79 / 22.90 / 26.35 (median +21.11%)
+- box, stack 1: 20.29 / 20.30 / 23.03 / 23.12 / 23.51 / 26.37 (median +23.07%)
+
+**The box's top three reps — 31.75, 33.08, 39.49 — have no counterpart in the
+idle venue at all.** That one-sided tail is what pulled its median to +29.59%,
+and it is the signature of a loaded machine, not of the engine. The two
+intervals overlap only in [23.5, 26.4], which is precisely where the tight
+measurement sits. **Best estimate of the true magnitude: ≈ +25%.**
+
+### The over-claim this entry refuses
+
+"Quiet venue ⇒ tighter interval" is the obvious lesson and it is **not
+supported here**. Stack 1's spread is *wider* on the idle venue (11.9 pts)
+than on the loaded box (6.1 pts). Whatever produced stack 2's clean run was
+arm- and session-specific, not a property of idleness. The defensible claim is
+narrower and is the only one made: **stack 2 now has one tight, high-`n`
+measurement, and it lands below the box's median.**
+
+### Second venue, not a replacement
+
+The venues differ in **both** pypy version (7.3.23 vs 7.3.20) and
+**architecture** (arm64 vs x86_64), and this engine is string- and
+dict-heavy, exactly the workload where those differ. So the idle number does
+not replace the box's: **the deployment number remains the box's**, and it
+should be re-measured there whenever the box goes genuinely quiet. What the
+idle run establishes is that the box's figure is an over-estimate, and roughly
+by how much.
+
+Elo projections, both projections and neither a measurement:
+102·log₂(1.2528) ≈ **+33** (idle), ≈ +38 (box). The honest number to carry
+forward is the lower one.
+
+---
+
+## 2026-08-16 — 10+0.1 POLL FOLLOW-UP: prepared, verified, and HELD ON VENUE
+
+The follow-up the 60+1 poll test registered for itself: *"a pass registers
+(does NOT run) a 10+0.1-style follow-up where clock-read frequency actually
+binds."* Everything short of games is done. It was not launched, and the
+reason is the venue.
+
+### Re-verify, not re-register — and which, stated
+
+The **form is unchanged**: same two arms one constant apart, same inverted
+tripwire with both branches fixed before game 1, same count gate that aborts
+rather than announcing a verdict over an empty PGN, same zero-illegal stop,
+same mechanical attribution by classifier exit code, packed arms, packed
+driver-resolution check, N=300, Elo unread until the count verifies. What
+moved is the **base engine** — the speed stack landed after the original arms
+were built — so both arms are rebuilt on the current 3376 entry. A
+form-preserving substitution is a **re-verification**, not a new registration,
+and the verification was done rather than asserted:
+
+| check | result |
+|---|---|
+| arm shas, pinned in the runner | base `a997b137…`, arm `72fd725a…` |
+| transfer to the venue | confirmed sha-for-sha, never rebuilt there |
+| payload, per the registered form | **exactly one `nodes%2048`** in base, **one `nodes%4096`** in arm |
+| minifier-hidden node-cap poll | correctly **absent from both** |
+| boot smoke at the 10+0.1 clock | **3/3** both arms |
+| packed driver-resolution check | **driver-line 0** both arms — builtin loop and shipped pooltm confirmed |
+| byte delta | **+1 (3376 vs 3377)** |
+
+**The byte delta is not zero and that is said plainly.** The 60+1 pair was
+zero-delta at 3405 B; this pair is not. One byte against 719 spare is
+immaterial to the ceiling, but "zero byte delta" was part of what made the
+original arms clean, and it is no longer true.
+
+The runner is **derived by parameter substitution from the registered 60+1
+script**, so the tripwire and the gates are inherited verbatim rather than
+retyped — the form was registered, so the form must not be re-authored.
+`bash -n` clean. Fresh srand 20260871 (20260870 burned by the 60+1 run).
+
+### The one genuinely new decision, registered before any game
+
+**Concurrency 4, not the 60+1 run's 8.** Registered here rather than chosen
+silently, because **concurrency moves the forfeit rate and the forfeit rate IS
+the measurement** — picking it after seeing results would be unfalsifiable.
+
+The reasoning, fixed in advance: at 10+0.1 the shipped pooltm yields
+`soft = 137.5 ms` and a wall of **687.5 ms**, against **11,325 ms** at 60+1 —
+**16.5× tighter**. Self-inflicted contention that was demonstrably harmless at
+concurrency 8 and a 11.3 s wall is not obviously harmless at 0.69 s, and the
+expensive failure mode is the **void** branch, where a single base forfeit
+burns the entire match. Halving concurrency buys margin against the failure
+that costs most. Both arms face it identically and the comparison is
+within-run, so the base-vs-arm contrast is untouched.
+
+### Why it is held, quantitatively
+
+| condition | value |
+|---|---|
+| box load, nine readings over ~8 min | **30.6 – 41.5, rising** |
+| foreign CPU across those readings | **782% – 4970%** |
+| foreign `fastchess` instances | **2** — another lane's *timed* matches |
+| foreign optimizer processes | 2 |
+
+Two reasons, and the second is the stronger:
+
+1. **It would probably void.** A 4096-node poll gap is 7.9% of the 687.5 ms
+   wall at the box's quiet speed, **24% at a third of a core, 50% at a
+   sixth**. The 60+1 run's worst *clean-venue* self-overrun was **+557 ms** —
+   larger than this TC's entire per-move wall. On a contended box the base arm
+   forfeits, the tripwire fires the venue branch, and 300 games and an srand
+   are spent for no information.
+2. **It would contaminate someone else's measurement.** Two foreign timed
+   matches are running now. Injecting a third at concurrency 4 degrades their
+   numbers as surely as theirs would degrade mine, and their runs are not mine
+   to spend.
+
+### Launch condition
+
+A quiet census immediately before game 1 — the same reading that held it here.
+Everything else is staged and verified; the run is one command.
+
+**What the result will mean, fixed now so it cannot be reinterpreted after:**
+if 4096 pays at 10+0.1 where it was neutral at 60+1, the clock-frequency
+mechanism is confirmed and it becomes a landing candidate. If it is neutral
+again, the lead closes entirely, at zero further cost. If the arm forfeits and
+the base does not, that is the measurement — "4096 unsafe at 10+0.1" — and the
+lead closes at 2048 with the safety evidence banked.
 
 ---
 
