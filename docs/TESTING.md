@@ -268,7 +268,7 @@ outside PST-shaped eval is invisible to it. Rule 12 also applies with full
 force: fixed-node results hold search effort constant, so they screen;
 only a wall-clock match on the real engine decides.
 
-The twin also accepts UCI clocks for calibrated `3+0.1` search screens. That
+The twin also accepts UCI clocks for provisional `3+0.1` search screens. That
 fixed budget policy is not a model of the shipping time manager; use `vmatch.py`
 to compare time policies and a real-clock match to validate the winner.
 
@@ -296,8 +296,8 @@ openings (`191/121/188`, +2.08 ± 26.57 Elo over 500 games), an explicit
 winner's-curse check. A second candidate passed (`211/129/160`,
 +35.56 ± 26.37), and the final exact policy was confirmed on a later untouched
 opening block: `218/135/147`, **+49.67 ± 26.24 Elo**, LOS 99.99%, over 500
-games at the calibrated C-twin `3+0.1` search surrogate. There were no crashes,
-illegal moves, disconnects, stalls, or time losses.
+games at the C-twin `3+0.1` search surrogate. There were no crashes, illegal
+moves, disconnects, stalls, or time losses.
 
 The posterior selected `QS=30`, but that setting regressed the WAC.004 tactical
 floor and the packed-engine tiny-clock test. Its one-dimensional posterior

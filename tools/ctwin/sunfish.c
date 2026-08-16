@@ -66,6 +66,7 @@ static const char INITIAL[121] =
 static int TAB[6][120];          /* padded pst for P N B R Q K(mid) */
 static int KEND[120];            /* endgame king table */
 static int PIECEVAL[6];          /* bare piece values P N B R Q K */
+static int REF_TAB[6][120], REF_KEND[120], REF_PIECEVAL[6];
 static int *PSTP[128];           /* by piece char; PSTP['K'] is swapped */
 static int MATE_LOWER, MATE_UPPER;
 static int tables_loaded = 0;
@@ -75,11 +76,12 @@ static int QS = 40;
 static int QS_A = 140;
 static int LMR = 75;
 static int EVAL_ROUGHNESS = 15;
+static int NULL_CAP_MARGIN = -1; /* -1 follows EVAL_ROUGHNESS, as Python */
+static int VALUE_N = 280, VALUE_B = 320, VALUE_R = 479, VALUE_Q = 929;
+static int PST_P = 100, PST_N = 100, PST_B = 100, PST_R = 100;
+static int PST_Q = 100, PST_K = 100, PST_KE = 100;
 static long TABLE_SIZE = 1000000;
-static int NULL_MARGIN = -200;   /* fuel-probe target margin (its own knob
-                                    since #192, deliberately NOT tied to
-                                    EVAL_ROUGHNESS; the shallow capped
-                                    null keeps following EVAL_ROUGHNESS) */
+static int NULL_MARGIN = -200;   /* fuel-probe target margin */
 static int NULL_MIN_DEPTH = 2;   /* null move when depth > this */
 static int NULL_LIMIT = 750;     /* |score| bound for both null mechanisms */
 static int NULL_CUT_RED = 3;     /* shallow null-candidate reduction */
@@ -87,6 +89,8 @@ static int NULL_RED = 7;         /* deep fuel-probe reduction */
 static int IID_MIN_DEPTH = 99;   /* tuned off; retained as a lab knob */
 static int IID_RED = 3;          /* IID depth reduction */
 static int FUT_MAX = 1;          /* futility pruning when depth <= this */
+static int FUT_CAP = 1;          /* 0 off, 1 quiet moves, 2 negative value */
+static int FUT_CAP_DEPTH = 3;
 static int MATE_DIST = 1;        /* mate scores carry distance (master: 0) */
 /* Replacement-policy battery knobs (tp_move only; tp_score untouched).
  * EVICT_POLICY 0: master/branch root-guarded FIFO insert-then-evict (>).
@@ -126,18 +130,13 @@ static int USE_VARIANT = 0;      /* no-op here: forces pyref's transcribed
  *   classic capped null only for NULL_MIN_DEPTH < depth < FUEL_MIN_DEPTH;
  *   from FUEL_MIN_DEPTH a null probe at the fixed target pos.score +
  *   NULL_MARGIN is a FUEL ORACLE, never a score candidate: pass beats
- *   target => real moves recurse to depth-2 instead of depth-1 (nominal
- *   depth still keys tables and QS).  FUEL_NULL=0 = pre-#192 deep null.
+ *   target => real moves spend FUEL_NULL extra depth units (nominal depth
+ *   still keys tables and QS).  FUEL_NULL=0 = pre-#192 deep null.
  * PR #184 derive-never-inherit: search() re-derives every history score
  *   from the board under the K-table chosen for THIS search, so no score
  *   is inherited across table swaps. */
 static int QS_TAIL = 0;
-static int FUEL_NULL = 1;        /* DEFAULT since #192 merged the fuel
-                                    oracle into master's sunfish.py; 0
-                                    restores the pre-#192 deep-null cutoff
-                                    (historical comparisons only -- no
-                                    longer difftest-provable against the
-                                    live reference) */
+static int FUEL_NULL = 1;        /* Reduction amount; 0 restores pre-#192. */
 static int FUEL_MIN_DEPTH = 6;
 static int DERIVE_FRESH = 0;
 
@@ -697,8 +696,9 @@ static int score_move(const Pos *pos, Move move, int val, int gamma,
     Pos child = domove(pos, move);
     int move_depth = rd - 1 - (!root && guard && val < LMR);
     *real = 1;
-    if (2 <= depth && depth <= 3 && pos->b[move.j] == '.'
-            && move.j != pos->ep && !move.prom) {
+    int capped = FUT_CAP == 1 ? pos->b[move.j] == '.'
+        && move.j != pos->ep && !move.prom : FUT_CAP == 2 && val < 0;
+    if (2 <= depth && depth <= FUT_CAP_DEPTH && capped) {
         int cap = pos->score + val + (depth - 1) * QS_A;
         if (cap >= MATE_LOWER) cap = MATE_LOWER - 1;
         if (cap < gamma) {
@@ -756,17 +756,16 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
     int nkill = 0;
     tpm_get_all(pos, killers, &nkill);
 
-    /* Null move, capped at static eval plus one score bucket (the cap
-     * follows EVAL_ROUGHNESS, exactly master's classic branch).  Since
-     * #192 this branch runs only below FUEL_MIN_DEPTH; above it the fuel
-     * oracle decides a reduction.  FUEL_NULL=0 restores the pre-#192
-     * deep-null cutoff for historical comparisons. */
+    /* Null move, capped at static eval plus one score bucket. Since #192
+     * this branch runs only below FUEL_MIN_DEPTH; above it the fuel oracle
+     * decides a reduction. FUEL_NULL=0 restores the old deep-null cutoff. */
     if (!root && depth > NULL_MIN_DEPTH
             && (!FUEL_NULL || depth < FUEL_MIN_DEPTH)
             && iabs(pos->score) < NULL_LIMIT && has_big_piece(pos)) {
         Pos rp = rotate(pos, 1);
         int s = -bound(&rp, 1 - gamma, depth - NULL_CUT_RED, 0, 0);
-        int score = pos->score + EVAL_ROUGHNESS;
+        int score = pos->score + (NULL_CAP_MARGIN < 0
+            ? EVAL_ROUGHNESS : NULL_CAP_MARGIN);
         if (s < score) score = s;
         Move proof = nomove;
         int have_proof = 0;
@@ -784,13 +783,13 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
     /* Fuel oracle -- its fixed target reduces the node.  Its static guard
      * also limits intrinsic LMR to positions where passing is meaningful. */
     int rd = depth;
-    int guard = FUEL_NULL && depth >= FUEL_MIN_DEPTH
+    int guard = depth >= FUEL_MIN_DEPTH
         && iabs(pos->score) < NULL_LIMIT && has_big_piece(pos);
-    if (guard) {
+    if (guard && FUEL_NULL) {
         int target = pos->score + NULL_MARGIN;
         Pos rp = rotate(pos, 1);
         if (-bound(&rp, 1 - target, depth - NULL_RED, 0, 0) >= target)
-            rd = depth - 1;
+            rd = depth - FUEL_NULL;
     }
 
     /* QSearch stand pat. */
@@ -1141,6 +1140,29 @@ static void apply_uci_moves(char **tok, int ntok) {
 /* ------------------------------------------------------------------ */
 /* Table loading and knobs                                             */
 /* ------------------------------------------------------------------ */
+static int scale_eval(int value, int scale) {
+    int product = value * scale;
+    return (product + (product >= 0 ? 50 : -50)) / 100;
+}
+
+static void refresh_eval(void) {
+    if (!tables_loaded) return;
+    int values[] = {REF_PIECEVAL[0], VALUE_N, VALUE_B, VALUE_R, VALUE_Q,
+                    REF_PIECEVAL[5]};
+    int scales[] = {PST_P, PST_N, PST_B, PST_R, PST_Q, PST_K};
+    for (int p = 0; p < 6; p++) {
+        PIECEVAL[p] = values[p];
+        for (int i = 0; i < 120; i++)
+            TAB[p][i] = values[p] + scale_eval(
+                REF_TAB[p][i] - REF_PIECEVAL[p], scales[p]);
+    }
+    for (int i = 0; i < 120; i++)
+        KEND[i] = PIECEVAL[5] + scale_eval(
+            REF_KEND[i] - REF_PIECEVAL[5], PST_KE);
+    MATE_LOWER = PIECEVAL[5] - 13 * PIECEVAL[4];
+    MATE_UPPER = PIECEVAL[5] + 10 * PIECEVAL[4];
+}
+
 static int load_tables(const char *path) {
     FILE *f = fopen(path, "r");
     if (!f) return 0;
@@ -1172,9 +1194,11 @@ static int load_tables(const char *path) {
     for (int c = 0; c < 128; c++) PSTP[c] = NULL;
     const char *order = "PNBRQK";
     for (int k = 0; k < 6; k++) PSTP[(int)order[k]] = TAB[k];
-    MATE_LOWER = PIECEVAL[5] - 13 * PIECEVAL[4];
-    MATE_UPPER = PIECEVAL[5] + 10 * PIECEVAL[4];
+    memcpy(REF_TAB, TAB, sizeof TAB);
+    memcpy(REF_KEND, KEND, sizeof KEND);
+    memcpy(REF_PIECEVAL, PIECEVAL, sizeof PIECEVAL);
     tables_loaded = 1;
+    refresh_eval();
     return 1;
 }
 
@@ -1182,6 +1206,13 @@ struct knob { const char *name; int *ip; long *lp; };
 static struct knob KNOBS[] = {
     { "QS", &QS, NULL }, { "QS_A", &QS_A, NULL }, { "LMR", &LMR, NULL },
     { "EVAL_ROUGHNESS", &EVAL_ROUGHNESS, NULL },
+    { "NULL_CAP_MARGIN", &NULL_CAP_MARGIN, NULL },
+    { "VALUE_N", &VALUE_N, NULL }, { "VALUE_B", &VALUE_B, NULL },
+    { "VALUE_R", &VALUE_R, NULL }, { "VALUE_Q", &VALUE_Q, NULL },
+    { "PST_P", &PST_P, NULL }, { "PST_N", &PST_N, NULL },
+    { "PST_B", &PST_B, NULL }, { "PST_R", &PST_R, NULL },
+    { "PST_Q", &PST_Q, NULL }, { "PST_K", &PST_K, NULL },
+    { "PST_KE", &PST_KE, NULL },
     { "TABLE_SIZE", NULL, &TABLE_SIZE },
     { "NULL_MARGIN", &NULL_MARGIN, NULL },
     { "NULL_MIN_DEPTH", &NULL_MIN_DEPTH, NULL },
@@ -1191,6 +1222,8 @@ static struct knob KNOBS[] = {
     { "IID_MIN_DEPTH", &IID_MIN_DEPTH, NULL },
     { "IID_RED", &IID_RED, NULL },
     { "FUT_MAX", &FUT_MAX, NULL },
+    { "FUT_CAP", &FUT_CAP, NULL },
+    { "FUT_CAP_DEPTH", &FUT_CAP_DEPTH, NULL },
     { "MATE_DIST", &MATE_DIST, NULL },
     { "EVICT_POLICY", &EVICT_POLICY, NULL },
     { "EVICT_SCAN_K", &EVICT_SCAN_K, NULL },
@@ -1209,12 +1242,15 @@ static int set_knob(const char *name, long v) {
     if (!strcmp(name, "EVICT_SCAN_K") && v < 1) return 0;
     if (!strcmp(name, "KILLER_COUNT") && (v < 1 || v > MAXKILL)) return 0;
     if (!strcmp(name, "QS_TAIL") && (v < 0 || v > 1)) return 0;
-    if (!strcmp(name, "FUEL_NULL") && (v < 0 || v > 1)) return 0;
+    if (!strcmp(name, "FUEL_NULL") && (v < 0 || v > 2)) return 0;
+    if (!strcmp(name, "FUT_CAP") && (v < 0 || v > 2)) return 0;
+    if (!strcmp(name, "FUT_CAP_DEPTH") && (v < 2 || v > 6)) return 0;
     if (!strcmp(name, "FUEL_MIN_DEPTH") && v < 1) return 0;
     if (!strcmp(name, "DERIVE_FRESH") && (v < 0 || v > 1)) return 0;
     for (struct knob *k = KNOBS; k->name; k++)
         if (!strcmp(k->name, name)) {
             if (k->ip) *k->ip = (int)v; else *k->lp = v;
+            refresh_eval();
             return 1;
         }
     return 0;

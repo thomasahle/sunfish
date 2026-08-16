@@ -26,7 +26,8 @@ live by `pyref.py`, so drift in the Python file shows up as a harness
 failure, not silent staleness — re-pass the gate, re-tune the flavor
 knob defaults, and re-pin variants.py's drift hashes when the search
 changes (done for #192). Historical flavors stay reachable by knob:
-`set FUEL_NULL 0` for the pre-#192 deep-null cutoff, `set IID_MIN_DEPTH
+`set FUEL_NULL 0` for the pre-#192 deep-null cutoff, or `2` to spend two
+depth units on a hot node; `set IID_MIN_DEPTH
 2` + `set MATE_DIST 0` for pre-capped-null master — knob-off settings
 are no longer difftest-provable against the live reference; their
 identity was proven against the reference of their day and is archived
@@ -79,6 +80,10 @@ in the git history of this file.
   C-only node/movegen screen over it, and the paired-openings fixed-node
   match driver (python-chess arbiter, trinomial SPRT, zero tolerance for
   illegal moves).
+- `adaptive_gp.py`, `logistic_gp.py`, `all_parameters.json` — an
+  asynchronous logistic-GP game tuner and its mixed search/evaluation space.
+  `sunfish_gate.py` prevents policies below the fixed-depth mate floors
+  (20/20 mate-in-two and 12/14 mate-in-three) from consuming games.
 - `tmlib.py`, `tmsim.py`, `vmatch.py`, `tmmatrix.py`, `npsprofile.py`,
   `npsmodel.json` — the TIME-MANAGEMENT surrogate (see below): the formula
   mirrors, the stage-0 trajectory simulator, the virtual-clock match driver,
@@ -118,16 +123,82 @@ make bench      # C-vs-PyPy wall-time ratio at identical nodes
 
 Tuning knobs (no recompile): UCI `setoption name NAME value VALUE`, lab
 `set NAME VALUE`, `SF_NAME=` env, or `NAME=VALUE` argv after the table path —
-`QS QS_A LMR EVAL_ROUGHNESS TABLE_SIZE NULL_MARGIN NULL_MIN_DEPTH NULL_LIMIT
-NULL_CUT_RED NULL_RED IID_MIN_DEPTH IID_RED FUT_MAX MATE_DIST FUEL_NULL
-FUEL_MIN_DEPTH` (`NULL_MARGIN` is the fuel-probe target margin,
-`NULL_CUT_RED` controls the shallow score candidate, and `NULL_RED` controls
-the deep fuel probe), plus the tp_move battery: `EVICT_POLICY` (0 master
+`QS QS_A LMR EVAL_ROUGHNESS TABLE_SIZE NULL_CAP_MARGIN NULL_MARGIN
+NULL_MIN_DEPTH NULL_LIMIT NULL_CUT_RED NULL_RED IID_MIN_DEPTH IID_RED FUT_MAX FUT_CAP FUT_CAP_DEPTH
+MATE_DIST FUEL_NULL FUEL_MIN_DEPTH` (`NULL_CAP_MARGIN=-1` follows
+`EVAL_ROUGHNESS`, `NULL_MARGIN` is the fuel-probe target margin, and the two
+`NULL_*_RED` knobs control the shallow and deep probes; `FUEL_NULL` controls
+the hot node's extra depth cost, while zero skips the probe but retains the
+static intrinsic-LMR guard). `FUT_CAP` selects no shallow cap, the
+current quiet-move cap, or the simpler negative-`value()` cap;
+`FUT_CAP_DEPTH` selects its horizon. `VALUE_N VALUE_B
+VALUE_R VALUE_Q` tune material, while
+`PST_P PST_N PST_B PST_R PST_Q PST_K PST_KE` scale the positional component
+of each loaded table. The tp_move battery adds `EVICT_POLICY` (0 master
 root-guarded FIFO, 1 unguarded
 evict-before-insert, 2 depth-stored bounded scan with `EVICT_SCAN_K`,
 3 hash-slot two-tier replace-if-deeper), `KILLER_COUNT` (1..3 most recent
 distinct killers), `USE_VARIANT` (Python-side transcription proof; no-op
 in C). Unknown or out-of-range knobs are hard errors on every input path.
+
+For long joint studies, one color-swapped opening pair is one posterior
+update. Forty engine processes means twenty scheduler slots:
+
+`all_parameters.json` covers every live search/evaluation constant, including
+the null-oracle fuel amount. It excludes
+`TABLE_SIZE` (a memory budget) and
+the historical or PR-only flavor selectors above; those belong in separate
+ablation matches, not in the production-parameter posterior. Its default
+point is current master: `NULL_LIMIT=60000` makes the score guard inactive;
+`500` is the separately tested PR #207 policy. The correctness gate applies
+to challengers, not the fixed opponent: master itself misses two mate-floor
+positions that the guarded candidates must recover.
+The numeric search domains cover the source's declared tuning ranges, except
+that `QS_A=0` is excluded because it would permanently filter moves instead
+of eventually widening the real tree. Evaluation ranges are limited by the
+corner-checked mate-band, promotion, and nonnegative-table invariants; a
+posterior maximum on one of those boundaries is a proof constraint, not an
+invitation to sample an invalid table.
+
+```sh
+python3 adaptive_gp.py \
+  --fastchess /path/to/fastchess \
+  --engine ./sunfish_c --engine-args ./tables_classic.txt \
+  --baseline-options default \
+  --space all_parameters.json --openings openings.fen \
+  --gate "python3 sunfish_gate.py" --gate-design --gate-workers 20 \
+  --cycle-openings \
+  --slots 20 --queue-batches 60 --refill-batches 20 \
+  --pairs 1 --initial-design 256 --inducing 128 --update-batches 8 \
+  --explore-start .5 --explore-floor .2 --duel-fraction .3 \
+  --wall-time 3d --batches 1000000
+```
+
+`--baseline-options default` pins the exact default point to zero. Opening
+reuse is balanced by a fresh deterministic shuffle per epoch, and independent
+books remain mandatory for final confirmation. A fixed inducing basis permits
+online Laplace updates without rebuilding a quadratic comparison matrix. The
+optimizer keeps its small matrix operations single-threaded so its 128-site
+model does not compete with the 20 game lanes. Its 2,048-point global design is
+used for the initial design, acquisition restarts, and inducing sites. It
+reserves 512 points for the default, every one-axis setting, and nearby two-axis
+combinations; the rest retain broad global coverage. Coordinate refinements
+are gated on demand. The pure-variance arm explores finite-design policies and
+validated coordinate refinements. It covers the unseen, gate-safe global
+design before revisiting a policy; afterward, statistically dominated policies
+leave the pure arm. UCB is free to replicate promising policies throughout.
+Proposals pass the correctness gate before games are spent. Rejected policies
+consume neither games nor allocation credit.
+Three reserved pairs per lane,
+replenished while two remain, hide that latency. `--gate-all` instead
+prevalidates the finite design and confines every acquisition to it; use that
+for a broad census, not the final joint refinement. `--gate-design` rejects
+unsafe design points up front while still allowing gated coordinate
+refinements. Results append to a JSONL journal and compact every 1,000 pairs,
+avoiding quadratic checkpoint I/O while remaining restartable. At the
+wall-time limit, the scheduler finishes every reserved color pair before its
+final checkpoint. `--seed-state` replays that journal and inherits its
+allocation clock; pass `--seed-selections 0` only to restart exploration.
 
 Game use: `position startpos moves …` / `position fen …`, then
 `go nodes N` (primary — clock-free surrogate games), `go depth D`,
