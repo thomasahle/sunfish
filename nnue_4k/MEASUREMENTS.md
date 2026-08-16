@@ -318,7 +318,10 @@ battery compares, for all 60 positions, **every MTD probe the driver yields**
 different trees. Reference transcript sha256 `d947986fe9eca2bb…`, 904,848
 nodes, and it reproduces byte-for-byte on the laptop **and** on the bench box.
 **Every arm in every table below passed it**, including the profiling
-instrument itself.
+instrument itself. The battery ships as `tools/build/identity_gate.py`, so
+the next speed change can be held to the same standard without rebuilding
+it: `identity_gate.py ENGINE.py > ref.txt` records, `--ref ref.txt`
+compares, exit 1 on any divergence.
 
 ### Method, and what is wrong with it
 
