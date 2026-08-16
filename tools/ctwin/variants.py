@@ -194,7 +194,7 @@ class VariantSearcher(Searcher):
         def moves():
             killers = self.tp_move.get_all(pos)
 
-            if (not root and 2 < depth < 6 and abs(pos.score) < 500
+            if (not root and 2 < depth < 6 and abs(pos.score) < 750
                     and any(c in pos.board for c in "RBNQ")):
                 score = min(pos.score + S.EVAL_ROUGHNESS,
                     -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
@@ -204,7 +204,7 @@ class VariantSearcher(Searcher):
             # Fuel oracle (master since #192): a fuel decision, never a
             # score candidate; real moves below recurse to d - 1.
             d = depth
-            if depth >= 6 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ"):
+            if depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ"):
                 target = pos.score + S.NULL_MARGIN
                 if -self.bound(pos.rotate(nullmove=True), 1 - target, depth - 7) >= target:
                     d = depth - 1

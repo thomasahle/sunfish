@@ -309,10 +309,13 @@ The other selected settings are `QS_A=140`, `EVAL_ROUGHNESS=15`,
 capped null from depth 3 through 5, real-only fuel shaping from depth 6, and
 IID disabled. The study coupled the shallow and deep reductions at 7; the
 depth-six mate floor subsequently showed that this was invalid. Production
-retains the shallow candidate's three-ply reduction, the `abs(score) < 500`
+retains the shallow candidate's three-ply reduction, the `abs(score) < 750`
 guard for both null mechanisms, and exempts the unstored driver root from
 intrinsic LMR. The depth-eight mate floor invalidated removal of the score
-guard. Those corrections are measured separately. This last independent
+guard. A complete threshold sweep retained 12/14 mate-in-three positions
+through 775, then fell to 11/14 at 800 and 10/14 at 850. At 20,000 fixed
+nodes, 750 scored +2.43 ± 4.35 Elo against 500 and -0.35 ± 3.79 Elo
+against unguarded master over 3,000 games per match. This last independent
 confirmation, not the adaptive posterior estimate, is the landing evidence.
 
 ## Testing the packed artifact

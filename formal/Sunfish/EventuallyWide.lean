@@ -878,7 +878,7 @@ theorem forcedMate_completeG (G : QSGame) (guard : G.Pos → Nat → Bool)
 
 /-- Arm A (control): the shipped guard with a fixed horizon,
 `2 < depth < 48` in the code.  `base` abstracts the position part
-(`abs(score) < 500 and pieces on board`), exactly as the shipped model
+(`abs(score) < 750 and pieces on board`), exactly as the shipped model
 abstracts its guard. -/
 def fixedHorizonGuard (G : QSGame) (base : G.Pos → Bool) (H : Nat) :
     G.Pos → Nat → Bool :=

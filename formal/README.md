@@ -55,7 +55,7 @@ The proof is generic in `C`; it does not depend on chess or mate constants.
 The production guard is:
 
 ```python
-(not root and 2 < depth < 6 and abs(pos.score) < 500
+(not root and 2 < depth < 6 and abs(pos.score) < 750
     and any(c in pos.board for c in "RBNQ"))
 ```
 
@@ -90,7 +90,7 @@ shapes only how much depth the real moves spend:
 
 ```python
 d = depth
-guard = (depth >= 6 and abs(pos.score) < 500
+guard = (depth >= 6 and abs(pos.score) < 750
     and any(c in pos.board for c in "RBNQ"))
 if guard:
     nullpos = pos.rotate(nullmove=True)

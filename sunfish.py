@@ -386,7 +386,7 @@ class Searcher:
             # mate band, so one child report is enough to bound it. No null at
             # root, so we can always return a move. Below depth 6 only: from
             # depth 6 on the pass is never a score candidate (see below).
-            if (not root and 2 < depth < 6 and abs(pos.score) < 500
+            if (not root and 2 < depth < 6 and abs(pos.score) < 750
                     and any(c in pos.board for c in "RBNQ")):
                 score = min(pos.score + EVAL_ROUGHNESS,
                     -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
@@ -398,7 +398,7 @@ class Searcher:
             # A fixed-target null probe reduces hot nodes. Its static guard also
             # limits intrinsic LMR to positions where passing is meaningful.
             d = depth
-            guard = depth >= 6 and abs(pos.score) < 500 and any(c in pos.board for c in "RBNQ")
+            guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
             if guard:
                 nullpos = pos.rotate(nullmove=True)
                 target = pos.score + NULL_MARGIN

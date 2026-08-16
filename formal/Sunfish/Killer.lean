@@ -374,7 +374,7 @@ theorem boundKill_spec (G : Game) [DecidableEq G.Pos] :
 that can still end the loop below `MATE_UPPER` at a king-capturable node --
 its yield carries `None` (stores nothing, so `KillerOK` survives), but its
 cutoff value is not the sentinel.  sunfish guards it only by
-`abs(pos.score) < 500` (line 330), and its own FIXME at lines 323-329
+`abs(pos.score) < 750` (line 330), and its own FIXME at lines 323-329
 concedes the guard is heuristic.  `NullGuardBlocksAtCaptures` is the
 condition under which the guard actually closes the hole: with it, the
 `MATE_UPPER`-when-capturable invariant of `boundKill_spec` extends to the
