@@ -4552,6 +4552,92 @@ truncated number is believed.
 
 ---
 
+## 2026-08-16 — PRE-REGISTRATION: the DISTRIBUTION×LABEL matrix, all cells under one protocol
+
+Registered before any game of this matrix. Branch B fired tonight and promoted
+**distribution** to prime suspect; this is the experiment that tests it with
+one variable moved at a time.
+
+### Why not the arm that was proposed
+
+"Harvest positions from sunfish's own played games, twin cp labels, same
+trainer" **is already the λ=1 arm** — its corpus provenance reads
+`pgnglob: ~/sunfish-bench/*/*.pgn`, 74,766 of our own games. Re-running it
+would re-measure −63.23. Checked against the artifact, not assumed.
+
+And the two numbers we already hold differ in **both** axes at once:
+`PROVENANCE.txt` shows the legacy corpus is `lichess_db_eval.jsonl.zst` —
+Lichess positions with **deep SF evals** (depth 58 in the sampled rows) —
+against our self-play positions with **twin depth-8** labels. That is the same
+confound flagged for Leela-slice, already sitting in the comparison.
+
+### The matrix, and the missing cell
+
+| | SF-deep labels | twin depth-8 labels |
+|---|---|---|
+| **Lichess positions** | **cell A** — the 8Mv net, existing payload | **cell B** — NEW, the missing cell |
+| **self-play positions** | *(does not exist — we have no SF labels for our games)* | **cell C** — λ=1, **−63.23 ± 93.36** |
+
+- **C vs B** holds the label source fixed → isolates **DISTRIBUTION**.
+- **B vs A** holds the positions fixed → isolates **LABEL SOURCE**.
+
+Cell B: 750,000 unique Lichess positions extracted from `quiet8M.jsonl.zst`,
+size-matched to C's 737,414, twin depth-8 labels, **the dump's own SF evals
+read and DISCARDED on purpose** — keeping them would move both axes again.
+Same cpmax filter, same trainer, same architecture, frame gate must clear 0.5.
+
+### One protocol for all cells
+
+Every cell plays **tonight's selector**: 50 games vs the entry (`pst_entry.py`
+@ `d0a6e60`, 3410 B), fixed 20000 nodes, sources under pypy3, fresh srand per
+cell recorded, `book3k.pgn`, zero-illegal voids, top-pick-only. **Cell A is
+re-run under this protocol** rather than quoted from its historical −107,
+which was a 318-game SPRT screen — cross-protocol comparison is indicative
+only, and the point of this matrix is to be decision-grade.
+
+### Pre-committed branches — written before any game
+
+> **DISTRIBUTION-DRIVER.** B materially worse than C (C −63; B, say, beyond
+> −130 with non-overlapping bulk). Distribution is the driver: our self-play
+> positions are the better training distribution and the Lichess corpus was
+> holding the family back. Phase B centres on position sourcing, and
+> Leela-slice drops in priority — it would import *another* foreign
+> distribution.
+>
+> **LABEL-DRIVER.** The twin column is flat (B ≈ C) while the Lichess row
+> shows a gap (B vs A). Labels drive it, distribution does not. Leela-slice
+> RISES in priority, because its value is precisely a stronger label source,
+> and Route B's licence question becomes urgent rather than deferrable.
+>
+> **BOTH-AXES.** B sits between A and C with both comparisons material. Each
+> axis contributes; report both effect sizes and let the cheaper axis
+> (labels — we own the twin) be exploited first.
+>
+> **NULL — and the escalate-or-accept statement, written now.** All three
+> cells land within n=50 noise of each other (mutually overlapping intervals,
+> no pair separated). Then **neither axis is the lever at this capacity**, and
+> the honest reading is that a ~3,072-trit student is too small for the
+> position/label distinction to register. **ESCALATE-OR-ACCEPT:** we do NOT
+> spend another night on distribution; we either escalate to a capacity arm
+> (which needs the byte seam and therefore Thomas's direction call) or accept
+> that the replacement family is capacity-bound and the entry stands. This
+> branch is written now so a null cannot later be argued into "needs more
+> games".
+>
+> **AMBIGUOUS — the branch I expect not to need.** Exactly one comparison is
+> material and it is the one with the *wider* interval, or the ordering is
+> non-monotone (e.g. B better than both A and C). Then the matrix has not
+> resolved and the response is **one** fixed-N confirmation of the single
+> contested pair at N=300 — not a re-run of the matrix, and not a new axis.
+>
+> **TERMINAL.** If any cell BEATS the entry (interval bulk above zero), that
+> cell is the first replacement net in the campaign's history to do so; it
+> goes to a fixed-N confirmation at N=300 before any promotion talk, and no
+> other branch above applies.
+
+**No cell is promoted on this matrix.** It returns a direction, exactly as the
+λ sweep did; a promotion needs a fixed-N confirmation.
+
 ## 2026-08-16 — λ SELECTOR VERDICT: Branch B fires, and the label hypothesis is the one that weakens
 
 The root-cause experiment for the NNUE relaunch returned. **Outcome-blended
