@@ -286,6 +286,16 @@ class MixedAcquisitionTest(unittest.TestCase):
             self.assertLess(mate_lower + drop, min(kings))
             self.assertGreaterEqual(promotion, 0)
 
+    def test_joint_space_tunes_the_fuel_amount(self):
+        path = pathlib.Path(__file__).with_name("all_parameters.json")
+        spec = json.loads(path.read_text())
+        fuel = next(parameter for parameter in spec["parameters"]
+                    if parameter["name"] == "FUEL_NULL")
+        self.assertEqual(fuel["values"], [1, 2])
+        disabled = next(condition for condition in spec["conditions"]
+                        if condition["when"] == {"FUEL_MIN_DEPTH": [99]})
+        self.assertIn("FUEL_NULL", disabled["reset"])
+
     def test_coordinate_search_matches_exhaustive_gp_ucb(self):
         domain = list(itertools.product(*self.space.coordinate_values))
         observed = [domain[index] for index in (0, 211, 702, 1050, 1537, 2120)]

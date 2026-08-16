@@ -128,18 +128,13 @@ static int USE_VARIANT = 0;      /* no-op here: forces pyref's transcribed
  *   classic capped null only for NULL_MIN_DEPTH < depth < FUEL_MIN_DEPTH;
  *   from FUEL_MIN_DEPTH a null probe at the fixed target pos.score +
  *   NULL_MARGIN is a FUEL ORACLE, never a score candidate: pass beats
- *   target => real moves recurse to depth-2 instead of depth-1 (nominal
- *   depth still keys tables and QS).  FUEL_NULL=0 = pre-#192 deep null.
+ *   target => real moves spend FUEL_NULL extra depth units (nominal depth
+ *   still keys tables and QS).  FUEL_NULL=0 = pre-#192 deep null.
  * PR #184 derive-never-inherit: search() re-derives every history score
  *   from the board under the K-table chosen for THIS search, so no score
  *   is inherited across table swaps. */
 static int QS_TAIL = 0;
-static int FUEL_NULL = 1;        /* DEFAULT since #192 merged the fuel
-                                    oracle into master's sunfish.py; 0
-                                    restores the pre-#192 deep-null cutoff
-                                    (historical comparisons only -- no
-                                    longer difftest-provable against the
-                                    live reference) */
+static int FUEL_NULL = 1;        /* Reduction amount; 0 restores pre-#192. */
 static int FUEL_MIN_DEPTH = 6;
 static int DERIVE_FRESH = 0;
 
@@ -791,7 +786,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         int target = pos->score + NULL_MARGIN;
         Pos rp = rotate(pos, 1);
         if (-bound(&rp, 1 - target, depth - NULL_RED, 0, 0) >= target)
-            rd = depth - 1;
+            rd = depth - FUEL_NULL;
     }
 
     /* QSearch stand pat. */
@@ -1242,7 +1237,7 @@ static int set_knob(const char *name, long v) {
     if (!strcmp(name, "EVICT_SCAN_K") && v < 1) return 0;
     if (!strcmp(name, "KILLER_COUNT") && (v < 1 || v > MAXKILL)) return 0;
     if (!strcmp(name, "QS_TAIL") && (v < 0 || v > 1)) return 0;
-    if (!strcmp(name, "FUEL_NULL") && (v < 0 || v > 1)) return 0;
+    if (!strcmp(name, "FUEL_NULL") && (v < 0 || v > 2)) return 0;
     if (!strcmp(name, "FUEL_MIN_DEPTH") && v < 1) return 0;
     if (!strcmp(name, "DERIVE_FRESH") && (v < 0 || v > 1)) return 0;
     for (struct knob *k = KNOBS; k->name; k++)

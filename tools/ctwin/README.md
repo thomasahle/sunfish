@@ -26,7 +26,8 @@ live by `pyref.py`, so drift in the Python file shows up as a harness
 failure, not silent staleness — re-pass the gate, re-tune the flavor
 knob defaults, and re-pin variants.py's drift hashes when the search
 changes (done for #192). Historical flavors stay reachable by knob:
-`set FUEL_NULL 0` for the pre-#192 deep-null cutoff, `set IID_MIN_DEPTH
+`set FUEL_NULL 0` for the pre-#192 deep-null cutoff, or `2` to spend two
+depth units on a hot node; `set IID_MIN_DEPTH
 2` + `set MATE_DIST 0` for pre-capped-null master — knob-off settings
 are no longer difftest-provable against the live reference; their
 identity was proven against the reference of their day and is archived
@@ -126,7 +127,8 @@ Tuning knobs (no recompile): UCI `setoption name NAME value VALUE`, lab
 NULL_MIN_DEPTH NULL_LIMIT NULL_CUT_RED NULL_RED IID_MIN_DEPTH IID_RED FUT_MAX
 MATE_DIST FUEL_NULL FUEL_MIN_DEPTH` (`NULL_CAP_MARGIN=-1` follows
 `EVAL_ROUGHNESS`, `NULL_MARGIN` is the fuel-probe target margin, and the two
-`NULL_*_RED` knobs control the shallow and deep probes). `VALUE_N VALUE_B
+`NULL_*_RED` knobs control the shallow and deep probes; `FUEL_NULL` controls
+the hot node's extra depth cost). `VALUE_N VALUE_B
 VALUE_R VALUE_Q` tune material, while
 `PST_P PST_N PST_B PST_R PST_Q PST_K PST_KE` scale the positional component
 of each loaded table. The tp_move battery adds `EVICT_POLICY` (0 master
