@@ -4553,6 +4553,68 @@ truncated number is believed.
 
 ---
 
+## 2026-08-17 — PRE-REGISTRATION: the distribution confirmation, BOTH-VS-ENTRY at N=300 per side
+
+Registered before game 1. The matrix left exactly one contested pair — cell C
+(self-play positions) vs cell B (Lichess positions), labels held fixed — at
+**+118.47 Elo, 1.81σ**, unresolved. This confirms it.
+
+### Why both-vs-entry and not head-to-head — the coordinator's ruling, recorded
+
+> The observed effect **lives in vs-entry space**: C −63 and B −182 were both
+> measured against the entry, so the confirmation must estimate **the same
+> estimand**. A head-to-head measures the *direct* gap, which intransitivity
+> can inflate or deflate for two nets sharing a trainer (correlated blind
+> spots), and a surprising head-to-head number would leave the vs-entry gap
+> **still unconfirmed**. The decision the program faces — invest in
+> distribution-matched corpora or not — is priced in **vs-entry performance,
+> the goal metric.**
+
+### Form
+
+| | |
+|---|---|
+| design | **both-vs-entry**, N=**300 per side**, 600 games total |
+| arms | cell C `e_lam1` (self-play + twin) and cell B `e_cellB` (Lichess + twin), both vs the entry `pst_entry.py` @ `d0a6e60`, 3410 B |
+| limit | fixed **20000 nodes**, sources under pypy3 |
+| srand | **fresh, recorded**: C = 20260901, B = 20260902 |
+| gates | zero-illegal voids; **count gate** — 300/300 per side or the side is void |
+| venue | laptop, census at launch (free, 12 cores, load 1.64) |
+
+### Decision rule, fixed in advance
+
+**Primary statistic: the C-minus-B gap in vs-entry Elo**, with a 95% interval
+from the difference of two independent matches. At N=300 the per-side error is
+about **±38**, so the gap error is about **±54**; the observed **+118** would
+resolve at roughly **2.2σ** if real.
+
+> **CONFIRMED** — the gap's 95% interval **excludes zero with self-play
+> positive**. Distribution is established as a real lever in vs-entry space,
+> and Phase B invests in distribution-matched corpora.
+>
+> **NULL** — the interval **contains zero**. The matrix's 1.81σ was noise;
+> distribution joins labels as a measured non-lever, and **both axes of this
+> matrix are then closed**. The program does not get a third pass at
+> position/label sourcing at this capacity — the remaining lever is capacity,
+> which needs the byte seam and Thomas's direction call.
+>
+> **AMBIGUOUS** — the interval excludes zero but the gap has collapsed to a
+> fraction of +118 (say under +50), i.e. real but far smaller than the matrix
+> suggested. Then distribution is a *minor* lever: report the shrunken effect
+> size, and do **not** spend a corpus-engineering programme on it without a
+> capacity arm alongside.
+
+**No promotion under any branch** — both cells lose to the entry; this
+measures a *direction*, not a candidate.
+
+### Optional secondary — descriptive, explicitly NOT a decision input
+
+One 300-game **B-vs-C head-to-head** for the intransitivity read, run **only
+if the venue census leaves free slots after the primary completes, never at
+its expense**. It is labelled descriptive: it cannot confirm, deny or modify
+the primary's verdict, and if the two disagree that disagreement is itself the
+finding about intransitivity between two nets sharing a trainer.
+
 ## 2026-08-16 — PRE-REGISTRATION: the DISTRIBUTION×LABEL matrix, all cells under one protocol
 
 Registered before any game of this matrix. Branch B fired tonight and promoted
