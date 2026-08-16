@@ -73,6 +73,18 @@ class MixedAcquisitionTest(unittest.TestCase):
             target,
         )
 
+    def test_bounded_coordinate_ascent_stays_one_step_from_a_seed(self):
+        target = (37, 13)
+
+        def score(points):
+            values = np.asarray(points)
+            return -np.sum((values - target) ** 2, axis=1)
+
+        point = coordinate_maximum(
+            self.space, [self.space.default], score, set(), None, steps=1)
+        self.assertNotEqual(point, target)
+        self.assertEqual(sum(a != b for a, b in zip(point, self.space.default)), 1)
+
     def test_gate_all_keeps_acquisition_in_the_validated_design(self):
         target = np.array((37, 13))
 

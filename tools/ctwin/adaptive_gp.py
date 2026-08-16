@@ -494,7 +494,7 @@ def exploration_stratum(state, mode, space):
     return structural
 
 
-def coordinate_maximum(space, seeds, score, active, structural, restarts=4):
+def coordinate_maximum(space, seeds, score, active, structural, restarts=4, steps=None):
     """Deterministically climb a mixed discrete acquisition from diverse seeds."""
     cache = {}
     normalize = getattr(space, "normalize", lambda point: point)
@@ -522,7 +522,8 @@ def coordinate_maximum(space, seeds, score, active, structural, restarts=4):
     for index in order[:restarts]:
         point = seeds[index]
         value = seed_scores[index]
-        while True:
+        climbed = 0
+        while steps is None or climbed < steps:
             neighbors = []
             for axis, choices in enumerate(space.coordinate_values):
                 for choice in choices:
@@ -535,6 +536,7 @@ def coordinate_maximum(space, seeds, score, active, structural, restarts=4):
             if values[best] <= value + 1e-12:
                 break
             point, value = neighbors[best], values[best]
+            climbed += 1
         optima.append((value, point))
     return min(optima, key=lambda item: (-item[0], item[1]))[1]
 
@@ -672,9 +674,10 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
             values = score(pool)
             vector = min(zip(values, pool), key=lambda item: (-item[0], item[1]))[1]
         else:
+            gated = getattr(args, "gate_design", False)
             vector = coordinate_maximum(
-                space, [*candidates, *observed], score, set(forbidden), stratum,
-                args.acquisition_restarts)
+                space, [*candidates, *(validated if gated else observed)], score,
+                set(forbidden), stratum, args.acquisition_restarts, 1 if gated else None)
     else:
         for index, candidate in enumerate(candidates):
             if candidate in forbidden or candidate in active or (
