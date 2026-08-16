@@ -128,7 +128,7 @@ opt_ranges = dict(
 ###############################################################################
 
 
-class Position(namedtuple("P", "board score wc bc ep kp")):
+class Position(namedtuple("P", "board score wc bc ep kp r")):
     """A state of a chess game
     board -- a 120 char representation of the board
     score -- the piece-square evaluation, kept exactly incremental so that
@@ -138,7 +138,11 @@ class Position(namedtuple("P", "board score wc bc ep kp")):
     ep - the en passant square
     kp - the king passant square
 
-    `score` is a function of the other fields, so identity -- what the
+    `r` is the board mirrored and case-swapped -- the view the opponent
+    gets after this side moves. It is carried rather than recomputed
+    because `board[::-1].swapcase()` measured 92% of make-move.
+
+    `score` and `r` are functions of the other fields, so identity -- what the
     transposition table, the killer table and the repetition set key on --
     deliberately ignores it. That is LOAD-BEARING, not tidiness: pst["K"]
     is swapped between K_MID and K_END per search, so the same board can
@@ -216,9 +220,10 @@ class Position(namedtuple("P", "board score wc bc ep kp")):
         The accumulator is unchanged; only which block is "ours" flips, and
         that flips the sign of the net residual exactly as it flips ps."""
         return Position(
-            self.board[::-1].swapcase(), -self.score, self.bc, self.wc,
+            self.r, -self.score, self.bc, self.wc,
             119 - self.ep if self.ep and not n else 0,
             119 - self.kp if self.kp and not n else 0,
+            self.board,
         )
 
     def move(self, move):
@@ -226,12 +231,12 @@ class Position(namedtuple("P", "board score wc bc ep kp")):
         p, q = self.board[i], self.board[j]
         put = lambda board, i, p: board[:i] + p + board[i + 1 :]
         # Copy variables and reset ep and kp
-        board = self.board
+        board, r = self.board, self.r
         wc, bc, ep, kp = self.wc, self.bc, 0, 0
         score = self.score + self.value(move)
-        # Actual move
-        board = put(board, j, board[i])
-        board = put(board, i, ".")
+        # Actual move, applied to BOTH orientations so neither is ever rebuilt
+        board, r = put(board, j, p), put(r, 119 - j, p.swapcase())
+        board, r = put(board, i, "."), put(r, 119 - i, ".")
         # Castling rights, we move the rook or capture the opponent's
         wc = (wc[0] and i != A1, wc[1] and i != H1)
         bc = (bc[0] and j != H8, bc[1] and j != A8)
@@ -240,20 +245,20 @@ class Position(namedtuple("P", "board score wc bc ep kp")):
             wc = (False, False)
             if abs(j - i) == 2:
                 kp = (i + j) // 2
-                r = A1 if j < i else H1
-                board = put(board, r, ".")
-                board = put(board, kp, "R")
+                rk = A1 if j < i else H1
+                board, r = put(board, rk, "."), put(r, 119 - rk, ".")
+                board, r = put(board, kp, "R"), put(r, 119 - kp, "r")
         # Pawn promotion, double move and en passant capture
         if p == "P":
             if A8 <= j <= H8:
-                board = put(board, j, prom)
+                board, r = put(board, j, prom), put(r, 119 - j, prom.swapcase())
             if j - i == 2 * N:
                 ep = i + N
             if j == self.ep:
-                board = put(board, j + S, ".")
+                board, r = put(board, j + S, "."), put(r, 119 - j - S, ".")
         # We rotate the returned position, so it's ready for the next player
-        return Position(board[::-1].swapcase(), -score, bc, wc,
-                        119 - ep if ep else 0, 119 - kp if kp else 0)
+        return Position(r, -score, bc, wc,
+                        119 - ep if ep else 0, 119 - kp if kp else 0, board)
 
     def value(self, move):
         i, j, prom = move
@@ -648,7 +653,7 @@ def from_board(board, wc=(True, True), bc=(True, True), ep=0, kp=0):
     """Build a position from scratch; `board` is in the mover's orientation."""
     score = sum(pst[p][i] if p.isupper() else -pst[p.upper()][119 - i]
                 for i, p in enumerate(board) if p.isalpha())
-    return Position(board, score, wc, bc, ep, kp)
+    return Position(board, score, wc, bc, ep, kp, board[::-1].swapcase())
 
 
 hist = [from_board(initial)]

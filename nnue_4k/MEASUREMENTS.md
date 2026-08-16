@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **THE MIRRORED BOARD LANDS: stop RECOMPUTING the rotation and make-move drops 92% of its cost — **+20.17% nps (quiet, n=8)** / **+16.17% (box, n=8)** for **+34 B**, node-identical — and the campaign now measures **+54.51% end-to-end** against the pre-speed artifact. AND THE MUTABLE BOARD IS CLOSED PERMANENTLY at +0.3 Elo** | Archaeology first: `0622039` on `nnue-mutable-board` had the right interface (`@contextmanager` do/undo) and the wrong body — `list(self.board)` plus feature-vector copies then `''.join` back, strictly MORE allocation than the immutable splices, with a dead `put()`+undo-stack that was never wired. `c39c8d4` had already re-priced it +71..+110 → +15 on the NNUE engine. **Neither price transfers to the entry, and reusing either would repeat the exact error c39c8d4 exists to record**, so make-move was decomposed on the shipped artifact: 1,578 ns of a 6,660 ns node (23.7% of wall), of which **`board[::-1].swapcase()` is 1,436 ns = 92%** and the splices a mutable board removes are **21 ns = 1.3%** (`.translate()` is 8× WORSE under pypy; rejected). **So the mutable board is +0.3 Elo behind a Zobrist rewrite — 106× smaller than the alternative — and is closed for the third and last time.** What landed instead: carry `r`, the board mirrored and case-swapped, apply every put to BOTH orientations (index `x` and `119-x`, case swapped), and `rotate()` becomes a field swap. **Node-identical because the representation is CACHED, not abandoned** — dropping rotation outright would change black's scan order and the index-based sort tie-break, hence the tree; that variant is explicitly NOT this one. Verified on 1,959 child boards before implementation, then by identity_gate at depth 6 on **laptop AND box**, plus a new **derived-field invariant** now in the gate battery (holds on 275,543 positions; a deliberately corrupted mirror is CAUGHT, 4,709 violations). **MEMORY GATE, the flagged killer, measured both loads**: game-like (fresh process, tp_move at 107k) **+1.2 MB (+0.4%)**; saturated table (one search, `self.t` at TABLE_SIZE=10⁶) **740 MB → 1,017 MB, +277 MB (+37%)**. Box has 371 GB, so even 16 concurrent processes is ~4% of RAM — **PASSES**, with the caveat recorded that no memory limit is documented in the 4k rules and a ~1 GB/process cap would bind. **PREDICTION vs MEASURED, stated as required: predicted +27.4%, measured +20.2/+16.2** — the component arithmetic treated the whole 1,436 ns as removable, but that figure includes ALLOCATING two 120-char strings and the mirrored design still allocates two; only the reverse-and-case-swap COMPUTATION is removed. Same error family as c39c8d4 in new dress |
 | 2026-08-16 | **STAGED-SCRIPT DEFECT #2, caught by the executing lane before a single game: `run_meter3_box.sh` shipped with NO free-core gate — the exact non-negotiable its own registration and handoff both named. Cause is SCRIPT REUSE, twice running, and the class is now closed by a mechanical staging gate** | Mine, and the hold was correct. Mechanism: a `sed` renamed the banner and produced the doubled string `"+400 METER METER 3"`, so the follow-up `replace()` anchor `"+400 METER 3"` **matched nothing and inserted the gate silently** — the same silent-no-op class this campaign keeps recording — and the header still read "RUN 2, RELOCATED". **My verification did grep for the gate patterns and I skim-read only the head of the output**, so I confirmed four patterns and never noticed the two that were absent. **Absence is what eyeballs miss.** Fixes: the script is **rewritten fresh, not patched** (reuse is the common cause of both defects — meter 2's harvest section died silently, meter 3's gate never existed), and staging now runs **`verify_staged.sh`**, which exits non-zero on any missing non-negotiable and separately flags predecessor text left by reuse. Negative control: against the broken draft it reports MISSING on all three gate patterns plus two STALE headers; against the rewrite, **STAGING GATE PASSED**. One honest note on the gate itself — its first run failed on `tries -ge 60`, which was **my regex missing a quote character, not a missing feature**; I checked the code before relaxing the pattern, because a checklist that gets loosened whenever it complains is worse than none |
 | 2026-08-16 | **PRE-REGISTERED — METER 3, the post-#207 goal-tracking number: BOTH arms moved since the landed +244.47, so it is re-measured against the classic that actually exists today. Entry **3376 B** (−29, the speed stack) vs classic **3392 B** (+146, #205/#206/#207) — the packed classic is now LARGER than the 4k entry** | Arms rebuilt, byte-measured and sha-pinned at registration: entry `a997b137e1e4a655…` **3376 B, 720 spare**, nnue-4k **`1b6b94d`**, `check_entry.sh` green; classic `6bbac98a40c5f90d…` **3392 B**, master **`f4f06d4`** (post-#205/#206/#207, mate-floor guard restored). Form identical to the landed meter so the two stay comparable: **fixed N=300**, 60+1, adjudication none, **concurrency 8 declared**, srand **20260823** (fresh), **zero-forfeit = VOID**, zero-illegal = stop. Venue the box, gate **re-expressed in FREE CORES** because the laptop's "foreign CPU < 40%" is meaningless on 96 cores: **require ≥ 24 free** (3× the match's ~8-core need). Census at registration: **3162% = 32 of 96 cores in use, 64 free** — owner's `optimizer-refine-20260816` **19 cores**, training lane 7, our matches 0.7. **The meter yields to the owner's work and never contends with it**; at nice 10 with ~56 cores still free once it starts, it does not. **EXPECTATIONS REGISTERED BEFORE GAME 1 so the reading cannot drift**: it should read **LOWER** than +244.47 (classic gained ~+48 on its own ladder) and **HIGHER** by the speed stack's **≈+33** projection (idle-venue, n=8) → central ≈ **+230**, band **+220-280** plausible — **and the number that comes out is the number.** Label: **post-#207-classic** |
 | 2026-08-16 | **QUIET-VENUE RE-MEASURE closes the magnitude caveat: the landed stack is **+25.28% (n=8, spread 2.9 points)** on an idle venue, against **+29.59% (n=6, spread 16.0)** on the loaded bench box. The box median was inflated by its own load tail; best estimate of the true magnitude is ≈ **+25%**** | Same instrument, same arms, same local-A/B triples, cpu-time, depth 5, pre-speed baseline vs the landed 3376 stack. **Idle venue: load 1.75 → 2.91, eight reps 23.51 / 24.30 / 24.84 / 25.20 / 25.36 / 25.60 / 26.34 / 26.38.** Loaded box: load 30.6–41.5 sustained across nine readings, foreign CPU 782–4970%, six reps 23.46 / 26.27 / 27.43 / 31.75 / 33.08 / 39.49 — **the box's top three reps have no counterpart in the quiet venue at all**, which is what a load tail looks like. **SECOND VENUE, NOT A REPLACEMENT**: the venues differ in pypy (7.3.23 vs 7.3.20) AND architecture (arm64 vs x86_64), so the deployment number remains the box's, to be re-measured there whenever it goes genuinely quiet. **The tempting over-claim is refused**: quiet does NOT simply mean tighter — stack 1's spread is *wider* on the idle venue (11.9 pts) than on the loaded box (6.1), so the precision here is arm- and session-specific, not a property of the venue. Elo projection ≈ **+33** (idle) vs +38 (box), both projections, no games |
@@ -320,6 +321,167 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-16 — THE MIRRORED BOARD: the rotation is cached, not recomputed (+20.2% / +16.2%, +34 B). And the mutable board is CLOSED
+
+Commissioned as a mutable-board project. It ends as a different change,
+because pricing the commissioned one first showed it attacks 1.3% of
+make-move while something else attacks 92%.
+
+### Archaeology — what the lineage actually had
+
+`origin/nnue-mutable-board`, commit `0622039` (2026-08-05), read verbatim
+rather than summarised from its message:
+
+- `Position` stayed a **namedtuple**; `move()` and `rotate()` became
+  `@contextmanager` generators.
+- `move()` saved eight fields including two feature-vector `.copy()` calls,
+  built `board_list = list(self.board)`, mutated it, then `''.join(...)` back
+  to a string and yielded a **new** Position.
+- `rotate()` was also a context manager, yielding a fresh Position and calling
+  `calculate_score()` — a full re-derivation, worse than today's rotate.
+- A `put(self, i, p, stack=None)` with a real undo stack exists and is **dead
+  as written** (it assigns to namedtuple fields). The right idea, never wired.
+
+So: **right interface, wrong body** — string → list → mutate → join is
+strictly *more* allocation than the immutable splices it replaced, plus
+`contextlib` overhead. `dc6c554` records the value-semantics assumption
+leaking into callers. Confirms the verdict `c39c8d4` reached in 2026-08-12,
+which had already re-priced the idea from +71..+110 Elo down to +15 on the
+NNUE engine after catching itself reading a marginal cost as a total.
+
+### Why neither existing price could be reused
+
+`c39c8d4`'s +15 was measured on a node dominated by `nn_cp`; **the entry has
+no net**. The profile in this ledger is of the **pre-speed** entry. Using
+either would have repeated precisely the error that correction exists to
+record. So make-move was decomposed on the artifact as it ships:
+
+| component of make-move | ns/move | share |
+|---|---|---|
+| **`board[::-1].swapcase()`** | **1,436** | **92%** |
+| `value(move)` | 38 | 2.4% |
+| the two board splices | 21 | 1.3% |
+
+Independently: `[::-1]` alone 314 ns, `.swapcase()` alone **1,139 ns**.
+`.translate()` with a 256-entry table is **8× worse** under pypy (11 µs) and
+was rejected outright. One splice, for scale: **~1–10 ns**.
+
+### THE MUTABLE BOARD IS CLOSED — third pricing, and the last
+
+A mutable board removes the splices (21 ns) and adds make/unmake bookkeeping
+(7.3 ns, measured on a `bytearray`): **net 13 ns/move = 0.20% of wall = +0.3
+Elo** — and it must first pay for an incremental **Zobrist TT**, because a
+mutating Position cannot be a dict key. That rewrite also *weakens* identity:
+today equality is exact field comparison; under Zobrist, equality **is** hash
+equality, so a collision silently aliases two positions.
+
+**+0.3 Elo behind a Zobrist rewrite, against +35.6 Elo (predicted) for the
+alternative — 106× smaller.** Do not reopen without new evidence; three
+independent pricings now agree it is not the lever.
+
+### What landed instead
+
+`Position` carries `r`: its own board mirrored and case-swapped — the view the
+opponent gets after this side moves. Every `put()` is applied to both
+orientations (index `x`, and `119 - x` with the case swapped). `move()` hands
+the child the mirror it already built; `rotate()` is a field swap. `r` is a
+function of the other fields, like `score`, so it stays out of `__hash__` and
+`__eq__`.
+
+**Why this is node-identical and the obvious alternative is not.** Abandoning
+the rotated representation would change the order `gen_moves` scans black's
+pieces *and* change what the `(val, move)` sort tie-breaks on, since moves
+sort by raw index — different ordering, different tree, full screen pipeline.
+Keeping the representation and merely **caching** it changes nothing any
+reader of the board can see. Verified on **1,959 child boards over 60
+positions, zero mismatches, before a line of entry code was written.**
+
+### Gates
+
+| gate | result |
+|---|---|
+| identity vs the **pre-speed** reference, depth 6, every MTD probe + node count | **IDENTICAL**, laptop **and** box |
+| **derived-field invariant** (new, now in the battery) | **holds on 275,543 positions**; a deliberately corrupted mirror is **caught**, 4,709 violations |
+| `check_entry.sh` | **3410 B, 686 spare** (+34 on 3376; estimate was +20–40) |
+| legality, `go nodes 20000` | **130/130, 0 illegal**, first-yield worst 582/2048 |
+| first-yield gate, 505 positions | **PASS** |
+| mate-conversion | **8/8** |
+| packed smoke, empty dir | startpos, **castling**, **en passant**, **promotion** all answer — the three tricky dual-put paths |
+| full suite | failure set **unchanged** from baseline |
+
+### THE MEMORY GATE — the flagged killer, measured on both loads
+
+The second 120-char string is stored in the transposition table's **keys**, so
+this was the way the change could die. Two loads, because they disagree:
+
+| load | incumbent | mirror | delta |
+|---|---|---|---|
+| game-like: fresh process, 40 searches, `tp_move` at 106,790 | 343.8 MB peak | 345.0 MB peak | **+1.2 MB (+0.4%)** |
+| saturated: one search, `self.t` at TABLE_SIZE = 10⁶ | 740 MB | 1,017 MB | **+277 MB (+37%)** |
+
+The two differ because `self.t` is cleared every search: only a single search
+deep enough to fill it (≈1.4 M nodes) reaches saturation. At 60+1 a move
+searches ~1.7 M nodes, so **saturation is the realistic case at league TC**;
+at 10+0.1 (~100 k nodes/move) it is not.
+
+**PASSES.** The box has **371 GB** (318 available); sixteen concurrent engine
+processes at saturation is ~16 GB, about 4% of RAM. Recorded caveat: **no
+memory limit is documented in the 4k rules**, and a cap near 1 GB per process
+would bind, since this moves a saturated table from 740 MB to 1,017 MB.
+
+*(Method note: the first phase-2 measurement ran in the same process as the
+saturation phase and inherited its heap, so it was not independent. The
+figure quoted is a re-run in a fresh process.)*
+
+### PREDICTION vs MEASURED
+
+| | nps | Elo |
+|---|---|---|
+| predicted (component arithmetic) | +27.4% | +35.6 |
+| **measured, quiet venue, n=8** | **+20.17%** [17.27, 21.47] | **+24.4** |
+| **measured, bench box, n=8** | **+16.17%** [14.97, 18.14] | **+19.7** |
+
+**The prediction over-shot by 7–11 points, and the reason is worth keeping.**
+The arithmetic treated the whole 1,436 ns of `board[::-1].swapcase()` as
+removable. It is not: that figure includes **allocating two 120-character
+strings**, and the mirrored design still allocates two per move (the two
+spliced results). Only the *computation* — the reverse and the case-swap over
+120 characters — is removed; the *allocation* is intrinsic to producing a
+child board at all. On top of that: four splices instead of two with index
+arithmetic, one `p.swapcase()` call per move, and a seventh namedtuple field
+on every construction.
+
+This is the same error family as `c39c8d4` in new dress: **subtracting an
+operation's measured cost assumes all of that cost is avoidable.** Component
+arithmetic sets the direction; only the A/B sets the number.
+
+Registered, not chased: the per-move `p.swapcase()` (a method call on a
+one-character string) is the visible remaining slack in the new make-move.
+Candidate spellings to be measured, not assumed — this lane's record on
+"obviously faster" source changes is poor.
+
+### Running total of the speed campaign
+
+**3405 B → 3410 B (+5 net across three landings, 686 spare)** and, against the
+pre-speed baseline, **+54.51% nps** — quiet venue, n=8, per-rep 41.00 / 47.55 /
+52.34 / 54.19 / 54.83 / 57.31 / 58.90 / 59.98. All node-identical, zero games
+played. The bytes went slightly positive for the first time, bought with the
+largest single nps gain of the campaign.
+
+**That number is MEASURED end to end, not compounded, and the difference
+matters**: multiplying the three landings' own ratios predicts +50.55%, and
+the measured figure is +54.51%. Deltas failed to compose again — this time
+*upward*, where the mirrored board's own prediction failed *downward*. Both
+are the same fact about a tracing JIT, and it is why the campaign total is a
+fresh A/B against the original artifact rather than a product of its parts.
+The spread here (41–60%) is wider than any single landing's, so the total is
+the least precise number in this file; treat +54.51% as "about half again",
+not as three significant figures.
+
+Elo projection ≈ 102·log₂(1.5451) ≈ **+64** at 60+1 — a projection, no games.
 
 ---
 

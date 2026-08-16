@@ -667,6 +667,109 @@ for _a, _b in _speed:
     assert src.count(_a) == 1, "speed anchor %r occurs %d times" % (_a[:50], src.count(_a))
     src = src.replace(_a, _b, 1)
 
+# ---- THE MIRRORED BOARD: stop RECOMPUTING the rotation (LANDED 2026-08-16) -
+# Measured on the shipped artifact, not inferred: make-move is 1,578 ns of a
+# 6,660 ns node (23.7% of wall), and `board[::-1].swapcase()` is 1,436 ns of
+# that -- 92% of make-move. The two string splices everyone assumes are the
+# cost are 21 ns, 1.3%.
+#
+# So the rotation is not recomputed any more. A Position carries `r`, its own
+# board mirrored and case-swapped, and every put() is applied to BOTH
+# orientations -- at index x in `board` and at 119 - x with the case swapped
+# in `r`. Making a move then hands the child the mirror it already has, and
+# rotate() becomes a field swap. Two extra splices (~21 ns) replace a 1,436 ns
+# rotate.
+#
+# WHY THIS IS NODE-IDENTICAL, and why the OTHER way of killing the rotation is
+# not. Abandoning the rotated representation entirely would change the order
+# gen_moves scans black's pieces AND change what the (val, move) sort
+# tie-breaks on, because moves sort by raw index -- different ordering,
+# different tree. Keeping the representation and only caching it changes
+# nothing any reader of the board can see. Verified rather than argued: the
+# mirrored maintenance was checked against the shipped rotate on 1,959 child
+# boards over 60 positions, zero mismatches, before any of this was written.
+#
+# `r` is a FUNCTION OF THE OTHER FIELDS, exactly like `score`, so it stays out
+# of __hash__ and __eq__ -- the docstring's existing paragraph about score
+# covers it and is extended to say so.
+#
+# THE MUTABLE BOARD IS CLOSED, for the third and last time. It attacks the
+# 21 ns, not the 1,436: measured, it is +0.3 Elo, behind a Zobrist TT rewrite
+# (a mutating Position cannot be a dict key). See the ledger entry dated
+# 2026-08-16; c39c8d4 priced it at +15 on the NNUE engine and 0622039 is the
+# abandoned attempt.
+_mirror = [
+    ('class Position(namedtuple("P", "board score wc bc ep kp")):\n',
+     'class Position(namedtuple("P", "board score wc bc ep kp r")):\n'),
+
+    # the derived-field paragraph already exists for `score`; extend it
+    ("    `score` is a function of the other fields, so identity -- what the\n",
+     "    `r` is the board mirrored and case-swapped -- the view the opponent\n"
+     "    gets after this side moves. It is carried rather than recomputed\n"
+     "    because `board[::-1].swapcase()` measured 92% of make-move.\n"
+     "\n"
+     "    `score` and `r` are functions of the other fields, so identity -- what the\n"),
+
+    # rotate() is now a swap of the two orientations
+    ("        return Position(\n"
+     "            self.board[::-1].swapcase(), -self.score, self.bc, self.wc,\n"
+     "            119 - self.ep if self.ep and not n else 0,\n"
+     "            119 - self.kp if self.kp and not n else 0,\n"
+     "        )\n",
+     "        return Position(\n"
+     "            self.r, -self.score, self.bc, self.wc,\n"
+     "            119 - self.ep if self.ep and not n else 0,\n"
+     "            119 - self.kp if self.kp and not n else 0,\n"
+     "            self.board,\n"
+     "        )\n"),
+
+    # every put() becomes a dual put. board[i] is p, three lines above.
+    ("        board = self.board\n"
+     "        wc, bc, ep, kp = self.wc, self.bc, 0, 0\n"
+     "        score = self.score + self.value(move)\n"
+     "        # Actual move\n"
+     "        board = put(board, j, board[i])\n"
+     '        board = put(board, i, ".")\n',
+     "        board, r = self.board, self.r\n"
+     "        wc, bc, ep, kp = self.wc, self.bc, 0, 0\n"
+     "        score = self.score + self.value(move)\n"
+     "        # Actual move, applied to BOTH orientations so neither is ever rebuilt\n"
+     "        board, r = put(board, j, p), put(r, 119 - j, p.swapcase())\n"
+     '        board, r = put(board, i, "."), put(r, 119 - i, ".")\n'),
+
+    # the rook square was called `r`; the mirror needs that name
+    ("                kp = (i + j) // 2\n"
+     "                r = A1 if j < i else H1\n"
+     '                board = put(board, r, ".")\n'
+     '                board = put(board, kp, "R")\n',
+     "                kp = (i + j) // 2\n"
+     "                rk = A1 if j < i else H1\n"
+     '                board, r = put(board, rk, "."), put(r, 119 - rk, ".")\n'
+     '                board, r = put(board, kp, "R"), put(r, 119 - kp, "r")\n'),
+
+    ("            if A8 <= j <= H8:\n"
+     "                board = put(board, j, prom)\n",
+     "            if A8 <= j <= H8:\n"
+     "                board, r = put(board, j, prom), put(r, 119 - j, prom.swapcase())\n"),
+
+    ("            if j == self.ep:\n"
+     '                board = put(board, j + S, ".")\n',
+     "            if j == self.ep:\n"
+     '                board, r = put(board, j + S, "."), put(r, 119 - j - S, ".")\n'),
+
+    ("        return Position(board[::-1].swapcase(), -score, bc, wc,\n"
+     "                        119 - ep if ep else 0, 119 - kp if kp else 0)\n",
+     "        return Position(r, -score, bc, wc,\n"
+     "                        119 - ep if ep else 0, 119 - kp if kp else 0, board)\n"),
+
+    # the one place a Position is built from nothing pays the rotate once
+    ("    return Position(board, score, wc, bc, ep, kp)\n",
+     "    return Position(board, score, wc, bc, ep, kp, board[::-1].swapcase())\n"),
+]
+for _a, _b in _mirror:
+    assert src.count(_a) == 1, "mirror anchor %r occurs %d times" % (_a[:50], src.count(_a))
+    src = src.replace(_a, _b, 1)
+
 open(OUT, "w").write(src)
 try:
     compile(src, OUT, "exec")

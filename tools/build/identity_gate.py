@@ -104,15 +104,63 @@ def transcript(eng, pos, depth):
     return out, nodes
 
 
+def check_derived(eng, fens, depth):
+    """DERIVED-FIELD INVARIANT, for engines that carry one.
+
+    The mirrored board `r` is a function of `board`, kept incrementally so the
+    rotation is never recomputed. Nothing in the search re-derives it, so if
+    the incremental maintenance is ever wrong the engine searches a corrupted
+    mirror and the node transcript may still match -- the two are independent
+    failures. This checks the contract itself, on every position the search
+    actually visits, not on a sample.
+
+    A no-op for engines without the field, so the gate stays universal.
+    """
+    probe = from_fen(eng, STARTPOS)
+    if not hasattr(probe, "r"):
+        return None
+    bad = [0, 0]
+    orig = eng.Searcher.bound
+
+    def spy(self, pos, gamma, d, root=False):
+        bad[1] += 1
+        if pos.r != pos.board[::-1].swapcase():
+            bad[0] += 1
+        return orig(self, pos, gamma, d, root)
+
+    eng.Searcher.bound = spy
+    for name, fen in fens:
+        s = eng.Searcher()
+        for dd, g, sc, mv in s.search([from_fen(eng, fen)]):
+            if dd > depth:
+                break
+    eng.Searcher.bound = orig
+    return bad
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("engine")
     ap.add_argument("--depth", type=int, default=6)
     ap.add_argument("--files", default=FILES)
     ap.add_argument("--ref", help="reference transcript to compare against")
+    ap.add_argument("--invariant", action="store_true",
+                    help="also check the derived mirrored-board field on every "
+                         "position visited (slow; run it when the field changes)")
     args = ap.parse_args()
 
     eng = load_engine(args.engine)
+
+    if args.invariant:
+        r = check_derived(eng, load_fens(args.files), min(args.depth, 4))
+        if r is None:
+            print("derived-field invariant: N/A (engine carries no mirrored board)")
+        elif r[0]:
+            print("DERIVED-FIELD INVARIANT VIOLATED on %d of %d positions" % tuple(r))
+            sys.exit(1)
+        else:
+            print("derived-field invariant HOLDS on all %d positions visited" % r[1])
+        eng = load_engine(args.engine)   # fresh module: the spy mutated the class
     lines = []
     total = 0
     for name, fen in load_fens(args.files):
