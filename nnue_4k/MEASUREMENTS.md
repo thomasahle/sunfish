@@ -366,6 +366,32 @@ follow-up where the nps payoff would actually show. A negative interval at
 the registered order — count, illegal, forfeit-attribution — and only then, and
 only on the branches that permit it, is a number computed.
 
+### LAUNCH 1 ABORTED AT GAME 1 — zero games spent, and it exposed a defect in the runner worth more than the launch
+
+`fastchess` died one second in: `Fatal; poll4096 engine startup failure:
+"posix_spawn failed: Exec format error"`. The engine wrappers were written
+**without a `#!/bin/sh`**. The cause is a transcription trap worth naming: the
+meter's proven runner was read through a `grep -vE "^#"` filter to strip its
+commentary, and that filter also ate the shebang **inside its heredoc**, so the
+wrapper was copied minus the one line that makes it executable.
+
+**The more serious finding is what happened next.** With an empty PGN the
+runner walked straight past the count, evaluated the tripwire, found zero
+forfeits and printed **"SAFE — zero forfeits on either arm → 4096 is SAFE at
+60+1"**. No number was ever quotable and no games were spent, but a runner that
+can announce a *safety verdict having played nothing* is a defect in its own
+right — the forfeit branches are only meaningful relative to a completed match,
+and an inverted tripwire makes "no forfeits" the PASS condition, so an empty
+match reads as a pass. That is the single most dangerous failure shape this
+design has, and it fired on the first launch.
+
+**Fixed so it cannot recur**: the count gate now runs FIRST and **aborts** —
+`if [ "$n" -ne 300 ]` prints "no branch of the tripwire applies — not SAFE, not
+VOID, not the measurement" and exits 7. The registration already said Elo would
+not be read before N was verified at 300; the runner now *enforces* that rather
+than merely stating it. Arms, srand, book, concurrency, tripwire and reading
+are all unchanged. Launch 2 is the run.
+
 ---
 
 ## 2026-08-16 — `er40` SCREEN VERDICT: **−21.22 ± 18.60**, interval EXCLUDING zero. Depth bought at ZERO instability cost still does not convert — it COSTS. This closes #205's open question
