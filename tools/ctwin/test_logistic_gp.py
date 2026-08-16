@@ -829,8 +829,10 @@ class MixedAcquisitionTest(unittest.TestCase):
             self.assertTrue(all(batch["knobs"]["X"] >= 3 for batch in result["batches"]))
             result["batches"].append(result["batches"][-1])
             save_state(state, result)
+            with state.with_suffix(".jsonl").open("ab") as journal:
+                journal.write(b'{"batches":')
             resumed = root / "resumed.json"
-            subprocess.run([
+            resume = [
                 sys.executable, str(pathlib.Path(__file__).with_name("adaptive_gp.py")),
                 "--fastchess", str(manager), "--engine", str(engine),
                 "--baseline-options", "default", "--space", str(space),
@@ -840,11 +842,13 @@ class MixedAcquisitionTest(unittest.TestCase):
                 "--initial-design", "2", "--batches", "1", "--start", "5",
                 "--seed-state", str(state),
                 "--state", str(resumed), "--logs", str(root / "resumed-logs"),
-            ], check=True, stdout=subprocess.DEVNULL)
+            ]
+            subprocess.run(resume, check=True, stdout=subprocess.DEVNULL)
             self.assertEqual(calls.read_text(), "x" * 5)
             result = load_state(resumed, 1)
             self.assertEqual(len(result["batches"]), 5)
             self.assertEqual(result["selections"], 4)
+            subprocess.run(resume, check=True, stdout=subprocess.DEVNULL)
 
     def test_duels_keep_a_directly_anchored_opponent(self):
         anchored = self.space.canonical({"X": 0, "Y": 10})

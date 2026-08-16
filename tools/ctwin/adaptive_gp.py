@@ -802,6 +802,7 @@ async def run_pair(args, slot, experiment, vector, opponent, opening, space):
 async def optimize(args):
     pathlib.Path(args.logs).mkdir(parents=True, exist_ok=True)
     state = load_state(args.state, args.start)
+    seed = load_state(args.seed_state, args.start) if args.seed_state and not state["batches"] else None
     openings = OpeningSchedule(args.openings, args.opening_seed, args.cycle_openings)
     if not args.cycle_openings:
         validate_opening_budget(args.openings, state["next_opening"], args.batches, args.pairs)
@@ -809,8 +810,7 @@ async def optimize(args):
     if args.baseline_options == "default":
         args.baseline_options = space.knobs(space.default)
     bind_study(state, study_identity(args))
-    if args.seed_state and not state["batches"]:
-        seed = load_state(args.seed_state, args.start)
+    if seed is not None:
         old_baseline = seed["study"]["baseline"]["options"]
         old_names = set(old_baseline)
         for batch in seed["batches"]:
