@@ -5,7 +5,7 @@
     {"name": "QS_A", "type": "integer", "default": 140,
      "min": 20, "max": 300, "step": 20, "scale": 60},
     {"name": "EVAL_ROUGHNESS", "type": "discrete", "default": 15,
-     "values": [5, 10, 15, 20, 30, 40, 50], "scale": 10},
+     "values": [1, 2, 3, 5, 10, 15, 20, 30, 40, 50], "scale": 10},
     {"name": "NULL_CAP_MARGIN", "type": "discrete", "default": 15,
      "values": [0, 5, 10, 15, 20, 30, 40, 50], "scale": 10},
     {"name": "NULL_MARGIN", "type": "integer", "default": -200,
