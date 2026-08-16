@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **λ SELECTOR VERDICT: BRANCH B FIRES — outcome-blended labels are strictly WORSE, the label hypothesis is weakened, and DISTRIBUTION is promoted to prime suspect** | Three 50-game fixed-node mini-matches vs the entry (`pst_entry.py` @ `d0a6e60`, 3410 B), per the SELECTOR SPEC, **0 illegal / 0 forfeits / 150 of 150 `normal`**: **λ=0 −190.85 ± 116.16 (25.0%)**, **λ=0.5 −181.70 ± 117.71 (26.0%)**, **λ=1 control −63.23 ± 93.36 (41.0%)**. **Monotone in λ** — pure cp best, every step toward game outcomes strictly worse at this corpus size. Applying `47a760a`'s pre-registration verbatim: Branch A required an experimental arm *meaningfully inside −100*; both sit 180+ behind, so **A does not fire**. Branch B required them to die *with a healthy control* — the control trained cleanly (corr(base,label) 0.883, beats both anchors, 57% sparsity) and is the best of the three, so **B FIRES**: the Leela-slice arm now outranks the λ dial. **NO PROMOTION**: top pick is λ=1 and it still LOSES to the entry — this is a direction verdict only. **The control's −63 point estimate is NOT claimable as beating the historical ≈−107 band**: n=50 screening, CI **[−156.59, +30.13]** spans both the band and zero, and the spec says a mini-match returns a pick, never an Elo for the ledger |
 | 2026-08-16 | **THE SPEED AXIS IS CALIBRATED — RELATION HOLDS. Pooled over all 1068 games the speed stack is **+32.30 ± 15.98** → **[+16.39, +48.35]**, the interval EXCLUDES ZERO, and the empirical slope is **1.28 ± 0.63 Elo per 1% nps** with the modelled 1.46 inside it. Speed projections stop being unvalidated-model-estimates** | Single pooled read exactly as registered (`5801806`): block 1 300 games srand 20260824 + block 2 768 games srand 20260825, **534 complete pairs**, ptnml **[29, 116, 181, 143, 65]**, score 54.63%. Tripwires on the new block read FIRST: **0 illegal, 0 forfeits, 768/768 `normal`** — and **0/0 across all 1068**, arms sha-verified identical in both blocks (prespeed 3405 B `5a207fdf…`, speed 3376 B `a997b137…`), venue gate 86 free cores. **Branches applied in interval form: HOLDS FIRES** (lo = +16.39 > 0 **and** point +32.30 ≥ +20); DISCOUNTED does not (UB +48.35); STILL-AMBIGUOUS does not; the terminal branch is **not** reached. **The projection was very nearly exact: +33 projected, +32.30 measured.** Slope **1.28 ± 0.63** — modelled 1.46 **inside**, **zero excluded**, so the nps→Elo relation at 60+1 is established rather than assumed. **Design B re-prices to +23.0 ± 11.4** (from a modelled +26.3) and every speed figure is now quoted at the empirical slope. **Sobering corollary**: closing the remaining ~200 Elo to +400 on speed alone needs **+156% more nps (a 2.56× speedup)** at the point estimate — 2.05× at the optimistic end, 4.07× at the pessimistic. **Method note that earned itself**: predicting this interval by scaling the OBSERVED se gave ±16.5 against an actual **±15.98 (3.3% off)**, where the settler's draw-rate-model prediction was 27% optimistic — the correction held |
 | 2026-08-16 | **PRE-REGISTERED — SETTLER CONTINUATION to a FIXED TOTAL N=1068: the ambiguous branch's own registered response, executed. 768 new games (384 rounds, srand **20260825**) pooled with the existing 300, ONE read at completion, never interim** | Legitimate as a continuation **only** because it was the pre-registered response to the AMBIGUOUS branch and **the new total is fixed before game 301** — that is what separates it from the sequential testing the settler verdict warned against. Same arms, sha re-verified (prespeed **3405 B** `5a207fdf…`, speed **3376 B** `a997b137…`), same form (60+1, conc 8, adjudication none, zero-forfeit=VOID, zero-illegal=stop, box gate ≥24 free cores). N is **1068, not 1067** — 767 is an odd number of games and a half-pair is a biased pair, so it rounds UP to 384 whole rounds. **Power recomputed by SCALING THE OBSERVED se, not by re-deriving from a draw-rate model** — that modelling is exactly what made ±24.5 optimistic when the truth was ±31.12, so the observed 32.67% draw rate and the real pair correlation are carried implicitly: se 15.88 → **8.42, i.e. ≈ ±16.5**. **The branch RULES are unchanged and stay in INTERVAL terms** (HOLDS = interval excludes 0 and point ≥ +20; DISCOUNTED = upper < +33; else STILL-AMBIGUOUS) rather than being hardcoded to the expected power — if the new block disperses differently the rules must still bind. Their expected translation at ±16.5: **HOLDS ⟺ point ≥ +20.0, DISCOUNTED ⟺ point < +16.5, STILL-AMBIGUOUS ⟺ [+16.5, +20.0)** — a **3.5-Elo sliver**, down from the settler's wide-open window. **FOURTH BRANCH REGISTERED NOW, and there is NO fifth continuation**: if it is still ambiguous at 1068, the finding is **"the effect is smaller than the axis needs"** and every speed projection is thereafter quoted as **≤ the pooled upper bound**. Design B and all speed figures stay labelled **unvalidated-model-estimates** until this reads |
 | 2026-08-16 | **SETTLER VERDICT: AMBIGUOUS — the third branch fired, and it is the one that saved the reading. Speed arm **+23.20 ± 31.12** → **[−7.92, +54.32]**, an interval that contains 0, the +3.8 residual lean, AND the +33 projection. It arbitrates NOTHING, and the point estimate of +23 in "the twenties" is exactly what would have been misread as confirmation** | 300/300, **0 forfeits, 0 illegal**, arms sha-verified (prespeed 3405 B `5a207fdf…` vs speed 3376 B `a997b137…`), venue gate passed with 76 free cores, srand 20260824, 2 h 26 m. 53.33% — 99 W / 79 L / 122 D, ptnml **[10, 35, 49, 37, 19]** over 150 pairs, DrawRatio 32.67%, **LOS 92.91%**. **The three registered readings applied exactly**: HOLDS needs the interval to exclude 0 — it does not (lo = −7.92) — so it **does NOT fire despite the point estimate clearing +20**; DISCOUNTED needs upper < +33 — upper is +54.32 — so it **does NOT fire**; **AMBIGUOUS fires.** Registered response is **more games on this pairing, never narration**, and that is what this entry recommends. **Implied slope: 0.92 ± 1.23 Elo per 1% nps** against the modeled **1.46** — the model is inside the interval and so is **zero**, so the axis is **still uncalibrated**. **Design B's ≈+25-30 is therefore NOT discounted — and NOT confirmed**; it remains an unvalidated projection and should be quoted as such. **My own power estimate was optimistic**: I registered ±24.5 and got **±31.12** (draws ran 32.67%), which is why the ambiguous branch was needed at all. Cost to finish the job, read ONCE at a fixed N: **~240 more games** to establish the effect is above zero, **~767 more** to separate +33 from 0 |
@@ -4550,6 +4551,64 @@ fastchess's reported Elo and Ptnml on all three screens before any
 truncated number is believed.
 
 ---
+
+## 2026-08-16 — λ SELECTOR VERDICT: Branch B fires, and the label hypothesis is the one that weakens
+
+The root-cause experiment for the NNUE relaunch returned. **Outcome-blended
+labels are not the answer; they are strictly worse.**
+
+| arm | score% | Elo vs entry | 95% |
+|---|---|---|---|
+| λ=0 (pure game outcome) | 25.0% | **−190.85 ± 116.16** | [−307.0, −74.7] |
+| λ=0.5 | 26.0% | **−181.70 ± 117.71** | [−299.4, −64.0] |
+| **λ=1 (pure cp — the control)** | 41.0% | **−63.23 ± 93.36** | [−156.6, +30.1] |
+
+150 games total, **0 illegal, 0 forfeits, 150/150 `normal`**. Fixed nodes
+20000, sources under pypy3, fresh srand per arm (20260881/2/3), `book3k.pgn`,
+one shared corpus (`corpus_sha f48c1d07e60b3b34`, 737,414 positions) so **only
+the blend moved**.
+
+**The result is MONOTONE in λ**: every step away from pure cp toward game
+outcomes cost strength. That is a clean signal, not a noisy one — λ=0 and
+λ=0.5 are 118 and 127 Elo below the control respectively.
+
+### Applying the pre-registration verbatim (`47a760a`)
+
+> **Branch A — CONFIRMED** required λ=0 or λ=0.5 to land *not 100+ Elo behind
+> the entry*. Both are **180+ behind**. **A does not fire.**
+>
+> **Branch B — WEAKENED** required both to fail *in the same band as the eight
+> deaths* while the control was healthy. The control trained cleanly —
+> `corr(base,label) 0.883`, beats both anchors, 57% sparsity, no early-kill —
+> and is the best of the three. **B FIRES.** The label hypothesis is weakened;
+> **DISTRIBUTION is promoted to prime suspect**, and the **Leela-slice arm now
+> outranks the λ dial**.
+
+### No promotion, and one number that is NOT a claim
+
+**Top pick is λ=1, and it still loses to the entry.** This is a direction
+verdict only; nothing is promoted and no arm advances to a screen.
+
+**The control's −63.23 must not be read as beating the historical ≈−107
+band.** Its interval is **[−156.59, +30.13]** — it spans the band *and* zero.
+At n=50 the selector returns a **pick**, never an Elo for the ledger, and
+quoting −63 as an improvement would be exactly the error the spec was written
+to prevent.
+
+### What this verdict cost, and what nearly voided it
+
+The first run of these three arms was **void** — a frame bug of mine, not a
+property of λ. `parse_lambda_npz` negated cp and flipped outcome for
+black-to-move, copying `parse_labeled_npz`, whose input is *white-POV*; our
+twin scores **side-to-move**, so the labels were already in the features'
+frame and the flip broke exactly the black-to-move half. `corr(base, label)`
+read **0.002**, all three arms early-killed at epoch 2 — **including the
+control**, which is the tell that it was instrumentation and not the
+hypothesis. Repaired to **0.883**; the corpus itself was never wrong, only
+the loader, so no relabel was needed. A **frame gate** now refuses to train
+when `corr(base, label) ≤ 0.5`, and the orientation test — which had asserted
+the wrong convention by analogy, and is how the bug got through — is
+corrected.
 
 ## 2026-08-16 — POOL FIXED-N VERDICT: the magnitude is **+102.47 ± 32.43**, and the SPRT decider was **22 Elo high**
 
