@@ -245,6 +245,73 @@ VAL-probe-first):
 - **trainable K_MID / K_END seam tables.** Currently hand-kept classic
   tables. Same treatment: in the graph, on the grid, through the codec.
 
+## REGISTRATION — THE λ SWEEP (dial #1), and a premise correction (2026-08-16)
+
+Registered before any run. **λ is the best root-cause candidate the campaign
+has produced**, and it is testable without a single byte downloaded.
+
+### Premise correction: the existing corpus CANNOT carry λ
+
+The tasking assumed outcomes are in the corpus or reconstructible. Checked,
+and they are not. `data.py`'s own docstring: `legacy-pkl` is
+**`FEATS/OFFS/PSTC/Y/KB`** and *"READ-ONLY: these caches carry no FENs"*.
+Inspected `cache_repl8M.pkl` directly — a 6-tuple of `array` objects, exactly
+those fields. **No outcome, and no FEN to join one back with.**
+
+And the archive PGNs are the mirror image. Verified on a real game: movetext
+carries **`{book}` comments only, no eval scores** — because our packed
+engines emit no `info` lines (this lane's own adjudication-inert finding, now
+cutting the other way). `[Result "1-0"]` **is** present.
+
+| source | positions | outcomes | evals |
+|---|---|---|---|
+| `cache_repl8M.pkl` | ✔ | **✘** | ✔ (cp) |
+| archive PGNs (92,912 games) | ✔ | **✔ free** | **✘** |
+
+So λ=0 (pure outcome) needs *no teacher at all*; λ=1 (the incumbent control)
+and λ=0.5 need evals on **the same positions**, which the twin supplies. The
+experiment is still the cheapest decisive one available — it just needs a
+small corpus build first, which the tasking did not budget. Reporting that
+rather than quietly rebuilding.
+
+### Labeling cost — measured on the box, not estimated
+
+`sunfish_c` at fixed depth, single core, **including per-position process
+startup** (so these are pessimistic):
+
+| depth | s/position | pos/s/core | 1–5 M positions on 32 cores |
+|---|---|---|---|
+| 6 | 0.0146 | 68 | **8–38 min** |
+| **8** | 0.0479 | **20** | **~1.3–6.5 h** |
+| 10 | 0.109 | 9 | 2.9–14.5 h |
+
+Depth 8 matches the reference recipe's re-scoring depth. **A persistent-process
+labeler would beat these substantially**, since startup dominates at depth 6.
+
+**`lc0` is NOT installed on the box** — so "lc0-as-labeler" is not the
+zero-cost option it looked like: it needs a binary *and* net weights fetched
+before it can label anything. We already own a teacher that costs nothing to
+obtain and is on-distribution by construction. **Recommend twin-first**; price
+lc0 only if the twin's label quality proves to be the limit.
+
+### The sweep
+
+| | |
+|---|---|
+| arms | **λ ∈ {0 (pure outcome), 0.5, 1 (pure cp — the incumbent, as control)}** |
+| recipe | the one-layer family at its established config: `arch residual`, `ternary 0.85`, `gridste 1`, l1 .0005, 30 epochs, `perm_seed 0`, two val draws |
+| corpus | **one** build shared by all three arms — archive positions, quiet filter per the study, dedup, outcome from `[Result]`, cp from the twin at depth 8. Identical positions across arms; only the label blend moves |
+| target | 1–5 M positions (our student is ~3,072 trits; volume is not the constraint) |
+| **judged by** | **the SELECTOR — 50 games each vs the pinned entry.** Not val. The hypothesis *is* that val was the wrong lens |
+| **first, before any training** | **λ-orientation unit test**: assert on a hand-made example that λ=0 reproduces the outcome target and λ=1 the cp target. The study found the two reference trainers use **opposite** conventions (`wdl=1.0` = outcome; `lambda_` conventionally the reverse) — this is a registered trap, not a worry |
+| pass reading | if λ=0 or 0.5 yields the first net that is **not 100+ Elo behind the entry**, the root cause is confirmed and the matrix re-centres on outcome-blended labels |
+
+**Route rulings recorded:** Route B (`linrock`, license unstated) is **HELD
+awaiting Thomas — not downloaded**. Route A (ODbL 1.0 + DbCL 1.0, clearly
+licensed) stays the small pure-Leela-distribution arm. The **binpack
+clean-room decoder is priced, not built** — if twin-labeling and λ pan out it
+may never be needed.
+
 ## PHASE A FEASIBILITY — Leela data: located, licensed, and SMALLER than asked for (2026-08-16)
 
 **Nothing downloaded yet.** This is the scoped check, reported first as ordered.
