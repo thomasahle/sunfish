@@ -245,6 +245,77 @@ VAL-probe-first):
 - **trainable K_MID / K_END seam tables.** Currently hand-kept classic
   tables. Same treatment: in the graph, on the grid, through the codec.
 
+## PHASE A FEASIBILITY — Leela data: located, licensed, and SMALLER than asked for (2026-08-16)
+
+**Nothing downloaded yet.** This is the scoped check, reported first as ordered.
+
+### Where the data actually is
+
+| route | host | format | license found |
+|---|---|---|---|
+| **A — official Lc0 runs** | `storage.lczero.org/files/training_data/` — `run3`, `test30/40/60/71/75/78/79/80/90/91`, tars ~15 MB–2.1 GB | Lc0 **V6 records** (fixed-size, includes full policy planes) | **ODbL 1.0 + DbCL 1.0**, stated in `LICENSE.txt` at that path |
+| **B — SF-community converted packs** | HuggingFace `linrock/test78`, `test79`, `test80-2022/2023/2024`; Leela93/95/96/99 on Kaggle | **SF `binpack`** (`.min-v2.v6.binpack.zst`) | **no license tag on the HF datasets** — recorded as unstated |
+
+Concrete sizes, `linrock/test80-2024`: 19 files, **~353 GB** total; monthly
+binpacks **6.9–12.3 GB compressed**, the raw `.tar.zst` 15–34 GB.
+
+### The number that reframes the ask
+
+**Route A is infeasible at any useful position count and Route B is far
+cheaper than the tasking assumed.** V6 records carry a 1858-wide policy
+vector, so they run ~8 KB/position — 10 M positions would be ~80 GB. Binpack
+runs closer to **~7 bytes/position**, so the same 10 M is **tens of MB of
+stream**, not a few GB.
+
+And then the real point: **our student has ~3,072 trainable trits.** A 10–50 M
+position slice is 3–16 thousand positions per parameter. **Data volume is not
+the binding constraint at this scale — label quality and distribution are.**
+So the slice should be sized by *coverage*, not by matching reference-recipe
+volume: **1–5 M positions (~10–40 MB of binpack stream) is already generous**,
+and it makes the download a non-event. Recommend we take the smallest
+convenient slice and spend the saved effort on the decoder and the
+distribution question.
+
+### The real cost: the decoder
+
+`binpack` is a chained format, so a clean-room implementation from the format
+documentation is genuine work — and it is the only lawful route, since the SF
+tooling that reads it is GPL and **we transplant no code**. Two mitigations
+worth pricing before committing: (i) a *prefix* of a `.zst` binpack should
+decode up to the last complete chunk, which is all we need for a few million
+positions; (ii) `linrock/test78`/`test79` are older and smaller than the 2024
+packs. Route A's V6 is the *easier* decode (fixed-size records) and is the
+**properly licensed** one — it loses only on size, which is why it stays the
+fallback rather than the plan.
+
+### Updated Phase A matrix — 2-D, small nets, selector-judged
+
+| | **label: teacher value→cp** | **label: win-prob + WDL blend (λ)** | **label: twin own-search** |
+|---|---|---|---|
+| **positions: Leela slice** | ✔ favored teacher arm | ✔ | — (teacher positions, own labels is incoherent) |
+| **positions: our 93k-game archive** | — (no teacher labels for these) | — | ✔ cheap on-distribution arm (~22× twin, nearly free) |
+| **positions: blend** | ✔ | ✔ | ✔ |
+
+- **λ semantics are a live trap**, flagged from the study: bmdanielsson's
+  `--wdl` has **1.0 = pure game outcome**, while the nnue-pytorch lineage's
+  `lambda_` is conventionally the *opposite* orientation. Whichever we
+  implement, the direction gets asserted by a unit test before any run.
+- Scaling constants from the study: win-prob via `600/361`, label via
+  `/410`; our house `sigK` is 400, so the conversion is a small, checkable
+  change rather than a new mechanism.
+- **The on-distribution risk is the scientific point, not a formality.**
+  Leela positions come from superhuman self-play; our 3376-byte student meets
+  classic-level opposition at shallow depth. That mismatch is exactly what the
+  archive arm exists to measure, and it is why Leela-data is the *favored*
+  teacher arm rather than an axiom.
+- Everything already approved stands: fenkey split, `perm_seed` pinned,
+  **two val draws from day one**, Zobrist/FEN dedup, quiet filter per the
+  study, and **label depth decided by calibration on the SELECTOR** — because
+  this campaign has already measured that val does not predict play across
+  families.
+
+**Not built, not downloaded — awaiting the mix/label confirm.**
+
 ## TRAINER STUDY — bmdanielsson/nnue-trainer (NNUE-V2 Phase A, 2026-08-16)
 
 **LICENSE FIRST, and it is the strict case.** The repo has **no LICENSE file**
