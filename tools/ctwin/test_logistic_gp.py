@@ -102,7 +102,7 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertIn(vector, candidates)
         self.assertNotEqual(vector, tuple(target))
 
-    def test_exploration_stays_in_the_validated_region(self):
+    def test_exploration_can_validate_an_unseen_design_point(self):
         class Model:
             @staticmethod
             def predict(points):
@@ -128,9 +128,10 @@ class MixedAcquisitionTest(unittest.TestCase):
             state, self.space.prior_mean, candidates, [], args, self.space,
             Model(), validated={safe})
         self.assertEqual(diagnostics["mode"], "explore")
-        self.assertEqual(vector, safe)
+        self.assertIn(vector, candidates)
+        self.assertNotEqual(vector, safe)
 
-    def test_exploration_falls_back_to_ucb_without_a_validated_challenger(self):
+    def test_exploration_does_not_require_a_validated_challenger(self):
         class Model:
             @staticmethod
             def predict(points):
@@ -148,9 +149,9 @@ class MixedAcquisitionTest(unittest.TestCase):
             state, self.space.prior_mean, self.space.candidates, [], args,
             self.space, Model(), forbidden={default}, validated={default},
             observation_counts=Counter({default: 1}))
-        self.assertEqual(diagnostics["mode"], "ucb")
+        self.assertEqual(diagnostics["mode"], "explore")
         self.assertNotEqual(vector, default)
-        self.assertEqual(state["exploration_credit"], 1)
+        self.assertEqual(state["exploration_credit"], 0)
 
     def test_exploration_drops_supportedly_dominated_points(self):
         weak = self.space.canonical({"X": 100, "Y": 20})

@@ -170,10 +170,11 @@ model does not compete with the 20 game lanes. Its 2,048-point global design is
 used for the initial design, acquisition restarts, and inducing sites. It
 reserves 512 points for the default, every one-axis setting, and nearby two-axis
 combinations; the rest retain broad global coverage. Coordinate refinements
-are gated on demand. The pure-variance arm explores validated policies whose
-confidence intervals still overlap the best supported lower bound, while UCB
-may expand the validated region. Rejected policies consume neither games nor
-allocation credit, and statistically dominated policies leave the pure arm.
+are gated on demand. The pure-variance arm explores finite-design policies and
+validated coordinate refinements whose confidence intervals still overlap the
+best supported lower bound. Proposals pass the correctness gate before games
+are spent. Rejected policies consume neither games nor allocation credit, and
+statistically dominated policies leave the pure arm.
 Three reserved pairs per lane,
 replenished while two remain, hide that latency. `--gate-all` instead
 prevalidates the finite design and confines every acquisition to it; use that

@@ -622,10 +622,11 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
             mode = "ucb"
             acquisition = mean + args.exploration * np.sqrt(variance)
         state["exploration_credit"] = credit
-    validated_pool = []
+    exploration_pool = []
     if mode == "explore":
-        validated_pool = [point for point in validated if point not in forbidden]
-        if not validated_pool:
+        exploration_pool = sorted(
+            (set(candidates) | set(validated)) - set(forbidden))
+        if not exploration_pool:
             mode = "ucb"
             state["exploration_credit"] += 1
     stratum = None if fresh_design or mode == "ucb" else exploration_stratum(state, mode, space)
@@ -646,7 +647,7 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
         # Fantasized variance decides whether another pending copy is useful;
         # do not impose a fixed one-copy-per-configuration rule on top of it.
         if mode == "explore":
-            pool = validated_pool
+            pool = exploration_pool
             pool_mean, pool_variance = statistics(pool)
             confidence = getattr(args, "explore_confidence", 1.96)
             supported = max(0, max(pool_mean - confidence * np.sqrt(pool_variance)))
