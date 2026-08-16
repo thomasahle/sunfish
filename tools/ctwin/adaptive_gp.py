@@ -565,7 +565,7 @@ def fantasy_variance(model, space, pending, points, variance, effective_trials):
 
 
 def choose(state, mean_function, candidates, pending, args, space, model=None,
-           forbidden=(), validated=(), observation_counts=None):
+           forbidden=(), validated=(), observation_counts=None, validated_only=False):
     if model is None:
         model = posterior(
             state, mean_function, args.pair_weight, space, getattr(args, "inducing", 0))
@@ -663,8 +663,9 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
             pool = matching or [point for point in pool if point in plausible]
             values = score(pool)
             vector = min(zip(values, pool), key=lambda item: (-item[0], item[1]))[1]
-        elif args.gate_all:
-            pool = [point for point in candidates if point not in forbidden and (
+        elif args.gate_all or validated_only:
+            pool = candidates if args.gate_all else sorted(set(candidates) | set(validated))
+            pool = [point for point in pool if point not in forbidden and (
                 stratum is None or space.is_structural(point) == stratum)]
             if not pool:
                 raise RuntimeError("no available acquisition point")
@@ -991,7 +992,7 @@ async def optimize(args):
                     item[0], replacement = await asyncio.to_thread(
                         choose, trial, mean_function, candidates, item[4], args, space,
                         allocation_model, forbidden | others, validated_configurations(),
-                        counts)
+                        counts, args.gate_design)
                     if replacement["mode"] != item[1]["mode"]:
                         raise AssertionError("gate replacement changed allocation mode")
                     item[1] = replacement

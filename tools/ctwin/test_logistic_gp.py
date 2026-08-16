@@ -102,6 +102,35 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertIn(vector, candidates)
         self.assertNotEqual(vector, tuple(target))
 
+    def test_gate_design_retry_stays_in_the_validated_set(self):
+        target = np.array((37, 13))
+
+        class Model:
+            @staticmethod
+            def predict(points):
+                mean = -np.sum((np.asarray(points) - target) ** 2, axis=1)
+                return mean, np.ones(len(points))
+
+        state = {
+            "batches": [{
+                "knobs": self.space.knobs(self.space.default),
+                "wins": 1, "draws": 0, "losses": 1,
+            }],
+            "selections": 1,
+        }
+        args = SimpleNamespace(
+            pair_weight=.5, inducing=0, initial_design=1,
+            explore_start=0, explore_floor=0, explore_half_life=1,
+            exploration=1, explore_optimism=0, pairs=1,
+            gate_all=False, acquisition_restarts=4,
+        )
+        candidates = [point for point in self.space.candidates
+                      if point != self.space.default]
+        vector, _ = choose(
+            state, self.space.prior_mean, candidates, [], args, self.space,
+            Model(), validated={tuple(target)}, validated_only=True)
+        self.assertEqual(vector, tuple(target))
+
     def test_exploration_can_validate_an_unseen_design_point(self):
         class Model:
             @staticmethod
