@@ -428,6 +428,40 @@ this lane's. The arms are built, gated and sha-recorded, so the screens are a
 one-line launch whenever it is wanted:
 `run_screen.sh cnt0 20260861` and `run_screen.sh qs60 20260862`.
 
+### THE COMPLETE CENSUS, in one table, so nobody re-derives it
+
+Every tunable numeric constant in the SHIPPED search (`minifier-hide` regions
+excluded — they are not in the artifact), found by a systematic literal sweep
+of the `Searcher` body, not by grepping for names. Base packs at **3405 B**.
+
+| constant | value | role | zero-byte values | liveness (bestmove divergence) |
+|---|---|---|---|---|
+| `QS` | 40 | QS admission intercept, `val_lower = QS − depth*QS_A`; governs the depth-0 nodes that dominate the budget | **only 60** (20/25/30/70/80/90 all +2 B) | **LIVE** 12/60 |
+| `QS_A` | 140 | per-ply slope of the same gate | **only 160** (all others +2 B) | **DEAD 0/505 — axis closed** |
+| `EVAL_ROUGHNESS` | 15 | MTD-bi bisection stop width; also the go-loop's depth-commit test | 10, 12 free; **40 gives −1 B**; 20/25/30 cost +1/+2/+2 | **LIVE** 9/60 (10/12 weak, 3/60) |
+| `LMR` | 60 | late-move-reduction static-value threshold | 30/50/75 free, 40 gives −1 B | **DEAD**: 75→1/505, 50→3, 40→9, 30→18 |
+| null static guard | `abs(pos.score) < 500` | blocks the null in lopsided positions | 250/300/350/400/700/900 all free | **NEARLY DEAD** 900→8/505 (1.6%) |
+| null reduction | `depth − 3`, **two** probe sites | null cut probe + its mate-band verification | 2, 4, 5 free (4 gives −1 B) | **LIVE** 6–12/60 |
+| null min depth | `depth > 2` | | **+3 B at EVERY value — excluded** | not measurable at zero bytes |
+| futility depth | `depth <= 1` | the sorted-descending futility break | 0 (−1 B), 2, 3 free | **LIVE, most responsive** 6–15/60 |
+| LMR count gate | `cnt > 2` | | **only 0** free (1 → +1, 3/5 → +2) | **LIVE** 8/60 |
+| LMR reduction | `depth − 2` | 1-ply reduction, verified re-search | 3, 4 free | **LIVE** 10–11/60 |
+| LMR min depth | `depth > 2` | | +1/+2 B — excluded | not measurable at zero bytes |
+| IIR | `depth > 2`, `depth −= 1` | internal iterative reduction (a +22.3 ± 16.0 mechanism) | **NONE free** — every neighbour +1 to +3 B | **off-grid, unmeasured** |
+| deadline poll | `nodes % 2048` | how often the clock is read | **1024 / 4096 / 8192 all free** | **inert under fixed nodes by construction** |
+| `PROBE_CAP` | 40 | MTD probes-per-depth safety cap | — | never binds at this budget |
+| `TABLE_SIZE` | 10\*\*6 | TT eviction cap | — | never reached at 20000 nodes |
+| max depth | `range(1, 1000)` | | — | never reached |
+| `MATE_LOWER` / `MATE_UPPER` | 60000 ∓ | soundness bounds | — | **not tunable** |
+
+Read as a whole this is the round's most durable output: of the entry's
+sixteen search constants, **two are structurally unreachable at zero bytes**
+(null min depth, LMR min depth, plus the whole IIR pair), **three are dead or
+near-dead** (`LMR`, `QS_A`, the null guard), **four never bind**, one is
+invisible to this instrument (the deadline poll), and the **six that are both
+live and free were all played tonight and all failed to beat the incumbent.**
+The zero-byte constant surface of this engine is now mapped, not sampled.
+
 ### A zero-byte nps lead, handed to the timed lane
 
 One constant in the shipped search is invisible to a fixed-node instrument by
