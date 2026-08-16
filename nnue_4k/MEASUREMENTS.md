@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-16 | **`er40` SCREEN VERDICT: `EVAL_ROUGHNESS` 15 → 40 is **−21.22 ± 18.60**, 95% **[−39.88, −2.68]** — an interval EXCLUDING ZERO. Depth bought at ZERO instability cost still does not convert; it COSTS. #205's open question is closed** | 1000 games, **0 illegal, 0 forfeits**, 500 pairs 0 unpaired, ptnml **[83, 96, 178, 85, 58]**, 46.95% (359W/420L/221D), nElo −24.68 ± 21.53, adjudication symmetric 687/1000, 54 m at conc 8. Pentanomial **recomputed from the PGN independently** and reproduces fastchess to the digit. SPRT is UNDECIDED at cap (LLR −2.45 of −2.94, 83.1% toward H0) because the hypotheses were 0 vs 10 and the truth is ≈ −21, below both — so "undecided" means **not better**, not unknown, and unlike #205's straddling [−11.33, +23.17] this interval is entirely negative. **This was registered ON MECHANISM before `er40`'s own mini-match was scored, and run despite its 7th-place finish**: it is the only zero-byte arm that buys depth while REDUCING instability (+0.29 plies, MTD crossings **1 → 0**). #205's decomposition left open that instability, not depth, was the problem; removing the instability entirely and still losing 21 Elo **refutes that reading**. Extra plies at a fixed node budget are worth ~nothing here however paid for — the MTD driver's **value resolution is worth more than the depth its probes could buy**. Depth-does-not-convert now rests on **twelve arms across three registrations**. Bonus calibration: the 50-game mini-match said −41.9 ± 92.0 where the screen says −21.2 ± 18.6 — the point estimate was wrong by 100% of the effect, which is exactly why the spec forbids quoting one |
 | 2026-08-16 | **CONSTANT SELECTOR ROUND 1: NO WINNER — and the cohort tilts NEGATIVE, suggestively. 500 games, 0 illegal, 0 forfeits. The entry sits at or near a local optimum of its own search constants** | Top pick `cnt0` 53.00%, tied with `qs60` at **53.00% exactly — a 0.00-point gap against a required 10** — so the pre-registered rule does not fire and nothing is promoted on rank. **The informative part is the aggregate**: the null calibration registered BEFORE the games said top-of-ten reads 59.6% on average under a pure null, and the observed top is **53.0%**. Pooling all 250 pairs directly: **−24.36 Elo, 95% [−50.05, +1.07], two-sided p = 0.060**; P(top-of-ten ≤ 53.0%) = **2.75%** against this round's own variance. **A published-then-corrected number is on the record**: this entry first said 2.13% / 0.83% and "significantly", computed from the registered null's #205 pentanomial, whose 43.8% draw rate is higher than this round's 37.6% — narrower null, p-values biased toward significance. Corrected within the hour, before anything was built on it; the finding is **suggestive, not significant**. Every zero-byte perturbation of every live constant, in BOTH directions, makes the entry worse on average. Full map (score%): cnt0 53, qs60 53, nred5 51, fut3 50, lred3 49, lred4 49, er40 44, nred2 41, fut0 40, fut2 35. **#205's central finding reproduced on ten fresh points**: corr(Δdepth, score%) = **+0.252** (p≈0.46) — the four arms buying ≥0.94 plies average 45.8%, the three SPENDING depth average 44.7%, statistically indistinguishable, so **buying plies at fixed nodes is worth ~nothing**. Instrument amendment offered: **the selector ranks FAMILIES, not CONSTANTS** — it resolves ~101 Elo at N\*=50 and ~59 at N\*\*=150, against constant effects ≤20 Elo, so the tie is deliberately NOT escalated (it would buy nothing) and both leaders are registered-not-run for screens. Individual intervals span ±64..±93 and 8 of 10 contain zero: this rules out large wins, it does not prove the constants tuned |
 | 2026-08-16 | **PRE-REGISTERED before game 1: ENTRY-NATIVE CONSTANT SELECTOR, round 1. Ten arms, each ONE value change to a search constant the entry INHERITED from classic and never tuned here, every one verified ZERO-BYTE by pack (≤ 3405 B, three of them −1 B). 50-game fixed-node mini-matches vs the pinned entry, per the standing SELECTOR SPEC** | **A LIVENESS MAP WAS BUILT FIRST, and it already answers one open question at ZERO games**: 21 zero-byte deviations were probed for bestmove divergence vs the base at the screen's own 20000-node budget, and **`LMR` is a DEAD KNOB across its whole zero-byte band — deadest exactly where classic's tuning points**. Over the full 505-position first-yield suite: **`LMR = 75` changes ONE move in 505 (0.2%)**, 50 → 3, 40 → 9, 30 → 18 (3.6%). The threshold sits in a value dead zone — quiet moves carry PST deltas under 40, captures carry material over 100, so every threshold in 50..75 selects the same set. **This retires #205's deferred `LMR = 75` follow-up without a game**, and implies `LMR`'s measured +38.9 ± 19.1 belongs to the reduction MECHANISM, not the threshold. Also dead: **`QS_A = 160` at 0/505 exactly** — the only zero-byte value on that knob, so the QS slope axis is closed at zero cost — and the null static guard (900 → 8/505 = 1.6%; `abs(pos.score) < 500` almost never binds). Cohort chosen from the LIVE remainder, mechanism registered in advance (Δ mean depth / MTD crossings / diff-moves per 60): `fut3` +1.59/1/12, `fut2` +1.05/3/15, `lred4` +1.44/1/11, `lred3` +0.94/1/10, `nred5` +0.75/1/6, `cnt0` +0.30/1/8, `er40` +0.29/**0**/9, `qs60` −0.05/2/12, `nred2` −0.51/2/12, `fut0` −0.65/1/6. Base is 9.98 plies, 1 crossing. **`er40` is the one arm that buys depth at ZERO instability** (crossings 1 → 0), the cleanest available test of #205's "bought depth does not convert". Gate ladder green on all 11 builds; driver v3 + black-FEN abort armed (the #205 run-1 void condition). Decision rule fixed in advance: top pick must exceed **50%** AND lead 2nd by **> 10 points**, else escalate that pair to N\*\* = 150; one illegal move stops the cohort |
 | 2026-08-16 | **#205 PORT SCREEN VERDICT: UNDECIDED at the 1000-game cap — **+5.91 ± 17.25**, 95% **[−11.33, +23.17]**, 0 illegal, 0 forfeits. The interval EXCLUDES classic's own **+48.25 ± 27.03**, so classic-tuned search does NOT transfer to the entry — and at **+71 B** it fails the byte bar outright. DO NOT LAND** | LLR 0.20 of (−2.94, 2.94) = 6.7% of a decision; 500 pairs 0 unpaired, ptnml **[55, 82, 219, 79, 65]**, 50.85%, adjudication symmetric (679/1000, same driver both arms), median 225 plies, 54 m on the box at conc 8. Pentanomial **recomputed from the PGN independently** and reproduces fastchess to the digit. **The negative is informative because the mechanism DID transfer**: same 20000 nodes, the arm is deeper on **53/60** positions and shallower on **0**, **+2.20 plies** — the depth was bought and did not convert. Decomposition says why it might not: fuel oracle alone = **1.87 plies for 2** MTD crossings, intrinsic gate alone = **0.27 for 4**, together **2.20 for 13** — depth additive, **instability superadditive**. Byte economics settle it: **0.08 Elo/byte** at the point estimate (0.33 at the 95% upper bound) against LMR's ~1.8. `LMR = 75` was pre-registered as dropped and the decomposition bounds that gap — the whole intrinsic half is 0.27 of 2.20 plies, a poor place for a hidden +40. No timed confirmation is spent. Landing shape was still verified end to end (byte-identical artifact `f56119a7…`; golf count `nullmove` 7→8; **3 of 6 anchors survive landing**, incl. the fuel oracle itself — the `iirk` silent-double trap) |
@@ -291,7 +292,73 @@ how much effort it cost.
 
 ---
 
-## 2026-08-16 — ROUND-1 RESULT: NO WINNER, and the interesting part is that the cohort is significantly WORSE than noise. The entry sits at a local optimum of its own constants
+## 2026-08-16 — `er40` SCREEN VERDICT: **−21.22 ± 18.60**, interval EXCLUDING zero. Depth bought at ZERO instability cost still does not convert — it COSTS. This closes #205's open question
+
+The screen registered on mechanism rather than on rank, before `er40`'s own
+mini-match was scored, and run regardless of its 7th-place finish. 1000 games,
+**0 illegal, 0 forfeits**, 54 minutes on the box at concurrency 8.
+
+| | |
+|---|---|
+| arm | `er40` = `EVAL_ROUGHNESS` 15 → 40, one value, **−1 packed byte** (3404) |
+| Elo (pentanomial) | **−21.22 ± 18.60**, 95% **[−39.88, −2.68]** |
+| score | 359 W / 420 L / 221 D = **46.95%** |
+| ptnml | **[83, 96, 178, 85, 58]** over **500 pairs, 0 unpaired** |
+| nElo | −24.68 ± 21.53 |
+| SPRT | **UNDECIDED at cap**, LLR **−2.45** of (−2.94, 2.94) = 83.1% toward H0 |
+| adjudication | 687/1000, symmetric — same driver both arms; 313 `normal` |
+| srand / arena | 20260860 / `~/sunfish-bench/entry-consts-20260816` |
+
+Pentanomial **recomputed independently from the PGN** and reproduces fastchess
+to the digit (46.95%, −21.22, [83, 96, 178, 85, 58]).
+
+**Read the SPRT and the interval together, because they say different things.**
+The hypotheses were elo0 = 0 against elo1 = 10; the truth is ≈ −21, below
+both, so the log-likelihood walked toward H0 and ran out of games at 83% of the
+way. "Undecided" here means "not better", not "unknown" — and unlike #205,
+whose interval straddled zero at [−11.33, +23.17], **this interval excludes
+zero on the negative side.** The arm is worse. All 1000 games were played, so
+there is no early-stopping inflation of the kind that cost `pooltm` 22 Elo.
+
+### Why this is the night's most useful number
+
+`er40` was chosen precisely because it is the only zero-byte deviation that
+buys depth while REDUCING instability: **+0.29 plies for MTD bracket crossings
+1 → 0**, because the bisection stop width is a driver property and not part of
+any transposition key. #205 bought 2.20 plies for 13 crossings and got
++5.91 ± 17.25, and its decomposition concluded "depth additive, instability
+superadditive" — which left open the reading that the depth was fine and the
+instability spoiled it.
+
+**That reading is now refuted.** Remove the instability entirely and the bought
+depth is still not worth anything — it costs **−21 Elo**. So:
+
+> Extra plies at a fixed node budget are worth approximately nothing in this
+> engine, however they are paid for. What the MTD-bi driver spends its probes
+> on — **value resolution at the root** — is worth MORE than the depth those
+> probes could buy. `EVAL_ROUGHNESS = 15` is not an inherited default that
+> nobody checked; it is now the best-measured constant in the entry, and
+> coarsening it to 40 is a measured −21 Elo.
+
+Together with round 1's ten-arm correlation (Δdepth vs score% = +0.252,
+p ≈ 0.46; four depth-buying arms 45.8% against three depth-spending arms
+44.7%), depth-does-not-convert now rests on **twelve arms across three
+independent registrations**. Treat it as settled for this engine at this node
+budget: any future proposal justified by "it searches deeper for the same
+nodes" should be required to say what ELSE it does.
+
+### The selector's own accuracy, checked against a real screen
+
+`er40`'s 50-game mini-match read **44.00% (−41.9 ± 92.0)**; its 1000-game
+screen reads **46.95% (−21.22 ± 18.60)**. Same sign, and the screen sits
+comfortably inside the mini-match's interval — but the mini-match's point
+estimate was **21 Elo pessimistic**, on an arm whose true effect is −21. That
+is the spec's "never a ledger Elo" caveat earning its place with a worked
+example: at 50 games the point estimate was wrong by 100% of the effect.
+
+---
+
+## 2026-08-16 — ROUND-1 RESULT: NO WINNER, and the cohort tilts negative — suggestively, not significantly. The entry sits at or near a local optimum of its own constants
 
 500 games, **0 illegal, 0 forfeits**, 10 arms × 50 games, ~28 minutes on the
 box at concurrency 8. The pre-registered rule does not fire.
