@@ -245,6 +245,63 @@ VAL-probe-first):
 - **trainable K_MID / K_END seam tables.** Currently hand-kept classic
   tables. Same treatment: in the graph, on the grid, through the codec.
 
+## PRE-COMMITTED READING — the λ sweep's two branches (2026-08-16)
+
+Written before the arms run, so the conclusion cannot be chosen after the
+numbers arrive. Both branches are real outcomes; neither is a failure of the
+experiment.
+
+> **Branch A — CONFIRMED.** If λ=0 or λ=0.5 produces a net that is **not
+> 100+ Elo behind the entry** — even losing, but by far less than the −107
+> the linear family has never beaten — the label hypothesis is **confirmed**.
+> Eval-agreement was the wrong training target, the eight play-deaths get a
+> common cause, and **Phase B re-centres on outcome-blended labels**.
+>
+> **Branch B — WEAKENED.** If λ=0 and λ=0.5 fail in the same band as the
+> eight deaths (≈ −107 or worse), the label hypothesis **weakens** and
+> **DISTRIBUTION becomes the prime suspect** — i.e. the positions, not the
+> targets, are what our student cannot learn from — and the matrix's
+> Leela-slice arm becomes the priority rather than the λ dial.
+
+**λ-orientation test: PASSED, before any training** (`train/test_lambda_orientation.py`).
+Our convention is fixed and asserted: **λ=0 is OUTCOME, λ=1 is CP**, both in
+win-prob space, both side-to-move relative,
+`target = λ·sigmoid(cp/400) + (1−λ)·outcome`. The test uses a deliberately
+*disagreeing* case — teacher says +400 cp, the game was drawn — so a flipped
+orientation cannot pass, and it separately asserts that **λ=1 ignores the
+outcome channel entirely**, which is what makes the control a real control.
+
+### Corpus build — funnel, from the smoke and the live scan
+
+Reused `tools/tune/texel_data.py`'s approach rather than writing fresh
+(python-chess replay, FEN-set dedup, sparse sampling) and, most importantly,
+**its TT lesson**: `ucinewgame` + `isready` before every labelled position,
+because without it the same FEN scores differently depending on what preceded
+it (that lane measured −14 vs −22 at depth 8). A label must be a function of
+(fen, depth, engine) alone.
+
+Smoke on one 300-game PGN, showing the funnel shape:
+
+| stage | count |
+|---|---|
+| plies seen | 41,397 |
+| − book plies (<8) | 2,400 |
+| − noisy (capture/promo/ep/in-check/gives-check) | 13,035 |
+| − under 6 pieces | 2,688 |
+| − duplicate positions | 633 |
+| **= kept (unique, quiet)** | **7,127** (17.2% of plies) |
+
+Live full-archive scan is running and tracking the same shape (22 files in:
+14,721 games → 171,137 kept), which extrapolates to **~1 M unique quiet
+positions** — the low end of the 1–5 M target and, for a ~3,072-trit student,
+already generous. Labelling that at depth 8 costs ~1.3 h on 32 cores by the
+measured 20 pos/s/core.
+
+Provenance to be stamped into the corpus at label time, per the order: PGN
+glob, per-stage funnel counts, dedup ratio, sample stride, label depth, and
+the **twin binary sha** (`501ec9486373abdd…`), plus the corpus's own sha and
+two val draws.
+
 ## REGISTRATION — THE λ SWEEP (dial #1), and a premise correction (2026-08-16)
 
 Registered before any run. **λ is the best root-cause candidate the campaign
