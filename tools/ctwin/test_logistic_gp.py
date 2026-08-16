@@ -239,10 +239,10 @@ class MixedAcquisitionTest(unittest.TestCase):
     def test_halton_design_handles_full_tuning_space(self):
         parameters = [
             {"name": f"X{i}", "type": "discrete", "values": [0, 1, 2], "default": 1}
-            for i in range(25)
+            for i in range(32)
         ]
-        space = MixedSpace({"parameters": parameters, "max_candidates": 64})
-        self.assertEqual(len(space.candidates), 64)
+        space = MixedSpace({"parameters": parameters, "max_candidates": 96})
+        self.assertEqual(len(space.candidates), 96)
         self.assertIn(space.default, space.candidates)
 
     def test_local_design_reserves_pairwise_combinations(self):

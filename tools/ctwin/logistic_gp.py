@@ -190,10 +190,12 @@ class MixedSpace:
     @staticmethod
     def halton_design(names, choices, count):
         """Generate a deterministic product-space design without materializing it."""
-        primes = (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37,
-                  41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97)
-        if len(choices) > len(primes):
-            raise ValueError(f"Halton design supports at most {len(primes)} parameters")
+        primes = []
+        for candidate in itertools.count(2):
+            if len(primes) == len(choices):
+                break
+            if all(candidate % prime for prime in primes if prime * prime <= candidate):
+                primes.append(candidate)
 
         def coordinate(index, base):
             value, fraction = 0, 1 / base
@@ -207,7 +209,7 @@ class MixedSpace:
             values = [
                 choices[axis][min(int(coordinate(index, prime) * len(choices[axis])),
                                   len(choices[axis]) - 1)]
-                for axis, prime in enumerate(primes[:len(choices)])
+                for axis, prime in enumerate(primes)
             ]
             yield dict(zip(names, values))
 
