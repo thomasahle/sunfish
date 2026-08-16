@@ -46,7 +46,19 @@ UNBOUNDED_MAX_SECONDS = 600
 # Optional, and so deliberately absent here: TABLE_SIZE (hasattr-guarded
 # at both use sites) and features (its presence selects the NNUE
 # scoring path in from_fen).
-ENGINE_API = ("MATE_LOWER", "Move", "Position", "Searcher", "Stop",
+#
+# `Move` LEFT this list because the dependency it named is gone, not because
+# the check was relaxed. This driver used to build engine moves with
+# `sunfish.Move(i, j, prom)` and read them back with `.i` / `.j` / `.prom`,
+# which pinned every engine to one move representation for the driver's
+# convenience. It now builds a plain `(i, j, prom)` tuple and destructures on
+# read, which every engine here already accepts -- classic's `Position.move`
+# and `value` both start `i, j, prom = move`, and a namedtuple IS a tuple, so
+# moves the ENGINE produces still arrive here unchanged and still compare and
+# hash equal to the ones we produce. ENGINE_API should name what the driver
+# actually uses; leaving `Move` in it would fail engines over an attribute
+# nothing reads.
+ENGINE_API = ("MATE_LOWER", "Position", "Searcher", "Stop",
               "opt_ranges", "parse", "render", "version")
 
 
@@ -64,13 +76,16 @@ def check_engine_module(module):
 
 
 def render_move(move, white_pov):
+    # Destructured, not attribute-read: a move is (from, to, promotion) and
+    # the driver does not care whether the engine spells that as a namedtuple
+    # or a bare tuple. See the ENGINE_API note above.
     if move is None:
         return "(none)"
-    i, j = move.i, move.j
+    i, j, prom = move
     if not white_pov:
         i, j = 119 - i, 119 - j
     render = sunfish.render
-    return render(i) + render(j) + move.prom.lower()
+    return render(i) + render(j) + prom.lower()
 
 
 def parse_move(move_str, white_pov):
@@ -78,7 +93,7 @@ def parse_move(move_str, white_pov):
     i, j, prom = parse(move_str[:2]), parse(move_str[2:4]), move_str[4:].upper()
     if not white_pov:
         i, j = 119 - i, 119 - j
-    return sunfish.Move(i, j, prom)
+    return (i, j, prom)
 
 
 def first_legal_move(hist):
@@ -612,7 +627,7 @@ def can_kill_king(pos):
     # captures in case of illegal castling.
     #MATE_LOWER = 60_000 - 10 * 929
     #return any(pos.value(m) >= MATE_LOWER for m in pos.gen_moves())
-    return any(pos.board[m.j] == 'k' or abs(m.j - pos.kp) < 2 for m in pos.gen_moves())
+    return any(pos.board[j] == 'k' or abs(j - pos.kp) < 2 for _, j, _ in pos.gen_moves())
 
 
 def pv(searcher, pos, include_scores=True, include_loop=False):
