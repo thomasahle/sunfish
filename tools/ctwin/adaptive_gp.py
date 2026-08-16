@@ -826,8 +826,6 @@ async def optimize(args):
     validate_options(args.baseline_engine, args.baseline_args, args.baseline_options)
     fixed = fixed_baseline_point(args, space)
     if fixed is not None:
-        if not gate_policy(args, state, space, fixed):
-            raise RuntimeError("the fixed baseline fails the policy gate")
         space.condition(fixed)
     mean_function = source_prior(args.source_logs, args.battery, args.transfer, space)
     candidates = [candidate for candidate in space.candidates if candidate != fixed]

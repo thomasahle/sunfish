@@ -146,7 +146,11 @@ update. Forty engine processes means twenty scheduler slots:
 `all_parameters.json` covers every live search/evaluation constant, including
 the null-oracle fuel amount. It excludes `TABLE_SIZE` (a memory budget) and
 the historical or PR-only flavor selectors above; those belong in separate
-ablation matches, not in the production-parameter posterior.
+ablation matches, not in the production-parameter posterior. Its default
+point is current master: `NULL_LIMIT=60000` makes the score guard inactive;
+`500` is the separately tested PR #207 policy. The correctness gate applies
+to challengers, not the fixed opponent: master itself misses two mate-floor
+positions that the guarded candidates must recover.
 
 ```sh
 python3 adaptive_gp.py \

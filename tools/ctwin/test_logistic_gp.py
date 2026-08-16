@@ -325,6 +325,24 @@ class MixedAcquisitionTest(unittest.TestCase):
                      if parameter["name"] == "FUT_CAP_DEPTH")
         self.assertEqual((depth["min"], depth["max"]), (2, 4))
 
+    def test_joint_space_anchors_master_and_covers_search_ranges(self):
+        path = pathlib.Path(__file__).with_name("all_parameters.json")
+        spec = json.loads(path.read_text())
+        parameters = {parameter["name"]: parameter for parameter in spec["parameters"]}
+
+        def values(name):
+            return MixedSpace.parameter_values(parameters[name])
+
+        self.assertEqual(parameters["NULL_LIMIT"]["default"], 60000)
+        self.assertIn(500, values("NULL_LIMIT"))
+        self.assertEqual((min(values("QS")), max(values("QS"))), (0, 300))
+        self.assertEqual((min(values("QS_A")), max(values("QS_A"))), (20, 300))
+        self.assertEqual(max(values("EVAL_ROUGHNESS")), 50)
+        self.assertLessEqual(min(value for value in values("LMR") if value > -1000), -200)
+        self.assertEqual(max(values("LMR")), 200)
+        self.assertLessEqual(min(values("NULL_MARGIN")), -300)
+        self.assertGreaterEqual(max(values("NULL_MARGIN")), 300)
+
     def test_coordinate_search_matches_exhaustive_gp_ucb(self):
         domain = list(itertools.product(*self.space.coordinate_values))
         observed = [domain[index] for index in (0, 211, 702, 1050, 1537, 2120)]
@@ -712,7 +730,8 @@ class MixedAcquisitionTest(unittest.TestCase):
                 "--state", str(state), "--logs", str(root / "logs"),
             ], check=True, stdout=subprocess.DEVNULL)
             result = load_state(state, 1)
-            self.assertEqual(len(result["gates"]), 6)
+            self.assertEqual(len(result["gates"]), 5)
+            self.assertNotIn('{"X":3}', result["gates"])
             self.assertTrue(all(batch["knobs"]["X"] >= 3 for batch in result["batches"]))
             result["batches"].append(result["batches"][-1])
             save_state(state, result)
@@ -728,7 +747,7 @@ class MixedAcquisitionTest(unittest.TestCase):
                 "--seed-state", str(state),
                 "--state", str(resumed), "--logs", str(root / "resumed-logs"),
             ], check=True, stdout=subprocess.DEVNULL)
-            self.assertEqual(calls.read_text(), "x" * 6)
+            self.assertEqual(calls.read_text(), "x" * 5)
             result = load_state(resumed, 1)
             self.assertEqual(len(result["batches"]), 5)
             self.assertEqual(result["selections"], 4)
