@@ -97,8 +97,23 @@ def test_timed_stop_never_plays_mid_dive_artifact(capsys):
 
 
 def test_terminal_fail_high_reports_exact_score_before_none(capsys):
-    """A terminal root has an exact score but deliberately has no move."""
-    hist = [sunfish.Position(sunfish.initial, 0, (True, True), (True, True), 0, 0)]
+    """A terminal root has an exact score but deliberately has no move.
+
+    The root must be GENUINELY terminal, not merely claimed so by the
+    scripted tape: since the structural bestmove floor (03beefe) landed,
+    `go_loop`'s final "bestmove" line plays the first legal move of the
+    CURRENT root whenever `first_legal_move` finds one, precisely so a
+    real fail-high-with-no-move can never be confused with an abort. The
+    startpos this test used before 03beefe has 20 legal moves, so the
+    floor correctly overrode the scripted "(none)" with a real one
+    (e.g. a2a3) -- that was the floor doing its job, not a regression;
+    this test was stale, asserting the pre-floor contract on a position
+    the floor was never meant to leave alone. Stalemate is the one root
+    shape where the floor's own fallback also finds nothing, so `(none)`
+    is exactly what should come out, and this checks that.
+    """
+    fen = "8/8/8/8/8/6q1/5k2/7K w - - 0 1"   # textbook stalemate, White to move
+    hist = [uci.from_fen(*fen.split())]
     uci.go_loop(ScriptedSearcher([(1, 0, 0, None)]), hist,
                 threading.Event(), max_movetime=10**6, max_depth=3)
     lines = capsys.readouterr().out.splitlines()
