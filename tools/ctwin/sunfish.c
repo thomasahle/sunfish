@@ -76,14 +76,12 @@ static int QS = 40;
 static int QS_A = 140;
 static int LMR = 75;
 static int EVAL_ROUGHNESS = 15;
+static int NULL_CAP_MARGIN = -1; /* -1 follows EVAL_ROUGHNESS, as Python */
 static int VALUE_N = 280, VALUE_B = 320, VALUE_R = 479, VALUE_Q = 929;
 static int PST_P = 100, PST_N = 100, PST_B = 100, PST_R = 100;
 static int PST_Q = 100, PST_K = 100, PST_KE = 100;
 static long TABLE_SIZE = 1000000;
-static int NULL_MARGIN = -200;   /* fuel-probe target margin (its own knob
-                                    since #192, deliberately NOT tied to
-                                    EVAL_ROUGHNESS; the shallow capped
-                                    null keeps following EVAL_ROUGHNESS) */
+static int NULL_MARGIN = -200;   /* fuel-probe target margin */
 static int NULL_MIN_DEPTH = 2;   /* null move when depth > this */
 static int NULL_LIMIT = 500;     /* |score| bound for both null mechanisms */
 static int NULL_CUT_RED = 3;     /* shallow null-candidate reduction */
@@ -760,17 +758,16 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
     int nkill = 0;
     tpm_get_all(pos, killers, &nkill);
 
-    /* Null move, capped at static eval plus one score bucket (the cap
-     * follows EVAL_ROUGHNESS, exactly master's classic branch).  Since
-     * #192 this branch runs only below FUEL_MIN_DEPTH; above it the fuel
-     * oracle decides a reduction.  FUEL_NULL=0 restores the pre-#192
-     * deep-null cutoff for historical comparisons. */
+    /* Null move, capped at static eval plus one score bucket. Since #192
+     * this branch runs only below FUEL_MIN_DEPTH; above it the fuel oracle
+     * decides a reduction. FUEL_NULL=0 restores the old deep-null cutoff. */
     if (!root && depth > NULL_MIN_DEPTH
             && (!FUEL_NULL || depth < FUEL_MIN_DEPTH)
             && iabs(pos->score) < NULL_LIMIT && has_big_piece(pos)) {
         Pos rp = rotate(pos, 1);
         int s = -bound(&rp, 1 - gamma, depth - NULL_CUT_RED, 0, 0);
-        int score = pos->score + EVAL_ROUGHNESS;
+        int score = pos->score + (NULL_CAP_MARGIN < 0
+            ? EVAL_ROUGHNESS : NULL_CAP_MARGIN);
         if (s < score) score = s;
         Move proof = nomove;
         int have_proof = 0;
@@ -1211,6 +1208,7 @@ struct knob { const char *name; int *ip; long *lp; };
 static struct knob KNOBS[] = {
     { "QS", &QS, NULL }, { "QS_A", &QS_A, NULL }, { "LMR", &LMR, NULL },
     { "EVAL_ROUGHNESS", &EVAL_ROUGHNESS, NULL },
+    { "NULL_CAP_MARGIN", &NULL_CAP_MARGIN, NULL },
     { "VALUE_N", &VALUE_N, NULL }, { "VALUE_B", &VALUE_B, NULL },
     { "VALUE_R", &VALUE_R, NULL }, { "VALUE_Q", &VALUE_Q, NULL },
     { "PST_P", &PST_P, NULL }, { "PST_N", &PST_N, NULL },

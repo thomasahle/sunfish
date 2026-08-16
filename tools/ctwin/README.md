@@ -122,11 +122,12 @@ make bench      # C-vs-PyPy wall-time ratio at identical nodes
 
 Tuning knobs (no recompile): UCI `setoption name NAME value VALUE`, lab
 `set NAME VALUE`, `SF_NAME=` env, or `NAME=VALUE` argv after the table path —
-`QS QS_A LMR EVAL_ROUGHNESS TABLE_SIZE NULL_MARGIN NULL_MIN_DEPTH NULL_LIMIT
-NULL_CUT_RED NULL_RED IID_MIN_DEPTH IID_RED FUT_MAX MATE_DIST FUEL_NULL
-FUEL_MIN_DEPTH` (`NULL_MARGIN` is the fuel-probe target margin,
-`NULL_CUT_RED` controls the shallow score candidate, and `NULL_RED` controls
-the deep fuel probe). `VALUE_N VALUE_B VALUE_R VALUE_Q` tune material, while
+`QS QS_A LMR EVAL_ROUGHNESS TABLE_SIZE NULL_CAP_MARGIN NULL_MARGIN
+NULL_MIN_DEPTH NULL_LIMIT NULL_CUT_RED NULL_RED IID_MIN_DEPTH IID_RED FUT_MAX
+MATE_DIST FUEL_NULL FUEL_MIN_DEPTH` (`NULL_CAP_MARGIN=-1` follows
+`EVAL_ROUGHNESS`, `NULL_MARGIN` is the fuel-probe target margin, and the two
+`NULL_*_RED` knobs control the shallow and deep probes). `VALUE_N VALUE_B
+VALUE_R VALUE_Q` tune material, while
 `PST_P PST_N PST_B PST_R PST_Q PST_K PST_KE` scale the positional component
 of each loaded table. The tp_move battery adds `EVICT_POLICY` (0 master
 root-guarded FIFO, 1 unguarded
