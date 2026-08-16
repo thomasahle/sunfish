@@ -158,7 +158,8 @@ python3 adaptive_gp.py \
   --engine ./sunfish_c --engine-args ./tables_classic.txt \
   --baseline-options default \
   --space all_parameters.json --openings openings.fen \
-  --gate "python3 sunfish_gate.py" --gate-workers 20 --cycle-openings \
+  --gate "python3 sunfish_gate.py" --gate-design --gate-workers 20 \
+  --cycle-openings \
   --slots 20 --queue-batches 60 --refill-batches 20 \
   --pairs 1 --initial-design 256 --inducing 128 --update-batches 8 \
   --explore-start .5 --explore-floor .2 --duel-fraction .3 \
@@ -182,8 +183,9 @@ statistically dominated policies leave the pure arm.
 Three reserved pairs per lane,
 replenished while two remain, hide that latency. `--gate-all` instead
 prevalidates the finite design and confines every acquisition to it; use that
-for a broad census, not the final joint refinement. Results append to a JSONL
-journal and compact every 1,000 pairs,
+for a broad census, not the final joint refinement. `--gate-design` rejects
+unsafe design points up front while still allowing gated coordinate
+refinements. Results append to a JSONL journal and compact every 1,000 pairs,
 avoiding quadratic checkpoint I/O while remaining restartable. At the
 wall-time limit, the scheduler finishes every reserved color pair before its
 final checkpoint. `--seed-state` replays that journal and inherits its

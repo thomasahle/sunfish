@@ -221,7 +221,7 @@ def study_identity(args):
                          "explore_confidence",
                          "duel_fraction", "inducing", "seed_selections",
                          "acquisition_restarts", "update_batches", "gate_workers",
-                         "gate_all")
+                         "gate_all", "gate_design")
         },
     }
 
@@ -835,7 +835,7 @@ async def optimize(args):
         if not isinstance(space, logistic_gp.LegacySpace):
             raise ValueError("--safe-only applies only to the built-in Sunfish LMR space")
         candidates = [x for x in candidates if x[2] and not any(x[len(logistic_gp.NUMERIC):])]
-    if args.gate_all:
+    if args.gate_all or args.gate_design:
         feasible = []
         for offset in range(0, len(candidates), args.gate_workers):
             group = candidates[offset:offset + args.gate_workers]
@@ -847,7 +847,8 @@ async def optimize(args):
             save_state(args.state, state)
         print(f"[gate] feasible candidate space: {len(feasible)}/{len(candidates)}", flush=True)
         candidates = feasible
-        space.candidates = sorted(set(candidates + ([fixed] if fixed is not None else [])))
+        if args.gate_all:
+            space.candidates = sorted(set(candidates + ([fixed] if fixed is not None else [])))
     if not candidates:
         raise ValueError("the policy gate rejected every challenger")
     deadline = None
@@ -1133,6 +1134,8 @@ def main():
     parser.add_argument("--gate-workers", type=int, default=4)
     parser.add_argument("--gate-all", action="store_true",
         help="validate the finite candidate space before allocating games")
+    parser.add_argument("--gate-design", action="store_true",
+        help="prevalidate the finite design but allow coordinate refinements")
     parser.add_argument("--seed-selections", type=int,
         help="override the imported allocation clock (use 0 to restart it)")
     parser.add_argument("--safe-only", action="store_true")
@@ -1141,8 +1144,8 @@ def main():
     args.baseline_args = args.engine_args if args.baseline_args is None else args.baseline_args
     if args.source_logs and not args.battery:
         parser.error("--source-logs requires --battery")
-    if args.gate_all and not args.gate:
-        parser.error("--gate-all requires --gate")
+    if (args.gate_all or args.gate_design) and not args.gate:
+        parser.error("--gate-all and --gate-design require --gate")
     if not 0 <= args.explore_floor <= args.explore_start <= 1:
         parser.error("require 0 <= --explore-floor <= --explore-start <= 1")
     if not 0 <= args.duel_fraction <= 0.40:
