@@ -101,6 +101,34 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertIn(vector, candidates)
         self.assertNotEqual(vector, tuple(target))
 
+    def test_exploration_stays_in_the_validated_region(self):
+        class Model:
+            @staticmethod
+            def predict(points):
+                values = np.asarray(points)
+                return np.zeros(len(points)), np.sum(values * values, axis=1) + 1
+
+        safe = self.space.canonical({"X": 0, "Y": 10})
+        state = {
+            "batches": [{
+                "knobs": self.space.knobs(self.space.default),
+                "wins": 1, "draws": 0, "losses": 1,
+            }],
+        }
+        args = SimpleNamespace(
+            pair_weight=.5, inducing=0, initial_design=1,
+            explore_start=1, explore_floor=1, explore_half_life=1,
+            exploration=1, explore_optimism=0, pairs=1,
+            gate_all=False, acquisition_restarts=4,
+        )
+        candidates = [point for point in self.space.candidates
+                      if point != self.space.default]
+        vector, diagnostics = choose(
+            state, self.space.prior_mean, candidates, [], args, self.space,
+            Model(), validated={safe})
+        self.assertEqual(diagnostics["mode"], "explore")
+        self.assertEqual(vector, safe)
+
     def test_seeded_new_axis_is_designed_after_a_mature_clock(self):
         class Model:
             @staticmethod

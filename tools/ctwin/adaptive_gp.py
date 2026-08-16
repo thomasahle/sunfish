@@ -564,7 +564,7 @@ def fantasy_variance(model, space, pending, points, variance, effective_trials):
 
 
 def choose(state, mean_function, candidates, pending, args, space, model=None,
-           forbidden=()):
+           forbidden=(), validated=()):
     if model is None:
         model = posterior(
             state, mean_function, args.pair_weight, space, getattr(args, "inducing", 0))
@@ -634,7 +634,13 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
 
         # Fantasized variance decides whether another pending copy is useful;
         # do not impose a fixed one-copy-per-configuration rule on top of it.
-        if args.gate_all:
+        if mode == "explore" and validated:
+            pool = [point for point in validated if point not in forbidden and (
+                stratum is None or space.is_structural(point) == stratum)]
+            pool = pool or [point for point in validated if point not in forbidden]
+            values = score(pool)
+            vector = min(zip(values, pool), key=lambda item: (-item[0], item[1]))[1]
+        elif args.gate_all:
             pool = [point for point in candidates if point not in forbidden and (
                 stratum is None or space.is_structural(point) == stratum)]
             if not pool:
@@ -868,6 +874,13 @@ async def optimize(args):
             if not record["accepted"]
         }
 
+    def validated_configurations():
+        return {
+            space.canonical(record["knobs"])
+            for record in state.get("gates", {}).values()
+            if record["accepted"]
+        }
+
     def schedule_experiment(vector, diagnostics):
         opponent = choose_opponent(
             state, mean_function, vector, args, space, allocation_model)
@@ -914,7 +927,8 @@ async def optimize(args):
                 reservation_pending = list(pending)
                 vector, diagnostics = await asyncio.to_thread(
                     choose, trial, mean_function, candidates, pending, args, space,
-                    allocation_model, forbidden | {item[0] for item in proposals})
+                    allocation_model, forbidden | {item[0] for item in proposals},
+                    validated_configurations())
                 commit_selection(proposal_state, trial)
                 proposals.append([vector, diagnostics, reservation, 0, reservation_pending])
                 pending.append((vector, None))
@@ -945,7 +959,7 @@ async def optimize(args):
                     trial = selection_state(item[2])
                     item[0], replacement = await asyncio.to_thread(
                         choose, trial, mean_function, candidates, item[4], args, space,
-                        allocation_model, forbidden | others)
+                        allocation_model, forbidden | others, validated_configurations())
                     if replacement["mode"] != item[1]["mode"]:
                         raise AssertionError("gate replacement changed allocation mode")
                     item[1] = replacement
