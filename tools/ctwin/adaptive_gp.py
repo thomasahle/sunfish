@@ -218,6 +218,7 @@ def study_identity(args):
             name: getattr(args, name)
             for name in ("pair_weight", "exploration", "initial_design", "explore_start",
                          "explore_floor", "explore_half_life", "explore_optimism",
+                         "explore_confidence",
                          "duel_fraction", "inducing", "seed_selections",
                          "acquisition_restarts", "update_batches", "gate_workers",
                          "gate_all")
@@ -639,9 +640,20 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
         # Fantasized variance decides whether another pending copy is useful;
         # do not impose a fixed one-copy-per-configuration rule on top of it.
         if mode == "explore" and validated:
-            pool = [point for point in validated if point not in forbidden and (
+            pool = [point for point in validated if point not in forbidden]
+            pool_mean, pool_variance = statistics(pool)
+            confidence = getattr(args, "explore_confidence", 1.96)
+            supported = max(0, max(pool_mean - confidence * np.sqrt(pool_variance)))
+            plausible = {
+                point for point, mean, variance in zip(pool, pool_mean, pool_variance)
+                if mean + confidence * math.sqrt(variance) >= supported
+            }
+            if not plausible:
+                plausible.add(pool[int(np.argmax(
+                    pool_mean + confidence * np.sqrt(pool_variance)))])
+            matching = [point for point in pool if point in plausible and (
                 stratum is None or space.is_structural(point) == stratum)]
-            pool = pool or [point for point in validated if point not in forbidden]
+            pool = matching or [point for point in pool if point in plausible]
             values = score(pool)
             vector = min(zip(values, pool), key=lambda item: (-item[0], item[1]))[1]
         elif args.gate_all:
@@ -1099,6 +1111,8 @@ def main():
     parser.add_argument("--explore-half-life", type=float, default=40)
     parser.add_argument("--explore-optimism", type=float, default=0,
         help="explore with mean + K*sd instead of pure variance")
+    parser.add_argument("--explore-confidence", type=float, default=1.96,
+        help="discard exploration points whose upper bound is supportedly dominated")
     parser.add_argument("--duel-fraction", type=float, default=0.30)
     parser.add_argument("--pair-weight", type=float, default=0.5)
     parser.add_argument("--inducing", type=int, default=0,
@@ -1144,6 +1158,8 @@ def main():
     if args.inducing < 0 or min(
             args.acquisition_restarts, args.update_batches, args.checkpoint_batches) < 1:
         parser.error("inducing must be nonnegative; acquisition and update counts must be positive")
+    if args.explore_confidence <= 0:
+        parser.error("--explore-confidence must be positive")
     if args.explore_optimism < 0 or (
             args.seed_selections is not None and args.seed_selections < 0):
         parser.error("--explore-optimism and --seed-selections cannot be negative")

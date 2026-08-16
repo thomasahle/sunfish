@@ -130,6 +130,31 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(diagnostics["mode"], "explore")
         self.assertEqual(vector, safe)
 
+    def test_exploration_drops_supportedly_dominated_points(self):
+        weak = self.space.canonical({"X": 100, "Y": 20})
+        plausible = self.space.canonical({"X": 0, "Y": 10})
+
+        class Model:
+            @staticmethod
+            def predict(points):
+                mean = np.array([-10 if point == weak else 0 for point in points])
+                variance = np.array([4 if point == weak else 1 for point in points])
+                return mean, variance
+
+        state = {"batches": [], "selections": 1}
+        args = SimpleNamespace(
+            pair_weight=.5, inducing=0, initial_design=1,
+            explore_start=1, explore_floor=1, explore_half_life=1,
+            exploration=1, explore_optimism=0, explore_confidence=1.96, pairs=1,
+            gate_all=False, acquisition_restarts=4,
+        )
+        vector, diagnostics = choose(
+            state, self.space.prior_mean, self.space.candidates, [], args,
+            self.space, Model(), validated={weak, plausible},
+            observation_counts=Counter({plausible: 1}))
+        self.assertEqual(diagnostics["mode"], "explore")
+        self.assertEqual(vector, plausible)
+
     def test_acquisition_uses_incremental_observation_counts(self):
         class Model:
             @staticmethod
