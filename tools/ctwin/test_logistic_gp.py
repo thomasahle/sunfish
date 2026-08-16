@@ -535,11 +535,13 @@ class MixedAcquisitionTest(unittest.TestCase):
                 "--gate", str(gate), "--gate-all", "--gate-workers", "3",
                 "--slots", "1", "--queue-batches", "1", "--refill-batches", "1",
                 "--initial-design", "2", "--batches", "1", "--start", "5",
-                "--seed-state", str(state), "--seed-selections", "3",
+                "--seed-state", str(state),
                 "--state", str(resumed), "--logs", str(root / "resumed-logs"),
             ], check=True, stdout=subprocess.DEVNULL)
             self.assertEqual(calls.read_text(), "x" * 6)
-            self.assertEqual(len(load_state(resumed, 1)["batches"]), 5)
+            result = load_state(resumed, 1)
+            self.assertEqual(len(result["batches"]), 5)
+            self.assertEqual(result["selections"], 4)
 
     def test_duels_keep_a_directly_anchored_opponent(self):
         anchored = self.space.canonical({"X": 0, "Y": 10})

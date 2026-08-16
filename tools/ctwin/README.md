@@ -167,7 +167,8 @@ acquisition to it; use that for a broad census, not the final joint refinement. 
 append to a JSONL journal and compact every 1,000 pairs,
 avoiding quadratic checkpoint I/O while remaining restartable. At the
 wall-time limit, the scheduler finishes every reserved color pair before its
-final checkpoint.
+final checkpoint. `--seed-state` replays that journal and inherits its
+allocation clock; pass `--seed-selections 0` only to restart exploration.
 
 Game use: `position startpos moves …` / `position fen …`, then
 `go nodes N` (primary — clock-free surrogate games), `go depth D`,

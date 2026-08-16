@@ -734,7 +734,8 @@ async def optimize(args):
             for batch in seed["batches"]
         ]
         state["next_experiment"] = len(state["batches"])
-        state["selections"] = args.seed_selections
+        state["selections"] = (seed.get("selections", len(seed["batches"]))
+            if args.seed_selections is None else args.seed_selections)
         state["allocations"] = {}
         state["new_axes"] = [name for name in space.names if name not in old_names]
         compatible = ("candidate", "gate", "gate_timeout", "space")
@@ -1033,8 +1034,8 @@ def main():
     parser.add_argument("--gate-workers", type=int, default=4)
     parser.add_argument("--gate-all", action="store_true",
         help="validate the finite candidate space before allocating games")
-    parser.add_argument("--seed-selections", type=int, default=0,
-        help="continue the allocation clock when importing a state")
+    parser.add_argument("--seed-selections", type=int,
+        help="override the imported allocation clock (use 0 to restart it)")
     parser.add_argument("--safe-only", action="store_true")
     args = parser.parse_args()
     args.baseline_engine = args.baseline_engine or args.engine
@@ -1063,7 +1064,8 @@ def main():
     if args.inducing < 0 or min(
             args.acquisition_restarts, args.update_batches, args.checkpoint_batches) < 1:
         parser.error("inducing must be nonnegative; acquisition and update counts must be positive")
-    if args.explore_optimism < 0 or args.seed_selections < 0:
+    if args.explore_optimism < 0 or (
+            args.seed_selections is not None and args.seed_selections < 0):
         parser.error("--explore-optimism and --seed-selections cannot be negative")
     asyncio.run(optimize(args))
 
