@@ -46,7 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
-| 2026-08-16 | **CONSTANT SELECTOR ROUND 1: NO WINNER — and the cohort is SIGNIFICANTLY WORSE THAN NOISE. 500 games, 0 illegal, 0 forfeits. The entry sits at a local optimum of its own search constants** | Top pick `cnt0` 53.00%, tied with `qs60` at **53.00% exactly — a 0.00-point gap against a required 10** — so the pre-registered rule does not fire and nothing is promoted on rank. **The informative part is the aggregate**: the null calibration registered BEFORE the games said top-of-ten reads 59.6% on average (median 59.0, p95 65.0) under a pure null, and the observed top is **53.0%** — **P(top-of-ten ≤ 53.0%) = 2.13%**, with the ten-arm mean at 46.5% where noise gives 50% (P ≤ 46.5% = 0.83%, post-hoc). Every zero-byte perturbation of every live constant, in BOTH directions, makes the entry worse on average. Full map (score%): cnt0 53, qs60 53, nred5 51, fut3 50, lred3 49, lred4 49, er40 44, nred2 41, fut0 40, fut2 35. **#205's central finding reproduced on ten fresh points**: corr(Δdepth, score%) = **+0.252** (p≈0.46) — the four arms buying ≥0.94 plies average 45.8%, the three SPENDING depth average 44.7%, statistically indistinguishable, so **buying plies at fixed nodes is worth ~nothing**. Instrument amendment offered: **the selector ranks FAMILIES, not CONSTANTS** — it resolves ~101 Elo at N\*=50 and ~59 at N\*\*=150, against constant effects ≤20 Elo, so the tie is deliberately NOT escalated (it would buy nothing) and both leaders are registered-not-run for screens. Individual intervals span ±64..±93 and 8 of 10 contain zero: this rules out large wins, it does not prove the constants tuned |
+| 2026-08-16 | **CONSTANT SELECTOR ROUND 1: NO WINNER — and the cohort tilts NEGATIVE, suggestively. 500 games, 0 illegal, 0 forfeits. The entry sits at or near a local optimum of its own search constants** | Top pick `cnt0` 53.00%, tied with `qs60` at **53.00% exactly — a 0.00-point gap against a required 10** — so the pre-registered rule does not fire and nothing is promoted on rank. **The informative part is the aggregate**: the null calibration registered BEFORE the games said top-of-ten reads 59.6% on average under a pure null, and the observed top is **53.0%**. Pooling all 250 pairs directly: **−24.36 Elo, 95% [−50.05, +1.07], two-sided p = 0.060**; P(top-of-ten ≤ 53.0%) = **2.75%** against this round's own variance. **A published-then-corrected number is on the record**: this entry first said 2.13% / 0.83% and "significantly", computed from the registered null's #205 pentanomial, whose 43.8% draw rate is higher than this round's 37.6% — narrower null, p-values biased toward significance. Corrected within the hour, before anything was built on it; the finding is **suggestive, not significant**. Every zero-byte perturbation of every live constant, in BOTH directions, makes the entry worse on average. Full map (score%): cnt0 53, qs60 53, nred5 51, fut3 50, lred3 49, lred4 49, er40 44, nred2 41, fut0 40, fut2 35. **#205's central finding reproduced on ten fresh points**: corr(Δdepth, score%) = **+0.252** (p≈0.46) — the four arms buying ≥0.94 plies average 45.8%, the three SPENDING depth average 44.7%, statistically indistinguishable, so **buying plies at fixed nodes is worth ~nothing**. Instrument amendment offered: **the selector ranks FAMILIES, not CONSTANTS** — it resolves ~101 Elo at N\*=50 and ~59 at N\*\*=150, against constant effects ≤20 Elo, so the tie is deliberately NOT escalated (it would buy nothing) and both leaders are registered-not-run for screens. Individual intervals span ±64..±93 and 8 of 10 contain zero: this rules out large wins, it does not prove the constants tuned |
 | 2026-08-16 | **PRE-REGISTERED before game 1: ENTRY-NATIVE CONSTANT SELECTOR, round 1. Ten arms, each ONE value change to a search constant the entry INHERITED from classic and never tuned here, every one verified ZERO-BYTE by pack (≤ 3405 B, three of them −1 B). 50-game fixed-node mini-matches vs the pinned entry, per the standing SELECTOR SPEC** | **A LIVENESS MAP WAS BUILT FIRST, and it already answers one open question at ZERO games**: 21 zero-byte deviations were probed for bestmove divergence vs the base at the screen's own 20000-node budget, and **`LMR` is a DEAD KNOB across its whole zero-byte band — deadest exactly where classic's tuning points**. Over the full 505-position first-yield suite: **`LMR = 75` changes ONE move in 505 (0.2%)**, 50 → 3, 40 → 9, 30 → 18 (3.6%). The threshold sits in a value dead zone — quiet moves carry PST deltas under 40, captures carry material over 100, so every threshold in 50..75 selects the same set. **This retires #205's deferred `LMR = 75` follow-up without a game**, and implies `LMR`'s measured +38.9 ± 19.1 belongs to the reduction MECHANISM, not the threshold. Also dead: **`QS_A = 160` at 0/505 exactly** — the only zero-byte value on that knob, so the QS slope axis is closed at zero cost — and the null static guard (900 → 8/505 = 1.6%; `abs(pos.score) < 500` almost never binds). Cohort chosen from the LIVE remainder, mechanism registered in advance (Δ mean depth / MTD crossings / diff-moves per 60): `fut3` +1.59/1/12, `fut2` +1.05/3/15, `lred4` +1.44/1/11, `lred3` +0.94/1/10, `nred5` +0.75/1/6, `cnt0` +0.30/1/8, `er40` +0.29/**0**/9, `qs60` −0.05/2/12, `nred2` −0.51/2/12, `fut0` −0.65/1/6. Base is 9.98 plies, 1 crossing. **`er40` is the one arm that buys depth at ZERO instability** (crossings 1 → 0), the cleanest available test of #205's "bought depth does not convert". Gate ladder green on all 11 builds; driver v3 + black-FEN abort armed (the #205 run-1 void condition). Decision rule fixed in advance: top pick must exceed **50%** AND lead 2nd by **> 10 points**, else escalate that pair to N\*\* = 150; one illegal move stops the cohort |
 | 2026-08-16 | **#205 PORT SCREEN VERDICT: UNDECIDED at the 1000-game cap — **+5.91 ± 17.25**, 95% **[−11.33, +23.17]**, 0 illegal, 0 forfeits. The interval EXCLUDES classic's own **+48.25 ± 27.03**, so classic-tuned search does NOT transfer to the entry — and at **+71 B** it fails the byte bar outright. DO NOT LAND** | LLR 0.20 of (−2.94, 2.94) = 6.7% of a decision; 500 pairs 0 unpaired, ptnml **[55, 82, 219, 79, 65]**, 50.85%, adjudication symmetric (679/1000, same driver both arms), median 225 plies, 54 m on the box at conc 8. Pentanomial **recomputed from the PGN independently** and reproduces fastchess to the digit. **The negative is informative because the mechanism DID transfer**: same 20000 nodes, the arm is deeper on **53/60** positions and shallower on **0**, **+2.20 plies** — the depth was bought and did not convert. Decomposition says why it might not: fuel oracle alone = **1.87 plies for 2** MTD crossings, intrinsic gate alone = **0.27 for 4**, together **2.20 for 13** — depth additive, **instability superadditive**. Byte economics settle it: **0.08 Elo/byte** at the point estimate (0.33 at the 95% upper bound) against LMR's ~1.8. `LMR = 75` was pre-registered as dropped and the decomposition bounds that gap — the whole intrinsic half is 0.27 of 2.20 plies, a poor place for a hidden +40. No timed confirmation is spent. Landing shape was still verified end to end (byte-identical artifact `f56119a7…`; golf count `nullmove` 7→8; **3 of 6 anchors survive landing**, incl. the fuel oracle itself — the `iirk` silent-double trap) |
 | 2026-08-16 | **#205 PORT RUN 1 VOID BY INSTRUMENT at 868 games — `sunfish_ui/` was not staged in the arena, so BOTH arms fell through to the builtin UCI loop, which silently ignores `position fen`, and answered an EPD book from the START POSITION. 868 illegal moves, all `g1f3`, **434 base / 434 n205 — exactly symmetric**. NO Elo exists and the arms are innocent** | The entry resolves its driver from THIS FILE'S GRANDPARENT (`arena/bin/` → `arena/`), which had no `sunfish_ui/`. A documented trap (2026-08-15 stage-2 amendment says it verbatim) that I walked into because `tools/screens/ab_fixednode.sh` still specifies an EPD book — it predates the finding and its wrappers assumed an arena with `sunfish_ui/` beside `bin/`. The gate ladder never saw it: the gates drive FENs through `sunfish_ui` in-process and passed 130/130 zero-illegal on both arms. **Fixed so it cannot recur silently**: driver v3 staged beside `bin/`, and the runner now ABORTS before game 1 unless both arms print `v3 nodes fen` AND answer a black-to-move FEN with `g8f6` rather than `g1f3` — verified, not assumed. Run 2 re-registered with **srand 20260825** (20260824 burned) and adjudication reclassified from structurally-inert to **ACTIVE and symmetric**, since the driver makes both arms emit `score cp`. Cost: ~3 minutes of 8 slots |
@@ -314,29 +314,53 @@ above-50% clause, and then fails the separation clause outright — `qs60` is at
 **53.00% exactly, a gap of 0.00 points against a required 10**. NOT SEPARATED.
 No arm is promoted on rank.
 
-### The finding is not "no signal". It is a SIGNIFICANTLY NEGATIVE cohort
+### The finding is not "no signal". The cohort tilts NEGATIVE — suggestively, not significantly
 
-The null calibration was registered before the games precisely so this could be
-read honestly. It said: under a complete null, the top of ten 50-game arms
-reads **59.6% on average, median 59.0, p95 65.0**.
+**CORRECTION, made within the hour and before anything was built on it.** This
+section first reported P(top-of-ten ≤ 53.0%) = 2.13% and P(cohort mean ≤ 46.5%)
+= 0.83%, and called the cohort "significantly" negative. **Both p-values were
+too small and the word "significantly" was wrong.** They came from the null
+simulated at registration time, which used **#205's pentanomial** — and #205's
+draw rate (219/500 pairs = 43.8% DD) is higher than this round's (94/250 =
+37.6% DD). A higher draw rate means lower variance, a narrower null, and
+p-values biased toward significance. The registered *calibration* was still the
+right thing to have (it is what makes the 53% readable at all); using its
+variance for the *test* was the error. Recomputed below against this round's
+own measured variance, which is the correct null.
 
-**The observed top is 53.0%.**
+The direct one-sample test, pooling all 250 pairs — no simulation, no assumed
+shape:
 
-| test against the registered null | value |
+| pooled across all ten arms, 250 pairs / 500 games | value |
 |---|---|
-| P(top-of-ten ≤ 53.0%) | **2.13%** |
-| P(cohort mean ≤ 46.5%) — *post-hoc statistic, labelled as such* | **0.83%** |
+| mean pair score | **46.50%** (null: 50%) |
+| pooled Elo | **−24.36**, 95% **[−50.05, +1.07]** |
+| z vs 50% | −1.878 |
+| **two-sided p** | **0.060** (one-sided 0.030) |
+| pooled ptnml | [39, 50, 94, 41, 26] |
 
-The cohort's *best* arm is in the bottom 2% of what pure noise produces, and
-the ten-arm mean is 46.5% where noise gives 50%. So the neighbourhood does not
-merely fail to contain a winner — **it tilts downward, and significantly.**
-Every zero-byte perturbation of every live search constant, in both directions,
-makes the entry worse on average.
+And the two cohort statistics re-simulated against this round's own pair
+variance (SD 0.2947 → per-arm SE **5.89 points**, cohort-mean SE **1.86**):
 
-This is the aggregate test the individual arms could never give. One 50-game
-arm resolves ~101 Elo and is hopeless for a ≤20 Elo effect; but **500 games
-pooled across ten arms is a well-powered test of a different and better
-question** — "is the incumbent at a local optimum?" — and the answer is yes.
+| test | corrected | first published |
+|---|---|---|
+| P(top-of-ten ≤ 53.0%) | **2.75%** | ~~2.13%~~ |
+| P(cohort mean ≤ 46.5%) *(one-sided)* | **2.85%** | ~~0.83%~~ |
+
+**The honest reading.** The registered null says top-of-ten should read 59.6%
+on average; it read **53.0%**, in the bottom ~3% of the null. The ten-arm mean
+is 46.5% where noise gives 50%, a pooled **−24.4 Elo whose 95% interval
+[−50.1, +1.1] just touches zero**. So: the neighbourhood **consistently tilts
+downward, and the evidence is suggestive (p = 0.060 two-sided) rather than
+significant.** Every zero-byte perturbation of every live constant, in both
+directions, made the entry worse on average — but a 6% two-sided p is not a
+result to bank, and it is not called one.
+
+This is still the aggregate test the individual arms could never give. One
+50-game arm resolves ~101 Elo and is hopeless against a ≤20 Elo effect; **500
+games pooled across ten arms resolves ~25 Elo** and answers a different and
+better question — "is the incumbent at a local optimum?" — with the answer
+"probably yes, and by roughly 24 Elo of average tilt".
 
 ### Depth does not convert, reproduced on ten fresh points
 
