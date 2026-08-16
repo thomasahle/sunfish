@@ -5,7 +5,7 @@
     {"name": "QS_A", "type": "integer", "default": 140,
      "min": 20, "max": 300, "step": 20, "scale": 60},
     {"name": "EVAL_ROUGHNESS", "type": "discrete", "default": 15,
-     "values": [0, 5, 10, 15, 20, 30, 40, 50], "scale": 10},
+     "values": [5, 10, 15, 20, 30, 40, 50], "scale": 10},
     {"name": "NULL_CAP_MARGIN", "type": "discrete", "default": 15,
      "values": [0, 5, 10, 15, 20, 30, 40, 50], "scale": 10},
     {"name": "NULL_MARGIN", "type": "integer", "default": -200,
@@ -33,9 +33,6 @@
      "values": [0, 1, 2], "off_values": [0]},
     {"name": "FUT_CAP_DEPTH", "type": "integer", "default": 3,
      "min": 2, "max": 6, "scale": 1},
-    {"name": "MATE_DIST", "type": "categorical", "default": 1,
-     "values": [0, 1], "off_values": [0]},
-
     {"name": "VALUE_N", "type": "discrete", "default": 280,
      "values": [250, 260, 270, 280, 290], "scale": 20},
     {"name": "VALUE_B", "type": "discrete", "default": 320,
@@ -68,8 +65,6 @@
   "conditions": [
     {"when": {"FUT_CAP": [0]},
      "reset": ["FUT_CAP_DEPTH"]},
-    {"when": {"EVAL_ROUGHNESS": [0]},
-     "reset": ["MATE_DIST"]},
     {"when": {"NULL_MIN_DEPTH": [99]},
      "reset": ["NULL_CAP_MARGIN", "NULL_CUT_RED"]},
     {"when": {"FUEL_MIN_DEPTH": [99]},
@@ -84,7 +79,6 @@
     {"NULL_LIMIT": 0},
     {"NULL_LIMIT": 500},
     {"NULL_MIN_DEPTH": 99, "FUEL_MIN_DEPTH": 99},
-    {"MATE_DIST": 0, "NULL_LIMIT": 500},
     {"FUT_MAX": 0},
     {"FUT_CAP": 0}
   ],

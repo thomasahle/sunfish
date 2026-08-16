@@ -411,12 +411,22 @@ class MixedAcquisitionTest(unittest.TestCase):
         depth = next(parameter for parameter in spec["parameters"]
                      if parameter["name"] == "FUT_CAP_DEPTH")
         self.assertEqual((depth["min"], depth["max"]), (2, 6))
-        mate = next(parameter for parameter in spec["parameters"]
-                    if parameter["name"] == "MATE_DIST")
-        self.assertEqual(mate["values"], [0, 1])
-        space = MixedSpace(spec)
-        conditioned = space.knobs(space.canonical({"EVAL_ROUGHNESS": 0, "MATE_DIST": 0}))
-        self.assertEqual(conditioned["MATE_DIST"], 1)
+        self.assertNotIn("MATE_DIST", {
+            parameter["name"] for parameter in spec["parameters"]})
+
+    def test_mate_gate_rejects_flat_mate_policies_before_running_engine(self):
+        gate = pathlib.Path(__file__).with_name("sunfish_gate.py")
+        for options in ({"MATE_DIST": 0}, {"EVAL_ROUGHNESS": 0}):
+            request = json.dumps({
+                "engine": "/does/not/exist",
+                "engine_args": "",
+                "options": options,
+            })
+            result = subprocess.run(
+                [sys.executable, gate], input=request, text=True,
+                capture_output=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout.strip(), "mate-distance:disabled")
 
     def test_joint_space_anchors_master_and_covers_search_ranges(self):
         path = pathlib.Path(__file__).with_name("all_parameters.json")
@@ -431,6 +441,7 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual((min(values("QS")), max(values("QS"))), (0, 300))
         self.assertEqual((min(values("QS_A")), max(values("QS_A"))), (20, 300))
         self.assertEqual(max(values("EVAL_ROUGHNESS")), 50)
+        self.assertGreater(min(values("EVAL_ROUGHNESS")), 0)
         self.assertLessEqual(min(value for value in values("LMR") if value > -1000), -200)
         self.assertEqual(max(values("LMR")), 200)
         self.assertLessEqual(min(values("NULL_MARGIN")), -300)

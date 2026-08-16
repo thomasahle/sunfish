@@ -53,8 +53,12 @@ def mate_floor(argv, name, depth, limit):
 
 def main():
     request = json.load(sys.stdin)
+    options = request["options"]
+    if not options.get("MATE_DIST", 1) or not options.get("EVAL_ROUGHNESS", 15):
+        print("mate-distance:disabled")
+        return 1
     argv = [request["engine"], *shlex.split(request["engine_args"])]
-    argv += [f"{name}={value}" for name, value in sorted(request["options"].items())]
+    argv += [f"{name}={value}" for name, value in sorted(options.items())]
     results = {name: mate_floor(argv, name, depth, limit)
                for name, depth, limit in SUITES}
     print(" ".join(f"{name}:{found}/{total}" for name, (found, total) in results.items()))
