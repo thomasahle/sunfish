@@ -185,9 +185,11 @@ reserves 512 points for the default, every one-axis setting, and nearby two-axis
 combinations; the rest retain broad global coverage. Coordinate refinements
 are gated on demand. The pure-variance arm explores finite-design policies and
 validated coordinate refinements whose confidence intervals still overlap the
-best supported lower bound. Proposals pass the correctness gate before games
-are spent. Rejected policies consume neither games nor allocation credit, and
-statistically dominated policies leave the pure arm.
+best supported lower bound. It covers unseen and unreserved policies before
+revisiting one; UCB is free to replicate promising policies. Proposals pass the
+correctness gate before games are spent. Rejected policies consume neither
+games nor allocation credit, and statistically dominated policies leave the
+pure arm.
 Three reserved pairs per lane,
 replenished while two remain, hide that latency. `--gate-all` instead
 prevalidates the finite design and confines every acquisition to it; use that

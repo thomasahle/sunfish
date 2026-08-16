@@ -194,6 +194,58 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertNotEqual(vector, default)
         self.assertEqual(state["exploration_credit"], 0)
 
+    def test_exploration_prefers_unseen_points(self):
+        observed, unseen = self.space.candidates[:2]
+
+        class Model:
+            @staticmethod
+            def predict(points):
+                variance = np.array([10 if point == observed else 1 for point in points])
+                return np.zeros(len(points)), variance
+
+        state = {"batches": [], "selections": 1}
+        args = SimpleNamespace(
+            pair_weight=.5, inducing=0, initial_design=1,
+            explore_start=1, explore_floor=1, explore_half_life=1,
+            exploration=1, explore_optimism=0, pairs=1,
+            gate_all=False, acquisition_restarts=4,
+        )
+        vector, diagnostics = choose(
+            state, self.space.prior_mean, [observed, unseen], [], args,
+            self.space, Model(), observation_counts=Counter({observed: 1}))
+        self.assertEqual(diagnostics["mode"], "explore")
+        self.assertEqual(vector, unseen)
+
+    def test_exploration_avoids_pending_points(self):
+        pending, unseen = self.space.candidates[:2]
+
+        class Model:
+            @staticmethod
+            def predict(points):
+                variance = np.array([10 if point == pending else 1 for point in points])
+                return np.zeros(len(points)), variance
+
+            @staticmethod
+            def predict_covariance(points):
+                return np.zeros(len(points)), np.eye(len(points))
+
+            @staticmethod
+            def predict_cross_covariance(left, right):
+                return np.zeros((len(left), len(right)))
+
+        state = {"batches": [], "selections": 1}
+        args = SimpleNamespace(
+            pair_weight=.5, inducing=0, initial_design=1,
+            explore_start=1, explore_floor=1, explore_half_life=1,
+            exploration=1, explore_optimism=0, pairs=1,
+            gate_all=False, acquisition_restarts=4,
+        )
+        vector, diagnostics = choose(
+            state, self.space.prior_mean, [pending, unseen], [(pending, None)], args,
+            self.space, Model(), observation_counts=Counter())
+        self.assertEqual(diagnostics["mode"], "explore")
+        self.assertEqual(vector, unseen)
+
     def test_exploration_drops_supportedly_dominated_points(self):
         weak = self.space.canonical({"X": 100, "Y": 20})
         plausible = self.space.canonical({"X": 0, "Y": 10})
@@ -213,7 +265,7 @@ class MixedAcquisitionTest(unittest.TestCase):
             gate_all=False, acquisition_restarts=4,
         )
         vector, diagnostics = choose(
-            state, self.space.prior_mean, self.space.candidates, [], args,
+            state, self.space.prior_mean, [weak, plausible], [], args,
             self.space, Model(), validated={weak, plausible},
             observation_counts=Counter({plausible: 1}))
         self.assertEqual(diagnostics["mode"], "explore")

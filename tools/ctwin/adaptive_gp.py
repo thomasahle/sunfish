@@ -669,6 +669,9 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
             matching = [point for point in pool if point in plausible and (
                 stratum is None or space.is_structural(point) == stratum)]
             pool = matching or [point for point in pool if point in plausible]
+            # Exploration buys coverage; UCB is free to buy more evidence at old points.
+            unseen = [point for point in pool if point not in sites]
+            pool = unseen or pool
             values = score(pool)
             vector = min(zip(values, pool), key=lambda item: (-item[0], item[1]))[1]
         elif args.gate_all or validated_only:
