@@ -269,6 +269,44 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(vector[0], self.space.default[0])
         self.assertNotEqual(vector[1], self.space.default[1])
 
+    def test_new_axis_design_uses_its_closest_feasible_frontier(self):
+        frontier = self.space.canonical({"X": 0, "Y": 0})
+        distractor = self.space.canonical({"X": 0, "Y": 10})
+
+        class Model:
+            @staticmethod
+            def predict(points):
+                mean = np.array([100 if point == distractor else 0 for point in points])
+                return mean, np.ones(len(points))
+
+        state = {
+            "batches": [{
+                "knobs": self.space.knobs(self.space.default),
+                "wins": 1, "draws": 0, "losses": 1,
+            }],
+            "new_axes": ["Y"],
+            "selections": 1000,
+        }
+        args = SimpleNamespace(
+            pair_weight=.5, inducing=0, initial_design=1,
+            explore_start=0, explore_floor=0, explore_half_life=1,
+            exploration=1, explore_optimism=0, pairs=1,
+            gate_all=True, acquisition_restarts=4,
+        )
+        vector, diagnostics = choose(
+            state, self.space.prior_mean, [frontier, distractor], [], args,
+            self.space, Model())
+        self.assertEqual(diagnostics["mode"], "design")
+        self.assertEqual(vector, frontier)
+        state["batches"].append({
+            "knobs": self.space.knobs(frontier),
+            "wins": 1, "draws": 0, "losses": 1,
+        })
+        _, diagnostics = choose(
+            state, self.space.prior_mean, [frontier, distractor], [], args,
+            self.space, Model())
+        self.assertEqual(diagnostics["mode"], "ucb")
+
     def test_gate_all_report_excludes_seeded_points_outside_design(self):
         historical = (37, 13)
         self.assertNotIn(historical, self.space.candidates)

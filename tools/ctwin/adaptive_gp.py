@@ -594,14 +594,17 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
         selections, args.explore_start, args.explore_floor, args.explore_half_life)
     new_axes = set(state.get("new_axes", ()))
     fresh = set()
-    if new_axes:
-        for candidate in candidates:
-            changed = [
-                name for name, value, default in zip(space.names, candidate, space.default)
-                if value != default
-            ]
-            if len(changed) == 1 and changed[0] in new_axes and candidate not in sites:
-                fresh.add(candidate)
+    for name in new_axes:
+        axis = space.names.index(name)
+        seen = {candidate[axis] for candidate in sites}
+        options = [candidate for candidate in candidates
+                   if candidate[axis] != space.default[axis]]
+        if options:
+            distance = min(sum(a != b for a, b in zip(candidate, space.default))
+                           for candidate in options)
+            fresh.update(candidate for candidate in options
+                         if candidate[axis] not in seen
+                         and sum(a != b for a, b in zip(candidate, space.default)) == distance)
     fresh_design = bool(fresh)
     if fresh_design:
         mode = "design"
