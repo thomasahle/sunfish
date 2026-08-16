@@ -247,6 +247,50 @@ VAL-probe-first):
 
 ## Log (newest first)
 
+- 2026-08-16 02:10 UTC: **THE FORFEIT TRIPWIRE FIRED, CORRECTLY — and the
+  pause it caused cost 7h19m of training, which is the next structural gap.**
+
+  `queue_runner` SIGSTOPped `99_tail016` when forfeits rose **34 → 38**.
+  Attribution, done before anything was unpaused:
+
+  | source | forfeits | verdict |
+  |---|---|---|
+  | `nnue-match/*.pgn` (10 files, mtimes 08-07…08-09) | **exactly 34** | the baseline itself — static for a week, entirely historical |
+  | **`guide-lmr-20260815/match.pgn`** | **the +4** | `[White "guide-lmr"] [Black "master"]` — an **owner-side CLASSIC search experiment**, same family as `elo-frontier-lmr` / `elo-intrinsic-lmr` / `elo-capped-lmr` and PR #202/#205's intrinsic LMR. **Out of scope.** |
+  | `replnet-20260814`, `tmpool-20260814`, `tmsmooth-20260814`, `tmfix60-20260814`, `meter-20260815` | **0, all five** | none of our dirs forfeited anything |
+  | **`entry-consts-20260816`** | **0** across 11 PGNs / 1119 games | the flagged anomaly — a fixed-node sweep forfeiting would mean it ran timed or the driver fell through. It did not, and it **is** inside the runner's globs, so it was genuinely watched |
+
+  That the static files sum to **exactly** the baseline is the check that
+  makes the attribution airtight: the 34 was never live traffic, so the
+  entire delta is one identified out-of-scope match.
+
+  **The tripwire proved its worth.** It is the instrument that would catch a
+  real regression — our training starving a live match — and it fired on the
+  first genuine rise it ever saw, paused rather than guessed, and named the
+  pid and the numbers in a report. Pause-and-report is the correct design and
+  it behaved exactly as written.
+
+  **Re-baseline arithmetic — and a correction to the instruction.** The
+  tasking said re-arm at 38. That would have tripped again within seconds:
+  `guide-lmr` kept forfeiting for ~6 minutes after the trip (4 → **32**), so
+  the live count is **66 = 34 static + 32 guide-lmr**. The runner's own
+  operator path handles this — deleting `PAUSED_REPORT.txt` SIGCONTs *and*
+  re-baselines to the current count — so the correct action was to delete the
+  report and let it compute 66 itself. Confirmed:
+  `[queue] resumed 99_tail016.yaml (new baseline 66)`, process state `RNl`.
+
+  **The cost, stated plainly: the run sat SIGSTOPped for 7 h 19 m**
+  (18:48:48Z → 02:07Z). The tail was built so an empty queue could not idle
+  the trainer without a human; it does that. But a **paused** run idles the
+  trainer just as completely, and pause-and-report needs a reader — so the
+  always-training rule broke again through a door the tail does not cover.
+  Three earlier gaps today were 38, 31 and 50 minutes; this one was longer
+  than all three combined. **Naming it, not fixing it unilaterally:** the
+  obvious candidates (auto-resume after attribution, or narrowing the globs
+  to exclude owner-side dirs) both weaken a safety instrument that just
+  demonstrated it works, and that trade is a coordinator call, not mine.
+
+
 - 2026-08-15 16:15 UTC: **PROGRAM-WIDE COMPLETE-PENDING-DIRECTION — the
   training program is formally handed to the owner's decision.**
 
