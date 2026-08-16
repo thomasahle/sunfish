@@ -139,6 +139,20 @@ static int QS_TAIL = 0;
 static int FUEL_NULL = 1;        /* Reduction amount; 0 restores pre-#192. */
 static int FUEL_MIN_DEPTH = 6;
 static int DERIVE_FRESH = 0;
+/* FEN_HIST: how a `position fen` builds the history, which is a SEARCH INPUT.
+ * sunfish_ui/uci.py -- the driver every match runs -- writes
+ *     hist = [pos] if get_color(pos) == WHITE else [pos.rotate(), pos]
+ * so a BLACK-to-move FEN starts with TWO plies: the root, preceded by its own
+ * white-POV mirror.  Searcher.search does `self.history = set(hist)` and
+ * bound() returns 0 for a non-root node found there, so the mirror is a live
+ * draw-scoring entry from move 1 -- and the null move reaches it exactly
+ * (rotate(nullmove) == rotate() whenever ep == kp == 0, i.e. for every book
+ * position without an en-passant square).
+ *   1 (default) = the driver's construction: what every match plays.
+ *   0           = the one-ply construction this file used before.
+ * pyref.py carries the same knob under the same name, so `difftest --set
+ * FEN_HIST=N` keeps both sides of the identity gate honest either way. */
+static int FEN_HIST = 1;
 
 /* ------------------------------------------------------------------ */
 /* Python arithmetic                                                   */
@@ -487,13 +501,24 @@ static jmp_buf stopjmp;
 #define MAXHIST 4096
 static Pos hist[MAXHIST];
 static int nhist;
-static char side0;               /* side to move of hist[0]: 'w' or 'b' */
+static int nhist0 = 1;           /* history length right after `position`: 2 for
+                                    a black-to-move FEN under FEN_HIST=1, else 1.
+                                    Move parity counts from HERE, so it holds
+                                    under either construction and through the
+                                    difftest push/pop walk. */
+static char side0;               /* side to move of hist[nhist0-1]: 'w' or 'b' */
 static Pos rootpos;
 
 static double now_s(void) {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
     return ts.tv_sec + ts.tv_nsec * 1e-9;
+}
+
+/* Is the side to move at hist[nhist-1] black?  Under FEN_HIST=1 this is the
+ * driver's own `len(hist) % 2 == 0`, stated without assuming the base length. */
+static int mover_is_black(void) {
+    return ((side0 == 'b') ^ ((nhist - nhist0) & 1)) != 0;
 }
 
 static int in_history(const Pos *p) {
@@ -992,7 +1017,7 @@ static void go_game(long max_nodes, double movetime_s, int maxd) {
     deadline = movetime_s > 0 ? start + (movetime_s > 0.05 ? movetime_s : 0.05) : 0.0;
     char best[8] = "", cand[8] = "";
     int d0 = 1;
-    int mover_black = (side0 == 'b') ^ ((nhist - 1) % 2);
+    int mover_black = mover_is_black();
 
     if (!setjmp(stopjmp)) {          /* movetime deadline still aborts mid-probe */
         int gamma = 0;
@@ -1071,7 +1096,7 @@ static void reset_state(void) {
     hist[0].wc0 = hist[0].wc1 = hist[0].bc0 = hist[0].bc1 = 1;
     hist[0].ep = hist[0].kp = 0;
     pos_seal(&hist[0]);
-    nhist = 1;
+    nhist = nhist0 = 1;
     side0 = 'w';
 }
 
@@ -1117,9 +1142,17 @@ static int setup_fen(char **tok, int ntok) {
     p.score = score;
     pos_seal(&p);
     side0 = tok[1][0];
-    if (side0 == 'b') p = rotate(&p, 0);
-    hist[0] = p;
-    nhist = 1;
+    /* uci.py: hist = [pos] if WHITE else [pos.rotate(), pos], with pos already
+     * oriented to the mover.  rotate() is an involution, so the driver's
+     * hist[0] is the board exactly as parsed -- p here. */
+    if (side0 == 'b') {
+        if (FEN_HIST) { hist[0] = p; hist[1] = rotate(&p, 0); nhist = 2; }
+        else          { hist[0] = rotate(&p, 0);              nhist = 1; }
+    } else {
+        hist[0] = p;
+        nhist = 1;
+    }
+    nhist0 = nhist;
     return 1;
 }
 
@@ -1233,6 +1266,7 @@ static struct knob KNOBS[] = {
     { "FUEL_NULL", &FUEL_NULL, NULL },
     { "FUEL_MIN_DEPTH", &FUEL_MIN_DEPTH, NULL },
     { "DERIVE_FRESH", &DERIVE_FRESH, NULL },
+    { "FEN_HIST", &FEN_HIST, NULL },
     { NULL, NULL, NULL }
 };
 static int set_knob(const char *name, long v) {
@@ -1247,6 +1281,7 @@ static int set_knob(const char *name, long v) {
     if (!strcmp(name, "FUT_CAP_DEPTH") && (v < 2 || v > 6)) return 0;
     if (!strcmp(name, "FUEL_MIN_DEPTH") && v < 1) return 0;
     if (!strcmp(name, "DERIVE_FRESH") && (v < 0 || v > 1)) return 0;
+    if (!strcmp(name, "FEN_HIST") && (v < 0 || v > 1)) return 0;
     for (struct knob *k = KNOBS; k->name; k++)
         if (!strcmp(k->name, name)) {
             if (k->ip) *k->ip = (int)v; else *k->lp = v;
@@ -1344,7 +1379,7 @@ int main(int argc, char **argv) {
                 hist[0].wc0 = hist[0].wc1 = hist[0].bc0 = hist[0].bc1 = 1;
                 hist[0].ep = hist[0].kp = 0;
                 pos_seal(&hist[0]);
-                nhist = 1;
+                nhist = nhist0 = 1;
                 side0 = 'w';
                 if (ntok >= 3 && !strcmp(tok[2], "moves"))
                     apply_uci_moves(tok + 3, ntok - 3);
@@ -1370,7 +1405,7 @@ int main(int argc, char **argv) {
         }
 
         else if (!strcmp(tok[0], "pop")) {
-            if (nhist > 1) nhist--;
+            if (nhist > nhist0) nhist--;
             puts("ok");
         }
 
@@ -1395,7 +1430,7 @@ int main(int argc, char **argv) {
                 else if (!strcmp(tok[k], "movestogo")) movestogo = atoi(tok[k + 1]);
             }
             if (mt == 0 && (wtime >= 0 || btime >= 0)) {
-                int black = (side0 == 'b') ^ ((nhist - 1) % 2);
+                int black = mover_is_black();
                 double remain = (black ? btime : wtime) / 1000.0;
                 double inc = (black ? binc : winc) / 1000.0;
                 mt = movestogo ? remain / movestogo + inc : remain / 12 + 0.9 * inc;

@@ -57,6 +57,17 @@ Position.gen_moves = _counting_gen_moves
 # Searcher, so the ordinary gate never depends on the transcription.
 BATTERY = {"EVICT_POLICY": 0, "EVICT_SCAN_K": 4, "KILLER_COUNT": 1, "USE_VARIANT": 0}
 
+# --- harness knobs (no Python-side sunfish attribute) ----------------------
+# FEN_HIST: how `position fen` builds the history it hands to search().
+#   1 (default) = sunfish_ui/uci.py's construction, which is what MATCHES run:
+#       hist = [pos] if white else [pos.rotate(), pos].  The extra ply is a
+#       search input -- search() does self.history = set(hist) and bound()
+#       scores any non-root repeat of it as a draw -- so a reference that
+#       builds one ply is not the engine a match plays.
+#   0 = the one-ply construction this file used before, kept so the
+#       difference can be measured rather than argued.
+HARNESS = {"FEN_HIST": 1}
+
 
 def make_searcher():
     if any(BATTERY[k] != d for k, d in
@@ -68,6 +79,24 @@ def make_searcher():
         variants.KILLER_COUNT = BATTERY["KILLER_COUNT"]
         return variants.VariantSearcher()
     return Searcher()
+
+
+def fen_history(fen_fields):
+    """Build the HISTORY a `position fen` starts from, the way the driver every
+    match runs builds it (sunfish_ui/uci.py):
+
+        hist = [pos] if get_color(pos) == WHITE else [pos.rotate(), pos]
+
+    For a black-to-move FEN that is TWO plies: the root, preceded by its own
+    white-POV mirror.  It is not cosmetic -- Searcher.search does
+    `self.history = set(hist)` and bound() returns 0 for a non-root node found
+    there, so the mirror scores as a draw from move 1, and the null move lands
+    on it exactly whenever ep == kp == 0.  Returning one ply here made the gate
+    certify a construction no match ever played."""
+    pos, side = from_fen(fen_fields)
+    if side == "b" and HARNESS["FEN_HIST"]:
+        return [pos.rotate(), pos], side
+    return [pos], side
 
 
 def from_fen(fen_fields):
@@ -137,6 +166,9 @@ def main():
                 BATTERY[args[1]] = int(args[2])
                 searcher = make_searcher()
                 emit("ok")
+            elif args[1] in HARNESS:
+                HARNESS[args[1]] = int(args[2])
+                emit("ok")
             else:
                 emit("err knob")
 
@@ -150,8 +182,7 @@ def main():
                 if "moves" in fen:
                     k = fen.index("moves")
                     fen, moves = fen[:k], fen[k + 1:]
-                pos, side = from_fen(fen)
-                hist = [pos]
+                hist, side = fen_history(fen)
                 apply_uci_moves(hist, moves, side)
             emit("ok")
 
