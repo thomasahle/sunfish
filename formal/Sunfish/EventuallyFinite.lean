@@ -70,7 +70,7 @@ it, by countermodel.  The four design items:
 3. THE SHAPE.  For the no-tail fuel value `fuelValueD2`:
 
      eventual_classification_fuel_finite :
-       ValFloor G 192 -> EndsWithin G N p -> (root legality) ->
+       ValFloor G 211 -> EndsWithin G N p -> (root legality) ->
          forall D >= C*N + C + 6,
            mate-band tests read off the value are exactly the truth,
            and the no-mate case sits strictly inside the band.
@@ -241,7 +241,7 @@ unreachable.  `EvalQuiet` is not needed: no static evaluation is ever
 read at a node this argument visits. -/
 theorem forcedMate_of_fuelValueD2_ends (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 1 ≤ C)
-    (hF : ValFloor G 192) :
+    (hF : ValFloor G 211) :
     ∀ (n D : Nat) (p : G.Pos),
       EndsWithin G n p →
       hasKingCapture G.toNullGame.toGame p = false →
@@ -355,7 +355,7 @@ defender's regime fold puts every legal reply in the band at its
 edge-selected child depth, and the mate-side theorem prices each of them. -/
 theorem forcedlyMated_of_fuelValueD2_ends (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 1 ≤ C)
-    (hF : ValFloor G 192)
+    (hF : ValFloor G 211)
     {n D : Nat} {q : G.Pos}
     (hE : EndsWithin G n q)
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
@@ -409,7 +409,7 @@ analysis on which arm holds is needed, because the budget compresses
 every mate index below `N + 1`. -/
 theorem eventual_classification_fuel_finite (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
-    (hF : ValFloor G 192)
+    (hF : ValFloor G 211)
     {N : Nat} (p : G.Pos)
     (hE : EndsWithin G N p)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)

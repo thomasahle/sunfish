@@ -227,7 +227,7 @@ inductive BPos where
 open BPos in
 /-- Every fidelity hypothesis of the development holds here: the king
 capture is valued in the mate band (`KingCaptureValHigh`), no move value is
-below -192 (`ValFloor`), every both-kings evaluation is quiet (`EvalQuiet`),
+below -211 (`ValFloor`), every both-kings evaluation is quiet (`EvalQuiet`),
 and the pass is the identity, so `BP` is not in check.  The only thing under
 test is what a king-capturable node reports. -/
 def CexB : QSGame where
@@ -244,7 +244,7 @@ def CexB : QSGame where
     | BK => 60000
     | _ => 0
 
-theorem cexB_valFloor : ValFloor CexB 192 := by
+theorem cexB_valFloor : ValFloor CexB 211 := by
   intro p; cases p <;> decide
 
 theorem cexB_kingCaptureValHigh : KingCaptureValHigh CexB := by
@@ -442,7 +442,7 @@ live child's stand-pat is below `MATE_LOWER` under `EvalQuiet`, so the
 accumulator is lifted either way.
 
 Premises are fidelity only: a move-value floor inside the band
-(`ValFloor`, tables -192) and the quiet-eval bound (`EvalQuiet`).  No
+(`ValFloor`, tables -211) and the quiet-eval bound (`EvalQuiet`).  No
 chess-side premise, no window premise beyond the docstring's own
 `1 - MATE_UPPER < gamma <= MATE_UPPER`. -/
 

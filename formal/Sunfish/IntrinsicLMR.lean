@@ -58,7 +58,7 @@ theorem intrinsicEdgeSpend_le_two (G : QSGame) (hot eligible : G.Pos → Nat →
 edge-generic fuel theorem. Every real edge costs at most three plies. -/
 theorem forcedMate_intrinsicValue (G : QSGame) (guard : G.Pos → Bool)
     (hot eligible : G.Pos → Nat → Bool) (low : G.Pos → Nat → G.Pos → Bool)
-    (hF : ValFloor G 192) {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
+    (hF : ValFloor G 211) {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, 3 * k + 4 ≤ D →
       MATE_LOWER ≤ fuelValueD2 G guard 3 (intrinsicEdgeSpend G hot eligible low) D p :=
   forcedMate_fuelValueD2 G guard 3 (intrinsicEdgeSpend G hot eligible low) (by omega) hF hFM
@@ -67,7 +67,7 @@ theorem forcedMate_intrinsicValue (G : QSGame) (guard : G.Pos → Bool)
 full eventual W/D/L classification from depth `3*N + 9` onward. -/
 theorem eventual_classification_intrinsic_finite (G : QSGame) (guard : G.Pos → Bool)
     (hot eligible : G.Pos → Nat → Bool) (low : G.Pos → Nat → G.Pos → Bool)
-    (hF : ValFloor G 192) {N : Nat} (p : G.Pos) (hE : EndsWithin G N p)
+    (hF : ValFloor G 211) {N : Nat} (p : G.Pos) (hE : EndsWithin G N p)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER)) :
     ∀ D : Nat, 3 * N + 9 ≤ D →

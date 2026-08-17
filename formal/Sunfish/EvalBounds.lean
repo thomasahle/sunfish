@@ -43,22 +43,22 @@ namespace Sunfish
 namespace EvalBounds
 
 /-- piece['P'] + pst['P'], all 64 squares (sunfish.py's padding fold). -/
-def sqP : List Int := [100, 100, 100, 100, 100, 100, 100, 100, 178, 183, 186, 173, 202, 182, 185, 190, 107, 129, 121, 144, 140, 131, 144, 107, 83, 116, 98, 115, 114, 100, 115, 87, 74, 103, 110, 109, 106, 101, 100, 77, 78, 109, 105, 89, 90, 98, 103, 81, 69, 108, 93, 63, 64, 86, 103, 69, 100, 100, 100, 100, 100, 100, 100, 100]
+def sqP : List Int := [100, 100, 100, 100, 100, 100, 100, 100, 170, 175, 177, 166, 211, 174, 177, 181, 106, 126, 119, 140, 136, 128, 140, 106, 85, 114, 98, 114, 113, 100, 114, 88, 77, 103, 109, 108, 105, 101, 100, 79, 80, 108, 105, 90, 91, 98, 103, 83, 72, 107, 94, 67, 68, 87, 103, 72, 100, 100, 100, 100, 100, 100, 100, 100]
 
 /-- piece['N'] + pst['N'], all 64 squares (sunfish.py's padding fold). -/
-def sqN : List Int := [214, 227, 205, 205, 270, 225, 222, 210, 277, 274, 380, 244, 284, 342, 276, 266, 290, 347, 281, 354, 353, 307, 342, 278, 304, 304, 325, 317, 313, 321, 305, 297, 279, 285, 311, 301, 302, 315, 282, 280, 262, 290, 293, 302, 298, 295, 291, 266, 257, 265, 282, 280, 282, 280, 257, 260, 206, 257, 254, 256, 261, 245, 258, 211]
+def sqN : List Int := [207, 222, 197, 197, 269, 219, 216, 203, 277, 273, 390, 240, 284, 348, 276, 265, 291, 354, 281, 361, 360, 310, 348, 278, 306, 306, 330, 321, 316, 325, 308, 299, 279, 286, 314, 303, 304, 319, 282, 280, 260, 291, 294, 304, 300, 297, 292, 265, 255, 263, 282, 280, 282, 280, 255, 258, 199, 255, 251, 254, 259, 241, 256, 204]
 
 /-- piece['B'] + pst['B'], all 64 squares (sunfish.py's padding fold). -/
-def sqB : List Int := [261, 242, 238, 244, 297, 213, 283, 270, 309, 340, 355, 278, 281, 351, 322, 298, 311, 359, 288, 361, 372, 310, 348, 306, 345, 337, 340, 354, 346, 345, 335, 330, 333, 330, 337, 343, 337, 336, 320, 327, 334, 345, 344, 335, 328, 345, 340, 335, 339, 340, 331, 326, 327, 326, 340, 336, 313, 322, 305, 308, 306, 305, 310, 310]
+def sqB : List Int := [255, 234, 230, 236, 295, 202, 279, 265, 308, 342, 359, 274, 277, 354, 322, 296, 310, 363, 285, 365, 377, 309, 351, 305, 348, 339, 342, 357, 349, 348, 337, 331, 334, 331, 339, 345, 339, 338, 320, 328, 335, 348, 346, 337, 329, 348, 342, 337, 341, 342, 332, 327, 328, 327, 342, 338, 312, 322, 303, 307, 305, 303, 309, 309]
 
 /-- piece['R'] + pst['R'], all 64 squares (sunfish.py's padding fold). -/
-def sqR : List Int := [514, 508, 512, 483, 516, 512, 535, 529, 534, 508, 535, 546, 534, 541, 513, 539, 498, 514, 507, 512, 524, 506, 504, 494, 479, 484, 495, 492, 497, 475, 470, 473, 451, 444, 463, 458, 466, 450, 433, 449, 437, 451, 437, 454, 454, 444, 453, 433, 426, 441, 448, 453, 450, 436, 435, 426, 449, 455, 461, 484, 477, 461, 448, 447]
+def sqR : List Int := [504, 499, 502, 482, 505, 502, 518, 514, 518, 499, 518, 526, 518, 522, 503, 521, 492, 504, 499, 502, 511, 498, 497, 490, 479, 483, 490, 488, 492, 476, 473, 475, 459, 454, 468, 464, 470, 459, 447, 458, 450, 459, 450, 461, 461, 454, 461, 447, 442, 452, 457, 461, 459, 449, 448, 442, 458, 462, 466, 483, 478, 466, 457, 457]
 
 /-- piece['Q'] + pst['Q'], all 64 squares (sunfish.py's padding fold). -/
-def sqQ : List Int := [935, 930, 921, 825, 998, 953, 1017, 955, 943, 961, 989, 919, 949, 1005, 986, 953, 927, 972, 961, 989, 1001, 992, 972, 931, 930, 913, 951, 946, 954, 949, 916, 923, 915, 914, 927, 924, 928, 919, 909, 907, 899, 923, 916, 918, 913, 918, 913, 902, 893, 911, 929, 910, 914, 914, 908, 891, 890, 899, 898, 916, 898, 893, 895, 887]
+def sqQ : List Int := [936, 930, 920, 815, 1005, 955, 1026, 958, 944, 964, 995, 918, 951, 1013, 992, 955, 927, 976, 964, 995, 1008, 998, 976, 931, 930, 911, 953, 948, 957, 951, 915, 922, 914, 912, 927, 923, 928, 918, 907, 905, 896, 922, 915, 917, 911, 917, 911, 899, 889, 909, 929, 908, 912, 912, 906, 887, 886, 896, 895, 915, 895, 889, 892, 883]
 
 /-- piece['K'] + pst['K'], all 64 squares (sunfish.py's padding fold). -/
-def sqK : List Int := [60004, 60054, 60047, 59901, 59901, 60060, 60083, 59938, 59968, 60010, 60055, 60056, 60056, 60055, 60010, 60003, 59938, 60012, 59943, 60044, 59933, 60028, 60037, 59969, 59945, 60050, 60011, 59996, 59981, 60013, 60000, 59951, 59945, 59957, 59948, 59972, 59949, 59953, 59992, 59950, 59953, 59958, 59957, 59921, 59936, 59968, 59971, 59968, 59996, 60003, 59986, 59950, 59943, 59982, 60013, 60004, 60017, 60030, 59997, 59986, 60006, 59999, 60040, 60018]
+def sqK : List Int := [60004, 60049, 60042, 59911, 59911, 60054, 60075, 59944, 59971, 60009, 60050, 60050, 60050, 60050, 60009, 60003, 59944, 60011, 59949, 60040, 59940, 60025, 60033, 59972, 59950, 60045, 60010, 59996, 59983, 60012, 60000, 59956, 59950, 59961, 59953, 59975, 59954, 59958, 59993, 59955, 59958, 59962, 59961, 59929, 59942, 59971, 59974, 59971, 59996, 60003, 59987, 59955, 59949, 59984, 60012, 60004, 60015, 60027, 59997, 59987, 60005, 59999, 60036, 60016]
 
 def tmax (t : List Int) : Int := t.foldr max (-1000000)
 def tmin (t : List Int) : Int := t.foldr min 1000000
@@ -85,7 +85,7 @@ theorem evalBound_lt_MATE_UPPER : evalBound < MATE_UPPER := by decide
 /-- The mop-up endgame king table (70 - 10 * center manhattan distance,
 PR #140): its spread also keeps the bound below MATE_LOWER, so swapping
 it in cannot break `Bounded`. -/
-def kEndVals : List Int := [-70, -50, -30, -10, -10, -30, -50, -70, -50, -30, -10, 10, 10, -10, -30, -50, -30, -10, 10, 30, 30, 10, -10, -30, -10, 10, 30, 50, 50, 30, 10, -10, -10, 10, 30, 50, 50, 30, 10, -10, -30, -10, 10, 30, 30, 10, -10, -30, -50, -30, -10, 10, 10, -10, -30, -50, -70, -50, -30, -10, -10, -30, -50, -70]
+def kEndVals : List Int := [-56, -40, -24, -8, -8, -24, -40, -56, -40, -24, -8, 8, 8, -8, -24, -40, -24, -8, 8, 24, 24, 8, -8, -24, -8, 8, 24, 40, 40, 24, 8, -8, -8, 8, 24, 40, 40, 24, 8, -8, -24, -8, 8, 24, 24, 8, -8, -24, -40, -24, -8, 8, 8, -8, -24, -40, -56, -40, -24, -8, -8, -24, -40, -56]
 
 theorem kEndSpread_lt : (tmax kEndVals - tmin kEndVals) + 15 * nkMax < MATE_LOWER := by
   decide
@@ -126,16 +126,16 @@ NONNEGATIVE given the shipped tables:
 
 * capture: `+ pst[q][119-j]` -- every table is nonnegative
   (`capture_terms_nonneg`, extending `nk_nonneg` with the king);
-* the kp "castling check detection" bonus: `+ pst[K][119-j]` ≥ 59901;
+* the kp "castling check detection" bonus: `+ pst[K][119-j]` ≥ 59911;
 * promotion: `+ pst[prom][j] - pst[P][j]` -- on every promotion square
   each of N, B, R, Q beats the pawn (`promotion_terms_nonneg`);
 * en passant: `+ pst[P][...]` ≥ 63;
-* castling rook relocation: corner → D1 gains 35, corner → F1 gains 14
+* castling rook relocation: corner → D1 gains 25, corner → F1 gains 9
   (`castle_rook_deltas`; the rotation means only the rank-1 corners of
   the white-view table are ever used).
 
 So the floor of `pos.value` is the worst table delta, `-quietDropMax =
--192` (attained by the queen, 825 - 1017).  This is the concrete number
+-211` (attained by the queen, 815 - 1026).  This is the concrete number
 behind the abstract `ValFloor` hypothesis: the link from the board
 string to these tables is not modeled (same caveat as `Bounded` above),
 but every numeric fact is machine-checked here. -/
@@ -145,12 +145,12 @@ quiet move of that piece can score. -/
 def spread (t : List Int) : Int := tmax t - tmin t
 
 /-- The move-value floor is `-quietDropMax`: no quiet move drops more
-than the queen's worst-case 192. -/
+than the queen's worst-case 211. -/
 def quietDropMax : Int :=
   max (spread sqP) (max (spread sqN) (max (spread sqB)
     (max (spread sqR) (max (spread sqQ) (spread sqK)))))
 
-theorem quietDropMax_eq : quietDropMax = 192 := by decide
+theorem quietDropMax_eq : quietDropMax = 211 := by decide
 
 /-- Every table (king included) is nonnegative, so capture and kp-bonus
 terms of `pos.value` only add. -/
@@ -167,14 +167,14 @@ theorem promotion_terms_nonneg :
      ((List.zipWith (· - ·) (sqQ.take 8) (sqP.take 8)).all (fun x => decide (0 ≤ x)))) = true := by
   decide
 
-/-- The two castling rook relocations gain value: a1 → d1 is +35,
-h1 → f1 is +14 (64-square indices 56/59 and 63/61). -/
+/-- The two castling rook relocations gain value: a1 → d1 is +25,
+h1 → f1 is +9 (64-square indices 56/59 and 63/61). -/
 theorem castle_rook_deltas :
-    sqR.getD 59 0 - sqR.getD 56 0 = 35 ∧ sqR.getD 61 0 - sqR.getD 63 0 = 14 := by
+    sqR.getD 59 0 - sqR.getD 56 0 = 25 ∧ sqR.getD 61 0 - sqR.getD 63 0 = 9 := by
   decide
 
 /-- A king capture's value is dominated by the captured king's square
-value (≥ tmin sqK = 59901), which clears `MATE_LOWER` even after the
+value (≥ tmin sqK = 59911), which clears `MATE_LOWER` even after the
 worst mover drop -- the concrete backing for `KingCaptureValHigh`
 (Sunfish/Stalemate.lean): king captures always pass the QS val-filter. -/
 theorem kingCapture_val_above : MATE_LOWER + quietDropMax < tmin sqK := by decide

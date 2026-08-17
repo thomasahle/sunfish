@@ -611,10 +611,10 @@ theorem:
   `all(...)` arm.
 * The `depth > 2` arm is sound because at depth ≥ 3 the threshold
   `val_lower = 40 - 140 * depth ≤ -380` sits below every move value: a
-  named floor hypothesis `ValFloor` (concretely -192, machine-checked
+  named floor hypothesis `ValFloor` (concretely -211, machine-checked
   from the piece-square tables -- `EvalBounds.quietDropMax_eq`), under
   which `gate_implies_no_filtering` reduces this arm to the first.
-  **Finding**: `val_lower 2 = -240` is ALREADY below the -192 floor, so
+  **Finding**: `val_lower 2 = -240` is ALREADY below the -211 floor, so
   with the shipped tables `allAboveB` is identically true at depth ≥ 2
   and the `depth > 2` arm is redundant -- a scan-skipping optimization,
   one ply more conservative than the tables require
@@ -724,7 +724,7 @@ theorem val_lower_deep (d : Nat) (h : 1 ≤ d) : val_lower d ≤ -380 := by
 
 /-- The pre-`c01915f` threshold, kept ONLY to state what the change
 bought: the depth-sloped form `QS - depth * QS_A`, which masked a
-legal move whenever its table value fell in `[-192, -100)` at remaining
+legal move whenever its table value fell in `[-211, -100)` at remaining
 depth 1.  Nothing in the shipped model reads this. -/
 def val_lower_pre (d : Nat) : Int := QS - d * QS_A
 
@@ -733,8 +733,8 @@ theorem val_lower_pre_one : val_lower_pre 1 = -100 := by decide
 set_option maxRecDepth 4096 in
 /-- **What `c01915f` bought, at the constants.**  The old threshold
 admitted a depth-1 move only from -100 up, leaving the whole band
-`[-192, -100)` -- non-empty for the shipped tables, whose move-value
-floor is -192 -- maskable at the frontier.  The new one admits from
+`[-211, -100)` -- non-empty for the shipped tables, whose move-value
+floor is -211 -- maskable at the frontier.  The new one admits from
 `-MATE_UPPER` up, and nothing in the band is below that. -/
 theorem admission_widened_at_frontier :
     val_lower_pre 1 = -100 ∧ val_lower 1 = -MATE_UPPER ∧
@@ -796,8 +796,8 @@ def qsGateB (G : QSGame) (d : Nat) (p : G.Pos) : Bool :=
 /-! ### The move-value floor -/
 
 /-- **ValFloor**: every legal move's value is at least `-B`.  For the
-shipped tables `B = 192` works: `pos.value` is the mover's table delta
-(≥ -192, the queen's worst case) plus nonnegative terms -- all
+shipped tables `B = 211` works: `pos.value` is the mover's table delta
+(≥ -211, the queen's worst case) plus nonnegative terms -- all
 machine-checked in `Sunfish/EvalBounds.lean` (`quietDropMax_eq`,
 `capture_terms_nonneg`, `promotion_terms_nonneg`, `castle_rook_deltas`);
 the link from board strings to tables is not modeled (the same caveat as
@@ -829,7 +829,7 @@ theorem movesAbove_pos (G : QSGame) {B : Int} (hF : ValFloor G B)
 
 /-- **The `depth > 2` arm, justified**: whenever the gate is on -- by
 either arm -- the filter provably kept every legal move, provided the
-move values respect a floor of at least -380 (tables: -192).  This is
+move values respect a floor of at least -380 (tables: -211).  This is
 the lemma that lets the depth arm inherit the exhaustion argument. -/
 theorem gate_implies_no_filtering (G : QSGame) {B : Int} (hF : ValFloor G B)
     (hB : B ≤ 380) (d : Nat) (p : G.Pos) (hg : qsGateB G d p = true) :
@@ -857,7 +857,7 @@ theorem depth_arm_redundant (G : QSGame) {B : Int} (hF : ValFloor G B)
 set_option maxRecDepth 4096 in
 /-- The table-level arithmetic behind the previous two theorems.  Before
 `c01915f` this said `val_lower 2 = -240`, already below the concrete
--192 floor, so the filter died at depth 2 and the depth arm was one ply
+-211 floor, so the filter died at depth 2 and the depth arm was one ply
 of slack.  It now dies at depth 1, by 69,098 points rather than 48. -/
 theorem tables_kill_filter_at_depth2 :
     val_lower 1 = -69290 ∧ val_lower 1 ≤ -EvalBounds.quietDropMax ∧
@@ -1498,7 +1498,7 @@ theorem gate_always_on (G : QSGame) {B : Int} (hF : ValFloor G B)
 as a hypothesis; the shipped admission discharges it, so above the
 frontier "the fold is the untouched sentinel" certifies that every
 legal move loses the king, on the strength of a fidelity floor alone.
-The floor may be anything inside the band -- the shipped tables' -192
+The floor may be anything inside the band -- the shipped tables' -211
 is nearly three orders of magnitude to spare. -/
 theorem correction_trustworthy_ungated (G : QSGame) (hB : Bounded G.toNullGame.toGame)
     {B : Int} (hF : ValFloor G B) (hBMU : B ≤ MATE_UPPER) (d : Nat) (p : G.Pos)
@@ -4576,7 +4576,7 @@ move, a depth-2 parent converts that to a spurious `MATE_UPPER`, and
 from depth 3 up the probe-free scan trusts the corrupted sentinel.
 Chess-plausibility: no natural position with ONLY >100cp-dropping legal
 moves is known; table arithmetic does not exclude it (`ValFloor` is
-192 > 100). -/
+211 > 100). -/
 def NoMaskedMobility (G : QSGame) : Prop :=
   ∀ p, (∀ m ∈ movesAbove G (val_lower 1) p, hasKingCapture G.toNullGame.toGame m = true) →
     ∀ m ∈ G.moves p, hasKingCapture G.toNullGame.toGame m = true
@@ -5233,7 +5233,7 @@ theorem reducedScan_needs_premise :
 /-- The countermodel respects the shipped floor, which is what makes the
 retirement of `NoMaskedMobility` here a fact about the fix and not about
 a badly-formed game. -/
-theorem cexM_floor : ValFloor CexM 192 := by
+theorem cexM_floor : ValFloor CexM 211 := by
   intro p m _
   cases p <;> cases m <;> decide
 

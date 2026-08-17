@@ -197,6 +197,46 @@ add bookkeeping, so this version was rejected without games.
 
 ---
 
+## 2026-08-17 — Classic: retune PST amplitude
+
+The joint tuner suggested changing both material values and the amplitude of
+the existing piece-square tables. Independent 20,000-node attribution matches
+separated them cleanly: the PST-only arm scored **+26.1 ± 18.9 Elo** over
+1,000 games (**+7.3 Elo lower bound**, 419 wins / 344 losses / 237 draws),
+while the material-only arm scored **−10.4 ± 19.4 Elo**. The search-constant
+arm was also inconclusive at **+3.8 ± 19.1 Elo**.
+
+The retained PST scales are P 90%, N 110%, B 110%, R 70%, Q 110%, middlegame
+K 90%, and endgame K 80%. They are baked into the existing tables rather than
+computed at startup, so the cleaned engine remains **140 lines**. The C twin
+reproduces all sampled Python nodes and reports exactly. The updated concrete
+Lean bounds are `evalBound = 15554` and `quietDropMax = 211`; the full formal
+build passes.
+
+The real-clock confirmation is in, and it does not confirm. A time-faithful C
+match at `3+0.1`, pre-registered at a fixed 1,000 games (500 color-swapped
+opening pairs) before the first game, with both arms running the byte-identical
+binary and differing only in the tables file:
+
+```text
++410 =211 -379    +10.77 +/- 18.75 Elo    LOS 87.0%    Ptnml [69, 75, 193, 82, 81]
+```
+
+Zero illegal moves, zero disconnects, zero time losses, 500 distinct openings,
+1,000/1,000 games finished. The 95% interval is `[-7.98, +29.52]`: it contains
+zero, so on the pre-registered bar this is **timed-unresolved**, not a
+confirmation. The point estimate stays positive and is roughly 40% of the
+fixed-node `+26.1`, and the interval covers both zero and the fixed-node number.
+
+The shrinkage has a visible mechanism. Over the differential gate's own seven
+benchmark positions at depth 7 the retuned tables spend 405,713 nodes against
+master's 396,715 -- **+2.27% more work for the same depth**. A fixed-node match
+pays nothing for that; a clock does. This is the hidden variable behind rule 12,
+and the reason the kptap term went from `+56` at fixed node to `+0.58` timed.
+
+Resolving the sign properly needs a separately pre-registered, larger match or
+an SPRT. Extending this one is not available: the total was fixed before game 1.
+
 ## 2026-08-17 — Classic: one shallow cap family, with lazy null evaluation
 
 The exact cleanup puts depth-0/1 stand-pat futility and the depth-2/3

@@ -17,7 +17,7 @@ weakening.**  The premise is retired outright, by the code.
 **The hope, and why it was reasonable.**  Masking was a FRONTIER
 effect.  The pre-`c01915f` val-filter admitted `val >= QS - depth *
 QS_A`, so at remaining depth 2 the threshold was already -240, below
-the shipped tables' move value floor of -192, and every legal move
+the shipped tables' move value floor of -211, and every legal move
 survived.  Masking therefore existed ONLY at remaining depth 1 --
 roughly `D` plies from the root.  A phantom found there is `D`
 negations away from the root, so it looked like it should either be
@@ -111,12 +111,12 @@ theorem eval_child_live (G : QSGame) {p m : G.Pos}
 
 /-- **(a) Masking is confined to the frontier itself.**  It used to be
 confined to remaining depth 1 -- `val_lower_pre 2 = -240` was already
-below the tables' move-value floor of -192.  Since `c01915f` the
+below the tables' move-value floor of -211.  Since `c01915f` the
 threshold above the frontier is `-MATE_UPPER`, so the QS filter is the
 identity on the legal move list from remaining depth 1 up and no move
 can be masked at any depth the correction runs at.  The answer to
 "where can masking live" is now: nowhere. -/
-theorem filter_identity_off_frontier (G : QSGame) (hF : ValFloor G 192)
+theorem filter_identity_off_frontier (G : QSGame) (hF : ValFloor G 211)
     {d : Nat} (hd : 1 ≤ d) (p : G.Pos) :
     movesAbove G (val_lower d) p = G.moves p :=
   movesAbove_all G d p (allAboveB_of_floor G hF d p (val_lower_le_neg_floor d hd))
@@ -126,7 +126,7 @@ below is still a true theorem, but under the fidelity floor its two
 hypotheses -- "some legal move exists" and "every depth-1-admitted move
 is illegal" -- cannot both hold: the admitted set is the whole move
 list.  So the phantom the rest of this module is about has no site. -/
-theorem maskedFrontier_unreachable (G : QSGame) (hF : ValFloor G 192) (p : G.Pos)
+theorem maskedFrontier_unreachable (G : QSGame) (hF : ValFloor G 211) (p : G.Pos)
     (hai : allIllegalB G p = false)
     (hmask : ∀ m ∈ movesAbove G (val_lower 1) p,
       hasKingCapture G.toNullGame.toGame m = true) : False := by
@@ -184,7 +184,7 @@ suggests: `NoMaskedMobility` bought the honesty arm and nothing else --
 and since `c01915f` it does not have to be bought at all
 (`eventual_classification_frontier_free`). -/
 theorem eventual_completeness_without_frontier (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hZ : NoZugzwang G guard) (p : G.Pos)
+    (hF : ValFloor G 211) (hZ : NoZugzwang G guard) (p : G.Pos)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false) :
     (∀ k, ForcedMate G k p → ∀ D, k + 1 ≤ D → MATE_LOWER ≤ nullValueD2 G guard D p) ∧
     (∀ k, ForcedlyMated G k p → ∀ D, k + 2 ≤ D → nullValueD2 G guard D p ≤ -MATE_LOWER) := by
@@ -212,7 +212,7 @@ complement is closed under negation and `max`.
 
 /-- **EvalBand B**: outside the king-gone zone the static score stays
 within `±B`.  The shipped tables give `B = EvalBounds.evalBound =
-15437`, the same table arithmetic `EvalQuiet` reads one-sidedly; the
+15554`, the same table arithmetic `EvalQuiet` reads one-sidedly; the
 link from board strings to tables is unmodelled exactly as for
 `Bounded`. -/
 def EvalBand (G : Game) (B : Int) : Prop :=
@@ -476,7 +476,7 @@ open EPos in
 `val (C n) (C (n+1)) = -150`: the legal continuation drops more than
 `QS_A - QS = 100` of table value, so under the pre-`c01915f` threshold
 it was masked at remaining depth 1 and admitted from remaining depth 2
-on -- the shape `NoMaskedMobility` forbade and `ValFloor 192` permits,
+on -- the shape `NoMaskedMobility` forbade and `ValFloor 211` permits,
 repeated at every ply.  Against the shipped threshold the same -150 is
 69,140 points clear of the admission edge. -/
 def CexE : QSGame where
@@ -511,14 +511,14 @@ theorem cexE_ai_C (n : Nat) : allIllegalB CexE (EPos.C n) = false := rfl
 
 /-! ### Every fidelity premise holds -/
 
-theorem cexE_floor : ValFloor CexE 192 := by
+theorem cexE_floor : ValFloor CexE 211 := by
   intro p m _
   cases p <;> cases m <;>
     first
       | decide
-      | exact (by decide : (-192 : Int) ≤ -150)
-      | exact (by decide : (-192 : Int) ≤ 0)
-      | exact (by decide : (-192 : Int) ≤ MATE_LOWER)
+      | exact (by decide : (-211 : Int) ≤ -150)
+      | exact (by decide : (-211 : Int) ≤ 0)
+      | exact (by decide : (-211 : Int) ≤ MATE_LOWER)
 
 theorem cexE_quiet : EvalQuiet CexE.toNullGame.toGame := by
   intro p
@@ -784,7 +784,7 @@ and `EvalQuiet` (fidelity, tables) and `NoZugzwang` (chess, layer 2,
 about the PASS and not about the filter).  The one masking premise is
 gone. -/
 theorem eventual_classification_frontier_free (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hZ : NoZugzwang G guard) (p : G.Pos)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER)) :
@@ -803,7 +803,7 @@ before `c01915f` this implication was FALSE (`CexE` was the witness),
 and it is what `NoMaskedMobility` used to be spent on.  Nothing but
 fidelity and the pass premise pays for it now. -/
 theorem eventual_honesty_frontier_free (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hZ : NoZugzwang G guard) (p : G.Pos)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))

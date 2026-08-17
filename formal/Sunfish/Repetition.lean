@@ -212,11 +212,11 @@ The depth condition `C + 2 ≤ D` is what makes the child's own history
 check fire: the reduced child depth is at least `D - C ≥ 2 - 1`, i.e.
 positive, in the regime, and `D - 1 ≥ 1` below the horizon.
 
-Premise: `ValFloor G 192` (fidelity, tables), which admits the repeating
+Premise: `ValFloor G 211` (fidelity, tables), which admits the repeating
 move through the QS filter at nominal depth ≥ 2.  No chess premise. -/
 theorem repetition_not_lost (G : QSGame) (hist guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
-    (hF : ValFloor G 192)
+    (hF : ValFloor G 211)
     {p m : G.Pos}
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
@@ -277,7 +277,7 @@ the initial accumulator and can hold the value above 0.  That gap is
 exactly the pruning debt the fuel oracle retires. -/
 theorem all_replies_repeat_forces_draw (G : QSGame) (hist guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
-    (hF : ValFloor G 192)
+    (hF : ValFloor G 211)
     {p m : G.Pos}
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))
@@ -333,7 +333,7 @@ now, in the modeled game with the repetition rule, DRAWS WITH A
 CERTIFICATE. -/
 theorem draw_arm_strengthened (G : QSGame) (hist guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
-    (hF : ValFloor G 192)
+    (hF : ValFloor G 211)
     {p m : G.Pos}
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
     (hcap : ¬ (hasKingCapture G.toNullGame.toGame p = true))

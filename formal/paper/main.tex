@@ -615,7 +615,7 @@ The $\ML$ margin leak, and its shipped repair $\ML = K - 13Q$
 \textbf{Backs \emph{KingCaptureValHigh}}: a king capture's move value
 clears $\ML$ even after the worst mover drop.\\
 \texttt{quietDropMax\_eq}, \texttt{capture\_terms\_nonneg} & --- &
-The move-value floor is $-192$ (backs \emph{ValFloor}).\\
+The move-value floor is $-211$ (backs \emph{ValFloor}).\\
 \midrule
 \multicolumn{3}{@{}l}{\texttt{Driver.lean} --- what windows MTD-bi can actually probe (Section~\ref{sec:mtdbi})}\\
 \texttt{driver\_wide\_is\_now\_the\_range} & --- &
@@ -2397,7 +2397,7 @@ spec deliberately does not quantify over them.
 
 \begin{theorem}[The spine: a mate in reach is in the band]
 \label{thm:matek}
-Under \emph{ValFloor} alone (every legal move's value is $\ge -192$
+Under \emph{ValFloor} alone (every legal move's value is $\ge -211$
 --- a fidelity fact backed by \texttt{EvalBounds}),
 $\mathrm{ForcedMate}\ G\ k\ p$ implies
 $\ML \le \negamax^{\mathrm{D2}}_D(p)$ at \emph{every} depth
@@ -2506,7 +2506,7 @@ fold.  One more ply computes the honest $0$.
 \end{counterexample}
 
 At defender remaining depth $\ge 2$ the tables' floor admits
-everything ($-192 \ge \mathit{val\_lower}(2) = -240$); depth exactly 1
+everything ($-211 \ge \mathit{val\_lower}(2) = -240$); depth exactly 1
 is the frontier, and the premise that closes it is
 \texttt{NoMaskedMobility} --- ``a position whose every
 depth-1-admitted move is illegal has no legal move at all''.  That
@@ -3112,7 +3112,7 @@ Python's \texttt{sorted} sorts, descending by value. &
 A mate-band move value \emph{is} a king capture. &
 \textbf{Backed} by the \texttt{EvalBounds} margins\\
 \texttt{EvalQuiet}, \texttt{ValFloor} &
-Quiet evaluations stay below the band; move values are $\ge -192$. &
+Quiet evaluations stay below the band; move values are $\ge -211$. &
 \textbf{Backed} by \texttt{EvalBounds}\\
 \midrule
 \multicolumn{3}{@{}l}{\emph{Input validity}}\\

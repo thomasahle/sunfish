@@ -210,12 +210,12 @@ theorem cexRz_qs (v : Int) (g : RzPos → Bool) (gamma : Int)
   rfl
 
 /-- Every fidelity premise of the double-primed theorems holds on the
-countermodel: bounded quiet evals, table floor far above `-192`, king
+countermodel: bounded quiet evals, table floor far above `-211`, king
 captures valued at the top and only them, legally-reached root. -/
 theorem cexRz_fidelity (v : Int) (hv1 : -MATE_LOWER < v) (hv2 : v ≤ 0) :
     Bounded (CexRz v).toNullGame.toGame ∧
     EvalQuiet (CexRz v).toNullGame.toGame ∧
-    ValFloor (CexRz v) 192 ∧
+    ValFloor (CexRz v) 211 ∧
     KingCaptureValHigh (CexRz v) ∧
     HighValIsKingCapture (CexRz v) ∧
     hasKingCapture (CexRz v).toNullGame.toGame RzPos.rz = false := by
@@ -547,7 +547,7 @@ declared value at every `D ≥ k` (the unextended bound is `k + 1`,
 `forcedMate_complete`).  Same premises as the unextended statement:
 `ValFloor` (fidelity) + `NoZugzwang` (layer 2). -/
 theorem forcedMate_ext (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hZ : NoZugzwang G guard)
+    (hF : ValFloor G 211) (hZ : NoZugzwang G guard)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p)
     (hic : inCheckB G.toNullGame p = true) :
     ∀ D : Nat, k ≤ D → MATE_LOWER ≤ nullValueE G guard D p := by

@@ -37,7 +37,7 @@ For the shipped `C = 3` that is `D ≥ 3k`, four plies below `3k + 4`, and
 the dual becomes `D ≥ C*(k-1) + 6` = `3k + 3`, four below `3k + 7`.
 
 WHY IT IS SHARP.  `MDG` below is a ten-position game inside the theorem's
-hypothesis class (`sharp_valFloor : ValFloor MDG 192`) with a forced mate
+hypothesis class (`sharp_valFloor : ValFloor MDG 211`) with a forced mate
 in 3 plies at `MDPos.A1` and in 5 plies at `MDPos.A2`.  One defender node sits at
 nominal depth 5 -- inside the sub-horizon window -- where the pass is
 worth 0; the mate is masked there, and the masking propagates to the
@@ -121,7 +121,7 @@ MECHANISM MAP (pre-#216 line -> post-#218 line).
   searched prefix reports on the identical capped fold.  The depth-one tail
   and the `depth <= 1` futility break
   (`:455-469`) are GONE, folded into the unified cap.  `val_lower 0 = QS` is
-  unchanged, and under `ValFloor G 192` the model's `val_lower d <= -192`
+  unchanged, and under `ValFloor G 211` the model's `val_lower d <= -211`
   from `d = 2` on (`val_lower_le_neg_floor`), so `movesAbove G (val_lower d)`
   already denotes the complete move list at every depth the code now uses
   unconditionally.  Model and code therefore agree at depth 0 and at every
@@ -134,7 +134,7 @@ MECHANISM MAP (pre-#216 line -> post-#218 line).
   move IS admitted (`mem_movesAbove_of_floor`, `2 <= d`) and then
   `foldMax_le_of_mem`, which a WIDER set can only help; the dual bounds every
   member through `movesAbove_subset` into `G.moves`, which a wider set still
-  satisfies.  Consequence: `ValFloor G 192` is now sufficient but no longer
+  satisfies.  Consequence: `ValFloor G 211` is now sufficient but no longer
   necessary for the completeness direction -- the shipped producer admits
   every pseudo-legal move at positive depth outright
   (master's `producerMoves_positive`).  Dropping the premise is an available
@@ -203,7 +203,7 @@ exactly one ply and the pass candidate shares the attacker's MAX, where
 `foldMax_le_of_mem` ignores it. -/
 theorem forcedMate_leaf_fuelValueD2 (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC1 : 1 ≤ C) (hC4 : C ≤ 4)
-    (hF : ValFloor G 192) {p m : G.Pos}
+    (hF : ValFloor G 211) {p m : G.Pos}
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER)) (hm : m ∈ G.moves p)
     (hleg : hasKingCapture G.toNullGame.toGame m = false) (hmate : Checkmated G m) :
     ∀ D : Nat, 2 ≤ D → MATE_LOWER ≤ fuelValueD2 G guard C spend D p := by
@@ -256,7 +256,7 @@ admission depth 2.  For every edge-cost selector, and for every
 reduction cap `1 ≤ C ≤ 4` (shipped: `C = 3`, giving `D ≥ 3k`). -/
 theorem forcedMate_fuelValueD2_sharp (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC1 : 1 ≤ C) (hC4 : C ≤ 4)
-    (hF : ValFloor G 192)
+    (hF : ValFloor G 211)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, 2 ≤ D → C * k + 6 ≤ D + 2 * C →
       MATE_LOWER ≤ fuelValueD2 G guard C spend D p := by
@@ -330,7 +330,7 @@ only be the `mate` constructor -- `step` at index 2 would need
 `ForcedMate G 0`.) -/
 theorem forcedMate_fuelValueD2_short (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC1 : 1 ≤ C) (hC4 : C ≤ 4)
-    (hF : ValFloor G 192)
+    (hF : ValFloor G 211)
     {k : Nat} {p : G.Pos} (hk : k ≤ 2) (hFM : ForcedMate G k p) :
     ∀ D : Nat, 2 ≤ D → MATE_LOWER ≤ fuelValueD2 G guard C spend D p := by
   intro D h2
@@ -350,7 +350,7 @@ fold has to be regime-seeded -- one ply of horizon more than the mate
 side, and no more.  Shipped `C = 3`: `D ≥ 3k + 3`. -/
 theorem forcedlyMated_fuelValueD2_sharp (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC1 : 1 ≤ C) (hC4 : C ≤ 4)
-    (hF : ValFloor G 192)
+    (hF : ValFloor G 211)
     {k : Nat} {q : G.Pos}
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
     (hFL : ForcedlyMated G k q) :
@@ -402,7 +402,7 @@ theorem forcedlyMated_fuelValueD2_sharp (G : QSGame) (guard : G.Pos → Bool)
 `3k + 4`.  Same premise as `forcedMate_intrinsicValue`: `ValFloor` only. -/
 theorem forcedMate_intrinsicValue_sharp (G : QSGame) (guard : G.Pos → Bool)
     (hot eligible : G.Pos → Nat → Bool) (low : G.Pos → Nat → G.Pos → Bool)
-    (hF : ValFloor G 192) {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
+    (hF : ValFloor G 211) {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, 2 ≤ D → 3 * k ≤ D →
       MATE_LOWER ≤ fuelValueD2 G guard 3 (intrinsicEdgeSpend G hot eligible low) D p :=
   fun D h2 hD => forcedMate_fuelValueD2_sharp G guard 3
@@ -411,7 +411,7 @@ theorem forcedMate_intrinsicValue_sharp (G : QSGame) (guard : G.Pos → Bool)
 /-- The mated dual as shipped, sharp: `D ≥ 3k + 3`, against `3k + 7`. -/
 theorem forcedlyMated_intrinsicValue_sharp (G : QSGame) (guard : G.Pos → Bool)
     (hot eligible : G.Pos → Nat → Bool) (low : G.Pos → Nat → G.Pos → Bool)
-    (hF : ValFloor G 192) {k : Nat} {q : G.Pos}
+    (hF : ValFloor G 211) {k : Nat} {q : G.Pos}
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
     (hFL : ForcedlyMated G k q) :
     ∀ D : Nat, 6 ≤ D → 3 * k + 3 ≤ D →
@@ -428,7 +428,7 @@ against the `3k + 4` the suite currently uses. -/
 /-- mate-in-1 (`k = 1`): `D = 2` suffices (suite: 7). -/
 theorem ci_mate_in_1 (G : QSGame) (guard : G.Pos → Bool)
     (hot eligible : G.Pos → Nat → Bool) (low : G.Pos → Nat → G.Pos → Bool)
-    (hF : ValFloor G 192) {p : G.Pos} (hFM : ForcedMate G 1 p) :
+    (hF : ValFloor G 211) {p : G.Pos} (hFM : ForcedMate G 1 p) :
     MATE_LOWER ≤ fuelValueD2 G guard 3 (intrinsicEdgeSpend G hot eligible low) 2 p :=
   forcedMate_fuelValueD2_short G guard 3 (intrinsicEdgeSpend G hot eligible low)
     (by omega) (by omega) hF (by omega) hFM 2 (by omega)
@@ -436,14 +436,14 @@ theorem ci_mate_in_1 (G : QSGame) (guard : G.Pos → Bool)
 /-- mate-in-2 (`k = 3`): `D = 9` suffices (suite: 13). -/
 theorem ci_mate_in_2 (G : QSGame) (guard : G.Pos → Bool)
     (hot eligible : G.Pos → Nat → Bool) (low : G.Pos → Nat → G.Pos → Bool)
-    (hF : ValFloor G 192) {p : G.Pos} (hFM : ForcedMate G 3 p) :
+    (hF : ValFloor G 211) {p : G.Pos} (hFM : ForcedMate G 3 p) :
     MATE_LOWER ≤ fuelValueD2 G guard 3 (intrinsicEdgeSpend G hot eligible low) 9 p :=
   forcedMate_intrinsicValue_sharp G guard hot eligible low hF hFM 9 (by omega) (by omega)
 
 /-- mate-in-3 (`k = 5`): `D = 15` suffices (suite: 19). -/
 theorem ci_mate_in_3 (G : QSGame) (guard : G.Pos → Bool)
     (hot eligible : G.Pos → Nat → Bool) (low : G.Pos → Nat → G.Pos → Bool)
-    (hF : ValFloor G 192) {p : G.Pos} (hFM : ForcedMate G 5 p) :
+    (hF : ValFloor G 211) {p : G.Pos} (hFM : ForcedMate G 5 p) :
     MATE_LOWER ≤ fuelValueD2 G guard 3 (intrinsicEdgeSpend G hot eligible low) 15 p :=
   forcedMate_intrinsicValue_sharp G guard hot eligible low hF hFM 15 (by omega) (by omega)
 
@@ -517,7 +517,7 @@ The mating line is allowed to sink below the horizon, where each edge costs
 exactly one ply. -/
 theorem forcedMate_fuelValueD2_noSubPass (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC1 : 1 ≤ C) (hC3 : C ≤ 3)
-    (hg : ∀ q, guard q = false) (hF : ValFloor G 192)
+    (hg : ∀ q, guard q = false) (hF : ValFloor G 211)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, 2 ≤ D → C * k + 4 ≤ D + 3 * C →
       MATE_LOWER ≤ fuelValueD2 G guard C spend D p := by
@@ -579,7 +579,7 @@ theorem forcedMate_fuelValueD2_noSubPass (G : QSGame) (guard : G.Pos → Bool)
 (`k = 5`) at `D = 10` -- against 9 and 15 today. -/
 theorem ci_mate_in_2_noSubPass (G : QSGame) (guard : G.Pos → Bool)
     (hot eligible : G.Pos → Nat → Bool) (low : G.Pos → Nat → G.Pos → Bool)
-    (hg : ∀ q, guard q = false) (hF : ValFloor G 192)
+    (hg : ∀ q, guard q = false) (hF : ValFloor G 211)
     {p : G.Pos} (hFM : ForcedMate G 3 p) :
     MATE_LOWER ≤ fuelValueD2 G guard 3 (intrinsicEdgeSpend G hot eligible low) 4 p :=
   forcedMate_fuelValueD2_noSubPass G guard 3 (intrinsicEdgeSpend G hot eligible low)
@@ -587,7 +587,7 @@ theorem ci_mate_in_2_noSubPass (G : QSGame) (guard : G.Pos → Bool)
 
 theorem ci_mate_in_3_noSubPass (G : QSGame) (guard : G.Pos → Bool)
     (hot eligible : G.Pos → Nat → Bool) (low : G.Pos → Nat → G.Pos → Bool)
-    (hg : ∀ q, guard q = false) (hF : ValFloor G 192)
+    (hg : ∀ q, guard q = false) (hF : ValFloor G 211)
     {p : G.Pos} (hFM : ForcedMate G 5 p) :
     MATE_LOWER ≤ fuelValueD2 G guard 3 (intrinsicEdgeSpend G hot eligible low) 10 p :=
   forcedMate_fuelValueD2_noSubPass G guard 3 (intrinsicEdgeSpend G hot eligible low)
@@ -598,7 +598,7 @@ is the generic theorem's `C = 2` instance -- `D ≥ 2k + 2` against `3k`.
 `M3` (`C = 1`, no reductions) gives `D ≥ k + 4`. Both are corollaries of
 `forcedMate_fuelValueD2_sharp`; only the edge-cost cap changes. -/
 theorem forcedMate_fuelValueD2_sharp_C2 (G : QSGame) (guard : G.Pos → Bool)
-    (spend : G.Pos → Nat → G.Pos → Nat) (hF : ValFloor G 192)
+    (spend : G.Pos → Nat → G.Pos → Nat) (hF : ValFloor G 211)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, 2 ≤ D → 2 * k + 2 ≤ D →
       MATE_LOWER ≤ fuelValueD2 G guard 2 spend D p :=
@@ -606,7 +606,7 @@ theorem forcedMate_fuelValueD2_sharp_C2 (G : QSGame) (guard : G.Pos → Bool)
     hF hFM D h2 (by omega)
 
 theorem forcedMate_fuelValueD2_sharp_C1 (G : QSGame) (guard : G.Pos → Bool)
-    (spend : G.Pos → Nat → G.Pos → Nat) (hF : ValFloor G 192)
+    (spend : G.Pos → Nat → G.Pos → Nat) (hF : ValFloor G 211)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, 2 ≤ D → k + 4 ≤ D →
       MATE_LOWER ≤ fuelValueD2 G guard 1 spend D p :=
@@ -821,7 +821,7 @@ theorem fuelValueD2C_checkmated (G : QSGame) (guard : G.Pos → Bool)
 at 2 and 3 its own report is clamped below the band. -/
 theorem forcedMate_leaf_fuelValueD2C (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC1 : 1 ≤ C) (hC4 : C ≤ 4)
-    (hF : ValFloor G 192) {p m : G.Pos}
+    (hF : ValFloor G 211) {p m : G.Pos}
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER)) (hm : m ∈ G.moves p)
     (hleg : hasKingCapture G.toNullGame.toGame m = false) (hmate : Checkmated G m) :
     ∀ D : Nat, 4 ≤ D → MATE_LOWER ≤ fuelValueD2C G guard C spend D p := by
@@ -873,7 +873,7 @@ Shipped `C = 3`: `D ≥ 3k + 1` (`k ≥ 3`), `D ≥ 4` (`k ≤ 2`).  `ValFloor`
 only -- still no chess premise. -/
 theorem forcedMate_fuelValueD2C_sharp (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC1 : 1 ≤ C) (hC4 : C ≤ 4)
-    (hF : ValFloor G 192)
+    (hF : ValFloor G 211)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, 4 ≤ D → C * k + 4 ≤ D + C → C * k + 6 ≤ D + 2 * C →
       MATE_LOWER ≤ fuelValueD2C G guard C spend D p := by
@@ -942,7 +942,7 @@ defender side pays nothing for it beyond the mate side's own floor.
 Shipped `C = 3`: `D ≥ 3k + 4`. -/
 theorem forcedlyMated_fuelValueD2C_sharp (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC1 : 1 ≤ C) (hC4 : C ≤ 4)
-    (hF : ValFloor G 192)
+    (hF : ValFloor G 211)
     {k : Nat} {q : G.Pos}
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
     (hFL : ForcedlyMated G k q) :
@@ -1002,7 +1002,7 @@ for the engine as it stands, against the `3k + 4` in the script today. -/
 /-- mate-in-1 (`k = 1`): `D = 4`.  Suite today: 7. -/
 theorem ci_code_mate_in_1 (G : QSGame) (guard : G.Pos → Bool)
     (hot eligible : G.Pos → Nat → Bool) (low : G.Pos → Nat → G.Pos → Bool)
-    (hF : ValFloor G 192) {p : G.Pos} (hFM : ForcedMate G 1 p) :
+    (hF : ValFloor G 211) {p : G.Pos} (hFM : ForcedMate G 1 p) :
     MATE_LOWER ≤ fuelValueD2C G guard 3 (intrinsicEdgeSpend G hot eligible low) 4 p :=
   forcedMate_fuelValueD2C_sharp G guard 3 (intrinsicEdgeSpend G hot eligible low)
     (by omega) (by omega) hF hFM 4 (by omega) (by omega) (by omega)
@@ -1010,7 +1010,7 @@ theorem ci_code_mate_in_1 (G : QSGame) (guard : G.Pos → Bool)
 /-- mate-in-2 (`k = 3`): `D = 10`.  Suite today: 13. -/
 theorem ci_code_mate_in_2 (G : QSGame) (guard : G.Pos → Bool)
     (hot eligible : G.Pos → Nat → Bool) (low : G.Pos → Nat → G.Pos → Bool)
-    (hF : ValFloor G 192) {p : G.Pos} (hFM : ForcedMate G 3 p) :
+    (hF : ValFloor G 211) {p : G.Pos} (hFM : ForcedMate G 3 p) :
     MATE_LOWER ≤ fuelValueD2C G guard 3 (intrinsicEdgeSpend G hot eligible low) 10 p :=
   forcedMate_fuelValueD2C_sharp G guard 3 (intrinsicEdgeSpend G hot eligible low)
     (by omega) (by omega) hF hFM 10 (by omega) (by omega) (by omega)
@@ -1020,7 +1020,7 @@ first-success depth of the hardest suite position is 15, so 16 keeps one
 ply of margin -- and the theorem says no position can need more.) -/
 theorem ci_code_mate_in_3 (G : QSGame) (guard : G.Pos → Bool)
     (hot eligible : G.Pos → Nat → Bool) (low : G.Pos → Nat → G.Pos → Bool)
-    (hF : ValFloor G 192) {p : G.Pos} (hFM : ForcedMate G 5 p) :
+    (hF : ValFloor G 211) {p : G.Pos} (hFM : ForcedMate G 5 p) :
     MATE_LOWER ≤ fuelValueD2C G guard 3 (intrinsicEdgeSpend G hot eligible low) 16 p :=
   forcedMate_fuelValueD2C_sharp G guard 3 (intrinsicEdgeSpend G hot eligible low)
     (by omega) (by omega) hF hFM 16 (by omega) (by omega) (by omega)
@@ -1029,7 +1029,7 @@ theorem ci_code_mate_in_3 (G : QSGame) (guard : G.Pos → Bool)
 gives `D ≥ 2k + 2`; no reductions (`C = 1`) gives `D ≥ k + 3`.  Both are
 instances -- only the edge-cost cap changes. -/
 theorem forcedMate_fuelValueD2C_C2 (G : QSGame) (guard : G.Pos → Bool)
-    (spend : G.Pos → Nat → G.Pos → Nat) (hF : ValFloor G 192)
+    (spend : G.Pos → Nat → G.Pos → Nat) (hF : ValFloor G 211)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, 4 ≤ D → 2 * k + 2 ≤ D →
       MATE_LOWER ≤ fuelValueD2C G guard 2 spend D p :=
@@ -1037,7 +1037,7 @@ theorem forcedMate_fuelValueD2C_C2 (G : QSGame) (guard : G.Pos → Bool)
     hF hFM D h4 (by omega) (by omega)
 
 theorem forcedMate_fuelValueD2C_C1 (G : QSGame) (guard : G.Pos → Bool)
-    (spend : G.Pos → Nat → G.Pos → Nat) (hF : ValFloor G 192)
+    (spend : G.Pos → Nat → G.Pos → Nat) (hF : ValFloor G 211)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, 4 ≤ D → k + 4 ≤ D →
       MATE_LOWER ≤ fuelValueD2C G guard 1 spend D p :=
@@ -1060,7 +1060,7 @@ hatch when it is reached inside the sub-horizon window. -/
 `LF`'s single move illegal (`allIllegalB LF`) and `YC` the check witness
 (`inCheckB LF`).  `pass LF = YC` makes `LF` mated rather than stalemated;
 `pass _ = ZP` is the masking pass -- `ZP` is moveless and not in check, so
-the terminal correction values it 0.  `val ≡ 0` clears the `ValFloor 192`
+the terminal correction values it 0.  `val ≡ 0` clears the `ValFloor 211`
 bar and admits every move at every positive depth. -/
 inductive MDPos where
   | A2 | D2 | A1 | D1 | A0 | LF | XI | KG | YC | ZP
@@ -1089,7 +1089,7 @@ def MDG : QSGame where
   val := fun _ _ => 0
 
 /-- Inside the theorem's hypothesis class. -/
-theorem sharp_valFloor : ValFloor MDG 192 := by
+theorem sharp_valFloor : ValFloor MDG 211 := by
   intro p m _; simp [MDG]
 
 /-- The maximal spend: `min (C-1) 2 = 2` at `C = 3`, so every regime edge
@@ -1240,7 +1240,7 @@ can realize, whose declared value misses the mate band. -/
 
 theorem mate_depth_bound_sharp_k3 :
     ∃ (G : QSGame) (guard : G.Pos → Bool) (spend : G.Pos → Nat → G.Pos → Nat) (p : G.Pos),
-      ValFloor G 192 ∧ ForcedMate G 3 p ∧
+      ValFloor G 211 ∧ ForcedMate G 3 p ∧
         fuelValueD2 G guard 3 spend (3 * 3 - 1) p < MATE_LOWER :=
   ⟨MDG, mdGuard, mdSpend, MDPos.A1, sharp_valFloor, sharp_forcedMate_3_A1, by
     have hML : MATE_LOWER = 47923 := rfl
@@ -1249,7 +1249,7 @@ theorem mate_depth_bound_sharp_k3 :
 
 theorem mate_depth_bound_sharp_k5 :
     ∃ (G : QSGame) (guard : G.Pos → Bool) (spend : G.Pos → Nat → G.Pos → Nat) (p : G.Pos),
-      ValFloor G 192 ∧ ForcedMate G 5 p ∧
+      ValFloor G 211 ∧ ForcedMate G 5 p ∧
         fuelValueD2 G guard 3 spend (3 * 5 - 1) p < MATE_LOWER :=
   ⟨MDG, mdGuard, mdSpend, MDPos.A2, sharp_valFloor, sharp_forcedMate_5_A2, by
     have hML : MATE_LOWER = 47923 := rfl
@@ -1258,7 +1258,7 @@ theorem mate_depth_bound_sharp_k5 :
 
 theorem mated_depth_bound_sharp_k3 :
     ∃ (G : QSGame) (guard : G.Pos → Bool) (spend : G.Pos → Nat → G.Pos → Nat) (q : G.Pos),
-      ValFloor G 192 ∧ hasKingCapture G.toNullGame.toGame q = false ∧
+      ValFloor G 211 ∧ hasKingCapture G.toNullGame.toGame q = false ∧
         ForcedlyMated G 3 q ∧
         -MATE_LOWER < fuelValueD2 G guard 3 spend (3 * 3 + 2) q :=
   ⟨MDG, mdGuard, mdSpend, MDPos.D2, sharp_valFloor, by decide, sharp_forcedlyMated_3_D2, by
@@ -1364,7 +1364,7 @@ theorem sharp_cap_mate3_at_9 (g : MDPos → Bool) :
 
 theorem code_mate_depth_bound_sharp_k3 :
     ∃ (G : QSGame) (guard : G.Pos → Bool) (spend : G.Pos → Nat → G.Pos → Nat) (p : G.Pos),
-      ValFloor G 192 ∧ ForcedMate G 3 p ∧
+      ValFloor G 211 ∧ ForcedMate G 3 p ∧
         fuelValueD2C G guard 3 spend (3 * 3) p < MATE_LOWER :=
   ⟨MDG, mdGuard, mdSpend, MDPos.A1, sharp_valFloor, sharp_forcedMate_3_A1,
     sharp_cap_mate3_at_9 mdGuard⟩
@@ -1375,7 +1375,7 @@ sub-horizon pass (`guard ≡ false`) leaves `D = 9` short of the mate at `k = 3`
 just the same.  The two mechanisms have to go together to move the bound. -/
 theorem code_mate_depth_bound_sharp_k3_guardOff :
     ∃ (G : QSGame) (guard : G.Pos → Bool) (spend : G.Pos → Nat → G.Pos → Nat) (p : G.Pos),
-      ValFloor G 192 ∧ (∀ q, guard q = false) ∧ ForcedMate G 3 p ∧
+      ValFloor G 211 ∧ (∀ q, guard q = false) ∧ ForcedMate G 3 p ∧
         fuelValueD2C G guard 3 spend (3 * 3) p < MATE_LOWER :=
   ⟨MDG, fun _ => false, mdSpend, MDPos.A1, sharp_valFloor, fun _ => rfl,
     sharp_forcedMate_3_A1, sharp_cap_mate3_at_9 (fun _ => false)⟩

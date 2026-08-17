@@ -135,7 +135,7 @@ applies directly with maximum edge cost three:
 
 ```text
 eventual_classification_fuel :
-  ValFloor G 192 -> EvalQuiet G -> (root legality) ->
+  ValFloor G 211 -> EvalQuiet G -> (root legality) ->
     exists D0, forall D >= D0,  W / D / L read off the value, correctly
 ```
 
@@ -159,7 +159,7 @@ holds when the game itself is finite (`EventuallyFinite.lean`):
 
 ```text
 eventual_classification_fuel_finite :
-  ValFloor G 192 -> EndsWithin G N p -> (root legality) ->
+  ValFloor G 211 -> EndsWithin G N p -> (root legality) ->
     forall D >= C*N + C + 6,  W / D / L read off the value, correctly
 ```
 
@@ -249,13 +249,13 @@ forcedMate_fuelValueD2C_sharp    : D >= max 4 (C*(k-1) + 4) (C*(k-2) + 6)  -- 3k
 forcedlyMated_fuelValueD2C_sharp : D >= max 6 (C*k + 4) (C*k + 6 - C)      -- 3k+4
 ```
 
-Premises unchanged throughout: `ValFloor G 192` and nothing else -- no
+Premises unchanged throughout: `ValFloor G 211` and nothing else -- no
 `NoZugzwang`, no mate-band agreement. Layer 1 for the fuel shape
 (`FuelBracketSpec`) remains stated and unproven, so these are bounds on the
 declared value, as the theorems they replace were.
 
 **Sharpness.** `MDG` is a ten-position game inside the hypothesis class
-(`sharp_valFloor : ValFloor MDG 192`) with a forced mate in 3 plies at `A1` and
+(`sharp_valFloor : ValFloor MDG 211`) with a forced mate in 3 plies at `A1` and
 in 5 at `A2`, and an edge spend of 2 (the hot bit plus the intrinsic-LMR bit,
 `min (C-1) 2 = 2`) at every regime node -- a schedule the shipped code
 realizes whenever the fuel probe fails high on a quiet move. One defender node
@@ -393,7 +393,7 @@ a mate at the depth-one frontier.
 `producerMoves`; the selective-search fold in `Stalemate.lean` models the same
 line as `val_lower`, and until now it still carried the PRE-`c01915f` sloped
 form `QS - depth * QS_A`. The two model files disagreed at depth 1 for moves
-valued in `[-192, -100)` — conservative for the soundness theorems (the model
+valued in `[-211, -100)` — conservative for the soundness theorems (the model
 searched a subset of what the code searches) but load-bearing for everything
 built ON the masking. `val_lower` is now the shipped two-valued admission
 
@@ -406,7 +406,7 @@ consequence, spent everywhere downstream, is `movesAbove_pos`: under ANY
 move-value floor inside the band the filtered list at positive depth IS the
 pseudo-legal list. The pre-`c01915f` threshold survives as `val_lower_pre`,
 used only to state what the change bought (`admission_widened_at_frontier`:
-the old admission edge was -100 with a -192 table floor below it; the new one
+the old admission edge was -100 with a -211 table floor below it; the new one
 is -69290, which nothing in the band undercuts).
 
 What that turns into, module by module:
@@ -606,7 +606,7 @@ driver could not act on the ordering at all.  Tie-breaking is free: the
 theorem holds for every maximising choice.  Depth is fixed at `d + 1` for every move of the
 play.
 
-Premises: `ValFloor G 192` + `EvalQuiet` (fidelity, tables),
+Premises: `ValFloor G 211` + `EvalQuiet` (fidelity, tables),
 `NoMaskedMobility` (formerly chess, layer 2 -- required per `CexF`; since
 `c01915f` a THEOREM under `ValFloor`, `noMaskedMobility_of_valFloor`),
 `NoZugzwang` (chess, layer 2), root legality.  No new chess premise.  `#print axioms`:
@@ -883,7 +883,7 @@ range and either band edge.  Four cases, no chess content: the two
 sentinel branches, the terminal ladder (or the stalemate `0`), the
 static eval, and closure of the corridor's complement under negation
 and `max` -- which is all the fold does.  For the shipped tables that
-corridor is `MATE_LOWER - evalBound = 47923 - 15437 = 32486` points
+corridor is `MATE_LOWER - evalBound = 47923 - 15554 = 32369` points
 wide: `shipped_band_gap_wide` machine-checks that it exceeds **two
 thousand** stopping tolerances.  So a 15-point slack cannot move a
 value across a band edge, and the move the driver leaves in `tp_move`
@@ -915,7 +915,7 @@ reduction would have to be re-argued in the first.
 
 **The frontier premise survived the weakening, and was retired by the
 code instead.**  Masking was genuinely local -- `val_lower_pre 2 =
--240` is below the tables' -192 move value floor, so from remaining
+-240` is below the tables' -211 move value floor, so from remaining
 depth 2 up the filter was the identity -- which is why the eventual
 reading looked promising: `CexF`'s phantom dissolved at depth 3.
 
@@ -998,7 +998,7 @@ The re-measurement and the verdict are choice-free; the
 by-case pattern `eventual_classification` itself carries.  One new
 fidelity premise, `EvalBand B` -- the two-sided form of the table bound
 `EvalQuiet` reads one-sidedly, discharged for the shipped tables at
-`B = EvalBounds.evalBound = 15437`.
+`B = EvalBounds.evalBound = 15554`.
 
 ## Terminal positions and legality evidence
 
@@ -1111,7 +1111,7 @@ own stand-pat enters `futTerm` and a live child's stand-pat is below
 `MATE_LOWER` (`EvalQuiet`).
 
 Premises are fidelity only: a move-value floor inside the band (`ValFloor`,
-tables -192) and `EvalQuiet`, plus the docstring's own window condition.  No
+tables -211) and `EvalQuiet`, plus the docstring's own window condition.  No
 chess-side premise.
 
 | fact | theorem | axioms |

@@ -50,7 +50,7 @@
     {"name": "PST_R", "type": "integer", "default": 100,
      "min": 0, "max": 110, "step": 10, "scale": 30},
     {"name": "PST_Q", "type": "integer", "default": 100,
-     "min": 50, "max": 110, "step": 10, "scale": 30},
+     "min": 50, "max": 100, "step": 10, "scale": 30},
     {"name": "PST_K", "type": "integer", "default": 100,
      "min": 50, "max": 120, "step": 10, "scale": 35},
     {"name": "PST_KE", "type": "integer", "default": 100,

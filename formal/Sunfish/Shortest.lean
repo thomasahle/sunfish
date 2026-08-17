@@ -195,7 +195,7 @@ not have to.  Everything downstream only needs the rung index, and
 proving the block is free -- it is two existing theorems and leastness,
 with no new induction over the tree. -/
 theorem leastMate_value_block (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
     {k D : Nat} {p : G.Pos}
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)
@@ -247,7 +247,7 @@ that is exactly the shape the driver needs: `search` stops at
 than `EVAL_ROUGHNESS` cannot fit inside such a window.  Halve the
 per-ply price and this theorem is false. -/
 theorem leastMate_value_separation (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
     {j k D : Nat} {p q : G.Pos}
     (hcapp : hasKingCapture G.toNullGame.toGame p = false)
@@ -328,7 +328,7 @@ This is what the separation lemma buys, in the place it matters:
 affordable only because achievable distances have a fixed parity. -/
 theorem forcedMate_play_shortest_odd (G : QSGame) (guard : G.Pos → Bool)
     (ch : G.Pos → G.Pos) (d : Nat)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
     (hch : NearMaximalChoice G guard d ch) :
     ∀ (k : Nat) (p : G.Pos),
@@ -434,7 +434,7 @@ it is what makes a least distance an ODD one, and the odd distances are
 exactly the ones the driver's final bracket can tell apart. -/
 theorem leastMate_play_shortest (G : QSGame) (guard : G.Pos → Bool)
     (ch : G.Pos → G.Pos) (d : Nat)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
     (hch : NearMaximalChoice G guard d ch)
     {k : Nat} {p : G.Pos}
@@ -498,7 +498,7 @@ engine may be one rung short of the true argmax and still cannot be
 talked into a faster loss. -/
 theorem defence_maximal_resistance (G : QSGame) (guard : G.Pos → Bool)
     (ch : G.Pos → G.Pos) (d : Nat)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
     (hch : NearMaximalChoice G guard d ch)
     {q m : G.Pos} {i j : Nat}
@@ -638,7 +638,7 @@ its terminal status beyond `hai` naming a legal move.  The argument is
 entirely about the positions the engine can move to. -/
 theorem defence_resistance_step (G : QSGame) (guard : G.Pos → Bool)
     (ch : G.Pos → G.Pos) (d : Nat)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
     (hch : NearMaximalChoice G guard d ch)
     {n : Nat} {q : G.Pos}
@@ -705,7 +705,7 @@ prove, and it is what keeps `i` small enough for the local step to fit
 inside the horizon. -/
 theorem defence_resists (G : QSGame) (guard : G.Pos → Bool)
     (ch : G.Pos → G.Pos) (d : Nat)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
     (hch : NearMaximalChoice G guard d ch)
     (hspan : (d : Int) * EVAL_ROUGHNESS ≤ 21366) :
@@ -784,7 +784,7 @@ theorem applies at every node of the play whose remaining budget is at
 least three. -/
 theorem defence_move_legal (G : QSGame) (guard : G.Pos → Bool)
     (ch : G.Pos → G.Pos) (d : Nat)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G)
     (hch : NearMaximalChoice G guard d ch)
     (hspan : (d : Int) * EVAL_ROUGHNESS ≤ 21366)
@@ -842,7 +842,7 @@ is nothing left to defend and `ResistsFor G ch 0 q` is the whole
 claim. -/
 theorem leastMated_defence_resists (G : QSGame) (guard : G.Pos → Bool)
     (ch : G.Pos → G.Pos) (d : Nat)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
     (hch : NearMaximalChoice G guard d ch)
     {k : Nat} {q : G.Pos}
@@ -867,7 +867,7 @@ outlast the faster mate that does not exist, and refuting it needs the
 ply that would have shown it. -/
 theorem dtm_optimal (G : QSGame) (guard : G.Pos → Bool)
     (ch : G.Pos → G.Pos) (d : Nat)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
     (hch : NearMaximalChoice G guard d ch)
     (hspan : (d : Int) * EVAL_ROUGHNESS ≤ 21366) :
@@ -968,7 +968,7 @@ def CexD : QSGame where
 
 instance : DecidableEq CexD.Pos := inferInstanceAs (DecidableEq DPos)
 
-theorem cexD_floor : ValFloor CexD 192 := by
+theorem cexD_floor : ValFloor CexD 211 := by
   intro p m _
   cases p <;> cases m <;> decide
 
@@ -1305,7 +1305,7 @@ The general result behind this instance is
 needs no chess-side frontier assumption at all once the positive-depth
 admission is the reserved sentinel. -/
 theorem cexD_defence_no_longer_needs_frontier :
-    ValFloor CexD 192 ∧ EvalQuiet CexD.toNullGame.toGame ∧
+    ValFloor CexD 211 ∧ EvalQuiet CexD.toNullGame.toGame ∧
       NoZugzwang CexD (fun _ => false) ∧
       MaximalChoice CexD (fun _ => false) 4 chD ∧
       NearMaximalChoice CexD (fun _ => false) 4 chD ∧

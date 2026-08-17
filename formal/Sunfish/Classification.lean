@@ -24,7 +24,7 @@ layer 1, no chess premise) -- eventually classifies the position:
 
 | premise | kind | arm |
 |---|---|---|
-| `ValFloor G 192` | fidelity (tables) | all three (spine + inversions) |
+| `ValFloor G 211` | fidelity (tables) | all three (spine + inversions) |
 | `NoZugzwang` | chess, layer 2 | win + loss (the transfer to the declared function; the finding side) |
 | `EvalQuiet` | fidelity (tables) | neither (depth-0 and frontier inversions) |
 | `NoMaskedMobility` | DISCHARGED (`noMaskedMobility_of_valFloor`) | neither (the honesty side; a premise only before `c01915f`) |
@@ -99,7 +99,7 @@ classification through `classification_visible` below and the landed
 probe corollaries (`forcedMate_probe_failsHigh`, `mate_report_honest`,
 `mated_report_honest`, and their `_kcx` twins). -/
 theorem eventual_classification (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
     (p : G.Pos)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)
@@ -143,7 +143,7 @@ theorem eventual_classification (G : QSGame) (guard : G.Pos → Bool)
 /-- The win and loss arms are mutually exclusive -- directly on the
 real-move spine, no zugzwang or honesty premise: at a common deep
 horizon the two bounds contradict. -/
-theorem classification_exclusive (G : QSGame) (hF : ValFloor G 192)
+theorem classification_exclusive (G : QSGame) (hF : ValFloor G 211)
     {k k' : Nat} {p : G.Pos}
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)
     (hFM : ForcedMate G k p) (hFMd : ForcedlyMated G k' p) : False := by
@@ -156,7 +156,7 @@ theorem classification_exclusive (G : QSGame) (hF : ValFloor G 192)
 horizon iff the declared value reaches the mate band at SOME depth --
 completeness one way, no-false-mates the other. -/
 theorem eventual_mate_iff (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
     (p : G.Pos) (hcapf : hasKingCapture G.toNullGame.toGame p = false) :
     (∃ k, ForcedMate G k p) ↔ ∃ D, MATE_LOWER ≤ nullValueD2 G guard D p := by
@@ -170,7 +170,7 @@ theorem eventual_mate_iff (G : QSGame) (guard : G.Pos → Bool)
 is genuinely needed: a kingless root sits at `-MATE_UPPER` forever
 without being "mated" in the spec's sense. -/
 theorem eventual_mated_iff (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
     (p : G.Pos) (hcapf : hasKingCapture G.toNullGame.toGame p = false)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER)) :
@@ -221,7 +221,7 @@ include `Classical.choice` through `bound_null_spec`, as everywhere
 downstream of layer 1. -/
 theorem classification_visible (G : QSGame) (guard kill : G.Pos → Bool)
     (hB : Bounded G.toNullGame.toGame) (hK : KillerLegal G kill)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
     (D : Nat) (p : G.Pos)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)
@@ -266,7 +266,7 @@ theorem classification_visible_kcx (G : QSGame) (guard kill : G.Pos → Bool)
     (hB : Bounded G.toNullGame.toGame)
     (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
     (hK : KillerLegal G kill)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
     (D : Nat) (p : G.Pos)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)
@@ -702,12 +702,12 @@ theorem negamaxD2t_defender_le (G : QSGame) {d : Nat} {m : G.Pos}
       (fun m' hm' => hall m' (movesAbove_subset G _ m m' hm')) (by omega)
 
 /-- **Mate-in-k completeness for the t-variant, real-move layer** --
-same premise (`ValFloor G 192`), same bound (`D ≥ k + 1`) as
+same premise (`ValFloor G 211`), same bound (`D ≥ k + 1`) as
 `forcedMate_negamaxD2`.  The attacker's witness is admitted, so the
 unfilter trigger provably never fires at attacker nodes; at defender
 nodes the tail only adds options that the `ForcedMate` derivation
 already refutes. -/
-theorem forcedMate_negamaxD2t (G : QSGame) (hF : ValFloor G 192)
+theorem forcedMate_negamaxD2t (G : QSGame) (hF : ValFloor G 211)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, k + 1 ≤ D → MATE_LOWER ≤ negamaxD2t G D p := by
   have hMU : MATE_UPPER = 69290 := rfl
@@ -779,7 +779,7 @@ theorem forcedMate_negamaxD2t (G : QSGame) (hF : ValFloor G 192)
 
 /-- The mated-side dual for the t-variant: same premise, same
 `D ≥ k + 2` bound as `forcedlyMated_negamaxD2`. -/
-theorem forcedlyMated_negamaxD2t (G : QSGame) (hF : ValFloor G 192)
+theorem forcedlyMated_negamaxD2t (G : QSGame) (hF : ValFloor G 211)
     {k : Nat} {q : G.Pos}
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
     (hFL : ForcedlyMated G k q) :
@@ -921,7 +921,7 @@ theorem nullValueD2t_eq_realValue_of_noZugzwangT (G : QSGame)
 /-- Mate-in-k completeness for the declared t-value: the transfer,
 under `NoZugzwangT`. -/
 theorem forcedMate_completeT (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hZ : NoZugzwangT G guard)
+    (hF : ValFloor G 211) (hZ : NoZugzwangT G guard)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, k + 1 ≤ D → MATE_LOWER ≤ nullValueD2t G guard D p := by
   intro D hD
@@ -994,7 +994,7 @@ theorem admitted_frontier_escape_t (G : QSGame) (guard : G.Pos → Bool)
 /-- **No false mates, t-variant -- unconditional over chess**: a
 mate-band declared t-value at a legally-reached root IS a forced mate
 within the probed depth, under FIDELITY premises alone
-(`ValFloor G 192` + `EvalQuiet`).  `NoMaskedMobility` -- once required
+(`ValFloor G 211` + `EvalQuiet`).  `NoMaskedMobility` -- once required
 for the shipped `nullValueD2`, and the reason this variant was written
 -- is absent: where the shipped value's defender fold COULD silently
 drop the escape, the t-fold provably contains it.  Since `c01915f` the
@@ -1002,7 +1002,7 @@ shipped fold contains it too (`filter_identity_off_frontier` at
 remaining depth 1), so the shipped statement is now premise-free as
 well (`eventual_classification_frontier_free`). -/
 theorem forcedMate_of_nullValueD2t (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame) :
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame) :
     ∀ (D : Nat) (p : G.Pos),
       hasKingCapture G.toNullGame.toGame p = false →
       MATE_LOWER ≤ nullValueD2t G guard D p →
@@ -1134,7 +1134,7 @@ theorem forcedMate_of_nullValueD2t (G : QSGame) (guard : G.Pos → Bool)
 
 /-- The mated-side dual, t-variant: fidelity premises only. -/
 theorem forcedlyMated_of_nullValueD2t (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (D : Nat) (q : G.Pos)
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
     (hkgq : ¬ (G.eval q ≤ -MATE_LOWER))
@@ -1204,7 +1204,7 @@ win/loss arms consume `ValFloor` + `NoZugzwangT` as before (the
 finding side's premise was never the target here; its recorded
 discharge option remains the depth-decaying guard). -/
 theorem eventual_classification_t (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hZ : NoZugzwangT G guard)
     (p : G.Pos)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)

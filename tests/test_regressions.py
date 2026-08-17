@@ -143,7 +143,7 @@ class TestCappedNullMove:
         searcher.bound = observed
         score = bound(pos, 0, 5)
 
-        assert score == pos.score + sf.EVAL_ROUGHNESS == 409
+        assert score == pos.score + sf.EVAL_ROUGHNESS == 403
         assert not any(gamma == 1 - sf.MATE_LOWER for gamma, _, _ in calls)
 
 
@@ -310,7 +310,7 @@ class TestStaticMoveCap:
         caps = [min(sf.MATE_LOWER - 1, pos.score + pos.value(m) + sf.QS_A)
             for m in pos.gen_moves()]
 
-        assert score == max(caps) == 186
+        assert score == max(caps) == 181
         assert searcher.nodes == 1
 
     def test_bk15_forcing_capture_recovers_above_cap_horizon(self):
@@ -416,12 +416,12 @@ class TestPositiveDepthEvasion:
         sf.pst["K"] = sf.K_MID
         child = hist_from_fen(self.CHILD)[-1]
         legal = [m for m in child.gen_moves() if not child.move(m).king_capture()]
-        assert [child.value(m) for m in legal] == [-159]
+        assert [child.value(m) for m in legal] == [-143]
         assert max(child.value(m) for m in legal) < sf.QS - sf.QS_A
 
         searcher = sf.Searcher()
         searcher.root, searcher.history = child, set()
-        assert searcher.bound(child, 1 - sf.MATE_LOWER, depth, root=True) == -1108
+        assert searcher.bound(child, 1 - sf.MATE_LOWER, depth, root=True) == -1102
         assert searcher.tp_move[child] in legal
 
 

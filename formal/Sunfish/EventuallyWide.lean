@@ -262,7 +262,7 @@ depth `≥ 4` (the finalizer's exact `-MATE_LOWER`).  `NoZugzwang` and
 mate-band agreement appear nowhere. -/
 theorem forcedMate_fuelValueD2 (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
-    (hF : ValFloor G 192)
+    (hF : ValFloor G 211)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, C * k + 4 ≤ D → MATE_LOWER ≤ fuelValueD2 G guard C spend D p := by
   have hMU : MATE_UPPER = 69290 := rfl
@@ -342,7 +342,7 @@ theorem forcedMate_fuelValueD2 (G : QSGame) (guard : G.Pos → Bool)
 node, so its own fold must be regime-seeded too). -/
 theorem forcedlyMated_fuelValueD2 (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
-    (hF : ValFloor G 192)
+    (hF : ValFloor G 211)
     {k : Nat} {q : G.Pos}
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
     (hFL : ForcedlyMated G k q) :
@@ -390,7 +390,7 @@ is eventually recognized -- a depth bound exists for every `k` -- with
 no assumption on the edge-cost selector and no chess premise. -/
 theorem finite_mates_eventually_recognized (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
-    (hF : ValFloor G 192) :
+    (hF : ValFloor G 211) :
     ∀ k : Nat, ∃ Dk : Nat, ∀ p : G.Pos, ForcedMate G k p →
       ∀ D : Nat, Dk ≤ D → MATE_LOWER ≤ fuelValueD2 G guard C spend D p :=
   fun k => ⟨C * k + 4, fun _ hFM D hD =>
@@ -412,7 +412,7 @@ theorem hotSpend_child_depth (G : QSGame) (hot : G.Pos → Nat → Bool)
 
 /-- Completeness as shipped: `D ≥ 2k + 4`, `ValFloor` only. -/
 theorem forcedMate_fuelValueD2_code (G : QSGame) (guard : G.Pos → Bool)
-    (hot : G.Pos → Nat → Bool) (hF : ValFloor G 192)
+    (hot : G.Pos → Nat → Bool) (hF : ValFloor G 211)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, 2 * k + 4 ≤ D →
       MATE_LOWER ≤ fuelValueD2 G guard 2 (hotSpend G hot) D p :=
@@ -575,7 +575,7 @@ a sloped threshold eventually clears any value whatsoever -- and this
 one is not, because a flat threshold clears only what is above it.  The
 hypothesis it needs is `ValFloor`, i.e. that move values live inside
 the band at all, which every theorem in this file already assumes and
-which the shipped tables satisfy with -192 against -69290.  An
+which the shipped tables satisfy with -211 against -69290.  An
 unconditional reading would have to contemplate a move valued below the
 reserved sentinel, which is not a move value but a token collision. -/
 theorem every_move_eventually_admitted (G : QSGame) {B : Int}
@@ -594,7 +594,7 @@ is uniform at the FRONTIER'S SUCCESSOR: from remaining depth 1 on,
 nothing is filtered (the Liveness respend of
 `tables_kill_filter_at_depth2`, cited through
 `mem_movesAbove_of_floor`). -/
-theorem admitted_uniformly_of_floor (G : QSGame) (hF : ValFloor G 192) :
+theorem admitted_uniformly_of_floor (G : QSGame) (hF : ValFloor G 211) :
     ∀ (d : Nat), 1 ≤ d → ∀ (p m : G.Pos), m ∈ G.moves p →
       m ∈ movesAbove G (val_lower d) p :=
   fun _ hd _ _ hm => mem_movesAbove_of_floor G hF hd hm
@@ -633,7 +633,7 @@ structure EventuallyExhaustive (G : QSGame) (guard : G.Pos → Nat → Bool) : P
 /-- Any finite-horizon guard satisfies the contract, given the fidelity
 floor that arm (i) now needs. -/
 theorem eventuallyExhaustive_of_horizon (G : QSGame) (guard : G.Pos → Nat → Bool)
-    {H : Nat} (hH : Horizon G guard H) (hF : ValFloor G 192) :
+    {H : Nat} (hH : Horizon G guard H) (hF : ValFloor G 211) :
     EventuallyExhaustive G guard :=
   ⟨every_move_eventually_admitted G hF (by decide),
    fun N => ⟨N + 1, fun _ hd => by omega⟩,
@@ -655,7 +655,7 @@ tables) and a finite null horizon -- NO chess premise -- put the
 declared value in the mate band at every `D ≥ k + H + 1`. -/
 theorem forcedMate_nullValueD2G_of_horizon (G : QSGame)
     (guard : G.Pos → Nat → Bool) {H : Nat}
-    (hF : ValFloor G 192) (hH : Horizon G guard H)
+    (hF : ValFloor G 211) (hH : Horizon G guard H)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, k + H + 1 ≤ D → MATE_LOWER ≤ nullValueD2G G guard D p := by
   have hMU : MATE_UPPER = 69290 := rfl
@@ -732,7 +732,7 @@ defender node, so its own pass term must be off too (hence one more
 ply of headroom than the mate side). -/
 theorem forcedlyMated_nullValueD2G_of_horizon (G : QSGame)
     (guard : G.Pos → Nat → Bool) {H : Nat}
-    (hF : ValFloor G 192) (hH : Horizon G guard H)
+    (hF : ValFloor G 211) (hH : Horizon G guard H)
     {k : Nat} {q : G.Pos}
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
     (hFL : ForcedlyMated G k q) :
@@ -876,7 +876,7 @@ mirror of `forcedMate_complete`.  A credit variant thus has BOTH
 guarantees: this one inside its null region (chess premise), and the
 horizon theorem above it (no premise). -/
 theorem forcedMate_completeG (G : QSGame) (guard : G.Pos → Nat → Bool)
-    (hF : ValFloor G 192) (hZ : NoZugzwangG G guard)
+    (hF : ValFloor G 211) (hZ : NoZugzwangG G guard)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, k + 1 ≤ D → MATE_LOWER ≤ nullValueD2G G guard D p := by
   intro D hD
@@ -936,7 +936,7 @@ theorem phaseAdaptiveGuard_horizon (G : QSGame) (phase : G.Pos → Nat)
 `H`, mate-in-k completeness of the declared function needs `ValFloor`
 ONLY -- the chess premise is gone, at a depth cost of `H` plies. -/
 theorem forcedMate_complete_fixedHorizon (G : QSGame) (base : G.Pos → Bool)
-    (H : Nat) (hF : ValFloor G 192)
+    (H : Nat) (hF : ValFloor G 211)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, k + H + 1 ≤ D →
       MATE_LOWER ≤ nullValueD2G G (fixedHorizonGuard G base H) D p :=
@@ -961,7 +961,7 @@ premise, into the value function the composed code arm computes
   no legal move, the fold runs over the full list instead.
 
 The result is the goal state named in this file's header: the whole
-trichotomy on FIDELITY premises only (`ValFloor G 192` + `EvalQuiet`,
+trichotomy on FIDELITY premises only (`ValFloor G 211` + `EvalQuiet`,
 both table-checked).  No chess premise appears in ANY arm.
 
 **Scope, honestly** (inherited verbatim from `Classification.lean` and
@@ -1210,7 +1210,7 @@ bounded member-by-member over the full move list, so the tail's extra
 options are harmless (they are refuted by the same derivation). -/
 theorem forcedMate_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
-    (hF : ValFloor G 192)
+    (hF : ValFloor G 211)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, C * k + 4 ≤ D → MATE_LOWER ≤ fuelValueD2t G guard C spend D p := by
   have hMU : MATE_UPPER = 69290 := rfl
@@ -1286,7 +1286,7 @@ theorem forcedMate_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
 /-- The mated dual for the composed value. -/
 theorem forcedlyMated_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
-    (hF : ValFloor G 192)
+    (hF : ValFloor G 211)
     {k : Nat} {q : G.Pos}
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
     (hFL : ForcedlyMated G k q) :
@@ -1387,7 +1387,7 @@ depths, which weakens the INDEX of the mate found -- recovered by
 `forcedMate_mono`. -/
 theorem forcedMate_of_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame) :
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame) :
     ∀ (D : Nat) (p : G.Pos),
       hasKingCapture G.toNullGame.toGame p = false →
       MATE_LOWER ≤ fuelValueD2t G guard C spend D p →
@@ -1526,7 +1526,7 @@ theorem forcedMate_of_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
 premises only. -/
 theorem forcedlyMated_of_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (D : Nat) (q : G.Pos)
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
     (hkgq : ¬ (G.eval q ≤ -MATE_LOWER))
@@ -1606,7 +1606,7 @@ by the fuel oracle, `NoMaskedMobility` by the frontier tail -- NO chess
 premise appears in any arm. -/
 theorem eventual_classification_fuel_arms (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (p : G.Pos)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER)) :
@@ -1655,7 +1655,7 @@ holds, which is `Classical.em` (a genuine, disclosed use -- the
 per-arm lemmas above and everything they rest on are choice-free). -/
 theorem eventual_classification_fuel (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (p : G.Pos)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER)) :
@@ -1805,7 +1805,7 @@ theorem driver_sees_trichotomy_fuel (G : QSGame) (guard : G.Pos → Bool)
     (probe : Nat → G.Pos → Int → Int)
     (hspec : FuelTailBracketSpec G guard C spend probe)
     (hB : Bounded G.toNullGame.toGame)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (D : Nat) (p : G.Pos)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER))

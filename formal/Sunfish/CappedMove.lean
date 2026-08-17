@@ -169,7 +169,7 @@ def lazyMoveTail (G : QSGame) (static gamma : Int) (depth : Nat)
 /-- Every produced move clears the concrete Python `base`.  At depth zero
 this is true by construction; at positive depth it follows from the shipped
 move-value floor. -/
-theorem producerMoves_above_floor (G : QSGame) (hF : ValFloor G 192)
+theorem producerMoves_above_floor (G : QSGame) (hF : ValFloor G 211)
     (depth : Nat) (p m : G.Pos) (hm : m ∈ producerMoves G depth p) :
     producerFloor depth ≤ G.val p m := by
   by_cases hd : depth = 0
@@ -196,7 +196,7 @@ theorem mem_lazyMoveTail {G : QSGame} {static gamma : Int} {depth : Nat}
 /-- A tail move's fixed cap lies below the current window.  This is the
 arithmetic correspondence between Python's intrinsic threshold and the cap;
 no chess or child-search premise is involved. -/
-theorem lazyMoveTail_cap_lt_gamma (G : QSGame) (hF : ValFloor G 192)
+theorem lazyMoveTail_cap_lt_gamma (G : QSGame) (hF : ValFloor G 211)
     (static gamma : Int) (depth : Nat) (p m : G.Pos) (hdepth : depth ≤ 3)
     (hm : m ∈ lazyMoveTail G static gamma depth p) :
     shallowMoveCap static (G.val p m) depth < gamma := by
@@ -251,7 +251,7 @@ theorem foldMax_windowReports {α : Type _} (gamma : Int)
 
 /-- The one emitted maximum-tail-cap report is valid for the fold of the
 actual capped tail values. -/
-theorem lazyMoveTail_report (G : QSGame) (hF : ValFloor G 192)
+theorem lazyMoveTail_report (G : QSGame) (hF : ValFloor G 211)
     (static gamma : Int) (depth : Nat) (p : G.Pos) (full : G.Pos → Int)
     (hdepth : depth ≤ 3) (hwindow : LOSS < gamma) :
     WindowReport gamma

@@ -21,7 +21,7 @@ Two points the proof turns on:
 
 * **The QS val-filter cannot hide the mating line.**  The attacker's
   chosen move must survive `movesAbove (val_lower depth)`, and
-  `ValFloor G 192` (the shipped tables' floor,
+  `ValFloor G 211` (the shipped tables' floor,
   `EvalBounds.quietDropMax`) already clears the depth-2 threshold
   `val_lower 2 = -240` -- the same arithmetic as the retired gate's
   `tables_kill_filter_at_depth2`, respent here on the liveness side.
@@ -39,7 +39,7 @@ Two points the proof turns on:
   `hasKingCapture` is false at the reached position: the move did not
   leave the attacker's own king capturable.
 
-Premises: `ValFloor G 192` (fidelity, tables) for the spine;
+Premises: `ValFloor G 211` (fidelity, tables) for the spine;
 `NoZugzwang` (layer 2, chess) for the transfer -- Thomas's decision:
 reuse the existing layer-2 assumption rather than change the engine.
 `NoZugzwang` thereby gets its SECOND consumer: accuracy
@@ -111,7 +111,7 @@ tables' move-value floor: since `c01915f` it is the reserved sentinel
 `-MATE_UPPER = -69290`, not the sloped `val_lower_pre 2 = -240` that
 used to make this a depth-2 statement.  The liveness respend of
 `tables_kill_filter_at_depth2`. -/
-theorem val_lower_le_neg_floor (d : Nat) (h : 1 ≤ d) : val_lower d ≤ -192 := by
+theorem val_lower_le_neg_floor (d : Nat) (h : 1 ≤ d) : val_lower d ≤ -211 := by
   have hMU : MATE_UPPER = 69290 := rfl
   rw [val_lower_pos d (by omega)]
   omega
@@ -119,7 +119,7 @@ theorem val_lower_le_neg_floor (d : Nat) (h : 1 ≤ d) : val_lower d ≤ -192 :=
 /-- Under the tables' floor, EVERY legal move survives the QS filter at
 every positive remaining depth -- in particular the mating move does,
 and now at the frontier's own successor and not one ply later. -/
-theorem mem_movesAbove_of_floor (G : QSGame) (hF : ValFloor G 192)
+theorem mem_movesAbove_of_floor (G : QSGame) (hF : ValFloor G 211)
     {d : Nat} (hd : 1 ≤ d) {p m : G.Pos} (hm : m ∈ G.moves p) :
     m ∈ movesAbove G (val_lower d) p := by
   rw [mem_movesAbove]
@@ -174,7 +174,7 @@ the terminal branch, and it is where the distance ENTERS: `allIllegalB`
 true and `inCheckB` true give exactly
 `terminalValue G d m = -MATE_LOWER - min d 21366`, the unspent depth
 made into score. -/
-theorem forcedMate_negamaxD2 (G : QSGame) (hF : ValFloor G 192)
+theorem forcedMate_negamaxD2 (G : QSGame) (hF : ValFloor G 211)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, k + 1 ≤ D → mateFloor D k ≤ negamaxD2 G D p := by
   have hMU : MATE_UPPER = 69290 := rfl
@@ -268,7 +268,7 @@ def ForcedlyMated (G : QSGame) (k : Nat) (q : G.Pos) : Prop :=
 king), which is the only way the search ever gets to ask.  A corollary
 of the spine, not a second induction: legal replies invoke
 `forcedMate_negamaxD2`, illegal ones the sentinel branch. -/
-theorem forcedlyMated_negamaxD2 (G : QSGame) (hF : ValFloor G 192)
+theorem forcedlyMated_negamaxD2 (G : QSGame) (hF : ValFloor G 211)
     {k : Nat} {q : G.Pos}
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
     (hFL : ForcedlyMated G k q) :
@@ -319,7 +319,7 @@ theorem forcedlyMated_negamaxD2 (G : QSGame) (hF : ValFloor G 192)
 /-- The old, `min`-free reading of the spine: a forced mate in `k`
 plies puts the real-move value IN THE BAND at every depth `D >= k + 1`.
 Everything downstream that only needs "this is a mate" cites this. -/
-theorem forcedMate_negamaxD2_band (G : QSGame) (hF : ValFloor G 192)
+theorem forcedMate_negamaxD2_band (G : QSGame) (hF : ValFloor G 211)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, k + 1 ≤ D → MATE_LOWER ≤ negamaxD2 G D p := by
   have hML : MATE_LOWER = 47923 := rfl
@@ -330,7 +330,7 @@ theorem forcedMate_negamaxD2_band (G : QSGame) (hF : ValFloor G 192)
   omega
 
 /-- The dual, `min`-free. -/
-theorem forcedlyMated_negamaxD2_band (G : QSGame) (hF : ValFloor G 192)
+theorem forcedlyMated_negamaxD2_band (G : QSGame) (hF : ValFloor G 211)
     {k : Nat} {q : G.Pos}
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
     (hFL : ForcedlyMated G k q) :
@@ -352,7 +352,7 @@ the function the shipped search provably brackets with no chess premise
 at all (`bound_null_spec`) -- is in the mate band wherever a forced
 mate exists. -/
 theorem forcedMate_complete (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hZ : NoZugzwang G guard)
+    (hF : ValFloor G 211) (hZ : NoZugzwang G guard)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, k + 1 ≤ D → mateFloor D k ≤ nullValueD2 G guard D p := by
   intro D hD
@@ -362,7 +362,7 @@ theorem forcedMate_complete (G : QSGame) (guard : G.Pos → Bool)
 /-- The `min`-free reading of the transfer, for the probe corollaries
 below. -/
 theorem forcedMate_complete_band (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hZ : NoZugzwang G guard)
+    (hF : ValFloor G 211) (hZ : NoZugzwang G guard)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
     ∀ D : Nat, k + 1 ≤ D → MATE_LOWER ≤ nullValueD2 G guard D p := by
   intro D hD
@@ -383,7 +383,7 @@ theorem forcedMate_probe_failsHigh (G : QSGame)
     (guard kill : G.Pos → Bool)
     (hB : Bounded G.toNullGame.toGame)
     (hK : KillerLegal G kill)
-    (hF : ValFloor G 192) (hZ : NoZugzwang G guard)
+    (hF : ValFloor G 211) (hZ : NoZugzwang G guard)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p)
     (D : Nat) (hD : k + 1 ≤ D)
     (gamma : Int) (hg1 : -MATE_UPPER < gamma) (hg2 : gamma ≤ MATE_LOWER) :
@@ -403,7 +403,7 @@ theorem forcedMate_probe_failsHigh_kcx (G : QSGame)
     (hB : Bounded G.toNullGame.toGame)
     (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
     (hK : KillerLegal G kill)
-    (hF : ValFloor G 192) (hZ : NoZugzwang G guard)
+    (hF : ValFloor G 211) (hZ : NoZugzwang G guard)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p)
     (D : Nat) (hD : k + 1 ≤ D)
     (gamma : Int) (hg1 : -MATE_UPPER < gamma) (hg2 : gamma ≤ MATE_LOWER) :
@@ -938,10 +938,10 @@ frontier.**  The value's defender fold ranges over `movesAbove`, but
 `ForcedMate` quantifies over ALL legal defender replies -- filtering
 shrinks the defender's options in the VALUE but not in real chess.  At
 defender remaining depth ≥ 2 the shipped tables' floor clears the
-threshold (`mem_movesAbove_of_floor`, `ValFloor G 192` vs `val_lower 2
+threshold (`mem_movesAbove_of_floor`, `ValFloor G 211` vs `val_lower 2
 = -240`) and nothing is filtered; at defender remaining depth EXACTLY
 1 the threshold is `val_lower 1 = -100` and a legal reply valued in
-`[-192, -100)` was invisible to the fold.  That was not a proof gap but
+`[-211, -100)` was invisible to the fold.  That was not a proof gap but
 a FALSITY: `CexF` below was a machine-checked countermodel -- all
 fidelity premises hold, the depth-2 declared value was the full
 `MATE_UPPER`, and there is NO forced mate; the defender's one escape
@@ -958,7 +958,7 @@ reduced scan, resurrected here as a live layer-2 premise with its first
 real consumer.  Under it, a frontier defender fold at or below
 `-MATE_LOWER` forces `allIllegalB`, contradicting the fold branch; the
 band value then cannot reach the frontier shape at all.  Premises of
-the spine: `ValFloor G 192` + `EvalQuiet` (fidelity, tables) +
+the spine: `ValFloor G 211` + `EvalQuiet` (fidelity, tables) +
 `NoMaskedMobility` (chess, layer 2) + root legality
 (`hasKingCapture p = false`, the `HistoryLegal` shape -- a root the
 side to move could win the king from is `MATE_UPPER` by construction
@@ -1055,7 +1055,7 @@ defender folds quantify over ALL legal replies because nothing is
 filtered at remaining depth ≥ 2 (`ValFloor`).  The frontier arm is
 `frontier_filtered_escape`.  NO `NoZugzwang` anywhere. -/
 theorem forcedMate_of_nullValueD2 (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G) :
     ∀ (D : Nat) (p : G.Pos),
       hasKingCapture G.toNullGame.toGame p = false →
@@ -1157,7 +1157,7 @@ forced mate (`forcedMate_of_nullValueD2` at the replies; depth ≥ 2 at
 the node means nothing was filtered, and the depth-1 case is the
 frontier again, closed the same way). -/
 theorem forcedlyMated_of_nullValueD2 (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G)
     (D : Nat) (q : G.Pos)
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
@@ -1204,7 +1204,7 @@ theorem forcedlyMated_of_nullValueD2 (G : QSGame) (guard : G.Pos → Bool)
 depth, by `bound_null_spec` (layer 1) + the spine. -/
 theorem mate_report_honest (G : QSGame) (guard kill : G.Pos → Bool)
     (hB : Bounded G.toNullGame.toGame) (hK : KillerLegal G kill)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G)
     (D : Nat) (p : G.Pos)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)
@@ -1221,7 +1221,7 @@ theorem mate_report_honest_kcx (G : QSGame) (guard kill : G.Pos → Bool)
     (hB : Bounded G.toNullGame.toGame)
     (hV : KingCaptureValHigh G) (hCF : CaptureFirst G)
     (hK : KillerLegal G kill)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G)
     (D : Nat) (p : G.Pos)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false)
@@ -1243,7 +1243,7 @@ the value from the other side and certifies nothing about being mated.
 The kcx twin is the same rewrite through `boundKCX_null_spec`.) -/
 theorem mated_report_honest (G : QSGame) (guard kill : G.Pos → Bool)
     (hB : Bounded G.toNullGame.toGame) (hK : KillerLegal G kill)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G)
     (D : Nat) (q : G.Pos)
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
@@ -1274,7 +1274,7 @@ guaranteed to arrive anywhere.  It is the distance -- `terminalValue`'s
 unspent depth -- that makes the engine's own greedy choice provably
 convergent.
 
-Premises: `ValFloor G 192` and `EvalQuiet` (fidelity, tables),
+Premises: `ValFloor G 211` and `EvalQuiet` (fidelity, tables),
 `NoMaskedMobility` (chess, layer 2 -- REQUIRED, see `CexF`),
 `NoZugzwang` (chess, layer 2) for the transfer to the declared
 function, root legality, and `MaximalChoice` (the engine's move; its
@@ -1323,7 +1323,7 @@ what lets the play argument use the engine's OWN move rather than the
 spec's witness: the chosen move's value is at least the witness's, so
 the mate it leads to is at least as near. -/
 theorem forcedMate_of_value_dist (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G) :
     ∀ (D t : Nat) (p : G.Pos),
       hasKingCapture G.toNullGame.toGame p = false →
@@ -1440,7 +1440,7 @@ theorem forcedMate_of_value_dist (G : QSGame) (guard : G.Pos → Bool)
 /-- The mated-side dual, with the distance, split so the checkmated
 case carries no budget at all (it needs none: mate is HERE). -/
 theorem forcedlyMated_of_value_dist (G : QSGame) (guard : G.Pos → Bool)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G)
     (D t : Nat) (q : G.Pos)
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
@@ -1569,7 +1569,7 @@ the theorem is unprovable -- indeed unstatable, since "the move the
 value picks" is then any mating move at all. -/
 theorem forcedMate_play_mates (G : QSGame) (guard : G.Pos → Bool)
     (ch : G.Pos → G.Pos) (d : Nat)
-    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hF : ValFloor G 211) (hQ : EvalQuiet G.toNullGame.toGame)
     (hNM : NoMaskedMobility G) (hZ : NoZugzwang G guard)
     (hch : MaximalChoice G guard d ch) :
     ∀ (k : Nat) (p : G.Pos),
@@ -1725,7 +1725,7 @@ theorem cexF_quiet : EvalQuiet CexF.toNullGame.toGame := by
   intro p
   cases p <;> decide
 
-theorem cexF_floor : ValFloor CexF 192 := by
+theorem cexF_floor : ValFloor CexF 211 := by
   intro p m _
   cases p <;> cases m <;> decide
 
