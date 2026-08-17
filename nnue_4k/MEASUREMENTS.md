@@ -70,6 +70,7 @@ how much effort it cost.
 |---|---|---|
 | 2026-08-17 | **IDEA 20 LANDS as `kptap`: the queens-off CLIFF becomes a phase RAMP on BOTH tapered tables — +56.07 ± 29.97 for +53 bytes, and the CHEAPER arm is the one that won** | Fixed-node 20,000, 900 games in ONE round-robin with the shipped entry as anchor, 300 per pairing, srand 20260918, book3k, read once at a fixed total: **0 illegal, 0 `(none)`, count gate 900/900**. `kptap` **[+26.10, +86.04]** clears zero; the king-only ramp `ktap` is **+13.90 ± 29.45** and does not; head-to-head does not separate them. **Ramping the PAWN table is where the Elo is** — pend's step handed a full passer bonus to positions with a full board still on. +53 B vs `ktap`'s +65 B because the two-table form deletes the `end` boolean and pend's switch line and lzma matches the two identical blend lines. Entry **3410 → 3463, 633 spare**, and the landed artifact is **sha256-identical** to the arm that played (`5d01f499be56b903…`). Hot-loop cost zero: the blend runs once per search at the kend+fresh seam, **6.6 µs per `search()` call**, node count IDENTICAL to the incumbent at ph = 24 |
 | 2026-08-17 | **A 50-GAME SELECTOR SELECTS; IT DOES NOT MEASURE — and tonight it ranked the two arms BACKWARDS** | The base-vs-`ktap` pairing read **+99.95 ± 80.14** (srand 20260817) and then **−63.23 ± 78.21** (srand 20261102): opposite signs, 163 Elo apart, each inside the other's interval, on runs with **0 illegal and full counts** (150/150, 300/300). Worse than noisy — **directionally wrong**: the selector put `ktap` 114 Elo AHEAD of `kptap`, the fixed-N block put `kptap` 42 Elo ahead with the only interval that clears zero. Acting on the selector would have landed the dearer arm and quoted +99.95 for it. Every verdict in this sweep therefore comes from a fixed-N block read once at completion; selector numbers are quoted only as the reason a pairing was promoted |
+| 2026-08-17 | **IDEA 3 UNDECIDED: the fitted taper does NOT land — the Elo is in the RAMP, not in the second table set** | 900 games, 300 per pairing, fixed 20,000 nodes, srand 20261207, read once at a fixed total, **0 illegal, count gate 900/900**: `tap` **−10.43 ± 37.23**, `tapk` **+27.85 ± 34.32**, neither clearing zero (the selector had them at +48.96 and +41.89). A fitted eg table set costs **+301…+316 B**, improves held-out win-prob MSE by a real **3.56%** on the SHIPPED quantised tables, and does not convert — while `kptap`, the same ramp with **no fitted data at all**, is **+56.07 ± 29.97** for **53 B**. Fifth time this lane has measured a fitted eval fitting better and playing no better, and the first time against a hand-written phase term that beat it at a fifth of the price. **Both taper arms DELETE pend**, and the mean constraint that made the fit generalise cannot re-express it, so every number above is net of losing a landed +21.31; `tapp` (3726 B, pend kept UNDER the fitted delta) is built, gated and unscreened, and the next taper screen should carry it against `kptap` rather than the old base |
 | 2026-08-17 | **THE TAPER FITS — the 2026-08-13 "continuous phase blend does not fit: 4157 bytes, 61 OVER, dead on price" verdict is OVERTURNED by storing the endgame set as `mg + a coarse delta`** | Fitted second table set at **+312 B** (`tap` 3722, 374 spare) and **+301 B** (`tapk` 3711, 385 spare) on the 3410-byte entry; shape sweep across both roots and seven delta steps in the re-anchored `price_taper.py --delta`. A fitted eg table is not independent of the mg one, so subtracting leaves near-zero numbers and a mixed-radix pack over 25 levels is where the codec is cheapest. Same trick reprices **2 king-WING buckets at +217…+294 B** (filler) against the old ~134 B/bucket full-block figure where 4 exact buckets were 409 OVER. `price_taper.py` had to be **re-anchored for the second time in four days** — `pend` rewrote the seam the 2026-08-13 re-anchor had just targeted, so the script failed its own assert and none of its numbers were reproducible from it |
 | 2026-08-17 | **THE MEAN-CONSTRAINED TAPERED FIT BEATS THE FREE ONE HELD OUT: −3.76% vs −2.41% win-prob MSE, and the SHIPPED quantised tables keep −3.56%** | 2,000,000 positions of `pool10m`, held out on the corpus's own `val_a`, K=350. Phase is a function of the material, so eg and phase are collinear — a lone rook at ph=2 is what MAKES the phase 2 — and the free fit exploits it, returning a queen **635 cp below** its own midgame value: material re-pricing wearing a taper's clothes, which generalises worse AND is the one thing the delta encoding cannot compress. Pinning each eg table to its mg mean (five equalities through the KKT system, not a re-centring) leaves only SHAPE. `score_tables.py` then scores the tables the ARTIFACT DECODES, per codec.py's standing complaint that the fit never sees the emit: the 16 cp grid costs 0.27 of the 3.83 points |
 | 2026-08-17 | **THE FRAME BUG THAT REPORTED A 24.5% IMPROVEMENT** | `pool10m`'s meta says `"frame": "labels side-to-move"`; the fit's features are white-framed. Fed together they sign-scramble every black-to-move row — half the corpus — and the fit answers by driving the piece values toward zero, which genuinely IS the best linear fit to a sign-scrambled target. **The loss did not show it; the tables did**: the queen came back 1,146 cp below its midgame value. A held-out improvement is not a correctness check |
@@ -406,9 +407,44 @@ from a fixed-N block read once at completion.
 | `tap` vs `tapk` | 50.00 | 0.00 ± 87.97 |
 
 Both taper arms point positive against the shipped entry and neither separates
-from the other. **Promoted, not concluded**: a fixed 300 games per pairing on
-base / `tap` / `tapk` (srand 20261207) is registered and running, and it is the
-number that decides.
+from the other. Promoted to a fixed-N block, which is the number that decides.
+
+### IDEA 3 CONFIRMATION — UNDECIDED. The fitted taper does NOT land
+
+**900 games, 300 per pairing, fixed 20,000 nodes, srand 20261207, book3k, read
+once at a fixed total. 0 illegal, 0 `(none)`, count gate 900/900.**
+
+| pairing | score% (A) | Elo (A) | interval |
+|---|---|---|---|
+| base vs `tap` | 51.50 | **`tap` −10.43 ± 37.23** | [−47.66, +26.80] |
+| base vs `tapk` | 46.00 | **`tapk` +27.85 ± 34.32** | [−6.47, +62.17] |
+| `tap` vs `tapk` | 48.00 | `tapk` +13.90 ± 33.91 | [−48.63, +13.85] |
+
+**Neither arm clears zero.** The selector's +48.96 and +41.89 became −10.43 and
++27.85 — the same shrink toward nothing that the `ktap` pairing showed, and the
+reason this entry leads with the selector warning.
+
+**What the three numbers say together, read against `kptap`'s +56.07.** The arm
+that carries the phase ramp AND the king ramp (`tapk`) is the better of the
+two; the arm whose king stays on the queens-off cliff (`tap`) is not
+distinguishable from the baseline. Both delete pend. `kptap` — the ramp
+*alone*, with pend ramped rather than deleted and **no fitted data at all** —
+beats both of them for 53 bytes instead of 300.
+
+**So the taper's Elo is in the RAMP, not in the second table set.** A fitted
+endgame table set costs +301…+316 B, improves held-out win-probability MSE by
+a real 3.56%, and does not convert. That is the fifth time this lane has
+measured a fitted eval fitting better and playing no better, and it is the
+first time it has been measured against a hand-written phase term that beat it
+at a fifth of the price.
+
+**The one arm that answers the obvious objection is built and unscreened.**
+`tapp` (3726 B) keeps pend UNDER the fitted delta, because the mean constraint
+that made the fit generalise cannot express a monotone advancement bonus (see
+the pawn-table comparison in the `tapp` commit). Every taper arm that played
+tonight was net of losing a landed, confirmed +21.31. `tapp` is the first arm
+the next taper screen should carry — and it should carry `kptap`, not the old
+base, as its anchor.
 
 ### Regression nets (fixed depth, this entry's own baseline, not classic's)
 
