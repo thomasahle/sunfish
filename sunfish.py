@@ -1,7 +1,10 @@
 #!/bin/sh
+# Sunfish - a minimalist Python chess engine by Thomas Dybdahl Ahle and contributors.
+# Copyright (c) Thomas Dybdahl Ahle. Licensed under the GNU General Public License v3.
+# Original project: github.com/thomasahle/sunfish
+
 """:"
-# Polyglot header: run with pypy3 when available, else python3 (issue #102).
-# No -u needed: all UCI output is flushed explicitly (sunfish_ui/uci.py).
+# Python polyglot trick: find the best available python interpreter:
 for cmd in pypy3 python3; do
    command -v "$cmd" > /dev/null && exec "$cmd" "$0" "$@"
 done
