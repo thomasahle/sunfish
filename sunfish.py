@@ -373,14 +373,25 @@ class Searcher:
             # - at depth=0, since it would be expensive and break "futility pruning".
             if depth > 0 and pos in self.history: return 0
 
-        # Generator of moves to search in order.
-        # This allows us to define the moves, but only calculate them if needed.
+        # Look for the strongest move from earlier searches of this position.
+        # Read it before null-move in case the recursive probe evicts it.
+        killer = self.tp_move.get(pos)
+
+        # A fixed-target null probe reduces hot nodes. Its static guard also
+        # limits intrinsic LMR to positions where passing is meaningful.
+        d = depth
+        guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
+        if guard:
+            nullpos = pos.rotate(nullmove=True)
+            target = pos.score + NULL_MARGIN
+            d -= -self.bound(nullpos, 1 - target, depth - 7) >= target
+
+        # At positive depth all real moves belong to the fixed fold. At the
+        # quiescence frontier, retain the tuned tactical threshold.
+        val_lower = QS if depth == 0 else -MATE_UPPER
+
+        # Yield resolved virtual reports or unresolved real moves lazily.
         def moves():
-            # Look for the strongest move from earlier searches of this position.
-            # See https://chessprogramming.org/Killer_Move for details.
-            # We read this "killer move" before null-move in case it would get
-            # evicted from the table or replaced with something else worse.
-            killer = self.tp_move.get(pos)
 
             # First try not moving at all, i.e. the null move.
             # See https://chessprogramming.org/Null_Move for details.
@@ -396,62 +407,35 @@ class Searcher:
                     and any(c in pos.board for c in "RBNQ")):
                 score = cap if (cap := pos.score + EVAL_ROUGHNESS) < gamma else min(cap,
                     -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
-                # A king capture substitutes the exact MATE_UPPER for a
-                # virtual fail-high; the cached move is a capture certificate.
-                proof = score >= gamma and (self.tp_move.get(pos) or pos.king_capture())
-                yield (proof, MATE_UPPER) if proof and pos.value(proof) >= MATE_LOWER else (None, score)
-
-            # A fixed-target null probe reduces hot nodes. Its static guard also
-            # limits intrinsic LMR to positions where passing is meaningful.
-            d = depth
-            guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
-            if guard:
-                nullpos = pos.rotate(nullmove=True)
-                target = pos.score + NULL_MARGIN
-                d -= -self.bound(nullpos, 1 - target, depth - 7) >= target
+                # A king capture substitutes the exact MATE_UPPER for a virtual fail-high.
+                proof = score >= gamma and pos.king_capture()
+                yield (proof, MATE_UPPER) if proof else (None, score)
 
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else. (Note depth at root is always > 0.)
             if depth == 0:
                 yield None, pos.score
 
-            # We only generate moves with an intrinsic score above some treshold
-            # that decreases with depth. This is a generalization of Quiescent Search,
-            # See https://chessprogramming.org/Quiescence_Search for details.
-            val_lower = QS - depth * QS_A
-            # Bound the omitted depth-one tail by its best stand-pat,
-            # widening to all moves only when that cannot fail low.
-            if depth == 1:
-                tail = pos.score + val_lower - 1
-                if tail < gamma:
-                    yield None, tail
-                else:
-                    val_lower = -MATE_UPPER
+            if killer and (val := pos.value(killer)) >= val_lower:
+                yield killer, MATE_UPPER if val >= MATE_LOWER else val
 
-            # Search the killer first, but only if it belongs to the fixed move
-            # set. At depths 0-1 the static cap is exact stand-pat futility; at
-            # depths 2-3 it shapes the tree by bounding every ordinary move.
-            def score_move(move, val):
-                move_depth = d - 1 - (not root and guard and val < LMR)
-                cap = (MATE_UPPER if depth > 3 or val >= MATE_LOWER else
-                    min(MATE_LOWER - 1, pos.score + val + max(depth - 1, 0) * QS_A))
-                if cap < gamma: return None, cap
-                return move, min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
-
-            if killer and pos.value(killer) >= val_lower:
-                yield score_move(killer, pos.value(killer))
-
-            # Search the fixed move set by decreasing value. A virtual cap
-            # bounds the rest of the sorted tail, so it ends the stream.
-            for val, move in sorted(((v, m) for m in pos.gen_moves() if (v:=pos.value(m)) >= val_lower), reverse=True):
-                result = score_move(move, val)
-                yield result
-                if result[0] is None: break
+            # Search the fixed move set by decreasing intrinsic value.
+            for val, move in sorted(((v, m) for m in pos.gen_moves()
+                    if (v:=pos.value(m)) >= val_lower), reverse=True):
+                yield move, MATE_UPPER if val >= MATE_LOWER else val
 
         # Run through the moves, shortcutting when score >= gamma.
         # live is True if we saw a legal (not null, score > -MATE_UPPER) move
         best, live = -MATE_UPPER, False
         for move, score in moves():
+            if move is not None and score < MATE_LOWER:
+                val = score
+                cap = (MATE_UPPER if depth > 3 else
+                    min(MATE_LOWER - 1, pos.score + val + max(depth - 1, 0) * QS_A))
+                if cap < gamma: move, score = None, cap
+                else:
+                    move_depth = d - 1 - (not root and guard and val < LMR)
+                    score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
             best = max(best, score)
             live |= move is not None and score > -MATE_UPPER
             if best >= gamma:

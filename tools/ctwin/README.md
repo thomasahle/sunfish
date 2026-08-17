@@ -50,9 +50,9 @@ in the git history of this file.
   namedtuples do — score included (a position rebuilt under a different
   K-table is a different key in Python too).
 - **Generator laziness.** `bound()`'s move phases run in Python's exact
-  order — killer read *before* the null-move search, the null proof
-  re-reading the table, the killer re-searched before the sorted list exists, the sorted list
-  never built if the killer cuts.
+  order: the killer is read before null search, capture substitution scans
+  the board directly, king captures resolve before recursion, and the sorted
+  list is never built if the killer cuts.
 - **Node counting.** `nodes` increments at exactly one site: `bound()`
   entry, including driver probes and TT-hit returns.
 - **Module state.** `pst["K"]` swaps to the endgame table per search and
@@ -94,11 +94,12 @@ in the git history of this file.
 
 - Identity, standing gate (`make gate`, PGO binary): 27 positions
   (startpos + openings, Bratko-Kopec, WAC, mates, stalemates, null-move
-  mates, perft set, KQK) × depth 1..6 with the movegen walk — 830 MTD-bi
+  mates, perft set, KQK) × depth 1..6 with the movegen walk — 818 MTD-bi
   probes and 901 movegen lists byte-identical; depth 1..7 on 6 positions,
-  264 probes; two tuned-knob sweeps (QS/QS_A/EVAL_ROUGHNESS on both
-  sides) × depth 1..5, 1285 probes; eviction sweeps (`TABLE_SIZE` 500 and
-  50) × depth 1..6, 1691 probes. Movegen *call counts* are compared in
+  235 probes; two tuned-knob sweeps (QS/QS_A/EVAL_ROUGHNESS on both
+  sides) × depth 1..5, 1396 probes; an LMR sweep × depth 1..6, 818 probes;
+  eviction sweeps (`TABLE_SIZE` 500 and 50) × depth 1..6, 1828 probes.
+  Movegen *call counts* are compared in
   every `done` line since the battery landed.
 - Identity, battery cells: USE_VARIANT transcription proof (wide + walk,
   and `TABLE_SIZE` 500) plus 8 cells (policies 1/2/3, killers 2/3, two

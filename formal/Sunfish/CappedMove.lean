@@ -1,8 +1,13 @@
 /-
-The unified shallow static move cap and lazy depth-one tail in Searcher.bound.
+The positive-depth move producer and shallow static cap in Searcher.bound.
 
-At depths zero through three, every move except a king capture passes through
-one producer with cap
+At depth zero the producer retains the tuned quiescence threshold. At every
+positive depth it emits the complete pseudo-legal move list, independently of
+the window and move table. A mate-band intrinsic value is normalized directly
+to `MATE_UPPER`; `HighValIsKingCapture` says that this branch is exactly a king
+capture, whose recursive child would immediately return `-MATE_UPPER`.
+
+Every other move at depths zero through three has the fixed cap
 
     min (MATE_LOWER - 1) (static + gain + (depth - 1) * QS_A).
 
@@ -13,17 +18,8 @@ depths two and three it instead declares the move value to be the minimum of
 the cap and the full child value. If the cap lies below the window, the child
 need not be searched; otherwise `WindowReport.cap` transports its report.
 
-Moves are sorted by decreasing gain. The cap is monotone in gain, so once a
-move returns a virtual cap, that report also dominates the rest of the tail.
-Only king captures bypass the cap and retain the exact `MATE_UPPER` sentinel.
-The selective cap can delay a shallow mate proof, but it cannot invent one,
-and it disappears above depth three.
-
-At remaining depth one, the omitted moves' best possible stand-pat is emitted
-as a fail-low upper report.  If that report cannot fail low, the threshold
-widens to the table-proved move floor and the complete tail is searched.  Thus
-the depth-one report targets the complete move fold without paying to generate
-the tail at ordinary windows.
+The positive-band ceiling prevents a selective cap from inventing mate. The
+cap disappears above depth three.
 -/
 
 import Sunfish.CappedNull
@@ -45,16 +41,6 @@ theorem shallowMoveCap_lowDepth (static gain : Int) (depth : Nat)
   have hzero : depth - 1 = 0 := by omega
   simp [shallowMoveCap, hzero, Int.min_def]
   omega
-
-/-- The cap follows the intrinsic move ordering: a later, no-higher-gain move
-has a no-higher cap. This is the algebra behind ending the sorted stream after
-its first virtual capped report. -/
-theorem shallowMoveCap_mono_gain (static first later : Int) (depth : Nat)
-    (hgain : later ≤ first) :
-    shallowMoveCap static later depth ≤ shallowMoveCap static first depth := by
-  unfold shallowMoveCap
-  simp only [Int.min_def]
-  split <;> split <;> omega
 
 /-- A cap below the current window is a complete fail-low report for the
 capped value; no report about the full child is needed. -/
@@ -103,55 +89,40 @@ theorem cappedMove_preserves_negativeMate (cap value : Int)
     min cap value = value := by
   omega
 
-/-- Two reports at the same window can be joined through the node's `max`.
-This is the report-algebra rule used to combine the searched prefix with the
-omitted tail's upper report. -/
-theorem WindowReport.max (gamma ra rb a b : Int)
-    (ha : WindowReport gamma ra a) (hb : WindowReport gamma rb b) :
-    WindowReport gamma (max ra rb) (max a b) := by
-  rcases ha with ha | ha <;> rcases hb with hb | hb <;>
-    simp only [WindowReport, Int.max_def] at * <;>
-    split <;> split <;> omega
+/-- The exact fixed producer set in Python: tactical moves at quiescence,
+and every pseudo-legal move at positive depth. -/
+def producerMoves (G : QSGame) (depth : Nat) (p : G.Pos) : List G.Pos :=
+  if depth = 0 then movesAbove G QS p else G.moves p
 
-/-- Integer move values below the threshold are at most `threshold - 1`.
-The usual depth-one stand-pat bound therefore gives one upper report for the
-entire omitted tail. -/
-theorem omittedMove_le_tailCap (static value threshold moveValue : Int)
-    (hvalue : value < threshold) (hmove : moveValue ≤ static + value) :
-    moveValue ≤ static + threshold - 1 := by
-  omega
+theorem producerMoves_zero (G : QSGame) (p : G.Pos) :
+    producerMoves G 0 p = movesAbove G QS p := by
+  simp [producerMoves]
 
-/-- When the tail cap is below the window it is a valid fail-low report; no
-omitted child needs to be generated or searched. -/
-theorem lazyTail_failLow (gamma tailCap tailValue : Int)
-    (hcap : tailCap < gamma) (htail : tailValue ≤ tailCap) :
-    WindowReport gamma tailCap tailValue := by
-  exact Or.inl ⟨hcap, htail⟩
+/-- Positive-depth completeness is structural: it needs no score-floor or
+window premise. In particular, a filtered legal evasion cannot fabricate a
+mate at the old depth-one frontier. -/
+theorem producerMoves_positive (G : QSGame) (depth : Nat) (p : G.Pos)
+    (hdepth : 0 < depth) : producerMoves G depth p = G.moves p := by
+  simp [producerMoves, Nat.ne_of_gt hdepth]
 
-/-- Combining the searched prefix with a safely skipped tail still reports on
-the complete depth-one move fold. -/
-theorem lazyTail_report (gamma prefixReport tailCap prefixValue tailValue : Int)
-    (hprefix : WindowReport gamma prefixReport prefixValue)
-    (hcap : tailCap < gamma) (htail : tailValue ≤ tailCap) :
-    WindowReport gamma (max prefixReport tailCap) (max prefixValue tailValue) := by
-  exact hprefix.max gamma prefixReport tailCap prefixValue tailValue
-    (lazyTail_failLow gamma tailCap tailValue hcap htail)
+/-- The producer's exact report for an intrinsic mate-band move. Ordinary
+move values remain unresolved until the consumer searches or caps them. -/
+def producedScore (gain : Int) : Int :=
+  if MATE_LOWER ≤ gain then MATE_UPPER else gain
 
-/-- The fixed move set denoted by the lazy implementation: all moves at the
-depth-one frontier, and the ordinary threshold above it. -/
-def lazyMoves (G : QSGame) (depth : Nat) (p : G.Pos) : List G.Pos :=
-  if depth = 1 then G.moves p else movesAbove G (val_lower depth) p
+theorem producedScore_capture (gain : Int) (hgain : MATE_LOWER ≤ gain) :
+    producedScore gain = MATE_UPPER := by
+  simp [producedScore, hgain]
 
-/-- With the shipped table floor, the lazy search denotes the complete real
-move list at every positive depth. Depth one is complete by definition;
-depth two and above already clear the intrinsic-value floor. -/
-theorem lazyMoves_eq_moves (G : QSGame) (hF : ValFloor G 192)
-    (depth : Nat) (p : G.Pos) (hdepth : 1 ≤ depth) :
-    lazyMoves G depth p = G.moves p := by
-  by_cases h1 : depth = 1
-  · simp [lazyMoves, h1]
-  · rw [lazyMoves, if_neg h1]
-    exact movesAbove_all G depth p
-      (depth_arm_redundant G hF (by omega) depth (by omega) p)
+theorem producedScore_ordinary (gain : Int) (hgain : gain < MATE_LOWER) :
+    producedScore gain = gain := by
+  simp [producedScore, Int.not_le.mpr hgain]
+
+/-- Under the table-backed high-value premise, producer normalization never
+turns an ordinary move into the exact king-capture sentinel. -/
+theorem producedScore_exact_capture (G : QSGame) (hHi : HighValIsKingCapture G)
+    (p m : G.Pos) (hm : m ∈ G.moves p) (hgain : MATE_LOWER ≤ G.val p m) :
+    producedScore (G.val p m) = MATE_UPPER ∧ G.eval m ≤ -MATE_LOWER :=
+  ⟨producedScore_capture (G.val p m) hgain, hHi p m hm hgain⟩
 
 end Sunfish

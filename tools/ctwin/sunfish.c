@@ -713,8 +713,8 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail);
 
 static int score_move(const Pos *pos, Move move, int val, int gamma,
         int depth, int rd, int root, int guard, int *real) {
-    int move_depth = rd - 1 - (!root && guard && val < LMR);
     *real = 1;
+    if (val >= MATE_LOWER) return MATE_UPPER;
     int capped = depth <= FUT_MAX ? val < MATE_LOWER
         : depth <= FUT_CAP_DEPTH && (FUT_CAP == 1 ? val < MATE_LOWER : FUT_CAP == 2 && val < 0);
     int cap = MATE_UPPER;
@@ -723,6 +723,7 @@ static int score_move(const Pos *pos, Move move, int val, int gamma,
         if (cap >= MATE_LOWER) cap = MATE_LOWER - 1;
         if (cap < gamma) { *real = 0; return cap; }
     }
+    int move_depth = rd - 1 - (!root && guard && val < LMR);
     Pos child = domove(pos, move);
     int full = -bound(&child, 1 - gamma, move_depth, 0, 0);
     return cap < full ? cap : full;
@@ -753,7 +754,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         if (depth > 0 && in_history(pos)) return 0;
     }
 
-    int val_lower = QS - depth * QS_A;
+    int val_lower = depth == 0 ? QS : -MATE_UPPER;
     int best = -MATE_UPPER, live = 0, done = 0;
     Move nomove = { 0, 0, 0 };
 
@@ -786,12 +787,8 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
             if (s < score) score = s;
         }
         Move proof = nomove;
-        int have_proof = 0;
-        if (score >= gamma) {                       /* short-circuit `and` */
-            have_proof = tpm_get(pos, &proof);       /* re-read, like Python */
-            if (!have_proof) have_proof = king_capture(pos, &proof);
-        }
-        if (have_proof && value(pos, proof) >= MATE_LOWER)
+        int have_proof = score >= gamma && king_capture(pos, &proof);
+        if (have_proof)
             PROCESS(1, proof, MATE_UPPER);
         else
             PROCESS(0, nomove, score);
@@ -822,12 +819,6 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         tpm_get_all(pos, killers, &nkill);
     }
 
-    if (!qstail && !QS_TAIL && depth == 1) {
-        int tail = pos->score + val_lower - 1;
-        if (tail < gamma) PROCESS(0, nomove, tail);
-        else val_lower = -MATE_UPPER;
-    }
-
     /* Killer(s) first, gated by the QS threshold, most recent first.
      * A qs_tail probe skips the killer phase. */
     if (!qstail)
@@ -855,7 +846,6 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
                 int real;
                 int score = score_move(pos, m, val, gamma, depth, rd, root, guard, &real);
                 PROCESS(real, m, score);
-                if (!real) break;
             } else {
                 Pos np = domove(pos, m);
                 PROCESS(1, m, -bound(&np, 1 - gamma, rd - 1, 0, 0));
