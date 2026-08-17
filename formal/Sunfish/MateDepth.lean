@@ -56,6 +56,125 @@ shipped code realizes when the fuel probe fails high and the mating move
 is a quiet one (`val < LMR`).
 
 Zero sorries, no Mathlib, no audit-surface change.
+
+MODEL DRIFT -- validity against post-#218 master (d0687b9)
+==========================================================
+
+This file was written against pre-#216 master (e499dae).  Since then #215
+("Unify shallow pruning under lazy caps", 42c0816) and #218 ("Unify real-move
+scoring in the search consumer", c01915f) rewrote the producer/consumer split
+in `Searcher.bound`.  Every mechanism this file prices was re-checked line by
+line against d0687b9.  VERDICT: all four uniform bounds, the three CI
+corollaries and all four sharpness certificates STAND AS PROVED.  The file
+compiles unchanged on top of d0687b9's `formal/` (axioms `[propext,
+Quot.sound]`, zero sorries).  One cosmetic fidelity edit is outstanding; it
+is priced at the end and changes no value.
+
+MECHANISM MAP (pre-#216 line -> post-#218 line).
+
+* fuel probe / hot bit: `:406-411` -> `:380-387`.  MOVED ONLY, out of the
+  `moves()` generator into `bound()`'s own scope.  Body byte-identical:
+  `guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board ...)`,
+  `target = pos.score + NULL_MARGIN`,
+  `d -= -self.bound(nullpos, 1 - target, depth - 7) >= target`.  Still ONE
+  ply (`d -= <bool>`), still probed at `depth - 7`.  `NULL_MARGIN = -200` and
+  its tuner range `(-400, 800)` are untouched; the reworded comment's "burn
+  two plies" is the TOTAL real-move reduction (base ply + hot bit), not a
+  second probe ply.  `C = 3` is intact.
+
+* intrinsic-LMR bit: `:439` -> `:437`.  MOVED ONLY, out of the deleted
+  `score_move` helper into the consumer loop.  Expression byte-identical,
+  `move_depth = d - 1 - (not root and guard and val < LMR)`, and `val` is
+  still `pos.value(move)` (the consumer only enters that branch when the
+  produced score is below `MATE_LOWER`, where it equals the intrinsic value).
+  `intrinsicSpend`, `intrinsic_child_depth` and `spend <= 2` unchanged.
+
+* sub-horizon pass: `:395-402` -> `:406-412`.  Guard identical
+  (`not root and 2 < depth < 6 and ...`), pass child still at `depth - 3`.
+  Two local changes, neither reaching this file: (i) a sub-window
+  short-circuit `score = cap if (cap := pos.score + EVAL_ROUGHNESS) < gamma
+  else min(cap, ...)`, which is the same declared value `min(cap, P)` with a
+  lazier report -- master's `WindowReport.cap_failLow` discharges it; (ii)
+  `proof` now reads `pos.king_capture()` instead of
+  `self.tp_move.get(pos) or pos.king_capture()`, moving the `MATE_UPPER`
+  substitution off the move table and onto the position predicate, i.e.
+  strictly CLOSER to the model's node-level `hasKingCapture` branch.  The
+  proved bounds never touch the pass term anyway: it is confined to nominal
+  depths 3-5, and every defender node in both inductions is required to sit
+  at nominal depth >= 6 (`fuelValueD2C_of_fold_regime`, `hd : 5 <= d`).
+
+* shallow static cap: `:441-442` -> `:433-434`.  The band WIDENED from
+  `2 <= depth <= 3` to `depth <= 3`; the arithmetic is unchanged inside the
+  old band (`max(depth - 1, 0)` reproduces `(depth - 1)` at depths 2 and 3,
+  and master has already made `shallowMoveCap` use natural subtraction to
+  match).  The widening is the only real model delta -- see the pricing
+  below.  The cap's guard `val < MATE_LOWER` and its ceiling `MATE_LOWER - 1`
+  are unchanged, so `shallowMoveCap_below_positiveMate` still applies.
+
+* QS admission: `val_lower = QS - depth * QS_A` (`:421`) plus the depth-one
+  lazy tail (`:422-429`) -> `val_lower = QS if depth == 0 else -MATE_UPPER`
+  (`:391`).  The depth-one tail and the `depth <= 1` futility break
+  (`:455-469`) are GONE, folded into the unified cap.  `val_lower 0 = QS` is
+  unchanged, and under `ValFloor G 192` the model's `val_lower d <= -192`
+  from `d = 2` on (`val_lower_le_neg_floor`), so `movesAbove G (val_lower d)`
+  already denotes the complete move list at every depth the code now uses
+  unconditionally.  Model and code therefore agree at depth 0 and at every
+  depth >= 2, and differ only at nominal depth 1, where the model still
+  filters at `val_lower 1 = -100`.
+  THIS FILE NEVER FOLDS AT NOMINAL DEPTH 1.  Part I enters a fold only at
+  `D >= 2` and Part II only at `D >= 4`, and both inductions carry that
+  floor down every edge.  Beyond that the two directions are structurally
+  insensitive to the admitted set: completeness needs only that the mating
+  move IS admitted (`mem_movesAbove_of_floor`, `2 <= d`) and then
+  `foldMax_le_of_mem`, which a WIDER set can only help; the dual bounds every
+  member through `movesAbove_subset` into `G.moves`, which a wider set still
+  satisfies.  Consequence: `ValFloor G 192` is now sufficient but no longer
+  necessary for the completeness direction -- the shipped producer admits
+  every pseudo-legal move at positive depth outright
+  (master's `producerMoves_positive`).  Dropping the premise is an available
+  strengthening, not a repair.
+
+* king captures resolved statically (`:419-425`, `:431`): a move with
+  `pos.value(move) >= MATE_LOWER` is now reported `MATE_UPPER` without
+  recursion.  Value-identical -- the old code searched it and the kingless
+  child returned `-MATE_UPPER` -- so nothing here changes.  `live` and the
+  `tp_move` store behave as before, and the terminal finalizer (`:456-472`)
+  is untouched.
+
+PRICING THE ONE OUTSTANDING EDIT.  `capClamp` guards on `2 <= d /\ d <= 3`
+and should guard on `d <= 3`.  The theorems are parametric in the clamp: the
+only clamp facts any proof body uses are `capClamp_le` (the clamp lowers) and
+`capClamp_of_deep` (identity from depth 4).  Both survive verbatim -- one
+token in `capClamp_of_deep`'s `if_neg`, one dropped hypothesis in
+`capClamp_lt_ML`, and one `And.intro` nesting in `sharp_cap_A0_3`; about six
+lines in total, with `capClamp_lt_ML` getting STRONGER (`d <= 3` instead of
+`2 <= d /\ d <= 3`).  Evaluating both clamps on the witness game gives the
+same number everywhere:
+
+    fuelValueD2C  MDG 9  A1 = 280      fuelValueD2C' MDG 9  A1 = 280
+    fuelValueD2C  MDG 10 A1 = 47968    fuelValueD2C' MDG 10 A1 = 47968
+    guard off,    MDG 9  A1 = 280      guard off,    MDG 9  A1 = 280
+
+so `sharp_cap_mate3_at_9`, `code_mate_depth_bound_sharp_k3` and
+`code_mate_depth_bound_sharp_k3_guardOff` are unaffected.  `MDG` has
+`val = 0` and `eval = 0` off `KG`, so its admitted sets and its depth-0/1
+fold weights are identical under both the old and the new producer; the
+uncapped certificates `sharp_mate3_at_8`, `sharp_mate5_at_14` and
+`sharp_mated3_at_11` all still evaluate to 0.  The attacker floor stays 4:
+depths 2 and 3 were already blocked, and at depths 0 and 1 a fold weight can
+only reach the mate band through a child whose king is gone, which fires the
+node-level `hasKingCapture` branch before any fold.
+
+EMPIRICAL ANCHORS (pre-#216 e499dae vs post-#218 d0687b9, same harness).
+First-success depths did NOT move on any suite:
+
+    mate1.fen           0/8 at D=3,  8/8 at D=4    (proved `ci_code_mate_in_1` = 4)
+    mate2_eventual.fen  1/5 at D=6,  5/5 at D=7    (proved `ci_code_mate_in_2` = 10)
+    mate3_eventual.fen  1/2 at D=14, 2/2 at D=15   (proved `ci_code_mate_in_3` = 16)
+
+Identical counts at every depth from 1 to 16 on both engines.  The mate-in-1
+corner is still exactly tight -- missed at `3k = 3`, found at `3k + 1 = 4` --
+which is the observable the cap's ply predicts.
 -/
 
 import Sunfish.IntrinsicLMR
