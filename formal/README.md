@@ -178,6 +178,118 @@ the mated band at depth 1 (`cexD_fuel_M1`) before classifying it correctly
 from depth 10 on (`cexD_M_eventually_classified`). Fixed-depth honesty below
 the bound still requires complete move admission.
 
+## How much depth a forced mate costs (`MateDepth.lean`)
+
+`eventual_classification_fuel_arms` arms a win at `D >= C*k + 4` and a loss at
+`D >= C*k + C + 4` -- `3k + 4` and `3k + 7` as shipped. Neither constant is
+sharp, and neither mechanism-checks against the shallow move cap.
+`MateDepth.lean` replaces both, and certifies the replacements with a
+countermodel rather than an argument.
+
+**Where the slack was.** The old induction demands the real-only regime
+(nominal depth `>= 6`) at *every* node of the mating line and charges a full
+`C` for the edge into the mate. Two of those charges are not needed:
+
+- an attacker node is safe at the admission floor. Its fold is a MAX, the
+  mating child is admitted by `ValFloor` from remaining depth 2 on
+  (`mem_movesAbove_of_floor`), and the sub-horizon pass candidate enters the
+  same max -- `foldMax_le_of_mem` ignores the accumulator, so a pass can never
+  pull the maximum down. Below the horizon the code also reduces nothing, so
+  those edges cost exactly one ply.
+- the checkmated leaf is classified by the depth-gated terminal correction at
+  any depth `>= 1` (`fuelValueD2_checkmated`).
+
+Only DEFENDER nodes need the horizon: their fold is bounded above, so the
+sub-horizon pass -- the candidate the `not root and 2 < depth < 6 and ...`
+guard admits -- can mask the mate. The mating line's last two plies are an
+attacker node and the leaf, so the horizon has to be reached two plies before
+the end, not at the end:
+
+```text
+forcedMate_fuelValueD2_sharp    :  D >= max 2 (C*(k-2) + 6)   -- 3k    shipped (was 3k+4)
+forcedlyMated_fuelValueD2_sharp :  D >= max 6 (C*(k-1) + 6)   -- 3k+3  shipped (was 3k+7)
+```
+
+**The shallow cap costs one more ply, and `fuelValueD2` did not have it.**
+The fuel value omits
+
+```python
+if 2 <= depth <= 3 and val < MATE_LOWER:
+    cap = min(MATE_LOWER - 1, pos.score + val + (depth - 1) * QS_A)
+```
+
+and that clamp puts every non-king-capture report strictly below `MATE_LOWER`
+(`shallowMoveCap_below_positiveMate`): an attacker node at nominal depth 2 or 3
+cannot report a mate at all -- `CappedMove.lean` already says the cap "can
+delay a shallow mate proof", and this is the delay, priced. The cap only ever
+LOWERS a report, so a defender node (bounded above) pays nothing for it; the
+attacker's floor rises from 2 to 4. `fuelValueD2C` is `fuelValueD2` with the
+clamp on every fold weight, and
+
+```text
+forcedMate_fuelValueD2C_sharp    : D >= max 4 (C*(k-1) + 4) (C*(k-2) + 6)  -- 3k+1
+forcedlyMated_fuelValueD2C_sharp : D >= max 6 (C*k + 4) (C*k + 6 - C)      -- 3k+4
+```
+
+Premises unchanged throughout: `ValFloor G 192` and nothing else -- no
+`NoZugzwang`, no mate-band agreement. Layer 1 for the fuel shape
+(`FuelBracketSpec`) remains stated and unproven, so these are bounds on the
+declared value, as the theorems they replace were.
+
+**Sharpness.** `MDG` is a ten-position game inside the hypothesis class
+(`sharp_valFloor : ValFloor MDG 192`) with a forced mate in 3 plies at `A1` and
+in 5 at `A2`, and an edge spend of 2 (the hot bit plus the intrinsic-LMR bit,
+`min (C-1) 2 = 2`) at every regime node -- a schedule the shipped code
+realizes whenever the fuel probe fails high on a quiet move. One defender node
+lands at nominal depth 5, inside the sub-horizon window, where the pass is
+worth 0 and the mate is masked:
+
+| certificate | statement |
+| --- | --- |
+| `sharp_mate3_at_8` | mate in 3 plies, value 0 at `D = 8 = 3*3 - 1` |
+| `sharp_mate5_at_14` | mate in 5 plies, value 0 at `D = 14 = 3*5 - 1` |
+| `sharp_mated3_at_11` | the dual escapes at `D = 11 = 3*3 + 2` |
+| `sharp_cap_mate3_at_9` | with the cap, `D = 9 = 3*3` is still one ply short |
+
+The pair at 8 and 14 is `2*C` apart, so no bound with a slope below `C` holds
+either: the certificates pin the slope as well as the constants.
+
+**The CI table.** `tools/quick_tests.sh` states the convention -- mate-in-`n`
+moves is `k = 2n - 1` plies -- and currently spends `3k + 4`:
+
+| suite | `k` | script today | proved, fuel model | proved, shipped (cap) |
+| --- | --- | --- | --- | --- |
+| `mate1.fen` | 1 | 7 | 2 (`ci_mate_in_1`) | 4 (`ci_code_mate_in_1`) |
+| `mate2_eventual.fen` | 3 | 13 | 9 (`ci_mate_in_2`) | 10 (`ci_code_mate_in_2`) |
+| `mate3_eventual.fen` | 5 | 19 | 15 (`ci_mate_in_3`) | 16 (`ci_code_mate_in_3`) |
+
+The shipped column is the one a CI depth may be lowered to. The gap between
+the columns is the shallow cap, and it is not academic: at depth 3 the suite's
+mate-in-1 positions are all missed, and at depth 4 all eight are found.
+
+**Menu instances.** The bound is generic in the edge-cost cap `C` and in the
+sub-horizon guard, so the price of each mechanism is a corollary rather than a
+new proof:
+
+| engine variant | bound | theorem |
+| --- | --- | --- |
+| today (`C = 3`, cap, sub-horizon pass) | `3k + 1` | `forcedMate_fuelValueD2C_sharp` |
+| one reduction bit (`C = 2`) | `2k + 2` | `forcedMate_fuelValueD2C_C2` |
+| no reductions (`C = 1`) | `k + 4` | `forcedMate_fuelValueD2C_C1` |
+| delete the sub-horizon pass ONLY | `3k + 1` -- unchanged | `code_mate_depth_bound_sharp_k3_guardOff` |
+| delete the shallow cap ONLY | `3k` | `forcedMate_fuelValueD2_sharp`, sharp per `sharp_mate3_at_8` |
+| delete both | `max 2 (C*k + 4 - 3*C)`, i.e. `3k - 5` | `forcedMate_fuelValueD2_noSubPass` |
+
+The fourth row is the useful surprise: the cap and the sub-horizon pass mask
+in *different* depth bands (2--3 for the attacker, 3--5 for the defender), and
+removing either one alone leaves the other binding. The certificate is the
+same witness game with the guard off -- it still masks, at the capped attacker
+node.
+
+`defender_le_of_replies` is the step those last two share: a defender node
+reports at or below `-MATE_LOWER` as soon as its fold carries no pass term --
+either above the horizon, or with the guard off at every depth.
+
 ## Positive-depth moves and shallow move caps
 
 The Python producer admits only moves at or above `QS` at depth zero, but
@@ -828,6 +940,9 @@ tests and chess corpora validate those executable primitives.
   W/D/L trichotomy with no chess premise.
 - `IntrinsicLMR.lean`: static LMR eligibility and the bounded, move-dependent
   edge cost used by intrinsic LMR.
+- `MateDepth.lean`: the sharp mate-depth accounting -- which mechanism costs
+  which ply, the shipped shallow cap folded in, and the countermodel that
+  pins the constants and the slope.
 - `Repetition.lean`: the game-history draw rule on top of the fuel value.
 - `EventuallyFinite.lean`: the finiteness variant -- the trichotomy for the
   untailed fuel value under `EndsWithin`, with an effective depth bound.
