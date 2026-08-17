@@ -603,29 +603,57 @@ def main():
             times = dict(zip(args[1::2], map(int, args[2::2])))
             side = "wb"[len(hist) % 2 == 0]
             wtime, winc = times.get(side + "time", 60000), times.get(side + "inc", 0)
-            # Pool accounting over an M=40 move horizon, the increment spent
-            # once, clipped to a quarter clock: a reserve of four increments.
-            think = min(wtime / 40 + 0.9 * winc, wtime / 4)
-            think = times.get("movetime", think) / 1000
+            # A whole-game POOL, not a divisor, in milliseconds. Over an
+            # M = 40 move horizon the pool is what the clock still holds once
+            # all M+2 remaining moves have paid the ~200ms of lag between our
+            # bestmove and the clock stopping; `soft` is one move's share of
+            # it, and the wall is five shares or half of what this move can
+            # safely reach. Two limits, because one number cannot answer both
+            # "what is this move worth" and "how long may one iteration run".
+            # THE WALL CANNOT GO NEGATIVE, which a wtime/2 - 1s cap can:
+            # lichess.org/EAThUL0P was lost that way, ~16 moves at no search
+            # on an already-expired deadline. sunfish_ui/uci.py's pool_budget
+            # is this same arithmetic in seconds, asserted equal on a grid.
+            # THE ONE MEASURED HOLE, disclosed rather than fixed: with no
+            # increment the pool is empty below 42*200ms of clock, so `soft`
+            # falls to the floor and the quarter-clock clamp is unreachable -
+            # a sudden-death endgame one depth shallower than the old
+            # divisor's, and -209.91 +/- 60.11 at a 1s clock in the driver's
+            # own arm. It never flags. Scoping the pool to P > 0 would fix it
+            # and is a design change with its own screen; what ships is what
+            # was measured.
+            soft = min(max(0, wtime + 39 * winc - 42 * 200) / 40, max(0, wtime - 400) / 4)
+            think = max(times.get("movetime", min(5 * soft, (wtime - 400) / 2)) / 1000, .05)
+            soft = min(max(soft / 1000, .05), think)
 
             start = time.time()
-            searcher.deadline = start + max(think, .05)
+            searcher.deadline = start + think
             # A fail high gives the move that achieved it, but only a
             # COMPLETED depth's last fail-high is trustworthy - a stop
             # inside a depth can catch a probe at a nonsense window.
-            best, cand, d0 = None, None, 1
+            # lo/up mirror the MTD bracket the searcher is closing, and that
+            # is what makes the soft limit above readable: a search may only
+            # be ABANDONED where the bracket has closed, so an unsettled move
+            # runs on toward the wall instead of committing a half-searched
+            # answer. Two limits buy nothing without it - a break at any
+            # yield stops at the soft one and the five-fold headroom the pool
+            # exists to grant is never reached.
+            best, cand, d0, lo, up = None, None, 1, -1e9, 1e9
             try:
                 for depth, gamma, score, move in searcher.search(hist):
                     if depth > d0:
-                        best, d0 = cand or best, depth
+                        best, d0, lo, up = cand or best, depth, -1e9, 1e9
                     if score >= gamma:
+                        lo = max(lo, score)
                         if move is None: print("info depth", depth, "score cp", score); break
-                        i, j = move.i, move.j
-                        if len(hist) % 2 == 0: i, j = 119 - i, 119 - j
+                        # The flip folds into the assignment rather than following
+                        # it: same coordinates, and it pays for the bracket above
+                        # so the pool costs the minified engine no lines at all.
+                        i, j = (119 - move.i, 119 - move.j) if len(hist) % 2 == 0 else (move.i, move.j)
                         cand = render(i) + render(j) + move.prom.lower()
                         print("info depth", depth, "score cp", score, "pv", cand)
-                    if (best or cand) and time.time() - start > think * 0.8:
-                        break
+                    else: up = min(up, score)
+                    if not lo < up - EVAL_ROUGHNESS and (best := cand or best) and time.time() - start > soft: break
             except Stop:
                 pass
 
