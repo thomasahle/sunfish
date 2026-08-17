@@ -301,7 +301,7 @@ Entry = namedtuple("Entry", "lower upper")
 
 class Searcher:
     def __init__(self):
-        self.tp_score, self.tp_move, self.history = {}, {}, set()
+        self.tp_score, self.tp_move, self.hist, self.history = {}, {}, {}, set()
         self.nodes, self.deadline = 0, 1 << 63
 
     def bound(self, pos, gamma, depth, root=False):
@@ -419,8 +419,10 @@ class Searcher:
             if killer and (val := pos.value(killer)) >= val_lower:
                 yield killer, MATE_UPPER if val >= MATE_LOWER else val
 
-            # Search the fixed move set by decreasing intrinsic value.
-            for val, move in sorted(((v, m) for m in pos.gen_moves()
+            # Search the fixed move set by decreasing intrinsic value, with a
+            # butterfly bonus: moves that have cut before sort ahead of their
+            # equals. Ordering only - the value yielded is the intrinsic one.
+            for _, val, move in sorted(((v + self.hist.get(m, 0), v, m) for m in pos.gen_moves()
                     if (v:=pos.value(m)) >= val_lower), reverse=True):
                 yield move, MATE_UPPER if val >= MATE_LOWER else val
 
@@ -442,6 +444,7 @@ class Searcher:
                 # Save the move for pv construction and killer heuristic
                 if move is not None and depth:
                     self.tp_move[pos] = move
+                    self.hist[move] = min(self.hist.get(move, 0) + depth * depth, 100)
                     # Never evict the current search root: its killer is the
                     # answer go_loop plays, and once the table churns more
                     # than TABLE_SIZE stores in one deep probe, FIFO would
