@@ -262,10 +262,18 @@ every step, with the score deltas straddling `EVAL_ROUGHNESS` exactly where
 convergence flips. The three budget statements are **byte-identical** to the
 arm that played. No re-match is owed.
 
-**The arms played were built one master behind the landing** (`5a7d744`, before
-#213's shallow-move cap), where the same diff priced +77 B. Both arms share that
-base, so the quantity measured is the TM difference; #213 does not touch it, the
-same reasoning the pool's entry-side confirmation recorded against #205.
+**BASE DRIFT, stated plainly rather than left for a reader to notice.** The arms
+played were built at `5a7d744`, and master has since taken #213, #216, #218 and
+#219; today's classic is stronger overall (#218 measured positive on both
+instruments). What transfers is the **TM axis**: both arms shared one base and
+differed only in the budget and the stop rule, and none of those four PRs
+touches the `go` handler, so the quantity confirmed is the time-manager
+difference and nothing else. What does NOT transfer is the altitude against
+post-#218 classic — a faster search changes what a soft limit buys, in an
+unknown direction and probably a smaller one. **+96.19 is not claimed against
+today's engine**, and re-measuring it is not owed either: the landing rests on
+the TM-axis claim, which is the one that was tested. (Same reasoning the pool's
+entry-side confirmation recorded against #205.)
 
 ### Scope, and the hole that stays open
 
