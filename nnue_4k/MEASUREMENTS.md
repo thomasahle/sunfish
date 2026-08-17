@@ -18062,3 +18062,42 @@ right inside the template is wrong outside it. Six shapes packed to 97 bytes
 (the shebang head alone, `pack.sh` having failed) and reported `runs=0`. The
 run check is what caught it; a byte-only harness would have recorded six
 absurdly good sizes.
+
+### FACTOR LANE addendum — how much the mirror costs, measured on the trained N=64 table
+
+Mirroring's byte win is measured above; this is its structural cost, read off
+the one trained wide net that exists. Decomposing its shipped trit table into
+file-even and file-odd parts:
+
+**80.4 % of the table's energy is file-SYMMETRIC**, 19.6 % file-odd (identical
+for the float table and the trits). Per piece the odd share is P 27 %, N 24 %,
+B 24 %, R 12 %, Q 13 %, K 28 %, p 41 %, n 16 %, b 26 %, r 12 %, q 1 %, k 24 %
+— rooks and queens are nearly symmetric, pawns and kings least so, which is
+what castling and the pawn's capture geometry predict.
+
+Retained energy against the FULL table, for the two containers at matched
+rank (the folded table's rows are used twice, so its energy is counted twice):
+
+| rank | 1 | 2 | 3 | **4** | 6 | **8** | 12 | 16 | 24 | 32 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| unmirrored 768×N | 0.361 | 0.493 | 0.584 | **0.626** | 0.697 | **0.747** | 0.809 | 0.850 | 0.899 | 0.934 |
+| mirrored 384×N | 0.360 | 0.489 | 0.579 | **0.620** | 0.669 | **0.693** | 0.720 | 0.737 | 0.760 | 0.775 |
+
+**At the affordable points, mirroring wins.** Unmirrored r=4/N=32 costs
+3,982 B and retains 0.626; mirrored r=8/N=32 costs 4,022 B and retains
+**0.693**. The mirror's penalty at low rank is tiny (0.626 → 0.620 at r=4)
+because the first four singular directions are almost entirely symmetric
+anyway; it only bites past r≈8, where the 0.804 ceiling starts to bind.
+
+**What this is and is not.** It is a property of *one* trained unconstrained
+table, and both numbers are pessimistic for the same reason: a trained
+rank-constrained net finds its own optimum rather than a truncation, and a
+trained *mirrored* net learns the best symmetric function rather than the
+symmetrisation of the best asymmetric one, so 0.804 is a floor on what
+mirroring could achieve, not a ceiling on it. **No val number is inferred from
+this table** — it ranks shapes for the training round, nothing more.
+
+On that ranking the shape to train first is **mirrored, r=8, N=32**
+(4,022 B at 70 % zeros, 74 spare), with **mirrored r=4/N=64** (3,803 B, 293
+spare) as the wide-and-cheap alternative that keeps 64 units for the bytes of
+the shipped 5-lane net.
