@@ -67,8 +67,9 @@ in `Searcher.bound`.  Every mechanism this file prices was re-checked line by
 line against d0687b9.  VERDICT: all four uniform bounds, the three CI
 corollaries and all four sharpness certificates STAND AS PROVED.  The file
 compiles unchanged on top of d0687b9's `formal/` (axioms `[propext,
-Quot.sound]`, zero sorries).  One cosmetic fidelity edit is outstanding; it
-is priced at the end and changes no value.
+Quot.sound]`, zero sorries).  The one fidelity edit the audit turned up --
+`capClamp`'s band -- has been taken here; it moves no value, as recorded at
+the end.
 
 MECHANISM MAP (pre-#216 line -> post-#218 line).
 
@@ -107,9 +108,10 @@ MECHANISM MAP (pre-#216 line -> post-#218 line).
   `2 <= depth <= 3` to `depth <= 3`; the arithmetic is unchanged inside the
   old band (`max(depth - 1, 0)` reproduces `(depth - 1)` at depths 2 and 3,
   and master has already made `shallowMoveCap` use natural subtraction to
-  match).  The widening is the only real model delta -- see the pricing
-  below.  The cap's guard `val < MATE_LOWER` and its ceiling `MATE_LOWER - 1`
-  are unchanged, so `shallowMoveCap_below_positiveMate` still applies.
+  match).  This was the only real model delta and `capClamp` now carries the
+  widened band -- see the closing section.  The cap's guard
+  `val < MATE_LOWER` and its ceiling `MATE_LOWER - 1` are unchanged, so
+  `shallowMoveCap_below_positiveMate` still applies.
 
 * QS admission: `val_lower = QS - depth * QS_A` (`:421`) plus the depth-one
   lazy tail (`:422-429`) -> `val_lower = QS if depth == 0 else -MATE_UPPER`
@@ -141,22 +143,25 @@ MECHANISM MAP (pre-#216 line -> post-#218 line).
   `tp_move` store behave as before, and the terminal finalizer (`:456-472`)
   is untouched.
 
-PRICING THE ONE OUTSTANDING EDIT.  `capClamp` guards on `2 <= d /\ d <= 3`
-and should guard on `d <= 3`.  The theorems are parametric in the clamp: the
-only clamp facts any proof body uses are `capClamp_le` (the clamp lowers) and
-`capClamp_of_deep` (identity from depth 4).  Both survive verbatim -- one
-token in `capClamp_of_deep`'s `if_neg`, one dropped hypothesis in
-`capClamp_lt_ML`, and one `And.intro` nesting in `sharp_cap_A0_3`; about six
-lines in total, with `capClamp_lt_ML` getting STRONGER (`d <= 3` instead of
-`2 <= d /\ d <= 3`).  Evaluating both clamps on the witness game gives the
-same number everywhere:
+THE ONE EDIT, TAKEN.  `capClamp` used to guard on `2 <= d /\ d <= 3`; it now
+guards on `d <= 3`, the shipped band.  The theorems are parametric in the
+clamp: the only clamp facts any proof body uses are `capClamp_le` (the clamp
+lowers) and `capClamp_of_deep` (identity from depth 4).  Both survived
+verbatim -- the edit was one token in `capClamp_of_deep`'s `if_neg`, one
+dropped hypothesis in `capClamp_lt_ML`, and one `And.intro` nesting in
+`sharp_cap_A0_3`, with `capClamp_lt_ML` coming out STRONGER (`d <= 3` instead
+of `2 <= d /\ d <= 3`).  Evaluating the old and the new clamp side by side on
+the witness game gives the same number everywhere:
 
-    fuelValueD2C  MDG 9  A1 = 280      fuelValueD2C' MDG 9  A1 = 280
-    fuelValueD2C  MDG 10 A1 = 47968    fuelValueD2C' MDG 10 A1 = 47968
+    old band {2,3}                     new band {0,1,2,3}
+    fuelValueD2C  MDG 9  A1 = 280      fuelValueD2C  MDG 9  A1 = 280
+    fuelValueD2C  MDG 10 A1 = 47968    fuelValueD2C  MDG 10 A1 = 47968
     guard off,    MDG 9  A1 = 280      guard off,    MDG 9  A1 = 280
 
 so `sharp_cap_mate3_at_9`, `code_mate_depth_bound_sharp_k3` and
-`code_mate_depth_bound_sharp_k3_guardOff` are unaffected.  `MDG` has
+`code_mate_depth_bound_sharp_k3_guardOff` are unaffected -- 280 is below
+`MATE_LOWER = 47923` at `D = 3k = 9`, and 47968 is above it at
+`D = 3k + 1 = 10`.  `MDG` has
 `val = 0` and `eval = 0` off `KG`, so its admitted sets and its depth-0/1
 fold weights are identical under both the old and the new producer; the
 uncapped certificates `sharp_mate3_at_8`, `sharp_mate5_at_14` and
@@ -610,19 +615,31 @@ theorem forcedMate_fuelValueD2_sharp_C1 (G : QSGame) (guard : G.Pos → Bool)
 Part I's sharpened `3k` -- does NOT model one mechanism the shipped search
 has: the shallow static cap
 
-    if 2 <= depth <= 3 and val < MATE_LOWER:
-        cap = min(MATE_LOWER - 1, pos.score + val + (depth - 1) * QS_A)
-    ...
-    return move, min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
+    cap = (MATE_UPPER if depth > 3 else
+        min(MATE_LOWER - 1, pos.score + val + max(depth - 1, 0) * QS_A))
+    if cap < gamma: move, score = None, cap
+    else:
+        move_depth = d - 1 - (not root and guard and val < LMR)
+        score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
 
-At nominal depth 2 or 3 EVERY move that is not a king capture reports at
-most `shallowMoveCap`, which `shallowMoveCap_below_positiveMate`
+At every nominal depth `≤ 3` EVERY move that is not a king capture reports
+at most `shallowMoveCap`, which `shallowMoveCap_below_positiveMate`
 (CappedMove.lean) puts strictly below `MATE_LOWER`.  Such a node cannot
-report a mate at all -- `CappedMove.lean`'s own docstring says it: "the cap
-can delay a shallow mate proof".  The cap only ever LOWERS a report, so it
-cannot hurt a defender node (whose fold needs an upper bound); it binds
-exactly at the ATTACKER nodes of the mating line, whose admission floor
-therefore rises from 2 to 4.
+report a mate at all -- the cap "can delay a mate proof found exactly at
+the selective frontier", as formal/README.md puts it, and this is the
+delay, priced.  The cap only ever LOWERS a report, so it cannot hurt a
+defender node (whose fold needs an upper bound); it binds exactly at the
+ATTACKER nodes of the mating line, whose admission floor therefore rises
+from 2 to 4.
+
+The two ends of the band are not the same mechanism.  At depths 2 and 3 the
+clamp is the SELECTIVE cap and it binds.  At depths 0 and 1 natural
+subtraction flattens the margin and the clamp is the old stand-pat futility
+estimate (`shallowMoveCap_lowDepth`), where it is mate-neutral -- a fold
+weight can only reach the positive mate band through a child whose king is
+gone, and such a parent fires the node-level `hasKingCapture` branch before
+any fold is taken.  So `capClamp` carries the shipped `depth ≤ 3` band
+exactly, and the floor is still 4.
 
 Consequence for the uniform bound (`fuelValueD2C` below is `fuelValueD2`
 plus the clamp):
@@ -634,9 +651,10 @@ is `D ≥ 3k + 1` for `k ≥ 3` and `D ≥ 4` for `k ≤ 2` -- three plies below
 the shipped `3k + 4`, one above Part I's cap-free `3k`.  The one-ply corner
 is exactly what the suite shows: mate-in-1 needs `D = 4`, not 2. -/
 
-/-- The shipped clamp, as a fold weight transformer. -/
+/-- The shipped clamp, as a fold weight transformer.  The band is the
+consumer's own `depth > 3` test, so it covers depths 0 through 3. -/
 def capClamp (G : QSGame) (p : G.Pos) (d : Nat) (m : G.Pos) (x : Int) : Int :=
-  if 2 ≤ d ∧ d ≤ 3 ∧ G.val p m < MATE_LOWER then
+  if d ≤ 3 ∧ G.val p m < MATE_LOWER then
     min (shallowMoveCap (G.eval p) (G.val p m) d) x
   else x
 
@@ -653,14 +671,14 @@ three", as `CappedMove.lean` states. -/
 theorem capClamp_of_deep (G : QSGame) (p : G.Pos) {d : Nat} (hd : 4 ≤ d)
     (m : G.Pos) (x : Int) : capClamp G p d m x = x := by
   unfold capClamp
-  rw [if_neg (fun h => by have := h.2.1; omega)]
+  rw [if_neg (fun h => by have := h.1; omega)]
 
-/-- At depth 2 or 3 no ordinary move can report a mate. -/
-theorem capClamp_lt_ML (G : QSGame) (p : G.Pos) {d : Nat} (hd2 : 2 ≤ d) (hd3 : d ≤ 3)
+/-- At any depth in the band no ordinary move can report a mate. -/
+theorem capClamp_lt_ML (G : QSGame) (p : G.Pos) {d : Nat} (hd3 : d ≤ 3)
     (m : G.Pos) (hval : G.val p m < MATE_LOWER) (x : Int) :
     capClamp G p d m x < MATE_LOWER := by
   unfold capClamp
-  rw [if_pos ⟨hd2, hd3, hval⟩]
+  rw [if_pos ⟨hd3, hval⟩]
   have := shallowMoveCap_below_positiveMate (G.eval p) (G.val p m) d
   omega
 
@@ -1253,7 +1271,7 @@ theorem sharp_cap_A0_3 (g : MDPos → Bool) : fuelValueD2C MDG g 3 mdSpend 3 MDP
       (-(fuelValueD2C MDG g 3 mdSpend 2 MDPos.LF))
       ≤ shallowMoveCap (MDG.eval MDPos.A0) (MDG.val MDPos.A0 MDPos.LF) (2 + 1) := by
     unfold capClamp
-    rw [if_pos (And.intro (by omega) (And.intro (by omega) (by decide)))]
+    rw [if_pos (And.intro (by omega) (by decide))]
     exact Int.min_le_left _ _
   have hval : shallowMoveCap (MDG.eval MDPos.A0) (MDG.val MDPos.A0 MDPos.LF) (2 + 1) = 280 := by
     show shallowMoveCap (0 : Int) 0 3 = 280
