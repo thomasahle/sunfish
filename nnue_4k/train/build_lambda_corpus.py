@@ -141,6 +141,65 @@ def scan(out, pgnglob, maxpos):
     print("\nwrote %s" % out)
 
 
+def scan_dump(out, dumppath, maxpos):
+    """FENs ONLY from a lichess_db_eval-style dump -- the SF evals are read and
+    DISCARDED on purpose.
+
+    This builds the distribution-isolating arm: the legacy corpus's POSITIONS
+    with our twin's labels, so that against the self-play corpus (same twin,
+    same depth, same filter) the ONLY moved variable is where the positions
+    came from.  Keeping the dump's own deep SF evals would move the label
+    source too and reproduce the confound the experiment exists to remove.
+
+    No outcome channel: a dump position has no game attached.  That is fine --
+    the comparison arm is lambda=1, which never reads the outcome channel."""
+    # zstd BINARY, not the python module: installing packages into the owner's
+    # box env is off-limits by standing rule, and `zstd` is already present.
+    seen, rows = set(), []
+    n_lines = 0
+    if not os.path.exists(dumppath):
+        raise SystemExit("dump not found: %s (paths are relative to CWD, and the "
+                         "dumps live one level above train/)" % dumppath)
+    proc = subprocess.Popen(["zstd", "-dc", dumppath], stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE, text=True, bufsize=1)
+    with proc.stdout as r:
+        for line in r:
+            n_lines += 1
+            try:
+                fen = json.loads(line)["fen"]
+            except Exception:
+                continue
+            if len(fen.split()) == 4:
+                fen = fen + " 0 1"          # dump omits the clocks
+            k = fenkey(fen)
+            if k in seen:
+                continue
+            seen.add(k)
+            rows.append((fen, 0.5, k))      # outcome unused at lambda=1
+            if maxpos and len(rows) >= maxpos:
+                break
+    # NEVER WRITE AN EMPTY CORPUS SILENTLY.  The first version shelled out to a
+    # relative path that did not exist, got zero bytes on stdout, and cheerfully
+    # wrote a 0-position npz -- the failure mode this project keeps paying for.
+    if proc.poll() is None:
+        proc.terminate()
+    err = (proc.stderr.read() or "").strip() if proc.stderr else ""
+    if n_lines == 0 or not rows:
+        raise SystemExit("dump scan read %d lines and kept %d positions -- refusing "
+                         "to write an empty corpus.  zstd said: %s"
+                         % (n_lines, len(rows), err[:200] or "(nothing)"))
+    print("dump scan: %d lines -> %d unique positions" % (n_lines, len(rows)))
+    np.savez_compressed(out,
+                        fens=np.array([r[0] for r in rows]),
+                        outcome=np.array([r[1] for r in rows], dtype=np.float32),
+                        fenhash=np.array([r[2] for r in rows]),
+                        meta=json.dumps({"source": os.path.basename(dumppath),
+                                         "lines": n_lines, "kept": len(rows),
+                                         "labels": "twin (dump evals DISCARDED)",
+                                         "outcome": "absent (lam=1 only)"}))
+    print("wrote %s" % out)
+
+
 def label(out, engine, tables, depth, nproc):
     """Twin-label every position at fixed depth.  cp is SIDE-TO-MOVE
     relative, matching the outcome channel.
@@ -260,7 +319,9 @@ def _worker(engine, tables, depth):
 
 if __name__ == "__main__":
     mode = sys.argv[1]
-    if mode == "scan":
+    if mode == "scan-dump":
+        scan_dump(sys.argv[2], sys.argv[3], int(sys.argv[4]) if len(sys.argv) > 4 else 0)
+    elif mode == "scan":
         scan(sys.argv[2], sys.argv[3], int(sys.argv[4]) if len(sys.argv) > 4 else 0)
     elif mode == "label":
         label(sys.argv[2], sys.argv[3], sys.argv[4],
