@@ -18138,3 +18138,55 @@ unrun.
 **The N=5 anchor is FIRM on the same test** (−1.6e-5, inside σ), which is what
 makes the comparison legitimate: the arm that lost had converged, and the arm
 that won had not finished winning.
+
+---
+
+## 2026-08-18 — THE WIDTH CURVE, COMPLETE: val is monotone in lanes, ~24 % more learned signal per doubling, and it has not saturated at N=64
+
+All four upper-bound arms are in. Every one is **identical to
+`220_cap_n5b_s0` in every field except `model.N`** (and, on the float arm,
+`ternary`/`l1`), on `pool10m.npz`, 6 epochs, linear schedule, seed 0, and
+every one reports **`val-sha a0aa553db6908e91`** — the same 500,086-position
+val split as the N=5 anchors, checked on each run rather than assumed.
+
+| N | best val | vs best N=5 seed | learned signal over material 0.02054 | × the N=5 signal | last2−prev2 |
+|---|---|---|---|---|---|
+| **5** (`221`, anchor) | 0.0176273 | — | 0.0029127 | 1.00 | −1.6e-5 FIRM |
+| **16** (`330`) | **0.0160953** | **−8.69 %** | 0.0044447 | **1.53** | −2.7e-5 SOFT |
+| **32** (`331`) | **0.0150709** | **−14.50 %** | 0.0054691 | **1.88** | −2.4e-5 SOFT |
+| **64** (`329`) | **0.0139381** | **−20.93 %** | 0.0066019 | **2.27** | −3.7e-5 SOFT |
+
+Trajectories: N=16 `.01620 .01616 .01612 .01613 .01610 .01610`; N=32
+`.01525 .01513 .01513 .01511 .01513 .01507`; N=64
+`.01410 .01399 .01403 .01394 .01394 .01396`.
+
+**Every arm clears both registered bars** (NOISE 0.0175173, FUNDING
+0.0168991) — the *narrowest* of them, N=16, clears the funding bar by 0.0008
+and the noise bar by 65σ.
+
+**Three readings.**
+
+1. **The curve is smooth and monotone, ~24 % more learned signal per doubling
+   of width** (2.27× over 3.68 doublings from N=5 to N=64), and **it has not
+   saturated**: the N=64 point is the steepest, not the flattest.
+2. **All three wide arms are SOFT** on the registered convergence test while
+   the N=5 anchor is FIRM. Every number above is therefore a *pessimistic*
+   bound — the wide nets were still improving when a schedule tuned for five
+   lanes ran out. The 18-epoch obligation registered above is now clearly
+   worth paying, and it can only move these figures further.
+3. **The affordable widths are inside this curve.** Measured byte points for
+   factored artifacts that build and run: unmirrored r=4/N=16 **3,918 B**,
+   r=4/N=32 **3,982 B**; mirrored r=8/N=32 **4,022 B** at 70 % zeros;
+   mirrored r=4/N=64 **3,803 B**. So the whole N=16…64 span is byte-reachable,
+   and its upper bound runs from −8.7 % to −20.9 % of val.
+
+**What is still not known, and it is the only thing that matters now:** how
+much of this a **rank-constrained** table keeps. The curve prices WIDTH, which
+is free to buy in a free table and must be paid for with rank in a payload.
+The trained factored arch is the instrument and it is not built. Nothing here
+is an Elo claim; the shipped N=5 net's **31.00 %** at fixed nodes is the
+standing reminder that this family has converted val into play exactly zero
+times so far.
+
+`333_factor_ub_f32` (float, N=32) is still queued behind four other lanes'
+arms and will say whether ternary quantization costs anything at width.
