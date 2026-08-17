@@ -370,8 +370,9 @@ to answer it: the pool is TWO changes, a budget and a stop rule, and classic
 pays for them separately — the budget is three statements and the bracket rule
 four more, which on a ~150-line engine is a real question and not a rhetorical
 one. (It was answered twice over: the arms below priced the Elo, and the
-landing then golfed the whole port down to ZERO minified lines, so the cheap
-half would have saved nothing in the end either.) Two arms priced them.
+landing put the soft check at `Searcher.search()`'s existing bracket boundary,
+making the whole port ZERO minified lines. The cheap half would therefore have
+saved nothing in the end either.) Two arms priced them.
 **Both DELEGATE their parent's numbers** rather than restating the arithmetic,
 so a cell meant to isolate one change cannot be measuring two
 (`test_tm_surrogate.py` asserts exactly that):

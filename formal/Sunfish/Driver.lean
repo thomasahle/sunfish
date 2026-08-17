@@ -4,17 +4,20 @@ loop):
 
     gamma = 0                                        -- once, NOT per depth
     for depth in range(1, 1000):
-        lower, upper = -MATE_LOWER, MATE_LOWER       -- per depth
+        lower, upper = 1 - MATE_UPPER, MATE_UPPER    -- per depth
         while lower < upper - EVAL_ROUGHNESS:
             score = self.bound(pos, gamma, depth, root=True)
             if score >= gamma: lower = score
             if score < gamma: upper = score
             ...
             gamma = (lower + upper + 1) // 2
+        if time.time() > self.soft: return
 
 This file proves what the bisection actually guarantees about the
 windows `bound()` is probed with -- and machine-checks what it does
-NOT.
+NOT. The soft-clock check is structurally outside the `while`: it can
+terminate iterative deepening only after the current bracket has
+converged, without changing any probe or report inside that bracket.
 
 **The finding** (discovered while discharging the "driver range"
 premise of the layered kcx specs): the README's and the code comment's
@@ -75,6 +78,29 @@ structure DState where
   lower : Int
   upper : Int
   gamma : Int
+
+/-- The exact negation of the Python MTD loop guard. A depth is complete
+when its remaining score interval is no wider than the driver's tolerance. -/
+def BracketClosed (st : DState) : Prop :=
+  ¬ st.lower < st.upper - EVAL_ROUGHNESS
+
+/-- The packed driver's soft deadline is eligible only at a completed-depth
+boundary. Wall-clock time is abstracted as the proposition `elapsed`; it does
+not enter `DState`, `dstep`, or the value being bounded. -/
+def SoftStop (elapsed : Prop) (st : DState) : Prop :=
+  elapsed ∧ BracketClosed st
+
+theorem softStop_requires_closed {elapsed : Prop} {st : DState}
+    (h : SoftStop elapsed st) :
+    st.upper - st.lower ≤ EVAL_ROUGHNESS := by
+  unfold SoftStop BracketClosed at h
+  omega
+
+theorem open_bracket_cannot_softStop {elapsed : Prop} {st : DState}
+    (h : st.lower < st.upper - EVAL_ROUGHNESS) :
+    ¬ SoftStop elapsed st := by
+  unfold SoftStop BracketClosed
+  omega
 
 def dstep (st : DState) (score : Int) : DState :=
   let l := if st.gamma ≤ score then score else st.lower
@@ -242,7 +268,8 @@ theorem clampGamma_in_band (g : Int) :
   omega
 
 /-- HISTORICAL (the narrow bracket of `c72cf6d`).  **The in-band
-premise, discharged for every driver probe**: with the clamp, a depth's first window is in-band unconditionally, and every
+premise, discharged for every driver probe**: with the clamp, a depth's
+first window is in-band unconditionally, and every
 LATER probe happens only while the loop condition holds -- which forces
 the bracket back inside the band (a mate-band score always breaks the
 loop: `lower` only moves up from `-MATE_LOWER` and `upper` only moves

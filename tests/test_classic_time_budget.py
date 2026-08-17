@@ -35,7 +35,6 @@ been deleted cannot be re-run.  `one-max` and the old parking policy are kept
 for the same reason: they are the two failure shapes the pool has to not have.
 """
 import pathlib
-import random
 import re
 import sys
 
@@ -325,109 +324,52 @@ def test_the_pool_survives_a_long_sudden_death_game(moves):
 # (6) the loop that reads the two limits
 # --------------------------------------------------------------------------
 
-def test_the_wall_is_armed_as_the_deadline():
-    assert re.search(r"searcher\.deadline = start \+ think$", SRC, re.M)
+def test_the_wall_and_soft_deadlines_are_armed_together():
+    assert re.search(
+        r"searcher\.deadline, searcher\.soft = start \+ think, start \+ soft$",
+        SRC, re.M)
 
 
 def test_the_soft_limit_is_read_only_where_the_bracket_has_closed():
     """The other half of the pool, and the half that carries the Elo.
 
-    A break at any yield stops at the soft limit and the 5x wall is never
-    approached.  So the loop tracks the MTD bracket the searcher is closing and
-    may only abandon a search where that bracket has closed -- committing
-    `best` there, never from a half-searched depth.
+    A check in the UCI loop would have to duplicate the MTD interval.  The
+    search generator already owns the exact interval, so it reads the soft
+    clock immediately after its inner loop closes and before the next depth.
     """
-    assert re.search(r"best, cand, d0, lo, up = None, None, 1, -1e9, 1e9", SRC)
-    assert re.search(r"best, d0, lo, up = cand or best, depth, -1e9, 1e9", SRC)
-    assert re.search(r"^ +lo = max\(lo, score\)$", SRC, re.M)
-    assert re.search(r"^ +else: up = min\(up, score\)$", SRC, re.M)
-    # The commit-and-break is ONE statement, so the pool costs the minified
-    # engine no lines; `and` short-circuits, so `best` is still assigned
-    # exactly when the bracket has closed and the break still needs a move.
-    assert re.search(r"^ +if not lo < up - EVAL_ROUGHNESS and \(best := cand or best\)"
-                     r" and time\.time\(\) - start > soft: break$", SRC, re.M)
-    # and the rule it replaced is gone, so a break at any yield cannot return
-    assert "think * 0.8" not in SRC
+    search = SRC.split("def search(self, history):", 1)[1].split(
+        "# UCI User interface", 1)[0]
+    assert "while lower < upper - EVAL_ROUGHNESS:" in search
+    assert re.search(r"^ {12}if time\.time\(\) > self\.soft: return$", search, re.M)
+    packed = SRC.split('elif args[0] == "go":', 1)[1]
+    assert "think * 0.8" not in packed
+    assert "lo, up" not in packed
 
 
-def _loop(golfed, probes, soft, times):
-    """The go handler's stop rule, in the shape named by `golfed`.
+def test_elapsed_soft_time_finishes_the_current_bracket(monkeypatch):
+    """Both reports closing depth 1 are yielded; depth 2 is never entered."""
+    import sunfish                                      # noqa: E402
 
-    Returns the step-by-step trace, not just the outcome: two rules that agree
-    on the move but abandon at different probes are not the same mechanism,
-    and the +96.19 was measured on the mechanism.
-    """
-    best = cand = None
-    d0, lo, up = 1, -1e9, 1e9
-    trace = []
-    for k, (depth, gamma, score, move) in enumerate(probes):
-        if depth > d0:
-            best, d0, lo, up = cand or best, depth, -1e9, 1e9
-        if score >= gamma:
-            lo = max(lo, score)
-            if move is None:
-                trace.append(("terminal", k, best, cand))
-                break
-            cand = move
-        else:
-            up = min(up, score)
-        if golfed:
-            if (not lo < up - 15 and (best := cand or best) and times[k] > soft):
-                trace.append(("soft", k, best, cand))
-                break
-        else:
-            if not lo < up - 15:
-                best = cand or best
-                if best and times[k] > soft:
-                    trace.append(("soft", k, best, cand))
-                    break
-        trace.append(("step", k, best, cand))
-    return trace, best, cand
+    searcher = sunfish.Searcher()
+    searcher.soft = 0
+    searcher.bound = lambda pos, gamma, depth, root=False: 0
+    monkeypatch.setattr(sunfish.time, "time", lambda: 1)
+
+    reports = list(searcher.search([sunfish.hist[0]]))
+    assert [depth for depth, gamma, score, move in reports] == [1, 1]
+    assert [score >= gamma for depth, gamma, score, move in reports] == [True, False]
 
 
-def test_the_one_line_break_is_step_for_step_the_form_that_was_measured():
-    """The golf may not change the mechanism, and this proves it did not.
-
-    +96.19 +/- 33.81 was measured on a four-line commit-then-break block. What
-    ships is one line, because the pool had to cost the minified engine
-    nothing. The two are the same rule by short-circuit evaluation -- `best` is
-    assigned exactly when the bracket has closed, and the break still requires
-    a move -- and an argument is not a gate, so 20,000 seeded probe streams are
-    replayed through both and every step compared.
-    """
-    rng = random.Random(20260817)
-    for _ in range(20000):
-        probes, depth = [], 1
-        for _ in range(rng.randint(1, 25)):
-            if rng.random() < 0.25:
-                depth += 1
-            gamma = rng.randint(-300, 300)
-            # deltas straddle EVAL_ROUGHNESS exactly, where convergence flips
-            score = gamma + rng.choice([-200, -60, -16, -15, -14, -1, 0, 1,
-                                        14, 15, 16, 60, 200])
-            move = None if rng.random() < 0.05 else "m%d" % rng.randint(0, 3)
-            probes.append((depth, gamma, score, move))
-        times = [rng.uniform(0, 2) for _ in probes]
-        soft = rng.choice([0.0, 0.05, 0.5, 1.0, 5.0])
-        assert _loop(False, probes, soft, times) == _loop(True, probes, soft, times)
+def test_a_hard_stop_prefers_the_last_completed_depth():
+    """Keep a depth-one candidate only if no complete depth exists yet."""
+    packed = SRC.split('elif args[0] == "go":', 1)[1]
+    assert re.search(r"^ {12}except Stop:\n {16}cand = best or cand$", packed, re.M)
+    assert 'print("bestmove", cand or best or \'(none)\')' in packed
 
 
-def test_the_pv_flip_folded_into_its_assignment_is_the_same_flip():
-    """The line the bracket was paid for, and it is behaviour-neutral.
-
-    `i, j = move.i, move.j` plus a conditional flip became one conditional
-    assignment -- the same idiom the `position` handler already uses four lines
-    up. That fold is what keeps the minified engine line-neutral.
-    """
-    assert re.search(r"i, j = \(119 - move\.i, 119 - move\.j\) if len\(hist\) % 2 == 0"
-                     r" else \(move\.i, move\.j\)", SRC)
-    assert not re.search(r"^ +i, j = move\.i, move\.j$", SRC, re.M)
-    for i in range(21, 99):
-        for j in range(21, 99):
-            was = (i, j)
-            was = (119 - was[0], 119 - was[1])       # the old two-step form
-            now = (119 - i, 119 - j)                 # the folded form
-            assert was == now
+def test_default_soft_deadline_is_unbounded():
+    import sunfish                                      # noqa: E402
+    assert sunfish.Searcher().soft == 1 << 63
 
 
 def test_the_bracket_width_is_the_engines_own_convergence_window():
@@ -435,7 +377,9 @@ def test_the_bracket_width_is_the_engines_own_convergence_window():
     loop reads convergence with the same constant the search converges on."""
     import sunfish                                      # noqa: E402
     assert sunfish.EVAL_ROUGHNESS == 15
-    assert "EVAL_ROUGHNESS" in SRC.split("elif args[0] == \"go\":")[1]
+    search = SRC.split("def search(self, history):", 1)[1].split(
+        "# UCI User interface", 1)[0]
+    assert "EVAL_ROUGHNESS" in search
 
 
 # --------------------------------------------------------------------------

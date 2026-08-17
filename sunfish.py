@@ -323,7 +323,7 @@ Entry = namedtuple("Entry", "lower upper")
 class Searcher:
     def __init__(self):
         self.tp_score, self.tp_move, self.history = {}, {}, set()
-        self.nodes, self.deadline = 0, 1 << 63
+        self.nodes, self.deadline, self.soft = 0, 1 << 63, 1 << 63
 
     def bound(self, pos, gamma, depth, root=False):
         """ Let s* be the score of the sub-tree from pos at this depth, as
@@ -547,6 +547,7 @@ class Searcher:
                 if score < gamma: upper = score
                 yield depth, gamma, score, self.tp_move.get(pos)
                 gamma = (lower + upper + 1) // 2
+            if time.time() > self.soft: return
 
 
 ###############################################################################
@@ -627,37 +628,28 @@ def main():
             soft = min(max(soft / 1000, .05), think)
 
             start = time.time()
-            searcher.deadline = start + think
+            searcher.deadline, searcher.soft = start + think, start + soft
             # A fail high gives the move that achieved it, but only a
             # COMPLETED depth's last fail-high is trustworthy - a stop
             # inside a depth can catch a probe at a nonsense window.
-            # lo/up mirror the MTD bracket the searcher is closing, and that
-            # is what makes the soft limit above readable: a search may only
-            # be ABANDONED where the bracket has closed, so an unsettled move
-            # runs on toward the wall instead of committing a half-searched
-            # answer. Two limits buy nothing without it - a break at any
-            # yield stops at the soft one and the five-fold headroom the pool
-            # exists to grant is never reached.
-            best, cand, d0, lo, up = None, None, 1, -1e9, 1e9
+            # Searcher owns the exact MTD bracket, so it reads the soft limit
+            # only after that bracket closes; an unsettled move may use the wall.
+            best, cand, d0 = None, None, 1
             try:
                 for depth, gamma, score, move in searcher.search(hist):
                     if depth > d0:
-                        best, d0, lo, up = cand or best, depth, -1e9, 1e9
+                        best, d0 = cand or best, depth
                     if score >= gamma:
-                        lo = max(lo, score)
                         if move is None: print("info depth", depth, "score cp", score); break
-                        # The flip folds into the assignment rather than following
-                        # it: same coordinates, and it pays for the bracket above
-                        # so the pool costs the minified engine no lines at all.
-                        i, j = (119 - move.i, 119 - move.j) if len(hist) % 2 == 0 else (move.i, move.j)
+                        i, j = move.i, move.j
+                        if len(hist) % 2 == 0:
+                            i, j = 119 - i, 119 - j
                         cand = render(i) + render(j) + move.prom.lower()
                         print("info depth", depth, "score cp", score, "pv", cand)
-                    else: up = min(up, score)
-                    if not lo < up - EVAL_ROUGHNESS and (best := cand or best) and time.time() - start > soft: break
             except Stop:
-                pass
+                cand = best or cand
 
-            print("bestmove", best or cand or '(none)')
+            print("bestmove", cand or best or '(none)')
 
 
 if __name__ == "__main__":

@@ -1190,6 +1190,7 @@ King-capture substitution uses the position predicate directly, so its exact
 | root versus interior null behavior | `CanNull.lean` |
 | transposition-table interval updates | `TableSwap.lean` and table results in `Stalemate.lean` |
 | MTD-bi bracket range and convergence | `Driver.lean` |
+| soft-clock termination only between completed MTD brackets | `softStop_requires_closed` |
 
 The model abstracts Python's board representation, move generation, sorting,
 and table implementation. The audit pins the corresponding source regions;

@@ -46,7 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
-| 2026-08-17 | **CLASSIC POOL VERDICT: the pool takes classic's builtin clock and its packed artifact at +96.19 ± 33.81 (95%, pentanomial) over a FIXED 300 at 30+1 — WINS CLEAR, the pre-written branch** | 150W/69L/81D = 63.50%, Ptnml [7,19,46,42,36] over 150 pairs, **0 illegal, 0 forfeits, 300/300 normal**. The surrogate ranked right and read HIGH (+117 to +223 vs +96.19) — a calibration datum. Mechanism predicted to 4%: identical median spend (1.277 s vs 1.258 s), max spend **7.729 s vs 1.944 s**, 14.2% of pool moves over 2 s against 0.0%. Elo lives in the PAIR: budget alone +41.9 [−0.4,+85.5], stop rule alone +64.4 [+8.1,+124.3], both +223.3 on the surrogate. Price **+67 B and ZERO minified lines** as landed (142 → 142): the bracket costs two, the PV flip folded six lines below buys two back, and the one-line commit-and-break is proved step-identical to the measured four-line form over 20,000 replays. Raises the +400 goalpost by ~96 Elo; meter 3 is now historical |
+| 2026-08-17 | **CLASSIC POOL VERDICT: the pool takes classic's builtin clock and its packed artifact at +96.19 ± 33.81 (95%, pentanomial) over a FIXED 300 at 30+1 — WINS CLEAR, the pre-written branch** | 150W/69L/81D = 63.50%, Ptnml [7,19,46,42,36] over 150 pairs, **0 illegal, 0 forfeits, 300/300 normal**. The surrogate ranked right and read HIGH (+117 to +223 vs +96.19) — a calibration datum. Mechanism predicted to 4%: identical median spend (1.277 s vs 1.258 s), max spend **7.729 s vs 1.944 s**, 14.2% of pool moves over 2 s against 0.0%. Elo lives in the PAIR: budget alone +41.9 [−0.4,+85.5], stop rule alone +64.4 [+8.1,+124.3], both +223.3 on the surrogate. Price **+36 B and ZERO minified lines** as landed (142 → 142): `Searcher.search()` reads the soft clock at the bracket boundary it already owns, so the UCI loop duplicates no search state. Raises the +400 goalpost by ~96 Elo; meter 3 is now historical |
 | 2026-08-17 | **PRE-REGISTERED: the POOL takes classic's builtin clock (and its packed artifact) — the record shows the pool WON this venue's Elo cells in 2026-08-15's ranking pass (`min40_4` vs `pool` −114/−134/−114) and lost it only on the one-line elegance tiebreak, so the merits were never settled** | Fixed **N=300 at 30+1**, real clock, box, no SPRT, adjudication NONE, srand 20260901; branches written before game 1 (wins-clear → land / null → do not land / loses → record a reversed surrogate rank). Surrogate replication of the decision cell: **−223.3 [−345.5, −136.6]** for `min40_4` vs `pool`, 60 games, zero floor substitutions. Port priced: budget alone **+37 B / +0 lines** and NOT the measured object; budget + MTD-bracket soft rule **+77 B / +4 lines**. Raises the +400 goalpost by design |
 | 2026-08-17 | Classic consumer-side scoring and exact captures | **+25.4 ± 19.0 Elo fixed-node**, −2.36% nodes, 149→142 lines; real-clock pending |
 | 2026-08-17 | Classic unified caps | **+14.3 ± 15.0 Elo timed**, 1,000 games; keep at 149 lines |
@@ -233,36 +233,32 @@ zero clean lines** — strictly cheaper than what landed — and it reads
 
 | base | packed before | packed after | delta | **clean lines** | source lines |
 |---|---|---|---|---|---|
-| `a20b714` (as landed) | 3342 B | 3409 B | **+67 B** | **142 → 142** | 620 → 654 |
+| `4c8770e` (as landed) | 3342 B | 3378 B | **+36 B** | **142 → 142** | 604 → 623 |
 | `52cb130` | 3389 B | 3457 B | +68 B | 149 → 153 | 620 → 648 |
 | `e499dae` | 3369 B | 3451 B | +82 B | 150 → 154 | 642 → 670 |
 | `5a7d744` (arms' base) | 3426 B | 3503 B | +77 B | 152 → 156 | — |
 
-**THE REGISTRATION PROMISED A WORSE PRICE THAN THE LANDING PAYS, and it is left as written.** Its wins-clear branch says "+77 B and +4 clean lines" with the README moving 152 → 156. That was true of the form the games were played with; the golf came after, at Thomas's ask on #217, and the shipped form is cheaper on both axes with the same mechanism. The registration is append-only and is not edited — this entry is the correction, which is what that rule is for.
+**THE REGISTRATION PROMISED A WORSE PRICE THAN THE LANDING PAYS, and it is left as written.** Its wins-clear branch says "+77 B and +4 clean lines" with the README moving 152 → 156. That was true of the form the games were played with; the bracket-owner refactor came after, at Thomas's ask on #217, and the shipped form is cheaper on both axes with the same mechanism. The registration is append-only and is not edited — this entry is the correction, which is what that rule is for.
 
 **IT LANDS LINE-NEUTRAL ON THE MINIFIED ENGINE, at Thomas's ask on #217.** The
-first three rows are the same port before the golf, and they cost four minified
-lines; the shipped form costs **zero**. Two of those four were the bracket
-update, which is now the canonical `lo`/`up` pair the driver and the entry both
-use; the other two were bought back six lines below, by folding the PV's
-board flip into its own assignment — the same conditional-flip idiom the
-`position` handler four lines up already uses. **No functionality was removed to
-make room**, and the flip is asserted identical over every square pair.
+measured port checked the soft clock after closing an MTD bracket. The shipped
+form puts that check at the canonical boundary: immediately after
+`Searcher.search()`'s own `while` loop. The UCI consumer therefore needs no
+duplicate `lo`/`up` state, no compound commit-and-break, and no compressed PV
+flip. The result costs **zero clean lines** without golfing unrelated code.
 
-The byte figure moves with the base (+67 to +82 across four of them) because
-what changes is the LZMA stream around the diff, not the diff. The stable
-number, and the one the elegance bar should be read against, is now **zero
-minified lines** for a manager that is worth +96.19.
+The byte figure moves with the base because LZMA prices the surrounding stream,
+not merely the diff. On current master it is **+36 bytes**. The stable number,
+and the one the elegance bar should be read against, is **zero minified lines**
+for a manager that measured +96.19.
 
-**The one-line commit-and-break is the measured mechanism, proved rather than
-argued.** `+96.19 ± 33.81` was measured on a four-line commit-then-break block;
-what ships is `if not lo < up - EVAL_ROUGHNESS and (best := cand or best) and
-time.time() - start > soft: break`. They are the same rule by short-circuit
-evaluation, and `test_the_one_line_break_is_step_for_step_the_form_that_was_
-measured` replays **20,000 seeded probe streams** through both and compares
-every step, with the score deltas straddling `EVAL_ROUGHNESS` exactly where
-convergence flips. The three budget statements are **byte-identical** to the
-arm that played. No re-match is owed.
+**The stopping boundary is the measured mechanism, represented directly.**
+`+96.19 ± 33.81` was measured by reading the soft deadline once the MTD bracket
+closed. The generator now checks the deadline immediately after the very loop
+whose negated guard defines that closure. `Driver.lean` proves that the check
+cannot fire with an open bracket, and the interface test executes a two-report
+closing bracket and verifies that the next depth is not entered. The three
+budget statements remain byte-identical to the arm that played.
 
 **BASE DRIFT, stated plainly rather than left for a reader to notice.** The arms
 played were built at `5a7d744`, and master has since taken #213, #216, #218 and
