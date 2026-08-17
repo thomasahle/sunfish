@@ -17528,3 +17528,94 @@ same gates.
 existing serial queue (`nice 19`, ≤8 threads, forfeit tripwire); one arm
 trains at a time. The box's owner tuner and the pr218 matches are untouched
 and are not counted as ours.
+
+---
+
+## ARM 9 PRE-FLIGHT — two silent failure modes in the entry's UCI surface
+
+Registered order says measure label throughput before sizing the slice. Doing
+that found something more important than a throughput number: **the 4k entry
+cannot be used as a labeller at all through its UCI interface, and both ways
+it fails are silent.**
+
+**(1) `go depth N` does not exist.** The entry's `go` parser reads
+`wtime/winc/movetime` and, behind `minifier-hide`, `nodes`. Nothing else. A
+`go depth 3` therefore leaves `wtime` at its 60000 default, the engine
+computes a ~1.5 s think, and the "depth 3" label is really a **wall-clock
+search whose value depends on how loaded the box was**. This is the
+campaign's clock-coupling defect in a new venue — the same shape as the
+fixed-node screen that was silently a 1.5 s/move game until `tc=6000+0` was
+pinned, and the same shape as the `nodes=N`-with-no-clock screen script. The
+arm's budget is therefore **nodes**, which is implemented, deterministic, and
+the same effort currency the selector screen uses.
+
+**(2) The entry prints no score.** It emits `bestmove` and `info string`
+diagnostics and nothing else — a 4k artifact spends no bytes on `info` lines
+a tournament manager ignores. So a UCI labeller reads back no evaluation at
+all. A labeller-only copy (`objsweep/entry_label.py`) prints one
+`info depth D score cp S nodes N conv C` line before `bestmove`, taken from
+the last **converged** MTD bracket, with `conv 0` marking the fallback when a
+node cap cut the loop before any depth's bracket closed. Nothing in the
+search reads the new variable, so no bound, cut or time decision can see it.
+
+**(3) And the one that would have produced a corpus: `position fen` does not
+exist either.** The loop implements `position startpos [moves ...]` only, and
+an unrecognised `position` line is *ignored* — the engine keeps whatever
+position it had. Measured: 60 different FENs returned the **identical** score
+(70 cp at 2,000 nodes, 53 at 8,000, 42 at 20,000 — the startpos, searched
+deeper). Coverage was 60/60, determinism was 40/40, every gate I had built
+said green, and the corpus would have been a million copies of one number.
+The tell was the label spread, which is now printed by the probe for exactly
+this reason: **a labeller pre-flight must check that the labels VARY**, not
+merely that they arrive and are reproducible.
+
+Throughput, measured on the (startpos-degenerate but correctly-budgeted)
+runs, one worker, `nice 19`, box shared with the owner's tuner:
+
+| budget | pos/s/worker | median depth | 16 workers x 6 h |
+|---|---|---|---|
+| `go nodes 2000` | 32.4 | 3 | 11.2 M |
+| `go nodes 8000` | 11.6 | 5 | 4.0 M |
+| `go nodes 20000` | 5.2 | 6 | 1.8 M |
+
+So the ≤6-box-hour cap is not the binding constraint at any budget the arm
+would want — the honest slice size is set by **what the family can absorb**,
+and the ledger already measured that: a 200k-position pre-flight reached val
+0.01754 against 0.01750 at 10M. The arm will therefore spend its budget on
+**label quality (20,000 nodes, the selector's own budget) at a few hundred
+thousand positions**, not on millions of shallow labels, and it will run a
+**size-matched control** — the same positions with their original Stockfish
+labels — so that "label source" is isolated from "corpus size".
+
+### An instrument-validation step this unlocks, and it is worth more than the arm
+
+`outval` is gated on but has never been checked against a known Elo
+difference. The entry-as-labeller makes that check cheap: score the *entry
+itself* on the same held-out slice and compare with the control nets, which
+the capacity arm measured at **31.00%** against it. If the entry's outval is
+far better than the nets', outval is strength-correlated and the 3σ bar means
+something; if it is not, the bar is weak and that must be known **before**
+arms are spent against it, not after. Registered as a pre-condition on the
+rest of the sweep's outval readings.
+
+## ARM 10 — PRICED, and the price is the reason it moves behind ARMs 1 and 2
+
+The brief caps this arm at one day or record-and-skip. Priced honestly:
+
+| piece | size | note |
+|---|---|---|
+| sibling harvest (python-chess legal moves, k=8/parent, twin depth-8 labels) | ~130 lines | reuses `build_lambda_corpus.label`'s file-IO worker pattern verbatim |
+| labelling 400k children | ~1.5 box-hours | twin measured at 175 pos/s over 32 workers |
+| grouped batching in `data.py` | ~45 lines | `batches()` shuffles a flat id list today; groups must stay intact |
+| `pairwise_rank_loss` in `model.py` | ~25 lines | |
+| dispatch + refusal in `train.py` | ~15 lines | must refuse `rank>0` on a corpus with no groups, the way `lam<1` already refuses a corpus with no outcomes |
+| `LossCfg.rank` field | 2 lines | **but this bumps EVERY config's hash**, since `config_hash` canonicalises the whole dataclass — any run resuming across the change would refuse its own checkpoint. Apply between queue jobs only. |
+| unit tests (zero loss at perfect order; invariance to a global shift of `pred`) | ~40 lines | a ranking loss that is not shift-invariant is not a ranking loss |
+
+**~260 lines, ~1.5 box-hours of labelling, plus the usual 10-minute run** —
+inside the cap, but five to ten times every other arm in the sweep and the
+only one that mutates shared trainer code. ARMs 1 and 2 are config-only runs
+of ten minutes each. So the run order becomes **11, 9, 1, 2, then 10**, and
+ARM 10 is spent only if something in the sweep has shown life by then. That
+is a deliberate deviation from the brief's stated order, taken under its own
+"cheap-first" instruction and recorded here rather than quietly.
