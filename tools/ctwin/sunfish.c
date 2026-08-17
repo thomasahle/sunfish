@@ -713,18 +713,19 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail);
 
 static int score_move(const Pos *pos, Move move, int val, int gamma,
         int depth, int rd, int root, int guard, int *real) {
-    Pos child = domove(pos, move);
     int move_depth = rd - 1 - (!root && guard && val < LMR);
     *real = 1;
-    int capped = FUT_CAP == 1 ? val < MATE_LOWER : FUT_CAP == 2 && val < 0;
-    if (2 <= depth && depth <= FUT_CAP_DEPTH && capped) {
-        int cap = pos->score + val + (depth - 1) * QS_A;
+    int capped = depth <= FUT_MAX ? val < MATE_LOWER
+        : depth <= FUT_CAP_DEPTH && (FUT_CAP == 1 ? val < MATE_LOWER : FUT_CAP == 2 && val < 0);
+    int cap = MATE_UPPER;
+    if (capped) {
+        cap = pos->score + val + (depth > 1 ? depth - 1 : 0) * QS_A;
         if (cap >= MATE_LOWER) cap = MATE_LOWER - 1;
         if (cap < gamma) { *real = 0; return cap; }
-        int full = -bound(&child, 1 - gamma, move_depth, 0, 0);
-        return cap < full ? cap : full;
     }
-    return -bound(&child, 1 - gamma, move_depth, 0, 0);
+    Pos child = domove(pos, move);
+    int full = -bound(&child, 1 - gamma, move_depth, 0, 0);
+    return cap < full ? cap : full;
 }
 
 /* ------------------------------------------------------------------ */
@@ -777,11 +778,13 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
     if (!root && depth > NULL_MIN_DEPTH
             && (!FUEL_NULL || depth < FUEL_MIN_DEPTH)
             && iabs(pos->score) < NULL_LIMIT && has_big_piece(pos)) {
-        Pos rp = rotate(pos, 1);
-        int s = -bound(&rp, 1 - gamma, depth - NULL_CUT_RED, 0, 0);
         int score = pos->score + (NULL_CAP_MARGIN < 0
             ? EVAL_ROUGHNESS : NULL_CAP_MARGIN);
-        if (s < score) score = s;
+        if (score >= gamma) {
+            Pos rp = rotate(pos, 1);
+            int s = -bound(&rp, 1 - gamma, depth - NULL_CUT_RED, 0, 0);
+            if (s < score) score = s;
+        }
         Move proof = nomove;
         int have_proof = 0;
         if (score >= gamma) {                       /* short-circuit `and` */
@@ -848,17 +851,11 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         for (int k = 0; k < c.n; k++) {
             int val = VM_VAL(vbuf[k]);
             Move m = VM_MOVE(vbuf[k]);
-            if (!qstail && depth <= FUT_MAX && pos->score + val < gamma) {
-                /* Futility: value evidence only, except the mate special
-                 * case, which is a real (cutting) witness. */
-                if (val >= MATE_LOWER) PROCESS(1, m, MATE_UPPER);
-                else PROCESS(0, nomove, pos->score + val);
-                break;                       /* Python breaks either way */
-            }
             if (!qstail) {
                 int real;
                 int score = score_move(pos, m, val, gamma, depth, rd, root, guard, &real);
                 PROCESS(real, m, score);
+                if (!real) break;
             } else {
                 Pos np = domove(pos, m);
                 PROCESS(1, m, -bound(&np, 1 - gamma, rd - 1, 0, 0));

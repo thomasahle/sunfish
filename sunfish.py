@@ -389,12 +389,12 @@ class Searcher:
             # passing is better than any move - the piece test guards that
             # (K+P endings). Capping the pass at static evaluation plus one
             # score bucket also keeps its value monotone and below the positive
-            # mate band, so one child report is enough to bound it. No null at
-            # root, so we can always return a move. Below depth 6 only: from
+            # mate band. A sub-window cap needs no child report; otherwise one
+            # is enough. No null at root, so we can always return a move. From
             # depth 6 on the pass is never a score candidate (see below).
             if (not root and 2 < depth < 6 and abs(pos.score) < 750
                     and any(c in pos.board for c in "RBNQ")):
-                score = min(pos.score + EVAL_ROUGHNESS,
+                score = cap if (cap := pos.score + EVAL_ROUGHNESS) < gamma else min(cap,
                     -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
                 # A king capture substitutes the exact MATE_UPPER for a
                 # virtual fail-high; the cached move is a capture certificate.
@@ -428,47 +428,25 @@ class Searcher:
                 else:
                     val_lower = -MATE_UPPER
 
-            # Now finally play the killer move. But note that we have to respect
-            # the QS lower bound, otherwise we would get search instability.
-            # We will search it again in the main loop below, but the tp will
-            # make this mostly free.
-            # At depths 2-3, every ordinary move is capped by its static gain.
-            # A cap below gamma skips the child; otherwise min transports the
-            # child report to the same fixed capped value.
+            # Search the killer first, but only if it belongs to the fixed move
+            # set. At depths 0-1 the static cap is exact stand-pat futility; at
+            # depths 2-3 it shapes the tree by bounding every ordinary move.
             def score_move(move, val):
                 move_depth = d - 1 - (not root and guard and val < LMR)
-                cap = MATE_UPPER
-                if 2 <= depth <= 3 and val < MATE_LOWER:
-                    cap = min(MATE_LOWER - 1, pos.score + val + (depth - 1) * QS_A)
+                cap = (MATE_UPPER if depth > 3 or val >= MATE_LOWER else
+                    min(MATE_LOWER - 1, pos.score + val + max(depth - 1, 0) * QS_A))
                 if cap < gamma: return None, cap
                 return move, min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
 
             if killer and pos.value(killer) >= val_lower:
                 yield score_move(killer, pos.value(killer))
 
-            # Then all the other moves
-            # Quiescent search: only moves above the val-limit are admitted -
-            # filtering BEFORE the sort skips sorting the sub-threshold tail
-            # (most of the list at QS nodes), and is literally the model's
-            # movesAbove form (formal/Sunfish/Stalemate.lean).
+            # Search the fixed move set by decreasing value. A virtual cap
+            # bounds the rest of the sorted tail, so it ends the stream.
             for val, move in sorted(((v, m) for m in pos.gen_moves() if (v:=pos.value(m)) >= val_lower), reverse=True):
-                # If the new score is less than gamma, the opponent will for sure just
-                # stand pat, since ""pos.score + val < gamma === -(pos.score + val) >= 1-gamma""
-                # This is known as futility pruning.
-                if depth <= 1 and pos.score + val < gamma:
-                    # Need special case for MATE, since it would normally be caught
-                    # before standing pat. A sub-mate futility yield estimates
-                    # the child's stand-pat without searching it, so it is
-                    # value evidence only, never legality evidence: it goes
-                    # out as a virtual (None) yield - it can never cut (its
-                    # score is below gamma by construction), and it must not
-                    # set 'live' and mask the terminality correction below.
-                    yield (move, MATE_UPPER) if val >= MATE_LOWER else (None, pos.score + val)
-                    # We can also break, since we have ordered the moves by value,
-                    # so it can't get any better than this.
-                    break
-
-                yield score_move(move, val)
+                result = score_move(move, val)
+                yield result
+                if result[0] is None: break
 
         # Run through the moves, shortcutting when score >= gamma.
         # live is True if we saw a legal (not null, score > -MATE_UPPER) move
