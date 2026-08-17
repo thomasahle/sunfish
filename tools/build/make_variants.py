@@ -155,6 +155,53 @@ MODS = {
         "   - 10 * (abs(2 * (i // 10) - 11) + abs(2 * (i % 10) - 9)) for i in range(120))\n",
         "   - 14 * (abs(2 * (i // 10) - 11) + abs(2 * (i % 10) - 9)) for i in range(120))\n",
     ),
+    # ---- THE MINIMAL TAPER: the queens-off CLIFF becomes a phase RAMP -----
+    # The entry already carries two king tables and already picks between them
+    # once per search. What it does not have is a taper: the choice is a step
+    # function of one boolean, so a queenless middlegame with four rooks and
+    # four minors on gets the SAME fully-centralized king table as a bare KRK
+    # ending. `ktap` replaces the step with a linear interpolation on the
+    # standard 24-point phase (N=B=1, R=2, Q=4), so K_MID holds at full
+    # material and K_END arrives only as the material actually leaves.
+    #
+    # COST CLASS ZERO IN THE HOT LOOP, exactly like pend and kact: the blend
+    # runs ONCE per search, at the same root seam the kend+fresh fix already
+    # pays for, and the from_board rebuild two lines below re-derives the
+    # carried score under whatever table this produces. `value(move)` and
+    # every futility/QS margin keep reading one fixed `pst` for the whole
+    # search -- there is no per-node multiply and no second accumulator,
+    # which is what the 2026-08-13 "continuous phase blend does not fit"
+    # pricing was really about (that build carried a second 384-value TABLE
+    # SET; this one carries no new data at all).
+    #
+    # Phase is clamped at 24 so a second queen extrapolates PAST K_MID
+    # nowhere: promotions can push the raw sum to 28+.
+    #
+    # `ktap` leaves the pawn seam alone -- pend is a landed, confirmed +21.31
+    # and it is not this mod's to re-decide. `kptap` is the variant that
+    # ramps both, and it is measured separately for exactly that reason.
+    "ktap": (
+        '        end = "Q" not in pos.board or "q" not in pos.board\n'
+        '        pst["K"] = K_END if end else K_MID\n',
+        '        end = "Q" not in pos.board or "q" not in pos.board\n'
+        '        ph = min(24, sum(pos.board.count(c) * w\n'
+        '                         for c, w in zip("NnBbRrQq", (1, 1, 1, 1, 2, 2, 4, 4))))\n'
+        '        pst["K"] = tuple(e + (m - e) * ph // 24 for m, e in zip(K_MID, K_END))\n',
+    ),
+    # `kptap`: the same ramp on BOTH tapered tables. pend's endgame pawn bonus
+    # currently switches on at the queen exchange and is full strength the
+    # instant it does; here it grows with the same phase the king table uses.
+    # This one can lose ground that pend already won, which is why it is a
+    # separate arm and not a "while we are here" extension of ktap.
+    "kptap": (
+        '        end = "Q" not in pos.board or "q" not in pos.board\n'
+        '        pst["K"] = K_END if end else K_MID\n'
+        '        pst["P"] = P_END if end else P_MID\n',
+        '        ph = min(24, sum(pos.board.count(c) * w\n'
+        '                         for c, w in zip("NnBbRrQq", (1, 1, 1, 1, 2, 2, 4, 4))))\n'
+        '        pst["K"] = tuple(e + (m - e) * ph // 24 for m, e in zip(K_MID, K_END))\n'
+        '        pst["P"] = tuple(e + (m - e) * ph // 24 for m, e in zip(P_MID, P_END))\n',
+    ),
     # ---- H2 KING-SAFETY TERMS (nnue_4k/MEASUREMENTS.md, the H2 -----------
     # pre-registration). The entry is MATED in a third of its losses
     # (classic: a fifth; control: a tenth), and the measured queen-regime
@@ -280,6 +327,109 @@ MODS = {
         '        heavy = sum(piece[c] for c in pos.board.upper() if c in "NBRQ")\n'
         '        pst["K"] = K_MID if heavy > piece["Q"] and ("Q" in pos.board or "q" in pos.board) else K_END\n',
     ),
+    # ---- PAWN-STRUCTURE MACHINERY, PRICED BY BUILDING ---------------------
+    # The 2026-08-14 H1 registration recorded the passer delta-rule as
+    # "DESIGNED and priced out (score/ps split returns + scan class)". That
+    # was reasoning, not a build, and the number it turned on -- what a
+    # per-file pawn accumulator costs in bytes and in nps -- was never
+    # measured. `pdbl` measures it, on the cheapest structural term that is
+    # genuinely O(1) incremental.
+    #
+    # WHY DOUBLED AND NOT PASSED. A per-file count integer is RANK-BLIND. A
+    # doubled penalty is a function of the counts alone, so a pawn moving from
+    # file a to file b changes it by exactly (c_b >= 1) - (c_a >= 2) -- two
+    # nibble reads, no scan. A PASSER bonus is rank-weighted, so when an enemy
+    # pawn is captured off file f+1 the bonus that appears depends on the rank
+    # of our pawn on file f, which the counts do not record. Making passers
+    # incremental needs a SECOND accumulator (most-advanced rank per file);
+    # computing them on demand is the scan class the registration named. So
+    # `pdbl` is the floor: whatever a passer term would cost, it costs at
+    # least this, and this is the part that is cheap.
+    #
+    # THE FIELD IS TWO-SIDED AND SWAPS ON ROTATE. `w` packs our eight file
+    # counts in nibbles 0-7 and theirs in nibbles 8-15; rotate() exchanges the
+    # halves, which is what makes the mirrored board's opponent view correct
+    # for free. Files are counted in the MOVER's orientation, so a file index
+    # is (square % 10) - 1 for us and 8 - (square % 10) for them.
+    #
+    # The term rides in value(), NOT only in score: `value(move)` has to stay
+    # an exact delta of `score` or move ordering, the QS admission gate and
+    # the futility test all start reading a different quantity than the search
+    # returns. That requirement is the whole reason this is expensive.
+    "pdbl": [
+        ('class Position(namedtuple("P", "board score wc bc ep kp r")):\n',
+         'class Position(namedtuple("P", "board score wc bc ep kp r w")):\n'),
+        ("            119 - self.kp if self.kp and not n else 0,\n"
+         "            self.board,\n"
+         "        )\n",
+         "            119 - self.kp if self.kp and not n else 0,\n"
+         "            self.board, self.w >> 32 | (self.w & 0xFFFFFFFF) << 32,\n"
+         "        )\n"),
+        ("        board, r = self.board, self.r\n"
+         "        wc, bc, ep, kp = self.wc, self.bc, 0, 0\n"
+         "        score = self.score + self.value(move)\n",
+         "        board, r = self.board, self.r\n"
+         "        wc, bc, ep, kp = self.wc, self.bc, 0, 0\n"
+         "        score = self.score + self.value(move)\n"
+         "        w = self.w\n"
+         '        if p == "P":\n'
+         "            w += (1 << 4 * (j % 10 - 1)) - (1 << 4 * (i % 10 - 1))\n"
+         "            if A8 <= j <= H8: w -= 1 << 4 * (j % 10 - 1)\n"
+         "            if j == self.ep: w -= 1 << 4 * (8 + 8 - (j + S) % 10)\n"
+         '        if q == "p": w -= 1 << 4 * (8 + 8 - j % 10)\n'),
+        ("        return Position(r, -score, bc, wc,\n"
+         "                        119 - ep if ep else 0, 119 - kp if kp else 0, board)\n",
+         "        return Position(r, -score, bc, wc,\n"
+         "                        119 - ep if ep else 0, 119 - kp if kp else 0, board,\n"
+         "                        w >> 32 | (w & 0xFFFFFFFF) << 32)\n"),
+        ("    return Position(board, score, wc, bc, ep, kp, board[::-1].swapcase())\n",
+         "    w = 0\n"
+         "    for i, p in enumerate(board):\n"
+         '        if p == "P": w += 1 << 4 * (i % 10 - 1)\n'
+         '        elif p == "p": w += 1 << 4 * (8 + 8 - i % 10)\n'
+         "    return Position(board, score + dbl(w), wc, bc, ep, kp,\n"
+         "                    board[::-1].swapcase(), w)\n"),
+        # the doubled term itself, and the O(1) delta value() adds
+        ("def from_board(board, wc=(True, True), bc=(True, True), ep=0, kp=0):\n",
+         "def dbl(w):\n"
+         '    """-12 cp per doubled pawn, ours minus theirs. Only called from\n'
+         "    from_board -- every other site updates the delta in O(1).\"\"\"\n"
+         "    return -12 * sum(max(0, w >> 4 * f & 15) - 1 for f in range(8)\n"
+         "                     if w >> 4 * f & 15) \\\n"
+         "        + 12 * sum(max(0, w >> 4 * f & 15) - 1 for f in range(8, 16)\n"
+         "                   if w >> 4 * f & 15)\n"
+         "\n"
+         "\n"
+         "def from_board(board, wc=(True, True), bc=(True, True), ep=0, kp=0):\n"),
+        ('        if p == "P":\n'
+         "            if A8 <= j <= H8:\n"
+         "                score += pst[prom][j] - pst[\"P\"][j]\n"
+         "            if j == self.ep:\n"
+         '                score += pst["P"][119 - (j + S)]\n'
+         "        return score\n",
+         '        if p == "P":\n'
+         "            if A8 <= j <= H8:\n"
+         "                score += pst[prom][j] - pst[\"P\"][j]\n"
+         "                # the pawn LEAVES its file and does not arrive on one\n"
+         "                score += 12 * (self.w >> 4 * (i % 10 - 1) & 15 >= 2)\n"
+         "            elif i % 10 != j % 10:\n"
+         "                # doubled delta, O(1): our count on the destination file\n"
+         "                # rises and on the source file falls. GUARDED on the\n"
+         "                # file actually changing -- a straight push has a == b,\n"
+         "                # where the formula (c_b >= 1) - (c_a >= 2) reads 1 for a\n"
+         "                # single pawn and invents a phantom doubled pawn on every\n"
+         "                # push. Caught by the from-scratch rebuild check, not by\n"
+         "                # the delta check: value() and move() agreed with each\n"
+         "                # other perfectly while both were wrong.\n"
+         "                score -= 12 * ((self.w >> 4 * (j % 10 - 1) & 15 >= 1)\n"
+         "                               - (self.w >> 4 * (i % 10 - 1) & 15 >= 2))\n"
+         "            if j == self.ep:\n"
+         '                score += pst["P"][119 - (j + S)]\n'
+         "                score -= 12 * (self.w >> 4 * (16 - (j + S) % 10) & 15 >= 2)\n"
+         '        if q == "p":\n'
+         "            score -= 12 * (self.w >> 4 * (16 - j % 10) & 15 >= 2)\n"
+         "        return score\n"),
+    ],
     # ---- SEARCH: the root gamma seed. THIS IS NOT AN EVAL MOD -------------
     # `search()` starts every search at gamma = 0 and bisects. The root stores a
     # move ONLY on a fail-high, so the node count of the first root fail-high --
