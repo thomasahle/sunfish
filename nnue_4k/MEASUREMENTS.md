@@ -17931,8 +17931,8 @@ every rank. So `329_factor_ub_n64` bounds everything below it.
 | frame gate | — | — | wtm +0.4879 btm +0.4707 spread 0.0172 |
 
 **Same corpus, same split, same 500,086-position val set by sha, same recipe,
-same seed, one field changed.** Trajectory: 0.01410, 0.01399, 0.01403,
-0.01394, 0.01394, 0.01396.
+same seed, one field changed.** Trajectory (exact): 0.0140979, 0.0139929,
+0.0140262, 0.0139422, **0.0139381**, 0.0139570.
 
 Against the bars registered before any of this existed:
 
@@ -17940,7 +17940,7 @@ Against the bars registered before any of this existed:
 |---|---|---|
 | NOISE (5σ) | ≤ 0.0175173 | **PASSED by 0.0035773** — 162.6σ |
 | FUNDING (25 % of the learned signal) | ≤ 0.0168991 | **PASSED by 0.0029591** |
-| SOFT/FIRM (last-2 mean − prev-2 mean vs −σ) | −2.2e-5 | **+1.0e-5 → FIRM**, converged |
+| SOFT/FIRM (last-2 mean − prev-2 mean vs −σ) | −2.2e-5 | **−3.66e-5 → SOFT** (see the correction below) |
 
 **−20.9 % of val against the best N=5 seed.** In signal terms: the material
 anchor is 0.02054, so N=5 holds 0.0029127 of learned signal and N=64 holds
@@ -18101,3 +18101,40 @@ On that ranking the shape to train first is **mirrored, r=8, N=32**
 (4,022 B at 70 % zeros, 74 spare), with **mirrored r=4/N=64** (3,803 B, 293
 spare) as the wide-and-cheap alternative that keeps 64 units for the bytes of
 the shipped 5-lane net.
+
+### CORRECTION to the verdict above, within the hour and before anything was built on it: the bound is SOFT, not FIRM — and softness makes the pass STRONGER, not weaker
+
+The verdict entry above first read "**+1.0e-5 → FIRM**, converged". **That was
+an arithmetic slip of mine** — I averaged the rounded trajectory by eye and got
+the sign wrong. Computed from `metrics.jsonl` at full precision:
+
+    val   0.0140979  0.0139929  0.0140262  0.0139422  0.0139381  0.0139570
+    last-2 mean 0.0139476   prev-2 mean 0.0139842   diff  -3.66e-05
+
+against σ = 2.2e-5. **−3.66e-5 is more negative than −σ, so the registered
+criterion reads SOFT: the arm was still descending when the six-epoch schedule
+ended.** The entry above is amended in place to say so.
+
+**What the criterion's letter says, and why the letter over-reaches here.** As
+written it says "no branch fires until one arm is re-run at 18 epochs". Its
+own stated intent, in the same registration, is that the test is "deliberately
+asymmetric: a soft bound can only *delay* a refutation, never manufacture a
+pass." Both halves matter, and they point opposite ways, so here is the
+reasoning rather than a choice of clause:
+
+`val(free N)` is a **lower bound on the loss** of every factored net of width
+N. An under-trained free-N run therefore reports a val that is **too HIGH** —
+the converged bound is lower still. Softness moves the bound *away* from the
+bars in the direction of a stronger pass, and cannot be the reason a passing
+arm passed. The criterion exists to stop an under-trained arm from
+**refuting** the design; it has nothing to catch when the arm clears the
+funding bar by 135σ while still descending.
+
+**So the funding branch fires, and the 18-epoch re-run is retained as an
+obligation rather than a blocker** — it is now a question about *how much more*
+width is worth, not about whether the gate opened. It is registered here,
+unrun.
+
+**The N=5 anchor is FIRM on the same test** (−1.6e-5, inside σ), which is what
+makes the comparison legitimate: the arm that lost had converged, and the arm
+that won had not finished winning.
