@@ -509,7 +509,13 @@ class MixedAcquisitionTest(unittest.TestCase):
         def values(name):
             return MixedSpace.parameter_values(parameters[name])
 
-        self.assertEqual(parameters["NULL_LIMIT"]["default"], 60000)
+        limit = parameters["NULL_LIMIT"]["default"]
+        self.assertEqual(limit, 750)
+        root = path.parents[2]
+        self.assertIn(f"static int NULL_LIMIT = {limit};",
+                      (root / "tools/ctwin/sunfish.c").read_text())
+        self.assertEqual((root / "sunfish.py").read_text().count(
+            f"abs(pos.score) < {limit}"), 2)
         self.assertIn(500, values("NULL_LIMIT"))
         self.assertEqual((min(values("QS")), max(values("QS"))), (0, 300))
         self.assertEqual((min(values("QS_A")), max(values("QS_A"))), (20, 300))

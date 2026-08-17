@@ -10,7 +10,7 @@
      "values": [0, 5, 10, 15, 20, 30, 40, 50], "scale": 10},
     {"name": "NULL_MARGIN", "type": "integer", "default": -200,
      "min": -400, "max": 800, "step": 10, "scale": 150},
-    {"name": "NULL_LIMIT", "type": "discrete", "default": 60000,
+    {"name": "NULL_LIMIT", "type": "discrete", "default": 750,
      "values": [0, 250, 350, 500, 750, 1000, 1250, 2000, 60000],
      "off_values": [0], "scale": 500},
     {"name": "NULL_CUT_RED", "type": "integer", "default": 3,
