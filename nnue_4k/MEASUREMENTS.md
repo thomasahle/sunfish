@@ -17189,3 +17189,88 @@ format limit rather than a bug. Whether removing the inconsistency also
 restores data absorption is exactly the read to watch on this run's val curve
 — epoch 0 sits at 0.01770 — and it is the thing that will say whether the
 capacity arm's premise survives.
+
+---
+
+## N=5 HARVEST — in budget, seeds tight, and absorption still absent
+
+### The repair holds, and the byte question is closed
+
+All three seeds report **zero** `bias digits CLIPPED` notices (against 1/6 on
+every epoch of the N=6 run), so trainer and exporter now agree in production.
+
+**TRAINED N=5 ARTIFACT: 4,002 bytes — IN BUDGET by 94**, and it opens `e2e4`.
+`verify_export` passes bit-exact (768×5 trits, gains [67, 69, 72, 76, 73];
+entry == int-ref == torch-mirror on 200 fens × 3 views + a 60-ply walk). The
+provisional was 3,999 B, so the random-payload proxy was accurate to **+3 B**
+here and **−4 B** at N=6 — the structure-blind container claim is now
+confirmed from both ends, and provisional byte numbers can be trusted to a
+few bytes in future.
+
+| | provisional (random @43.1%) | trained | verdict |
+|---|---|---|---|
+| N=5 | 3,999 | **4,002** | **in budget by 94** |
+| N=6 | 4,155 | 4,159 | over by 63 |
+
+### Seed spread: the val noise floor is 0.00002
+
+| seed | 0 | 1 | 2 |
+|---|---|---|---|
+| best val | 0.01765 | 0.01763 | 0.01763 |
+
+A spread of 2e-5 across seeds — tight enough that any val difference below
+that is noise. Useful, and it is the only thing val is being used for here.
+
+### Absorption is STILL absent — the arm's premise remains unmet
+
+Val across six passes over 10M positions, all three seeds:
+0.01770 → 0.01765, 0.01769 → 0.01764, 0.01771 → 0.01766. **Movement of ~0.3%,
+the same shape as the defective-clamp N=6 run.** Fixing the bias rail removed
+a real defect and did *not* restore data absorption. The caveat registered
+before these runs — that the fix made the bound *consistent*, not *wide* — is
+what happened: bias digits still land on their per-lane rails, so the format
+is genuinely tight rather than inconsistently tight.
+
+### CORRECTION, form (a): I misread the train curve
+
+I twice cited "train loss rising 9.6%" as evidence of a pathological
+self-tightening squeeze, including as one of the two pillars of the bias-rail
+diagnosis. That was wrong. `train.py` reports the **full objective**:
+
+    loss = lambda_loss(...) + saturation_penalty(...) + l1_pressure(model._u, l1)
+
+while `val` is the data term alone. So a rising train number is the L1 and
+saturation penalties growing as weights grow — which is *expected* under
+`l1=5e-4` with gains that increase during training — not the data fit
+degrading. The gap between train and val widens from 0.0023 to 0.0042 across
+the run, consistent with exactly that.
+
+The bias rail was still a genuine defect on its own evidence (all six biases
+at exactly ±0.019000, and a trainer/exporter disagreement that forced export
+truncation), and fixing it was right. But **the mechanism I attached to it was
+partly built on a misread**, and the absorption finding rests on one pillar
+only: **val is flat, and 50× more data buys ~0.2%.** Stated so the next reader
+weighs the evidence that actually exists.
+
+### Harness: two defects fixed before the screen ran
+
+**The screen script ran `nodes=N` with no clock** — precisely the
+configuration behind the campaign-wide clock-coupling defect, where the
+engine defaults `wtime` to 60000, computes a 1500 ms think, and sets a
+deadline the node cap never reaches. A "fixed-node" screen would have silently
+been a 1.5 s/move timed game rewarding the faster arm. `ab_fixednode.sh` now
+pins `tc=6000+0` (deadline ~150 s, unreachable) and gained a
+**deadline-relative dormancy gate** that voids on any move ≥ 15 s, with an
+explicit "gate could NOT run" path rather than a silent pass when the pgn
+carries no move times.
+
+**The arena carried a stale `sunfish_ui` v2** shadowing the repo's v3. The
+engine's own guard caught it and refused to run — "it voided 425 games once" —
+which is that guard doing exactly its job and saving this screen. Refreshed
+to v3; both engines then answered correctly and both passed the legality gate
+at the played budget (20,000 nodes).
+
+Screen launched: `capn5` vs the pinned `entry`, 25 rounds / 50 games, 20,000
+nodes, srand 20260817, concurrency 8. Top-pick read only, never an Elo for the
+ledger. The bar it reports against: fixed-node gain must exceed the **≈59.8
+Elo** timed tax measured for N=5 for the timed projection to be positive.

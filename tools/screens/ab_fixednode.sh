@@ -15,6 +15,17 @@
 # No wait-loop: this cannot be started by another stage dying. Run it
 # deliberately.
 #
+# THE CLOCK IS PINNED ON PURPOSE (tc=6000+0), and removing it re-opens a
+# defect that has already voided results. `nodes=N` alone sends no clock, so
+# the engine's own UCI loop defaults wtime to 60000, computes
+# think = min(60000/40, 60000/2-1000) = 1500 ms, and sets a deadline BEFORE
+# the node-cap block ever runs -- so a "fixed-node" game silently becomes a
+# 1.5-second-per-move timed game, and the comparison rewards whichever arm is
+# FASTER rather than whichever searches better. A prior sweep found 16.82% of
+# one match's moves hitting that deadline, 1.51x more often on the slower arm.
+# tc=6000+0 gives wtime 6,000,000 ms -> think 150 s, which the node cap always
+# reaches first, so the deadline is unreachable and the screen is speed-free.
+#
 # usage: ab_fixednode.sh NAME_A ENG_A NAME_B ENG_B TAG SRAND [NODES] [ROUNDS] [CONC]
 set -u
 cd "$(dirname "$0")"
@@ -49,7 +60,7 @@ done
 nice -n 5 "$FC" \
   -engine cmd="$ARENA/w_$NA.sh" name="$NA" \
   -engine cmd="$ARENA/w_$NB.sh" name="$NB" \
-  -each proto=uci nodes="$NODES" \
+  -each proto=uci nodes="$NODES" tc=6000+0 \
   -openings file="$BOOK" format=epd order=random -srand "$SRAND" \
   -rounds "$ROUNDS" -games 2 -repeat -concurrency "$CONC" -recover \
   -sprt elo0=0 elo1=10 alpha=0.05 beta=0.05 \
@@ -67,6 +78,25 @@ if [ "$(grep -ci 'illegal move' "$ARENA/$TAG.pgn")" -gt 0 ]; then
          /makes an illegal move/{printf "    %s %s %s %s :: %s\n", r, w, b, f, $0}' \
         "$ARENA/$TAG.pgn" | tee -a "$OUT"
     exit 8
+fi
+# DORMANCY GATE, relative to the pinned deadline. With tc=6000+0 the engine's
+# own deadline is ~150 s, so any move at or past 150/10 = 15 s means the node
+# cap did NOT bind and that move was shaped by something else (a stall, or the
+# clock after all). Void rather than average it away: this is the check that
+# would have caught the clock coupling before it cost a campaign of results.
+mt=$(grep -oE '[0-9]+\.[0-9]+s' "$ARENA/$TAG.pgn" | tr -d 's' | sort -rn | head -1)
+if [ -z "$mt" ]; then
+    say "DORMANCY GATE: no per-move times in the pgn -- gate could NOT run."
+    say "  Not a pass. Re-run with move times enabled before trusting this screen."
+else
+    slow=$(grep -oE '[0-9]+\.[0-9]+s' "$ARENA/$TAG.pgn" | tr -d 's' \
+           | awk '$1 >= 15 {n++} END {print n+0}')
+    say "dormancy gate  slowest move ${mt}s, moves >=15s: $slow"
+    if [ "$slow" -gt 0 ]; then
+        say "DORMANCY VOID: $slow move(s) at or past deadline/10 -- the node cap did"
+        say "  not bind on those moves. This screen is VOID, not a weak result."
+        exit 9
+    fi
 fi
 "$PY" "$ARENA/pair_elo.py" "$ARENA/$TAG.pgn" 2>&1 | tee -a "$OUT"
 grep -E "^Elo|^Games|SPRT" "$ARENA/$TAG.log" | tail -4 | tee -a "$OUT"
