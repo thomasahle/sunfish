@@ -282,6 +282,44 @@ def test_the_two_classic_candidates_differ_where_it_matters():
     assert tmlib.onemax(120, 2).hard != pytest.approx(2 * tmlib.onemax(60, 1).hard)
 
 
+def test_the_2x2_arms_are_exactly_one_change_each_from_their_parents():
+    """`poolyield` and `min40_4c` are the off-diagonals of budget x stop rule.
+
+    Both DELEGATE their numbers rather than restating them, and that is what
+    this asserts: an arm that re-derived its parent's arithmetic could drift
+    from it silently, and then a cell that was supposed to isolate the stop
+    rule would be measuring two changes at once.  The 2x2 is what attributed
+    the pool's Elo to the PAIR: the budget alone read +40.7 [-41.7, +128.0]
+    against min40_4 at 30+1 while the pair read -223.3 [-345.5, -136.6] the
+    other way.
+    """
+    for t, i in ((60, 0), (60, 0.1), (30, 1), (60, 1), (1, 0), (1800, 3)):
+        p, y = tmlib.pool(t, i), tmlib.poolyield(t, i)
+        assert (y.soft, y.hard) == (p.soft, p.hard)
+        assert y.rule == "yield_frac" and p.rule == "mtd_converged"
+        # the target a yield_frac arm reads is frac*hard, and here it must be
+        # `soft` itself -- no fixed fraction of a 5x wall could name it.
+        assert y.frac * y.hard == pytest.approx(y.soft, rel=1e-12)
+        m, c = tmlib.min40_4(t, i), tmlib.min40_4c(t, i)
+        assert (c.soft, c.hard) == (m.soft, m.hard)
+        assert c.rule == "mtd_converged" and m.rule == "yield_frac"
+
+
+def test_the_stop_rule_can_only_pay_off_where_the_wall_is_far_above_the_target():
+    """Why min40_4c is predicted small and the pool is not, as arithmetic.
+
+    The bracket rule's entire effect is to let an unsettled search run past the
+    soft limit toward the wall, so hard/soft bounds what it can buy: 1.25x for
+    min40_4, which derives its target as 0.8 of its own wall, against 5x for
+    the pool wherever no clamp binds.
+    """
+    for t, i in ((60, 0), (60, 0.1), (30, 1), (60, 1)):
+        m = tmlib.min40_4(t, i)
+        assert m.hard / m.soft == pytest.approx(1.25, rel=1e-9)
+        p = tmlib.pool(t, i)
+        assert p.hard / p.soft == pytest.approx(5.0, rel=1e-9)
+
+
 def test_the_signatures_do_not_depend_on_the_spend_model():
     """The reason the three calibration signatures are worth anything: they
     are BUDGET arithmetic, so no modelled quantity can move them.  The

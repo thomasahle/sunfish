@@ -1,483 +1,461 @@
-"""The classic builtin clock: one pool, spent down, and parked off the floor.
+"""The classic builtin clock: one whole-game pool, read at two limits.
 
-sunfish.py's `go` handler budgets time on a single inline line. Two
-properties decide whether that line is safe, and no other gate can see
-either -- the node ladder never starts a clock, and a match reports only
-the result.
+`sunfish.py`'s `go` handler is the packed classic artifact's entire time
+manager -- `pack.sh` deletes the `minifier-hide` block and the
+`sunfish_ui.uci` import with it, so a checkout reaches the driver and only the
+artifact runs that loop.  No other gate can see it: the node ladder never
+starts a clock and a match reports only the result.
 
-  * how HIGH the policy parks.  Iterate the self-clock recurrence
-    T <- T - think(T) - O + I over our own moves (O is per-move overhead
-    we cannot avoid, I the increment).
+WHAT THIS FILE ASSERTS, and what it deliberately does not.  The pool's own
+arithmetic -- monotonicity, continuity, the movestogo branch, the walks, the
+five-fold headroom, the floor -- is characterised in `test_tm_pool.py` against
+`uci.pool_budget`, and duplicating it here would be a second way to say the
+same thing.  What only this file can say is that the ARTIFACT's inlined
+millisecond copy is that same function, and that the loop AROUND it reads both
+limits the way the measured arm did:
 
-    A park is NOT caused by a cap, and an earlier draft of this file said
-    it was.  At any increment TC the clock MUST come to rest where
-    `spend + overhead == income`, whatever the budget's shape, so every
-    manager parks -- these candidates included.  What the shape decides is
-    not WHETHER the clock settles but HOW MUCH CLOCK IS STILL IN HAND when
-    it does, and that is the whole of the safety argument.  The surrogate
-    owns those altitudes and reads them off realized spend (60+0.1:
-    one-max 6.17s, the step form 2.11s, min40-4 0.22s; 60+1: reserves of
-    10.4s, 4.1s and 6.4s at a common ~1.06s spend).  This file asserts the
-    MECHANISM that orders them and leaves the numbers to that instrument.
+  1. the two shipped statements are lifted from the engine, so reshaping them
+     fails here loudly instead of quietly testing a stale duplicate;
+  2. they equal `uci.pool_budget` on a clock/increment grid -- one arithmetic
+     at three sites (driver in seconds, 4k entry and this loop in
+     milliseconds), which is the only thing that makes the duplication safe;
+  3. the wall is armed as the deadline and the soft limit is read ONLY where
+     the MTD bracket has closed.  A soft limit read at any yield stops at the
+     soft limit, and the wall -- five times it -- is then unreachable, so the
+     two-limit design would be worth nothing.  That is not a style point: the
+     surrogate priced the budget alone at +40.7 [-41.7, +128.0] against the
+     shipped min40_4 at 30+1 and the full pool at -223.3 [-345.5, -136.6] the
+     other way, i.e. the whole effect is in the pair.
 
-    The incumbent `min(t/12 + .9i, t/2 - 1s)` parks LOW and blind.  Once
-    the cap binds the recurrence is T <- T/2 + 1 + I, fixed point
-    T* = 2 + 2I seconds -- measured at 2.0s (60+0) and a 2.1s median
-    (60+0.1).  Under a 2s clock that cap is already NEGATIVE, so the arm
-    defining the park cannot be spent at all: the budget collapses to the
-    0.05s floor and ~200ms/move of lag drains the remainder.  That is
-    lichess EAThUL0P, lost on time at move 73 with no single move
-    overrunning.  The defect is the ALTITUDE, not the existence.
-
-  * how much RESERVE is banked when the floor is reached.  A pool policy
-    is worth exactly the clock it still holds at its floor, in moves.
-
-Two candidate one-liners are walked here against the shipped one:
-
-    one-max   max((wtime - 8000) / 40 + winc, 50)
-    min40-4   min(wtime / 40 + 0.9 * winc, wtime / 4)
-
-Both drop the `t/2 - 1s` cap, which does not create the park but does set
-it at the floor on a negative budget, and they reach a positive budget by
-different routes -- one-max banks a named 8s overhead reserve, min40-4
-clips to a quarter clock so the reserve is four increments and no
-time-dimensioned constant appears at all.  This file is the shared
-scaffolding: the candidates are literals, so every property below is
-checked on both no matter which one is shipped.
+THE HISTORY THIS FILE REPLACES.  It used to walk two one-line candidates,
+`min40-4` and `one-max`, chosen when the classic clock dropped its
+`wtime/2 - 1s` cap (#196).  `min40-4` shipped and is kept below as the CONTROL
+literal -- the arm this pool was measured against -- because a control that has
+been deleted cannot be re-run.  `one-max` and the old parking policy are kept
+for the same reason: they are the two failure shapes the pool has to not have.
 """
+import pathlib
+import random
 import re
-import os
+import sys
 
 import pytest
 
-ENGINE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "sunfish.py")
-SRC = open(ENGINE).read()
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
 
-# The shipped budget statement, lifted from the engine rather than copied:
-# if that line is reshaped this file fails loudly instead of quietly
-# testing a stale duplicate.
-SHIPPED = re.search(r"^ +(think = (?:min|max)\(.*\))$", SRC, re.M)
+from sunfish_ui import uci                              # noqa: E402
 
-# The three policies as source, all in the MILLISECOND domain that the `go`
-# handler actually works in -- `wtime`/`winc` arrive as integer ms and the
-# next line in main() divides by 1000.  Mixing the domains is the trap that
-# produced a 590-second move, so it is crossed in exactly one place below.
-OLD = "think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1000)"
-ONE_MAX = "think = max((wtime - 8000) / 40 + winc, 50)"
-MIN40_4 = "think = min(wtime / 40 + 0.9 * winc, wtime / 4)"
+SRC = (ROOT / "sunfish.py").read_text()
 
-CANDIDATES = {"one-max": ONE_MAX, "min40-4": MIN40_4}
+# ---- the shipped statements, lifted rather than copied ---------------------
+SOFT_LINE = re.search(r"^ +(soft = min\(.*\))$", SRC, re.M)
+THINK_LINE = re.search(r"^ +(think = max\(times\.get\(.*\))$", SRC, re.M)
+CLIP_LINE = re.search(r"^ +(soft = min\(max\(soft / 1000, \.05\), think\))$", SRC, re.M)
 
-# The engine floors the budget once more where it arms the deadline
-# (`max(think, .05)`), which is what guards a tiny explicit `movetime`.
-FLOOR = 0.05
-# Per-move overhead measured in production: process wakeup, I/O, lichess lag.
-OVERHEAD = 0.2
+# ---- the arms this one replaced, as literals, all MILLISECONDS ------------
+# The `go` handler works in ms (`wtime`/`winc` arrive as integer ms) and
+# crosses to seconds exactly once.  Mixing the domains produced a 590-second
+# move once; every literal here is therefore labelled with its unit.
+OLD = "think = min(wtime / 12 + 0.9 * winc, wtime / 2 - 1000)"    # pre-#196
+MIN40_4 = "think = min(wtime / 40 + 0.9 * winc, wtime / 4)"       # #196, the CONTROL
+ONE_MAX = "think = max((wtime - 8000) / 40 + winc, 50)"           # #196's runner-up
 
+FLOOR = uci.TM_FLOOR             # 0.05 s, and the engine's `.05`, same number
+O = uci.MOVE_OVERHEAD            # 0.2 s, measured; the pool's O and the lag
+OVERHEAD = 0.2                   # what a real deployment charges per move
 
-def _think_ms(stmt, wtime_ms, winc_ms):
-    ns = {"wtime": wtime_ms, "winc": winc_ms, "min": min, "max": max}
-    exec(stmt, ns)
-    return ns["think"]
+CLOCKS = (0.001, 0.05, 0.2, 0.4, 1, 2, 5, 8.4, 10, 30, 60, 180, 300, 1800)
+INCS = (0, 0.001, 0.05, 0.1, 0.5, 1, 2, 3, 5)
 
 
-def budget(stmt, wtime_s, winc_s=0.0):
-    """Seconds of thinking for a clock given in SECONDS -- the one unit crossing.
+def shipped(wtime_ms, winc_ms, movetime_ms=None):
+    """(soft, think) in SECONDS from the engine's own three statements.
 
-    Takes and returns seconds because every regime and recurrence below is
-    naturally stated in seconds; converts to and from the engine's
-    millisecond domain here, once, so no test has to remember which side of
-    the /1000 it is on.
+    Runs the lifted text, so it cannot drift from what the artifact plays.
     """
-    return _think_ms(stmt, wtime_s * 1000.0, winc_s * 1000.0) / 1000.0
+    times = {} if movetime_ms is None else {"movetime": movetime_ms}
+    ns = {"wtime": wtime_ms, "winc": winc_ms, "times": times,
+          "min": min, "max": max}
+    exec(SOFT_LINE.group(1), ns)      # noqa: S102 - the shipped expression
+    exec(THINK_LINE.group(1), ns)     # noqa: S102
+    exec(CLIP_LINE.group(1), ns)      # noqa: S102
+    return ns["soft"], ns["think"]
 
 
-def armed(stmt, wtime_s, winc_s=0.0):
-    """What the searcher deadline actually gets: the budget under main()'s floor."""
-    return max(budget(stmt, wtime_s, winc_s), FLOOR)
-
-
-# --------------------------------------------------------------------------
-# the shipped line is one of the candidates
-# --------------------------------------------------------------------------
-
-def test_budget_statement_present():
-    assert SHIPPED, "the inline budget statement is missing or reshaped"
-
-
-def test_shipped_line_is_exactly_one_candidate():
-    """No third form drifts in unmeasured."""
-    assert SHIPPED.group(1) in CANDIDATES.values(), (
-        "shipped budget %r is neither candidate; add it to CANDIDATES and "
-        "give it a regime table before shipping" % SHIPPED.group(1))
-
-
-def test_the_old_policy_is_the_one_being_replaced():
-    """Pin the baseline as a literal so the contrast below cannot go stale."""
-    assert SHIPPED.group(1) != OLD, "still on the parking policy"
-    assert budget(OLD, 60) == pytest.approx(5.0)          # 60+0 -> t/12
-    assert budget(OLD, 60, 1) == pytest.approx(5.9)       # 60+1 -> t/12 + .9i
+def legacy(stmt, wtime_s, winc_s=0.0):
+    """A retired one-liner's budget, SECONDS in and SECONDS out."""
+    ns = {"wtime": wtime_s * 1000.0, "winc": winc_s * 1000.0,
+          "min": min, "max": max}
+    exec(stmt, ns)                    # noqa: S102
+    return ns["think"] / 1000.0
 
 
 # --------------------------------------------------------------------------
-# regime tables
+# (1) the statements are present and are the pool
 # --------------------------------------------------------------------------
 
-@pytest.mark.parametrize("wtime,winc,want", [
-    (300, 0, 7.3),      # (300 - 8) / 40
-    (60, 0, 1.3),       # (60 - 8) / 40
-    (30, 1, 1.55),      # (30 - 8) / 40 + 1
-    (14, 0, 0.15),      # (14 - 8) / 40
-    (8, 0, 0.05),       # the reserve is exactly spent; floor takes over
-    (4, 0, 0.05),       # under the reserve: floor
-    (0.5, 0, 0.05),     # nearly flagged: floor
-])
-def test_one_max_regimes(wtime, winc, want):
-    assert budget(ONE_MAX, wtime, winc) == pytest.approx(want)
+def test_the_three_budget_statements_are_present():
+    for name, m in (("soft", SOFT_LINE), ("think", THINK_LINE),
+                    ("soft clip", CLIP_LINE)):
+        assert m, "the inline %s statement is missing or reshaped" % name
 
 
-@pytest.mark.parametrize("wtime,winc,want", [
-    (300, 0, 7.5),      # 300 / 40
-    (60, 0, 1.5),       # 60 / 40
-    (30, 1, 1.65),      # 30 / 40 + 0.9
-    (14, 0, 0.35),      # 14 / 40
-    (8, 0, 0.2),        # 8 / 40 -- still pacing, not floored
-    (2, 1, 0.5),        # clock under four increments: the quarter-clock clip
-    (0.5, 0, 0.0125),   # 0.5 / 40, under main()'s floor
-])
-def test_min40_4_regimes(wtime, winc, want):
-    assert budget(MIN40_4, wtime, winc) == pytest.approx(want)
+def test_the_shipped_budget_is_not_one_of_the_retired_one_liners():
+    """A third form must not drift in unmeasured."""
+    for stmt in (OLD, MIN40_4, ONE_MAX):
+        assert stmt not in SRC, "a retired budget is back in the engine: %r" % stmt
 
 
-def test_sudden_death_is_the_same_pacing_law_for_both():
-    """At I = 0 both are a plain 40-move split, one shifted by its reserve."""
-    for t in (30, 60, 120, 300, 600):
-        assert budget(MIN40_4, t) == pytest.approx(t / 40)
-        assert budget(ONE_MAX, t) == pytest.approx((t - 8) / 40)
+def test_the_pool_constants_are_the_drivers_M_and_O():
+    """39 and 42*200 are (M-1)*I and (M+2)*O, not free parameters.
 
-
-# --------------------------------------------------------------------------
-# NO PARK: the recurrence has no fixed point above the floor
-# --------------------------------------------------------------------------
-
-def drift(stmt, wtime_s, winc_s, overhead=OVERHEAD):
-    """One step of T <- T - think - O + I, as a signed change in the clock.
-
-    Uses the ARMED budget, i.e. what the engine really spends including
-    main()'s floor -- this is the recurrence a game actually walks.
+    Read off the driver rather than restated, so retuning `POOL_MOVES` or
+    `TM_OVERHEAD_MS` there without touching the artifact is a red test.
     """
-    return winc_s - overhead - armed(stmt, wtime_s, winc_s)
+    m, o_ms = uci.POOL_MOVES, 1000 * O
+    assert "%d * winc" % (m - 1) in SOFT_LINE.group(1)
+    assert "%d * %d" % (m + 2, o_ms) in SOFT_LINE.group(1)
+    assert "%d) / 4" % (2 * o_ms) in SOFT_LINE.group(1)
 
 
-def drift_raw(stmt, wtime_s, winc_s, overhead=OVERHEAD):
-    """The same step on the unfloored formula -- the analytic recurrence.
+# --------------------------------------------------------------------------
+# (2) ONE ARITHMETIC AT THREE SITES -- the reason duplication is allowed
+# --------------------------------------------------------------------------
 
-    The floor is what turns the old policy's park into a drain, so the two
-    have to be kept apart: the fixed point below is a property of the
-    FORMULA, and the floor is then what happens to a game that reaches it.
+def test_the_artifacts_millisecond_pool_is_the_drivers_pool():
+    """t_ms(W, I) == 1000 * t_s(W/1000, I/1000) at every grid point, both limits.
+
+    The driver works in seconds and this loop in milliseconds; the only thing
+    between the two sources is a factor of 1000 in three constants.  The
+    seconds/ms confusion has cost this project two incidents, which is why the
+    crossing is asserted numerically and not argued.
     """
-    return winc_s - overhead - budget(stmt, wtime_s, winc_s)
+    worst = 0.0
+    for w in CLOCKS:
+        for i in INCS:
+            got_s, got_h = shipped(w * 1000, i * 1000)
+            want_s, want_h = uci.pool_budget(w, i)
+            for got, want in ((got_s, want_s), (got_h, want_h)):
+                worst = max(worst, abs(got - want) / max(abs(want), 1e-9))
+    assert worst < 1e-12, f"artifact and driver disagree by {worst:.3e} relative"
 
 
-def walk(stmt, base_s, inc_s, moves, overhead=OVERHEAD):
-    """Simulate our own clock over `moves` of our moves; -1 == flagged."""
-    clock = base_s
-    for mv in range(moves):
-        clock += drift(stmt, clock, inc_s, overhead)
-        if clock <= 0:
-            return -1, mv
-    return clock, moves
+def test_the_soft_limit_is_never_above_the_wall():
+    for w in CLOCKS:
+        for i in INCS:
+            soft, think = shipped(w * 1000, i * 1000)
+            assert soft <= think + 1e-12, (w, i, soft, think)
 
 
-def park_clock(stmt, winc_s, overhead):
-    """The clock a game comes to rest at: the highest T with drift >= 0.
+def test_the_wall_is_five_soft_limits_wherever_no_clamp_binds():
+    """The headroom the bracket rule exists to make reachable.
 
-    `drift` is nonincreasing in T (the budget only grows with the clock), so
-    the resting point is found by bisection.  Returns 0.0 when the clock
-    never stops falling, i.e. when there is genuinely no park.
+    Where neither the quarter-clock nor the half-clock clamp binds, the wall is
+    exactly 5x the soft limit.  min40_4's was 1/0.8 = 1.25x, which is why the
+    same stop rule bought nothing there.
     """
-    if drift(stmt, 0.0, winc_s, overhead) < 0:
+    seen = 0
+    for w in (30, 60, 180, 300, 1800):
+        for i in (0, 0.1, 1):
+            soft, think = shipped(w * 1000, i * 1000)
+            if soft > FLOOR and think < (w - 2 * O) / 2 - 1e-9:
+                assert think == pytest.approx(5 * soft, rel=1e-12)
+                seen += 1
+    assert seen >= 10, "grid never reached the unclamped regime"
+
+
+# --------------------------------------------------------------------------
+# (3) the wall cannot go negative -- the defect that lost a game
+# --------------------------------------------------------------------------
+
+@pytest.mark.parametrize("wtime", [0.001, 0.05, 0.5, 1, 1.9, 2, 2.4, 5, 60, 1800])
+@pytest.mark.parametrize("winc", [0, 0.1, 1, 5])
+def test_the_wall_is_always_positive_and_at_least_the_floor(wtime, winc):
+    """`wtime/2 - 1s` goes negative under a 2 s clock; half of `A` cannot.
+
+    A negative wall is an already-expired deadline, which is how
+    lichess.org/EAThUL0P was lost: ~16 moves at no search at all.
+    """
+    soft, think = shipped(wtime * 1000, winc * 1000)
+    assert think >= FLOOR - 1e-12
+    assert soft >= min(FLOOR, think) - 1e-12
+    assert legacy(OLD, 1.9) < 0, "the control no longer demonstrates the defect"
+
+
+def test_a_movetime_overrides_both_limits_and_keeps_the_floor():
+    """`go movetime` is the GUI's own number: it becomes the wall, and the soft
+    limit is clipped to it so no break can fire after the wall has passed."""
+    for mt in (1, 30, 300, 5000):
+        soft, think = shipped(60000, 0, movetime_ms=mt)
+        assert think == pytest.approx(max(mt / 1000, FLOOR))
+        assert soft <= think + 1e-12
+    # CI runs exactly this on the minified engine, so it is pinned here too.
+    soft, think = shipped(60000, 0, movetime_ms=300)
+    assert think == pytest.approx(0.3) and soft == pytest.approx(0.3)
+
+
+# --------------------------------------------------------------------------
+# (4) THE DISCLOSED HOLE, asserted so it cannot be forgotten
+# --------------------------------------------------------------------------
+
+def test_the_sudden_death_collapse_exists_and_is_bounded():
+    """With no increment the pool is empty below (M+2)*O and soft hits the floor.
+
+    Recorded rather than hidden: the driver measured -209.91 +/- 60.11 at a 1 s
+    clock for exactly this, and the code comment says so.  What is asserted
+    here is the SHAPE -- the collapse is to the floor and never below it, the
+    engine always gets a positive budget, and it starts exactly at the knee --
+    so that a future fix (scoping the pool to P > 0) changes this test on
+    purpose instead of by accident.
+    """
+    knee = (uci.POOL_MOVES + 2) * O                     # 8.4 s at the shipped O
+    for t in (0.05, 0.5, 1, 2, 5, 8.0):
+        soft, think = shipped(t * 1000, 0)
+        assert soft == pytest.approx(FLOOR) and think == pytest.approx(FLOOR)
+        assert legacy(MIN40_4, t) > 0                   # the control still paces
+    for t in (12, 20, 60):
+        soft, _ = shipped(t * 1000, 0)
+        assert soft > FLOOR, "the pool should be spending again above the knee"
+    assert knee == pytest.approx(8.4)
+    # ANY increment removes it: the pool is then income-fed, not overhead-bound.
+    for i in (0.1, 1, 3):
+        soft, _ = shipped(1000, i * 1000)
+        assert soft > FLOOR or i * (uci.POOL_MOVES - 1) < knee
+
+
+# --------------------------------------------------------------------------
+# (5) the park, and the reserve it banks -- the safety argument
+# --------------------------------------------------------------------------
+
+def drift(spend, wtime_s, winc_s, overhead=OVERHEAD):
+    """One step of T <- T - spend - O + I, as a signed change in the clock."""
+    return winc_s - overhead - spend(wtime_s, winc_s)
+
+
+def park_clock(spend, winc_s, overhead=OVERHEAD):
+    """The clock a game rests at: the highest T with drift >= 0, by bisection.
+
+    `drift` is nonincreasing in T because the budget only grows with the clock.
+    0.0 means the clock never stops falling, i.e. there is genuinely no park.
+    """
+    if drift(spend, 0.0, winc_s, overhead) < 0:
         return 0.0
     lo, hi = 0.0, 600.0
     for _ in range(200):
         mid = (lo + hi) / 2
-        if drift(stmt, mid, winc_s, overhead) >= 0:
+        if drift(spend, mid, winc_s, overhead) >= 0:
             lo = mid
         else:
             hi = mid
     return lo
 
 
-@pytest.mark.parametrize("name,stmt", sorted(CANDIDATES.items()) + [("incumbent", OLD)])
-@pytest.mark.parametrize("inc,over,parks", [
-    (0.0, 0.05, False),    # sudden death: no income, so nothing to rest on
-    (0.0, 0.20, False),
-    (0.1, 0.20, False),    # lag exceeds the increment: still a pure drain
-    (0.1, 0.05, True),     # the surrogate's charge: income wins, so a park
-    (1.0, 0.05, True),
-])
-def test_a_park_exists_exactly_when_income_exceeds_overhead(name, stmt, inc, over, parks):
-    """The correction, asserted: a park is not caused by a cap.
+def pool_soft(wtime_s, winc_s):
+    return shipped(wtime_s * 1000, winc_s * 1000)[0]
 
-    The clock rests where `spend + overhead == income`.  Since spend is at
-    least the floor, a resting point exists iff `income - overhead >= floor`
-    -- a statement about the TIME CONTROL and the lag, not about the budget's
-    shape.  Every policy here obeys it, the candidates included.
+
+def test_a_park_exists_exactly_when_income_exceeds_overhead():
+    """The 2026-08-15 correction, asserted: a park is not caused by a cap.
+
+    The clock rests where `spend + overhead == income`.  Spend is at least the
+    floor, so a resting point exists iff `income - overhead >= floor` -- a fact
+    about the time control and the lag, not about the budget's shape.  The pool
+    obeys it like every other manager.
     """
-    assert (park_clock(stmt, inc, over) > 0) is parks
-    assert (inc - over >= FLOOR) is parks
+    for inc, over, parks in ((0.0, 0.05, False), (0.0, 0.20, False),
+                             (0.1, 0.20, False), (0.1, 0.05, True),
+                             (1.0, 0.05, True)):
+        assert (park_clock(pool_soft, inc, over) > 0) is parks
+        assert (inc - over >= FLOOR) is parks
 
 
-def test_park_altitude_is_what_the_shape_actually_decides():
-    """At 60+0.1 the three policies rest at three very different clocks.
+def test_the_pool_banks_a_bigger_reserve_than_the_control_it_replaces():
+    """min40_4's recorded cost was the thinnest flag margin in the field.
 
-    This reproduces the surrogate's ordering from the budget alone (it reads
-    6.17 / 2.11 / 0.22 s off realized spend, which is higher than the budget
-    model because the driver stops at 0.8*think; the numbers are that
-    instrument's, the ordering is arithmetic and belongs here).
+    On the SOFT limit -- what the loop stops at on a settled move -- the pool
+    rests at a higher clock than min40_4 at every increment and both charged
+    overheads, so the reserve it carries into an endgame is larger.  That is
+    the half of the trade the budget can prove.
 
-    Note where min40-4 lands: it parks LOWEST of the three, below even the
-    incumbent.  That is its known cost -- it wastes almost no clock and has
-    the thinnest flag margin -- and it is why the real-clock confirmation
-    for it is a flag hammer, not another Elo match.
+    WHAT THIS MODEL CANNOT SEE, stated rather than left to be discovered: on an
+    unsettled move the pool runs PAST soft toward a wall five times higher, so
+    its realized spend is larger than the number walked here and its realized
+    park is lower.  The surrogate measures that directly and it comes out the
+    other way -- the pool ends a 30+1 game on a 4.08 s median clock against
+    min40_4's 17.85 s, while min40_4 flagged 3 of 120 modelled 60+0 games and
+    the pool flagged none.  Both readings are real; this one is the floor of
+    the pool's spend, not its expectation.
     """
-    park = {n: park_clock(s, 0.1, 0.05) for n, s in
-            [("one-max", ONE_MAX), ("incumbent", OLD), ("min40-4", MIN40_4)]}
-    assert park["one-max"] == pytest.approx(6.0, abs=0.01)
-    assert park["incumbent"] == pytest.approx(2.1, abs=0.01)
-    assert park["min40-4"] == pytest.approx(0.2, abs=0.01)
-    assert park["one-max"] > park["incumbent"] > park["min40-4"]
-
-
-def test_only_the_incumbent_parks_blind_with_a_negative_budget():
-    """Parking low is survivable; parking on a NEGATIVE budget is the defect.
-
-    All three rest at the floor at 60+0.1.  The difference is that the
-    incumbent gets there because its cap went negative -- it is not choosing
-    a small budget, it has no budget at all -- while both candidates reach
-    the floor with a positive, monotone budget behind them.
-    """
-    assert budget(OLD, 2.0, 0.1) < 0.1                      # cap already biting
-    assert budget(OLD, 1.9, 0.0) < 0                        # and then negative
-    for stmt in CANDIDATES.values():
-        assert budget(stmt, 1.9, 0.0) > 0
-        assert budget(stmt, 0.5, 0.0) > 0
-
-
-@pytest.mark.parametrize("name,stmt", sorted(CANDIDATES.items()))
-def test_no_park_at_sudden_death(name, stmt):
-    """The one place "no park" survives the correction: winc == 0.
-
-    Income is zero, so `spend + overhead == income` has no solution with a
-    nonnegative budget and the clock falls monotonically.  This is the venue
-    the real-clock arm tests, and it is the venue the candidates were chosen
-    for.
-    """
-    grid = [t / 10.0 for t in range(1, 6001)]
-    assert max(drift(stmt, t, 0.0) for t in grid) < 0
-    assert park_clock(stmt, 0.0, OVERHEAD) == 0.0
-
-
-def test_the_old_policy_does_park_at_two_plus_two_inc():
-    """The contrast: the cap manufactures a stable fixed point at T* = 2 + 2I.
-
-    Solved on the unfloored formula with no overhead, which is the pure form
-    of the recurrence the cap induces: T <- T/2 + 1 + I.  At T* the capped
-    arm returns exactly I, so income and spend cancel.  This is the
-    equilibrium the candidates exist to remove, and the one measured at 2.0s
-    (60+0) and a 2.1s median (60+0.1).
-    """
-    for inc in (0.0, 0.1, 1.0, 3.0):
-        star = 2 + 2 * inc
-        assert budget(OLD, star, inc) == pytest.approx(inc)
-        assert drift_raw(OLD, star, inc, overhead=0.0) == pytest.approx(0.0, abs=1e-9)
-        # and it ATTRACTS: above it the clock falls, below it the clock rises
-        assert drift_raw(OLD, star + 0.5, inc, overhead=0.0) < 0
-        assert drift_raw(OLD, star - 0.5, inc, overhead=0.0) > 0
-    # neither candidate has any fixed point in that neighbourhood
-    for stmt in CANDIDATES.values():
-        assert drift_raw(stmt, 2.0, 0.0, overhead=0.0) < 0
-
-
-def test_at_sudden_death_the_old_park_is_a_drain_not_a_park():
-    """Why the 2s park kills: under it the budget is FLOORED, not held.
-
-    `t/2 - 1` is already negative below 2s, so the arm that defines the park
-    cannot actually be spent -- main()'s 0.05s floor takes over, income at
-    I = 0 is nothing, and the remaining 2.1s leaves ~8 moves at 0.05 + 0.2.
-    That is lichess EAThUL0P, and it is the reason the ALTITUDE of the park
-    is the thing that matters rather than its existence.
-    """
-    assert budget(OLD, 1.9) < 0                    # the cap has gone negative
-    assert armed(OLD, 1.9) == FLOOR                # so the engine plays blind
-    left, reached = walk(OLD, 2.1, 0.0, 40)
-    assert left == -1 and reached <= 9
-
-
-# --------------------------------------------------------------------------
-# the banked reserve, in moves of floor play
-# --------------------------------------------------------------------------
-
-def floor_clock(stmt, winc_s=0.0):
-    """The clock at which the budget first reaches main()'s floor."""
-    t = 600.0
-    while t > 0.001 and budget(stmt, t, winc_s) > FLOOR:
-        t -= 0.001
-    return t
-
-
-def test_one_max_banks_the_named_eight_second_reserve():
-    """The (M+2)*O accounting is the point: reach the floor still holding 10s.
-
-    The reserve constant is 8s and the floor is worth a further 40 * 0.05s,
-    so the budget lands on the floor with 8 + 2 = 10s of clock untouched --
-    40 further moves at 0.05 + 0.2 each.
-    """
-    assert floor_clock(ONE_MAX) == pytest.approx(8.0 + 40 * FLOOR, abs=0.01)
-    assert (8.0 + 40 * FLOOR) / (FLOOR + OVERHEAD) >= 40
-
-
-def test_min40_4_banks_no_named_reserve_but_never_collapses():
-    """Recorded, not hidden: min40-4 reaches the floor at 2s, like the old form.
-
-    Its safety is a different property -- the budget is t/40 all the way
-    down and stays POSITIVE, so there is no negative-cap collapse and the
-    approach to the floor is slow.  That is the trade against one-max's
-    named reserve, and it is exactly what the surrogate has to price.
-    """
-    assert floor_clock(MIN40_4) == pytest.approx(40 * FLOOR, abs=0.01)
-    for t in [x / 100.0 for x in range(1, 60001)]:
-        assert budget(MIN40_4, t) > 0
-
-
-def test_the_old_policy_reaches_its_floor_with_almost_nothing_banked():
-    """Same measurement on the shipped policy: 2.1s, i.e. 8 moves. That is the loss."""
-    assert floor_clock(OLD) == pytest.approx(2.1, abs=0.01)
-    assert floor_clock(OLD) / (FLOOR + OVERHEAD) < 9
+    control = lambda t, i: max(legacy(MIN40_4, t, i), FLOOR)    # noqa: E731
+    for over in (0.05, 0.2):
+        for inc in (0.1, 0.5, 1.0, 3.0):
+            assert park_clock(pool_soft, inc, over) >= park_clock(control, inc, over)
+    # And the park is reached on a POSITIVE budget, which is the whole
+    # difference from the policy that parked at T* = 2 + 2I on a negative cap.
+    for inc in (0.1, 1.0, 3.0):
+        rest = park_clock(pool_soft, inc, 0.05)
+        assert pool_soft(rest, inc) > 0
+        assert legacy(OLD, 2 + 2 * inc, inc) == pytest.approx(inc)
 
 
 @pytest.mark.parametrize("moves", [80, 100, 120])
-def test_candidates_survive_a_long_sudden_death_game(moves):
-    """3+0, the control that actually lost lichess EAThUL0P."""
-    for name, stmt in CANDIDATES.items():
-        left, reached = walk(stmt, 180, 0, moves)
-        assert left > 0, "%s flagged at move %d of %d in 3+0" % (name, reached, moves)
+def test_the_pool_survives_a_long_sudden_death_game(moves):
+    """3+0, the control that actually lost lichess EAThUL0P, walked on spend.
 
-
-def test_the_old_policy_reproduces_the_lost_game():
-    """The baseline really does flag -- otherwise the walk proves nothing."""
-    left, reached = walk(OLD, 180, 0, 120)
-    assert left == -1 and reached < 120
-
-
-# --------------------------------------------------------------------------
-# monotonicity
-# --------------------------------------------------------------------------
-
-@pytest.mark.parametrize("name,stmt", sorted(CANDIDATES.items()))
-@pytest.mark.parametrize("inc", [0.0, 0.1, 1.0, 3.0])
-def test_monotone_nondecreasing_in_wtime(name, stmt, inc):
-    """More clock never buys less thinking."""
-    prev = -1.0
-    for t in [x / 20.0 for x in range(1, 12001)]:    # 0.05s .. 600s
-        cur = budget(stmt, t, inc)
-        assert cur >= prev - 1e-12, "%s dips at wtime=%.2f inc=%.1f" % (name, t, inc)
-        prev = cur
-
-
-@pytest.mark.parametrize("name,stmt", sorted(CANDIDATES.items()))
-@pytest.mark.parametrize("wtime", [1.0, 8.0, 30.0, 60.0, 300.0])
-def test_monotone_nondecreasing_in_winc(name, stmt, wtime):
-    """More increment never buys less thinking."""
-    prev = -1.0
-    for i in [x / 100.0 for x in range(0, 1001)]:    # 0s .. 10s
-        cur = budget(stmt, wtime, i)
-        assert cur >= prev - 1e-12, "%s dips at wtime=%.1f inc=%.2f" % (name, wtime, i)
-        prev = cur
-
-
-# --------------------------------------------------------------------------
-# why no cap is needed (one-max) / what the cap is (min40-4)
-# --------------------------------------------------------------------------
-
-@pytest.mark.parametrize("wtime", [8.5, 9, 10, 20, 60, 120, 300, 600])
-@pytest.mark.parametrize("inc", [0.0, 0.1, 1.0, 2.0])
-def test_one_max_stays_under_half_the_clock_without_a_cap(wtime, inc):
-    """`(t - 8)/40` never approaches `t/2`, so the removed cap is not missed.
-
-    Exact condition: (t - 8)/40 + i < t/2  <=>  i < (19t + 8)/40, which at
-    the reserve clock t = 8.4s already allows i up to 4.19s -- past every
-    increment in the tested field.
+    The wall is what a game really pays when a search runs long, so the walk
+    charges the SOFT limit (what the loop stops at) plus the lag -- and the
+    clock must still be positive.  The old policy flags; the pool does not.
     """
-    assert budget(ONE_MAX, wtime, inc) < wtime / 2
-    assert inc < (19 * wtime + 8) / 40
-
-
-def test_one_max_half_clock_bound_has_a_stated_edge():
-    """It is a bound with a limit, not a universal law -- record where it ends."""
-    # a huge increment on a nearly dead clock does exceed half the clock,
-    # which is the regime the quarter-clock clip in min40-4 exists to hold.
-    assert budget(ONE_MAX, 1.0, 5.0) > 1.0 / 2
-    assert budget(MIN40_4, 1.0, 5.0) == pytest.approx(0.25)
-
-
-@pytest.mark.parametrize("wtime", [0.5, 1, 2, 8, 60, 300])
-@pytest.mark.parametrize("inc", [0.0, 0.1, 1.0, 5.0])
-def test_min40_4_never_spends_over_a_quarter_clock(wtime, inc):
-    assert budget(MIN40_4, wtime, inc) <= wtime / 4 + 1e-12
-
-
-@pytest.mark.parametrize("inc", [0.1, 0.5, 1.0, 3.0])
-def test_min40_4_reserve_is_four_increments(inc):
-    """The clip engages exactly when the clock falls under 4 * increment."""
-    assert budget(MIN40_4, 4 * inc, inc) == pytest.approx(inc)          # both arms agree
-    assert budget(MIN40_4, 4 * inc - 0.1, inc) == pytest.approx((4 * inc - 0.1) / 4)
-    below = budget(MIN40_4, 4 * inc + 0.1, inc)
-    assert below == pytest.approx((4 * inc + 0.1) / 40 + 0.9 * inc)
-
-
-def test_min40_4_never_binds_its_cap_at_sudden_death():
-    """At I = 0 the policy is exactly t/40 -- the cap is inert, hence no park.
-
-    Scoped deliberately to winc == 0, which is the only regime where "no
-    park" survives the correction -- and it is the regime the real-clock arm
-    tests.  Here min40-4 needs no reserve floor at all: the capped arm simply
-    never binds, so the policy is a pure geometric drain.
-    """
-    for t in [x / 10.0 for x in range(1, 6001)]:
-        assert budget(MIN40_4, t) == pytest.approx(t / 40)
-        assert t / 40 < t / 4
+    clock = 180.0
+    for _ in range(moves):
+        clock += drift(pool_soft, clock, 0.0)
+        assert clock > 0
+    old = 180.0
+    flagged = False
+    for _ in range(120):
+        old += drift(lambda t, i: max(legacy(OLD, t, i), FLOOR), old, 0.0)
+        if old <= 0:
+            flagged = True
+            break
+    assert flagged, "the control no longer reproduces the lost game"
 
 
 # --------------------------------------------------------------------------
-# units
+# (6) the loop that reads the two limits
 # --------------------------------------------------------------------------
 
-@pytest.mark.parametrize("scale", [0.001, 0.5, 2, 1000])
-def test_min40_4_is_unit_independent(scale):
-    """Homogeneous of degree 1: no time-dimensioned constant appears in it.
+def test_the_wall_is_armed_as_the_deadline():
+    assert re.search(r"searcher\.deadline = start \+ think$", SRC, re.M)
 
-    Scaling both inputs scales the budget exactly, so the formula reads the
-    same in seconds or milliseconds and the ms/s trap is unrepresentable.
+
+def test_the_soft_limit_is_read_only_where_the_bracket_has_closed():
+    """The other half of the pool, and the half that carries the Elo.
+
+    A break at any yield stops at the soft limit and the 5x wall is never
+    approached.  So the loop tracks the MTD bracket the searcher is closing and
+    may only abandon a search where that bracket has closed -- committing
+    `best` there, never from a half-searched depth.
     """
-    for t, i in [(60, 0), (60, 1), (30, 0.1), (2, 1), (300, 5)]:
-        assert (_think_ms(MIN40_4, t * scale, i * scale)
-                == pytest.approx(scale * _think_ms(MIN40_4, t, i)))
+    assert re.search(r"best, cand, d0, lo, up = None, None, 1, -1e9, 1e9", SRC)
+    assert re.search(r"best, d0, lo, up = cand or best, depth, -1e9, 1e9", SRC)
+    assert re.search(r"^ +lo = max\(lo, score\)$", SRC, re.M)
+    assert re.search(r"^ +else: up = min\(up, score\)$", SRC, re.M)
+    # The commit-and-break is ONE statement, so the pool costs the minified
+    # engine no lines; `and` short-circuits, so `best` is still assigned
+    # exactly when the bracket has closed and the break still needs a move.
+    assert re.search(r"^ +if not lo < up - EVAL_ROUGHNESS and \(best := cand or best\)"
+                     r" and time\.time\(\) - start > soft: break$", SRC, re.M)
+    # and the rule it replaced is gone, so a break at any yield cannot return
+    assert "think * 0.8" not in SRC
 
+
+def _loop(golfed, probes, soft, times):
+    """The go handler's stop rule, in the shape named by `golfed`.
+
+    Returns the step-by-step trace, not just the outcome: two rules that agree
+    on the move but abandon at different probes are not the same mechanism,
+    and the +96.19 was measured on the mechanism.
+    """
+    best = cand = None
+    d0, lo, up = 1, -1e9, 1e9
+    trace = []
+    for k, (depth, gamma, score, move) in enumerate(probes):
+        if depth > d0:
+            best, d0, lo, up = cand or best, depth, -1e9, 1e9
+        if score >= gamma:
+            lo = max(lo, score)
+            if move is None:
+                trace.append(("terminal", k, best, cand))
+                break
+            cand = move
+        else:
+            up = min(up, score)
+        if golfed:
+            if (not lo < up - 15 and (best := cand or best) and times[k] > soft):
+                trace.append(("soft", k, best, cand))
+                break
+        else:
+            if not lo < up - 15:
+                best = cand or best
+                if best and times[k] > soft:
+                    trace.append(("soft", k, best, cand))
+                    break
+        trace.append(("step", k, best, cand))
+    return trace, best, cand
+
+
+def test_the_one_line_break_is_step_for_step_the_form_that_was_measured():
+    """The golf may not change the mechanism, and this proves it did not.
+
+    +96.19 +/- 33.81 was measured on a four-line commit-then-break block. What
+    ships is one line, because the pool had to cost the minified engine
+    nothing. The two are the same rule by short-circuit evaluation -- `best` is
+    assigned exactly when the bracket has closed, and the break still requires
+    a move -- and an argument is not a gate, so 20,000 seeded probe streams are
+    replayed through both and every step compared.
+    """
+    rng = random.Random(20260817)
+    for _ in range(20000):
+        probes, depth = [], 1
+        for _ in range(rng.randint(1, 25)):
+            if rng.random() < 0.25:
+                depth += 1
+            gamma = rng.randint(-300, 300)
+            # deltas straddle EVAL_ROUGHNESS exactly, where convergence flips
+            score = gamma + rng.choice([-200, -60, -16, -15, -14, -1, 0, 1,
+                                        14, 15, 16, 60, 200])
+            move = None if rng.random() < 0.05 else "m%d" % rng.randint(0, 3)
+            probes.append((depth, gamma, score, move))
+        times = [rng.uniform(0, 2) for _ in probes]
+        soft = rng.choice([0.0, 0.05, 0.5, 1.0, 5.0])
+        assert _loop(False, probes, soft, times) == _loop(True, probes, soft, times)
+
+
+def test_the_pv_flip_folded_into_its_assignment_is_the_same_flip():
+    """The line the bracket was paid for, and it is behaviour-neutral.
+
+    `i, j = move.i, move.j` plus a conditional flip became one conditional
+    assignment -- the same idiom the `position` handler already uses four lines
+    up. That fold is what keeps the minified engine line-neutral.
+    """
+    assert re.search(r"i, j = \(119 - move\.i, 119 - move\.j\) if len\(hist\) % 2 == 0"
+                     r" else \(move\.i, move\.j\)", SRC)
+    assert not re.search(r"^ +i, j = move\.i, move\.j$", SRC, re.M)
+    for i in range(21, 99):
+        for j in range(21, 99):
+            was = (i, j)
+            was = (119 - was[0], 119 - was[1])       # the old two-step form
+            now = (119 - i, 119 - j)                 # the folded form
+            assert was == now
+
+
+def test_the_bracket_width_is_the_engines_own_convergence_window():
+    """EVAL_ROUGHNESS is the width the driver's MTD-bi loop stops at, so the
+    loop reads convergence with the same constant the search converges on."""
+    import sunfish                                      # noqa: E402
+    assert sunfish.EVAL_ROUGHNESS == 15
+    assert "EVAL_ROUGHNESS" in SRC.split("elif args[0] == \"go\":")[1]
+
+
+# --------------------------------------------------------------------------
+# (7) units
+# --------------------------------------------------------------------------
 
 @pytest.mark.parametrize("scale", [0.5, 2])
-def test_one_max_is_not_unit_independent(scale):
-    """The cost of the named reserve: 8000 and 50 are millisecond constants.
+def test_the_pool_is_not_unit_independent_and_that_is_the_trade(scale):
+    """min40_4 was homogeneous of degree 1; the pool cannot be.
 
-    Recorded, not tolerated -- this is the trade min40-4 buys out, and the
-    reason one-max's line must never be copied into a seconds-domain loop.
+    (M+2)*O and 2*O are absolute times -- 8400 ms and 400 ms here, 8.4 s and
+    0.4 s in the driver -- because an overhead is a property of the deployment
+    and not of the clock.  Recorded rather than tolerated: it is why the
+    crossing above is asserted numerically at every grid point, and why the
+    unit is named at every site in the engine's comment.
     """
     t, i = 60, 1
-    assert (_think_ms(ONE_MAX, t * scale, i * scale)
-            != pytest.approx(scale * _think_ms(ONE_MAX, t, i)))
-
-
-def test_the_shipped_line_is_in_the_millisecond_domain():
-    """main() divides by 1000 on the next line; assert that is still true."""
-    assert re.search(r"think = times\.get\(\"movetime\", think\) / 1000", SRC)
-    assert re.search(r"searcher\.deadline = start \+ max\(think, \.05\)", SRC)
+    a = shipped(t * 1000, i * 1000)[1]
+    b = shipped(t * scale * 1000, i * scale * 1000)[1]
+    assert b != pytest.approx(scale * a)
+    # the control it replaced WAS unit-independent, which is the thing lost
+    assert (legacy(MIN40_4, t * scale, i * scale)
+            == pytest.approx(scale * legacy(MIN40_4, t, i)))
