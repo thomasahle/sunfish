@@ -435,7 +435,7 @@ class Searcher:
                 if cap < gamma: move, score = None, cap
                 else:
                     move_depth = d - 1 - (not root and guard and val < LMR)
-                    score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
+                    score = min(cap, r) if (r := -self.bound(pos.move(move), 1 - gamma, move_depth)) < MATE_LOWER else r
             best = max(best, score)
             live |= move is not None and score > -MATE_UPPER
             if best >= gamma:
