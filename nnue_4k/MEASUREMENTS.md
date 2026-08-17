@@ -4554,6 +4554,149 @@ truncated number is believed.
 
 ---
 
+## 2026-08-17 — GO: Thomas funds the CAPACITY ARM
+
+**Owner decision, recorded at the moment it was given.** Thomas, verbatim:
+
+> **"You got it,"**
+
+quoting the capacity arm as offered on the brief.
+
+This is the program's bet. Every other axis this campaign measured is now
+closed by evidence rather than by preference:
+
+| axis | verdict | where |
+|---|---|---|
+| labels (teacher source) | **non-lever**, 0.28σ | matrix, `eb9785a` |
+| outcome blending (λ) | **strictly worse**, monotone | selector, `c790bc3` |
+| position distribution | **non-lever**, 0.76σ | confirmation, `7a86c50` |
+| fidelity / export honesty | real but **costs** val | `d0a6e60` |
+| **capacity** | **untested — this arm** | pending |
+
+Capacity is what is left, and it is now funded.
+
+---
+
+## 2026-08-17 — PRE-REGISTRATION: THE CAPACITY ARM
+
+Registered before any training and before any game. **One** arm: a net that
+spends the full byte seam on parameters, trained at real integer resolution
+from step 1, promoted only by play.
+
+### 1. Architecture — ceiling pending, everything else starts now
+
+The params-per-byte ceiling depends on the pricing lane's lossless-compression
+table (per-group 8-bit dictionary over 16-bit weights, transpose, zero-unused,
+zlib-at-import against decoder overhead) measured on the current entry. That
+number sets width; it does **not** gate feature design, data curriculum,
+resolution or harness, all of which begin immediately. **Ceiling arrives by
+relay; the arm is not designed around a guess.**
+
+### 2. Features — horizontal king mirroring
+
+Mirror the board so the side-to-move's king is always on one half, halving
+king-dependent inputs for the same parameter count. Independently on our V2
+list and measured as a gain by the external writeup (**ideas only — GPL, every
+line written here**).
+
+### 3. Resolution — the real integer grid from step 1
+
+`gridste` + `u2grid` semantics: every tensor the payload rounds is rounded
+inside forward by STE, with the frame gate (`corr(base,label) > 0.5`) and the
+export refusal for degenerate read-outs.
+
+**Stated explicitly because it will be asked:** the export-faithful net died at
+**−300** — but that was **at the old capacity**, where the second layer had ~2
+usable read-out levels. That death does **not** void the fidelity requirement;
+it is evidence about capacity, which is precisely what this arm changes. A
+capacity net trained at fake precision would repeat the original defect.
+
+### 4. THE NPS BAR — the arm's real bar, quantified
+
+Strength is not the test. **Net eval-gain must exceed the nps cost**:
+
+> **required Elo > (nps cost in %) × 1.28**, the calibrated slope
+> (1.28 ± 0.63 Elo per 1% nps, from the 1068-game settler).
+
+A net costing **30% nps needs ~+38 Elo just to tie**. Consequences, binding:
+
+- **The candidate's pypy inference cost is measured BEFORE any selector
+  game**, and the break-even line is written into the run's own record.
+- Mitigations weighed in the architecture, not bolted on: Design B's
+  cached-rotation substrate, and an incremental accumulator (piece moves as
+  add/subtract deltas; king moves as the expensive bucket-switch case, counted
+  not hand-waved).
+
+### 5. Data — stage 1 on what we already own
+
+**Both existing twin corpora, ~1.5 M positions**: self-play 737,414
+(`f48c1d07e60b3b34`) + Lichess 749,263 (`6cc47825bc619672`). The NULL proved
+them **equivalent at old capacity**, so there is no reason to prefer one and
+good reason to use both.
+
+Filtering to apply, with an explicit applied/skipped record:
+
+| technique | decision |
+|---|---|
+| flatten piece-count distribution by stochastic skipping | **apply** — our corpora are endgame-heavy by harvest |
+| skip early plies | **apply** where ply context survived the harvest (self-play has it; the Lichess dump does not) |
+| keep-sacrifices | **apply only if cheaply approximable** without a search per position; otherwise **skip and say so** |
+
+**Outcome blending stays OUT of stage 1** — our own λ verdict, monotone and
+decisive. A stage-2 blend is registered as a **FOLLOW-UP**, conditional on the
+capacity net showing the data absorption the external writeup reports.
+**Route B / Leela data remains licence-HELD and untouched**; it returns only
+as a prerequisite question if this arm lands and wants volume.
+
+### 6. Seeds and selection
+
+**Multiple from-scratch seeds** (external practice, and our own census showed
+seed spread is real). Selection is the **play selector, top-pick only**.
+**Val remains banned as a selection input** — it survives tonight on
+protocol-robustness grounds regardless of the size of the inversion.
+
+### 7. Branch set — pre-committed, before any game
+
+> **BEATS-ENTRY.** Interval bulk above zero vs the entry. → **fixed-N
+> confirmation** at N≥300 under the hardened harness before any promotion
+> talk. This would be the first replacement net in the campaign's history to
+> beat the entry.
+>
+> **CLOSE LOSS — the ONE ITERATE rule, stated now.** Point estimate inside
+> **−40** of the entry (i.e. better than −40) **and** nps-adjusted break-even
+> within reach. → **Exactly one** iterate is permitted. Its single changed
+> variable is registered before it runs, and it inherits this same branch set.
+> **One. Not a programme.** A second close loss is a LOSES-BADLY outcome.
+>
+> **LOSES BADLY — the terminal verdict, verbatim.** Point estimate worse than
+> **−100** vs the entry, with the nps bar accounted. Then:
+>
+> > *"Capacity does not cross over inside 4096 bytes. With labels, position
+> > distribution, outcome blending and export fidelity each measured and each
+> > closed, and with capacity — the last untested axis — funded, built at the
+> > full byte seam and beaten by the hand-built distilled-PST entry, the
+> > learned-eval replacement programme has no remaining untried lever at this
+> > budget. The entry stands as the artifact. Further learned-eval work
+> > requires a larger budget or a different competition."*
+>
+> That is the family's final answer, and it is written before the games so it
+> cannot be softened after them.
+>
+> **AMBIGUOUS.** Between −40 and −100, or an interval too wide to place. →
+> **One** fixed-N confirmation at N=300 of that candidate, then re-apply these
+> bands to the confirmed number. No re-design inside the ambiguity.
+>
+> **TERMINAL-INSTRUMENT.** Any gate failure (count, zero-illegal,
+> deadline-relative dormancy) voids the run and it is re-run; a void is never
+> a verdict.
+
+### 8. Harness and venue
+
+Hardened throughout: **pinned clock** so the node stop is the only stop,
+**deadline-relative dormancy gate** (void bar = deadline/10), **count gates**,
+**zero-illegal voids**, **fresh srands recorded**, **census by parentage**.
+Venue: **box**. The owner's tuner is untouchable.
+
 ## 2026-08-17 — CONFIRMATION VERDICT: distribution is a NON-LEVER, and the night's instrument catch is the real result
 
 The re-run landed clean on the box and the pre-registered null fired.
