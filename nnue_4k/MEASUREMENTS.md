@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-17 | **Mate-band cap exemption (theorem menu option A)** | **UNSOUND — REFUSED.** Makes `bound()` gamma-dependent: `Entry(lower=47938, upper=1204)` at depth 2. Mate suites really did improve (mate1 0/8 → 6/8 at depth 2–3); the sound instance costs −60 Elo |
 | 2026-08-17 | **REGISTERED (search-features lane, before game 1): mate-band cap exemption + butterfly history, fixed-N fixed-node screens** | Bars and branches below; mate gate already read, Elo read once at N = 300 |
 | 2026-08-17 | Root aspiration (MTD warm-start) | **DECLINED without games**: the probes an aspiration bracket removes cost 4.51% of nodes at ±50, 2.28% at ±100 — an upper bound, before re-widening |
 | 2026-08-17 | Countermove archaeology (`KILLER_ORDER` old-first) | The deciding cell **completed and was never recorded**: −49.4 [−76.4, −22.9], 524 games, H0 accepted |
@@ -136,6 +137,75 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-17 — The mate-band cap exemption is UNSOUND, and that is the finding
+
+The registered arm 1 above is refused by a correctness gate, before its Elo
+matters. Exempting a mate report from the shallow cap does not merely change
+what the search finds — it makes `bound()` **gamma-dependent**, which is the
+one thing the table forbids.
+
+**Witness** (`6n1/5k2/1b4r1/2P2P2/B1RB4/4P1q1/R2p3P/7K b`, the terminal-bench
+probe ladder in reverse order, depths 0/2/4, one `Searcher`):
+
+```text
+master     forward 0 crossings   reverse 0 crossings
+candidate  forward 0 crossings   reverse 1: (depth 2) Entry(lower=47938, upper=1204)
+```
+
+`lower = 47938 = MATE_LOWER + EVAL_ROUGHNESS` is the exempted mate report
+coming back from a child that is checkmated one ply down. `upper = 1204` is
+the *same key* reported by the cap's fail-low branch — `if cap < gamma: move,
+score = None, cap` — which claims the move is worth at most the static
+estimate. Master makes both branches state the same claim by clamping the
+searched report too; the exemption breaks the pair, and the table stores a
+contradiction 46,734 points wide. `tests/test_terminal_bench.py` fails on 12
+positions, `tests/test_tt_consistency.py` on a fortress, all with "ladder
+crossing".
+
+**The general form.** The `MATE_LOWER - 1` term in
+
+```python
+cap = (MATE_UPPER if depth > 3 else min(MATE_LOWER - 1, pos.score + val + max(depth - 1, 0) * QS_A))
+```
+
+is almost never the binding one — static estimates are in the thousands. What
+actually hides the mate is the **static futility term**, and that term is also
+what licenses skipping the child entirely. A cap may be dropped on a searched
+report only if it is dropped on the unsearched one, and no static rule can
+know that an unsearched child mates. So in an engine whose table is keyed by
+`(pos, depth)` alone, **shallow futility and shallow mate detection are
+mutually exclusive** — this is the "quiet mate-in-1, invisible to QS"
+countermodel, now priced in the shipped search rather than in a model.
+
+**What the mate suites lose with it.** The exemption really did work, and the
+numbers are worth keeping precisely because they are unbuyable at this price:
+`mate1.fen` 0/8 → **6/8** at both depth 2 and depth 3; `mate2_eventual.fen`
+0/5 → **3/5** at depth 5 and 1/5 → 3/5 at depth 6; `mate3_eventual` unchanged
+at 1/2, 1/2, 2/2 for depths 9/13/15; nothing regressed anywhere; and the
+24-opening depth-8 node battery was **byte identical** (1,590,257 both), which
+is why the Elo screen was expected flat.
+
+**The sound instance of the same theorem row is already priced.**
+`formal/README.md`'s menu offers `3k` instead of `3k + 1` for "delete the
+shallow cap ONLY" (`forcedMate_fuelValueD2_sharp`, sharp per
+`sharp_mate3_at_8`). Deleting the cap keeps gamma-independence — there is no
+second branch to contradict — and this ledger already measured that engine:
+**−60.41 ± 26.61 Elo, 488 games, SPRT H0** (the shallow-cap ablation control,
+same date). So the ply is buyable, at about sixty Elo, and the cheap version
+is not buyable at all.
+
+The screen against master was left running anyway, as the **A/A-grade control
+for the new fixed-N harness**: the two engines are node-identical everywhere a
+shallow mate does not appear, so the instrument, not the arm, is what that
+number tests.
+
+*Cost of any future attempt, recorded now:* every one of these arms trips
+`tests/test_model_audit.py` — the audit hashes the whole `Searcher.bound`
+region (`expected 2b3c3adc21af59d7`), so a search change lands with its model
+re-audit or it does not land.
 
 ---
 
