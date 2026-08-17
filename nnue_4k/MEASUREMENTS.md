@@ -17154,3 +17154,38 @@ measurement existed** and both are fixed. That is the system working as
 designed — the alternative was an Elo number that priced a broken instrument
 and a shipped artifact no decoder could read. The cost is real and is stated
 plainly: **the arm's first honest Elo read moves about 15 hours to the right.**
+
+### Post-amendment: a runner crash I caused, and the fix confirmed in production
+
+**The queue runner died, and the cause was my sequencing.** After killing the
+defective-clamp job I also moved its config out of `queue/` — while the runner
+was still doing that config's post-run bookkeeping. `queue_runner.main` then
+ran `os.rename(cfg, done/cfg)` on a file that was no longer there and died on
+`FileNotFoundError`. The runner log records it exactly:
+
+    [queue] - 2026-08-17 17:20: 210_cap_n5_s0.yaml rc=-15 in 4 min
+    FileNotFoundError: ... queue/210_cap_n5_s0.yaml -> queue/done/210_cap_n5_s0.yaml
+
+Nothing was lost and the queue stalled rather than corrupting, but three seeds
+sat idle until I noticed. The rule this earns: **never move the config the
+runner is currently executing — kill the job and let the runner file it to
+`done/` itself; only ever remove configs it has not started.** Restarted with
+the original invocation (log appended, not truncated, so the traceback stays
+as evidence); new runner PID **1961979**, and it picked up
+`220_cap_n5b_s0` immediately.
+
+**The repair is confirmed in production.** The first N=5 run under the
+corrected clamp reports **zero** `bias digits CLIPPED` notices, against 1/6 on
+every epoch of the N=6 run. Five gains `[62, 65, 67, 72, 69]` confirm N=5, and
+both gates pass unchanged (frame spread 0.0172, full 10M corpus, linear
+schedule).
+
+**One honest caveat, so the next reader is not surprised.** The bias digits
+still land on their rails — `[89, 89, 43, 0, 89]`, where 89 and 0 are the
+per-lane extremes. The fix made the trainer and the exporter agree on *one*
+bound; it did not make that bound *wide*. The net still wants more bias range
+than a `[-44, 45]` digit can carry at these gains, and that is now a genuine
+format limit rather than a bug. Whether removing the inconsistency also
+restores data absorption is exactly the read to watch on this run's val curve
+— epoch 0 sits at 0.01770 — and it is the thing that will say whether the
+capacity arm's premise survives.
