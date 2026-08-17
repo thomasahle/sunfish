@@ -17326,3 +17326,205 @@ neither is data.** The flat val predicted this: a model that does not absorb
 The distilled-PST entry survives for the reason it always has — its 384 values
 ride hand-built nonlinear machinery (K_MID/K_END, khold2, pend) that the
 linear-in-ps768 family has no way to express.
+
+---
+
+## REGISTRATION — the TRAINING-OBJECTIVE sweep (five arms, cheap-first)
+
+Pre-number and pre-run, as always. The capacity arm just closed the *width*
+and *data* axes for the linear-in-ps768 family (31.00% at fixed nodes, and
+val that moves 0.3% across six passes over 10M). Both of those arms changed
+**what the net is**. This sweep changes **what the net is asked to be**: the
+loss's cp→win mapping, the label source, the loss's form, and — in the two
+richer-bytes arms — the payload the objective is allowed to fill.
+
+If every arm's gate reads flat, that is not a failed sweep. It is the
+objective axis answering the same way the capacity and data axes did, and it
+is reported as such.
+
+### THE INSTRUMENT, and why `val` cannot be the gate
+
+`train.py` computes `val` against **the trained target**, and its own
+docstring says the consequence out loud for one dial: "val is then NOT
+comparable ACROSS lambda arms (different targets)". Every arm here moves the
+target. Change `sigK` and the target moves; change the labels to the entry's
+own search and the target moves; change to a ranking loss and there is no
+pointwise target left. Stacking those `val` numbers against the control's
+0.01764 would be comparing readings from four different rulers — and it would
+do so in the *flattering* direction, because a larger `sigK` compresses every
+target toward 0.5 and shrinks the mean squared error for free.
+
+So the sweep gates on two statistics that `objsweep/score.py` computes
+identically for every arm, from the SHIPPED artifact (`best.pickle`, at the
+arm's own best epoch), with the constants frozen in that file and never read
+from a config:
+
+| | what it is | what it is for |
+|---|---|---|
+| **refval** | mean (σ(pred/400) − σ(y/400))² over pool10m's held-out 500,086, y = the corpus label | the incumbent's own metric, so the incumbent-favouring read |
+| **outval** | Brier vs the **real game outcome** on 36,804 held-out positions from 74,766 of our own games | the neutral read: no arm trains on outcomes |
+
+`outval` fits **each net's own cp→win scale** on a disjoint pinned 100k fit
+set and spends it on the val slice. One free parameter, out of sample. Without
+that, an arm that merely trains toward a different cp scale would move the
+neutral statistic without being any better at chess — scale would be
+confounded with skill, which is precisely the axis this sweep varies.
+
+Both slices are `fenkey` (sha256(20260813+fen) % 20 == 0), which is
+POSITION-keyed: a position in the game-outcome slice is in pool10m's val slice
+too, if present at all. That is why a neutral read on a *different corpus* is
+available without leaking pool10m training rows.
+
+**The instrument's receipt.** `score.py`'s `--mirror` path skips only the
+engine's integer shift, which makes it `train.py`'s forward exactly under
+gridste. It reproduces all three control runs' `metrics.jsonl` best val to
+eight decimals — including the two whose best epoch is not their last:
+
+| seed | metrics.jsonl best val | score.py mirror | refval (as shipped) |
+|---|---|---|---|
+| 0 | 0.017648960 | **0.01764896** | 0.01765317 |
+| 1 | 0.017627280 | **0.01762728** | 0.01763129 |
+| 2 | 0.017634669 | **0.01763467** | 0.01763878 |
+
+The shipped column is ~4.1e-6 worse than the mirror across all three: that is
+the engine's truncating shift, priced, not estimated.
+
+### A defect found while building it: the corpora's `val_a` column is not the split
+
+`build_pool.py` keys `val_a` on `sha256(fen)`; `data.fen_hash` keys on
+`sha256(str(20260813) + fen)`. Two independent 5% slices: they disagree on
+**949,365 of pool10m's 10M rows** (and 70,123 of lambda_corpus's 737k). The
+trainer recomputes the key and never reads the column, so **no run has ever
+leaked** — a run's train set is the exact complement of its own val set — but
+anything that trusts the stored column holds out the wrong rows. The first
+draft of this sweep's calibration fit did exactly that, which would have put
+~95% of the neutral yardstick's own positions into the fit. The refset builder
+now recomputes the rule and refuses unless the row count equals the `n_val`
+the trainer recorded (500,086 and 36,804 — both matched), and `score.py`
+refuses unless `val_sha` equals the trainer's `a0aa553db6908e91`.
+
+**Second, smaller finding, recorded not acted on:** pool10m mixes two label
+scales. Its 94.3% dump half carries Stockfish depth-28 evals; the 5.7%
+self-play half carries `sp_cp` copied from the twin corpora, i.e. **twin
+depth-8** labels. On 210,637 positions both label, the two scales are
+measurably different (see below). Not this sweep's problem to fix, but the
+next corpus build should not assume one scale.
+
+### THE REGISTERED BAR — the honest threshold, from the ledgered seed census
+
+The three capacity-arm seeds are the noise floor, and they are re-measured on
+the *gated statistics* rather than borrowed from a different one:
+
+| statistic | mean | sd (n=3) | best seed | **3σ GATE** |
+|---|---|---|---|---|
+| refval | 0.01764108 | 1.11e-05 | 0.01763129 | **≤ 0.01760778** |
+| outval Brier | 0.12778113 | 4.48e-05 | 0.12773567 | **≤ 0.12764673** |
+| outval logloss | 0.56480349 | 9.28e-05 | 0.56469765 | ≤ 0.56452509 |
+
+**An arm passes its val gate iff it beats EITHER gate above AND also beats the
+best control seed on that same statistic.** The second clause is there because
+an sd from three points is itself a noisy estimate; beating the best seed does
+not depend on it. Two statistics × five arms = ten looks at a one-sided 3σ
+bar, so the family-wise false-positive rate is ≈1.3% — stated, not hidden.
+
+**No arm that fails its val gate gets selector games.** A passing arm gets the
+50-game screen vs `pst_entry @ d0a6e60` under the hardened harness (sources
+under pypy3, `tc=6000+0` with the node cap binding, deadline-relative dormancy
+gate, fresh srand, zero-illegal void, top-pick-only).
+
+**Two reference points the arms are measured against, not just each other:**
+on the same held-out slice the **twin's own depth-8 label** scores Brier
+0.11944 — better than any control net's 0.12778. The eval the entry already
+computes, searched, predicts our games' results better than the trained net
+does. That is IDEA 9's premise stated as a number, and it was measured before
+IDEA 9 ran.
+
+### ARM 11 — sigmoid recalibration: THE FIT IS THE RESULT, and it is a units story
+
+`objsweep/fit_sigmoid.py`, on lambda_corpus's 700,610 fit rows (74,766 of our
+own games, real results, twin depth-8 labels), holding out the yardstick's
+36,804:
+
+**In twin depth-8 units, K=400 is grossly wrong.** MLE `K_twin = 158.9`
+(Brier-optimal 159.9; a two-parameter fit agrees at 158.9 with a 5.4 cp
+offset, so there is no hidden tempo term). Held out: logloss 0.58691 → 0.54389,
+Brier 0.13426 → 0.11944. The sigmoid *family* fits essentially perfectly at
+that scale — empirical score vs σ(cp/158.9), by cp bin, agrees within a point
+or two everywhere from −800 to +800, while σ(cp/400) is off by 14 points at
+−700 (0.153 predicted, 0.012 observed).
+
+**In Stockfish depth-28 units — which is what 94.3% of pool10m is — it is
+already right.** The transfer needs the twin→SF scale, measured on the 210,637
+positions both corpora label, and *the estimator matters*: corr is only 0.616,
+so OLS SF-on-twin (0.8458) is attenuated and 1/OLS twin-on-SF is inflated;
+they bracket [134.4, 354.5] and neither is the object wanted. The object
+wanted is E[outcome | y] as a function of the SF label — the training target
+itself — so K is fitted by regressing the twin-implied win probability
+directly on the SF label. That conditional-mean fit gives
+
+> **K̂ = 418.3 in Stockfish-cp units, against the legacy 400: +4.6%.**
+
+The legacy scale is not "from another engine's era". It is from exactly the
+right era — Stockfish centipawns — and it is within 5% of the value our own
+games imply for them. The 2.6× discrepancy is real but is a **unit** effect:
+the twin's shallow evals are on a much sharper scale than SF's.
+
+**Registered consequence, and it is the sweep's most useful transfer:** the
+recalibration is not really a standalone arm, it is a **prerequisite for
+ARM 9**. ARM 9 labels positions with the entry's own search — labels in *our
+engine's* units, the twin's family, not Stockfish's. Training those at
+sigK=400 would apply a 2.6× wrong target scale and produce an uninterpretable
+null. ARM 9 therefore trains at the twin-unit calibration, re-fitted for its
+own labels, and that choice is registered here, before ARM 9 exists.
+
+**ARM 11 runs as a LADDER, not a point.** The K̂=418 estimate leans on
+`outcome ⊥ y | x`, which transfers the calibration through the *shallower*
+evaluator — the weak link, stated plainly. So rather than spend one run at a
+point estimate whose assumption may not hold, three 10-minute runs measure the
+sensitivity directly on the training corpus:
+
+| run | sigK | why this point |
+|---|---|---|
+| `310_obj11_k160` | 160 | the twin-unit calibration, i.e. the bracket's low end |
+| `311_obj11_k250` | 250 | the reduced-major-axis estimate, 218, rounded up |
+| `312_obj11_k418` | 418 | the registered K̂ |
+| (control) | 400 | `220/221/222_cap_n5b_s*`, already run |
+
+Everything else is `220_cap_n5b_s0` verbatim: pool10m, N=5 ternary gridste,
+l1 5e-4, satpen 0.03, AdamW linear-to-zero over 6 passes, seed 0. One knob.
+
+**PRE-COMMITTED BRANCHES.** (a) A ladder point passes its gate → it gets the
+50-game screen, and the ladder's *shape* is reported with it. (b) All three
+flat → the objective's cp→win scale is recorded as a **null on this corpus**,
+with the fit above as the explanation rather than a shrug, and no selector
+games are spent. (c) The ladder is monotone and worsening toward small K →
+that is evidence the loss's implicit weighting is already near-optimal, and it
+is recorded as a positive result about the incumbent.
+
+### THE REMAINING FOUR, in run order, each registered before it runs
+
+**ARM 9, search-consistency distillation.** Label a pool10m slice with
+`pst_entry`'s own depth-3 search and train on those. Throughput is measured
+FIRST and the slice sized to ≤6 box-hours; the labeller writes per-worker
+FILES, never pipes (the 64 KB-pipe deadlock rule), with a completeness gate
+that refuses a partially-labelled corpus. sigK re-fitted in the label's own
+units per the transfer above. Same gates.
+
+**ARM 10, pairwise ranking loss over sibling moves.** The trainer has no
+pairwise head; that change is PRICED FIRST and capped at one day, else the arm
+is recorded and skipped rather than allowed to eat the sweep.
+
+**ARM 1, wide biases + 5-level weights at the ~880 B max payload.** Format
+change; the byte number is recomputed at max payload before training, and the
+random-payload proxy is trusted to a few bytes (it was +3 B at N=5 and −4 B at
+N=6).
+
+**ARM 2, the ml2 second layer, as a clean instrument.** Its old −234 verdict
+is contaminated: 16.82% truncation, and it pre-dates the corpus, the per-lane
+bias clamp and the export fix. ONE clean run, 781 B payload with ml2 code,
+same gates.
+
+**Cotenancy and capacity.** Trainings are labeller-class and go through the
+existing serial queue (`nice 19`, ≤8 threads, forfeit tripwire); one arm
+trains at a time. The box's owner tuner and the pr218 matches are untouched
+and are not counted as ours.
