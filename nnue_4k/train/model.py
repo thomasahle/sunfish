@@ -135,8 +135,31 @@ class ResidualNet(nn.Module):
             if self.nb:
                 self.rawb.clamp_(-wclip, wclip)
             if self.cfg.ternary:
-                # exportable bias range is +-44 lane units of a 32*g_k cap
-                self.bias.clamp_(-0.019, 0.019)
+                # PER-LANE exportable bias range, the bound the exporter
+                # actually enforces: it stores bd_k = round(b_k*32*g_k) in
+                # [-44, 45], so b_k lives in [-44/(32*g_k), 45/(32*g_k)] and
+                # the bound MOVES with the lane's gain.
+                #
+                # This was a hardcoded +-0.019 for every lane, which is the
+                # bound at g=72 and wrong everywhere else in BOTH directions:
+                # too loose above g=72, so the exporter had to truncate (that
+                # is what the "bias digits CLIPPED" notice reported), and too
+                # tight below it, so representable range went unused.  Worse,
+                # gains GROW during training, so the true bound shrinks while
+                # the constant did not: a self-tightening squeeze.  The N=6
+                # seed-0 run came out with all six biases at exactly
+                # +-0.019000 -- every one of them pinned on the rail, with no
+                # freedom left -- and its val moved 0.2% across six passes
+                # over 10M positions while train loss ROSE 9.6%.
+                #
+                # Fixing it makes the trainer and the exporter agree on one
+                # bound.  That is the same defect class as the payload codec
+                # (an encoder grew a case its decoder lacked), closed here
+                # from the other side.
+                s = self.export_shift()
+                g = torch.clamp(torch.round(self.v.abs() * (1 << s) / 32.0), 1.0, 89.0)
+                lo, hi = -44.0 / (32.0 * g), 45.0 / (32.0 * g)
+                self.bias.copy_(torch.min(torch.max(self.bias, lo), hi))
 
     def export_shift(self):
         """The L1 shift the exporter will pick -- export.export_ml2 /

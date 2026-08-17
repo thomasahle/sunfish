@@ -17061,3 +17061,96 @@ background waits lapsed repeatedly, and then failed to carry the rule across
 when the executor changed from a script I launched to a queue I delegated to.
 Fixed for this cycle: the watcher now armed polls `queue/done/` for the seed
 configs themselves.
+
+---
+
+## REGISTRATION AMENDMENT — bias-clamp repair, and the N=5 branch
+
+Pre-number, as always: no Elo exists for the capacity arm, so this is
+instrument repair, the same class as the harness hardening and the payload
+codec fix — not a bar move.
+
+### The repair
+
+`model.clamp_weights` clamped the ternary bias to a hardcoded **±0.019** after
+every optimizer step. The exporter's actual bound is per-lane: it stores
+`bd_k = round(b_k·32·g_k)` in `[-44, 45]`, so `b_k` lives in
+`[-44/(32·g_k), 45/(32·g_k)]` — a bound that **moves with the lane's gain**.
+0.019 is that bound at g=72 and wrong everywhere else in both directions at
+once: too loose above g=72, forcing the exporter to truncate (the
+`bias digits CLIPPED` notice), and too tight below it, leaving representable
+range unused. Because gains *grow* during training, the true bound shrinks
+while the constant did not — a self-tightening squeeze.
+
+Now computed per lane from the same shift and gains the exporter uses.
+Verified: driving every bias to ±0.5 and clamping lands each one exactly on
+its own bound, and the resulting export digits are `[45]×6` and `[−44]×6` —
+**at the representable limits and never outside**, so the truncation notice
+should not recur. **The fix makes the trainer and the exporter agree on one
+bound.** That is the same defect class as the payload codec — an encoder grew
+a case its decoder lacked — closed here from the other side: a trainer
+enforcing a constraint its exporter did not share.
+
+### Correction, form (a): the note I withdraw
+
+Verbatim, from the pre-flight entry:
+
+> **One log line that will look alarming and is not.** The exporter prints
+> `1/6 bias digits CLIPPED to the payload range`. … But `gvb()` applies
+> **exactly that clamp inside forward** under `gridste` … so the net trains
+> against the clamped bias it will ship with. The notice reports a *binding
+> clamp*, not lost fidelity.
+
+"Benign under gridste" was right and incomplete. The notice was the visible
+symptom of a defective parameterisation underneath, and I stopped at the
+symptom instead of asking why a bias would sit on a rail at all. It sat there
+because a hardcoded constant put it there: all six of seed 0's biases came out
+at **exactly ±0.019000**, a parameter with no freedom left, while val moved
+0.2% across six passes over 10M and train loss rose 9.6%.
+
+### What is retained, what re-runs
+
+The N=6 seed-0 run is **retained as evidence-of-defect, not a candidate** — it
+measured the bias rail, not the architecture. Its artifact and 4,159 B byte
+number stand as the N=6 record. The N=6 seed-1/2 configs stay unqueued in
+`staging/`. The three N=5 seeds **requeue from scratch** as
+`220/221/222_cap_n5b_s{0,1,2}` — deliberately new names, so they get fresh run
+directories and cannot `--resume` a defective-clamp checkpoint.
+
+**The kill, with PID.** The defective-clamp N=5 seed-0 run, **PID 1958401**,
+was killed under this amendment; it was my own queue's process and it was
+measuring a known defect. It had completed 0 epochs. Reported honestly: my PID
+extraction returned **three** PIDs rather than one, and `kill $PID` therefore
+also killed my own ssh shell (1959477) mid-command, truncating it. The net
+effect was the intended one and was verified afterwards — configs moved, the
+train.py dead, the queue runner (3837758) untouched and alive — but the method
+was unsafe and this is the **third self-match incident** in this campaign. The
+standing rule already says count by parentage and never match your own command
+line; it now needs its kill-side corollary: **never pass an unvalidated
+multi-line PID list to `kill`; resolve to exactly one PID and confirm its
+identity first.**
+
+### N=5 BYTE VERDICT (provisional): 3,999 B — IN BUDGET by 97
+
+Measured today rather than in ~15 hours, because the container is
+**structure-blind** and this lane proved it: a random payload at seed 0's own
+sparsity (43.1% zeros) packs to **4,155 B at N=6 against the trained
+artifact's 4,159 B — 4 bytes apart**. That calibrates the proxy directly. At
+the same sparsity **N=5 packs to 3,999 B and runs**, so the trained N=5
+artifact is expected within a handful of bytes of that, with ~97 B spare.
+Registered as provisional; the trained artifact is the confirming read.
+
+| | N=5 | N=6 |
+|---|---|---|
+| random @43.1% zeros | **3,999 — in budget by 97** | 4,155 — over by 59 |
+| trained | pending (expect ≈3,999 ± ~5) | **4,159 — over by 63** |
+
+### Timeline honesty
+
+The first training round of the capacity arm produced no Elo and found **two
+real instrument defects**: silent payload corruption for every N ≥ 5, and a
+bias parameter pinned on a hardcoded rail. Both were caught **before any
+measurement existed** and both are fixed. That is the system working as
+designed — the alternative was an Elo number that priced a broken instrument
+and a shipped artifact no decoder could read. The cost is real and is stated
+plainly: **the arm's first honest Elo read moves about 15 hours to the right.**
