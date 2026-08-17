@@ -18001,3 +18001,64 @@ funded by the registered branch.
    an in-forward grid snap for `V`.
 4. **Only then a selector.** Nothing is promoted on val, and the fixed-node
    31.00 % that the N=5 arm scored is the standing reminder of why.
+
+---
+
+## 2026-08-18 — MIRRORING IS THE LEVER THE GATE ARGUES FOR: folding file f onto 7−f doubles the affordable rank, and rank 8 at 32 units now fits with 74 bytes to spare
+
+The gate says WIDTH pays (−20.9 % of val at N=64) and the `nn_cp` correction
+says width is CHEAP (~12 Elo at N=32). Both point at the same bottleneck:
+the payload can only carry `r` directions because `U` is 192·r digits. So the
+cheapest way to buy rank is to make a feature row cost half as much.
+
+**Horizontal mirroring does exactly that.** Fold file `f` onto `7−f` and a
+piece has 32 rows instead of 64; `U` halves; nothing else changes. Chess is
+very nearly file-symmetric (castling is the exception, and the entry's own
+hand tables are asymmetric only in ways the ledger already called "2014
+noise" — N c7 = +100 against d7 = −36). It costs about 20 code bytes: the
+feature index becomes `_f // 8 * 4 + min(_f % 8, 7 - _f % 8)`.
+
+Measured through `tools/build/pack.sh`, **every row built and RUN** (`uci` /
+`position startpos` / `go nodes 1500` returns a legal `bestmove`), code side
+3,170:
+
+| shape | zeros | packed | spare |
+|---|---|---|---|
+| **mirrored r=4 N=32** | 43 % | **3,677** | **419** |
+| mirrored r=4 N=48 | 43 % | 3,738 | 358 |
+| **mirrored r=4 N=64** | 43 % | **3,803** | **293** |
+| mirrored r=4 N=64 | 70 % | **3,766** | 330 |
+| mirrored r=5 N=5 (the shipped shape, mirrored) | 43 % | 3,805 | 291 |
+| mirrored r=6 N=48 | 43 % | 4,079 | 17 |
+| **mirrored r=8 N=32** | 43 % | 4,117 | −21 |
+| **mirrored r=8 N=32** | **70 %** | **4,022** | **74** |
+| mirrored r=8 N=48 | 70 % | 4,126 | −30 |
+| mirrored r=10 N=10 | 43 % | 4,251 | −155 |
+| mirrored r=12 N=32 | 43 % | 4,519 | −423 |
+
+Three readings.
+
+1. **Mirroring roughly doubles the affordable rank.** Unmirrored the frontier
+   was r=4; mirrored it is r=6 dense or **r=8 at the sparsity an `l1` arm
+   reaches**. Against the trained N=64 table's spectrum that moves the
+   retained energy from **62.6 % (r=4) to 74.7 % (r=8)**.
+2. **`r ∈ {4, 8}` are the waste-free ranks** — four trits fill a base-90 digit
+   exactly, so ceil(r/4) digits per feature has no slack at r=4 or r=8 and
+   ~25 % slack at r=5,6,7. r=8 is therefore *cheaper per direction* than r=6.
+3. **Mirrored r=4/N=64 costs 3,803 B — the same as the shipped net's own
+   shape mirrored (3,805) — with 64 units instead of 5.** That is the single
+   most striking row in this lane's whole table.
+
+**Not claimed:** that mirroring is free in val. It halves the model's capacity
+in a structured way, and no trained mirrored arm exists — the feature
+extractor would have to fold too. That is a trainer change of the same size as
+the factored arch and belongs in the same round. Recorded because the byte
+side is now measured and it changes which `(r, N)` are worth training.
+
+**A defect this found in its own tool, recorded per never-hide-errors:** the
+first mirrored build emitted `_f %% 8` into the artifact — the mirror index is
+an *argument* to the template, not part of it, so the `%%` escaping that is
+right inside the template is wrong outside it. Six shapes packed to 97 bytes
+(the shebang head alone, `pack.sh` having failed) and reported `runs=0`. The
+run check is what caught it; a byte-only harness would have recorded six
+absurdly good sizes.

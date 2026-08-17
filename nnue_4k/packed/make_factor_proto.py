@@ -48,7 +48,7 @@ def enc(d):
     return chr(35 + d + (35 + d >= 92))
 
 
-def emit_payload(r, N, cap_bits, zeros, seed=20260817):
+def emit_payload(r, N, cap_bits, zeros, seed=20260817, nfeat=768):
     """LSB-first digit stream: shift, N caps, N biases, r*N mixing, 768*r trits.
 
     Trits are packed FOUR to a digit as a flat stream (values 0..80), which is
@@ -64,7 +64,7 @@ def emit_payload(r, N, cap_bits, zeros, seed=20260817):
     # FEATURE-MAJOR, ceil(r/4) digits per feature (the last group zero-padded):
     # at r = 4 that is exactly one digit per feature and the stream is
     # byte-for-byte the shape the shipped N=4 payload already ships.
-    for _f in range(768):
+    for _f in range(nfeat):
         u = [0 if rng.random() < zeros else rng.choice((-1, 1)) for _ in range(r)]
         for c in range(0, r, 4):
             grp = u[c:c + 4]
@@ -73,15 +73,20 @@ def emit_payload(r, N, cap_bits, zeros, seed=20260817):
     return q
 
 
-def build(src, r, N, lane_bits, zeros, seed=20260817):
+def build(src, r, N, lane_bits, zeros, seed=20260817, mirror=False):
     half = lane_bits * N
     full = 2 * half
     lmask = (1 << lane_bits) - 1          # 2^lane_bits == 1 (mod lmask)
     vbits = lane_bits - 1                 # sign bit is the top lane bit
     vmask = (1 << vbits) - 1
     lo = 1 << (vbits - 1)                 # offset-binary zero point
-    ntrit = 768 * r
-    ndig = 1 + 2 * N + r * N + 768 * ((r + 3) // 4)
+    # HORIZONTAL MIRRORING folds file f onto 7-f, so a piece has 32 feature
+    # rows instead of 64 and U halves.  Chess is very nearly file-symmetric
+    # (castling is the exception), and width is what this family pays for.
+    nsq = 32 if mirror else 64
+    nfeat = 12 * nsq
+    ntrit = nfeat * r
+    ndig = 1 + 2 * N + r * N + nfeat * ((r + 3) // 4)
     # cap scale: caps are stored as digits 0..89, scaled to reach ~vmask
     cap_scale = 1 << max(0, vbits - 7)
 
@@ -128,8 +133,9 @@ _half = {}
 for _i, _p in enumerate(_PIECES):
     _half[_p] = _h = [0] * 120
     for _f in range(64):
-        _h[21 + _f // 8 * 10 + _f %% 8] = _T[_q[%d + _i * 64 + _f]]""" % (
-            voff, foff, N, r, lane_bits, N, foff)
+        _h[21 + _f // 8 * 10 + _f %% 8] = _T[_q[%d + _i * %d + %s]]""" % (
+            voff, foff, N, r, lane_bits, N, foff, nsq,
+            "_f // 8 * 4 + min(_f % 8, 7 - _f % 8)" if mirror else "_f")
     else:
         body = """_V = _q[%d:%d]
 _T = [[sum((_d // 3 ** _j %% 3 - 1) * (_V[(_c * 4 + _j) * %d + _k] - 44)
@@ -141,9 +147,11 @@ for _i, _p in enumerate(_PIECES):
     _half[_p] = _h = [0] * 120
     for _f in range(64):
         _h[21 + _f // 8 * 10 + _f %% 8] = sum(
-            _T[_c * 81 + _q[%d + (_i * 64 + _f) * %d + _c]]
+            _T[_c * 81 + _q[%d + (_i * %d + %s) * %d + _c]]
             for _c in range(%d))""" % (
-            voff, foff, N, r, lane_bits, N, nchunk, foff, nchunk, nchunk)
+            voff, foff, N, r, lane_bits, N, nchunk, foff, nsq,
+            "_f // 8 * 4 + min(_f % 8, 7 - _f % 8)" if mirror else "_f",
+            nchunk, nchunk)
     sub("""_half = {}
 for _i, _p in enumerate(_PIECES):
     _half[_p] = _h = [0] * 120
@@ -170,7 +178,7 @@ for _i, _p in enumerate(_PIECES):
             lane_bits, lane_bits))
 
     # --- the payload itself --------------------------------------------
-    q = emit_payload(r, N, vbits, zeros, seed)
+    q = emit_payload(r, N, vbits, zeros, seed, nfeat)
     # the trit stream is flat, but the feature loop above reads ceil(r/4)
     # digits per feature, so the two must agree on the digit count
     assert len(q) == ndig, (len(q), ndig)
@@ -191,12 +199,14 @@ def main():
     ap.add_argument("--N", type=int, default=32)
     ap.add_argument("--lane-bits", type=int, default=16)
     ap.add_argument("--zeros", type=float, default=0.43)
+    ap.add_argument("--mirror", action="store_true",
+                    help="fold file f onto 7-f: 32 squares per piece, U halves")
     ap.add_argument("--seed", type=int, default=20260817)
     ap.add_argument("--out", default=os.path.join(HERE, "factor_proto_built.py"))
     a = ap.parse_args()
     with open(a.entry) as f:
         src = f.read()
-    out, ndig, nh = build(src, a.r, a.N, a.lane_bits, a.zeros, a.seed)
+    out, ndig, nh = build(src, a.r, a.N, a.lane_bits, a.zeros, a.seed, a.mirror)
     with open(a.out, "w") as f:
         f.write(out)
     os.chmod(a.out, 0o755)
