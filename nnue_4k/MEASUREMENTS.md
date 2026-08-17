@@ -17978,3 +17978,29 @@ another arm's σ is not a measurement. These two seeds measure the spread
 where the claim is actually made; if it is materially wider, the σ counts in
 this section get restated downward and the gate verdict is re-read against
 the honest number.
+
+### A THIRD explanation, and its control, registered before it runs
+
+`315` tests sparsity. It does not test the other thing a steeper loss does:
+**at smaller sigK the gradients are simply larger, so the same lr and the
+same six epochs move the net FURTHER.** The incumbent's own recorded
+pathology makes that live rather than pedantic — "val moves 0.2% across six
+passes over 10M positions" is what an *undertrained* net looks like, and the
+full-objective loss at epoch 0 is 0.0542 at sigK=160 against 0.0200 at 400.
+
+`320_obj11_k400_lr4x` is the incumbent scale at 4× the learning rate. If
+undertraining is the mechanism, the outval gain appears there with the target
+untouched. If it does not, that explanation is dead and the credit lies with
+the target's shape or with sparsity, which `315` separates.
+
+So the k160 result now has **three** candidate mechanisms and **two**
+controls that between them can kill any of them:
+
+| mechanism | killed if | control |
+|---|---|---|
+| the target's shape (the claim) | either control reproduces the gain | — |
+| weaker effective l1 → denser net | `315` (l1=0 at K=400) shows no gain | `315` |
+| more optimization progress | `320` (4× lr at K=400) shows no gain | `320` |
+
+A 4× lr on AdamW may just destabilise; that would show in the val curve and
+gets reported as instability, not as a null.
