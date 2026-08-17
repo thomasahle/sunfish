@@ -78,10 +78,43 @@ def export_replnet(path, E, b, v, clampcp, base_kind, train_meta, struct=None):
     if clip:
         print("export_replnet: %d/%d bias digits CLIPPED to the payload range"
               % (clip, len(g)), flush=True)
-    digits = [shift] + g + bd
-    for f in range(768):
-        digits.append(sum((int(trits[f, k]) + 1) * 3 ** k for k in range(len(g))))
-    s90 = "".join(enc90(d) for d in reversed(digits))
+    # PAYLOAD DIGITS, as a MIXED-RADIX field list (value, radix), LSB first --
+    # the order replnet_proto.py's decoder pops them in.
+    #
+    # The feature radix is the reason this is not a flat base-90 list.  Packing
+    # a whole feature's N lanes into ONE digit needs radix 3^N, and that only
+    # fits base-90 while N <= 4 (3^4 = 81).  At N=5 it is 243 and at N=6 it is
+    # 729, so the old flat form fed enc90 digits far outside its range and
+    # chr(35 + d) happily produced characters up to U+02FD -- a payload no
+    # base-90 reader can decode, emitted silently.  Above N=4 each trit is its
+    # own base-3 field instead, which is what make_n6_proto.py's decoder pops
+    # and is denser than a whole extra char per feature.
+    N = len(g)
+    fields = [(shift, 90)] + [(x, 90) for x in g] + [(x, 90) for x in bd]
+    if N <= 4:
+        for f in range(768):
+            fields.append((sum((int(trits[f, k]) + 1) * 3 ** k for k in range(N)), 90))
+    else:
+        for f in range(768):
+            for k in range(N):
+                fields.append((int(trits[f, k]) + 1, 3))
+    for i, (val, radix) in enumerate(fields):
+        if not 0 <= val < radix:
+            raise SystemExit(
+                "export_replnet: payload field %d = %d is outside its radix %d. "
+                "Refusing to emit a payload no decoder can read." % (i, val, radix))
+    _w = 0
+    for val, radix in reversed(fields):
+        _w = _w * radix + val
+    s90 = ""
+    while _w:
+        _w, _d = divmod(_w, 90)
+        s90 = enc90(_d) + s90
+    if N <= 4:
+        # keep the shipped path BYTE-IDENTICAL: the old encoder emitted one
+        # char per field including leading zeros, so pad back to that length
+        # rather than silently shrinking every artifact already measured.
+        s90 = enc90(0) * (len(fields) - len(s90)) + s90
     assert "\\" not in s90 and '"' not in s90
     extra, note = {}, ""
     if struct is not None:

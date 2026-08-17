@@ -61,13 +61,23 @@ def decode_payload(s90, N):
     for _ in range(N):
         w, d = divmod(w, 90)
         bd.append(d)
+    # Feature radix mirrors export_replnet: one base-90 digit holds a whole
+    # feature's N lanes only while 3^N <= 90, i.e. N <= 4.  Above that each
+    # trit is its own base-3 field.  These two must never drift apart -- the
+    # N=6 export shipped a payload no reader could decode precisely because
+    # the encoder grew a case the decoder did not.
     trits = []
     for _ in range(768):
-        w, d = divmod(w, 90)
         row = []
-        for _ in range(N):
-            d, t = divmod(d, 3)
-            row.append(t - 1)
+        if N <= 4:
+            w, d = divmod(w, 90)
+            for _ in range(N):
+                d, t = divmod(d, 3)
+                row.append(t - 1)
+        else:
+            for _ in range(N):
+                w, t = divmod(w, 3)
+                row.append(t - 1)
         trits.append(row)
     assert w == 0, "payload had %d leftover digits" % w.bit_length()
     return shift, g, bd, trits

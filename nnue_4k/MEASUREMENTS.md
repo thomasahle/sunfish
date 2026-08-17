@@ -16932,3 +16932,132 @@ Queue arranged so neither branch wastes work: `100_cap_n6_s0` stays queued to
 produce the definitive trained N=6 payload (and a fixed-node eval number),
 seeds 1–2 are held in `staging/`, and N=5 versions of all three are staged
 beside them, one move from either verdict.
+
+---
+
+## SEED 0 HARVEST — byte verdict, an export defect, and a training-quality STOP
+
+### (0) An export defect found on the way to the byte number
+
+Seed 0's payload could not be priced because it was not decodable. 781
+characters with ordinals up to **765**, against a base-90 codec whose legal
+range is 35..126. `export_replnet` packed a whole feature's N lanes into ONE
+digit of radix 3^N and handed it to `enc90`, which is `chr(35 + d)`. That is
+fine while 3^N ≤ 90 — i.e. **only N ≤ 4** — and silently wrong above it: 243
+at N=5, 729 at N=6. No assertion caught it; the existing guard only checked
+for `\` and `"`, and the corrupt characters were neither. **The N=5 and N=6
+export paths had never been exercised, and would have produced an artifact no
+reader could decode, with no error.**
+
+Fixed: the payload is now built as an explicit mixed-radix field list, each
+trit its own base-3 field above N=4 (denser than a second char per feature,
+and exactly what `make_n6_proto.py`'s decoder pops), with a **hard refusal**
+if any field falls outside its radix — never again a silently unreadable
+payload. `verify_export.decode_payload` gained the matching case, because the
+defect was precisely an encoder growing a case its decoder lacked. N ≤ 4 is
+kept **byte-identical**, leading-zero padding included, so nothing already
+measured moves.
+
+Re-exported and validated end to end: `verify_export (a)` payload decode ==
+trainer quantization (768×6 trits, shift 4, gains [85, 68, 68, 72, 74, 68]);
+`(b,c)` entry == int-ref == torch-mirror **BIT-EXACT** on 200 fens × 3 views
+plus a 60-ply walk, mirror, antisymmetry and sentinel margin (1558 > 600) all
+pass. The N=6 derivation is therefore verified against the trained net by
+three independent implementations.
+
+### (1) BYTE VERDICT: 4,159 bytes — OVER by 63. N=5 triggers.
+
+The trained seed-0 N=6 artifact packs to **4,159 B** against the 4096 limit,
+and it runs (`bestmove g1f3`). **The pre-registered N=5 fallback triggers on
+pack.sh's number, exactly as written.**
+
+I predicted ≈4,121 (~25 over) by crediting trained payloads with ~30 B of
+compressibility over random ones. **That credit does not exist, and my own
+measurement had already said so**: the container costs 1.67 bits/trit, *above*
+log2(3), because a dense mixed-radix base-90 integer is structure-blind — lzma
+has nothing to find. The trained payload (43.1% zeros) packed within **2 bytes**
+of the random one (50% zeros, 4,157 B), which is the cleanest possible
+confirmation. The error was 38 B in the optimistic direction; the byte gap is
+real and slightly worse than forecast.
+
+### (2) Seed plan settled
+
+`210/211/212_cap_n5_s{0,1,2}` queued at N=5 — seed 0 re-runs, since its N=6
+artifact is **retained as evidence, not a candidate**. The N=6 seed-1/2 configs
+are parked in `staging/`, unqueued. Both the fixed exporter and the fixed
+verifier were in place on the box *before* any N=5 run started, which matters:
+N=5 is 3^5 = 243 and would have hit the same corruption.
+
+### (3) TRAINING-QUALITY READ: ANOMALOUS — do not spend selector games
+
+Clean on every gate: full corpus (`using all 10000000 positions`), frame gate
+inside the trainer (wtm +0.4879 / btm +0.4707 / spread 0.0172), `schedule
+linear over 6 epochs`, clip-saturation 0.00% every epoch, no early-kill. And
+the net does learn *something*: val 0.01750 against a material anchor of
+0.02054 is 14.8% better.
+
+But the run does not absorb data, and the training loss moves the wrong way:
+
+| epoch | 0 | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|---|
+| train | 0.01978 | 0.02094 | 0.02135 | 0.02155 | 0.02164 | **0.02168** |
+| val | 0.01754 | 0.01753 | 0.01751 | 0.01752 | 0.01752 | **0.01750** |
+
+Val moves **0.2% across six passes over 10M positions**, and the 1-pass
+200k-position pre-flight smoke had already reached 0.01754 — **50× the data
+and 6× the passes bought essentially nothing**, while train loss rose 9.6%.
+
+**Root cause, and it is a real defect.** `model.clamp_weights` ends with
+
+    if self.cfg.ternary:
+        self.bias.clamp_(-0.019, 0.019)
+
+a hardcoded constant applied after every optimizer step. All six trained
+biases came out at **exactly ±0.019000** — pinned at the wall, with no degree
+of freedom left. The correct bound is per-lane, `44/(32·g_k)`, and at the
+trained gains it ranges 0.01618–0.02022, so the single constant is wrong in
+*both* directions at once:
+
+| lane | 0 | 1 | 2 | 3 | 4 | 5 |
+|---|---|---|---|---|---|---|
+| gain | 85 | 68 | 68 | 72 | 74 | 68 |
+| true bound | 0.01618 | 0.02022 | 0.02022 | 0.01910 | 0.01858 | 0.02022 |
+| 0.019 is | too loose | too tight | too tight | too tight | too loose | too tight |
+
+Too loose on lanes 0 and 4 means the exporter must truncate — **that is what
+the `1/6 bias digits CLIPPED` notice has been reporting all along**. Too tight
+on the other four wastes representable range. And because gains *grow* during
+training (81→85 over six epochs), the true bound *shrinks* as training
+proceeds: a self-tightening squeeze that matches the rising train loss exactly.
+
+**This amends my earlier ledger note.** I recorded the clip notice as a
+documented non-defect because `gvb()` applies the same clamp inside forward,
+so the net trains against what it ships. That reasoning was correct and
+incomplete: the notice was benign in itself but was the visible symptom of a
+defective parameterisation underneath, and I stopped at the symptom instead of
+asking why a bias would sit on a rail at all.
+
+Consequence: **no selector games.** Item (4)'s condition is unmet twice over —
+there is no in-budget artifact at the settled N yet, and the training read
+independently says any Elo measured now would price a bias-saturated net
+rather than the architecture. The N=5 runs still earn their keep by settling
+the in-budget byte number, which is independent of training quality.
+
+### (5) Why the completion watcher did not fire — naming the class
+
+**Delegated-lifecycle completion has no exit event.** Every watcher I armed
+tonight polled for something a *directly launched* job produces: a process
+exiting, or a sentinel line in a log I owned (`BUILD COMPLETE`, `FILTER 4
+CLOSED`). Work handed to the queue runner produces neither. The runner never
+exits; and its filler-tail mechanism — the thing that exists so the queue is
+never idle — means the box *always* looks busy, so "no idle" carries no
+information. The real completion signal is a state change nobody was
+watching: the config moving into `queue/done/`, or `metrics.jsonl` reaching
+its final epoch.
+
+The aggravating detail is that this is a **recurrence in a new venue**. This
+lane already adopted "poll the artifact, not the process" after armed
+background waits lapsed repeatedly, and then failed to carry the rule across
+when the executor changed from a script I launched to a queue I delegated to.
+Fixed for this cycle: the watcher now armed polls `queue/done/` for the seed
+configs themselves.
