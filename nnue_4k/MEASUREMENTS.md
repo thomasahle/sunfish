@@ -16820,3 +16820,115 @@ reports a *binding clamp*, not lost fidelity — the registration's claim that
 nothing the artifact rounds is trained at a precision it lacks covers the range
 clip as well as the grid. Recorded because a future reader seeing `CLIPPED` in
 a run log would otherwise reasonably suspect a train/ship divergence.
+
+---
+
+## ACCUMULATOR PRICING — and the binding constraint is BYTES, not speed
+
+Measured before any selector game, per the registered NPS bar. Instrument:
+pypy 7.3.20 on the bench box, `nps_probe.py` (module-level search, fixed wall
+time) over three positions — startpos, an open middlegame, the Lasker
+endgame — 4 s each, three rounds, plus a search-free microbenchmark of the
+primitives. Variant built by `packed/make_n6_proto.py`, a mechanical
+assert-on-drift derivation from `replnet_proto.py` in the `make_ml2_proto.py`
+style, at N=4/5/6 with random weights at the measured 50% sparsity. All three
+packed artifacts were **run** and return legal moves, so every byte count
+below is for a working engine.
+
+### The premise has to be corrected first: the accumulator already exists
+
+`Position.move()` in the shipped template already does
+`acc + row[p][j] - row[p][i]` with capture, castling, promotion and
+en-passant deltas, and `rotate()` leaves `acc` untouched because both
+perspective blocks live in one integer. Verified at every width: the
+incremental result is **bit-identical to a from-scratch rebuild** (0
+mismatches). So the incremental accumulator is not a design to be priced and
+added — it is the substrate the −39.4% figure was *already* measured on, and
+there is no speed win available from building it.
+
+### Width is nearly free; the read-out is the cost
+
+| | delta (per move) | read-out `nn_cp` | combined | vs N=4 |
+|---|---|---|---|---|
+| N=4 (128-bit acc) | 32.7 ns | 381.8 ns | 414.6 ns | — |
+| N=5 (160-bit acc) | 33.6 ns | 459.0 ns | 492.6 ns | +18.8% |
+| N=6 (192-bit acc) | 35.3 ns | 483.7 ns | 519.1 ns | **+25.2%** |
+| full rebuild (`from_board`) | 3,586–3,654 ns, **width-independent** | | | ≈7–9× one delta+read-out |
+
+The accumulator delta is **7–8% of the net's per-move cost**; the read-out is
+the other ~92%, and the read-out is what grows with width. Two consequences.
+Any future speed work belongs in `nn_cp`, not in the accumulator — the
+accumulator is already so cheap that perfecting it cannot move nps. And a
+king-bucket rebuild boundary, if king mirroring ever introduces one, costs
+~3.6 µs — about 7–9 evaluations — and is width-independent; the registered
+capacity arm runs `kb: 1`, so no such boundary exists today.
+
+At engine level all three widths land inside noise of each other and
+**non-monotonically** (means 55,187 / 53,780 / 54,333 nps against the entry's
+100,917), which is itself the evidence that the width effect is below
+end-to-end noise: the family pays ~−45% to −47% for *having* the net, almost
+independently of how wide it is.
+
+### The deliverable: timed-play term per design point
+
+Timed term = nps cost % × 1.28 (slope from the 1068-game settler, ±0.63).
+
+| design point | nps vs entry | timed term | note |
+|---|---|---|---|
+| N=4 (trained, shipped proto) | −46.8% | −59.9 Elo | |
+| N=4 (random, width-controlled) | −45.3% | −58.0 Elo | |
+| N=5 | −46.7% | −59.8 Elo | |
+| **N=6, direct measurement** | **−46.2%** | **−59.1 Elo** | search-shape confounded |
+| **N=6, modelled from primitives** | **−50.9%** | **−65.2 Elo** | width-isolated |
+
+The two N=6 estimates bracket the answer. The direct number is confounded
+because random weights change the search tree, so nodes/second is not purely
+a cost measure; the modelled number takes the net's share of node time at N=4
+(18.119 − 9.909 = 8.210 µs/node — consistent with `nn_cp` running once per
+*generated move*, ~20–40 per node) and scales it by the measured +25.2%.
+**Read the bar at −59 to −65 Elo**, and re-measure directly once a trained
+N=6 payload exists.
+
+**This corrects the registration's own stated consequence.** It said N=6 is
+"+50% accumulator work … at ~−55% nps … needs ≈+70 fixed-node Elo merely to
+break even, making the incremental accumulator not optional." The magnitude
+was roughly right and the mechanism was wrong: the accumulator was already
+built, its delta is ~7% of the net's cost rather than the driver, and the
+growth is +25% on the read-out rather than +50% on the accumulator. The
+break-even requirement moves from ≈70 to **≈59–65 Elo**, and "the incremental
+accumulator is not optional" is moot.
+
+### (c) BYTES — the real conflict, and the N=5 fallback triggers
+
+`pack.sh`, working artifacts, against the 4096-byte limit:
+
+| variant | packed | headroom |
+|---|---|---|
+| entry `pst_entry` | 3,410 | 686 |
+| N=4 trained (shipped proto) | 3,812 | 284 |
+| N=4 random, base-3 container | 3,836 | 260 |
+| N=5 random | 3,998 | 98 — **fits** |
+| **N=6 random** | **4,157** | **−61 — OVER** |
+
+Marginal cost is **≈160 B per lane** = 1.67 bits/trit, slightly *above*
+log2(3): lzma extracts nothing from a dense mixed-radix base-90 stream, which
+is exactly why the staged base-48 two-stream container exists.
+
+**Stated plainly: N=6 does not fit, and the pre-registered N=5 fallback
+triggers on pack.sh's number.** The honest margin: a random payload costs 24 B
+more than a trained one at N=4 (3,836 vs 3,812), so scaling that structure
+credit to six lanes puts a trained N=6 at ≈4,121 B — **still ~25 B over**. The
+conclusion survives the random-weight penalty, but thinly.
+
+It is also recoverable rather than dead. Against a 61 B gap there are ~98 B of
+already-identified levers: the staged −48 B repack, ~30 B of trained-payload
+compressibility, and ~20 B of decode golf in the base-3 feature loop. So the
+decision is a `pack.sh` measurement on a trained payload, not a judgment call
+— and the speed side is indifferent, since N=5 and N=6 price within ~1 Elo of
+each other. **N=5 is the safe default and costs essentially nothing in timed
+play; its cost is capacity, 3,840 trits against 4,608 (−17%).**
+
+Queue arranged so neither branch wastes work: `100_cap_n6_s0` stays queued to
+produce the definitive trained N=6 payload (and a fixed-node eval number),
+seeds 1–2 are held in `staging/`, and N=5 versions of all three are staged
+beside them, one move from either verdict.
