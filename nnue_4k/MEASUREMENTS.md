@@ -16627,3 +16627,62 @@ loops. The per-position stage stays scalar because it needs a board object
 per row (SEE, capture detection) and does not vectorize. No working tool was
 rewritten for its own sake. The shipped artifact is untouched: nothing in
 this path runs at play time.
+
+### F. The 10M corpus is BUILT — `pool10m.npz`, corpus_sha `cd61bc58d9cdd48c`
+
+Registration-first held: the filters, the data scale, the schedule change and
+both gates were registered before the build, and the build then ran against
+them. Result, 375 MB, n = 10,000,000, ~10.5 minutes end to end (worker stage
+5m07s wall / 99 core-minutes across 24 workers; assemble 5m18s):
+
+| stage | count |
+|---|---|
+| raw dump lines read | 50,000,000 |
+| illegal placement rejected | 7,692 (0.0154%) |
+| dump rows kept after all per-position filters | 32,905,732 (65.8%) |
+| self-play candidates | 737,414 |
+| … filter 2, WDL matches score, skipped | 148,900 (20.19%) |
+| … filter 3, ply < 28, skipped | 37,539 (5.09%) |
+| … self-play kept | 557,252 |
+| pooled, after dedup | 33,380,272 (82,712 duplicates dropped) |
+| **after filter 1 flattening** | **10,000,000** |
+| sacrifices in the final corpus (filter 4) | 288,179 (2.88%) |
+| val_a / val_b, disjoint | 500,056 / 500,849 |
+
+**Filter 1 achieved essentially exact flatness**: the water level is 343,896
+positions per piece count, and **29 of the 30 present counts sit exactly at
+it**. Only count 3 (bare king plus one piece) is data-limited at 27,026 — a
+genuinely rare position class, not a pipeline artifact. Bands: 31.22% at
+3–12, then 13.76% each for 13–16, 17–20, 21–24, 25–28 and 29–32. Compare the
+unpooled sources — self-play 34% at ≤12, Lichess 57% at ≥25 — and the skew
+Thomas asked to remove is gone.
+
+**Both gates passed on the assembled corpus**: frame gate wtm +0.4872, btm
++0.4673, spread 0.0199; placement support 3..32 with an independent recount
+from the FEN text over 188,680 sampled rows finding **zero** impossible
+positions.
+
+**A consequence worth stating plainly.** The final corpus is **97.78% dump /
+2.22% self-play** (221,846 of the 557,252 self-play candidates survived
+flattening — proportionally favoured, 39.8% against the dump's 29.7%, but
+from a base 44× smaller). So **filters 2 and 3 now govern 2.22% of the
+training data**, not because they were weakened but because the corpus that
+makes 10M affordable is an eval database with no games in it. If those two
+filters are meant to carry real weight, the mix has to change, and the only
+ways to do that are to generate and label far more self-play — the labelling
+cost the label-null just let us avoid — or to use a source that ships
+outcomes and ply, which is Leela binpacks and licence-HELD. Registered as a
+consequence of the data-scale decision, not a defect in the filters.
+
+**One honest gap in this build.** Filter 4 is applied to the **dump side
+only**. The self-play component still comes from the original harvest, whose
+quiet filter skipped every capture, so self-play contributes **no
+sacrifices**; all 288,179 come from the dump. Section A describes filter 4 as
+applying to both corpora "at re-harvest", and that re-harvest has **not** been
+run — the wording described the plan, and this is what the artifact actually
+contains. Registered as PENDING, with its cost measured rather than guessed:
+modifying `scan` to keep SEE<0 captures, re-scanning the PGNs, and labelling
+the new positions with the twin at depth 8 is ~95 seconds of labelling for an
+estimated ~100k additional positions, on top of the PGN re-scan. At 2.22%
+self-play share it would move the corpus by well under a percent, so it is
+recorded for decision rather than done on my own initiative.
