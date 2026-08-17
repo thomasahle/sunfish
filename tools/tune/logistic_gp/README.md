@@ -53,9 +53,9 @@ python3 tools/tune/logistic_gp/adaptive_gp.py \
   --baseline-options default \
   --space tools/tune/logistic_gp/all_parameters.json \
   --openings /path/to/openings.epd --cycle-openings \
-  --gate "python3 tools/tune/logistic_gp/sunfish_gate.py" \
+  --gate "python3 tools/tune/logistic_gp/sunfish_gate.py --horizon-only" \
   --gate-design --gate-workers 20 \
-  --slots 20 --queue-batches 60 --refill-batches 20 \
+  --slots 20 --queue-batches 20 --refill-batches 1 \
   --pairs 1 --initial-design 256 --inducing 128 --update-batches 8 \
   --explore-start .5 --explore-floor .2 --duel-fraction .3 \
   --wall-time 3d --batches 1000000
@@ -69,13 +69,13 @@ independent book.
 `--baseline-options default` pins the configured default point to zero. The
 Sunfish space covers every live search/evaluation constant except memory and
 historical flavor switches. Its domains preserve the mate-band, promotion, and
-nonnegative-table invariants, and the gate rejects policies that lose the
-curated eventual-mate floors before they consume games.
+nonnegative-table invariants, and the gate rejects policies without a finite
+eventual-mate horizon before they consume games.
 
 The mate gate derives each suite depth from the candidate's maximum real-edge
-cost, move-cap horizon, and null-candidate horizon. Cheap policies therefore
-do not pay the default engine's search depth, while larger fuel and cap choices
-must demonstrate their correspondingly later mate guarantee. Classical null
+cost, move-cap horizon, and null-candidate horizon. `--horizon-only` cheaply
+rejects policies without a finite bound during a broad optimization; omit it
+to run the executable mate suites on finalists. Classical null
 (`FUEL_NULL=0`) is rejected because its null candidate has no finite defender
 horizon. The configured `FUEL_MIN_DEPTH=99` off sentinel is likewise rejected
 when it would leave shallow null active throughout the practical depth range.

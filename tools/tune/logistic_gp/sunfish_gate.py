@@ -96,6 +96,9 @@ def main():
     except ValueError as error:
         print(f"mate-depth:{error}")
         return 1
+    if "--horizon-only" in sys.argv:
+        print(" ".join(f"{name}:depth={depth}" for name, depth, _, _ in suites))
+        return 0
     argv = [request["engine"], *shlex.split(request["engine_args"])]
     argv += [f"{name}={value}" for name, value in sorted(options.items())]
     results = {name: mate_floor(argv, name, depth, limit)

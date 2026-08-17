@@ -520,6 +520,20 @@ class MixedAcquisitionTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "null-transition-disabled"):
             sunfish_gate.mate_depth({"FUEL_MIN_DEPTH": 99}, 2)
 
+    def test_horizon_gate_does_not_run_the_engine(self):
+        gate = pathlib.Path(__file__).with_name("sunfish_gate.py")
+        request = json.dumps({
+            "engine": "/does/not/exist",
+            "engine_args": "",
+            "options": {},
+        })
+        result = subprocess.run(
+            [sys.executable, gate, "--horizon-only"], input=request, text=True,
+            capture_output=True)
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout.strip(),
+            "mate1.fen:depth=4 mate2_eventual.fen:depth=10 mate3_eventual.fen:depth=16")
+
     def test_joint_space_anchors_master_and_covers_search_ranges(self):
         path = pathlib.Path(__file__).with_name("all_parameters.json")
         spec = json.loads(path.read_text())
