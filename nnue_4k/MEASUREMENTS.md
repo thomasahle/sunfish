@@ -18004,3 +18004,57 @@ controls that between them can kill any of them:
 
 A 4× lr on AdamW may just destabilise; that would show in the val curve and
 gets reported as instability, not as a null.
+
+## ARM 11 RUNG 1 — THE SELECTOR NUMBER: 35.00%, and the val gate did not predict it
+
+| | |
+|---|---|
+| arms | `k160` (sigK=160, 4,002 B) vs the pinned `entryd0` (pst_entry @ d0a6e60) |
+| games | 50 (25 colour-swapped pairs), 20,000 nodes, srand fresh, concurrency 8 |
+| **statistic (SELECTOR SPEC): score%** | **35.00%** |
+| W/L/D | 16 / 31 / 3 |
+| legality | 0 illegal, 0 no-move, both engines, gated at the played budget |
+| time forfeits | 0 |
+| **dormancy gate** | **slowest move 1.177 s, moves ≥15 s: 0 — PASS** |
+| games count | exactly 50 — no short count, no pooling |
+
+Every gate passes, so the number stands. Against the capacity arm's **31.00%**
+in the same arena with the same architecture, corpus, schedule and seed —
+differing only in `sigK` — this is **+4 percentage points**.
+
+**And +4 points is not a result at N=50.** The standard error on a 50-game
+score% is ~6.7 points, so the difference between two such screens carries
+~9.5; four points is 0.4σ. The honest statement is that this screen is
+consistent with anything from no change to a moderate gain, and that it rules
+out — decisively — the arm closing the ~100-Elo gap to the entry. **The
+distilled-PST entry is still far ahead of this family, and a better objective
+did not change that.**
+
+**So the val gate passed and the play gate did not follow, at the resolution
+bought.** That is the third independent confirmation of the caution this
+ledger has repeated all evening: refval and outval detect that a net changed,
+and they do not order Elo. A +15σ improvement in predicting our own games'
+results, worth 29% of everything the trained eval adds over counting
+material, bought at most a few points of score against a stronger opponent.
+**"Predicts outcomes better" and "plays better" are different properties**,
+and this arm is the cleanest demonstration of the gap the campaign has.
+
+### What actually gets asked next, and why it is not another A/B
+
+Fifty games against an opponent that beats the whole family cannot resolve a
+within-family difference. The question that matters is whether the loss
+constant buys Elo **among nets that are otherwise identical**, and the house
+methodology for several variants is one shared round-robin with a baseline
+anchor rather than per-variant A/B — de-correlated opponents, every game
+informing two ratings, and the field ordered at once.
+
+Launched: `entryd0` (anchor) + `capn5` (sigK=400) + `k250` + `k160`, 300
+games, 20,000 nodes, fresh srand, same hardened harness with the SPRT flag
+dropped (an SPRT on a four-engine tournament is meaningless) and the k250
+splice verified bit-exact before any game. The three nets differ only in
+`sigK`, so the pairwise net-vs-net cells are the measurement and the anchor
+keeps the field on a known scale.
+
+**The confound controls (`315` l1=0, `320` 4× lr) remain the more important
+result**, whatever the round-robin says: if either reproduces the outval gain,
+the "recalibration" story is wrong regardless of any Elo number.
