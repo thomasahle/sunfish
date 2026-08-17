@@ -17828,3 +17828,81 @@ that says there is would be wrong. The only thing the factorisation can buy is
 the **shape** of the function — 32 clipped-relu units over 4 directions
 instead of 5 units over 5 directions — and the gate above is the test of
 whether that shape is worth anything at all.
+
+---
+
+## 2026-08-18 — CORRECTION, and it is against my own pre-registration AND the ledger's width model: `nn_cp` runs ONCE PER NODE, not once per generated move, so the width tax is ~3× smaller than either of us priced
+
+Still pre-number on val — the factor arms are queued and the N=64 upper bound
+is training. This is an instrument correction, made before any result could
+select it.
+
+### The measurement: a count, not a timing
+
+ACCUMULATOR PRICING modelled the width-isolated N=6 tax by taking "the net's
+share of node time at N=4 (18.119 − 9.909 = 8.210 µs/node — **consistent with
+`nn_cp` running once per *generated move*, ~20–40 per node**)" and scaling it
+by the read-out's growth. I built this lane's whole Elo projection on that
+premise. **It is wrong, and it is checkable by counting rather than timing.**
+Wrapping `nn_cp` and `Position.move` and running a depth-9 search from the
+start position:
+
+| engine | **`nn_cp` per node** | `move()` per node | nodes |
+|---|---|---|---|
+| diagonal N=4 (shipped) | **0.99** | 0.99 | 16,417 |
+| factored r=4 N=8 | 1.01 | 1.01 | 17,626 |
+| factored r=4 N=16 | 1.02 | 1.02 | 69,987 |
+| factored r=4 N=32 | 1.01 | 1.01 | 23,226 |
+| factored r=4 N=48 | 1.01 | 1.01 | 25,538 |
+
+**One read-out per node, to two decimal places, at every width.** The source
+agrees once looked at: `nn_cp` has exactly two call sites, `from_board` and
+the tail of `Position.move`, and `move()` is itself ~1 per node — the
+`pos.move(m).k() for m in pos.gen_moves()` loop that would make it ~30 is the
+mate/stalemate detector and is almost never entered.
+
+So the read-out is ~200 ns of a ~12 µs node at N=4 — **under 2 %** — and the
+8.210 µs "net share" is the accumulator work and the row lookups, whose
+primitive grows only 52 → 80 ns (+54 %) from N=4 to N=32 where the read-out
+grows 4.4×.
+
+### The consequence: end-to-end, width is nearly free
+
+Three positions (startpos, an open middlegame, a rook ending), 4 s each,
+pypy 7.3.23 arm64, random weights:
+
+| engine | nps | vs `pst_entry` | timed term @1.28 | **extra vs diagonal N=4** |
+|---|---|---|---|---|
+| `pst_entry` | 164,032 | — | — | — |
+| diagonal N=4 (shipped) | 97,854 | −40.3 % | −51.6 Elo | — |
+| factored r=4 N=8 | 86,379 | −47.3 % | −60.5 Elo | −8.9 |
+| factored r=4 N=16 | 80,601 | −50.9 % | −65.2 Elo | −13.6 |
+| **factored r=4 N=32** | **82,473** | **−49.7 %** | **−63.6 Elo** | **−12.0** |
+| factored r=4 N=48 | 73,472 | −55.2 % | −70.7 Elo | −19.1 |
+
+**N=32 costs about 12 Elo more than N=4, where this lane's own registration
+said 37 and the ledger's width-isolated model implied more.** N=32 reading
+*faster* than N=16 is the same non-monotonicity the ledger found at N=4/5/6
+and is the honest error bar: random weights change the tree, so nps here is
+not a pure cost measure, and ±1–2 points of nps is noise. The count, though,
+is not confounded — it is a count.
+
+### What this does to the lane's own pre-registration
+
+**The claim "the design is priced NEGATIVE" was wrong by roughly 3× on the
+speed term, and I withdraw the magnitude while keeping the direction.** The
+honest restatement: the shipped N=5 arm measured 31.00 % against the entry at
+fixed nodes — a fixed-node deficit that has nothing to do with speed — and the
+factored widths add only ~4–12 Elo of read-out on top of what the family
+already pays. **The whole question is therefore the eval term, and the
+registered val gate is the entire test.** The bars are unchanged; nothing about
+this correction touches them, which is why it can be recorded while the arms
+run.
+
+**It also corrects a live number for other lanes.** ACCUMULATOR PRICING told
+readers to "read the bar at −59 to −65 Elo" for N=6 on a model whose premise
+was ~25× off, and used it to prefer N=5 over N=6. Its *end-to-end* figures
+(55,187 / 53,780 / 54,333 nps at N=4/5/6 — flat and non-monotonic) were right
+all along and were explained away as being below noise; they were simply
+correct. **Width is cheap, and the reason N=6 lost was bytes, which that entry
+also said and which remains true.**
