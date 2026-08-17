@@ -17942,3 +17942,39 @@ it trains at sigK=400, lam=1 on pool10m's fenkey split, which IS the frozen
 refval metric on the frozen refval slice, so its `refval_mirror` must
 reproduce its own `metrics.jsonl` best val to eight decimals the way all
 three control seeds did.
+
+### The ladder so far is MONOTONE in every column, which sharpens the confound
+
+| sigK | refval (incumbent) | outval Brier | outval AUC | weight zeros |
+|---|---|---|---|---|
+| 400 (control, n=3) | **0.0176411** | **0.1277811** | **0.846197** | 43.7% |
+| 250 (`311`) | 0.0179576 | 0.1275261 | 0.847146 | 28.0% |
+| 160 (`310`) | 0.0183234 | 0.1270985 | 0.848196 | 14.4% |
+| 100 (`316`) | queued | queued | queued | — |
+
+Rung 2 also passes: Brier 5.7σ better than the control mean and better than
+the best control seed. Four columns, three points, monotone in all of them.
+
+**And that is exactly what makes the l1 confound sharper rather than
+weaker.** Sparsity tracks `sigK` as tightly as the outval gain does — 43.7%,
+28.0%, 14.4% — so "the target reshaped the fit" and "the effective l1 fell
+and density rose" are, on this evidence, the *same curve seen twice*. No
+amount of extra ladder rungs separates them; only the control does.
+
+**The prediction, stated before `315_obj11_k400_l1zero` runs, so it can be
+wrong in public:** if density is the mechanism, sigK=400 with l1 off should
+land near rung 1's outval (Brier ≈ 0.1271, AUC ≈ 0.848) because l1=0 is the
+densest solution the incumbent scale can produce. If the target's shape is
+the mechanism, it should stay near the control (Brier ≈ 0.1278) and merely
+get denser. A result in between splits the credit, and I will report the
+split rather than claim the half I like.
+
+### Seed census at the new scale, registered before it runs
+
+`317/318_obj11_k160_s{1,2}`. Rung 1's gate was read against a noise floor
+measured at **sigK=400** (three seeds, Brier sd 4.5e-05). A different
+objective can have a different seed spread, and a "15σ" claim that borrows
+another arm's σ is not a measurement. These two seeds measure the spread
+where the claim is actually made; if it is materially wider, the σ counts in
+this section get restated downward and the gate verdict is re-read against
+the honest number.
