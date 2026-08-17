@@ -12,11 +12,40 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 INFO = re.compile(r"info depth (\d+) .* score (-?\d+)")
-# Every real edge costs at most three plies.  Mate-in-n has a proof of
-# 2*n-1 plies, hence the theorem-derived depths 3*(2*n-1)+4 below.
-SUITES = (("mate1.fen", 7, 8, 8),
-          ("mate2_eventual.fen", 13, 5, 5),
-          ("mate3_eventual.fen", 19, 2, 2))
+SUITES = (("mate1.fen", 1, 8, 8),
+          ("mate2_eventual.fen", 2, 5, 5),
+          ("mate3_eventual.fen", 3, 2, 2))
+
+
+def mate_depth(options, moves):
+    """Uniform depth bound for this policy's mate-in-moves gate."""
+    k = 2 * moves - 1
+    null_limit = options.get("NULL_LIMIT", 750)
+    fuel = options.get("FUEL_NULL", 1) if null_limit else 0
+    if null_limit and not fuel:
+        raise ValueError("unbounded-classical-null")
+
+    # Each real edge spends its ply, the hot-node fuel, and possibly LMR.
+    cost = 1 + fuel + bool(null_limit and options.get("LMR", 75) != -70000)
+
+    # D >= C*(k-1)+A keeps the last attacker beyond the cap horizon;
+    # D >= C*k+1 leaves its terminal child at positive depth.
+    cap_depth = max(options.get("FUT_MAX", 1),
+        options.get("FUT_CAP_DEPTH", 3) if options.get("FUT_CAP", 1) else 0)
+    attacker = cap_depth + 1
+    depth = max(cost * (k - 1) + attacker, cost * k + 1)
+
+    # D >= C*(k-2)+B keeps the last defender beyond the null horizon.
+    # If the shallow-null interval is empty, the ordinary positive-depth
+    # fold is already sufficient; otherwise it ends at FUEL_MIN_DEPTH.
+    if k > 1:
+        fuel_depth = options.get("FUEL_MIN_DEPTH", 6)
+        null_depth = options.get("NULL_MIN_DEPTH", 2)
+        defender = fuel_depth if null_limit and null_depth + 1 < fuel_depth else 1
+        if defender == 99:
+            raise ValueError("null-transition-disabled")
+        depth = max(depth, cost * (k - 2) + defender)
+    return depth
 
 
 def wait_for(process, prefix):
@@ -61,12 +90,18 @@ def main():
     if not options.get("MATE_DIST", 1) or not options.get("EVAL_ROUGHNESS", 15):
         print("mate-distance:disabled")
         return 1
+    try:
+        suites = [(name, mate_depth(options, moves), limit, floor)
+                  for name, moves, limit, floor in SUITES]
+    except ValueError as error:
+        print(f"mate-depth:{error}")
+        return 1
     argv = [request["engine"], *shlex.split(request["engine_args"])]
     argv += [f"{name}={value}" for name, value in sorted(options.items())]
     results = {name: mate_floor(argv, name, depth, limit)
-               for name, depth, limit, floor in SUITES}
+               for name, depth, limit, floor in suites}
     print(" ".join(f"{name}:{found}/{total}" for name, (found, total) in results.items()))
-    return int(any(results[name][0] < floor for name, depth, limit, floor in SUITES))
+    return int(any(results[name][0] < floor for name, depth, limit, floor in suites))
 
 
 if __name__ == "__main__":

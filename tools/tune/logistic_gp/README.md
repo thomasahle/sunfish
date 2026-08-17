@@ -72,6 +72,14 @@ historical flavor switches. Its domains preserve the mate-band, promotion, and
 nonnegative-table invariants, and the gate rejects policies that lose the
 curated eventual-mate floors before they consume games.
 
+The mate gate derives each suite depth from the candidate's maximum real-edge
+cost, move-cap horizon, and null-candidate horizon. Cheap policies therefore
+do not pay the default engine's search depth, while larger fuel and cap choices
+must demonstrate their correspondingly later mate guarantee. Classical null
+(`FUEL_NULL=0`) is rejected because its null candidate has no finite defender
+horizon. The configured `FUEL_MIN_DEPTH=99` off sentinel is likewise rejected
+when it would leave shallow null active throughout the practical depth range.
+
 Results append to a JSONL journal and periodically compact into the state file.
 Runs are restartable, preserve their exploration clock, and finish reserved
 color pairs before a wall-time stop. `report_gp.py` can inspect the saved

@@ -488,9 +488,9 @@ class MixedAcquisitionTest(unittest.TestCase):
     def test_mate_gate_rejects_flat_mate_policies_before_running_engine(self):
         gate = pathlib.Path(__file__).with_name("sunfish_gate.py")
         self.assertEqual(sunfish_gate.SUITES,
-            (("mate1.fen", 7, 8, 8),
-             ("mate2_eventual.fen", 13, 5, 5),
-             ("mate3_eventual.fen", 19, 2, 2)))
+            (("mate1.fen", 1, 8, 8),
+             ("mate2_eventual.fen", 2, 5, 5),
+             ("mate3_eventual.fen", 3, 2, 2)))
         for options in ({"MATE_DIST": 0}, {"EVAL_ROUGHNESS": 0}):
             request = json.dumps({
                 "engine": "/does/not/exist",
@@ -502,6 +502,23 @@ class MixedAcquisitionTest(unittest.TestCase):
                 capture_output=True)
             self.assertEqual(result.returncode, 1)
             self.assertEqual(result.stdout.strip(), "mate-distance:disabled")
+
+    def test_mate_gate_prices_each_search_policy(self):
+        def depths(options):
+            return tuple(sunfish_gate.mate_depth(options, moves)
+                         for _, moves, _, _ in sunfish_gate.SUITES)
+
+        self.assertEqual(depths({}), (4, 10, 16))
+        self.assertEqual(depths({"NULL_LIMIT": 0, "LMR": -70000}), (4, 6, 8))
+        self.assertEqual(depths({
+            "FUEL_NULL": 2,
+            "FUEL_MIN_DEPTH": 12,
+            "FUT_CAP_DEPTH": 6,
+        }), (7, 16, 24))
+        with self.assertRaisesRegex(ValueError, "unbounded-classical-null"):
+            sunfish_gate.mate_depth({"FUEL_NULL": 0}, 3)
+        with self.assertRaisesRegex(ValueError, "null-transition-disabled"):
+            sunfish_gate.mate_depth({"FUEL_MIN_DEPTH": 99}, 2)
 
     def test_joint_space_anchors_master_and_covers_search_ranges(self):
         path = pathlib.Path(__file__).with_name("all_parameters.json")
