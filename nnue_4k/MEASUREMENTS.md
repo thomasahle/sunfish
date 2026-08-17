@@ -18058,3 +18058,45 @@ keeps the field on a known scale.
 **The confound controls (`315` l1=0, `320` 4× lr) remain the more important
 result**, whatever the round-robin says: if either reproduces the outval gain,
 the "recalibration" story is wrong regardless of any Elo number.
+
+## ARM 11 — THE COMPLETE LADDER, and the registered point estimate is the null
+
+| sigK | refval | outval Brier | outval AUC | zeros | gate |
+|---|---|---|---|---|---|
+| **418** (K̂, the registered point estimate) | 0.0176181 | 0.1278230 | 0.846110 | 44.9% | **FAIL** |
+| 400 (control, n=3) | 0.0176411 | 0.1277811 | 0.846197 | 43.7% | — |
+| 250 | 0.0179576 | 0.1275261 | 0.847146 | 28.0% | **PASS** (5.7σ) |
+| 160 | 0.0183234 | 0.1270985 | 0.848196 | 14.4% | **PASS** (15.2σ) |
+| 100 | queued | | | | |
+
+**The point estimate the calibration fit produced is a null, and the effect
+lives far below it.** K̂ = 418.3 was derived by transferring the twin-unit
+calibration through the twin→Stockfish scale, and its run is the control in
+every column that matters: Brier 0.127823 against 0.127781, AUC 0.846110
+against 0.846197, and a weight table at 44.9% zeros against 43.7% — the same
+solution, as +4.6% on a scale ought to give. That was predicted and it is
+what happened.
+
+**Which means the transfer was wrong, and the assumption I flagged as its
+weak link is the one that broke.** K̂ rested on `outcome ⊥ y | x` — passing
+the calibration through the *shallower* evaluator — and the registration said
+in advance that this was "the less defensible of the two conditional
+independences". The measurement now says so too: the useful scale is near the
+**twin-unit** calibration K_twin = 158.9, not near its transferred image. The
+ladder was run precisely because that assumption might not hold, and it is
+the only reason this arm produced anything at all. A single run at the
+registered point estimate would have closed the axis as a null.
+
+Note `refval` is not monotone over the full range — 418 edges the control
+(2.1σ, beats the best control seed but misses the 3σ bar) before degrading
+steadily below it. That is what a metric anchored at K=400 should do, and it
+is a small check that refval behaves as designed.
+
+**Where ARM 11 stands.** Two rungs pass the val gate, one of them
+overwhelmingly; the selector says 35.00% against the entry, four points above
+the same architecture at sigK=400 and inside the noise of a 50-game screen;
+and the mechanism is not yet established, because sparsity and optimization
+progress both track `sigK` and their controls (`315`, `320`) have not run.
+The honest one-line summary is: **the objective axis is the first axis in this
+campaign to move a held-out statistic by more than a seed, and it has not yet
+been shown to move Elo.**
