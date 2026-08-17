@@ -4,8 +4,17 @@ A sunfish variant whose evaluation is classic's exact piece-square score
 plus a trained neural residual — with the entire accumulator *and* the
 evaluation head living in **one Python integer**, so a wide net costs a
 handful of big-int operations per node instead of a Python-level loop.
-The engine code packs to a few kilobytes, but the net it loads does not —
-see *The 4k build* for where that leaves the 4096-byte goal.
+
+**The competition artifact on this branch is `pst_entry.py`**: one
+self-contained file, currently **3410 bytes** (686 under the 4096
+limit), evaluation = distilled piece-square tables, measured
+**+200.24 ± 38.35 vs sunfish-classic** (300 games, 60+1, fixed-N) and
+live on lichess as `sunfish-nnue-engine`. The big-int NNUE documented
+below is the research track: its engine code packs to a few kilobytes,
+but no trained net has yet fit the budget *and* beaten the distilled
+tables in play. The live capacity arm (ternary, N=6 = 4608 trits,
+in-budget by construction — see `MEASUREMENTS.md`) is the current
+attempt to close that gap.
 
 ## Architecture
 
@@ -87,15 +96,17 @@ constants inside the limit. Moving the base tables out of the source and
 into the net file therefore saved nothing; it moved counted bytes from
 one counted place to another.
 
-Current state, stated honestly: the engine code packs to **~3800 bytes**
-and the smallest shipped net is **7.5 MB**, so the total is roughly
-three orders of magnitude over the limit. The 4k goal is open, not
-nearly met. With the engine at its present size there would be under
-300 bytes left for weights; reaching 4096 in total needs both a much
-smaller engine and a net compressed to the low kilobytes — extreme
-quantisation, weight sharing, or procedurally generated tables. The
-classic engine, by contrast, packs to 3196 bytes *including* its
-piece-square tables and is already within the limit.
+Current state, stated honestly: **the shipped entry is
+`pst_entry.py` at 3410 bytes all-inclusive** — inside the limit, with
+distilled piece-square tables as its whole evaluation, +200.24 ± 38.35
+vs classic at 60+1. The big-int NNUE track's engine packs to ~3800
+bytes and its smallest strong net is 7.5 MB — still orders of
+magnitude over budget, and every in-budget net measured so far has
+lost to the distilled tables in play (the full ledger is
+`MEASUREMENTS.md`; the label/λ/distribution axes are all measured
+non-levers at small capacity). The live capacity arm trains a
+4608-trit net whose packed form fits the budget by construction;
+whether it can beat the tables is the open, registered question.
 
 The v1 engine (92c4746) packed to 3952 bytes.
 
@@ -146,7 +157,10 @@ everything distributed is `.sfnn`.
 
 ## Lichess deployment
 
-`lichess/` holds the full bundle (setup.sh with frozen-tag + net-sha256
-pins, config.yml, systemd unit): the bot runs this engine through
-`sunfish_ui/uci.py` (pondering, FEN, Hash) on an ARM instance, with
-the verify battery as a hard install-time gate. See `lichess/README.md`.
+`lichess/` holds the full bundle (setup.sh, config.yml, systemd unit).
+Since 2026-08-17 the bot runs **the packed entry artifact directly**
+(`pst_entry.py`'s 3410-byte packed form — the same file the 4k goal is
+measured on), replacing the earlier dev-engine-through-`sunfish_ui`
+setup. Legality and gate batteries run before any deploy; the unit
+restarts only when the lichess API says the bot is idle. See
+`lichess/README.md`.
