@@ -17877,3 +17877,31 @@ alone.
 this ledger has said so all evening. A +11σ ordering gain against game
 outcomes is a reason to spend fifty games, not a prediction of what they will
 say.
+
+### Two more runs registered before they run, because the rung-1 result has a confound
+
+**The confound, named honestly.** The k160 net is far denser than the control
+(weight zeros 43.7% → 14.4%), and that is *not independent* of the change
+that was made. The data term at sigK=160 is ~2.9× larger than at 400, so the
+unchanged `l1: 5e-4` is a proportionally **weaker** sparsity pressure. "The
+recalibrated target found a better solution" and "the l1 got relatively
+weaker and a denser net predicts outcomes better" both fit the evidence so
+far, and they have completely different consequences.
+
+`315_obj11_k400_l1zero` is the decisive control: **the incumbent scale with
+l1 turned off** — the densest solution sigK=400 can produce. If density is
+what bought the outcome gain, it must show up here. If it does not, rung 1's
+gain is the target's shape.
+
+`316_obj11_k100` extends the ladder below 160, because two points that are
+both on the same side of an optimum do not locate it. This one decides the
+*interpretation*: an optimum near 160 corroborates the twin-unit calibration
+fit (K_twin = 158.9) and says the net's labels behave like twin units after
+all; an optimum far below 160 says the mechanism is not calibration but the
+loss quietly discarding large-|cp| positions — a robustness story with
+different consequences and a different next step.
+
+Both are `220_cap_n5b_s0` verbatim except for the one named knob, both are
+judged on the same registered bar, and both were queued before the k160
+screen returned so that the confound test cannot be accused of being shaped
+by the screen's answer.
