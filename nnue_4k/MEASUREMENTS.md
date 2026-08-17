@@ -18165,3 +18165,61 @@ forward here. The conv term is covered separately and non-trivially — on
 `61_replnet_clamp` it moves the eval by a mean of 34 cp (max 352), and
 zeroing its digits reproduces the single-layer path to max |Δ| = 0.0 cp. The
 two checks together cover the branch; neither alone does.
+
+## ARM 1' — the ×8 bias band FAILS, and it fails in the direction that redirects the fix
+
+| statistic | control (n=3) | `314_arm1b_bias8` | verdict |
+|---|---|---|---|
+| refval | 0.0176411 | **0.0177025** | worse |
+| outval Brier | 0.1277811 | **0.1278800** | worse — **FAIL** |
+| outval AUC | 0.846197 | 0.846070 | worse |
+
+**Val trajectory** (its own objective, identical in form to the control's):
+0.0177443 → 0.0177259 → 0.0177251 → 0.0177100 → 0.0177011 → **0.0176980**,
+against the control seed's 0.0176490. **Worse than the control on its own
+loss**, not merely on the gated statistics. Zero `CLIPPED` notices, so the
+widened clamp and the widened exporter agreed throughout.
+
+### The two numbers that matter, and they point the same way
+
+**Bias digits: `[+45, +45, +45, −29, +45]`. Four of five are STILL on the
+rail — with eight times the range.** The band is now ±22.5 cp and the net is
+still pressed against it. So the binding-bias finding is not just confirmed,
+it is *understated*: what the net wants is well beyond 8×.
+
+**And everything else is the same net.** Gains `[67, 69, 71, 76, 73]` against
+the control's `[67, 69, 72, 76, 73]`; zeros 44.1% against 43.7%. The ×8 run
+did not find a different solution. It found the same solution with a coarser
+bias, and paid for it.
+
+### So the ×8 rescale is the WRONG TRADE, and that is the useful result
+
+`biasscale` does not widen the band — it **swaps range for resolution**, 8×
+each way (±2.75 cp at 0.0625 cp → ±22.5 cp at 0.5 cp). The measurement says
+the resolution mattered more than the range, even though the range is
+provably binding. The registered pricing table offered two options and this
+run eliminates the cheap one:
+
+| widening | bytes | range | resolution | verdict |
+|---|---|---|---|---|
+| none (today) | — | ±2.75 cp | 0.0625 cp | 5/5 on the rails |
+| **rescale ×8** | **+3 B** | ±22.5 cp | 0.5 cp | **MEASURED WORSE — dead** |
+| second digit | +9 B | ±253 cp | 0.0625 cp | the only remaining candidate |
+
+The second digit is the one that does not trade: it buys range **and** keeps
+resolution, for 9 bytes instead of 3. Whether it is worth 9 B is now an open
+question with a real prior behind it, and it is a different arm.
+
+### The staging discipline paid, concretely
+
+ARM 1' was registered as trainer-only precisely so that a failure here would
+cost nothing but ten minutes. It failed, so **the ~40 lines of decoder work
+across `replnet_proto.py`, `make_n6_proto.py`, `make_ml2_proto.py` and
+`verify_export` are NOT spent** — and would have been spent on the wrong
+option, since the cheap variant is the one that lost. Building the format
+first and asking afterwards would have bought a format nobody wants.
+
+**Third independent confirmation of the binding bias in one night:** the
+capacity arm's N=5 net at `[+45, +45, −44, −44, +45]` (5/5), ARM 2's N=4 ml2
+at `[−44, +45, +45, +45]` (4/4), and this arm still at 4/5 after an 8×
+widening.
