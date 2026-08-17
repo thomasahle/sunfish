@@ -301,10 +301,10 @@ Entry = namedtuple("Entry", "lower upper")
 
 class Searcher:
     def __init__(self):
-        self.tp_score, self.tp_move, self.history = {}, {}, set()
+        self.tp_score, self.tp_move, self.cm, self.history = {}, {}, {}, set()
         self.nodes, self.deadline = 0, 1 << 63
 
-    def bound(self, pos, gamma, depth, root=False):
+    def bound(self, pos, gamma, depth, root=False, last=None):
         """ Let s* be the score of the sub-tree from pos at this depth, as
             a function of (pos, depth) alone. This includes null moves and
             QS pruning, and global parameters like self.history that don't
@@ -375,7 +375,8 @@ class Searcher:
 
         # Look for the strongest move from earlier searches of this position.
         # Read it before null-move in case the recursive probe evicts it.
-        killer = self.tp_move.get(pos)
+        # ... and the reply that refuted the move just played (countermove).
+        killer, cm = self.tp_move.get(pos), self.cm.get(last)
 
         # A fixed-target null probe reduces hot nodes. Its static guard also
         # limits intrinsic LMR to positions where passing is meaningful.
@@ -419,8 +420,10 @@ class Searcher:
             if killer and (val := pos.value(killer)) >= val_lower:
                 yield killer, MATE_UPPER if val >= MATE_LOWER else val
 
-            # Search the fixed move set by decreasing intrinsic value.
-            for val, move in sorted(((v, m) for m in pos.gen_moves()
+            # Search the fixed move set by decreasing intrinsic value, with the
+            # countermove a pawn ahead of its equals. Ordering only - the value
+            # yielded is the intrinsic one.
+            for _, val, move in sorted(((v + 100 * (m == cm), v, m) for m in pos.gen_moves()
                     if (v:=pos.value(m)) >= val_lower), reverse=True):
                 yield move, MATE_UPPER if val >= MATE_LOWER else val
 
@@ -435,13 +438,13 @@ class Searcher:
                 if cap < gamma: move, score = None, cap
                 else:
                     move_depth = d - 1 - (not root and guard and val < LMR)
-                    score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
+                    score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth, False, move))
             best = max(best, score)
             live |= move is not None and score > -MATE_UPPER
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
                 if move is not None and depth:
-                    self.tp_move[pos] = move
+                    self.tp_move[pos] = self.cm[last] = move
                     # Never evict the current search root: its killer is the
                     # answer go_loop plays, and once the table churns more
                     # than TABLE_SIZE stores in one deep probe, FIFO would
