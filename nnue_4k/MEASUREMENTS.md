@@ -17274,3 +17274,55 @@ Screen launched: `capn5` vs the pinned `entry`, 25 rounds / 50 games, 20,000
 nodes, srand 20260817, concurrency 8. Top-pick read only, never an Elo for the
 ledger. The bar it reports against: fixed-node gain must exceed the **≈59.8
 Elo** timed tax measured for N=5 for the timed projection to be positive.
+
+### THE CAPACITY ARM'S FIRST HONEST ELO READ — and it fails the bar outright
+
+| | |
+|---|---|
+| arms | `capn5` (seed 0, 4,002 B, in budget) vs the pinned `entry` |
+| games | 50 (25 colour-swapped pairs), 20,000 nodes, srand 20260817 |
+| **statistic (SELECTOR SPEC): score%** | **31.00%** |
+| W/L/D | 12 / 31 / 7 |
+| legality | 0 illegal, 0 no-move, both arms, gated at the played budget |
+| time forfeits | 0 |
+| **dormancy gate** | **slowest move 1.333 s, moves ≥15 s: 0 — PASS** |
+
+The dormancy number is the one that makes the rest trustworthy. With the clock
+pinned at `tc=6000+0` the engine deadline sits ~150 s away and the slowest move
+in fifty games took **1.333 s** — three orders of magnitude clear of it. The
+node cap bound on every single move, so this is a genuinely speed-free read,
+which is exactly what the un-clocked version of this script could not have
+given.
+
+**Against the registered two-part bar:**
+
+1. *Fixed-node eval gain vs entry, speed-free* — must be **positive**. It is
+   **31.00%**, decisively negative (the harness's own Elo, which the SELECTOR
+   SPEC bars from the ledger as a number, is negative by well over its
+   interval). **Part (i) fails outright.**
+2. *Timed projection* — moot, and worse: it subtracts the measured **≈59.8 Elo**
+   N=5 speed tax from an already-negative eval term.
+
+No seed rescue is available: the three seeds' val spread was 2e-5, and the
+deficit is far larger than any seed variation.
+
+**What this closes.** The capacity arm was funded to test whether spending the
+full byte seam on parameters, trained at real integer resolution on a much
+larger and properly filtered corpus, could beat the distilled-PST entry. On a
+verified instrument — both corpus gates green, export bit-exact against the
+trained net, harness clock-pinned with the dormancy gate passing — the answer
+is no, and not narrowly.
+
+**The generalization now covers both axes.** The linear family was already
+bracketed from both ends on *capacity* (five 384-value table fits and a
+3k-param net, Texel −57.7, C1 −93.8, d1 −76.0, b1 −182.6, 8Mv −107). This arm
+adds the *data* axis: 10M positions against 1.5M, 6.7× more unique data at
+identical optimiser cost, all four owner-required filters applied, deep
+Stockfish labels at median depth 28 — and the result lands with the rest of
+the family rather than above it. **Capacity was not the missing ingredient and
+neither is data.** The flat val predicted this: a model that does not absorb
+50× more data was never going to convert it into strength.
+
+The distilled-PST entry survives for the reason it always has — its 384 values
+ride hand-built nonlinear machinery (K_MID/K_END, khold2, pend) that the
+linear-in-ps768 family has no way to express.
