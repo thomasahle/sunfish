@@ -127,7 +127,15 @@ def main():
     model = build_model(cfg.model)
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.opt.lr,
                             weight_decay=cfg.opt.weight_decay)
-    sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=cfg.opt.epochs)
+    if cfg.opt.sched == "cosine":
+        sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, T_max=cfg.opt.epochs)
+    elif cfg.opt.sched == "linear":
+        sched = torch.optim.lr_scheduler.LinearLR(
+            opt, start_factor=1.0, end_factor=0.0, total_iters=cfg.opt.epochs)
+    else:
+        raise SystemExit("unknown opt.sched %r (want 'cosine' or 'linear')" % cfg.opt.sched)
+    print("optimizer AdamW(lr=%g, wd=%g)  schedule %s over %d epochs"
+          % (cfg.opt.lr, cfg.opt.weight_decay, cfg.opt.sched, cfg.opt.epochs), flush=True)
 
     start_epoch, best = 0, float("inf")
     ckpt_path = os.path.join(run_dir, "ckpt.pt")

@@ -104,6 +104,12 @@ class OptCfg:
     phasecap: float = 0.0       # project phase scales into [1/cap, cap]
     seed: int = 0               # torch + shuffle seed (train_packed pinned 0)
     threads: int = 0            # torch CPU threads (0 = torch default)
+    # LR schedule.  "cosine" is what every run before the capacity arm used
+    # and stays the default so those runs stay reproducible; "linear" decays
+    # linearly to zero, which is the reference recipe's schedule and what the
+    # capacity arm runs, adopted on parity grounds rather than on a
+    # measurement of ours.  Both end at zero; they differ in shape.
+    sched: str = "cosine"
 
 
 @dataclass
