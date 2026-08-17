@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-17 | **Butterfly history / countermove table, fixed-node screens** | **−2.32 ± 30.53** and **−8.11 ± 31.11**, 300 games each, all gates passed. 9–15% fewer nodes to depth, zero Elo. Five ordering attempts on record now, all flat |
 | 2026-08-17 | **Mate-band cap exemption (theorem menu option A)** | **UNSOUND — REFUSED.** Makes `bound()` gamma-dependent: `Entry(lower=47938, upper=1204)` at depth 2. Mate suites really did improve (mate1 0/8 → 6/8 at depth 2–3); the sound instance costs −60 Elo |
 | 2026-08-17 | **REGISTERED (search-features lane, before game 1): mate-band cap exemption + butterfly history, fixed-N fixed-node screens** | Bars and branches below; mate gate already read, Elo read once at N = 300 |
 | 2026-08-17 | Root aspiration (MTD warm-start) | **DECLINED without games**: the probes an aspiration bracket removes cost 4.51% of nodes at ±50, 2.28% at ±100 — an upper bound, before re-widening |
@@ -137,6 +138,71 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-17 — Two orderings screened, both flat: butterfly history and a countermove table
+
+Verdicts against the bars registered below, before game 1.
+
+| arm | Elo (300 games, fixed 20k nodes) | W/L/D | registered branch |
+|---|---|---|---|
+| `hist` butterfly history | **−2.32 ± 30.53** | 117 / 119 / 64 | −30 … +25 → **ledger only, no timed match bought** |
+| `cm` countermove table | **−8.11 ± 31.11** | 118 / 125 / 57 | −30 … +25 → **ledger only, no timed match bought** |
+
+Both matches: 300/300 games (count gate), zero illegal moves, zero time
+forfeits, dormancy gate passed with slowest moves 5.153 s and 6.311 s against
+a 15 s void threshold, srand 8172 and 8173, book `openings_2k.epd` at 150
+rounds of 2,000 positions, arms frozen (`hist` `68e0b5d3b62c`, `cm`
+`2a82878068a8`, `base` `9db9b4fcbb09` = master `4c8770e`).
+
+**The bar was not merely procedural, and the direction of the instrument's
+error matters.** A fixed-node screen holds the node budget equal, so an arm
+that needs fewer nodes per depth spends its saving on *more depth inside the
+same 20,000 nodes* — the screen pays these arms for the very thing they are
+good at, and charges them nothing for being 7–10% slower per node. Both were
+credited that way and both still came back flat. A timed match can only take
+value away from them, so the registered "no timed match" branch is also the
+right call on the merits.
+
+What the arms do buy, measured before the games:
+
+| | 24 openings @ d8 | 12 openings @ d9 | wall @ d9 | mean depth @ 1500 ms |
+|---|---|---|---|---|
+| master | 1,590,257 | 1,198,376 | 12.68 s | 8.167 |
+| `hist` | 1,446,973 (−9.01%) | 1,031,910 (−13.9%) | 12.10 s (−4.6%) | 8.500 |
+| `cm` | 1,390,840 (−12.54%) | 1,013,505 (−15.4%) | 11.28 s (−11.0%) | 8.083 |
+
+So the ordering really is better — 9–15% fewer nodes to the same depth, and
+faster in wall clock despite the per-node cost — and it is worth **zero
+measurable Elo**. That is the same answer every extra-ordering-candidate
+experiment in this engine has given: `TWO_KILLERS` at 668 fixed-node games,
+−2.6 [−26.0, +20.7]; `killer2`, +49 ± 56 on a 100-game `4+0.04` screen and
+**−17 ± 39** on its own 120-game 60+1 confirmation; `KILLER_COUNT` 2 and 3,
+−8.7 and −3.5 at 200 aborted games; the frozen-guide old-first cell, −49.4
+inside a family already declined. Five independent attempts, one instrument
+after another, all flat or worse. **The classic search is not
+ordering-starved**, and the next person with an ordering idea should be shown
+this row rather than the mechanism numbers above.
+
+Costs, for the record: `hist` +69 bytes, `cm` +64 bytes, both **142 lines
+unchanged**. `hist` passes the full suite (518 passed, 1 skipped); `cm` fails
+4 tests that monkeypatch `bound` with a four-argument stub and would need the
+fifth (`last`) threaded through them. Both trip `test_model_audit.py`, as any
+`Searcher.bound` change does.
+
+**Instrument note — one match was killed and the count gate caught it.** The
+mate-band control match reached 260 of its 300 scheduled games: `fastchess`
+took a `SIGTERM` at game 264 (`Terminated` in the runner's own output; 371 GB
+free, so not the OOM killer), the runner refused to print an Elo, and named
+the shortfall. That is rule 11 working as designed — the failure mode it
+exists for is precisely a truncated match whose Elo line still looks
+well-formed. The kill coincided with the teardown of the ssh session that
+launched it, and it is the one launch of the three that did not redirect
+stdin; the two that did ran to 300/300 untouched. Box launches from this lane
+now use `setsid nohup … < /dev/null &`, and a base-vs-base A/A control
+(`srand 8174`) is running under that form to certify the new fixed-N runner
+itself.
 
 ---
 
