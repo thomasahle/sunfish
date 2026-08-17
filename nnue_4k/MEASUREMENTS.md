@@ -16380,3 +16380,195 @@ and requeued as 40/41; queue now 40_cb → 41_lr → 50_dense60. The
 session-bound advisory monitor died again mid-screen; the box-side
 dispatcher carried the run and the verdict regardless — the liveness
 architecture held.
+
+---
+
+## Thomas's three inputs: the four filters, the trainer suggestion, and 10B positions
+
+Registered BEFORE any capacity-arm training starts. Nothing has trained yet,
+so the data-scale change below is a clean pre-training amendment, not a bar
+move. Every claim here is measured on the box; counts, not adjectives.
+
+### A. The four owner-required filters — applied/skipped, per corpus
+
+The two source corpora are not symmetric, and the asymmetry decides three of
+the four filters. Measured properties:
+
+| | self-play (`lambda_corpus.npz`) | Lichess eval dump |
+|---|---|---|
+| positions | 737,414 | 8,000,000 in `quiet8M`; ~200–290M in the raw DB |
+| labels | twin, depth 8 | Stockfish, **median depth 28** (min 6, max 245) |
+| outcomes | **present** (from `[Result]`, stm-relative) | **absent** — eval dump, no games |
+| ply context | available at harvest, not stored | **absent** — every FEN is 4-field, no clocks |
+| best move | the played move, from the PGN | **present** — the PV's first move |
+| label frame | already side-to-move | **WHITE-POV — must be negated for black** |
+
+**Filter 1 — flatten the piece-count distribution. APPLIED to both.**
+Mechanism: post-hoc acceptance-resampling against a target profile; it needs
+only the board, so it applies to any corpus. Pooling already does most of the
+work (self-play is endgame-heavy, 34% at ≤12 pieces; Lichess is opening-heavy,
+57% at ≥25), and the residual flattening is a per-band accept probability.
+Target profile to be recomputed on the assembled 10M pool, since the pool is
+now 92% Lichess rather than 50/50 — the flattening does materially more work
+at this mix than it did at the old one, and is the only filter that fights
+the new imbalance.
+
+**Filter 2 — stochastic-skip where WDL likely matches the position score.
+APPLIED to self-play. SKIPPED on the Lichess dump, for cause.**
+The dump is an *eval* database: it has no game attached, therefore no WDL, so
+the filter's input does not exist. This is not an omission we can engineer
+around — the source lacks the channel. On self-play both channels exist and I
+measured the agreement directly (K=300):
+
+| \|sigmoid(cp/K) − outcome\| < t | 0.10 | 0.15 | 0.20 | 0.25 | 0.30 |
+|---|---|---|---|---|---|
+| share of corpus | 19.35% | 26.29% | 33.41% | 40.32% | 47.29% |
+
+mean deviation 0.3062, median 0.3186, corr(q, outcome) +0.5865. Registered
+operating point: **t = 0.25, skip probability p = 0.5**, i.e. 40.32% of the
+self-play corpus is "WDL matches score" and half of it is dropped — ~20% of
+that corpus. Since self-play is only ~8% of the 10M pool, this filter now
+moves ~1.6% of the total; it was much more consequential at the old mix.
+
+**Filter 3 — skip the first 28 plies. APPLIED to self-play (at re-harvest).
+SKIPPED on the Lichess dump, for cause.**
+Our harvest currently skips only the first 8 (`BOOK_PLIES = 8`), so Thomas's
+28 is a real change; ply is known inside the harvest loop, so raising the
+constant and re-scanning is the whole mechanism. The dump's FENs are 4-field
+(no halfmove/fullmove counters — verified on all 200,000 sampled records), so
+ply is not recoverable for those positions at any cost. Recorded as
+unknowable-at-source rather than skipped by choice.
+
+**Filter 4 — keep sacrifices, skip SEE ≥ 0. APPLIED to both.**
+This is the one Thomas flagged as possibly needing a cheap approximation. It
+does not. Findings, in the order they changed the answer:
+
+1. python-chess 1.11.2 exposes **no** SEE and no occupancy-parameterised
+   attacker mask, so one had to be built. Rebuilding it from the public
+   attack tables gives a faithful, X-ray-aware swap list in ~50 lines.
+2. Validated by differential fuzz against a brute-force reference that plays
+   out capture sequences optimally: **47,489 of 47,490 captures exact** over
+   14,872 random positions. The first cut disagreed 133 times, *all* of them
+   promotion captures; modelling promotion throughout the swap list (a pawn
+   recapturing onto the back rank promotes too) closed 132 of them.
+3. The single survivor is the **textbook least-valuable-attacker limitation
+   inherent to SEE as defined** — the swap list always recaptures with the
+   cheapest attacker, which is occasionally worse than capturing with the
+   king, and removing pieces in LVA order can open a line the optimal
+   sequence would not. Stockfish's own SEE has exactly this property. So the
+   divergence is from *optimal capture play*, not from *true SEE*: there is
+   no approximation to disclose beyond this one, which is disclosed here.
+4. **Cost: 170,000–187,000 SEE calls/s ≈ 21,000–23,000 positions/s**, against
+   the depth-8 twin labeller's ~44 pos/s/core — roughly **480× cheaper than
+   the labelling it sits next to**. The C twin is therefore the wrong venue;
+   putting SEE in the harvest script in Python costs nothing measurable. No
+   day-long build, no divergence-recording fallback needed.
+
+Applying it to the Lichess side is *not* a matter of filtering `quiet8M`:
+that artifact's own derivation (`make_quiet_slice.py`) skips every position
+whose best move lands on an occupied square, so **it has already thrown all
+sacrifices away**. Filter 4 requires re-deriving from the raw DB, where the
+PV's first move supplies the move to score. Measured funnel, 400,000 raw
+lines, single core:
+
+| stage | count | share |
+|---|---|---|
+| mate / no usable eval | 75,170 | 18.79% |
+| \|cp\| > 1000 | 7,784 | 1.95% |
+| best move a promotion | 471 | 0.12% |
+| best move quiet — *today's only keep* | 242,977 | 60.74% |
+| best move a capture | 73,598 | 18.40% |
+| … of which **SEE < 0 → KEPT as sacrifices** | **8,630** | 11.73% of captures |
+| … of which SEE ≥ 0 → skipped as required | 64,968 | |
+| **total kept** | **251,607** | **62.90%** |
+
+Filter 4 adds **+3.55%** on top of the quiet-only keep. Small, and exactly
+the sharp positions a dead-linear eval family keeps failing on. One honest
+side effect: sacrifices are markedly more opening/middlegame-heavy than quiet
+positions (2.53% vs 13.56% at ≤12 pieces; 29.37% vs 22.28% at 25–28), so
+filter 4 slightly aggravates the skew filter 1 has to remove.
+
+### B. Thomas's trainer suggestion — nnue-pytorch or bullet
+
+**Fit analysis.** Both are built for the mainline NNUE object: dense int8/int16
+layers, incremental accumulators, binpack streaming, GPU batch assembly. Our
+artifact is a big-integer net whose forward pass is *one squaring mod 2^128−1*
+with a u2 read-out on a certified integer grid, trained with straight-through
+snapping onto that grid inside forward. Neither trainer has a place to put
+that: the thing they optimise is not the thing we ship. Adopting one today
+would mean reimplementing our quantisation inside their training loop and
+still exporting through our own certifier — cost with no gain at this scale.
+The measured scale supports that: 10M positions × 6 passes is ~7,300 steps at
+batch 8192, which our trainer already does comfortably on this box. The case
+for bullet is throughput at scales we are not at.
+
+**Schedule parity — checked, and we differ.** Today we run
+`AdamW(lr=3e-3, weight_decay=1e-5)` with
+`CosineAnnealingLR(T_max=epochs)`, batch 8192, 40 epochs.
+linrock's recipe is **AdamW + learning rate decaying linearly to zero**. We
+**match on the optimizer and differ on the decay shape** — both end at zero,
+but cosine holds the rate high and then drops steeply, while linear spends
+proportionally more of the run at intermediate rates. Per the tasking we
+**adopt linrock's shape**: linear-to-zero replaces cosine for the capacity
+arm. Registered as a schedule change made *before* game one, on parity
+grounds rather than on any measurement of ours.
+
+**Registered follow-up.** Trainer adoption is deferred and tied to the
+data-scaling decision, not to this arm: if a later decision pushes the corpus
+past the point where our trainer's throughput binds, we revisit, **bullet
+preferred on licence grounds (MIT)**; nnue-pytorch (GPL) is fine to *use* as
+an external tool, with only code transplant barred. Both licences to be
+verified from the repositories at that point, not from memory. Ideas only,
+independent reimplementation, zero transplanted code — unchanged.
+
+### C. DATA-SCALE AMENDMENT — 10M, not 1.5M, and not 10B
+
+**The 10B answer is no, for two independent reasons.**
+*Capacity:* N=6 ternary is 4608 trits = 4608·log2(3) ≈ **7,304 bits ≈ 7.3
+kilobits** of total information capacity. 10B positions is ~2.2M samples per
+parameter; loss goes flat orders of magnitude earlier. *Availability:* the
+entire Lichess eval database — our largest licensed source — holds ~200–290M
+positions (20.2 GiB compressed, ~515 bytes/line). 10B is **35–50× larger
+than the whole source**. Reaching it would need Leela binpacks, which are
+licence-HELD and not downloaded. Registered as **MOOT-UNLESS-THE-CAP-CHANGES**:
+10B returns only with a different artifact budget, and then with streaming
+via the trainer follow-up above.
+
+**Target: ~10M pooled positions.** Samples-per-parameter lands at
+10M/4608 ≈ **2,170**, inside the defensible 10³–10⁴ band.
+
+**The label-null pays for it.** The matrix measured deep-SF labels ≡ twin
+labels at 0.28σ. The only reason 750k positions were re-labelled with the
+twin was the matrix's single-variable control, and that experiment is closed.
+So stage 1 uses **the dump's own Stockfish evals directly — zero labelling
+compute** — at a median depth of 28 against our twin's 8. Verified: **0.00%**
+of best PVs are mate scores and none were unusable across 200,000 records.
+
+**Frame — the trap, checked before it could bite.** The dump's evals are
+**WHITE-POV**, not side-to-move: correlation against white-POV material is
++0.3949 for white-to-move and +0.3774 for black-to-move positions — both
+positive, which is only possible in the white-POV frame (a stm frame would
+make the black row strongly negative). The existing consumer agrees:
+`train_packed.py:254` reads `board, cp = board[::-1].swapcase(), -cp`. So
+dump labels **must be negated for black to move**, while self-play labels are
+already stm and must **not** be touched. Pooling them without this would have
+corrupted half of 92% of the corpus. The corpus-build frame gate
+(`corr(base, label) > 0.5`) stands and runs on the assembled pool.
+
+**Counts.** `quiet8M` is exactly 8,000,000 lines but cannot be used as the
+Lichess component, because its derivation already discarded the sacrifices
+filter 4 exists to keep. Re-deriving from the raw DB at the measured 62.90%
+keep rate needs ~15.9M raw lines to yield 10M kept; pooled with self-play's
+737,414 (minus filters 2 and 3) the target is comfortably met, and the raw DB
+supplies it out of ~200–290M available.
+
+**Build cost, up front.** 12,689 lines/s on one core *including* SEE and board
+construction → ~21 minutes single-core for 15.9M lines, and the box has 96
+cores and 371 GB RAM. The build is minutes, not the ~day that would have
+required reporting back first. Proceeding.
+
+**Epochs → passes.** The 40-epoch regime is replaced by **6 passes over 10M
+at batch 8192 = 7,324 steps**. This is deliberately *compute-neutral*:
+40 epochs × 1.5M and 6 passes × 10M are both 60M sample presentations. The
+arm therefore buys 6.7× more unique data at identical optimiser cost, each
+position seen 6 times instead of 40 — the whole point of the label-null.
