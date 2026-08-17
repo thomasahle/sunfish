@@ -76,19 +76,28 @@ _R2 = 1 | 1 << 64                # replicate one block's word into both
 MH, MVAL, MLO = _U << 15, _U * 32767, _U << 14
 _PIECES = "PNBRQKpnbrqk"
 
-# Payload decode (base-90, the old pst string's codec). Extraction, LSB
-# first: shift, NN gains, NN biases, 768*NN ternary weights 4-to-a-char.
-_w = 0
-for _c in "kJ_E,L2D1C)b9;_lJOOMe0L+2LLXqI0hhG5LY@J0KbF[FrLLKKLe11jIIF1IJICAEM_UniO9CeGULM0JOC4DhC:KqBJ@tp?O1UZVhXH'EtpYC5L3CU-0ITTeL2DFLrC:BqCFLOOkL1KLUXCLLUL`HFt5h+inMLIXL+IIKTn5$KUL';>UgO_:h1TKIFi^=1qFC1@MhX_:$L'L0&LJqMYCMOBDHtC+LLLPI.KML4K1'?UhhhL>@G'ROHqONT+WiUXCtCU)I5@?1L<Kofl=UUqeTLS`JAnFLFIPnuiVOIDhdLID#FM[.^BV41IBKL?GSOnVYUJ2hLiV9KKBU-O1OK=Lm>A10KUXV:1qeTKT2V2:LWBCIFYOKOpEHUV[:$?@BBNp1@Rr)Nh6WPRL_g;BL_KgNMnLLSgIL_NL4t_UMM@4hdbh[.40S3MIM1JDIWL=CKqNk0*IGFIPH_7FF/LL)kMMK7hIueKIKpu.%+LZR4UefJiL$KHIgqGIIJLKC04h=LLLLBEeM`Ube/UcMHF^UqkUKJJLXeINTD5L$lpiWU9qIOUkDTUG2OO;2YZdMLX41PnqiC4[UOtMCLMRkLI41:eXM1HJRseUL0&.rLUKaV:gMCX1j1So?1TGgKIFd31kVkGaJIhlU'iGLXBt@9`KL4016K1bafLPL)KI_L^7K7OcB/KqgLLfLUlIBROVLPKLngMChLu@LO4RKfMUXD1h4Kit3BVKrKKrL2_;I3HhXUqUL4`110BELK2'CQt4eTL11h..nweR:Y_M*":
- _d = ord(_c) - 35; _w = _w * 90 + _d - (_d > 4) - (_d > 56)
-_w, SHIFT = divmod(_w, 90)
+# Payload decode (base-90 bytes). The digits ARE the payload, read straight
+# off the literal: `_w = _w*90 + d` then `divmod(_w, 90)` peeled the same
+# digits back out in reverse, so the big integer was an identity pipeline.
+# Emitting the stream LSB-first drops the reversal with it. Extraction order
+# is unchanged: shift, NN gains, NN biases, 768*NN ternary weights 4-to-a-char.
+#
+# Three separable levers, priced one at a time on the real packer:
+#   no big int                      -8
+#   payload emitted LSB-first       -2   (the [::-1] goes)
+#   one alphabet gap instead of two -1   (35..125 skipping only 92: a bytes
+#                                         literal forbids only 34 and 92, and
+#                                         [35,125]\{92} is exactly 90 codes)
+#   bytes literal instead of ord() -11   (b"..."[i] is already an int)
+# Total -22 packed, +15 B of payload capacity. Node-identical at depth 6.
+_q = [_c - 35 - (_c > 92) for _c in b")L^X9Qdvm--g00KSd3sPB'1JKDA/00_3KTpTWgG2H:^1KqJJqJUA2shJ3g0CWTLeJQ3NK?tKgBLfmKJOKUNQAHkTKeKKfpJ.AbN6J6]K^HJ(KOKe`a0J50/3KJ_8?sAWKFh'TkgHI`FjUj02cEHJfFS0>nR0i0WBLf9U`JTKq-&/KTdrQIG0LWd903HKjQLKBLsNTZ3BhpmO03WKLcYX1:NN1FTSCjTNHp8TVhok$K4CSMHdWKIIJTjpT]EGLbT.daT_LdDAKKKK<g3/BJKIHHFpfHGJ$KhIedT3QYK*%-toJHJdtHg6JLLj(KK.EE6^GOHEFH)/jMpJB<KVHCI0LHL2R/3-Zgacg3?LLT^s3KM^KHfRKKmLMfJ^KA:f^KQOV5gM(qQ?0oMAA?>$9ZUTGDoNJNXEHBAVK91U1SJSdp09UWTJ/0@=lK<JN0N,TAJJ8UhKg1ITXUmNRF>KJAH03UA]-ZLE#CHKcgCHNUhtmOHEKEm@I_RKSdpTT<kenJ;K0>?4H(TBsBWThV*SMNpGNQ'F?=KgggT>'0J3KLJ-HOKKK*BsGCANLBXLpIK&/K'K$9^WgL?0BEp0<]hEHJS0g9^NfT=:'KTJ$4mSJHH*KWHKLmh*g4sEG_KTKKBWTKJ0KjNNKEBpA9BqKEC1KdSSH/,TB2K4BXosD'GWgUYT0N>os?IApJ9BgC3BNI/LKTFdB8NhmT^LD@BHIH0EHHi00dKJJKKqEZEaJ/I?XK4Fgg/HpWKK1*K/dLNNIk^:8a(B0C1K+D^Ij"]
+SHIFT = _q[0]
 # Per-lane activation ceilings G_k (both blocks) fold as the gains decode;
 # _B is the trained per-lane bias, every lane, offset-binary.
-_g, _B, MGP = [], 0, 0
+_g, _B, MGP = _q[1:5], 0, 0
 for _k in range(4):
-    _w, _d = divmod(_w, 90); _g.append(_d); MGP += _d * 32 << 16 * _k
-for _k in range(4):
-    _w, _d = divmod(_w, 90); _B += _d - 44 << 16 * _k
+    MGP += _g[_k] * 32 << 16 * _k
+    _B += _q[5 + _k] - 44 << 16 * _k
 MGP *= _R2
 MGH = MGP | MH
 _B = MLO + _B * _R2      # the empty-board accumulator: sign offsets + biases
@@ -97,15 +106,13 @@ _B = MLO + _B * _R2      # the empty-board accumulator: sign offsets + biases
 # Padding squares stay 0 in every half, so the mirrored composition below
 # needs no validity test.
 _half = {}
-for _p in _PIECES:
+for _i, _p in enumerate(_PIECES):
     _half[_p] = _h = [0] * 120
     for _f in range(64):
-        _w, _d = divmod(_w, 90)
+        _d = _q[9 + _i * 64 + _f]
         _h[21 + _f // 8 * 10 + _f % 8] = sum(
             _g[_k] * (_d // 3 ** _k % 3 - 1) << 16 * _k for _k in range(4))
 
-# ROWS[pf][piece][square]: us-block = the feature in this frame, them-block =
-# the mirrored feature in the opponent's frame; one shared weight table.
 _rows0 = {_p: [_half[_p][_s] + (_half[_p.swapcase()][119 - _s] << 64)
                for _s in range(120)] for _p in _PIECES}
 _rows1 = {_p: [_rows0[_p.swapcase()][119 - _s] for _s in range(120)] for _p in _PIECES}
