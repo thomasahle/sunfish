@@ -108,6 +108,32 @@ in the git history of this file.
   (1,155,634 nodes, depth-7 battery; ctwin 1.421s -> 0.669s across the
   optimization rounds, measured ratios 21.6-27.3x as the pyref side
   swings with host load; `make pgo && make bench` reproduces).
+- **Interpreter cross-check (2026-08-16): `make gate` is INTERPRETER-
+  INVARIANT on this corpus.** `difftest.py` has always driven the
+  reference side under `pypy3`; lean-surfaces uses a separately pinned
+  CPython (3.9.19) as its own oracle and had never been checked against
+  this harness's choice of interpreter. Ran the full 7-line gate twice
+  on the same rebased `master` commit, same positions/config both times,
+  swapping only the reference interpreter (a one-line, env-gated,
+  **uncommitted** change to `difftest.py`'s `Engine(["pypy3", ...])`
+  call): every one of the 7 lines produced byte-identical coverage
+  (positions x depth, probe counts, movegen-list counts) and 0
+  mismatches under CPython 3.9.19, matching the pypy3 baseline exactly.
+  The square's edge is settled: this harness's node-identity claim does
+  not depend on which interpreter drives the reference side.
+  **Not runtime-free, so the default stays `pypy3`:** on a small smoke
+  config CPython took ~3.2x longer (37.9s vs 11.9s, `--n 5 --depth 7`);
+  on the gate's `QS=0 EVAL_ROUGHNESS=40` sweep specifically — the one
+  line that disables quiescence delta-pruning and thereby explodes raw
+  node count — CPython took on the order of two hours against pypy3's
+  share of a 351s total-gate run, at least an order of magnitude worse
+  than the smoke-config ratio. Mechanism: CPython's per-op interpreter
+  overhead multiplies against the exploded node count from disabled
+  pruning, while pypy3's JIT benefit grows with how hot the inner loop
+  runs — so the two effects compound in opposite directions specifically
+  where pruning is weakest. `pypy3` remains the shipped default
+  reference interpreter; this entry is the record that the choice was
+  checked, not assumed.
 
 ## Use
 
