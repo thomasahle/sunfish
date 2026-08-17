@@ -4553,6 +4553,59 @@ truncated number is believed.
 
 ---
 
+## 2026-08-17 — AMENDMENT: fixed-node matches pin an explicit clock, and get a dormancy gate
+
+Registered before game 1 of the re-run. The confirmation was voided by a
+hidden wall-clock deadline inside `go nodes` (evidence in the void entry
+below). This closes the hole without touching a single artifact.
+
+### The defect, in one line
+
+`go nodes 20000` sends no `wtime`, so the engine's own handler defaults it —
+`bin/e_lam1.py` **L809** `times.get(side+"time", 60000)` → **L832**
+`think = min(60000/40, 60000/2-1000)` = **1500 ms** → **L847**
+`searcher.deadline = start + max(think,.05)`, set *before* the node-cap block
+and never cleared by it, polled at **L432**. **"Fixed nodes" was never a pure
+node stop on this engine.**
+
+### Fix 1 — pin a clock so large the deadline cannot bind
+
+Every fixed-node match from now on passes an explicit huge TC alongside the
+node limit: **`tc` with `wtime ≥ 6,000,000 ms`**, giving
+`think = 6,000,000/40 = 150 s` — three orders of magnitude beyond any real
+move at 20 k nodes, so the deadline is unreachable and the node cap is the
+only stop that can fire.
+
+**This preserves arm identity**: no engine is rebuilt, no source is edited, all
+shas unchanged. It makes the *registered intent* — a pure node stop — actually
+true, rather than true-only-on-a-quiet-machine.
+
+### Fix 2 — the DEADLINE-DORMANCY GATE, post-hoc, on every fixed-node match
+
+> Compute the fraction of move times **≥ 1.45 s**. If it exceeds **1%**, the
+> match **voids itself**, regardless of how clean its other tripwires are.
+
+Calibration for the 1% threshold, measured: the voided side C ran **26.98%**
+against the screen's **0.46%** and the matrix cells' **0.06–0.12%**. 1% sits an
+order of magnitude above every clean run and an order of magnitude below the
+contaminated one.
+
+### Screen comparability holds
+
+The screen's own exceedance was **0.46%** — under the new gate, and negligible
+contamination. So the −63.23 screen figure remains comparable to re-run
+numbers produced under the pinned clock; it is not itself voided by this
+amendment. The same applies to the matrix cells at 0.06% and 0.12%.
+
+### Re-run form (otherwise unchanged from `9abc2e1`)
+
+Both-vs-entry, **N=300 per side**, fixed 20 000 nodes **plus the pinned
+clock**, fresh srands (C = 20260911, B = 20260912), quiet-venue census at
+launch with the L2 Lean build **SIGSTOPped** (its PID list recorded to
+`LEAN_PAUSED_PIDS.txt`, to be SIGCONTed from that same list, not re-derived),
+zero-illegal voids, count gate 300/300, **and the dormancy gate at
+completion**. The decision rule, branches and estimand reasoning are unchanged.
+
 ## 2026-08-17 — PRE-REGISTRATION: the distribution confirmation, BOTH-VS-ENTRY at N=300 per side
 
 Registered before game 1. The matrix left exactly one contested pair — cell C
