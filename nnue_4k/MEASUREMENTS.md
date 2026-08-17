@@ -17803,3 +17803,28 @@ The 4 % spread across three engines whose hot loops are the same text is the
 instrument's noise floor at this width, and it is the same floor that made the
 N=4..8 rows of the width table unusable. **The width tax at N≥16 is 5–20× that
 floor, so that part of the table stands.**
+
+### FACTOR LANE addendum — the effective-parameter column, and a correction to the lane's own framing
+
+The design table has to carry both counts, because they point opposite ways.
+
+| shape | payload values (trits + digits + header) | reconstructed table entries | packed B | table entries / payload B | **free params / payload B** |
+|---|---|---|---|---|---|
+| shipped diagonal r=N=5 | 3840 + 0 + 11 = **3851** | 3,840 | ≈3,980 | 4.75 | **4.75** |
+| factored r=4 N=16 | 3072 + 64 + 33 = **3169** | 12,288 | 3,918 | 16.4 | 4.24 |
+| **factored r=4 N=32** | 3072 + 128 + 65 = **3265** | **24,576** | **3,982** | **30.3** | **4.02** |
+| factored r=4 N=48 | 3072 + 192 + 97 = **3361** | 36,864 | 4,048 | 42.0 | 3.83 |
+
+**A correction to this lane's own brief, stated before the gate resolves.** The
+framing "the payload buys a much wider effective net per byte" is true only in
+the *table-entries* column, where the factored form is 3.5–8.8× denser. In the
+column that carries information — free parameters per payload byte — the
+factored form is **worse than the diagonal it replaces** (4.02 against 4.75 at
+N=32), and it must be: a rank-4 table is a *restriction* of a free one, so it
+can only ever spend fewer degrees of freedom on the same bytes.
+
+So there is no compression win here in any information sense, and any entry
+that says there is would be wrong. The only thing the factorisation can buy is
+the **shape** of the function — 32 clipped-relu units over 4 directions
+instead of 5 units over 5 directions — and the gate above is the test of
+whether that shape is worth anything at all.
