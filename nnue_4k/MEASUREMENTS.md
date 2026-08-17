@@ -17619,3 +17619,146 @@ of ten minutes each. So the run order becomes **11, 9, 1, 2, then 10**, and
 ARM 10 is spent only if something in the sweep has shown life by then. That
 is a deliberate deviation from the brief's stated order, taken under its own
 "cheap-first" instruction and recorded here rather than quietly.
+
+---
+
+## ARM 1 — PRICED AND NOT RUN AS SPECIFIED; ARM 2 — REGISTERED AND RUNNABLE TODAY
+
+### The byte rig was calibrated before it was used
+
+`make_n6_proto.py --N=5` + the trained payload + `pack.sh` reproduces the
+ledgered **4,002 B exactly**, and the random-payload proxy at the same
+sparsity gives 3,999 (the recorded +3 B). Two calibrations that were not in
+the ledger and change how the seam is read:
+
+- **The code floor is 3,186 B** (N=4 and N=5 alike, and independent of weight
+  radix), so payload capacity is **910 B in context, ~880 B at the 30-B
+  margin** — that is where the brief's "~880 B" comes from. The incumbent
+  spends **819 B**.
+- "Structure-blind" holds only for the **dense mixed-radix codec (N≥5)**. For
+  the **flat one-char-per-feature codec (N≤4)**, which is what ml2 uses,
+  sparsity is worth **~78 B** across 35%→65% zeros. So ml2 byte numbers carry
+  a real sparsity band and N≥5 ones do not.
+
+### ARM 1: the 5-level half cannot be built, and the width it affords is a downgrade
+
+- **`cb_cmax` is a dead knob that lies.** `StructuredNet` never passes it to
+  `CodebookWeight` (whose signature has no `cmax`), so `cb_cmax: 2` produces
+  levels `[-1, 0, +1]` — while the certificate still prints "cmax=2 …
+  log2(5)=2.32 bits/element". A config surface that certifies a model the
+  trainer does not build is the same defect class as the payload codec, and
+  it is sitting in the tree pre-installed.
+- **`lr_wmax: 2` genuinely trains 5 levels — and cannot be exported.**
+  `export_replnet` does `(E*32).round().clamp(-1, 1)`; the struct
+  reconstruction assert fires (`178/2304 elements differ`) at the first
+  improving epoch. It fails loudly, which is the good news, but it fails.
+- **Even if it were built, the only in-budget width is N=3**, which is
+  **5,350 weight-state bits against the incumbent's 6,086 — a 12% capacity
+  DOWNGRADE** that leaves ~190 B of payload unused. One radix-5 lane costs
+  768·log2(5) ≈ 234 B and there are 94 B spare; N=4 misses by 42 B.
+
+**Verdict: ARM 1 as specified is not run.** It needs an export path, a
+decoder case, a verifier case and a bake-off arm that do not exist
+(~150–250 lines), to reach a net with less capacity than the one it replaces.
+
+**But half of ARM 1 is real, cheap, and answers a measured pathology.** The
+bias digit is one base-90 value, `bd = round(b·32·g)` clipped to `[-44, 45]`,
+hardcoded in both encoders, the trainer clamp, the STE, `field_budget`, the
+verifier and all three decoders. At the incumbent's shift 4 that is a band of
+**±2.75 cp against lane caps of 134–152 cp — 1.9% of a lane's dynamic
+range** — and the trained net's digits are `[+45, +45, −44, −44, +45]`:
+**five of five pinned, on both rails.** The ledger already flagged this as
+"a genuine format limit rather than a bug"; it is now priced:
+
+| widening | bytes (N=5) | delta | range | resolution |
+|---|---|---|---|---|
+| none (today) | 3,999 | — | ±2.75 cp | 0.0625 cp |
+| **rescale ×8** | **4,002** | **+3 B** | **±22.5 cp** | 0.5 cp |
+| second digit | 4,008 | +9 B | ±253 cp | 0.0625 cp |
+
+**Three bytes for eight times the bias range**, against a constraint that is
+provably binding on every lane. That becomes ARM 1', registered as a
+FORMAT-plus-objective arm, and it is only run with the decoder side changed
+in the same commit — encoder-grows-a-case-its-decoder-lacks has already cost
+this campaign two incidents and is about to be named a third time.
+
+### A live defect found while pricing ARM 2: `export_ml2` is silently corrupt at N≥5
+
+`export_ml2` never received the mixed-radix fix `export_replnet` got. It
+still packs a whole feature's N lanes into one base-90 digit with **no radix
+guard**, so at N=5 it emits characters with **ord up to 279** against a codec
+whose range is 35..126 — a payload no reader can decode, written without
+error. **Third instance of this exact class.** Not fixed here (ARM 2 runs at
+N=4 where the flat codec is correct) but recorded so the next N≥5 ml2 attempt
+does not rediscover it the expensive way. Also: **`certify_ml2` ignores N and
+bm** — `arm2_ml2_n4` and `arm2_ml2_n5` produce byte-identical certificates —
+so the ml2 certificate is only truthful at N=4/bm=4 and would happily certify
+a config with no engine and a corrupt exporter.
+
+### ARM 2 — REGISTERED, and it needs no code change
+
+```yaml
+name: arm2_ml2_n4
+data: {source: pool10m.npz, kind: lambda-npz, limit: 0, split: fenkey, val_mod: 20}
+model: {arch: ml2, N: 4, bm: 4, base: mat, ternary: 0.85, gridste: 1, u2grid: 1}
+loss: {l1: 0.0005, satpen: 0.03, satthresh: 480.0, lam: 1.0}
+opt: {epochs: 6, batch: 8192, lr: 3.0e-3, weight_decay: 1.0e-5, seed: 0, sched: linear}
+```
+
+Certified (`ml2 F2=32 m=4 umax=127 shift2=10 -- CERTIFIED`), and
+`ml2_check.py` passes on a spliced entry built from a random payload of the
+same shape: independent decode == engine, engine == `packed_layers` int
+bridge **bit-exact** on 60 fens × 2 pf + rotations + a 40-ply walk, L2 fired
+on 100 probes. **Expected 3,973 B** at the incumbent's 43.7% sparsity (3,925
+at 59.6%, 3,977 at 35%) — in budget by ~123 B.
+
+Three walls fix N=4: the exporter is corrupt at N≥5 (above), the engine
+hardcodes four lanes (`make_ml2_proto.py`'s 64-bit half, binary-tree spread,
+`MF = 2^128−1`, four explicit `U2[i]` terms), and an N=5 ml2 payload prices
+at 4,134 B — 38 over on the payload alone. `bm` must be 4 for the same
+engine reason. **`u2grid: 1` is mandatory**: the old −234 arm's `u2` was
+`[0.17, 0.08, 0.14, 0.11]`, every digit rounding to **zero**, so it played as
+a single-layer net while paying ml2's code and nps — which is a second
+reason, beyond the 16.82% truncation, that the −234 verdict priced nothing.
+
+**Honest correction to the prior:** the ml2 machinery costs **+130 B** today
+(3,316 B floor vs 3,186), not the ledger's +98 B — both floors moved. Its
+~0.90× nps tax (≈ −15 Elo) is unchanged and remains the bar any val win must
+clear before a timed match could be positive.
+
+**ARM 2's gate is the MIRROR pair**, because the scorer has no shipped read
+for a two-layer net (where the big-int fold truncates is not modelled, and
+guessing would price a net nobody runs). The control census on the same
+statistics:
+
+| statistic | mean | sd (n=3) | best seed | **3σ GATE** |
+|---|---|---|---|---|
+| refval_mirror | 0.01763697 | 1.10e-05 | 0.01762728 | **≤ 0.01760397** |
+| outval Brier (mirror) | 0.12780955 | 4.51e-05 | 0.12776403 | **≤ 0.12767422** |
+
+### The bar is calibrated: seed noise is small against real between-net spread
+
+Four genuinely different nets (N=4 and N=5, two corpora, 6 and 30 epochs)
+scored on the frozen statistics:
+
+| net | refval | outval Brier |
+|---|---|---|
+| `99_tail150` (N=4, 8M legacy, 30 ep) | **0.01763624** | **0.12765203** |
+| `220_cap_n5b_s0` (the control) | 0.01765317 | 0.12778113 |
+| `78_plain_seed1` | 0.01769610 | 0.12801146 |
+| `71_gridste_plain` | 0.01775906 | 0.12800300 |
+
+Spread is **1.2e-4 on refval (3.7× the 3σ bar)** and **3.6e-4 on Brier (8×)**,
+so the gate is sensitive to real differences rather than swamped by them.
+Two things follow, and the second is the more important. First, the bar is
+tight but reachable — `99_tail150` misses the Brier gate by 5e-7. Second,
+**these statistics do not order Elo**: the whole family sits inside 1.2e-4 of
+each other on refval while the capacity arm's member of it scored 31.00%
+against the entry. The gate is therefore used for exactly what it can do —
+detecting whether an objective change moved the net **at all** — and never as
+a strength estimate. An arm that cannot move a statistic by three seed-sigma
+has not earned fifty games.
+
+**Queue cotenancy, recorded:** another lane queued `330–333_factor_ub_*.yaml`
+at 21:53. They are untouched, and ARM 2 goes in at `313_` — contiguous with
+this sweep's own 310–312 block rather than inserted into theirs.
