@@ -10,7 +10,7 @@ import sys
 
 
 HERE = pathlib.Path(__file__).resolve().parent
-ROOT = HERE.parent.parent
+ROOT = HERE.parents[2]
 INFO = re.compile(r"info depth (\d+) .* score (-?\d+)")
 # Every real edge costs at most three plies.  Mate-in-n has a proof of
 # 2*n-1 plies, hence the theorem-derived depths 3*(2*n-1)+4 below.

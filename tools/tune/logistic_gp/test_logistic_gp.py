@@ -513,7 +513,7 @@ class MixedAcquisitionTest(unittest.TestCase):
 
         limit = parameters["NULL_LIMIT"]["default"]
         self.assertEqual(limit, 750)
-        root = path.parents[2]
+        root = path.parents[3]
         self.assertIn(f"static int NULL_LIMIT = {limit};",
                       (root / "tools/ctwin/sunfish.c").read_text())
         self.assertEqual((root / "sunfish.py").read_text().count(
