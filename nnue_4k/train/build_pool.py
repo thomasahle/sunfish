@@ -103,11 +103,31 @@ def see(chess, board, move):
 
 
 # --------------------------------------------------------------- worker
+def placement_mask(chess):
+    """Statuses that make the PIECE PLACEMENT impossible in real chess.
+
+    The Lichess eval database accepts user-submitted FENs, so it contains
+    composed junk -- 37- and 58-piece positions, 34 pawns.  Measured 0.0183%
+    of the raw dump, and their evals are meaningless for our purposes.
+
+    Deliberately NOT chess.Board.is_valid(), which also flags
+    STATUS_BAD_CASTLING_RIGHTS: that accounts for 1387 of 1419 flags in a
+    300k sample (0.46%), and castling rights are not one of our features --
+    ps768 reads piece placement only.  Rejecting on is_valid() would throw
+    away 25x more good positions than bad ones.
+    """
+    return (chess.STATUS_TOO_MANY_WHITE_PIECES | chess.STATUS_TOO_MANY_BLACK_PIECES
+            | chess.STATUS_TOO_MANY_WHITE_PAWNS | chess.STATUS_TOO_MANY_BLACK_PAWNS
+            | chess.STATUS_TOO_MANY_KINGS | chess.STATUS_NO_WHITE_KING
+            | chess.STATUS_NO_BLACK_KING | chess.STATUS_PAWNS_ON_BACKRANK)
+
+
 def worker(out_path):
     """stdin (raw dump jsonl) -> tsv of kept positions, already in stm frame."""
     chess = _load_chess()
     Board, Move = chess.Board, chess.Move
-    n = kept = n_mate = n_cpmax = n_promo = n_quiet = n_cap = n_sac = 0
+    BAD = placement_mask(chess)
+    n = kept = n_mate = n_cpmax = n_promo = n_quiet = n_cap = n_sac = n_illegal = 0
     t0 = time.time()
     with open(out_path, "w") as w:
         for line in sys.stdin:
@@ -137,6 +157,9 @@ def worker(out_path):
                 mv = Move.from_uci(pvs[0]["line"].split()[0])
             except Exception:
                 continue
+            if b.status() & BAD:        # composed junk, see placement_mask
+                n_illegal += 1
+                continue
             if mv.promotion:
                 n_promo += 1
                 continue
@@ -156,9 +179,9 @@ def worker(out_path):
             w.write("%s\t%d\t%d\t%d\n" % (fen, cp, len(b.piece_map()), is_sac))
             kept += 1
     sys.stderr.write("worker %s: read %d kept %d (quiet %d sac %d of %d caps) "
-                     "mate %d cpmax %d promo %d  %.0fs\n"
+                     "mate %d cpmax %d promo %d illegal %d  %.0fs\n"
                      % (os.path.basename(out_path), n, kept, n_quiet, n_sac,
-                        n_cap, n_mate, n_cpmax, n_promo, time.time() - t0))
+                        n_cap, n_mate, n_cpmax, n_promo, n_illegal, time.time() - t0))
 
 
 # ------------------------------------------------------------- assemble
@@ -237,6 +260,16 @@ def assemble(tsvs, out, target, selfplay=None, wdl_t=0.25, wdl_p=0.5,
     npc = np.asarray(npc, dtype=np.int64)
     sac = np.asarray(sac, dtype=np.int8)
     fens_a = np.asarray(fens, dtype=object)
+
+    # PLACEMENT GATE.  A chess position has 2..32 pieces; anything else means
+    # composed junk reached the corpus (the raw dump carries user-submitted
+    # FENs with 37 and 58 pieces).  Refuse rather than train on it.
+    if int(npc.max()) > 32 or int(npc.min()) < 2:
+        raise SystemExit(
+            "PLACEMENT GATE FAILED: piece counts run %d..%d, outside 2..32. "
+            "Composed/illegal positions reached the pool -- the worker's "
+            "placement_mask should have removed them.  Refusing to write."
+            % (int(npc.min()), int(npc.max())))
 
     # dedup on the position, vectorized
     keys = np.asarray([hashlib.sha1(f.split(" ")[0].encode() + f.split(" ")[1].encode()
