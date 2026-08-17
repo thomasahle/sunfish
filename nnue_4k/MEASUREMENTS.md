@@ -17762,3 +17762,53 @@ has not earned fifty games.
 **Queue cotenancy, recorded:** another lane queued `330–333_factor_ub_*.yaml`
 at 21:53. They are untouched, and ARM 2 goes in at `313_` — contiguous with
 this sweep's own 310–312 block rather than inserted into theirs.
+
+---
+
+## REGISTRATION — ARM 1', the bias band, and the knob that makes it testable
+
+Queued 22:10 as `314_arm1b_bias8`, registered here before it starts (the
+queue reaches it around 22:50; the config header carries the same text).
+
+The half of ARM 1 that is real is the bias digit, and the case for it is a
+measurement rather than a hope: `bd = round(b·32·g)` in `[-44, 45]` is a band
+of **±2.75 cp against lane caps of 134–152 cp**, and re-exporting the
+capacity arm's seed 0 from its own checkpoint prints
+`bias [89, 89, 0, 0, 89]` — the offset-by-44 form of `[+45, +45, −44, −44,
++45]`, **five of five lanes pinned, on both rails**. A ×8 rescale buys eight
+times the range for **+3 payload bytes**.
+
+### The knob, and the no-op receipt
+
+`model.biasscale: S` — the payload stores `round(b·32·g/S)` and the engine
+reads `bd·S/(32·g)`. Five sites move together: the exporter (both encoders),
+the post-step clamp, the gridste snap inside forward, and the artifact now
+**records its own scale** (`bias_scale` in the pickle), because a payload
+whose digits mean something non-default and does not say so is the decoder
+defect in slow motion.
+
+**The default must be invisible, and that is checked, not asserted.**
+Re-exporting `220_cap_n5b_s0` from its own checkpoint under the patched code
+reproduces its stored 949-character payload **BYTE-IDENTICALLY**. The
+baseline was taken the same way *before* the patch, so the comparison is
+against a measured artifact rather than against a belief about one.
+
+`certify_or_raise` now **REFUSES** `biasscale != 1` on the structured and
+two-layer paths: `BIAS_ABS = 44` is baked into their certified accumulator
+bound, so a scaled bias would leave the certificate describing a different
+model. `arch=residual` is not certified at all, which is precisely why
+stage 1 can run — stated so nobody reads the silence as approval.
+
+### Stage 1 cannot ship, and that is the point
+
+All three shipped decoders (`replnet_proto.py`, `make_n6_proto.py`,
+`make_ml2_proto.py`) and `verify_export` hardcode the `[-44, 45]` digit with
+no scale. An S=8 payload is therefore **one no entry can read**, and this run
+gets **no selector games whatever its number**. It answers the cheap question
+first — *does the net want the range?* — and only a pass at the registered
+bar buys the ~40 lines of decoder-side work. Building the format first and
+asking afterwards is how the campaign accumulated three encoder/decoder
+incidents; this is the same lesson applied before the fact instead of after.
+
+Gate as registered: refval ≤ 0.01760778 or outval Brier ≤ 0.12764673, and
+better than the best control seed on that statistic.
