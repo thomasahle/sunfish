@@ -82,8 +82,8 @@ in the git history of this file.
   illegal moves).
 - `adaptive_gp.py`, `logistic_gp.py`, `all_parameters.json` — an
   asynchronous logistic-GP game tuner and its mixed search/evaluation space.
-  `sunfish_gate.py` prevents policies below the fixed-depth mate floors
-  (20/20 mate-in-two and 12/14 mate-in-three) from consuming games.
+  `sunfish_gate.py` prevents policies that lose the curated eventual-mate
+  guarantees from consuming games.
 - `tmlib.py`, `tmsim.py`, `vmatch.py`, `tmmatrix.py`, `npsprofile.py`,
   `npsmodel.json` — the TIME-MANAGEMENT surrogate (see below): the formula
   mirrors, the stage-0 trajectory simulator, the virtual-clock match driver,
@@ -155,8 +155,8 @@ MATE_DIST FUEL_NULL FUEL_MIN_DEPTH FEN_HIST` (`NULL_CAP_MARGIN=-1` follows
 `EVAL_ROUGHNESS`, `NULL_MARGIN` is the fuel-probe target margin, and the two
 `NULL_*_RED` knobs control the shallow and deep probes; `FUEL_NULL` controls
 the hot node's extra depth cost, while zero skips the probe but retains the
-static intrinsic-LMR guard). `FUT_CAP` selects no shallow cap, the
-current quiet-move cap, or the simpler negative-`value()` cap;
+static intrinsic-LMR guard). `FUT_CAP` selects no shallow cap, the current
+quiet-move cap, or the simpler negative-`value()` cap;
 `FUT_CAP_DEPTH` selects its horizon. `FEN_HIST=0` restores the pre-2026-08-16
 one-ply `position fen` history; `1` (default) is the driver's two-ply
 construction for black-to-move FENs, which is what a match actually plays. `VALUE_N VALUE_B

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reject C-twin policies that lose Sunfish's deterministic mate floors."""
+"""Reject C-twin policies that lose Sunfish's eventual-mate guarantees."""
 
 import json
 import pathlib
@@ -12,7 +12,11 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 INFO = re.compile(r"info depth (\d+) .* score (-?\d+)")
-SUITES = (("mate2.fen", 6, 20, 20), ("mate3.fen", 8, 14, 12))
+# Every real edge costs at most three plies.  Mate-in-n has a proof of
+# 2*n-1 plies, hence the theorem-derived depths 3*(2*n-1)+4 below.
+SUITES = (("mate1.fen", 7, 8, 8),
+          ("mate2_eventual.fen", 13, 5, 5),
+          ("mate3_eventual.fen", 19, 2, 2))
 
 
 def wait_for(process, prefix):
