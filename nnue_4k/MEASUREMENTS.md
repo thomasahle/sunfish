@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-17 | **PRE-REGISTERED: the POOL takes classic's builtin clock (and its packed artifact) — the record shows the pool WON this venue's Elo cells in 2026-08-15's ranking pass (`min40_4` vs `pool` −114/−134/−114) and lost it only on the one-line elegance tiebreak, so the merits were never settled** | Fixed **N=300 at 30+1**, real clock, box, no SPRT, adjudication NONE, srand 20260901; branches written before game 1 (wins-clear → land / null → do not land / loses → record a reversed surrogate rank). Surrogate replication of the decision cell: **−223.3 [−345.5, −136.6]** for `min40_4` vs `pool`, 60 games, zero floor substitutions. Port priced: budget alone **+37 B / +0 lines** and NOT the measured object; budget + MTD-bracket soft rule **+77 B / +4 lines**. Raises the +400 goalpost by design |
 | 2026-08-17 | Classic consumer-side scoring and exact captures | **+25.4 ± 19.0 Elo fixed-node**, −2.36% nodes, 149→142 lines; real-clock pending |
 | 2026-08-17 | Classic unified caps | **+14.3 ± 15.0 Elo timed**, 1,000 games; keep at 149 lines |
 | 2026-08-17 | Classic unified shallow/lazy caps | **+8.0 ± 12.1 Elo fixed-node**, −2.39% nodes, 150→149 lines; timed C confirmation running |
@@ -135,6 +136,116 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-17 — PRE-REGISTRATION: the POOL takes classic's builtin clock, and the record says why this was still open
+
+**Written before game 1 of the confirmation.** Thomas asked whether the new TM
+formula, measured at **+102.47 ± 32.43** on the 4k entry, should go into classic
+as well. The number does not transfer — it is an entry-vs-entry ablation
+(`pool` vs the entry's `smooth` budget, 30+1, fixed N=300) — but the question
+does, and the first job was to find out whether measurement had already
+answered it.
+
+### THE RECORD FIRST: the pool was in the candidate set at this venue, and it WON
+
+The 2026-08-15 ranking pass (`tools/ctwin/README.md`; verdict entry "min40-4
+takes the classic-builtin venue") put the pool against BOTH classic candidates
+on the surrogate. It is not a case of a rejected candidate being re-proposed:
+
+| arm | vs | 60+0.1 | 30+1 | 60+1 |
+|---|---|---|---|---|
+| `min40_4` (shipped) | `pool` | **−114** [−208,−34] | **−134** [−218,−62] | **−114** [−198,−41] |
+| `onemax` | `pool` | **−215** [−328,−132] | **−114** [−201,−39] | **−120** [−206,−47] |
+
+That entry's own words: *"the full pool manager beats min40-4 at every
+increment TC by +114 to +134. min40-4 wins the ONE-LINE venue, not the field.
+The pool costs +57 B and a manager; this costs −7 bytes."* **min40_4 took the
+venue on the pre-declared elegance tiebreak and the byte price, with the Elo
+cell reading against it.** So the question is open on the merits and always
+was; what is new is that the price is now measured rather than estimated.
+
+### THE OBJECT, and the port that does NOT work
+
+`sunfish.py`'s `go` handler — which is **only** reached by the packed classic
+artifact (`pack.sh` deletes the `minifier-hide` block and the
+`sunfish_ui.uci` import with it; a checkout or wheel reaches the driver, which
+has run the pool by default since #204). Two ports were built and priced
+against master `5a7d744` (`classic.packed` 3426 B, 152 clean lines):
+
+| port | what it is | packed | clean lines |
+|---|---|---|---|
+| budget only | pool `(soft, hard)`, soft read at any yield | 3463 B (**+37**) | 152 (**+0**) |
+| budget + bracket rule | …soft read only where the MTD bracket closed | 3503 B (**+77**) | 156 (**+4**) |
+
+**The cheap port is not the measured object, and the surrogate says it is not
+worth having.** New arm `poolyield` in `tmlib` (the pool's numbers, delegated
+so they cannot drift, under classic's own `yield_frac` stop rule), read at the
+counts fixed before harvest:
+
+| arm | vs | TC | games | Elo (95%) |
+|---|---|---|---|---|
+| `min40_4` | `pool` | 30+1 | 60 | **−223.3** [−345.5, −136.6] |
+| `pool` | `poolyield` | 30+1 | 120 | *in flight* |
+| `poolyield` | `min40_4` | 30+1 / 60+1 / 60+0.1 / 60+0 | 60/60/120/120 | *in flight* |
+
+The 30+1 replication of the published cell is **−223.3 [−345.5, −136.6]** with
+**zero floor substitutions** (`floorbk` 0), so unlike the +147 legacy cell this
+one carries no structural-floor bias in either direction. Consistent with the
+published −134 [−218,−62]; larger, and both intervals exclude zero.
+
+**The mechanism, from the same cell:** median spend is *identical* (1.218 s
+pool vs 1.236 s min40_4) — the pool is not simply spending more. What differs
+is the tail and the stop: max spend 7.414 s vs 1.650 s, and **29% of
+min40_4's moves end at the WALL** (934 of 3180 `deadline` stops) against
+**10% of the pool's**, which ends 90% of its searches on the soft limit. A
+budget whose wall sits 1.25× above its soft target has nowhere to put an
+unsettled move; the pool's sits 5× above. **That headroom is unreachable
+without the bracket rule** — a break at any yield stops at the soft limit and
+the wall is never approached — which is why the +37 B port is the wrong one
+even though it is cheaper.
+
+### THE BAR, fixed before game 1
+
+| | |
+|---|---|
+| arms | classic packed artifact, `pool` (budget + bracket rule) vs shipped `min40_4`, sha-verified after transfer |
+| form | **fixed N=300, 30+1, no SPRT, no stopping rule, adjudication NONE** |
+| venue | bench box, `nice 10`, concurrency 8, free-core gate (≥ 24 of 96) before launch; HOLD AND REPORT if it never clears |
+| book | `book3k.pgn` (PGN — the packed loop parses only `position startpos moves …`) |
+| srand | **20260901**, fresh |
+| reading | pentanomial Elo with a 95% interval, W/L/D, game count verified against the fixed 300 |
+| tripwires | **any illegal move = STOP. any time forfeit = VOID.** Both counted from the PGN, per arm |
+| cotenancy | recorded at launch and at finish; the owner's tuner fleet is untouchable — not reniced, not paused, not counted as mine |
+
+**Branches, pre-written — the result may not pick the rule:**
+
+- **WINS CLEAR** (whole 95% interval above 0): land the pool in
+  `sunfish.py`'s builtin loop, +77 B and +4 clean lines stated in the PR, the
+  README line-count claim moved 152 → 156, `tmlib` re-pinned to the new
+  literal so the drift tripwire keeps working.
+- **NULL** (interval contains 0): **do not land.** The surrogate ranked it
+  first and the real clock did not confirm; report the pair and leave
+  `min40_4` shipping. One real-clock arm was bought and it is spent.
+- **LOSES** (interval below 0): do not land, and record it as the second case
+  of a surrogate rank the real clock reversed — which is a finding about the
+  instrument, not just about the arm.
+
+**Scope, and the hole that is NOT being fixed here.** The claim is increment
+TCs. With no increment the pool is empty below `(M+2)·O` = 8.4 s of clock, so
+`soft` collapses to the 0.05 s floor and the quarter-clock clamp becomes
+unreachable: at a 5 s sudden-death clock the classic pool reaches depth 3 where
+min40_4 reaches depth 4, and the driver's own arm measured **−209.91 ± 60.11**
+at a 1 s clock. It is disclosed in the code comment, it never flags, and
+scoping the pool to `P > 0` is a **design change with its own screen to run**.
+What ships is what was measured — the same formula the driver and the entry
+already ship, cliff included, so all three sites stay one arithmetic.
+
+**THIS MEASUREMENT RAISES THE +400 GOALPOST, and that is chosen, not
+overlooked.** `classic.packed` is the entry's opponent in the progress meter
+(meter 3: **+200.24 ± 38.35** at 60+1). Strengthening classic's clock moves the
+bar the entry has to clear by roughly whatever this match reads. Thomas asked
+for it knowing that.
+
 
 ## 2026-08-17 — Classic: consumer-side scoring and exact captures
 

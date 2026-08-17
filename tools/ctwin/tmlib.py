@@ -58,9 +58,24 @@ EVAL_ROUGHNESS = 15
 # Managers that no shipped engine carries yet.  A missing pin is news, not a
 # failure, for exactly these -- and the moment one lands, the same grep starts
 # reporting where, with no edit here.
-CANDIDATES = {"min40_4", "onemax"}
+CANDIDATES = {"onemax"}
 
 PINNED = {
+    # THE CLASSIC BUILTIN CLOCK, MILLISECONDS -- sunfish.py's `go` handler, the
+    # packed classic artifact's whole time manager (a checkout reaches the
+    # driver instead).  It became the pool on 2026-08-17; before that it ran
+    # min40_4 (#196), whose pin is retired just below.
+    #
+    # Only the SOFT line is pinned, and on purpose: it carries every constant
+    # (39*winc, 42*200, /40, the 400 and the /4), so drift in any of them shows
+    # up here.  The wall and the soft clip that follow it are asserted in
+    # tests/test_classic_time_budget.py, which lifts all three statements and
+    # grid-checks the pair against uci.pool_budget -- the artifact and the
+    # driver being ONE arithmetic is the thing that makes the duplication safe,
+    # and it is checked numerically rather than by pinning text twice.
+    "pool_classic": (
+        "sunfish.py",
+        "soft = min(max(0, wtime + 39 * winc - 42 * 200) / 40, max(0, wtime - 400) / 4)"),
     # sunfish_ui/uci.py:467 (master f95f49c) -- classic's incumbent, SECONDS.
     # Also uci.py:712 on branch tm-pool-manager, unchanged there.
     "legacy12": (
@@ -68,19 +83,6 @@ PINNED = {
     # sunfish_ui/uci.py:452 -- the movestogo branch of the same manager.
     "legacy12_mtg": (
         "sunfish_ui/uci.py", "min(wtime / movestogo + winc, wtime / 2 - 1)"),
-    # CANDIDATE (in CANDIDATES above), so its absence from the tree is
-    # reported as "not landed yet" rather than as drift.  It IS implemented on
-    # branch classic/tm-min40-4: sunfish.py:601 at a7d9a6c, in the classic
-    # built-in clock, and the text there is byte-identical to this literal.
-    #
-    # THAT BRANCH RUNS IT IN MILLISECONDS and this mirror runs it in SECONDS,
-    # and both are right -- which is the candidate's whole claim, now
-    # demonstrated by two independent implementations rather than argued.
-    # verify() grid-checks this literal in BOTH units for exactly that reason.
-    # Its driver matches the packed family too: max(think, .05) as the
-    # deadline, `(best or cand) and elapsed > think * 0.8` at every yield,
-    # and no opening ramp -- which is what FAMILY says about it below.
-    "min40_4": ("sunfish.py", "min(wtime / 40 + 0.9 * winc, wtime / 4)"),
     # CANDIDATE, the classic lane's sibling to min40_4 competing for the same
     # line: branch classic/tm-one-max-pool, sunfish.py:601 at 3a48984.
     # MILLISECONDS, and unlike min40_4 that matters -- the 8000 and the 50
@@ -272,6 +274,50 @@ def pool(wtime, winc, movestogo=None, ply=0, overhead=0.2, moves=40,
     return Budget(min(max(soft, TM_FLOOR), hard), hard, "mtd_converged", None)
 
 
+def poolyield(wtime, winc, movestogo=None, ply=0, **kw):
+    """CANDIDATE (classic lane, 2026-08-17): THE POOL'S NUMBERS, READ BY
+    CLASSIC'S OWN STOP RULE.
+
+    Identical (soft, hard) to `pool` -- it DELEGATES rather than restating the
+    arithmetic, so the two cannot drift -- but the soft limit is read at EVERY
+    yield, `if (best or cand) and elapsed > soft: break`, instead of only at a
+    yield where the MTD bracket has closed.
+
+    Why the arm exists.  Classic's builtin loop already has the two-limit
+    shape the pool needs: a `searcher.deadline` wall and a break tested at
+    every yield.  So the pool's BUDGET ports into `sunfish.py` in three lines
+    while the bracket rule is a second, separable mechanism costing three
+    more.  On a 152-line engine that difference is the whole elegance
+    argument, so it gets measured instead of assumed: `pool` minus
+    `poolyield` is the price of the bracket rule, and `poolyield` minus
+    `min40_4` is what the cheap port actually buys.
+
+    `frac` is soft/hard rather than a constant because replay reads
+    `frac * hard` for a yield_frac arm, and the target here is `soft` itself
+    -- the pool's wall is 5x its soft limit, not 1.25x, so no fixed fraction
+    of the wall would name the same number.
+    """
+    b = pool(wtime, winc, movestogo, ply=ply, **kw)
+    return Budget(b.soft, b.hard, "yield_frac", b.soft / b.hard)
+
+
+def min40_4c(wtime, winc, movestogo=None, ply=0, **kw):
+    """CANDIDATE (classic lane, 2026-08-17): min40_4's NUMBERS under the pool's
+    stop rule -- the other diagonal of the 2x2, and the arm that says whether
+    the pool's win is its arithmetic, its stop rule, or the INTERACTION.
+
+    The mechanism to attribute: the bracket rule's whole effect is to let an
+    unsettled search run PAST the soft limit, out to the wall.  How much that
+    is worth is bounded by hard/soft -- 5x for the pool, and only 1/0.8 = 1.25x
+    here, because min40_4 derives its soft limit as a fraction of its own wall.
+    So this arm is predicted small, and the prediction is what makes it worth
+    one cell: a null here plus a null on `poolyield` says the pool's Elo lives
+    in neither half alone.
+    """
+    b = min40_4(wtime, winc, movestogo, ply=ply, **kw)
+    return Budget(b.soft, b.hard, "mtd_converged", None)
+
+
 def dynamic_target(soft, stable_iters=0, changed=False, score_drop=0.0, mate=False):
     """uci.py `dynamic_target` (tm-pool-manager 7e8e1ff, lines 143-165).
 
@@ -327,13 +373,15 @@ def cap_binds(manager, wtime, winc, ply=40, **knobs):
         return t * t / (2 * t + 4000) < t * (1000 + 20 * i) / (40000 + 240 * i) + 0.9 * i
     if manager == "legacy12":
         return wtime / 2 - 1 < wtime / 12 + 0.9 * winc
-    if manager == "min40_4":
+    if manager in ("min40_4", "min40_4c"):
         return wtime / 4 < wtime / 40 + 0.9 * winc      # binds below T = 4*I
     if manager == "onemax":
         # No cap exists; the only shape change is the FLOOR, which the max()
         # applies at wtime == 10 - 40*winc seconds.
         return (t - 8000) / 40 + i < 50
-    if manager == "pool":
+    if manager in ("pool", "poolyield"):
+        # Same budget, so the same knee: poolyield changes only how the soft
+        # limit is READ, and a knee is a property of the two competing terms.
         overhead = knobs.get("overhead", 0.2)
         if knobs.get("phase_m"):
             m = max(20, 46 - ply / 2)
@@ -345,7 +393,8 @@ def cap_binds(manager, wtime, winc, ply=40, **knobs):
 
 MANAGERS = {"legacy12": legacy12, "oldtm": oldtm, "steptm": steptm,
             "smooth": smooth, "pool": pool, "min40_4": min40_4,
-            "onemax": onemax}
+            "onemax": onemax, "poolyield": poolyield,
+            "min40_4c": min40_4c}
 # Which DRIVER each manager was measured in.  It selects exactly one thing:
 # classic's opening ramp (`if len(hist) < 8: think = min(think, len(hist) +
 # random())`, uci.py:474), which the packed artifact does not have.
@@ -353,15 +402,21 @@ MANAGERS = {"legacy12": legacy12, "oldtm": oldtm, "steptm": steptm,
 # `pool` is listed as packed ON PURPOSE.  Its arithmetic is uci.py's
 # `pool_budget`, but the arm that measured +119.9 +/- 36.4 was the PACKED
 # `pooltm` mod, and the packed driver has no ramp.  Reproducing that number
-# with a ramp attached would be reproducing a different manager.  Worth
-# knowing when the pool lands in classic: uci.py:719-722 DOES ramp it (and
-# clamps the soft limit to the ramped value), so classic's pool and the
-# measured pool differ for the first eight plies of every game.
+# with a ramp attached would be reproducing a different manager.
+#
+# CORRECTED 2026-08-17.  An earlier note here said the driver ramps the pool,
+# so a classic pool would differ from the measured one for eight plies.  That
+# is no longer true and the fix is deliberate: uci.py scopes the ramp to the
+# incumbent manager ("THE RAMP BELONGS TO THE INCUMBENT MANAGER ONLY, and that
+# is a measurement rule before it is a design one"), and the classic builtin
+# clock -- which is where the pool landed on 2026-08-17 -- has never had a
+# ramp at all.  So all three shipped pools ARE the measured manager.
 FAMILY = {"legacy12": "classic", "oldtm": "packed", "steptm": "packed",
           "smooth": "packed", "pool": "packed", "min40_4": "packed",
           # Same classic-builtin driver as min40_4: max(think, .05) deadline,
           # `(best or cand) and elapsed > think * 0.8` at every yield, no ramp.
-          "onemax": "packed"}
+          "onemax": "packed", "poolyield": "packed",
+          "min40_4c": "packed"}
 
 
 # ----------------------------------------------------------------- verify ---
@@ -448,12 +503,30 @@ def verify(roots=(), verbose=True):
     # said_they_do), which is a stronger check on frozen, no-longer-shipping
     # formulas than re-deriving a pin from nothing would be.
     #
-    # The candidate is unit-independent, so its literal is checked in BOTH
-    # units -- if the mirror ever acquired an absolute constant this is where
-    # it would show.
-    grid("min40_4", min40_4, PINNED["min40_4"][1], 1, lambda v: max(v, TM_FLOOR))
-    grid("min40_4/ms", min40_4, PINNED["min40_4"][1], 1000,
-         lambda v: max(v / 1000, TM_FLOOR))
+    # min40_4 kept its own pin until 2026-08-17, grid-checked in BOTH units
+    # because it is the one unit-independent expression here.  RETIRED there,
+    # not re-anchored: the classic builtin clock it lived in now runs the pool
+    # (the `pool_classic` pin above), so no live text remains on any branch.
+    # The mirror stays -- it is the CONTROL arm in every cell this lane has
+    # measured, and a control that has been deleted cannot be re-run -- and
+    # the unit-independence claim is asserted numerically instead, in
+    # test_tm_surrogate.py's test_min40_4s_expression_commutes_exactly_with_
+    # unit_scaling.
+    #
+    # The landed classic pool, MILLISECONDS: the same _POOL_MS_TEXT block the
+    # 4k entry runs, so it is gridded against the pool mirror below rather than
+    # a second time here.  What IS checked here is that the shipped soft line
+    # reproduces that block's `soft` exactly, in the ms domain it is written in.
+    for t in GRID_T:
+        for i in GRID_I:
+            env = {"min": min, "max": max, "wtime": 1000 * t, "winc": 1000 * i}
+            exec(PINNED["pool_classic"][1], env)   # noqa: S102 - shipped text
+            ref = {"min": min, "max": max, "wtime": 1000 * t, "winc": 1000 * i}
+            exec(_POOL_MS_TEXT, ref)               # noqa: S102 - landed formula
+            assert abs(env["soft"] - ref["soft"]) < 1e-9, (
+                "classic's shipped soft line != the landed pool at T=%s I=%s: "
+                "%r vs %r" % (t, i, env["soft"], ref["soft"]))
+            checked += 1
     # one-max carries its own floor inside the pinned expression (the 50), so
     # nothing is re-applied after it.
     grid("onemax", onemax, PINNED["onemax"][1], 1000, lambda v: v / 1000)
@@ -491,7 +564,7 @@ def verify(roots=(), verbose=True):
         path, present = _pinned_present(relpath, literal, roots)
         if name in CANDIDATES and not present:
             report.append("  %-13s CANDIDATE: not landed in %s here (branch "
-                          "classic/tm-min40-4 has it)" % (name, relpath))
+                          "classic/tm-one-max-pool has it)" % (name, relpath))
             continue
         if path is None:
             report.append("  %-13s UNCHECKED against source: %s not in %s"
@@ -512,6 +585,9 @@ def verify(roots=(), verbose=True):
                   "mirror kept, not source-checked")
     report.append("  smooth        RETIRED at 5f16bae (superseded by the pool); "
                   "mirror kept, not source-checked")
+    report.append("  min40_4       RETIRED 2026-08-17 (classic's builtin clock "
+                  "became the pool; see the pool_classic pin); mirror kept as "
+                  "the CONTROL arm, not source-checked")
     report.append("  pool_ms       LANDED at 5f16bae into make_pst_entry.py's "
                   "_pooltm (make_variants.py no longer has it); that file does "
                   "not resolve on this checkout, so grid-assert only (below), "
