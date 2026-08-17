@@ -429,20 +429,16 @@ class Searcher:
             # the QS lower bound, otherwise we would get search instability.
             # We will search it again in the main loop below, but the tp will
             # make this mostly free.
-            # At depths 2-3, a non-checking move is capped by its static gain.
+            # At depths 2-3, every ordinary move is capped by its static gain.
             # A cap below gamma skips the child; otherwise min transports the
             # child report to the same fixed capped value.
             def score_move(move, val):
-                child = pos.move(move)
                 move_depth = d - 1 - (not root and guard and val < LMR)
                 cap = MATE_UPPER
-                if 2 <= depth <= 3 and pos.board[move.j] == "." and move.j != pos.ep and not move.prom:
+                if 2 <= depth <= 3 and val < MATE_LOWER:
                     cap = min(MATE_LOWER - 1, pos.score + val + (depth - 1) * QS_A)
-                check = cap < gamma and child.rotate(nullmove=True).king_capture()
-                if cap < gamma and not check: return None, cap
-                score = -self.bound(child, 1 - gamma, move_depth)
-                check = check or score > cap and child.rotate(nullmove=True).king_capture()
-                return move, score if check else min(cap, score)
+                if cap < gamma: return None, cap
+                return move, min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
 
             if killer and pos.value(killer) >= val_lower:
                 yield score_move(killer, pos.value(killer))

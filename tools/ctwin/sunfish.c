@@ -89,7 +89,7 @@ static int NULL_RED = 7;         /* deep fuel-probe reduction */
 static int IID_MIN_DEPTH = 99;   /* tuned off; retained as a lab knob */
 static int IID_RED = 3;          /* IID depth reduction */
 static int FUT_MAX = 1;          /* futility pruning when depth <= this */
-static int FUT_CAP = 1;          /* 0 off, 1 quiet moves, 2 negative value */
+static int FUT_CAP = 1;          /* 0 off, 1 ordinary moves, 2 negative value */
 static int FUT_CAP_DEPTH = 3;
 static int MATE_DIST = 1;        /* mate scores carry distance (master: 0) */
 /* Replacement-policy battery knobs (tp_move only; tp_score untouched).
@@ -711,27 +711,17 @@ static int has_big_piece(const Pos *p) {       /* any(c in board for "RBNQ") */
 
 static int bound(const Pos *pos, int gamma, int depth, int root, int qstail);
 
-static int gives_check(const Pos *child) {
-    Pos before = rotate(child, 1);
-    return king_capture(&before, NULL);
-}
-
 static int score_move(const Pos *pos, Move move, int val, int gamma,
         int depth, int rd, int root, int guard, int *real) {
     Pos child = domove(pos, move);
     int move_depth = rd - 1 - (!root && guard && val < LMR);
     *real = 1;
-    int capped = FUT_CAP == 1 ? pos->b[move.j] == '.'
-        && move.j != pos->ep && !move.prom : FUT_CAP == 2 && val < 0;
+    int capped = FUT_CAP == 1 ? val < MATE_LOWER : FUT_CAP == 2 && val < 0;
     if (2 <= depth && depth <= FUT_CAP_DEPTH && capped) {
         int cap = pos->score + val + (depth - 1) * QS_A;
         if (cap >= MATE_LOWER) cap = MATE_LOWER - 1;
-        if (cap < gamma) {
-            if (!gives_check(&child)) { *real = 0; return cap; }
-            return -bound(&child, 1 - gamma, move_depth, 0, 0);
-        }
+        if (cap < gamma) { *real = 0; return cap; }
         int full = -bound(&child, 1 - gamma, move_depth, 0, 0);
-        if (full > cap && gives_check(&child)) return full;
         return cap < full ? cap : full;
     }
     return -bound(&child, 1 - gamma, move_depth, 0, 0);

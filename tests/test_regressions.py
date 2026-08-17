@@ -276,30 +276,29 @@ class TestIntrinsicLMR:
 class TestShallowNullMateFloor:
     """#205 coupled the shallow null candidate to the deep probe's reduction.
 
-    Together with root LMR, that hid this forced mate at the CI depth-six
-    floor. Shallow null keeps its three-ply recurrence, and root moves get no
-    additional intrinsic reduction.
+    Together with root LMR, that hid this forced mate completely. Shallow null
+    keeps its three-ply recurrence, root moves get no intrinsic reduction, and
+    the finite shallow move cap may delay but not erase the proof.
     """
 
     FEN = "2q1r3/4pR2/3rQ1pk/p1pnN2p/Pn5B/8/1P4PP/3R3K w - - 1 0"
 
-    def test_depth_six_search_reports_mate(self):
+    def test_depth_eight_search_reports_mate(self):
         pos = hist_from_fen(self.FEN)[-1]
         result = None
         for depth, _, score, move in sf.Searcher().search([pos]):
-            if depth == 6:
+            if depth == 8:
                 result = score, move
-            elif depth > 6:
+            elif depth > 8:
                 break
         assert result is not None and result[0] >= sf.MATE_LOWER
 
 
 class TestStaticMoveCap:
-    """Quiet depth-two and depth-three moves have a fixed static upper cap.
+    """Ordinary depth-two and depth-three moves have a fixed static upper cap.
 
     A cap below the current window proves fail-low without a child search.
-    Captures, promotions, and checks remain uncapped so forcing play and the
-    existing mate-distance guarantees stay intact.
+    Only a king capture bypasses it and retains the exact mate sentinel.
     """
 
     def test_fail_low_caps_skip_all_starting_children(self):
@@ -313,14 +312,14 @@ class TestStaticMoveCap:
         assert score == max(caps) == 186
         assert searcher.nodes == 1
 
-    def test_bk15_forcing_capture_stays_full_depth(self):
+    def test_bk15_forcing_capture_recovers_above_cap_horizon(self):
         hist = hist_from_fen(
             "2r3k1/1p2q1pp/2b1pr2/p1pp4/6Q1/1P1PP1R1/P1PN2PP/5RK1 w - - 0 1")
-        moves = [render(hist, move) for _, move in stop_scan(hist, 4) if move]
+        moves = [render(hist, move) for _, move in stop_scan(hist, 7) if move]
 
         assert moves[-1] == "g4g7"
 
-    def test_en_passant_stays_full_depth(self):
+    def test_en_passant_uses_the_ordinary_move_cap(self):
         pos = hist_from_fen("4k3/8/8/3pP3/8/8/8/4K3 w - d6 0 1")[-1]
         ep = next(move for move in pos.gen_moves() if render([pos], move) == "e5d6")
         child = pos.move(ep)
@@ -335,7 +334,14 @@ class TestStaticMoveCap:
         searcher.bound = observed
         searcher.bound(pos, 1000, 2, root=True)
 
-        assert child in calls
+        assert child not in calls
+
+    def test_king_capture_keeps_exact_sentinel(self):
+        pos = hist_from_fen("4k3/8/8/8/8/8/4R3/4K3 w - - 0 1")[-1]
+        searcher = sf.Searcher()
+        searcher.root, searcher.history = pos, set()
+
+        assert searcher.bound(pos, sf.MATE_LOWER, 2, root=True) == sf.MATE_UPPER
 
 
 class TestFilteredCheckEvasion:
@@ -437,7 +443,9 @@ class TestMateDistance:
 
     The position below is the complaint in miniature: three mating moves
     and eight moves that mate in three, all scoring exactly 47923 on
-    master, and 47998 vs 47938 at depth 6 here."""
+    master, and 47998 vs 47938 at depth 6 here. The finite move cap can keep
+    a proof below the mate band at depths two and three; these guarantees
+    begin once the proof has moved above that frontier."""
 
     FEN = "8/3Q4/8/8/8/3R4/5K1k/8 w - - 0 1"
     FAST = ("d3h3", "d7h3", "d7h7")  # mate in 1
@@ -449,7 +457,7 @@ class TestMateDistance:
         searcher = sf.Searcher()
         return -searcher.bound(child, -sf.MATE_LOWER, depth - 1, root=True)
 
-    @pytest.mark.parametrize("depth", [4, 5, 6])
+    @pytest.mark.parametrize("depth", [6, 7, 8])
     def test_faster_mate_scores_strictly_better(self, depth):
         hist = hist_from_fen(self.FEN)
         fast = [self.yield_of(hist, m, depth) for m in self.FAST]
@@ -465,7 +473,7 @@ class TestMateDistance:
             f"same distance, different score: {fast} / {slow}"
         )
 
-    @pytest.mark.parametrize("depth", [2, 3, 4, 5, 6, 7, 8, 9, 10])
+    @pytest.mark.parametrize("depth", [4, 5, 6, 7, 8, 9, 10])
     def test_mate_in_one_score_carries_the_distance(self, depth):
         # Ra8# from a bare-rook mate: the score is the band floor plus the
         # depth the search still had in hand.

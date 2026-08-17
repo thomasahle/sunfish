@@ -488,7 +488,9 @@ class MixedAcquisitionTest(unittest.TestCase):
     def test_mate_gate_rejects_flat_mate_policies_before_running_engine(self):
         gate = pathlib.Path(__file__).with_name("sunfish_gate.py")
         self.assertEqual(sunfish_gate.SUITES,
-            (("mate2.fen", 6, 20, 20), ("mate3.fen", 8, 14, 12)))
+            (("mate1.fen", 7, 8, 8),
+             ("mate2_eventual.fen", 13, 5, 5),
+             ("mate3_eventual.fen", 19, 2, 2)))
         for options in ({"MATE_DIST": 0}, {"EVAL_ROUGHNESS": 0}):
             request = json.dumps({
                 "engine": "/does/not/exist",
