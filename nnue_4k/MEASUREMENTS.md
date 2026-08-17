@@ -4553,6 +4553,58 @@ truncated number is believed.
 
 ---
 
+## 2026-08-17 — AMENDMENT 2: the dormancy gate is DEADLINE-RELATIVE, because its object is truncation
+
+Registered **before side C completed and before any Elo of the re-run
+existed** — the venue diagnostic (1.19% over 1.45 s) was visible, the result
+was not. Recorded that way deliberately: a threshold changed after seeing an
+outcome is a moved bar, and this one was not.
+
+**Provenance of the flaw:** the 1.45 s / 1% form was specified in the void
+protocol and implemented faithfully; the error is in the specification, not
+the execution. Amendment 1's own fix invalidated its own gate — pinning the
+clock to 150 s made a 2 s move harmless, so a threshold meaning "truncated"
+silently became one meaning "slow".
+
+### (a) VOID condition — deadline-relative
+
+> On any fixed-node match: **any move ≥ deadline / 10 voids the match.**
+
+Tonight that is **15 s** under the 150 s pin — **5× above** the observed 2.96 s
+maximum and **10× below** the deadline. Zero such moves have occurred. The
+form generalises: whatever clock a future fixed-node match pins, the gate
+scales with it, because the quantity of interest is *proximity to the stop*,
+never wall-time.
+
+### (b) DIAGNOSTIC — reported, never voiding
+
+The full move-time distribution (median / p90 / p99 / max) **and** the
+≥1.45 s fraction, kept for continuity with tonight's evidence tables. These
+describe venue quality. They do not gate anything.
+
+### (c) PRIOR-SWEEP semantics — the old threshold is right for the old era
+
+For every match run **before** this hardening the deadline **was 1.5 s**, so
+**≥1.45 s ≈ 0.97 × deadline** is exactly the right truncation detector for
+that era. The sweep therefore keeps the 1.45 s threshold, and **states the
+per-match deadline alongside the fraction** so the ratio is legible rather
+than a bare number.
+
+### (d) Why load-immunity now actually holds
+
+Under a non-binding deadline the search is **deterministic in nodes**: both
+engines complete exactly 20,000 nodes regardless of wall-time, so the game
+tree — and therefore the outcome — is opening-determined and load-invariant.
+That is the load-immunity argument the campaign has been asserting for
+fixed-node screening all along; **it was false before the pin and is true
+after it.**
+
+Consequently the **quiet-venue census remains reported context, not a
+validity requirement**, for fixed-node matches under the pin. The desktop-load
+note stands as context: the laptop is not quiet tonight (Chrome/Spotify/etc.
+at ~100% each, 16 pypy3 on 12 cores), and under the pin that costs wall-time
+only.
+
 ## 2026-08-17 — AMENDMENT: fixed-node matches pin an explicit clock, and get a dormancy gate
 
 Registered before game 1 of the re-run. The confirmation was voided by a
