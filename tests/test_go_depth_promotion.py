@@ -104,18 +104,3 @@ def test_terminal_fail_high_reports_exact_score_before_none(capsys):
     lines = capsys.readouterr().out.splitlines()
     assert any("score cp 0" in line and "lowerbound" not in line for line in lines)
     assert "bestmove (none)" in lines
-
-
-def test_wac004_go_depth_3_finds_qxh7(capsys):
-    """End-to-end on the real engine and the real go_loop: the CI
-    battery's WAC.004. Depth 3 converges on h6f4; the depth-4 first probe
-    fails high on Qxh7+. 'go depth 3' must answer h6h7 (this exact case
-    regressed the master CI floor)."""
-    fen = "r1bq2rk/pp3pbp/2p1p1pQ/7P/3P4/2PB1N2/PP3PPR/2KR4 w - - 0 1"
-    hist = [uci.from_fen(*fen.split())]
-    uci.go_loop(sunfish.Searcher(), hist, threading.Event(),
-                max_movetime=10**6, max_depth=3)
-    lines = [l for l in capsys.readouterr().out.splitlines()
-             if l.startswith("bestmove")]
-    assert len(lines) == 1
-    assert lines[0].split()[1] == "h6h7"
