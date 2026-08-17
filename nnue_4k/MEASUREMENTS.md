@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-17 | **DISTRIBUTION CONFIRMATION: the NULL branch fires — distribution joins labels as a measured NON-LEVER, and the night's three headline gaps all dissolve into noise or venue** | N=300/side both-vs-entry on the box, hardened harness (fixed 20k nodes + pinned 150 s clock), **both gates PASS: 0 moves ≥15 s, 0.00% ≥1.45 s, max 1.231 s / 1.006 s, 0 illegal, 300/300 each**. **C self-play −93.70 ± 37.44** (63.17% to the entry), **B Lichess −134.95 ± 39.14** (31.50%). Registered gap **C−B = +41.25 ± 54.16, CI [−12.9, +95.4] — CONTAINS ZERO (0.76σ)** → **NULL as pre-written at `9abc2e1`**: no third pass at position/label sourcing at this capacity; the remaining lever is **capacity**, which needs the byte seam and Thomas's direction call. **No promotion** — both cells still lose to the entry. **Reconciliation**: every clean number sits inside the earlier intervals (matrix B −181.70 ± 87.88 vs clean −134.95; screen C −63.23 ± 93.36 vs clean −93.70), so **the matrix's +118 was n=50 noise** and **round-1's −240 was ~150 Elo of venue coupling**, not a correction. Both axes of the distribution×label matrix are now closed |
 | 2026-08-17 | **DISTRIBUTION×LABEL MATRIX: the LABEL axis is decisively NULL (0.28σ) and the DISTRIBUTION axis is the only live effect (1.81σ) — but no pair separates at n=50, so the AMBIGUOUS branch fires** | All three cells under ONE protocol (50 games vs entry @ `d0a6e60`, fixed 20k nodes, fresh srands, **150/150 games, 0 illegal, 0 forfeits**): **A Lichess+SF-deep −200.24 ± 93.38** (24%), **B Lichess+twin −181.70 ± 87.88** (26%), **C self-play+twin −63.23 ± 93.36** (41%). Holding positions fixed and swapping the label source moves **+18.54 Elo = 0.28σ** — labels are not the lever, and that is the cleanest null the campaign has produced. Holding labels fixed and swapping the distribution moves **+118.47 Elo = 1.81σ** in favour of our own self-play positions — the largest effect in the matrix and the only one worth chasing, but **not resolved**: all three intervals mutually overlap. Per the registration's AMBIGUOUS branch the response is **one fixed-N confirmation of the single contested pair (B vs C) at N=300** — not a re-run, not a new axis. **No promotion**: every cell still loses to the entry. Also note cell A re-measured at **−200** under this protocol against its historical **−107** (318-game SPRT screen) — cross-protocol, and a caution against quoting screen Elos as magnitudes | **POLL10 (passenger):** 300/300, count gate OK, 0 illegal, all `normal`, **zero time forfeits on both arms → SAFETY branch fires, the 4096-poll is SAFE at 10+0.1**. Elo: base **+20.87 ± 27.76** over poll4096 (53%) — **no gain where clock reads bind**, point negative for the arm and CI spanning zero, at **+1 byte** pack cost. Base sha `a997b137…` verified **bit-identical to the artifact that measured +244.47 at 60+1**. Safe-but-no-payoff → **no promotion, direction closed at this N/TC** |
 | 2026-08-16 | **λ SELECTOR VERDICT: BRANCH B FIRES — outcome-blended labels are strictly WORSE, the label hypothesis is weakened, and DISTRIBUTION is promoted to prime suspect** | Three 50-game fixed-node mini-matches vs the entry (`pst_entry.py` @ `d0a6e60`, 3410 B), per the SELECTOR SPEC, **0 illegal / 0 forfeits / 150 of 150 `normal`**: **λ=0 −190.85 ± 116.16 (25.0%)**, **λ=0.5 −181.70 ± 117.71 (26.0%)**, **λ=1 control −63.23 ± 93.36 (41.0%)**. **Monotone in λ** — pure cp best, every step toward game outcomes strictly worse at this corpus size. Applying `47a760a`'s pre-registration verbatim: Branch A required an experimental arm *meaningfully inside −100*; both sit 180+ behind, so **A does not fire**. Branch B required them to die *with a healthy control* — the control trained cleanly (corr(base,label) 0.883, beats both anchors, 57% sparsity) and is the best of the three, so **B FIRES**: the Leela-slice arm now outranks the λ dial. **NO PROMOTION**: top pick is λ=1 and it still LOSES to the entry — this is a direction verdict only. **The control's −63 point estimate is NOT claimable as beating the historical ≈−107 band**: n=50 screening, CI **[−156.59, +30.13]** spans both the band and zero, and the spec says a mini-match returns a pick, never an Elo for the ledger |
 | 2026-08-16 | **THE SPEED AXIS IS CALIBRATED — RELATION HOLDS. Pooled over all 1068 games the speed stack is **+32.30 ± 15.98** → **[+16.39, +48.35]**, the interval EXCLUDES ZERO, and the empirical slope is **1.28 ± 0.63 Elo per 1% nps** with the modelled 1.46 inside it. Speed projections stop being unvalidated-model-estimates** | Single pooled read exactly as registered (`5801806`): block 1 300 games srand 20260824 + block 2 768 games srand 20260825, **534 complete pairs**, ptnml **[29, 116, 181, 143, 65]**, score 54.63%. Tripwires on the new block read FIRST: **0 illegal, 0 forfeits, 768/768 `normal`** — and **0/0 across all 1068**, arms sha-verified identical in both blocks (prespeed 3405 B `5a207fdf…`, speed 3376 B `a997b137…`), venue gate 86 free cores. **Branches applied in interval form: HOLDS FIRES** (lo = +16.39 > 0 **and** point +32.30 ≥ +20); DISCOUNTED does not (UB +48.35); STILL-AMBIGUOUS does not; the terminal branch is **not** reached. **The projection was very nearly exact: +33 projected, +32.30 measured.** Slope **1.28 ± 0.63** — modelled 1.46 **inside**, **zero excluded**, so the nps→Elo relation at 60+1 is established rather than assumed. **Design B re-prices to +23.0 ± 11.4** (from a modelled +26.3) and every speed figure is now quoted at the empirical slope. **Sobering corollary**: closing the remaining ~200 Elo to +400 on speed alone needs **+156% more nps (a 2.56× speedup)** at the point estimate — 2.05× at the optimistic end, 4.07× at the pessimistic. **Method note that earned itself**: predicting this interval by scaling the OBSERVED se gave ±16.5 against an actual **±15.98 (3.3% off)**, where the settler's draw-rate-model prediction was 27% optimistic — the correction held |
@@ -4552,6 +4553,90 @@ fastchess's reported Elo and Ptnml on all three screens before any
 truncated number is believed.
 
 ---
+
+## 2026-08-17 — CONFIRMATION VERDICT: distribution is a NON-LEVER, and the night's instrument catch is the real result
+
+The re-run landed clean on the box and the pre-registered null fired.
+
+| side | score% | Elo vs entry | gate | diagnostic |
+|---|---|---|---|---|
+| **C — self-play positions** | 36.83% | **−93.70 ± 37.44** | **PASS** — 0 moves ≥15 s | 0.00% ≥1.45 s, max 1.231 s |
+| **B — Lichess positions** | 31.50% | **−134.95 ± 39.14** | **PASS** — 0 moves ≥15 s | 0.00% ≥1.45 s, max 1.006 s |
+
+300/300 each, **0 illegal**, arms sha-identical to the screen's, cross-venue
+identity proven moveless before game 1.
+
+### The registered statistic, applied verbatim
+
+**C − B = +41.25**, error `sqrt(37.44² + 39.14²) = ±54.16`, **95% CI
+[−12.9, +95.4]** — **contains zero** at **0.76σ**.
+
+> **NULL** (`9abc2e1`, written before any game): *the interval contains zero.
+> The matrix's 1.81σ was noise; distribution joins labels as a measured
+> non-lever, and both axes of this matrix are then closed. The program does
+> not get a third pass at position/label sourcing at this capacity — the
+> remaining lever is capacity, which needs the byte seam and Thomas's
+> direction call.*
+
+**No promotion**: both cells lose to the entry decisively.
+
+### Reconciliation — every earlier number was inside its own interval
+
+| quantity | earlier | clean | reading |
+|---|---|---|---|
+| B (Lichess+twin) | −181.70 ± 87.88 (n=50) | **−134.95 ± 39.14** | inside interval |
+| C (self-play+twin) | −63.23 ± 93.36 (n=50) | **−93.70 ± 37.44** | inside interval |
+| C−B gap | +118 (1.81σ) | **+41 (0.76σ)** | **n=50 noise** |
+| round-1 side C | −240.82 ± 45.97 | **−93.70** | **~150 Elo of venue coupling** |
+
+Nothing here was a real reversal. Two 50-game estimates regressed to their
+means, and one 300-game estimate was destroyed by a wall-clock deadline that
+the registration believed did not exist.
+
+### What the night actually produced
+
+Not a distribution result — **an instrument.** `go nodes` was never a pure
+node stop on this engine (`e_lam1.py` L809 default wtime 60000 → L832
+think 1500 ms → L847 deadline, polled L432), so "fixed nodes is load-immune"
+was **false as asserted** for the whole campaign. It is now true, by
+construction: the pinned clock makes the deadline unreachable, and the
+deadline-relative gate proves dormancy per match. Both confirmation sides
+recorded **0.00%** exceedance against the voided round's **26.98%**.
+
+### Flag rulings on the contaminated screens
+
+`ml2` (16.82%, 1.51× against its own arm) and `g70` (9.35%, 1.91×) are
+**flagged, and their re-runs are OPTIONAL HYGIENE** — queued behind all
+decision-relevant work, idle capacity only, hardened harness.
+
+**The bias is bounded rather than re-measured.** Void-C manufactured ~−177 at
+27% exceedance; scaling by exceedance and asymmetry puts ml2's artifact near
+**~−100** and g70's near **~−60**. Even at maximal plausible correction
+(−234 → ~−134, −300 → ~−240) both arms still lose decisively to the entry, so
+**the dead-eval-fits DIRECTION verdict survives unchanged**.
+
+**The anti-predictive finding takes a magnitude caveat**: it compared clean
+linear (−107, 0.00% exceedance) against contaminated ml2, so the *size* of the
+inversion is overstated. **The val-ban survives on protocol-robustness
+grounds** — game-based selection requires no assumption about val's
+correlation sign, so it is correct whether or not the inversion is as large as
+first reported.
+
+### CORRECTION (form a) — withdrawn claim, replaced text preserved
+
+In the ml2 screen's co-run note (2026-08-15) I wrote, verbatim:
+
+> *"Fixed-node play is deterministic, so the contention was wall-clock only
+> and neither result is affected."*
+
+**That claim is WITHDRAWN.** It was false when written: 16.82% of that match's
+moves hit the 1.5 s deadline, **1.51× more often on my own arm than on the
+entry's**, so the contention was not wall-clock only and the result was
+affected. The sentence stands in its original entry with this correction
+referenced; it is not edited away.
+
+(Poll10's verdict is already ledgered as a passenger on the matrix entry
+`eb9785a` and is not repeated here.)
 
 ## 2026-08-17 — AMENDMENT 3: the confirmation relocates to the box (pre-Elo)
 
