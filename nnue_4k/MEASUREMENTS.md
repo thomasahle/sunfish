@@ -4554,6 +4554,67 @@ truncated number is believed.
 
 ---
 
+## 2026-08-17 — CORRECTION + AMENDMENT: the nps bar is TWO-PART, and my decomposition was inverted
+
+### CORRECTION (form a) — the claim, verbatim, and why it is wrong
+
+Reported to the coordinator (and **caught before it reached any ledger entry
+or registration** — recorded here anyway, because a wrong number that nearly
+set a bar is worth keeping):
+
+> *"lam1 measured −93.70 against the entry — but ~50 of that is the speed tax,
+> so its eval is only ~−44 behind. The net isn't as evaluationally hopeless as
+> the play numbers looked; it's losing roughly half its deficit to being
+> slow."*
+
+**WITHDRAWN. It is backwards.** −93.70 was measured at **fixed 20 000 nodes
+under the pinned clock, with zero deadline exceedances** — both engines
+received exactly the same node budget regardless of wall-time. **Speed cannot
+enter that number.** Fixed-node results being speed-free is the entire reason
+the protocol exists, and this file already said so: *"fixed nodes hide the
+~19-op/eval speed tax"*. I subtracted a tax from a number that never contained
+one.
+
+**−93.70 IS the pure eval/search-quality gap at equal nodes.** The optimistic
+reading was wrong by ~50 Elo — in the direction that would have made every
+branch bar too generous.
+
+### The correct arithmetic, which runs the other way
+
+| term | value |
+|---|---|
+| fixed-node eval gap (measured, `7a86c50`) | **−93.70 ± 37.44** |
+| nps cost, measured on the box | **−39.4%** (19,818 vs entry 32,717) |
+| speed penalty at the calibrated slope (1.28 ± 0.63 Elo per 1% nps) | **−50.4 ± 24.8** |
+| **projected TIMED deficit** | **≈ −144 ± 45** |
+
+**The replnet family was always WORSE in real play than the fixed-node screens
+showed, not better.** Every screen Elo in this campaign understates the timed
+deficit by roughly the family's nps tax.
+
+### AMENDMENT — promotion requires BOTH parts
+
+> **(i) FIXED-NODE EVAL GAIN.** Measured vs the entry at equal nodes under the
+> hardened harness. This is the eval/search-quality term and it is speed-free.
+>
+> **(ii) TIMED-PLAY PROJECTION.**
+> `projection = fixed-node gain − (nps cost % × 1.28)` **> 0**, with the
+> candidate's own nps measured **before any selector game**. A capacity net is
+> only worth shipping if its eval gain outruns the speed it spends buying it.
+>
+> **(iii) FINAL GATE.** If the projection passes, a **fixed-N TIMED
+> confirmation** decides — the projection is a screen, never the verdict.
+
+**The bar rises as the arm spends its budget**: more parameters, fewer nps, a
+larger term (ii) to overcome. At a 60% nps cost the candidate needs **+77 Elo
+of fixed-node eval gain merely to break even in timed play** — while the
+current 3072-trit net sits 93.70 *behind* at fixed nodes. That is the size of
+the hole the capacity arm has to climb out of, stated before it starts.
+
+Consequently the **incremental accumulator and the cached-rotation substrate
+are load-bearing architecture, not optimisations** — they are the only levers
+that reduce term (ii) while term (i) grows.
+
 ## 2026-08-17 — GO: Thomas funds the CAPACITY ARM
 
 **Owner decision, recorded at the moment it was given.** Thomas, verbatim:
