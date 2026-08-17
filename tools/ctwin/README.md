@@ -151,10 +151,8 @@ the null-oracle fuel amount. It excludes
 `TABLE_SIZE` (a memory budget) and
 the historical or PR-only flavor selectors above; those belong in separate
 ablation matches, not in the production-parameter posterior. Its default
-point is current master: `NULL_LIMIT=60000` makes the score guard inactive;
-`500` is the separately tested PR #207 policy. The correctness gate applies
-to challengers, not the fixed opponent: master itself misses two mate-floor
-positions that the guarded candidates must recover.
+point is current master, including `NULL_LIMIT=750`. Every proposed challenger
+must pass the mate-floor correctness gate before games are spent.
 The numeric search domains cover the source's declared tuning ranges, except
 that `QS_A=0` is excluded because it would permanently filter moves instead
 of eventually widening the real tree. Evaluation ranges are limited by the
