@@ -16783,3 +16783,40 @@ have hit the same false alarm, and the natural response — lower the threshold
 the invariant (a frame error inverts exactly one side-to-move half) instead of
 a proxy calibrated to one labeller, so the class is closed rather than
 re-tuned.
+
+### Capacity arm queued — pre-flight validated on the closed corpus
+
+Three seeds registered and queued as `100_cap_n6_s0` / `101_..s1` / `102_..s2`
+(the runner picks `sorted()[0]`, so they precede the filler tail). Config, all
+three identical but for the seed: `arch residual, N=6, base mat, ternary 0.85,
+gridste 1`; `pool10m.npz`, `kind lambda-npz`, **`limit: 0`**, `split fenkey`;
+`l1 5e-4, satpen 0.03, lam 1.0`; `AdamW lr 3e-3 wd 1e-5, batch 8192, 6 passes,
+sched linear`.
+
+Pre-flight on the real corpus (2% slice, 1 pass) rather than discovering a
+defect three runs deep:
+- the truncation notice fires — `TRUNCATING 10000000 ... to limit=200000
+  (2.0%)`. This is why it exists: `limit` defaults to 4.1M, and the same run
+  with the default would have trained on 41% of the corpus while its record
+  claimed all of it.
+- the frame gate runs **inside the trainer** as well as at build time: wtm
+  +0.4879, btm +0.4707, spread 0.0172.
+- `optimizer AdamW(lr=0.003, wd=1e-05) schedule linear over 1 epochs` — the
+  parity change is live and printed into every run's record.
+- the export emits **six** gains, `[79, 62, 62, 66, 68, 63]`, confirming N=6
+  reaches the payload.
+- corpus parse costs ~20 s per 200k positions, so ~17 minutes per run at 10M.
+  A λ corpus is deliberately never cached (the cache format drops the outcome
+  channel), and that refusal is left alone rather than special-cased for
+  `lam=1` to save 34 minutes — it is a safety mechanism, not an inefficiency.
+
+**One log line that will look alarming and is not.** The exporter prints
+`1/6 bias digits CLIPPED to the payload range`. The payload stores bias digits
+`bd = round(b·32·g)` in `[-44, 45]`, and with gains near 62–79 that bounds the
+representable bias tightly. But `gvb()` applies **exactly that clamp inside
+forward** under `gridste` (`torch.clamp(..., -44.0, 45.0)`, straight-through),
+so the net trains against the clamped bias it will ship with. The notice
+reports a *binding clamp*, not lost fidelity — the registration's claim that
+nothing the artifact rounds is trained at a precision it lacks covers the range
+clip as well as the grid. Recorded because a future reader seeing `CLIPPED` in
+a run log would otherwise reasonably suspect a train/ship divergence.
