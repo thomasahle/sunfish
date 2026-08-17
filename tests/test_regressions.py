@@ -341,15 +341,35 @@ class TestStaticMoveCap:
         searcher = sf.Searcher()
         searcher.root, searcher.history = pos, set()
 
-        assert searcher.bound(pos, sf.MATE_LOWER, 2, root=True) == sf.MATE_UPPER
+        def recursive_call(*args, **kwargs):
+            pytest.fail("a king capture should be resolved before searching its kingless child")
+
+        searcher.bound = recursive_call
+        assert sf.Searcher.bound(
+            searcher, pos, sf.MATE_LOWER, 2, root=True) == sf.MATE_UPPER
+
+    def test_null_capture_substitution_ignores_a_quiet_killer(self):
+        pos = hist_from_fen("4k3/8/8/8/8/8/4R3/4K3 w - - 0 1")[-1]
+        passed = pos.rotate(nullmove=True)
+        quiet = next(move for move in pos.gen_moves() if pos.value(move) < sf.MATE_LOWER)
+        searcher = sf.Searcher()
+        searcher.root, searcher.history = None, set()
+        searcher.tp_move[pos] = quiet
+
+        def null_probe(child, gamma, depth, root=False):
+            assert child == passed
+            return 0
+
+        searcher.bound = null_probe
+        assert sf.Searcher.bound(searcher, pos, 0, 3) == sf.MATE_UPPER
 
 
-class TestFilteredCheckEvasion:
-    """A filtered legal evasion must be searched before certifying mate."""
+class TestPositiveDepthEvasion:
+    """Every positive-depth legal evasion must be searched before certifying mate."""
 
     CHILD = "8/8/8/8/8/8/1Q6/K1k5 b - - 0 1"
 
-    def test_lazy_tail_removes_false_mate(self):
+    def test_complete_move_fold_removes_false_mate(self):
         depth = 1
         sf.pst["K"] = sf.K_MID
         child = hist_from_fen(self.CHILD)[-1]

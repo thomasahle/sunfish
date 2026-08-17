@@ -167,8 +167,8 @@ eventual_classification_fuel_finite :
 plies -- is true of adjudicated chess (50-move plus threefold under match
 adjudication) and false of the ruleless modeled game. At `D >= C*N + 6` every
 node the classification depends on is reached before the frontier, so the
-masking sites are unreachable and `NoMaskedMobility`, the tail, and even
-`EvalQuiet` all drop out. The bound is *effective*: `2N + 8` for the
+masking sites are unreachable and `NoMaskedMobility` and even `EvalQuiet`
+drop out. The bound is *effective*: `2N + 8` for the
 null-only selector and `3N + 9` for intrinsic LMR (no classical `exists D0`).
 The file's entire footprint is
 `[propext, Quot.sound]`. The scope is eventual-only, by countermodel: `CexE`
@@ -176,12 +176,31 @@ The file's entire footprint is
 `CexD` satisfies it at budget 5 and still prices its drawable masked node in
 the mated band at depth 1 (`cexD_fuel_M1`) before classifying it correctly
 from depth 10 on (`cexD_M_eventually_classified`). Fixed-depth honesty below
-the bound still requires `NoMaskedMobility` or the #171 tail.
+the bound still requires complete move admission.
 
-## Shallow move caps and the lazy move tail
+## Positive-depth moves and shallow move caps
 
-At remaining depths zero through three, every admitted move except a king
-capture passes through the same static cap
+The Python producer admits only moves at or above `QS` at depth zero, but
+admits every pseudo-legal real move at positive depth:
+
+```text
+producerMoves(depth, pos) =
+  if depth = 0 then movesAbove(QS, pos) else moves(pos)
+```
+
+`producerMoves_zero` and `producerMoves_positive` state these two cases. The
+positive-depth theorem is structural: it needs no move-value floor, window,
+or move-table premise. In particular, no filtered legal evasion can fabricate
+a mate at the depth-one frontier.
+
+The producer also resolves an intrinsic mate-band move immediately as
+`MATE_UPPER`. `producedScore_capture` proves the arithmetic branch, while
+`producedScore_exact_capture` uses `HighValIsKingCapture` to show that the
+branch is an actual king capture. Recursing into its kingless child would only
+return `-MATE_UPPER`, so the normalization is exact.
+
+At depths zero through three, every other admitted move passes through the
+same static cap
 
 ```text
 min(min(MATE_LOWER - 1,
@@ -198,12 +217,6 @@ and three, the cap defines the selective move value. If it is below `gamma`,
 the child search is skipped. Otherwise `WindowReport.cap` transports the full
 child report through `min`.
 
-The main stream is sorted by decreasing intrinsic move value.
-`shallowMoveCap_mono_gain` shows that the first virtual capped report also
-bounds every remaining move, so the stream can stop there. The killer uses the
-same producer but cannot stop the stream because it was moved out of that
-intrinsic order.
-
 Only king captures bypass the cap. The cap is explicitly below the positive
 mate band, so it cannot create a positive mate value;
 `shallowMoveCap_below_positiveMate` and `cappedMove_positiveMate_only_from_full`
@@ -219,23 +232,9 @@ the selective frontier. It exists only at depths two and three, so deeper
 iterations move every fixed proof above that frontier. Its strength is an
 empirical question, separate from report correctness.
 
-At remaining depth one, an omitted move has intrinsic value at most
-`val_lower - 1`. Its child is a quiescence node, whose stand-pat candidate
-bounds the parent move from above by
-
-```text
-tail = pos.score + val_lower - 1
-```
-
-If `tail < gamma`, `lazyTail_failLow` lets the search emit that upper report
-without generating the omitted moves. Otherwise the threshold widens to the
-absolute score floor and every move is searched. `lazyTail_report` proves
-that both paths report on the same complete depth-one move fold. Thus
-`gamma` chooses proof work, not semantics, and no filtered legal evasion can
-certify mate. With the shipped constants, the table floor already admits every
-move at depth two and above. `lazyMoves_eq_moves` combines those two facts:
-the declared real-move set is complete at every positive depth, eliminating
-the masked-mobility premise from mate certification.
+Each ordinary cap is evaluated independently. A sub-window cap avoids only
+that move's child search; it does not terminate the producer. Thus ordering
+changes proof work but neither move membership nor the declared value.
 
 ## Mate distance
 
@@ -583,13 +582,11 @@ its IDEALISED exact-argmax form, so the driver's tolerance is not what breaks it
 
 Two things this settles.  **Acyclicity does not help**: `CexD` is a finite tree
 with no repetition in it, so no draw-by-repetition or well-founded-descent
-argument touches the failure.  **Depth does not help**: the masking sits one ply
-below the choice and stays there however large `d` grows, because the frontier
-travels with the search — `cexD_M4` values that very node honestly at remaining
-depth 4 while `cexD_M1` shows it lying at remaining depth 1. The lazy tail
-retires this premise: an upper report skips the tail only when it is below the
-window; otherwise the threshold widens to the proved move floor and searches
-every evasion. Positive-depth reports therefore target the complete move fold.
+argument touches the failure. **Depth does not help** when a selective frontier
+travels with the search. The current producer removes that frontier outright:
+at every positive depth it searches the complete move list, as stated by
+`producerMoves_positive`. Positive-depth reports therefore target the complete
+real-move fold without a masked-mobility premise.
 
 ## The eventual classification (`Eventual.lean`)
 
@@ -725,7 +722,7 @@ value function, the frontier tail is the only route left to retiring
 | ... and no repeated position anywhere | `cexE_acyclic` | `propext` |
 | ... which the failing premise is `NoMaskedMobility` | `cexE_masked` | `propext` |
 | a read-time clamp does not rescue it | `cexE_clamp_no_help` | `propext, Quot.sound` |
-| **the eventual trichotomy still needs the frontier premise** | `eventual_classification_needs_frontier` | `propext, Quot.sound` |
+| **trichotomy needs the frontier premise** | `eventual_classification_needs_frontier` | `propext, Quot.sound` |
 | the frontier tail classifies the same root correctly | `cexE_t_honest` | `propext, Quot.sound` |
 | both directions at once | `eventual_classification_verdict` | `propext, Quot.sound` |
 
@@ -773,8 +770,8 @@ The current `tp_move` contract is deliberately narrow:
 - terminal roots supply no move.
 
 The root entry is protected from FIFO eviction while its search is active.
-King-capture substitution separately preserves the exact `MATE_UPPER` promise
-at capturable nodes.
+King-capture substitution uses the position predicate directly, so its exact
+`MATE_UPPER` promise does not depend on move-table contents.
 
 ## Current source correspondence
 
@@ -783,15 +780,15 @@ at capturable nodes.
 | recursive zero-window move search | `Bound.bound_spec` |
 | null child report negation | `WindowReport.negate` |
 | lazy `min(pos.score + EVAL_ROUGHNESS, pass_report)` (depth < 6) | `cap_failLow`, `cappedNull_report` |
-| `target = pos.score + NULL_MARGIN` fuel probe (depth >= 6) | `hot_bit_determined`, `hot_bit_stable`, `fuel_edge_cost` |
+| fixed-target fuel probe | `hot_bit_determined`, `hot_bit_stable`, `fuel_edge_cost` |
 | static LMR eligibility and intrinsic move reduction | `intrinsic_edge_cost` |
 | real-move recursion at the reduced `d - 1` | `fuelValueD2t`, `eventual_classification_fuel` |
-| static evaluation bound keeps the cap below positive mate | `staticCap_in_scoreBand`, `staticCappedNull_below_positiveMate` |
-| unified shallow move cap and lazy fail-low | `shallowMoveCap_lowDepth`, `cappedMove_report` |
-| sorted capped-tail termination | `shallowMoveCap_mono_gain` |
+| static cap below positive mate | `staticCap_in_scoreBand`, `staticCappedNull_below_positiveMate` |
+| positive-depth complete producer | `producerMoves_positive` |
+| exact king-capture producer report | `producedScore_exact_capture` |
+| shallow move cap and lazy child evaluation | `shallowMoveCap_lowDepth`, `cappedMove_report` |
 | cap mate-band properties | `shallowMoveCap_below_positiveMate`, `cappedMove_preserves_negativeMate` |
 | filtered move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
-| complete positive-depth move set | `lazyTail_report`, `lazyMoves_eq_moves` |
 | sticky legality evidence and terminal override | terminal/finalizer results in `Stalemate.lean` |
 | king-capture evaluation margins and ordering | `EvalBounds.lean` |
 | `mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)` | `terminalValue`, `terminalValue_exact` |
@@ -809,7 +806,7 @@ tests and chess corpora validate those executable primitives.
 - `GameTree.lean`: chess-free negamax game model.
 - `Bound.lean`: core fail-soft search proof.
 - `CappedNull.lean`: capped-null report transport and score-band facts.
-- `CappedMove.lean`: shallow move caps and the lazy complete move tail.
+- `CappedMove.lean`: positive-depth move production and shallow move caps.
 - `Stalemate.lean`: selective-search fold, legality, and terminal finalizer.
 - `EvalBounds.lean`: numeric bounds induced by the piece-square tables.
 - `Killer.lean`: move-table legality and lifecycle.
