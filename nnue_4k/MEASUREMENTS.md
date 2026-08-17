@@ -4554,6 +4554,93 @@ truncated number is believed.
 
 ---
 
+## 2026-08-17 — CAPACITY ARM: the width/resolution point, registered
+
+The pricing lane's ceiling landed, so the one pending design axis closes.
+(Full report: `scratchpad/PACKED_ENTRY_COMPRESSION_PRICING.md`; staged branch
+`pack/entry-byte-stream-tables`.)
+
+### Container — two digit streams
+
+Payload ships as **two separate byte blocks, `v//14` and `v%14`, base-48**
+(base 56 straddles 0x40 and costs ~50 B), giving lzma a single `lc=3` literal
+context: **0.746 B/param** against today's mixed-radix **1.045**, improving
+with N. The container choice alone is worth **+241 int8-equivalent params**.
+linrock's per-group dictionary **inverts at our scale** (+86 B — 245 bits
+saved against a 567-bit codebook, on values already carrying 7.71 bits), and a
+second decompressor is moot since the artifact already ships in xz and pypy's
+`import lzma` alone costs 32.6 ms.
+
+### Seam — design to 686 B
+
+**686 B today.** The staged −48 repack would make it **734 B**, but it is
+entry-touching and needs Thomas's PR click, so **the arm is designed to 686
+conservatively** and the +48 is recorded as upside, not budget.
+
+### RESOLUTION: ternary — and the evidence is ours
+
+The menu at 686 B, storage only:
+
+| resolution | params | as ps768 lanes (after ~100 read-out tax) |
+|---|---|---|
+| **trit (3)** | **4756** | **N ≈ 6.06** |
+| 5-level | 3012 | N ≈ 3.79 |
+| 4-bit | 1999 | N ≈ 2.47 |
+| int8 | 889 | N ≈ 1.03 |
+
+**Ternary is chosen, and not by preference.** `71_gridste_plain` reached val
+**0.01378 — the 8Mv float reference exactly** — converged, with last-10 mean
+0.01379. Snapping weights, gains and biases onto the payload's integer grid
+cost the one-layer family **nothing measurable**. Spending bytes on finer
+resolution therefore buys something **already proven free at our scale**;
+the bytes go to parameters instead.
+
+This is the resolution-vs-count axis decided on measurement rather than on
+the general "less quantization = more strength" prior, which our own control
+contradicts at this width.
+
+### WIDTH: N = 6 at ps768, with N = 5 registered as the fallback
+
+- **N=6 → 4608 trits** against 4756 in-seam, ~4656 usable after the read-out
+  code tax (~40–80 B ≈ 50–100 params-equivalent). **48 trits of margin —
+  tight.**
+- **N=5 → 3840 trits**, comfortable, still **+25% params** over today's N=4.
+- **`pack.sh` measures the truth.** If the built read-out tax exceeds budget,
+  the arm drops to N=5 without re-registration; the reverse (N=7) requires the
+  +48 repack landing and a new registration.
+
+Today's net is **3072 trits (N=4)**, so the seam buys **+50% parameters at
+unchanged resolution**.
+
+### King mirroring — stated honestly
+
+Horizontal mirroring is registered as a **generalisation** measure, not a byte
+saver: at plain ps768 only the king's own rows fold, so the table barely
+shrinks. Its value is that **every parameter sees twice the data**, which is
+what the external writeup measured as strength. Claiming a large byte saving
+here would be wrong.
+
+### The nps consequence, which is the cost of this choice
+
+N=6 is **+50% accumulator work** per evaluated position against N=4, and the
+family already measures **−39.4% nps** (19,818 vs the entry's 32,717). Term
+(ii) of the promotion bar therefore **rises with this design**, exactly as the
+amendment warned. Concretely: if N=6 lands near −55% nps, the candidate needs
+**≈ +70 fixed-node Elo** merely to break even in timed play.
+
+**Therefore the incremental accumulator is not optional in this arm** — it is
+the only structural lever that decouples parameter count from per-move cost
+(piece moves as add/subtract deltas; king moves as the bucket-switch case,
+counted). It is designed in, and its cost is measured before any selector game.
+
+### Gate battery — coverage gap closed
+
+The pricing gates found that **perturbing the pawn's entire rank-8 row does
+not move the identity transcript**: the battery never exercises promotion
+scoring. **A promotion-exercising position set is added to this arm's gate
+battery**, so a capacity net's promotion weights are actually tested rather
+than assumed.
+
 ## 2026-08-17 — CORRECTION + AMENDMENT: the nps bar is TWO-PART, and my decomposition was inverted
 
 ### CORRECTION (form a) — the claim, verbatim, and why it is wrong
