@@ -46,6 +46,9 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-17 | **REGISTERED (search-features lane, before game 1): mate-band cap exemption + butterfly history, fixed-N fixed-node screens** | Bars and branches below; mate gate already read, Elo read once at N = 300 |
+| 2026-08-17 | Root aspiration (MTD warm-start) | **DECLINED without games**: the probes an aspiration bracket removes cost 4.51% of nodes at ±50, 2.28% at ±100 — an upper bound, before re-widening |
+| 2026-08-17 | Countermove archaeology (`KILLER_ORDER` old-first) | The deciding cell **completed and was never recorded**: −49.4 [−76.4, −22.9], 524 games, H0 accepted |
 | 2026-08-17 | Classic consumer-side scoring and exact captures | **+25.4 ± 19.0 Elo fixed-node**, −2.36% nodes, 149→142 lines; real-clock pending |
 | 2026-08-17 | Classic unified caps | **+14.3 ± 15.0 Elo timed**, 1,000 games; keep at 149 lines |
 | 2026-08-17 | Classic unified shallow/lazy caps | **+8.0 ± 12.1 Elo fixed-node**, −2.39% nodes, 150→149 lines; timed C confirmation running |
@@ -133,6 +136,171 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-17 — REGISTERED before game 1: two search-side screens, one declined on arithmetic, one archaeology
+
+Four search-side ideas were handed to this lane. This entry is the
+registration: instrument, gates, bars and branches are fixed **here**, before
+any game is played, and the Elo is read once at the pre-committed N.
+
+### The instrument (both screens)
+
+Fixed-N fixed-node, classic-vs-classic, on the bench box.
+`searchfeat-20260817/ab_fixedn.sh`, derived from `screens/ab_fixednode.sh`
+with the SPRT deliberately dropped — an SPRT-terminated Elo is biased away
+from zero and these are pre-registered decisions at a pre-registered N.
+
+- **N = 300 games** (150 rounds × 2, `-repeat`, color-swapped pairs), fixed;
+  no early stop, no pooling of separately launched runs.
+- **nodes = 20,000** with the **clock pinned at `tc=6000+0`**. The pin is not
+  cosmetic: `nodes=N` alone sends no clock, the engine's own UCI loop then
+  defaults `wtime` to 60,000 ms and sets a 1,500 ms deadline *before* the node
+  cap block runs, and the "fixed-node" screen silently becomes a 1.5 s/move
+  timed game that rewards the faster arm. At `tc=6000+0` the deadline is 150 s
+  and the cap always binds first.
+- **Book**: `openings_2k.epd`, 2,000 positions, `order=random`, 150 consumed —
+  more positions than rounds, so no opening is replayed. Fresh `-srand` per
+  screen (`20260817` + arm index); the arms are frozen trees
+  (`sunfish.py` + `sunfish_ui`), never a live checkout.
+- **Gates, all pre-committed**: legality gate at the played budget (100
+  positions incl. forced-reply-in-check, `go nodes 20000` with the same pinned
+  clock — the shipped copy of that gate only ever sent `go movetime`, so this
+  lane's copy was fixed to gate the path the screen actually plays);
+  **zero-tolerance** on illegal moves; **count gate** — a match that does not
+  finish exactly 300 games yields no Elo at all (rule 11); **dormancy gate** —
+  any move at or past deadline/10 = 15 s means the node cap did not bind on
+  that move and the screen is **VOID**, not a weak result.
+- Concurrency 4 per screen, as a polite cotenant: the box is running another
+  actor's timed 30+1 match and its tuner. Fixed-node under a pinned clock is
+  load-valid; the dormancy gate is what proves that claim per run rather than
+  assuming it.
+
+### Arm 1 — mate-band cap exemption (`exp/mate-band-exempt`)
+
+One line. The shallow static cap clamps every child report below the positive
+mate band, so an attacker node at nominal depth 0–3 cannot report a mate at
+all (`shallowMoveCap_below_positiveMate`; the price is the `3k + 1` bound in
+`formal/README.md` against `3k` without the clamp). The candidate exempts a
+child report that is already at or above `MATE_LOWER`:
+
+```python
+score = min(cap, r) if (r := -self.bound(pos.move(move), 1 - gamma, move_depth)) < MATE_LOWER else r
+```
+
+The cap only ever *lowers* a report, and the exemption applies exactly when
+the static estimate is provably wrong (the child returned a mate), so no
+fail-low can be manufactured. **+26 bytes, 142 lines unchanged.**
+
+*Gate (read BEFORE the screen, pypy3, `tools/tester.py`, which requires a mate
+score whose PV actually mates):*
+
+| suite | depth | master | candidate |
+|---|---|---|---|
+| `mate1.fen` (8) | 2 | 0/8 | **6/8** |
+| `mate1.fen` | 3 | 0/8 | **6/8** |
+| `mate1.fen` | 4 | 8/8 | 8/8 |
+| `mate2_eventual.fen` (5) | 5 | 0/5 | **3/5** |
+| `mate2_eventual.fen` | 6 | 1/5 | **3/5** |
+| `mate2_eventual.fen` | 7 | 5/5 | 5/5 |
+| `mate3_eventual.fen` (2) | 9 / 13 / 15 | 1 / 1 / 2 | 1 / 1 / 2 |
+
+The predicted improvement is real and strictly one-directional: shallow mates
+appear where the clamp used to hide them, nothing regresses. Fixed-depth node
+battery, 24 openings at depth 8: **1,590,257 nodes for both arms — byte
+identical**, which is the Elo-flat claim's mechanism (the exemption can only
+fire where a mate is found at depth ≤ 3).
+
+*Bar and branches, fixed now:* the screen tests the flat claim, not a gain.
+**PASS** = the 95% interval contains 0 and the point estimate is ≥ −20 →
+PR candidate. **FAIL** = the interval lies entirely below 0 → declined,
+ledger only. Either way the mate-suite table above stands on its own.
+*Known cost, not discovered later:* `tests/test_model_audit.py` fails on this
+diff — the Lean model cites the replaced line by name. The model and the code
+land together, so the PR carries the `MateDepth.lean` update (the target
+theorem, `forcedMate_fuelValueD2_sharp` at `3k`, already exists) or it does
+not land.
+
+### Arm 2 — butterfly history (`exp/butterfly-history`)
+
+A `from×to` (Move-keyed) history dict, bumped by `depth²` on every cutoff and
+capped at 100 = one pawn, added to the **sort key only** — the value yielded
+is still the intrinsic one, so caps, LMR eligibility and reports are
+untouched. **+69 bytes, 142 lines unchanged** (the minifier joins the store
+onto the existing `tp_move` line). State is per-`Searcher`, and `ucinewgame`
+constructs a fresh one, so nothing carries between games.
+
+*Gate:* 24 openings at depth 8, **1,446,973 nodes vs 1,590,257 = −9.01%**.
+
+*The asymmetry, stated before the games:* this arm makes the search cheaper
+per depth and more expensive per node, and a fixed-node screen charges only
+the first half. Measured on 12 openings to depth 8: **−15.3% nodes but only
+−6.0% wall time** — i.e. ~10% slower per node (92.5k → 84.2k nps). A
+fixed-node screen therefore **over-credits** this arm by roughly the node/time
+gap, the mirror image of the under-crediting rule 12 warns about.
+So: **advance only on ≥ +25 Elo**, and only to a timed 30+1 confirmation —
+never straight to a PR. **−30 … +25** = not a blunder and not a win: ledger
+only, no timed match bought. **≤ −30** = dead.
+
+### Arm 3 — root aspiration: DECLINED WITHOUT GAMES
+
+Warm-starting the MTD bracket from the previous iteration's score ± a margin
+was to be screened and, if it survived, confirmed at 30+1, because its payoff
+is time-to-depth and fixed nodes under-credit it. It does not reach a screen:
+the mechanism's ceiling was measured directly instead, and it is too small to
+buy games with.
+
+A root-probe census over 12 openings to depth 8 (475 probes, 899,765 nodes)
+classified every probe by how far its `gamma` sat from the previous depth's
+final score — the probes an aspiration bracket would never issue:
+
+| margin | probes skipped | nodes skipped | share of all nodes |
+|---|---|---|---|
+| ±50 | 210 / 475 | 40,585 | **4.51%** |
+| ±100 | 153 / 475 | 20,514 | **2.28%** |
+| ±200 | 106 / 475 | 6,947 | **0.77%** |
+
+Nearly half the probes are outside a ±50 window and they cost 4.5% of the
+tree, because fail-soft plus the transposition table makes a wild-gamma probe
+almost free: the root's children answer it from `entry.upper < gamma` and it
+returns a ply deep. And 4.51% is an **upper bound** — it credits aspiration
+with every skipped probe while charging it nothing for the re-widening
+research a missed window forces, which is where the mechanism's real risk
+lives. A ceiling of at most ~4.5% of nodes does not justify a 300-game timed
+match at a contended venue, and a 300-game fixed-node screen (±30 Elo) cannot
+resolve it either. Recorded as priced, not as untried.
+
+### Arm 4 — countermove: the old thread's deciding cell DID complete
+
+The ledger's open note — *2-killer counters rich (39.9% conversion), old-first
+cell running* — is from the frozen-guide battery (`experiment/frozen-guide`,
+`f056a9f`). The counters that motivated it: both killers present-and-distinct
+at 8.35% of killer-bearing nodes (3,921/46,932), and the second killer
+converting 39.9% of its searches into cutoffs (2,498/6,262).
+
+That cell finished, and its number was never written down:
+
+```text
+RESULT A=union_comp_oldfirst vs B=master: 524 games +171 =108 -245
+       elo -49.4 [-22.9, -76.4]  H0 accepted (elo <= 0)
+```
+
+Its own control, the same union composite with the current killer first, is
+−49.8. **Killer order is worth nothing: the two cells are one Elo apart in a
+±27 interval, inside a family that was already declined at −49.8.** No new
+games are owed to that thread.
+
+What that does *not* answer is the countermove table proper — last move →
+refutation, a different key from either killer. The record for it is one
+98-game screen at `4+0.04` reading +14 ± 59 for a tiebreak-only form that
+never entered the repo, which is not decision-grade. Adjacent evidence is
+consistently flat-to-negative: `TWO_KILLERS` at 668 fixed-node games is
+−2.6 [−26.0, +20.7]; a `killer2` arm read +49 ± 56 on a 100-game `4+0.04`
+screen and then **−17 ± 39** on its own 120-game 60+1 confirmation.
+A promoted-candidate countermove arm is registered on the same instrument and
+the same bar as arm 2 (≥ +25 to buy a timed confirmation), to be launched only
+if the venue stays uncontended after arms 1 and 2.
 
 ---
 
