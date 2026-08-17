@@ -158,7 +158,9 @@ This placement makes every `tp_score[(pos, depth)]` interval independent of
 game history. The table therefore persists across played moves instead of
 being cleared before every search. It is still cleared when the king table
 changes between middlegame and endgame or a UCI search option changes, because
-either changes the value function, and a new `Searcher` starts every UCI game.
+either changes the value function. The full UCI driver also starts a new
+`Searcher` on `ucinewgame`; retained entries remain sound for minimal callers
+that reuse one across games.
 `PersistentTableOK` and
 `persistentTable_history_independent` state the resulting table invariant;
 `rootHistoryFold_not_lost` proves that an available repetition with a
