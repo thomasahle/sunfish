@@ -17677,3 +17677,77 @@ never manufacture a pass. The ledger's existing evidence says FIRM is the
 likely reading — 60 epochs bought nothing over 30 on the ml2 recipe, and 50×
 data plus 6× passes bought 0.2 % on this one — but that evidence is at N≤6 and
 the arms under test are at N=16..64.
+
+---
+
+## 2026-08-18 — FACTOR LANE, PRE-NUMBER: exactly what the factored trainer would have to be, and the cheaper design the pricing turned up
+
+Written before the gate resolves, so that a pass costs a day rather than a
+week and a failure still leaves the next lane the derivation instead of the
+search for it. Nothing here is built.
+
+### The trainer change, in full
+
+`structures.LowRankResidual` is 80 % of it and 100 % wrong in two places. The
+factored arch (`arch: factor`) is that class with the residual deleted and the
+composite clamp lifted:
+
+    U = nn.Parameter(768, r)        ternary via the existing ternary_grid STE
+    V = nn.Parameter(r, N)          on the PAYLOAD's own integer grid
+    W = (U_q * 32) @ V_q            NO residual R, NO clamp back to ternary
+
+The two deletions are the whole design. `41_c1024_lr` kept `R` — a full
+768 × N ternary table beside the factors — so its payload was the full table
+*plus* U and V, which is why it was a regulariser and not a compressor. And it
+set `wmax = 1`, clipping `U@V` back onto {−1, 0, +1}, which throws away the
+integer resolution the product creates and is the entire expressive gain.
+
+Three details the export-fidelity lessons make non-negotiable:
+
+1. **`V` must be snapped inside forward, not at export.** The ml2 verdict is
+   the precedent: `u2` was a free float, the export mapping sent it to
+   `[0,0,0,0]`, and the second layer was *deleted* rather than degraded. `V`'s
+   grid is the payload digit itself — integers in [−44, +45] — and it must go
+   through the same `exact_ste` snap that `ternary_grid` uses, exactly as
+   `gridste: 1` already does for the gains and biases.
+2. **The per-lane cap and bias bounds change shape.** With no per-lane gain
+   `g_k` the cap `G_k` becomes its own payload field, and the bias bound
+   `44/(32·g_k)` — the constant the N=6 run was pinned against — has to be
+   re-derived from `V`'s column scale, per lane, or the same rail returns in a
+   new costume.
+3. **Certification is the `verify_export` triangle unchanged**, with one
+   extra leg: `structures.reconstruct` must reproduce the load-time
+   reconstruction, which `packed/factor_check.py` already implements
+   independently and green (payload round-trip, 768 rows == U@V, nn_cp ==
+   int-ref on real boards, pf-invariance, antisymmetry).
+
+The engine side needs nothing beyond what `make_factor_proto.py` already
+emits and certifies.
+
+### The cheaper design this lane's own pricing turned up, and did not build
+
+The read-out tax is the binding cost of buying UNITS: +98 % of the net's
+per-move cost at N=16, +278 % at N=32. **Features are free by comparison** —
+they enlarge `ROWS`, which is load-time memory, and cost nothing per node. And
+the factorisation buys features far more cheaply than it buys units, because
+`U` is *shared* across buckets while only the mixing is per-bucket:
+
+    W[b, f, k] = sum_j U[f, j] * V_b[j, k]     payload 192r + B*r*N digits
+
+At r=4, N=5 (**the shipped width, so zero extra read-out**), B=8 king buckets:
+768 + 160 digits ≈ 700 B of payload for an **8×-larger feature set**, against
+the 3,840-trit single-bucket table the entry ships. That is the one shape in
+this design space that is not priced negative before it starts.
+
+Its cost is not zero and is not read-out: a king move invalidates the bucket
+and forces a `from_board` rebuild, ledger-measured at ~3.6 µs and
+width-independent, against a 33 ns delta. At a naive 8 % king-move rate that
+is +69 % on the net's per-move cost — as bad as N=16 — so the design only pays
+with **coarse buckets that most king moves do not cross** (a 4-way half-board
+split leaves ~1–2 % crossings, ~+5–9 %). That number is a guess and would have
+to be measured on real games before anyone builds it.
+
+Recorded, not started: it needs engine machinery (a bucket index and a
+rebuild-on-cross path) that is outside this lane's mandate of reconstructing
+into the *standard* accumulator, and it is downstream of the same question —
+whether anything in the linear-in-ps768 family can move at all.
