@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-17 | Classic unified caps | **+14.3 ± 15.0 Elo timed**, 1,000 games; keep at 149 lines |
 | 2026-08-17 | Classic unified shallow/lazy caps | **+8.0 ± 12.1 Elo fixed-node**, −2.39% nodes, 150→149 lines; timed C confirmation running |
 | 2026-08-15 | **REGISTERED (hygiene lane, before fixing): `tmlib.verify()`'s default search root reaches into `~/repos/sunfish-packed`, a sibling checkout whose state is time-varying — PR #201's handoff observed the same commit read green, then 4 pins drifted an hour later, purely because the sibling moved underneath it** | Fix: pin the default root to this checkout alone (`roots = [ROOT]`, `ROOT` already `__file__`-derived; the sibling is dropped, no env-var override added). Gate: run the pinned-literal suite twice with the sibling moved to a different commit between runs — the verdict must be identical both times |
 | 2026-08-15 | **REGISTERED (hygiene lane, before fixing): 4 of the ctwin TM-surrogate's `PINNED` literals — `oldtm`/`steptm`/`pool_ms` (anchored in `tools/build/make_variants.py`) and `smooth` (anchored in `nnue_4k/pst_entry.py`) — broke when the pooltm landing (nnue-4k `5f16bae`) retired the first three from `make_variants.py` and replaced the entry's smooth budget with the pool. Nothing measured is invalidated; the pins just stopped asserting against the current truth** | Fix: `oldtm`/`steptm`/`smooth` drop from `PINNED` with a comment naming `5f16bae` as the retirement commit (no live source exists anywhere for them any more); `pool_ms` keeps its grid-assert against the same, byte-identical text — hand-verified against `make_pst_entry.py`'s `_pooltm` — but loses its file-anchor since that generator does not exist on master. Gate: full tmlib pin suite green against a fresh clone (the sibling no longer matters, post the root-fix above); one grid run showing the pool budget mirror equals its landed formula |
@@ -131,6 +132,36 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-17 — Classic: unified-cap timed confirmation
+
+The time-faithful C match completed at `3+0.1`, with 500 color-swapped
+opening pairs and both twins constructing a child only after its existing cap
+survived:
+
+```text
+386 =269 -345    +14.25 +/- 15.04 Elo    LOS 96.86%
+```
+
+Both engines reached median depth 12. There were zero crashes, disconnects,
+illegal moves, stalls, time losses, or forfeits. Together with the independent
+fixed-node result (`+7.99 +/- 12.12`) and the cleaned line reduction from 150
+to 149, this clears the five-Elo-per-line keep bar.
+
+Two earlier timed samples are excluded. The first constructed capped children
+eagerly in the candidate twin; the second fixed only the candidate while the
+baseline twin remained eager. Both were execution-time asymmetries absent
+from their Python engines. Search transcripts and the fixed-node result were
+unaffected. The final match made child construction lazy in both frozen twins.
+
+A follow-up tried using the monotone cap to filter the sorted move list before
+sorting and report the entire omitted tail as `gamma - 1`. It reduced the
+cleaned engine from 149 to 147 lines, but the loose fail-soft report cost MTD
+precision: the initial-position depth-8 run grew from 53,845 to 65,721 nodes
+(+22.1%) and from 2.13 s to 2.67 s. Recovering the exact tail maximum would
+add bookkeeping, so this version was rejected without games.
 
 ---
 
