@@ -156,7 +156,7 @@ MATE_DIST FUEL_NULL FUEL_MIN_DEPTH FEN_HIST` (`NULL_CAP_MARGIN=-1` follows
 `NULL_*_RED` knobs control the shallow and deep probes; `FUEL_NULL` controls
 the hot node's extra depth cost, while zero skips the probe but retains the
 static intrinsic-LMR guard). `FUT_CAP` selects no shallow cap, the current
-quiet-move cap, or the simpler negative-`value()` cap;
+ordinary-move cap, or the simpler negative-`value()` cap;
 `FUT_CAP_DEPTH` selects its horizon. `FEN_HIST=0` restores the pre-2026-08-16
 one-ply `position fen` history; `1` (default) is the driver's two-ply
 construction for black-to-move FENs, which is what a match actually plays. `VALUE_N VALUE_B

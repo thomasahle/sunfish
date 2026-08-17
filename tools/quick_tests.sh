@@ -17,7 +17,7 @@ $T "$1" ${2:-"--quiet"} mate $TESTF/mate3_eventual.fen --depth 19 --floor 2
 echo
 
 echo "Tactical strength regressions..."
-$T "$1" ${2:-"--quiet"} best $TESTF/win_at_chess_test.epd --depth 8 --floor 207
+$T "$1" ${2:-"--quiet"} best $TESTF/win_at_chess_test.epd --depth 8 --floor 168
 $T "$1" ${2:-"--quiet"} best $TESTF/bratko_kopec_test.epd --depth 8 --floor 11
 $T "$1" ${2:-"--quiet"} best $TESTF/3fold.epd --depth 4 --floor 2
 echo

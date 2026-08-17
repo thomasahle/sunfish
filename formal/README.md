@@ -175,8 +175,8 @@ the bound still requires `NoMaskedMobility` or the #171 tail.
 
 ## Shallow move caps and the lazy move tail
 
-At remaining depths two and three, an admitted quiet, non-promotion,
-non-checking move has value
+At remaining depths two and three, every admitted move except a king capture
+has value
 
 ```text
 min(min(MATE_LOWER - 1,
@@ -189,8 +189,8 @@ is below `gamma`, `cappedMove_failLow` proves that the cap itself is a valid
 fail-low report and the child search is skipped. Otherwise
 `WindowReport.cap` transports the full child report through `min`.
 
-Captures (including en passant), promotions, and checking moves bypass the
-cap. The cap is explicitly below the positive mate band, so it cannot create a positive mate value;
+Only king captures bypass the cap. The cap is explicitly below the positive
+mate band, so it cannot create a positive mate value;
 `shallowMoveCap_below_positiveMate` and `cappedMove_positiveMate_only_from_full`
 state that direction. For an eligible move, `pos.score + pos.value(move)` is
 the negated static score of a both-kings child. `EvalBounds.lean` puts it
@@ -198,15 +198,11 @@ strictly above `-MATE_LOWER`, so the positive margin cannot cross downward and
 no lower clamp is needed. `cappedMove_preserves_negativeMate` proves that a
 genuine negative mate is retained exactly.
 
-The check predicate is evaluated lazily, but its meaning is fixed. Before a
-cap fail-low skips the child, it proves the move is not a check. After a child
-search, it is needed only when the full report exceeds the cap. This changes
-the order of proof work, not the declared move value.
-
-The cap deliberately changes ordinary shallow quiet-move values. It exists
-only at depths two and three, so it shapes the moving frontier while leaving
-forcing moves and the deeper tree unchanged. Its strength is an empirical
-question, separate from report correctness.
+The cap deliberately changes ordinary shallow move values, including captures,
+promotions, and checks. It can therefore delay a mate proof found exactly at
+the selective frontier. It exists only at depths two and three, so deeper
+iterations move every fixed proof above that frontier. Its strength is an
+empirical question, separate from report correctness.
 
 At remaining depth one, an omitted move has intrinsic value at most
 `val_lower - 1`. Its child is a quiescence node, whose stand-pat candidate

@@ -1,16 +1,16 @@
 /-
 The shallow static move cap and lazy depth-one tail in Searcher.bound.
 
-At depths two and three, a quiet, non-promotion, non-checking real move has
-declared value
+At depths two and three, every move except a king capture has declared value
 
     min (MATE_LOWER - 1) (static + gain + (depth - 1) * QS_A) fullValue.
 
 The cap is fixed by the position, move, and depth.  If it lies below the
 window it is already a valid fail-low report, so the child need not be
 searched.  Otherwise `WindowReport.cap` transports the full child report.
-Captures (including en passant), promotions, and checking moves bypass the
-cap, preserving forcing play and the existing mate-distance behavior.
+Only king captures bypass the cap and retain the exact `MATE_UPPER` sentinel.
+The cap can delay a shallow mate proof, but it cannot invent one, and it
+disappears above depth three.
 
 At remaining depth one, the omitted moves' best possible stand-pat is emitted
 as a fail-low upper report.  If that report cannot fail low, the threshold
