@@ -228,8 +228,10 @@ def assemble(tsvs, out, target, selfplay=None, wdl_t=0.25, wdl_p=0.5,
     print("dump rows          %9d" % n_dump, flush=True)
 
     n_sp = 0
-    if selfplay and os.path.exists(selfplay):
-        d = np.load(selfplay, allow_pickle=True)
+    for sp_path in (selfplay or []):
+        if not os.path.exists(sp_path):
+            raise SystemExit("self-play corpus not found: %s" % sp_path)
+        d = np.load(sp_path, allow_pickle=True)
         sp_fens = [str(x) for x in d["fens"]]
         sp_cp = d["cp"].astype(np.int64)
         sp_oc = d["outcome"].astype(np.float64)
@@ -244,17 +246,21 @@ def assemble(tsvs, out, target, selfplay=None, wdl_t=0.25, wdl_p=0.5,
         ply = np.array([(int(f.split()[5]) - 1) * 2 + (1 if f.split()[1] == "b" else 0)
                         for f in sp_fens], dtype=np.int64)
         keep = (~drop) & (ply >= min_ply)
-        print("self-play rows     %9d  -> WDL-skip %d, ply<%d %d, kept %d"
-              % (len(sp_fens), int(drop.sum()), min_ply,
-                 int((ply < min_ply).sum()), int(keep.sum())), flush=True)
+        # the sacrifice slice is tagged from its own meta, so the data card can
+        # report filter 4's yield per corpus rather than per source file
+        is_sac = 1 if "sacrifice" in str(d["meta"]) else 0
+        print("self-play %-18s %9d  -> WDL-skip %d, ply<%d %d, kept %d%s"
+              % (os.path.basename(sp_path), len(sp_fens), int(drop.sum()), min_ply,
+                 int((ply < min_ply).sum()), int(keep.sum()),
+                 "  [SACRIFICES]" if is_sac else ""), flush=True)
         idx = np.flatnonzero(keep)
         chess = _load_chess()
         for i in idx:
             fens.append(sp_fens[i])
             cps.append(int(sp_cp[i]))
             npc.append(len(chess.Board(sp_fens[i]).piece_map()))
-            sac.append(0)
-        n_sp = len(idx)
+            sac.append(is_sac)
+        n_sp += len(idx)
 
     cps = np.asarray(cps, dtype=np.int64)
     npc = np.asarray(npc, dtype=np.int64)
@@ -338,7 +344,7 @@ if __name__ == "__main__":
         ap.add_argument("--tsv", nargs="+", required=True)
         ap.add_argument("--out", required=True)
         ap.add_argument("--target", type=int, default=10_000_000)
-        ap.add_argument("--selfplay", default=None)
+        ap.add_argument("--selfplay", nargs="*", default=[])
         ap.add_argument("--min-ply", type=int, default=28)
         a = ap.parse_args()
         assemble(a.tsv, a.out, a.target, a.selfplay, min_ply=a.min_ply)

@@ -29,8 +29,9 @@ if it is not in check and the move played from it is not a capture, not a
 promotion, not en-passant, and does not give check.
 
 usage:
-  build_lambda_corpus.py scan  OUT.npz PGNGLOB [MAXPOS]     # parse+filter+dedup
-  build_lambda_corpus.py label OUT.npz ENGINE TABLES [DEPTH] [NPROC]
+  build_lambda_corpus.py scan     OUT.npz PGNGLOB [MAXPOS]  # parse+filter+dedup
+  build_lambda_corpus.py scan-sac OUT.npz PGNGLOB [MAXPOS]  # the SEE<0 half
+  build_lambda_corpus.py label    OUT.npz ENGINE TABLES [DEPTH] [NPROC]
 """
 import glob
 import hashlib
@@ -136,6 +137,111 @@ def scan(out, pgnglob, maxpos):
                                          "sample_every": SAMPLE_EVERY,
                                          "min_pieces": MIN_PIECES,
                                          "n_book": n_book, "n_noisy": n_noisy,
+                                         "n_small": n_small, "n_dup": n_dup,
+                                         "kept": len(rows)}))
+    print("\nwrote %s" % out)
+
+
+def scan_sac(out, pgnglob, maxpos):
+    """The SACRIFICE half of the owner's filter 4, for the self-play corpus.
+
+    `scan` above implements the reference recipe's quiet filter, which skips
+    every position whose played move is a capture -- sacrifices included.  The
+    owner's filter 4 is a RELAXATION of exactly that line: keep a capture when
+    SEE < 0, because those are the tactically sharp positions a dead-linear
+    eval family keeps failing on.
+
+    This emits ONLY the sacrifices, so the existing labelled corpus can be
+    kept as-is and merged, rather than re-labelling 737k positions that would
+    come back byte-identical (same twin, same depth).  The keep condition
+    mirrors the dump-side worker in build_pool.py: a capture whose SEE is
+    negative, promotions excluded.  In-check and check-giving positions are
+    ALLOWED here, as they are on the dump side, so the two corpora's
+    sacrifice classes are defined the same way.
+    """
+    from build_pool import see as see_of          # the fuzz-validated swap list
+    paths = sorted(glob.glob(pgnglob))
+    assert paths, "no PGNs matched %s" % pgnglob
+    n_games = n_plies = n_book = n_notcap = n_seeok = n_small = n_dup = 0
+    n_promo = 0
+    seen, rows = set(), []
+    t0 = time.time()
+    for path in paths:
+        with open(path, errors="replace") as f:
+            while True:
+                try:
+                    g = chess.pgn.read_game(f)
+                except Exception:
+                    break
+                if g is None:
+                    break
+                res = g.headers.get("Result", "*")
+                if res not in ("1-0", "0-1", "1/2-1/2"):
+                    continue
+                n_games += 1
+                wpov = {"1-0": 1.0, "1/2-1/2": 0.5, "0-1": 0.0}[res]
+                board = g.board()
+                for ply, mv in enumerate(g.mainline_moves()):
+                    n_plies += 1
+                    if ply < BOOK_PLIES:
+                        n_book += 1
+                        board.push(mv)
+                        continue
+                    if not board.is_capture(mv):
+                        n_notcap += 1
+                        board.push(mv)
+                        continue
+                    if mv.promotion:
+                        n_promo += 1
+                        board.push(mv)
+                        continue
+                    if see_of(chess, board, mv) >= 0:
+                        n_seeok += 1
+                        board.push(mv)
+                        continue
+                    if len(board.piece_map()) < MIN_PIECES:
+                        n_small += 1
+                        board.push(mv)
+                        continue
+                    if ply % SAMPLE_EVERY == 0:
+                        fen = board.fen()
+                        k = fenkey(fen)
+                        if k in seen:
+                            n_dup += 1
+                        else:
+                            seen.add(k)
+                            stm = wpov if board.turn == chess.WHITE else 1.0 - wpov
+                            rows.append((fen, stm, k))
+                    board.push(mv)
+                if maxpos and len(rows) >= maxpos:
+                    break
+        print("  %-52s games %6d  sacs %8d  %.0fs"
+              % (os.path.basename(path)[:52], n_games, len(rows), time.time() - t0),
+              flush=True)
+        if maxpos and len(rows) >= maxpos:
+            break
+
+    print("\nSACRIFICE FUNNEL")
+    print("  games with a result      %9d" % n_games)
+    print("  plies seen               %9d" % n_plies)
+    print("  - book plies (<%d)        %9d" % (BOOK_PLIES, n_book))
+    print("  - not a capture          %9d" % n_notcap)
+    print("  - promotion capture      %9d" % n_promo)
+    print("  - capture with SEE >= 0  %9d" % n_seeok)
+    print("  - under %d pieces         %9d" % (MIN_PIECES, n_small))
+    print("  - duplicate positions    %9d" % n_dup)
+    print("  = KEPT (unique sacs)     %9d" % len(rows))
+    np.savez_compressed(out,
+                        fens=np.array([r[0] for r in rows]),
+                        outcome=np.array([r[1] for r in rows], dtype=np.float32),
+                        fenhash=np.array([r[2] for r in rows]),
+                        meta=json.dumps({"pgnglob": pgnglob, "games": n_games,
+                                         "plies": n_plies, "book_plies": BOOK_PLIES,
+                                         "sample_every": SAMPLE_EVERY,
+                                         "min_pieces": MIN_PIECES,
+                                         "class": "sacrifice (capture, SEE < 0)",
+                                         "n_notcap": n_notcap, "n_promo": n_promo,
+                                         "n_see_ge_0": n_seeok,
                                          "n_small": n_small, "n_dup": n_dup,
                                          "kept": len(rows)}))
     print("\nwrote %s" % out)
@@ -323,6 +429,8 @@ if __name__ == "__main__":
         scan_dump(sys.argv[2], sys.argv[3], int(sys.argv[4]) if len(sys.argv) > 4 else 0)
     elif mode == "scan":
         scan(sys.argv[2], sys.argv[3], int(sys.argv[4]) if len(sys.argv) > 4 else 0)
+    elif mode == "scan-sac":
+        scan_sac(sys.argv[2], sys.argv[3], int(sys.argv[4]) if len(sys.argv) > 4 else 0)
     elif mode == "label":
         label(sys.argv[2], sys.argv[3], sys.argv[4],
               int(sys.argv[5]) if len(sys.argv) > 5 else 8,

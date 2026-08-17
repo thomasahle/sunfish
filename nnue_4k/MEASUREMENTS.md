@@ -16686,3 +16686,100 @@ the new positions with the twin at depth 8 is ~95 seconds of labelling for an
 estimated ~100k additional positions, on top of the PGN re-scan. At 2.22%
 self-play share it would move the corpus by well under a percent, so it is
 recorded for decision rather than done on my own initiative.
+
+---
+
+## DATA CARD — `pool10m.npz`, corpus_sha `20d11868fffc5521`
+
+The stage-1 training corpus for the capacity arm. Superseded
+`cd61bc58d9cdd48c` when filter 4 was closed on the self-play side; that
+earlier sha appears in the build record above and should not be trained on.
+
+**Provenance.** 10,000,000 positions, 375 MB. Two sources, deliberately
+different in what they can support:
+
+| | Lichess eval DB | self-play archive |
+|---|---|---|
+| rows in final corpus | 9,773,555 (97.74%) | 226,445 (2.26%) |
+| labels | Stockfish, median depth 28 | our C twin, depth 8, sha `501ec948…` |
+| label frame | **WHITE-POV, negated for black** | **already side-to-move, untouched** |
+| outcomes | absent (no games) | present |
+| ply context | absent (4-field FENs) | present |
+| licence | ODbL 1.0 + DbCL 1.0 | ours |
+
+Labels are a function of (fen, depth, engine) alone: the sacrifice slice was
+labelled with the *same* twin binary, located by sha, that labelled the
+original corpus — not a rebuild that would have quietly changed the teacher.
+
+**The four owner-required filters, as actually applied.**
+
+| filter | Lichess | self-play | mechanism |
+|---|---|---|---|
+| 1 flatten piece counts | applied | applied | water-fill to a common level |
+| 2 stochastic-skip WDL≈score | **n/a, no games** | applied, 148,900 + 3,735 skipped | t=0.25, p=0.5 |
+| 3 skip first 28 plies | **n/a, no ply** | applied, 37,539 + 1,324 skipped | fullmove counter |
+| 4 keep sacrifices, skip SEE ≥ 0 | applied | **applied** | faithful swap-list SEE |
+
+Filter 1 reaches a level of **343,896 positions per piece count with 29 of the
+30 present counts sitting exactly at it**; only count 3 (bare king plus one
+piece) is data-limited at 27,026, a real scarcity rather than a pipeline
+artifact. Closing filter 4 left this **unchanged**, level for level.
+
+Filter 4 yields 292,926 sacrifices (2.93%): 288,179 from the dump and ~4,747
+from self-play, the latter harvested by `scan-sac` — 20,024 unique positions
+from 74,766 games, 19,168 surviving the cp filter (mean cp −51.9, as expected
+for positions whose mover plays an unsound capture), 14,294 passing filters 2
+and 3, of which ~4,600 survived flattening.
+
+**Filters 2 and 3 reach 2.26% of the corpus, and that is accepted for stage
+1.** Their purpose is data quality where their inputs exist, not a quota; the
+dump slice passed the two filters an eval database can support. Raising their
+reach would spend exactly the labelling compute the label-null saved. Stage-2
+note: if the arm shows absorption, reach rises through more self-play
+labelling — or Leela, licence-gated — as part of the registered data-scaling
+follow-up.
+
+**Gates, both green on the assembled corpus.**
+- *Frame*, split-half: wtm **+0.4879**, btm **+0.4707**, spread **0.0172**
+  (floor 0.15, spread limit 0.15). This is the direct evidence that two label
+  conventions are correctly co-registered.
+- *Placement*: support 3..32, and an independent recount from the FEN text
+  over 188,680 sampled rows finds **zero** impossible positions.
+
+**The SEE implementation, verbatim.** python-chess 1.11.2 exposes no SEE and
+no occupancy-parameterised attacker mask, so a faithful X-ray-aware swap list
+was rebuilt on its public attack tables and fuzzed against a brute-force
+reference that plays capture sequences out optimally: **47,489 of 47,490
+captures exact** over 14,872 random positions. The first cut disagreed 133
+times, all of them promotion captures; modelling promotion throughout the swap
+list — a pawn recapturing onto the back rank promotes too — closed 132. **The
+single survivor is the least-valuable-attacker limitation intrinsic to SEE as
+defined**: the swap list always recaptures with the cheapest attacker, which
+is occasionally worse than capturing with the king, and removing pieces in LVA
+order can open a line the optimal sequence would not. Stockfish's own SEE
+shares this property. So the divergence is from *optimal capture play*, not
+from *true SEE*, and it is disclosed here rather than hidden. Throughput
+170,000–187,000 calls/s ≈ 21,000–23,000 positions/s, about **480× cheaper than
+the depth-8 labelling beside it**, which is why SEE runs in the harvest script
+in Python and the C twin was the wrong venue.
+
+**Known contamination, quantified not hidden.** The raw Lichess DB accepts
+user-submitted FENs and therefore carries composed positions — 37 and 58
+pieces, 34 pawns — at 0.0183%; 7,692 were rejected building this corpus. The
+gate masks only statuses that make the *placement* impossible, deliberately
+not `is_valid()`, which flags 0.4730% of the dump with 97.7% of those being
+`BAD_CASTLING_RIGHTS` — a field ps768 never reads, so rejecting on it would
+discard 25× more good positions than bad. The earlier `quiet4M/8M` and
+`train4M/8M` artifacts were built without any legality check and carry the
+same ~0.02%; too small to have moved a verdict, recorded rather than acted on.
+
+**A gate-class note for future corpora.** The frame gate that guards this
+corpus used to be `corr(material, label) > 0.5`. That threshold was calibrated
+on twin depth-8 labels, which are nearly linear in material; **a correctly
+framed Stockfish depth-28 corpus measures 0.3113 and the old gate would have
+refused it**. Any future corpus with a stronger or less linear teacher would
+have hit the same false alarm, and the natural response — lower the threshold
+— is how a real frame bug eventually gets through. The split-half form tests
+the invariant (a frame error inverts exactly one side-to-move half) instead of
+a proxy calibrated to one labeller, so the class is closed rather than
+re-tuned.

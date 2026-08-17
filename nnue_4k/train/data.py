@@ -253,6 +253,16 @@ def parse_lambda_npz(path, split_seed=20260813, limit=0):
     fens = [str(f) for f in d["fens"]]
     ys = (d["y"] if "y" in d.files else d["cp"]).astype(np.int64)
     ocs = d["outcome"].astype(np.float32)
+    # LOUD TRUNCATION.  DataCfg.limit defaults to 4.1M, which would quietly
+    # train on 41% of a 10M corpus while the run's record claimed all of it.
+    # A corpus size is a headline number; never let it change in silence.
+    if limit and limit < len(fens):
+        print("lambda corpus: TRUNCATING %d available positions to limit=%d "
+              "(%.1f%%) -- set data.limit: 0 to use the whole corpus"
+              % (len(fens), limit, 100.0 * limit / len(fens)), flush=True)
+    else:
+        print("lambda corpus: using all %d positions (limit=%s)"
+              % (len(fens), limit or "0/unset"), flush=True)
     if limit:
         fens, ys, ocs = fens[:limit], ys[:limit], ocs[:limit]
     FEATS, OFFS, PSTC, Y = array("i"), array("q"), array("i"), array("i")
