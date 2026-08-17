@@ -18623,3 +18623,102 @@ any arm — but it means the gate can no longer be treated as an independent
 check on THIS arm specifically. ARM 10's promotion must rest on games, not on
 its own gate reading. Registered as a constraint on ARM 10, not a reason to
 avoid it.
+
+## CONFOUND CONTROL 2 — and it found something bigger than ARM 11: THE RECIPE IS UNDERTRAINED
+
+`3161_obj11_k400_lr4x` is the incumbent scale (sigK=400), the incumbent
+sparsity (l1=5e-4), the incumbent everything — at **4× the learning rate**.
+
+| statistic | control (n=3) | **lr4x** | verdict |
+|---|---|---|---|
+| refval | 0.0176411 | **0.0174250** | **19σ BETTER** — best net in the sweep |
+| outval Brier | 0.1277811 | **0.1276390** | 3.2σ better — **PASSES** |
+| outval AUC | 0.846197 | 0.846860 | better |
+| weight zeros | 43.7% | 37.1% | barely moved |
+
+**Val trajectory:** 0.0176743 → 0.0175605 → 0.0175195 → 0.0174578 →
+0.0174502 → **0.0174211**. That is **1.4% of movement across six passes,
+against the control's 0.3%.**
+
+**This reframes a finding the ledger has carried for days.** "Val moves 0.2%
+across six passes over 10M positions; 50× the data and 6× the passes bought
+essentially nothing" was recorded as *the model family failing to absorb
+data*, and it became one of the pillars of the capacity arm's conclusion.
+**A four-fold learning rate absorbs four to five times as much movement on
+the identical corpus and architecture.** The absorption failure was
+substantially an **optimisation** failure, not a capacity one — and lr=3e-3
+is inherited from `train_packed.py`, never tuned here.
+
+That does not overturn the capacity arm's Elo verdict, which was measured in
+games. It does mean **every net this campaign has trained was trained at a
+learning rate nobody had checked**, and the check costs ten minutes.
+
+### The ARM 11 mechanism, now resolved three ways
+
+| candidate | test | outcome |
+|---|---|---|
+| weaker effective l1 → denser net | `315`, l1=0 at K=400 | **REFUTED** — densest net, outval *worse* |
+| more optimization progress | `3161`, 4× lr at K=400 | **REAL but partial** — recovers 0.000142 of rung 1's 0.000683 gain, ~21% |
+| the target's shape | by elimination | carries the remaining ~79% |
+
+Both controls fired as registered, neither prediction was reinterpreted after
+the fact, and the answer is a split rather than a clean win — reported as a
+split.
+
+### The calibrated gate and the old statistics now DISAGREE about the same net
+
+Run through `siblingrank.py` — the gate calibrated against measured Elo this
+evening:
+
+| net | nrank | vs capn5 |
+|---|---|---|
+| capn5 | 0.3312 | — |
+| k250 | 0.3341 | 2.0σ worse |
+| **lr4x** | **0.3342** | **2.3σ worse** |
+| k160 | 0.3494 | 8.1σ worse |
+
+**lr4x is statistically identical to k250 (0.0σ) and slightly worse than the
+plain control** — despite being 19σ better on refval and passing both retired
+statistics. So a net that is a markedly better *regressor* is, by the only
+statistic with Elo calibration behind it, **not a better mover**.
+
+This is the third instance of one pattern tonight: position-value accuracy and
+outcome prediction both improve while move ordering does not follow. It is
+also a genuine test of the gate, because the two sides predict opposite
+things:
+
+> **Registered prediction:** lr4x finishes level with `capn5`/`k250` in play,
+> NOT ahead of them, despite its refval. If it instead finishes clearly
+> first, the calibrated gate is wrong about a net it was used to judge, and
+> that must be recorded as loudly as the calibration was.
+
+Registered as the next measurement: a follow-up round-robin including lr4x
+(the six-engine extension now running does not contain it). **No selector
+games are spent on lr4x's refval alone** — that is exactly the reasoning the
+gate was calibrated to replace.
+
+### MY ERROR: I destroyed ~245,000 labels with a bad repair
+
+Reported in full because it cost real compute. The ARM 9 labelling run had
+244,897 of 250,000 labels on disk when one unparseable FEN killed a worker.
+I added shard-resume plus a "repair the partial final line" step that kept
+only rows with **exactly three whitespace-separated fields** — the format of
+the *new* worker, which emits `cp trunc skip`. Every row already on disk had
+been written by the *old* worker, which emitted `cp trunc`: **two fields.**
+The repair rewrote all fourteen shards and kept 322 rows.
+
+Root cause, and it is not "a typo": **a repair function was written against
+the format I had just authored rather than against the format actually on
+disk**, and it ran destructively before anything read it. The same shape as
+the encoder/decoder defects this ledger has now recorded four times, with me
+on the encoder side.
+
+The rule: **a migration or repair that discards data must first be run in a
+counting, non-destructive mode and its keep/drop counts checked against
+expectations** — "322 of 250,000 survive" would have stopped it instantly.
+A second, cheaper guard would also have caught it: refuse any repair that
+discards more than a small fraction of existing rows.
+
+Cost: ~48 minutes of 14-worker labelling, redone. No corpus was corrupted and
+nothing downstream consumed the loss — the completeness gate did its job and
+the relaunch is running clean. ARM 9 slips ~50 minutes.
