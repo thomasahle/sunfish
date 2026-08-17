@@ -23,6 +23,24 @@ import collections
 random.seed(42)
 
 
+def from_epd(line):
+    """Read a test line as EPD, tolerating a full six-field FEN.
+
+    tests/files carries both forms: real EPD (four FEN fields then opcodes) and
+    plain six-field FENs. python-chess reads four fields and parses the rest as
+    opcodes, so a halfmove clock lands where an opcode belongs - tolerated by
+    chess 1.9.4, but 1.11.2 validates opcodes and raises "expected epd opcode to
+    start with a letter, got: '0'". Handing the two counters over as the standard
+    hmvc/fmvn operations reads both forms on every release, and keeps the counters
+    (chess 1.9.4 silently reset them to 0 and 1).
+    """
+    head, sep, ops = line.strip().partition(";")
+    fields = head.split()
+    if len(fields) > 5 and fields[4].isdigit() and fields[5].isdigit():
+        fields[4:6] = [f"hmvc {fields[4]}; fmvn {fields[5]};"]
+    return chess.Board.from_epd(" ".join(fields) + sep + ops)
+
+
 class Command:
     @classmethod
     def add_arguments(cls, parser):
@@ -37,19 +55,27 @@ class Command:
 # Perft test
 ###############################################################################
 
-from chess.engine import BaseCommand, UciProtocol
+from chess.engine import BaseCommand
 
 
 async def uci_perft(engine, depth):
-    class UciPerftCommand(BaseCommand[UciProtocol, None]):
-        def __init__(self, engine: UciProtocol):
+    # Written against both python-chess generations. chess 1.9.4 declares
+    # BaseCommand as Generic[ProtocolT, T] and hands the engine to every
+    # callback; 1.11 declares Generic[T] and keeps the engine itself, so the
+    # callbacks lost that argument. Either subscript raises TypeError on the
+    # other release, so the class stays unsubscripted; the callbacks take *args
+    # and read the engine from the enclosing scope instead. The line is the last
+    # argument on both: line_received(engine, line) against line_received(line).
+    class UciPerftCommand(BaseCommand):
+        def __init__(self, engine):
             super().__init__(engine)
             self.moves = []
 
-        def start(self, engine: UciProtocol) -> None:
+        def start(self, *args):
             engine.send_line(f"go perft {depth}")
 
-        def line_received(self, engine: UciProtocol, line: str) -> None:
+        def line_received(self, *args):
+            line = args[-1]
             match = re.match(r"(\w+): (\d+)", line)
             if match:
                 move = chess.Move.from_uci(match.group(1))
@@ -83,7 +109,7 @@ class Perft(Command):
                 print(f"Going to depth {d}/{args.depth}")
 
             for line in tqdm.tqdm(lines):
-                board, opts = chess.Board.from_epd(line)
+                board, opts = from_epd(line)
                 engine._position(board)
                 moves = await uci_perft(engine, d)
 
@@ -135,7 +161,7 @@ class Bench(Command):
 
         pb = tqdm.tqdm(lines)
         for line in pb:
-            board, _ = chess.Board.from_epd(line)
+            board, _ = from_epd(line)
             with await engine.analysis(board, limit) as analysis:
                 async for info in analysis:
                     pb.set_description(info_to_desc(info))
@@ -260,7 +286,7 @@ class Mate(Command):
         lines = lines[: args.limit]
         pb = tqdm.tqdm(lines)
         for line in pb:
-            board, _ = chess.Board.from_epd(line)
+            board, _ = from_epd(line)
             with await engine.analysis(board, limit) as analysis:
                 async for info in analysis:
                     pb.set_description(info_to_desc(info))
@@ -306,7 +332,7 @@ class Draw(Command):
         pb = tqdm.tqdm(args.file.readlines())
         for line in pb:
             total += 1
-            board, _ = chess.Board.from_epd(line)
+            board, _ = from_epd(line)
             with await engine.analysis(board, limit) as analysis:
                 last_lower = -10**10
                 last_upper = 10**10
@@ -371,7 +397,7 @@ class Best(Command):
         # random.shuffle(lines)
         lines = lines[: args.limit]
         for line in (pb := tqdm.tqdm(lines)):
-            board, opts = chess.Board.from_epd(line)
+            board, opts = from_epd(line)
             if "pv" in opts:
                 for move in opts["pv"]:
                     board.push(move)
