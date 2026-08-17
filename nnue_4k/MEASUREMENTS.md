@@ -18441,3 +18441,86 @@ fifty games this sweep spent chasing a 15σ statistic would have been spent
 better. **The rule this earns: a statistic proposed as a screen must be
 calibrated against measured Elo on at least a handful of nets BEFORE it gates
 anything, not after it passes something.**
+
+---
+
+## CALIBRATION — a sibling-ranking statistic against MEASURED Elo. Branch (a): it tracks.
+
+Executed before funding ARM 10, per the rule the `outval` inversion earned.
+**No training, no new labels, no games**: the reference is already in the
+round-robin's own PGN.
+
+**Construction.** For every position `entryd0` faced in the 300-game
+round-robin (6,023 of them, ≥4 legal moves, not in check), the move the entry
+PLAYED is its 20,000-node searched choice — the strongest engine in the field,
++112 Elo over the three nets. Each net ranks that position's 28.6 legal moves
+on average by its own static eval of the child (negated to the parent's
+frame), and the statistic is where the searched move lands in that ordering.
+**Self-reference is excluded by construction**: only the entry's positions are
+used and only the three NETS are scored, so no engine is ever judged against
+its own choices.
+
+| net | round-robin | Elo rank | top1 | top3 | **nrank** (lower better) | nrank rank |
+|---|---|---|---|---|---|---|
+| k250 | 46.3% | **1** | 0.1596 | 0.3216 | 0.3341 | 2 |
+| capn5 (sigK 400) | 45.7% | 2 | 0.1574 | 0.3213 | **0.3312** | **1** |
+| **k160** | **42.3%** | **3** | 0.1622 | 0.3254 | **0.3494** | **3** |
+
+**Paired** (every net ranked the same positions, so the difference is what
+carries the resolution):
+
+| comparison | Δ nrank | σ |
+|---|---|---|
+| k250 − capn5 | +0.00297 ± 0.00151 | 2.0 |
+| k250 − **k160** | **−0.01532 ± 0.00203** | **7.6** |
+| capn5 − **k160** | **−0.01829 ± 0.00226** | **8.1** |
+
+### The read, and it is branch (a)
+
+**The statistic puts k160 last at 8σ. `outval` put k160 FIRST at 15σ.** The
+same net, the same three-way comparison, opposite conclusions — and the
+round-robin says k160 is the weakest, by ~25 Elo over the other two.
+
+The one place the orderings disagree is `capn5` vs `k250`, and that
+disagreement is not real: those two are separated by **0.6 points of score%
+(~5 Elo) against ±50-Elo intervals** — the round-robin cannot order them.
+So the honest summary is the strongest form available:
+
+> **Sibling-ranking resolves the difference that exists (k160 is worse, 8σ)
+> and declines to invent one where the Elo measurement has none. `outval`
+> inverted the one difference that exists.**
+
+That is exactly what a screen-gate must do, and it is the first cheap
+statistic in this campaign to do it.
+
+### Pre-committed consequences, executed
+
+1. **ARM 10's premise is validated by measurement, not by argument.** An eval
+   inside a search is asked which sibling is better; the statistic that asks
+   that question tracks strength, and the statistic that asks "what is this
+   position worth" anti-tracks it. **The 260 lines are funded.**
+2. **The sibling statistic becomes the registered screen-gate for objective
+   arms**, replacing `outval` in that role — calibrated *before* gating,
+   which is the rule that produced it. `outval` and `refval` are retained as
+   *descriptive* readings only, and the ledger's standing caution now has a
+   worked counter-example attached rather than only a warning.
+3. **`objsweep/siblingrank.py` is the instrument** and it is cheap enough to
+   run on every future net: one PGN, no labels, no training, ~3 minutes.
+
+### Honest limits, and what would remove them
+
+n=3 nets, one reference engine, one architecture family, and the Elo spread
+they cover is ~25 points concentrated in a single net's deficit. This is
+calibration evidence, not a law. **Two more known-Elo points are cheap**: the
+`315` (l1=0) and `316` (k100) nets already exist, and adding them to a second
+round-robin of the same shape costs ~300 games / ~20 minutes and would take
+the calibration set to five nets spanning a wider Elo range. Recorded as the
+next step for the instrument itself, and it should be run before the gate is
+leaned on hard.
+
+**One caveat named rather than buried:** the reference is a single strong
+engine's move choices, so the statistic measures agreement with *that
+searcher*. That is the intended construct — good move ordering is agreement
+with what a strong search concludes — but a net could in principle score well
+by being entry-like without being strong, and n=3 cannot distinguish those.
+The five-net extension is what would start to.
