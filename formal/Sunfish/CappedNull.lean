@@ -6,8 +6,10 @@ negated, exactly as in Searcher.bound.  The production null contribution is
 
     min (eval + EVAL_ROUGHNESS) passReport
 
-Negation transfers a child report to the parent window, and `min` with a fixed
-cap preserves a valid fail-soft report. Consequently one child probe suffices.
+When the cap is already below the window, it is a valid fail-low report for
+the capped value and the child need not be searched. Otherwise negation
+transfers the child report to the parent window, and `min` with a fixed cap
+preserves it. Consequently at most one child probe suffices.
 
 The move fold, king-capture substitution, sticky `live` certificate, and
 post-fold mate/stalemate override are separate from this local transformer.
@@ -48,6 +50,16 @@ theorem WindowReport.cap (cap gamma report value : Int)
   rcases h with h | h <;>
     simp only [WindowReport, Int.min_def] <;>
     split <;> split <;> omega
+
+/-- If a fixed cap is already below the window, the cap itself is a complete
+fail-low report for the capped value. No report about `value` is needed. -/
+theorem WindowReport.cap_failLow (cap gamma value : Int) (h : cap < gamma) :
+    WindowReport gamma cap (min cap value) := by
+  left
+  constructor
+  · exact h
+  · simp only [Int.min_def]
+    split <;> omega
 
 /-- The exact local proof obligation of the Python expression
 `min(cap, -bound(pass, 1 - gamma, depth - 3))`. -/

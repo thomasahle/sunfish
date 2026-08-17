@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-17 | Classic unified shallow/lazy caps | **+8.0 ± 12.1 Elo fixed-node**, −2.39% nodes, 150→149 lines; timed C confirmation running |
 | 2026-08-15 | **REGISTERED (hygiene lane, before fixing): `tmlib.verify()`'s default search root reaches into `~/repos/sunfish-packed`, a sibling checkout whose state is time-varying — PR #201's handoff observed the same commit read green, then 4 pins drifted an hour later, purely because the sibling moved underneath it** | Fix: pin the default root to this checkout alone (`roots = [ROOT]`, `ROOT` already `__file__`-derived; the sibling is dropped, no env-var override added). Gate: run the pinned-literal suite twice with the sibling moved to a different commit between runs — the verdict must be identical both times |
 | 2026-08-15 | **REGISTERED (hygiene lane, before fixing): 4 of the ctwin TM-surrogate's `PINNED` literals — `oldtm`/`steptm`/`pool_ms` (anchored in `tools/build/make_variants.py`) and `smooth` (anchored in `nnue_4k/pst_entry.py`) — broke when the pooltm landing (nnue-4k `5f16bae`) retired the first three from `make_variants.py` and replaced the entry's smooth budget with the pool. Nothing measured is invalidated; the pins just stopped asserting against the current truth** | Fix: `oldtm`/`steptm`/`smooth` drop from `PINNED` with a comment naming `5f16bae` as the retirement commit (no live source exists anywhere for them any more); `pool_ms` keeps its grid-assert against the same, byte-identical text — hand-verified against `make_pst_entry.py`'s `_pooltm` — but loses its file-anchor since that generator does not exist on master. Gate: full tmlib pin suite green against a fresh clone (the sibling no longer matters, post the root-fix above); one grid run showing the pool budget mirror equals its landed formula |
 | 2026-08-13 | corrhist built, interior-only | 0.70x nodes AND 0.89x time to d8. Awaiting a quiet machine |
@@ -132,6 +133,30 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-17 — Classic: one shallow cap family, with lazy null evaluation
+
+The exact cleanup puts depth-0/1 stand-pat futility and the depth-2/3
+selective cap in one `score_move` producer. Across 27 positions through depth
+8 it preserved every score and chosen move; the cleaned classic engine fell
+from 150 to 149 lines. Moving recursion into the consumer was also trace-exact
+but grew to 152 lines, so that architecture was declined.
+
+The shared cap algebra exposed one useful change: when the capped null's
+static ceiling is already below `gamma`, that ceiling is a complete fail-low
+report and the null child can remain lazy. The small local implementation is
+behaviorally identical to the larger generic-candidate prototype. On the
+27-position depth-8 screen it used 1,116,937 nodes versus 1,144,248 for master
+(−2.39%); two positions had different intermediate MTD reports.
+
+Fixed-node C twin match at 20,000 nodes, 1,000 games, paired randomized
+openings: **+7.99 ± 12.12 Elo**, LOS 90.22%, 408 wins / 385 losses / 207 draws.
+The control ablation removing shallow caps entirely was decisively bad:
+**−60.41 ± 26.61 Elo** after 488 games, SPRT H0 accepted. A timed `3+0.1` C
+confirmation is pending. Its first 100 games were discarded because the C
+twin constructed capped children eagerly before returning their virtual
+report, work the Python candidate never performs. Child construction is now
+lazy in both twins; the restarted match will get a dated follow-up.
 
 ## 2026-08-13 — The transfer scoreboard: ice4's +421 is not our +421
 

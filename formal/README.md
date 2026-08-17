@@ -39,13 +39,18 @@ C(pos) = pos.score + EVAL_ROUGHNESS
 N(pos) = min(C(pos), P)
 ```
 
-The Python search obtains a one-sided report `r` for `P` from the complementary
-zero-window child probe and reports `min(C(pos), r)`.
+If `C(pos) < gamma`, the Python search reports the cap immediately and omits
+the child probe. `WindowReport.cap_failLow` proves that this is a valid upper
+report for the same `N(pos)`. Otherwise it obtains a one-sided report `r` for
+`P` from the complementary zero-window child probe and reports
+`min(C(pos), r)`.
 
 `Sunfish/CappedNull.lean` proves the two local steps needed for this operation:
 
 - `WindowReport.negate` transfers a child report at `1 - gamma` to the
   parent window at `gamma`.
+- `WindowReport.cap_failLow` permits the child to remain lazy when its fixed
+  cap is already below `gamma`.
 - `WindowReport.cap` proves that `min(C, ·)` transports a valid report of `P`
   to a valid report of `min(C, P)`.
 - `cappedNull_report` composes those two facts for the exact Python expression.
@@ -175,8 +180,8 @@ the bound still requires `NoMaskedMobility` or the #171 tail.
 
 ## Shallow move caps and the lazy move tail
 
-At remaining depths two and three, every admitted move except a king capture
-has value
+At remaining depths zero through three, every admitted move except a king
+capture passes through the same static cap
 
 ```text
 min(min(MATE_LOWER - 1,
@@ -184,10 +189,20 @@ min(min(MATE_LOWER - 1,
     full child value)
 ```
 
-This is a fixed function of the position, move, and depth. If the static cap
-is below `gamma`, `cappedMove_failLow` proves that the cap itself is a valid
-fail-low report and the child search is skipped. Otherwise
-`WindowReport.cap` transports the full child report through `min`.
+This is a fixed function of the position, move, and depth. At depths zero and
+one, natural subtraction makes the margin zero. The score identity then makes
+the cap exactly the existing stand-pat futility report; this is
+`shallowMoveCap_lowDepth` together with `futilityOK_discharged`. At depths two
+and three, the cap defines the selective move value. If it is below `gamma`,
+`cappedMove_failLow` proves that the cap itself is a valid fail-low report and
+the child search is skipped. Otherwise `WindowReport.cap` transports the full
+child report through `min`.
+
+The main stream is sorted by decreasing intrinsic move value.
+`shallowMoveCap_mono_gain` shows that the first virtual capped report also
+bounds every remaining move, so the stream can stop there. The killer uses the
+same producer but cannot stop the stream because it was moved out of that
+intrinsic order.
 
 Only king captures bypass the cap. The cap is explicitly below the positive
 mate band, so it cannot create a positive mate value;
@@ -767,12 +782,13 @@ at capturable nodes.
 |---|---|
 | recursive zero-window move search | `Bound.bound_spec` |
 | null child report negation | `WindowReport.negate` |
-| `min(pos.score + EVAL_ROUGHNESS, pass_report)` (depth < 6) | `cappedNull_report` |
+| lazy `min(pos.score + EVAL_ROUGHNESS, pass_report)` (depth < 6) | `cap_failLow`, `cappedNull_report` |
 | `target = pos.score + NULL_MARGIN` fuel probe (depth >= 6) | `hot_bit_determined`, `hot_bit_stable`, `fuel_edge_cost` |
 | static LMR eligibility and intrinsic move reduction | `intrinsic_edge_cost` |
 | real-move recursion at the reduced `d - 1` | `fuelValueD2t`, `eventual_classification_fuel` |
 | static evaluation bound keeps the cap below positive mate | `staticCap_in_scoreBand`, `staticCappedNull_below_positiveMate` |
-| shallow static move cap and lazy fail-low | `cappedMove_failLow`, `cappedMove_report` |
+| unified shallow move cap and lazy fail-low | `shallowMoveCap_lowDepth`, `cappedMove_report` |
+| sorted capped-tail termination | `shallowMoveCap_mono_gain` |
 | cap mate-band properties | `shallowMoveCap_below_positiveMate`, `cappedMove_preserves_negativeMate` |
 | filtered move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
 | complete positive-depth move set | `lazyTail_report`, `lazyMoves_eq_moves` |

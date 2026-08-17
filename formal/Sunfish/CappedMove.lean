@@ -1,16 +1,23 @@
 /-
-The shallow static move cap and lazy depth-one tail in Searcher.bound.
+The unified shallow static move cap and lazy depth-one tail in Searcher.bound.
 
-At depths two and three, every move except a king capture has declared value
+At depths zero through three, every move except a king capture passes through
+one producer with cap
 
-    min (MATE_LOWER - 1) (static + gain + (depth - 1) * QS_A) fullValue.
+    min (MATE_LOWER - 1) (static + gain + (depth - 1) * QS_A).
 
-The cap is fixed by the position, move, and depth.  If it lies below the
-window it is already a valid fail-low report, so the child need not be
-searched.  Otherwise `WindowReport.cap` transports the full child report.
+Natural subtraction makes the margin zero at depths zero and one. There the
+cap is the existing exact stand-pat futility estimate: the score identity and
+`futilityOK_discharged` show that it targets the ordinary child value. At
+depths two and three it instead declares the move value to be the minimum of
+the cap and the full child value. If the cap lies below the window, the child
+need not be searched; otherwise `WindowReport.cap` transports its report.
+
+Moves are sorted by decreasing gain. The cap is monotone in gain, so once a
+move returns a virtual cap, that report also dominates the rest of the tail.
 Only king captures bypass the cap and retain the exact `MATE_UPPER` sentinel.
-The cap can delay a shallow mate proof, but it cannot invent one, and it
-disappears above depth three.
+The selective cap can delay a shallow mate proof, but it cannot invent one,
+and it disappears above depth three.
 
 At remaining depth one, the omitted moves' best possible stand-pat is emitted
 as a fail-low upper report.  If that report cannot fail low, the threshold
@@ -27,17 +34,33 @@ namespace Sunfish
 
 /-- The exact fixed cap used for an eligible Python move. -/
 def shallowMoveCap (static gain : Int) (depth : Nat) : Int :=
-  min (MATE_LOWER - 1) (static + gain + (depth - 1) * QS_A)
+  min (MATE_LOWER - 1) (static + gain + ((depth - 1 : Nat) : Int) * QS_A)
+
+/-- At depths zero and one, natural subtraction makes the margin vanish.
+Under the ordinary-move evaluation bound, the unified cap is exactly the old
+stand-pat futility estimate. -/
+theorem shallowMoveCap_lowDepth (static gain : Int) (depth : Nat)
+    (hdepth : depth ≤ 1) (hband : static + gain < MATE_LOWER) :
+    shallowMoveCap static gain depth = static + gain := by
+  have hzero : depth - 1 = 0 := by omega
+  simp [shallowMoveCap, hzero, Int.min_def]
+  omega
+
+/-- The cap follows the intrinsic move ordering: a later, no-higher-gain move
+has a no-higher cap. This is the algebra behind ending the sorted stream after
+its first virtual capped report. -/
+theorem shallowMoveCap_mono_gain (static first later : Int) (depth : Nat)
+    (hgain : later ≤ first) :
+    shallowMoveCap static later depth ≤ shallowMoveCap static first depth := by
+  unfold shallowMoveCap
+  simp only [Int.min_def]
+  split <;> split <;> omega
 
 /-- A cap below the current window is a complete fail-low report for the
 capped value; no report about the full child is needed. -/
 theorem cappedMove_failLow (cap gamma value : Int) (h : cap < gamma) :
-    WindowReport gamma cap (min cap value) := by
-  left
-  constructor
-  · exact h
-  · simp only [Int.min_def]
-    split <;> omega
+    WindowReport gamma cap (min cap value) :=
+  WindowReport.cap_failLow cap gamma value h
 
 /-- When the child is searched, the generic monotone-cap theorem supplies
 the report for the declared capped move value. -/
@@ -58,9 +81,10 @@ theorem shallowMoveCap_below_positiveMate (static gain : Int) (depth : Nat) :
 `-MATE_LOWER < static + gain`; the shipped positive margin can only raise
 that quantity, and the positive-band ceiling is itself above `-MATE_LOWER`. -/
 theorem shallowMoveCap_above_negativeMate (static gain : Int) (depth : Nat)
-    (hdepth : 1 ≤ depth) (hstatic : -MATE_LOWER < static + gain) :
+    (hstatic : -MATE_LOWER < static + gain) :
     -MATE_LOWER < shallowMoveCap static gain depth := by
   have hML : MATE_LOWER = 47923 := rfl
+  have hnn : (0 : Int) ≤ ((depth - 1 : Nat) : Int) := Int.ofNat_nonneg _
   unfold shallowMoveCap QS_A
   simp only [Int.min_def]
   split <;> omega
