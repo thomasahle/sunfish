@@ -68,6 +68,15 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-17 | **IDEA 20 LANDS as `kptap`: the queens-off CLIFF becomes a phase RAMP on BOTH tapered tables — +56.07 ± 29.97 for +53 bytes, and the CHEAPER arm is the one that won** | Fixed-node 20,000, 900 games in ONE round-robin with the shipped entry as anchor, 300 per pairing, srand 20260918, book3k, read once at a fixed total: **0 illegal, 0 `(none)`, count gate 900/900**. `kptap` **[+26.10, +86.04]** clears zero; the king-only ramp `ktap` is **+13.90 ± 29.45** and does not; head-to-head does not separate them. **Ramping the PAWN table is where the Elo is** — pend's step handed a full passer bonus to positions with a full board still on. +53 B vs `ktap`'s +65 B because the two-table form deletes the `end` boolean and pend's switch line and lzma matches the two identical blend lines. Entry **3410 → 3463, 633 spare**, and the landed artifact is **sha256-identical** to the arm that played (`5d01f499be56b903…`). Hot-loop cost zero: the blend runs once per search at the kend+fresh seam, **6.6 µs per `search()` call**, node count IDENTICAL to the incumbent at ph = 24 |
+| 2026-08-17 | **A 50-GAME SELECTOR SELECTS; IT DOES NOT MEASURE — and tonight it ranked the two arms BACKWARDS** | The base-vs-`ktap` pairing read **+99.95 ± 80.14** (srand 20260817) and then **−63.23 ± 78.21** (srand 20261102): opposite signs, 163 Elo apart, each inside the other's interval, on runs with **0 illegal and full counts** (150/150, 300/300). Worse than noisy — **directionally wrong**: the selector put `ktap` 114 Elo AHEAD of `kptap`, the fixed-N block put `kptap` 42 Elo ahead with the only interval that clears zero. Acting on the selector would have landed the dearer arm and quoted +99.95 for it. Every verdict in this sweep therefore comes from a fixed-N block read once at completion; selector numbers are quoted only as the reason a pairing was promoted |
+| 2026-08-17 | **THE TAPER FITS — the 2026-08-13 "continuous phase blend does not fit: 4157 bytes, 61 OVER, dead on price" verdict is OVERTURNED by storing the endgame set as `mg + a coarse delta`** | Fitted second table set at **+312 B** (`tap` 3722, 374 spare) and **+301 B** (`tapk` 3711, 385 spare) on the 3410-byte entry; shape sweep across both roots and seven delta steps in the re-anchored `price_taper.py --delta`. A fitted eg table is not independent of the mg one, so subtracting leaves near-zero numbers and a mixed-radix pack over 25 levels is where the codec is cheapest. Same trick reprices **2 king-WING buckets at +217…+294 B** (filler) against the old ~134 B/bucket full-block figure where 4 exact buckets were 409 OVER. `price_taper.py` had to be **re-anchored for the second time in four days** — `pend` rewrote the seam the 2026-08-13 re-anchor had just targeted, so the script failed its own assert and none of its numbers were reproducible from it |
+| 2026-08-17 | **THE MEAN-CONSTRAINED TAPERED FIT BEATS THE FREE ONE HELD OUT: −3.76% vs −2.41% win-prob MSE, and the SHIPPED quantised tables keep −3.56%** | 2,000,000 positions of `pool10m`, held out on the corpus's own `val_a`, K=350. Phase is a function of the material, so eg and phase are collinear — a lone rook at ph=2 is what MAKES the phase 2 — and the free fit exploits it, returning a queen **635 cp below** its own midgame value: material re-pricing wearing a taper's clothes, which generalises worse AND is the one thing the delta encoding cannot compress. Pinning each eg table to its mg mean (five equalities through the KKT system, not a re-centring) leaves only SHAPE. `score_tables.py` then scores the tables the ARTIFACT DECODES, per codec.py's standing complaint that the fit never sees the emit: the 16 cp grid costs 0.27 of the 3.83 points |
+| 2026-08-17 | **THE FRAME BUG THAT REPORTED A 24.5% IMPROVEMENT** | `pool10m`'s meta says `"frame": "labels side-to-move"`; the fit's features are white-framed. Fed together they sign-scramble every black-to-move row — half the corpus — and the fit answers by driving the piece values toward zero, which genuinely IS the best linear fit to a sign-scrambled target. **The loss did not show it; the tables did**: the queen came back 1,146 cp below its midgame value. A held-out improvement is not a correctness check |
+| 2026-08-17 | **TWO WITNESSES, because `value()` and `move()` agreeing is not evidence — the pawn accumulator's phantom-doubled-pawn bug passed the delta check on 17,932 moves and died on the first ply of the rebuild check** | A straight pawn push has source file == destination file, where `(c_b ≥ 1) − (c_a ≥ 2)` reads 1 for a single pawn. Both halves of the term invented the phantom identically. `tools/eval4k/check_incremental.py` now asserts BOTH that `value(move)` is an exact delta of `score` AND that a from-scratch rebuild reproduces every derived Position field |
+| 2026-08-17 | **IDEA 5 PRICED BY BUILDING at last: the pawn accumulator is +215 B and 0.9837× nps** | The 2026-08-14 H1 registration recorded the passer delta-rule as "DESIGNED and priced out"; that was reasoning, and the number was never built. A two-sided per-file pawn-count integer (halves exchanged on `rotate()`) plus an O(1) doubled term costs +215 B (3410 → 3625) and −1.6% nps ≈ −2.4 Elo timed. **Doubled and not passed on purpose**: the counts are RANK-BLIND, so a rank-weighted passer bonus needs a SECOND accumulator or it is the scan class. +215 B is a FLOOR for passers and it is the cheap half |
+| 2026-08-17 | **IDEA 6 CLOSED — a king-PROXIMITY term is not expressible through this engine's shared PST, and the derivation is written down so it is not re-attempted** | Both sides read one `pst` through the `119 − i` mirror, so any `f` added to `pst["K"]` contributes `f(k_own) − f(119 − k_opp)`. Proximity needs `f` HIGH near the enemy king; corner-driving needs `f` LOW at corners. When the enemy king IS cornered — the case the term exists for — those are the same square with opposite signs. A real proximity term needs a non-incremental eval, i.e. `value(move)` stops being an exact delta, which move ordering, the QS gate and futility all read. Separately, the registered conversion gate has **no headroom at 500 ms** (base 8/8 with slack everywhere) |
+| 2026-08-17 | **THE CONVERSION GATE FOUND `ktap`'s MECHANISM WITHOUT PLAYING A GAME: at 100 ms the BASELINE fails `kqk-approach`, the position the suite was built around, and the phase ramp converts it in 8 of 18 moves** | base **7/8**, `ktap` **8/8**, `tap` 7/8 at 100 ms; all three are 8/8 at 500 ms, where the gate says nothing. The failing position starts the attacking king on a1 and requires it to march before any mate exists — exactly what a queens-off CLIFF versus a phase RAMP should differ on. Cost class zero in the hot loop, measured at **6.6 µs per `search()` call** (0.003% of a 0.2 s search) with node counts IDENTICAL to the incumbent at ph = 24, which is also the blend's identity check |
 | 2026-08-17 | **DISTRIBUTION CONFIRMATION: the NULL branch fires — distribution joins labels as a measured NON-LEVER, and the night's three headline gaps all dissolve into noise or venue** | N=300/side both-vs-entry on the box, hardened harness (fixed 20k nodes + pinned 150 s clock), **both gates PASS: 0 moves ≥15 s, 0.00% ≥1.45 s, max 1.231 s / 1.006 s, 0 illegal, 300/300 each**. **C self-play −93.70 ± 37.44** (63.17% to the entry), **B Lichess −134.95 ± 39.14** (31.50%). Registered gap **C−B = +41.25 ± 54.16, CI [−12.9, +95.4] — CONTAINS ZERO (0.76σ)** → **NULL as pre-written at `9abc2e1`**: no third pass at position/label sourcing at this capacity; the remaining lever is **capacity**, which needs the byte seam and Thomas's direction call. **No promotion** — both cells still lose to the entry. **Reconciliation**: every clean number sits inside the earlier intervals (matrix B −181.70 ± 87.88 vs clean −134.95; screen C −63.23 ± 93.36 vs clean −93.70), so **the matrix's +118 was n=50 noise** and **round-1's −240 was ~150 Elo of venue coupling**, not a correction. Both axes of the distribution×label matrix are now closed |
 | 2026-08-17 | **DISTRIBUTION×LABEL MATRIX: the LABEL axis is decisively NULL (0.28σ) and the DISTRIBUTION axis is the only live effect (1.81σ) — but no pair separates at n=50, so the AMBIGUOUS branch fires** | All three cells under ONE protocol (50 games vs entry @ `d0a6e60`, fixed 20k nodes, fresh srands, **150/150 games, 0 illegal, 0 forfeits**): **A Lichess+SF-deep −200.24 ± 93.38** (24%), **B Lichess+twin −181.70 ± 87.88** (26%), **C self-play+twin −63.23 ± 93.36** (41%). Holding positions fixed and swapping the label source moves **+18.54 Elo = 0.28σ** — labels are not the lever, and that is the cleanest null the campaign has produced. Holding labels fixed and swapping the distribution moves **+118.47 Elo = 1.81σ** in favour of our own self-play positions — the largest effect in the matrix and the only one worth chasing, but **not resolved**: all three intervals mutually overlap. Per the registration's AMBIGUOUS branch the response is **one fixed-N confirmation of the single contested pair (B vs C) at N=300** — not a re-run, not a new axis. **No promotion**: every cell still loses to the entry. Also note cell A re-measured at **−200** under this protocol against its historical **−107** (318-game SPRT screen) — cross-protocol, and a caution against quoting screen Elos as magnitudes | **POLL10 (passenger):** 300/300, count gate OK, 0 illegal, all `normal`, **zero time forfeits on both arms → SAFETY branch fires, the 4096-poll is SAFE at 10+0.1**. Elo: base **+20.87 ± 27.76** over poll4096 (53%) — **no gain where clock reads bind**, point negative for the arm and CI spanning zero, at **+1 byte** pack cost. Base sha `a997b137…` verified **bit-identical to the artifact that measured +244.47 at 60+1**. Safe-but-no-payoff → **no promotion, direction closed at this N/TC** |
 | 2026-08-16 | **λ SELECTOR VERDICT: BRANCH B FIRES — outcome-blended labels are strictly WORSE, the label hypothesis is weakened, and DISTRIBUTION is promoted to prime suspect** | Three 50-game fixed-node mini-matches vs the entry (`pst_entry.py` @ `d0a6e60`, 3410 B), per the SELECTOR SPEC, **0 illegal / 0 forfeits / 150 of 150 `normal`**: **λ=0 −190.85 ± 116.16 (25.0%)**, **λ=0.5 −181.70 ± 117.71 (26.0%)**, **λ=1 control −63.23 ± 93.36 (41.0%)**. **Monotone in λ** — pure cp best, every step toward game outcomes strictly worse at this corpus size. Applying `47a760a`'s pre-registration verbatim: Branch A required an experimental arm *meaningfully inside −100*; both sit 180+ behind, so **A does not fire**. Branch B required them to die *with a healthy control* — the control trained cleanly (corr(base,label) 0.883, beats both anchors, 57% sparsity) and is the best of the three, so **B FIRES**: the Leela-slice arm now outranks the λ dial. **NO PROMOTION**: top pick is λ=1 and it still LOSES to the entry — this is a direction verdict only. **The control's −63 point estimate is NOT claimable as beating the historical ≈−107 band**: n=50 screening, CI **[−156.59, +30.13]** spans both the band and zero, and the spec says a mini-match returns a pick, never an Elo for the ledger |
@@ -331,6 +340,257 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+
+## 2026-08-17 — EVAL-STRUCTURE SWEEP: `kptap` lands at +56.07 for 53 bytes, and the full taper finally fits
+
+Five non-net eval enrichments were briefed. This entry carries the prices, the
+gates and the screens for all five; two of them were built and played, two were
+priced and deprioritised on the numbers, and one is architecturally blocked in
+this engine and the derivation is written down so it is not re-attempted.
+
+Baseline throughout: `nnue_4k/pst_entry.py` @ `d0a6e60`, **3410 packed bytes,
+686 spare**. Every byte figure is one real source through
+`tools/build/pack.sh`, measured off disk, and run standalone in an empty
+directory. Nothing is composed.
+
+### The byte table
+
+| arm | what it is | packed | vs base | spare |
+|---|---|---|---|---|
+| base | the landed entry | 3410 | — | 686 |
+| **`kptap`** | **king AND pawn tables on a 24-point phase ramp — LANDED** | **3463** | **+53** | **633** |
+| `ktap` | king table alone on the ramp, no new data | 3475 | +65 | 621 |
+| `pdbl` | per-file pawn-count accumulator + doubled term | 3625 | **+215** | 471 |
+| `tapk` | fitted eg set for PNBRQ + king, all ramped | 3711 | **+301** | 385 |
+| `tap` | fitted eg set for PNBRQ, king on the queens-off cliff | 3722 | **+312** | 374 |
+| `tapp` | `tap` with pend kept UNDER the fitted pawn delta | 3726 | **+316** | 370 |
+| 2 king-WING buckets (filler) | bucket 1 as bucket 0 + coarse delta | 3627–3704 | **+217…+294** | 392–469 |
+
+Every one of the five built arms was run PACKED, alone, in an empty directory
+with `SF_NET`/`SF_A`/`SF_N` unset: 3/3 handshake (`uciok`, `readyok`,
+`bestmove`) and **zero files left behind**, which is the TCEC rule and the
+check that has caught every fake entry this lane has produced.
+
+
+### THE SELECTORS DISAGREE BY 163 ELO ON THE SAME PAIRING — read this before any number below
+
+Two fixed-node round-robins ran tonight, 50 games per pairing, different
+srands, same three-or-four arms, same book, same 20,000-node budget, zero
+illegal moves and full counts in both:
+
+| pairing | selector 1 (n=50, srand 20260817) | selector 2 (n=50, srand 20261102) | **CONFIRMATION (n=300, srand 20260918)** |
+|---|---|---|---|
+| base vs `ktap` | ktap **+99.95 ± 80.14** | ktap **−63.23 ± 78.21** | ktap **+13.90 ± 29.45** |
+| base vs `kptap` | kptap −13.90 ± 70.29 | — | kptap **+56.07 ± 29.97** |
+
+The same pairing read +99.95 and then −63.23 — opposite signs, 163 Elo apart,
+each inside the other's interval. Nothing is wrong with either run; ±80 at
+n=50 is what the instrument costs. **And the selector ranked the two arms
+BACKWARDS**: it put `ktap` 114 Elo ahead of `kptap`, and the fixed-N block put
+`kptap` 42 Elo ahead of `ktap` with the only interval that clears zero. Acting
+on the selector would have landed the wrong arm — the dearer one — and quoted
++99.95 for it.
+
+**A 50-game selector selects. It does not measure.** Every verdict below comes
+from a fixed-N block read once at completion.
+
+### IDEA 3 selector, 300 games (50 per pairing), 0 illegal, count gate 300/300
+
+| pairing | score% (A) | Elo (A) |
+|---|---|---|
+| base vs `tap` | 43.00 | `tap` **+48.96 ± 102.27** |
+| base vs `tapk` | 44.00 | `tapk` **+41.89 ± 82.84** |
+| `ktap` vs `tap` | 45.00 | `tap` +34.86 ± 79.21 |
+| `ktap` vs `tapk` | 55.00 | `tapk` −34.86 ± 86.61 |
+| `tap` vs `tapk` | 50.00 | 0.00 ± 87.97 |
+
+Both taper arms point positive against the shipped entry and neither separates
+from the other. **Promoted, not concluded**: a fixed 300 games per pairing on
+base / `tap` / `tapk` (srand 20261207) is registered and running, and it is the
+number that decides.
+
+### Regression nets (fixed depth, this entry's own baseline, not classic's)
+
+| suite | base | `ktap` | `kptap` | `tap` |
+|---|---|---|---|---|
+| win_at_chess @ d3 | 66/300 | 63/300 | — | 65/300 |
+| bratko_kopec @ d4 | 4/24 | 4/24 | — | 4/24 |
+| mate1 @ 8 ms | 7/8 | 7/8 | 7/8 | 6/8 |
+| mate-conversion @ 500 ms | 8/8 | 8/8 | 8/8 | 8/8 |
+| mate-conversion @ 100 ms | **7/8** | **8/8** | **8/8** | 7/8 |
+| legality gate @ 20,000 nodes | — | 40 forced / 0 no-move / 0 illegal | same | same |
+| incremental invariant (2 witnesses) | pass | pass | pass | pass |
+
+### IDEA 3 — the taper: the 2026-08-13 "does not fit" verdict is overturned
+
+The ledger says *"Continuous phase blend does not fit: 4157 bytes, 61 OVER.
+Dead on price whatever its loss."* That was measured with the second table set
+stored as a full independent decode block. Stored as **mg + a coarse delta** it
+is +312 B, because a fitted endgame table is not independent of the midgame one
+and a mixed-radix pack over 25 levels is where this codec is cheapest. Both
+roots and every delta step are in `tools/eval4k/price_fitted_taper.py`; the
+shape sweep with filler is in the re-anchored `price_taper.py --delta`.
+
+`price_taper.py` HAD TO BE RE-ANCHORED AGAIN, for the second time in four
+days: `pend` (61b1a51) rewrote the same root seam the 2026-08-13 re-anchor had
+targeted, so the script failed its own assert and none of its numbers could be
+reproduced from it. It now also emits the P_MID/P_END derivation, which
+`codec.emit` predates and which `splice` would otherwise have deleted out from
+under the root.
+
+**THE FIT** (`tools/tune/fit_taper.py`, 2,000,000 positions of `pool10m`, held
+out on the corpus's own `val_a` flag, win-probability MSE at K=350):
+
+| arm | VAL wp-mse | vs shipped baseline |
+|---|---|---|
+| baseline (classic tables + the kend rule) | 0.022645 | — |
+| free tapered fit | 0.022099 | **−2.41%** |
+| **mean-constrained tapered fit** | **0.021793** | **−3.76%** |
+
+**The constrained fit is BETTER held out, and that is the interesting part.**
+Phase is a function of the material, so in `(mg·ph + eg·(24−ph))/24` the eg
+block and the phase are collinear — a lone rook at ph=2 is what MAKES the phase
+2 — and the free fit exploits it, returning a queen worth **635 cp less** in the
+endgame table than in the midgame one. That is material re-pricing wearing a
+taper's clothes: it generalises worse AND a large mg→eg delta is the one thing
+the delta encoding cannot compress. Pinning each eg table to its mg table's
+mean (five equalities through the KKT system, not a re-centring afterwards)
+leaves only the SHAPE difference, which is the only thing a second table set
+can say that the first cannot.
+
+**ONE BUG, and it was the frame.** The corpus meta says `"frame": "labels
+side-to-move"`; the features are white-framed. The first run fed them together,
+sign-scrambling half the corpus — and reported a **24.5% held-out
+IMPROVEMENT**, because a near-zero eval really is the best linear fit to a
+sign-scrambled target. **The loss did not show it. The tables did**: the queen
+came back 1,146 cp below its own midgame value.
+
+### IDEA 20 — LANDS as `kptap`: +56.07 ± 29.97 for +53 bytes
+
+**Confirmation, 900 games in one round-robin, 300 per pairing, fixed 20,000
+nodes, srand 20260918, book3k, read once at a fixed total. 0 illegal, 0
+`(none)`, count gate 900/900.**
+
+| pairing | score% (A) | Elo (A) | interval |
+|---|---|---|---|
+| base vs `kptap` | 42.00 | **`kptap` +56.07 ± 29.97** | **[+26.10, +86.04]** — clears zero |
+| base vs `ktap` | 48.00 | `ktap` +13.90 ± 29.45 | [−15.55, +43.35] — does not |
+| `kptap` vs `ktap` | 47.50 | `ktap` −17.39 ± 31.24 | [−48.63, +13.85] — does not |
+
+**The cheaper arm won**, which is not the usual shape of these things. Ramping
+both tables is **+53 B** where ramping the king alone is **+65 B**: the
+two-table form deletes the `end` boolean and pend's own switch line, and lzma
+matches the two identical blend lines against each other. Landed entry
+**3463 bytes, 633 spare**, and the packed artifact is **sha256-identical** to
+the arm that played the 300 games (`5d01f499be56b903…`).
+
+**Ramping the PAWN table is where the Elo is.** `ktap` — the king ramp alone —
+does not clear zero, and `kptap` vs `ktap` head-to-head points the same way
+without separating. pend's step at the queen exchange was giving a full passer
+bonus to positions with a full board of pieces still on; the ramp phases it in.
+
+Both arms replace the queens-off step with a linear interpolation on the
+standard 24-point phase (N=B=1, R=2, Q=4, clamped so a second queen cannot
+extrapolate past K_MID). **No new data at all** — all four tables already ship.
+
+**Cost class zero in the hot loop, measured not asserted.** The blend runs ONCE
+per search, at the root seam the kend+fresh fix already pays for, and the
+`from_board` rebuild two lines below re-derives the carried score under whatever
+table it produces. Direct measurement: **6.6 µs per `search()` call**, 0.003% of
+a 0.2 s search. A same-tree wall-clock comparison — node counts **identical** at
+ph=24, which is also the check that the blend really is the identity there —
+puts the ratio below the instrument's noise floor, so 6.6 µs is the number.
+
+**THE CONVERSION GATE FOUND THE MECHANISM, independent of any Elo.** At 500 ms
+every arm converts 8/8 and the gate says nothing. At **100 ms** — closer to what
+the engine actually gets — the **BASELINE fails `kqk-approach`**, the position
+the suite was built around: the attacking king starts on a1 and must march
+before any mate exists.
+
+| arm | mate-conversion @100 ms | the discriminating position |
+|---|---|---|
+| base | **7/8** | `kqk-approach` FAILS, budget exhausted |
+| `ktap` | **8/8** | converts in 8 of 18 attacker moves |
+| **`kptap`** (landed) | **8/8** | converts in 8 of 18 attacker moves |
+| `tap` | 7/8 | `kqk-mid` FAILS |
+| `tapp` | 7/8 | `kqk-mid` FAILS |
+
+That is the ramp doing exactly the thing it was designed to do, on the
+instrument written to detect its absence.
+
+### IDEA 5 — the pawn accumulator, PRICED BY BUILDING for the first time
+
+The 2026-08-14 H1 registration recorded the passer delta-rule as *"DESIGNED and
+priced out (score/ps split returns + scan class)"*. That was reasoning; the
+number was never built. `pdbl` builds the cheapest structural term that is
+genuinely O(1) incremental — a two-sided per-file pawn-count integer (our eight
+nibbles low, theirs high, halves exchanged on `rotate()`) plus a doubled-pawn
+penalty — and prices it at **+215 B and 0.9837× nps (−1.6%)**, ≈ −2.4 Elo timed
+at the lane's 102-Elo-per-doubling model.
+
+**Doubled, and not passed, on purpose.** A per-file count integer is RANK-BLIND.
+A doubled penalty is a function of the counts alone, so a pawn moving from file
+a to file b changes it by exactly `(c_b ≥ 1) − (c_a ≥ 2)` — two nibble reads, no
+scan. A PASSER bonus is rank-weighted, so when an enemy pawn is captured off
+file f±1 the bonus that appears depends on the rank of our pawn on file f, which
+the counts do not record. Making passers incremental needs a SECOND accumulator
+(most-advanced rank per file); computing them on demand is the scan class the
+registration named. **So +215 B is a FLOOR for the passer term, and it is the
+cheap half.**
+
+**A BUG THE DELTA CHECK COULD NOT SEE.** `tools/eval4k/check_incremental.py`
+walks 17,932 random legal moves and asserts two things: that `value(move)` is an
+exact delta of the carried score, and that the carried score equals a
+from-scratch rebuild. The delta check passed perfectly while the term was
+wrong — `value()` and `move()` agreed with each other. The rebuild check caught
+it: on a STRAIGHT PUSH the source and destination files are the same, and
+`(c_b ≥ 1) − (c_a ≥ 2)` reads 1 for a single pawn, inventing a phantom doubled
+pawn on every push. Two engines that agree can both be wrong; only the
+from-scratch rebuild is an independent witness.
+
+### IDEA 4 — king buckets: repriced by the same delta trick, still deprioritised
+
+Only the **WING** form exists in this engine. A per-side own-king bucket changes
+the table when a king moves and invalidates every carried score in the tree, and
+the pst entry has no accumulator to rebuild — `make_pst_entry.py` excises it.
+The brief's "rebuild-on-king-move via the existing accumulator path" is a
+property of `sunfish_nnue.py`, not of this artifact.
+
+Repriced with the delta encoding (`tools/eval4k/price_kb_delta.py`): **2 wing
+buckets = +217…+294 B for filler**, against the 2026-08-13 full-block figure of
+~134 B/bucket where 4 exact buckets came to 4505 B = 409 OVER. Applying the
+lane's own filler-is-a-floor correction (+60–75 B/set) a fitted 2-bucket build
+lands near **+280…+370 B**. It fits; it was deprioritised behind the taper,
+which occupies the same budget, needs the same kind of fit, and is measuring
+positive.
+
+### IDEA 6 — the king-proximity term is NOT EXPRESSIBLE here, and here is why
+
+The brief asks for `score += w·(centre-distance of enemy king) + v·(king
+proximity)` in won endings. The first half already exists: both sides read ONE
+shared `pst` through the `119 − i` mirror, so `K_END`'s centralization gradient
+is simultaneously "my king central is good" and "their king central is bad" —
+which is why the entry converts KQK and KRK at all.
+
+The second half cannot be written as a table. Let `f` be any term added to
+`pst["K"]`. The evaluation gains `f(k_own) − f(119 − k_opp)`. With the enemy
+king at `ek`:
+
+* proximity wants `f(k_own)` to RISE as `k_own → ek`, so `f` must be high near
+  `ek`;
+* corner-driving wants `−f(119 − ek)` to rise as `ek → corner`, i.e. `f` LOW at
+  corners (119 − corner is the opposite corner).
+
+When `ek` is in a corner — the case the whole term exists for — these two
+requirements are the same square with opposite signs. **One shared table cannot
+carry both.** A real proximity term needs a non-incremental eval, which is a
+different engine: `value(move)` would stop being an exact delta of `score` and
+move ordering, the QS admission gate and the futility test all read that delta.
+
+The registered conversion gate meanwhile has **no headroom at 500 ms** (base is
+8/8 with slack on every position) and the headroom it does have at 100 ms is
+exactly what `ktap` already collects. Idea 6 is CLOSED as briefed.
 
 ## 2026-08-16 — THE MIRRORED BOARD: the rotation is cached, not recomputed (+20.2% / +16.2%, +34 B). And the mutable board is CLOSED
 

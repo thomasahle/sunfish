@@ -393,6 +393,53 @@ for _a, _b in _pend:
     assert src.count(_a) == 1, "pend anchor %r occurs %d times" % (_a[:40], src.count(_a))
     src = src.replace(_a, _b, 1)
 
+# ---- kptap: THE QUEENS-OFF CLIFF BECOMES A PHASE RAMP (LANDED 2026-08-17) --
+# The entry has carried two king tables since the kend fix and two pawn tables
+# since pend, and it has picked between each pair with the SAME boolean. What
+# it has never had is a TAPER: the pick is a step function, so a queenless
+# middlegame with four rooks and four minors still on gets the same fully
+# centralized king and the same full passer bonus as a bare KRK ending. Both
+# pairs are now interpolated on the standard 24-point phase (N=B=1, R=2, Q=4),
+# clamped at 24 because promotions can push the raw sum past it and nobody
+# measured extrapolating beyond K_MID.
+#
+# THE CHEAPER ARM IS THE ONE THAT WON, which is not the usual shape of these
+# things. Ramping BOTH tables costs +53 bytes where ramping the king ALONE
+# costs +65: this form deletes the `end` boolean and pend's own switch line,
+# and lzma matches the two identical blend lines against each other.
+#
+# COST CLASS ZERO IN THE HOT LOOP, like pend and kact, and for the same
+# reason: it runs ONCE per search at this root seam, `pst` is then fixed for
+# the whole search, and the from_board rebuild three lines below re-derives
+# the carried score under whatever tables it produced. `value(move)` stays an
+# exact delta and every futility and QS margin keeps reading one table.
+# Measured at 6.6 us per search() call -- 0.003% of a 0.2 s search -- with the
+# node count IDENTICAL to the incumbent's at ph == 24, which is both the
+# blend's identity check and why a same-tree wall-clock comparison of the two
+# arms lands inside its own noise.
+#
+# MEASURED, fixed-node 20,000 against the shipped entry, 300 games read ONCE
+# at a fixed total (nnue_4k/MEASUREMENTS.md, 2026-08-17): +56.07 +/- 29.97,
+# i.e. [+26.10, +86.04], zero illegal, 900/900 games in the block. The
+# king-only arm in the SAME round-robin is +13.90 +/- 29.45 and does not clear
+# zero -- ramping the pawn table is where the Elo is, and a 50-game selector
+# had ranked these two arms the other way round by 114 Elo.
+#
+# ENTRY-ONLY, like _pend and _pooltm: sunfish_nnue.py is another lane's
+# artifact and has played no game with this.
+_kptap = [
+    ('        end = "Q" not in pos.board or "q" not in pos.board\n'
+     '        pst["K"] = K_END if end else K_MID\n'
+     '        pst["P"] = P_END if end else P_MID\n',
+     '        ph = min(24, sum(pos.board.count(c) * w\n'
+     '                         for c, w in zip("NnBbRrQq", (1, 1, 1, 1, 2, 2, 4, 4))))\n'
+     '        pst["K"] = tuple(e + (m - e) * ph // 24 for m, e in zip(K_MID, K_END))\n'
+     '        pst["P"] = tuple(e + (m - e) * ph // 24 for m, e in zip(P_MID, P_END))\n'),
+]
+for _a, _b in _kptap:
+    assert src.count(_a) == 1, "kptap anchor %r occurs %d times" % (_a[:40], src.count(_a))
+    src = src.replace(_a, _b, 1)
+
 # ---- THE POOL TIME MANAGER (LANDED 2026-08-15) ----------------------------
 # Thomas's design. It replaces the smooth budget's single divisor with a POOL
 # and a WALL, in milliseconds like everything above the `/1000` line:

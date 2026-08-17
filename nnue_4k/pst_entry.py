@@ -584,9 +584,10 @@ class Searcher:
         # leave DURING a game and one Searcher plays every move of it (a
         # new game gets a new Searcher; this was never about state
         # outliving a game).
-        end = "Q" not in pos.board or "q" not in pos.board
-        pst["K"] = K_END if end else K_MID
-        pst["P"] = P_END if end else P_MID
+        ph = min(24, sum(pos.board.count(c) * w
+                         for c, w in zip("NnBbRrQq", (1, 1, 1, 1, 2, 2, 4, 4))))
+        pst["K"] = tuple(e + (m - e) * ph // 24 for m, e in zip(K_MID, K_END))
+        pst["P"] = tuple(e + (m - e) * ph // 24 for m, e in zip(P_MID, P_END))
         # The carried score was accumulated under the OTHER table: re-derive
         # it fresh so the swap leaves no stale constant behind (the entry's
         # kend+fresh pair; classic measured the constant harmless on the C
