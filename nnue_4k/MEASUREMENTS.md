@@ -18223,3 +18223,68 @@ first and asking afterwards would have bought a format nobody wants.
 capacity arm's N=5 net at `[+45, +45, −44, −44, +45]` (5/5), ARM 2's N=4 ml2
 at `[−44, +45, +45, +45]` (4/4), and this arm still at 4/5 after an 8×
 widening.
+
+## ARM 11 — THE WITHIN-FAMILY ROUND-ROBIN: sigK buys NO Elo, and the val gate is refuted as a predictor
+
+300 games, 4 engines, 6 pairings, 20,000 nodes, srand 20260819, concurrency
+10. All four engines passed the legality gate at the played budget; **300/300
+games played, 0 time forfeits, 0 illegal, dormancy gate slowest move 1.491 s
+against a ~150 s deadline.** No void condition fired, so the numbers stand.
+
+| rank | engine | score% | Elo | ± | games |
+|---|---|---|---|---|---|
+| 1 | **entryd0** (the anchor) | **65.7%** | +112.65 | 57.53 | 150 |
+| 2 | k250 | 46.3% | −25.52 | 56.66 | 150 |
+| 3 | capn5 (sigK=400) | 45.7% | −30.19 | 51.05 | 150 |
+| 4 | **k160** | **42.3%** | −53.70 | 55.09 | 150 |
+
+**The three nets differ only in the loss's `sigK` constant, and in play they
+are indistinguishable — with the recalibrated arm nominally LAST.** The
+head-to-head cells are as flat as a result can be:
+
+| pairing | score% (engine A) |
+|---|---|
+| capn5 vs **k160** | **50.00%** — dead level |
+| capn5 vs **k250** | **51.00%** — dead level |
+| k160 vs k250 | 36.00% |
+
+150 games per engine is three times the resolution of the 50-game screens,
+and it says the +4 points k160 showed against the entry was noise, exactly as
+that screen's own error bar warned.
+
+### What this refutes, stated plainly
+
+**The neutral yardstick failed as a predictor of strength, and it failed
+having done everything right.** `outval` is out-of-sample, outcome-grounded,
+computed on real games our engines played, with the cp→win scale fitted on a
+disjoint set so no arm could win on scale; `outval_auc` is pure concordance
+with the game result and cannot be moved by any mapping at all. Both moved by
+11–15σ, worth 29% of everything the trained eval adds over counting material.
+**And the Elo is flat.**
+
+That is a stronger negative result than a flat val would have been, because
+it closes a loophole rather than leaving one: the answer is not "we measured
+the wrong statistic". Predicting the outcome of positions from finished games
+and choosing good moves in a search are different problems, and an eval can
+get materially better at the first while getting no better at the second.
+
+**Consequences, registered:**
+
+1. **ARM 11 lands nothing.** The objective's cp→win scale is recorded as a
+   **null on Elo** for this family. The calibration finding itself stands as
+   a true statement about our games (K = 158.9 in twin units, held-out
+   logloss 0.587 → 0.544) — it simply does not cash out in play.
+2. **The sweep's gate is retired as a promotion criterion.** It did its job —
+   it detected, correctly and cheaply, that an objective change moved the
+   net — and it must never again be read as evidence about strength. This is
+   now the fourth independent confirmation in this campaign, and the first
+   where a statistic passed decisively and play still said nothing.
+3. **The confound controls become MORE interesting, not less.** If `315`
+   (l1=0) or `320` (4× lr) reproduces the outval gain, then outval was
+   tracking "denser or better-optimised net" rather than anything about
+   calibration — which would explain the non-conversion completely. That is
+   now the most valuable pending result in the sweep.
+
+**Harness note, not a void:** fastchess logged "PV continues after fifty-move
+rule" for k250 and one game ended by the fifty-move rule. Fixed-node search
+in dead-drawn positions; worth knowing, not disqualifying.
