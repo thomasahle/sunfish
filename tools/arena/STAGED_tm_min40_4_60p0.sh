@@ -1,4 +1,12 @@
 #!/bin/bash
+#
+# SUPERSEDED 2026-08-17 AND NEVER RUN. min40_4 no longer ships: the classic
+# builtin clock became the POOL, which beat it +223.3 [+136.6, +345.5] on the
+# surrogate at 30+1 (nnue_4k/MEASUREMENTS.md carries the real-clock
+# confirmation). This script is kept because a plan that was bought and not
+# spent is part of the record --
+# but do not arm it: it would play an arm no artifact carries. The pool's own
+# open question has its own script, STAGED_classic_pool_flag_hammer.sh.
 # STAGED, NOT ARMED -- the confirmation SPRT for the classic builtin clock.
 #
 #   arm      min40_4 = min(wtime / 40 + 0.9 * winc, wtime / 4)
