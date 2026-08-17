@@ -4319,11 +4319,7 @@ crossings 0; terminal bench 148/148; all mate floors; +4.4% nodes.
 
 Not modeled here, as always: the table (CanNull.lean -- production's
 TT cutoff serves stored brackets of the one key-determined function),
-the repetition-0 (which PRECEDES the consumer: a king-capturable
-position inside game history would evade the invariant in production,
-where the reference dodges it via the entry scan -- closed by the
-input-validity hypothesis `HistoryLegal` below, fidelity-class like
-`Bounded`), the killer yield (Killer.lean;
+root repetition (Repetition.lean), the killer yield (Killer.lean;
 `KillerAtKingCapturable` is now ACTIVELY preserved by the substitution
 arm), and the futility break (`boundFut`; its sub-mate arm can never
 cut -- `score < gamma` by construction -- and is virtual, and its
@@ -5102,9 +5098,7 @@ theorem boundKCX_null_spec (G : QSGame)
 
 /-- **VerifiedSearchNoCrossing**, production form: two driver-range
 probes of the same `(pos, depth)` never store contradictory bounds --
-zugzwang-free, bet-free, exactness restored.  (Table lookups and
-repetition are the CanNull layer; `HistoryLegal` below closes the one
-path that precedes the consumer.) -/
+zugzwang-free, bet-free, exactness restored. -/
 theorem kcx_no_crossing (G : QSGame)
     (guard kill : G.Pos → Bool)
     (hB : Bounded G.toNullGame.toGame)
@@ -5145,31 +5139,6 @@ theorem kcx_repairs_cexT :
     boundKCX CexT (fun _ => true) 4 () 10 = 0 ∧
     boundKCX CexT (fun _ => true) 4 () 100 = 0 :=
   ⟨by decide, by decide⟩
-
-/-! ### The history hypothesis -/
-
-/-- **HistoryLegal** (input validity, fidelity-class like `Bounded`):
-positions in the game history never have a capturable king -- every
-position that was actually reached came from a legal move.  This closes
-the one theoretical hole the production consumer leaves open: the
-repetition check PRECEDES the consumer, so a king-capturable position
-inside `history` would return the repetition 0 and evade the restored
-invariant (the reference dodges it via the eager entry scan).  Under
-this hypothesis the repetition-0 and the invariant's subject are
-disjoint. -/
-def HistoryLegal (G : NullGame) (hist : G.Pos → Bool) : Prop :=
-  ∀ p, hist p = true → hasKingCapture G.toGame p = false
-
-/-- Under `HistoryLegal` the repetition-0 can never mask the sentinel:
-no king-capturable position is a repetition hit. -/
-theorem repetition_never_masks (G : NullGame) (hist : G.Pos → Bool)
-    (hH : HistoryLegal G hist) (p : G.Pos)
-    (hcap : hasKingCapture G.toGame p = true) : hist p = false := by
-  cases h : hist p with
-  | false => rfl
-  | true =>
-    rw [hH p h] at hcap
-    exact Bool.noConfusion hcap
 
 /-! ### The reduced scan's countermodel, the warm oracle, the fast path,
 and the clamped driver -/

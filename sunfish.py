@@ -328,9 +328,8 @@ class Searcher:
     def bound(self, pos, gamma, depth, root=False):
         """ Let s* be the score of the sub-tree from pos at this depth, as
             a function of (pos, depth) alone. This includes null moves, QS,
-            futility and the reductions, and global parameters like
-            self.history that don't change during search. (Things that
-            change, like tp_move or gamma, are not allowed to change the
+            futility and the reductions, and fixed global parameters. (Things
+            that change, like tp_move or gamma, are not allowed to change the
             sub-tree and value of s*.)
 
             It is assumed 1 - MATE_UPPER < gamma <= MATE_UPPER.
@@ -399,11 +398,6 @@ class Searcher:
             if entry.lower >= gamma: return entry.lower
             if entry.upper < gamma: return entry.upper
 
-            # Let's not repeat positions. We don't chat
-            # - at the root (a driver probe) since it is in history, but not a draw.
-            # - at depth=0, since it would be expensive and break "futility pruning".
-            if depth > 0 and pos in self.history: return 0
-
         # Look for the strongest move from earlier searches of this position.
         # Read it before null-move in case the recursive probe evicts it.
         killer = self.tp_move.get(pos)
@@ -468,7 +462,8 @@ class Searcher:
                 cap = (MATE_UPPER if depth > 3 else
                     min(MATE_LOWER - 1, pos.score + val + margin))
                 move_depth = d - 1 - (not root and guard and val < LMR)
-                score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
+                child = pos.move(move)
+                score = min(cap, 0 if root and child in self.history else -self.bound(child, 1 - gamma, move_depth))
             best = max(best, score)
             live |= move is not None and score > -MATE_UPPER
             if best >= gamma:
@@ -520,18 +515,18 @@ class Searcher:
     def search(self, history):
         """Iterative deepening MTD-bi search"""
         self.nodes, self.history = 0, set(history)
-        self.tp_score.clear()
-        # Table choice is fixed for the whole search (and tp_score is
-        # cleared above), so every bound targets one value function.
         pos = self.root = history[-1]
+        gamma = 0
 
         # When queens come off, the kings can start to move to the center.
         # This is important to win KRK/KQK endings. Both directions every
         # search: table state must never outlive the condition (reused
         # processes start new games with this module state).
-        pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END
+        king = K_MID if "Q" in pos.board and "q" in pos.board else K_END
+        if pst["K"] is not king:
+            self.tp_score.clear()
+            pst["K"] = king
 
-        gamma = 0
         # In finished games, we could potentially go far enough to cause a recursion
         # limit exception. Hence we bound the ply. We also can't start at 0, since
         # that's quiscent search, and we don't always play legal moves there.

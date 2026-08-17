@@ -139,15 +139,11 @@ static int QS_TAIL = 0;
 static int FUEL_NULL = 1;        /* Reduction amount; 0 restores pre-#192. */
 static int FUEL_MIN_DEPTH = 6;
 static int DERIVE_FRESH = 0;
-/* FEN_HIST: how a `position fen` builds the history, which is a SEARCH INPUT.
+/* FEN_HIST: how a `position fen` builds the history used at the root boundary.
  * sunfish_ui/uci.py -- the driver every match runs -- writes
  *     hist = [pos] if get_color(pos) == WHITE else [pos.rotate(), pos]
  * so a BLACK-to-move FEN starts with TWO plies: the root, preceded by its own
- * white-POV mirror.  Searcher.search does `self.history = set(hist)` and
- * bound() returns 0 for a non-root node found there, so the mirror is a live
- * draw-scoring entry from move 1 -- and the null move reaches it exactly
- * (rotate(nullmove) == rotate() whenever ep == kp == 0, i.e. for every book
- * position without an en-passant square).
+ * white-POV mirror. Root moves into either history position score as draws.
  *   1 (default) = the driver's construction: what every match plays.
  *   0           = the one-ply construction this file used before.
  * pyref.py carries the same knob under the same name, so `difftest --set
@@ -732,7 +728,8 @@ static int score_move(const Pos *pos, Move move, int val, int gamma,
     }
     int move_depth = rd - 1 - (!root && guard && val < LMR);
     Pos child = domove(pos, move);
-    int full = -bound(&child, 1 - gamma, move_depth, 0, 0);
+    int full = root && in_history(&child) ? 0
+        : -bound(&child, 1 - gamma, move_depth, 0, 0);
     return cap < full ? cap : full;
 }
 
@@ -758,7 +755,6 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         if (idx >= 0) { elow = tps.cold[idx].lower; eupp = tps.cold[idx].upper; }
         if (elow >= gamma) return elow;
         if (eupp < gamma) return eupp;
-        if (depth > 0 && in_history(pos)) return 0;
     }
 
     int base = depth == 0 ? QS : -MATE_UPPER;
@@ -939,9 +935,12 @@ static void fmt_move(char *buf, const Move *m, int have) {
 static void search_setup(void) {
     nodes = 0;
     gen_calls = 0;
-    map_clear(&tps);
-    PSTP['K'] = (memchr(hist[nhist - 1].b, 'Q', 120) && memchr(hist[nhist - 1].b, 'q', 120))
+    int *king = (memchr(hist[nhist - 1].b, 'Q', 120) && memchr(hist[nhist - 1].b, 'q', 120))
               ? TAB[5] : KEND;
+    if (PSTP['K'] != king) {
+        map_clear(&tps);
+        PSTP['K'] = king;
+    }
     if (DERIVE_FRESH) {
         /* PR #184: history[:] = [p._replace(score=evaluate(p.board))] --
          * every score re-derived from the board under the K-table chosen
@@ -1360,7 +1359,10 @@ int main(int argc, char **argv) {
         }
 
         else if (!strcmp(tok[0], "set")) {
-            if (ntok >= 3 && set_knob(tok[1], atol(tok[2]))) puts("ok");
+            if (ntok >= 3 && set_knob(tok[1], atol(tok[2]))) {
+                map_clear(&tps);
+                puts("ok");
+            }
             else puts("err knob");
         }
 
@@ -1368,6 +1370,7 @@ int main(int argc, char **argv) {
             if (ntok < 5 || strcmp(tok[1], "name") || strcmp(tok[3], "value")
                     || !set_knob(tok[2], atol(tok[4])))
                 fprintf(stderr, "ctwin: bad UCI option\n");
+            else map_clear(&tps);
         }
 
         else if (!strcmp(tok[0], "position")) {

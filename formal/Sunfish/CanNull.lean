@@ -1,97 +1,26 @@
 /-
-The flagless null-move/repetition search and its (pos, depth)-keyed
-table, modeled exactly as the code stands since commit eda66ee ("Remove
-can_null: driver probes are unstored, the TT key is (pos, depth)");
-audit of sunfish.py lines 285-518 at that commit.
+The history-free interior null search and its `(pos, depth)`-keyed table.
 
-`can_null` is gone.  What replaced it:
+Interior calls use one value determined only by the key and fixed search
+parameters.  Driver probes skip the table in both directions, omit the null
+candidate at their own node, and store nothing.  Repetition is resolved only
+while folding moves at the actual root; `Repetition.lean` proves that wrapper.
+Consequently, advancing the played game cannot retarget an interior entry and
+the score table may persist between moves.
 
-* INTERIOR calls (`root=False`, the default -- every child search, the
-  null pass, the stalemate probe): semantics are uniform.  The null
-  yield is gated by position-determined tests alone
-  (`depth > 2 and abs(pos.score) < 750`, lines 364-365; the pass is
-  searched at `depth - 3` as an interior call, so sunfish still permits
-  CONSECUTIVE null moves -- reproduced exactly); the repetition gate
-  (`depth > 0 and pos in self.history`, line 341) is always on; lookups
-  (334-336) and stores (481-485) go through the table under the key
-  `(pos, depth)` -- no flag.
-* DRIVER probes (`root=True`: the search root, line 512, and IID, line
-  381): skip the table in BOTH directions, skip the repetition-0 and
-  the null option, and store nothing.  Every entry in the table
-  therefore describes ONE value function -- `nullValue` below,
-  determined by (pos, depth) and the per-search `history` -- and the
-  doctrine's invariant ("every stored bound describes one value
-  function determined by the transposition key") holds by construction
-  instead of by key partition.
+The definitions below retain a generic `hist` predicate because the stronger
+theorems cost nothing.  Production instantiates it with `fun _ => false`:
 
-THE COLLAPSED STORY (was: a two-function layering keyed by
-`(pos, depth, can_null)`; git has the last cn-keyed model at eda66ee):
+* `boundNullTT_spec` proves that the interior search brackets `nullValue` and
+  preserves `CTableOK`;
+* `rootProbe_spec` proves the unstored real-move driver fold;
+* `nullValue_plain` isolates the chess assumption behind null pruning.
 
-* `boundNullTT_spec` (PROVEN, unconditional): the interior search
-  brackets `nullValue` with a POINT spec, and the `(pos, depth)`-keyed
-  table stays consistent (`CTableOK`).  No zugzwang hypothesis
-  anywhere: self-consistency of search + table is unconditional.
-* `rootProbe_spec`, the driver lemma (PROVEN, unconditional): the
-  driver probe brackets its own `rootValue` -- the max over real moves
-  of the children's interior `nullValue` -- and preserves `CTableOK`
-  (its only table effect is through its interior children).
-  `rootValue` differs from `nullValue` exactly where a gate would have
-  fired (`rootValue_eq_nullValue` below); the divergence is harmless
-  BECAUSE the driver never stores: no table entry ever describes
-  `rootValue`.  (At the actual search root the difference is not even
-  optional: the root position sits in `history`, so interior semantics
-  would answer the root probe with the repetition 0 -- "it is in
-  history, but not a draw".)
-* IID (line 381) is the same rootProbe shape at `depth - 3`, and stores
-  nothing under its own key; its purpose -- killer arrival via
-  `tp_move` fail-highs inside the probe -- is `Sunfish/Killer.lean`'s
-  territory, unchanged here.  The source guard is now
-  `not killer and depth > 3`, since a depth-3 probe would enter
-  quiescence and cannot store a killer.  This model collapses depth-zero
-  quiescence to `eval`, so the corresponding transform in its uniform
-  recurrence is definitionally the identity on the table.  At greater
-  depths the probe's table effect is its children's interior stores,
-  modeled as the table component of the root recursion.
-* `nullValue_plain` (PROVEN under `NullBetOK`): relating `nullValue` to
-  the null-free `plainValue` is where the null-move BET lives.
-  Zugzwang only ever threatens this bridge, never self-consistency: a
-  zugzwang position makes the engine compute the wrong VALUE, but never
-  makes its table contradict its search.
-
-Exactness notes from the audit (those that survive the collapse):
-
-* Order of the prelude is exact: king-gone check (321-322) BEFORE table
-  lookup (332-336) BEFORE repetition (341-342); the early returns
-  (king-gone, TT hit, repetition) store nothing, all interior loop
-  exits store through Table part 2 (481-485, the plain stores =
-  `tablePart2` of `Sunfish/Tricks.lean`, reused here); driver probes
-  return without storing (the store sits under `if not root`).
-* The generator's LAZINESS is semantically load-bearing (a surprise of
-  the original audit, still true): the null yield is pulled first, and
-  if it cuts off, the IID recursion never runs -- so the table state
-  differs depending on the cutoff.  `cNodeTail` therefore applies the
-  IID table-effect only on the no-cutoff path.  A model that ran all
-  yields eagerly would mis-model `tp_score`.
-* `history` is a FIXED per-search parameter here (`hist`);
-  `ctableOK_empty` below is the invariant fact that justifies sunfish
-  clearing `tp_score` whenever `history` changes -- the table invariant
-  is history-relative, and the empty table satisfies it for any
-  history.
-* The deadline `Stop` (305-310) raises at node ENTRY, before any store:
-  an abort can leave the search unfinished but never a table entry
-  unjustified -- aborts cannot corrupt `CTableOK`.  Not modeled, by
-  that argument.
-* `depth = max(depth, 0)` (line 315) corresponds to this model's use of
-  `Nat` depths with saturating subtraction -- verified aligned.
-* The stalemate probe (line 468) calls `bound(flipped, MATE_UPPER, 0)`
-  as an ordinary interior call, so its table key is `(flipped, 0)`; the
-  repetition (depth > 0) and null (depth > 2) gates are dead at depth
-  0, so the probe is exactly a depth-0 interior search.
-* Not modeled in THIS file (each layered elsewhere): the killer yield
-  and `tp_move` (`Sunfish/Killer.lean`), futility
-  (`Sunfish/Tricks.lean`), the stalemate block
-  (`Sunfish/Stalemate.lean`), QS interior (collapsed to `eval`, see
-  README).
+The search deadline raises at node entry, before any store, so interruption
+cannot corrupt the table invariant.  QSearch depths are represented by natural
+zero, matching the source's `depth = max(depth, 0)` normalization.  Killer
+ordering, shallow caps, terminal classification, and root repetition are
+layered in their respective files.
 -/
 
 import Sunfish.Tricks
@@ -112,14 +41,8 @@ def nullGuard (G : Game) (p : G.Pos) : Prop :=
 instance (G : Game) (p : G.Pos) : Decidable (nullGuard G p) := by
   unfold nullGuard; infer_instance
 
-/-- `nullValue G hist d p`: THE value function of the search -- the one
-every stored entry describes, determined by `(pos, depth)` and the
-per-search `hist` alone.  King-gone normalization first (321-322); the
-repetition gate `depth > 0 ∧ hist p` returns 0 (341-342; `depth > 0` is
-carried by the patterns); the pass option, at `depth - 3`, is the fold's
-initial accumulator when `depth > 2 ∧ nullGuard` (364-365); children are
-interior searches at `depth - 1`.  No flag argument: interior semantics
-are uniform. -/
+/-- Generic interior value.  Production uses an empty `hist`, so every stored
+entry is determined by `(pos, depth)` and fixed parameters alone. -/
 def nullValue (G : NullGame) (hist : G.Pos → Bool) : Nat → G.Pos → Int
   | 0, p => if G.eval p ≤ -MATE_LOWER then -MATE_UPPER else G.eval p
   | 1, p =>
@@ -138,13 +61,8 @@ def nullValue (G : NullGame) (hist : G.Pos → Bool) : Nat → G.Pos → Int
         max LOSS (-(nullValue G hist d (G.pass p)))
       else LOSS)
 
-/-- `rootValue G hist d p`: what a driver probe (`root=True`) computes at
-its own node -- the plain move fold over the children's INTERIOR
-`nullValue`, with no repetition-0 and no pass option at the top node
-(children are ordinary interior searches, so gates fire below as usual).
-This function is never stored: the driver probes skip the table in both
-directions, which is exactly why it may differ from `nullValue`
-harmlessly (`rootValue_eq_nullValue` pins down where they agree). -/
+/-- The unstored driver fold over real moves and interior child values.  The
+actual search root additionally applies `rootMoveValue` from Repetition.lean. -/
 def rootValue (G : NullGame) (hist : G.Pos → Bool) : Nat → G.Pos → Int
   | 0, p => if G.eval p ≤ -MATE_LOWER then -MATE_UPPER else G.eval p
   | d + 1, p =>
@@ -153,22 +71,14 @@ def rootValue (G : NullGame) (hist : G.Pos → Bool) : Nat → G.Pos → Int
 
 /-! ### The keyed table: `Table` of Tricks.lean, invariant re-targeted -/
 
-/-- **The keyed-table invariant**: every entry under `(depth, pos)`
-brackets `nullValue` at exactly that key.  History-relative.  The table
-type is `Table` from `Sunfish/Tricks.lean` -- the key needs no flag,
-because the only deviant-semantics calls (the driver probes) never touch
-the table; the invariant differs from `TableOK` only in its target value
-function. -/
+/-- Every entry under `(depth, pos)` brackets the generic interior value.
+Production fixes `hist` to false, making this invariant history-independent. -/
 def CTableOK (G : NullGame) (hist : G.Pos → Bool) (t : Table G.toGame) : Prop :=
   ∀ (d : Nat) (p : G.Pos) (lo hi : Int),
     t.find d p = some (lo, hi) →
       lo ≤ nullValue G hist d p ∧ nullValue G hist d p ≤ hi
 
-/-- The repetition gate's bookkeeping fact: the EMPTY table satisfies the
-invariant for ANY history -- which is exactly why sunfish may (and must)
-clear `tp_score` when `history` changes: entries proven against one
-history mean nothing under another, and clearing restores the invariant
-trivially. -/
+/-- The empty table is a valid starting state for every model instance. -/
 theorem ctableOK_empty (G : NullGame) (hist : G.Pos → Bool) :
     CTableOK G hist ⟨fun _ _ => none⟩ :=
   fun _ _ _ _ h => Option.noConfusion h
@@ -542,15 +452,10 @@ theorem cNodeTail_spec (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos
         rw [hV]
         exact hloop.2.2 hlt
 
-/-- `bound` with the full flagless mechanics.  Interior calls
-(`root = false`): king-gone (321), keyed lookup (334-336), repetition
-(341), null move (364-365), IID as an unstored driver probe (381,
-result discarded, table kept), move loop, plain keyed store (481-485).
-Driver probes (`root = true`, the search root and IID): king-gone, then
-straight to the move loop over ordinary interior children -- no lookup,
-no repetition-0, no null yield, no store. Above depth 3 the probe still
-runs its own nested IID (table effect only); at depth 3 the model's
-depth-zero transform is the identity noted above. -/
+/-- Generic flagless search.  Interior calls use the keyed table and null
+candidate; driver calls use only the real-move fold and never access their own
+table key.  Production instantiates `hist` as false, and the actual root's
+history wrapper is proved separately in Repetition.lean. -/
 def boundNullTT (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos] :
     Nat → Bool → G.Pos → Int → Table G.toGame → Int × Table G.toGame
   | 0, _, p, _gamma, t =>
@@ -962,9 +867,7 @@ theorem boundNullTT_spec_all (G : NullGame) (hist : G.Pos → Bool) [DecidableEq
                     ht hiid hchild hE.1 hE.2 hV
                     (fun pf hpf => Option.noConfusion hpf)
                     (fun _ => rfl)
-      · -- Driver probe (root = true): no lookup, no repetition, no null,
-        -- no store; the nested IID's interior children are the only
-        -- table effect.
+      · -- Driver probe: no lookup, history branch, null candidate, or store.
         simp only [boundNullTT]
         by_cases hkg : G.eval p ≤ -MATE_LOWER
         · rw [if_pos hkg]
@@ -1012,10 +915,8 @@ theorem boundNullTT_spec (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.P
 
 /-! ### The driver probe -/
 
-/-- The driver probe -- `bound(pos, gamma, depth, root=True)`, used by
-the MTD-bi driver (line 512) and by IID (line 381, at `depth - 3`): the
-same move-loop recursion with no table access, no repetition-0 and no
-null yield; its children are ordinary interior searches. -/
+/-- The unstored driver probe: a real-move fold whose children are ordinary
+interior searches. -/
 def rootProbe (G : NullGame) (hist : G.Pos → Bool) [DecidableEq G.Pos]
     (gamma : Int) (d : Nat) (p : G.Pos) (t : Table G.toGame) :
     Int × Table G.toGame :=
@@ -1100,7 +1001,7 @@ theorem rootValue_eq_nullValue (G : NullGame) (hist : G.Pos → Bool) (p : G.Pos
 /-! ### The bridge to the null-free value: where the bet lives -/
 
 /-- The null-free value: king-capture-normalized negamax, i.e. exactly
-`nullValue` with the pass option and the repetition gate deleted.  This
+`nullValue` with the pass option and generic history branch deleted.  This
 is the honest "s*" of a king-capture engine (the same normalization
 `Sunfish/Stalemate.lean` established as the sentinel semantics); it
 differs from the raw `negamax` of `GameTree.lean` only at king-gone
@@ -1153,7 +1054,7 @@ def NullBetOK (G : NullGame) : Prop :=
     ∃ m ∈ G.moves p, plainValue G (d + 2) m ≤ plainValue G d (G.pass p)
 
 /-- **The bridge, proven under the named hypothesis**: with `NullBetOK`
-and an empty history (so the repetition gate never fires), `nullValue`
+and the production empty history, `nullValue`
 coincides with the null-free `plainValue` at every depth -- the pass
 option never raises the fold, so composing with `boundNullTT_spec`'s
 point spec recovers the original docstring against `plainValue`.

@@ -33,9 +33,9 @@ it, by countermodel.  The four design items:
    about 5900 plies from any position, and threefold repetition under
    match adjudication likewise caps every legal continuation.  The
    RULELESS modeled game does not satisfy it -- that is exactly
-   `CexE` -- so the premise is precisely the finiteness adjudication
-   restores.  `Repetition.lean`'s history rule is the in-model echo of
-   the same fact.
+   `CexE` -- so the premise is precisely what full draw adjudication
+   restores.  Production's root-only repetition choice is intentionally
+   weaker and does not imply global finiteness.
 
    Alternative statement, considered and set aside: "finitely many
    reachable positions + acyclicity of legal play" implies
@@ -129,7 +129,7 @@ it, by countermodel.  The four design items:
    (`6` the fuel horizon, below which the capped pass is still a
    score candidate; `C` the worst single-edge spend).  Unchanged:
    the game classified is the ruleless one (`ForcedMate` /
-   `ForcedlyMated`; `Repetition.lean`'s scope note applies verbatim),
+   `ForcedlyMated`),
    and layer 1 (`FuelBracketSpec`) stays the recorded open obligation
    exactly as in `EventuallyWide.lean`.
 

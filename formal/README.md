@@ -144,8 +144,25 @@ eventual_classification_fuel :
 `D >= C*k + 4` for a win and `D >= C*k + C + 4` for a loss) or
 `driver_sees_trichotomy_fuel`. The draw arm needs no depth floor at all: with
 no forced mate for either side the value is strictly inside the band at *every*
-depth. `Repetition.lean` adds the game-history rule (`repetition_not_lost`,
-`draw_arm_strengthened`) on top.
+depth.
+
+## Root repetition and the persistent score table
+
+Recursive values do not depend on the played-game history. Repetition is
+resolved while folding moves at the unstored root: a child already in the game
+history has exact value zero, after which it receives the same fixed shallow
+cap as any searched child. `rootMove_report` proves the edge transform and
+`rootHistorySearch_report` carries it through the lazy cutoff loop.
+
+This placement makes every `tp_score[(pos, depth)]` interval independent of
+game history. The table therefore persists across played moves instead of
+being cleared before every search. It is still cleared when the king table
+changes between middlegame and endgame or a UCI search option changes, because
+either changes the value function, and a new `Searcher` starts every UCI game.
+`PersistentTableOK` and
+`persistentTable_history_independent` state the resulting table invariant;
+`rootHistoryFold_not_lost` proves that an available repetition with a
+nonnegative move cap prevents the root from claiming a loss.
 
 `FuelTailBracketSpec` -- the layer-1 bracket for the composed search -- is
 stated and flagged unproven; it is not used by the theorems above.
@@ -1190,6 +1207,8 @@ King-capture substitution uses the position predicate directly, so its exact
 | `score > -MATE_UPPER` as the legality test | `boundD2''_live_iff_legal`, `boundKCX''_reserves_sentinel` |
 | legal killer lifecycle and eviction | `Killer.lean` |
 | root versus interior null behavior | `CanNull.lean` |
+| root repetition report and lazy fold | `rootMove_report`, `rootHistorySearch_report` |
+| score-table reuse across played histories | `persistentTable_history_independent` |
 | transposition-table interval updates | `TableSwap.lean` and table results in `Stalemate.lean` |
 | MTD-bi bracket range and convergence | `Driver.lean` |
 
@@ -1234,7 +1253,7 @@ tests and chess corpora validate those executable primitives.
 - `MateDepth.lean`: the sharp mate-depth accounting -- which mechanism costs
   which ply, the shipped shallow cap folded in, and the countermodel that
   pins the constants and the slope.
-- `Repetition.lean`: the game-history draw rule on top of the fuel value.
+- `Repetition.lean`: root repetition and history-independent score-table reuse.
 - `EventuallyFinite.lean`: the finiteness variant -- the trichotomy for the
   untailed fuel value under `EndsWithin`, with an effective depth bound.
 

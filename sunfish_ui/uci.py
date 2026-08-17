@@ -682,6 +682,7 @@ def run(sunfish_module, startpos):
                     # Skip options we don't store, like "Ponder"
                     elif uci_key in sunfish.opt_ranges:
                         setattr(sunfish, uci_key, int(uci_value))
+                        searcher.tp_score.clear()
 
                 # Tournament managers reuse the engine process for many games.
                 # Start each game with fresh tables: it frees the memory of

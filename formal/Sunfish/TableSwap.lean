@@ -1,8 +1,7 @@
 /-
-pst-swap soundness (milestone 2, part D): why `search` may retarget the
-evaluation between searches -- `pst["K"] = K_MID if "Q" in pos.board and
-"q" in pos.board else K_END`, assigned in BOTH directions on every
-search -- while keeping `tp_move` and clearing `tp_score`.
+King-table swap soundness: why `search` may retarget evaluation between
+middlegame and endgame while retaining `tp_move` and clearing `tp_score` at
+the transition.
 
 Two tables, two fates:
 
@@ -12,8 +11,8 @@ Two tables, two fates:
   the evaluation is part of `G`.  `tableEntries_eval_relative` below
   machine-checks the dependence: an EXACT entry for one evaluation
   violates the invariant for the other.  So the swap without the clear
-  would be unsound -- and the clear (`self.tp_score.clear()`, every
-  search) restores the invariant for the NEW evaluation
+  would be unsound -- and the transition clear (`self.tp_score.clear()`)
+  restores the invariant for the NEW evaluation
   unconditionally, because the empty table satisfies `CTableOK` for ANY
   game (`ctableOK_empty`, cited, not reproven).
 
@@ -31,11 +30,10 @@ Two tables, two fates:
   `killerLegal_lifecycle_pstSwap`, the cross-search mirror of
   `killerLegal_lifecycle`).
 
-The review-edit rationale (Thomas, `search`): the assignment runs in
-both directions every search precisely so that the evaluation in force
-is a function of the current position alone, never of module history --
-reused processes start new games with this module state, and `tp_move`
-entries stored under one K-table are then consumed under the other.
+The phase is checked in both directions every search, so evaluation is a
+function of the current position rather than module history. Score entries
+persist while the phase is unchanged and are discarded exactly when it changes.
+`tp_move` entries stored under one K-table may still be consumed under the other.
 That consumption is sound exactly because the lifecycle invariant is
 eval-independent modulo `SameKingClass`; the eval-RELATIVE table is the
 one that gets cleared.
@@ -157,9 +155,8 @@ def pstEntryB : Table PstB.toGame :=
 /-- **The eval-dependence of the keyed table invariant,
 machine-checked**: the exact entry satisfies `CTableOK` for the
 evaluation it was proven against and VIOLATES it for the swapped one.
-This is why `search` must clear `tp_score` when the pst assignment can
-change the evaluation -- and `ctableOK_empty` (any game, any history)
-is why clearing suffices. -/
+This is why `search` must clear `tp_score` when the king-table assignment
+changes the evaluation -- and `ctableOK_empty` is why clearing suffices. -/
 theorem tableEntries_eval_relative :
     CTableOK PstA (fun _ => false) pstEntry ∧
       ¬ CTableOK PstB (fun _ => false) pstEntryB := by

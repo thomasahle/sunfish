@@ -68,6 +68,48 @@ def render(hist, move):
     return uci.render_move(move, white_pov=len(hist) % 2 == 1)
 
 
+class TestRootRepetitionBoundary:
+    """Game history shapes only the unstored root fold, so interior TT
+    entries remain valid from one played move to the next."""
+
+    CYCLE = "7k/8/8/8/8/8/8/K7 w - - 0 1"
+
+    def test_repetition_is_resolved_at_the_root(self):
+        hist = hist_from_fen(self.CYCLE, ("a1b1", "h8g8", "b1a1"))
+        root = hist[-1]
+        repeat = next(move for move in root.gen_moves() if root.move(move) == hist[0])
+        searcher = sf.Searcher()
+        searcher.root, searcher.history = root, set(hist)
+        searcher.tp_move[root] = repeat
+
+        assert searcher.bound(root, 0, 4, root=True) == 0
+        assert searcher.nodes == 1  # The repeated child's subtree was not searched.
+
+        searcher = sf.Searcher()
+        searcher.history = {hist[0]}
+        searcher.bound(hist[0], 1, 1)
+        assert searcher.nodes > 1
+        assert (hist[0], 1) in searcher.tp_score
+
+    def test_score_table_survives_until_the_king_phase_changes(self):
+        old_king = sf.pst["K"]
+        try:
+            sf.pst["K"] = sf.K_MID
+            start = sf.Position(sf.initial, 0, (True, True), (True, True), 0, 0)
+            marker = (start.rotate(), 99)
+            searcher = sf.Searcher()
+            searcher.tp_score[marker] = sf.Entry(-1, 1)
+
+            next(searcher.search([start]))
+            assert marker in searcher.tp_score
+
+            ending = hist_from_fen("7k/8/8/8/8/8/8/K7 w - - 0 1")[-1]
+            next(searcher.search([ending]))
+            assert marker not in searcher.tp_score
+        finally:
+            sf.pst["K"] = old_king
+
+
 class TestStalemateBlindness:
     """lichess SSPx1Gr0 (2026-08-05): with Q+R vs bare K and mate-in-2 on
     the board, the deployed engine played Qc4?? stalemate. Root cause: a

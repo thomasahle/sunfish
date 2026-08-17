@@ -466,9 +466,8 @@ above the value band's floor.  A root whose declared value is the exact
 kingless sentinel `-MATE_UPPER` therefore ends with
 `lower = 1 - MATE_UPPER` one above its value -- the `max` in the
 conclusion records exactly this and nothing else; everywhere else
-`final.lower ≤ V`.  (A kingless root never reaches `search` from a
-legal game -- `HistoryLegal`'s territory -- but the theorem does not
-need to assume it.)
+`final.lower ≤ V`.  (A kingless root never reaches `search` from a legal game,
+but the theorem does not need to assume it.)
 
 The budget: the full band has width `2 * MATE_UPPER - 1 = 138579`, and
 `138579 ≤ EVAL_ROUGHNESS * 2^14`, so ONE carried-window probe (the
@@ -960,7 +959,7 @@ real consumer.  Under it, a frontier defender fold at or below
 band value then cannot reach the frontier shape at all.  Premises of
 the spine: `ValFloor G 192` + `EvalQuiet` (fidelity, tables) +
 `NoMaskedMobility` (chess, layer 2) + root legality
-(`hasKingCapture p = false`, the `HistoryLegal` shape -- a root the
+(`hasKingCapture p = false` -- a root the
 side to move could win the king from is `MATE_UPPER` by construction
 without being a mate).  `NoZugzwang` is NOT among them. -/
 
