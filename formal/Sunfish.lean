@@ -17,3 +17,4 @@ import Sunfish.EventuallyWide
 import Sunfish.IntrinsicLMR
 import Sunfish.Repetition
 import Sunfish.EventuallyFinite
+import Sunfish.MateDepth
