@@ -4553,6 +4553,71 @@ truncated number is believed.
 
 ---
 
+## 2026-08-17 — AMENDMENT 3: the confirmation relocates to the box (pre-Elo)
+
+Registered before game 1 on the new venue and before any Elo of the re-run
+existed.
+
+**Validity was already venue-immune** under amendments 1–2 — that was their
+point. **Wall-time is not.** The laptop was running 1.7 games/min under
+desktop load (Chrome/Spotify/etc. at ~100% each, 16 pypy3 on 12 cores),
+landing N=600 near 07:00Z. The box lands it in well under an hour.
+
+**The laptop run is ABANDONED, not VOID** — its validity was intact under the
+pin; it is stopped on wall-time economics alone. Its 67 games are retained as
+**diagnostics only**, never as results, as `ABANDONED_laptop_c2_lam1.pgn`.
+
+### Arms: transferred, sha-verified both sides (poll10 pattern)
+
+| arm | sha256 (16) | laptop | box |
+|---|---|---|---|
+| `e_lam1.py` | `fd843c55e01a1157` | ✔ | ✔ |
+| `e_cellB.py` | `d6ef6287acf37f83` | ✔ | ✔ |
+| `e_entry.py` | `f237adbd8f6e9fa0` | ✔ | ✔ |
+
+### CROSS-VENUE IDENTITY SPOT-CHECK — the iron rule applied to venue
+
+The venues run **different pypy builds**: laptop **7.3.23** (Python 3.11.15),
+box **7.3.20** (3.11.13). A version difference must be proven **moveless**
+before it is allowed near a measurement.
+
+**8 positions × 3 arms = 24 pairs, all IDENTICAL** at 20 000 nodes under the
+pinned clock:
+
+```
+lam1   g1f3 g8f6 g1f3 g1f3 f1b5 g1f3 b1c3 e2e4   (both venues)
+cellB  g1f3 g8f6 g1f3 g1f3 b1c3 d1b3 b1c3 f1g2   (both venues)
+entry  g1f3 d7d5 g1f3 b1c3 f1b5 g1f3 b1c3 e2e4   (both venues)
+```
+
+**The first attempt at this check was a FALSE PASS and is recorded as such**:
+it drove the arms with `position fen`, which these builtin-loop artifacts do
+not parse — every answer came back `g1f3`, including for a black-to-move
+endgame with no knight on g1. The valid form is `position startpos moves …`,
+and the bestmoves above vary across positions, which is what proves the arms
+are responding to the position at all. A check whose answers are all identical
+is not evidence of identity.
+
+**Observability limit, stated:** these arms emit no `info` lines, so node
+counts are not visible through UCI; bestmove identity over a varied position
+set is the observable proxy. Under fixed-node determinism a diverging search
+would surface as a diverging bestmove.
+
+### Form
+
+Unchanged from `9abc2e1` + amendments 1–2: both-vs-entry, **N=300 per side**,
+fixed 20 000 nodes **plus the pinned clock** (`tc=6000+0`), deadline-relative
+void bar at **15 s**, count gate, zero-illegal. **Fresh srands — new venue,
+new draw**: C = 20260921, B = 20260922. Census by parentage at launch; the
+tuner is untouchable and poll10's slots are free.
+
+### SIGCONT is no longer last
+
+Amendment 2's SIGCONT-last ordering existed to protect a laptop re-run that
+now will not happen. **The Lean tree is resumed from `LEAN_PAUSED_PIDS.txt`
+the moment the box launch is confirmed** — the laptop then hosts nothing
+validity-bound, and L2 restarts hours earlier.
+
 ## 2026-08-17 — AMENDMENT 2: the dormancy gate is DEADLINE-RELATIVE, because its object is truncation
 
 Registered **before side C completed and before any Elo of the re-run
