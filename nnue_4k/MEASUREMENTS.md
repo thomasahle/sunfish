@@ -18524,3 +18524,53 @@ searcher*. That is the intended construct — good move ordering is agreement
 with what a strong search concludes — but a net could in principle score well
 by being entry-like without being strong, and n=3 cannot distinguish those.
 The five-net extension is what would start to.
+
+## FIVE NETS, TWO STATISTICS, AND A PRE-REGISTERED PREDICTION
+
+`316_obj11_k100` completes the ladder below 160 and the outval trend does not
+stop there: Brier **0.127010** and AUC **0.84850**, both better than rung 1's.
+So the outval optimum is at or below sigK=100 — **not** near the twin-unit
+calibration K = 158.9. That weakens the calibration reading of ARM 11 and
+strengthens the alternative registered beside it: small K concentrates the
+fit near equality and quietly discards the large-|cp| tail, which is a
+robustness story, not a calibration one.
+
+The two statistics, on all five nets:
+
+| net | sibling nrank (lower better) | rank | outval Brier (lower better) | rank |
+|---|---|---|---|---|
+| capn5 (sigK 400) | **0.3312** | **1** | 0.127782 | 4 |
+| k250 | 0.3341 | 2 | 0.127526 | 3 |
+| l1zero (sigK 400, l1=0) | 0.3347 | 3 | 0.127905 | **5** |
+| k100 | 0.3425 | 4 | **0.127010** | **1** |
+| **k160** | **0.3494** | **5** | 0.127099 | 2 |
+
+**They are very nearly inverted.** The net the outcome-prediction statistic
+likes best (k100) the ordering statistic places fourth of five; the net
+ordering likes best (capn5) outcome-prediction places fourth. The paired
+separations on the ordering side are not marginal — k160 vs capn5 is 8.1σ,
+k100 vs k250 is 4.8σ, k160 vs k100 is 4.0σ — while `l1zero` and `k250` are
+0.4σ apart and are properly reported as unresolved.
+
+Measured Elo exists for three of these, and the ordering statistic got the
+one resolvable difference right (k160 last) while declining to split the pair
+the tournament also could not split.
+
+### The prediction, registered before the games are played
+
+A statistic that has been calibrated on three points should be made to
+predict two it has not seen. Extended round-robin launched — six engines
+(`entryd0` anchor + all five nets), 15 pairings, ~450 games so each engine
+gets ~150, fresh srand, same hardened harness and same void conditions.
+
+> **Predicted:** `l1zero` lands close to `k250`/`capn5`; `k100` lands clearly
+> below them but clearly ABOVE `k160`; `k160` stays last of the five nets.
+>
+> **Falsified if:** `k100` or `l1zero` finishes at the top of the nets, or
+> `k160` is not last.
+
+The rival statistic predicts the reverse order, so this tournament
+discriminates between them rather than merely adding data to one. A negative
+is worth more than a confirmation here, because work has just been funded on
+the strength of the calibration — and it is registered as a falsification
+condition rather than left as something to reinterpret afterwards.
