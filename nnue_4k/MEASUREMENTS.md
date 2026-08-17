@@ -17607,3 +17607,73 @@ Nothing is promoted on val in any branch: val is being used here only as a
 **screen inside one family**, which is the one use the truncation verdict
 licenses (`val ranks arms INSIDE a family and INVERTS across family
 boundaries`), and only ever to refuse work.
+
+---
+
+## 2026-08-18 — FACTOR LANE, PRE-NUMBER AMENDMENT: sparsity buys RANK, and one criterion that decides whether the upper bound is real
+
+Both halves registered while `310_obj11_k160` is still ahead of the factor
+arms in the queue, so no factor val exists yet.
+
+### (a) MEASURED: the affordable rank is a function of trained sparsity
+
+The pre-registration said "r ≥ 5 does not fit at any width" on one sparsity
+point. That is too strong, and the reason is in this lane's own container
+price list: zeros are worth up to 45 % of the payload. Re-measured across the
+sparsity axis, artifacts built and run:
+
+| r | N | zeros | packed | spare |
+|---|---|---|---|---|
+| 4 | 32 | 43 % | 3,982 | 114 |
+| 4 | 32 | 60 % | 3,943 | 153 |
+| 4 | 32 | 70 % | **3,885** | **211** |
+| 4 | 48 | 70 % | 3,945 | 151 |
+| 5 | 16 | 43 % | 4,308 | −212 |
+| 5 | 16 | 70 % | 4,199 | −103 |
+| 6 | 16 | 70 % | 4,267 | −171 |
+| 8 | 16 | 80 % | 4,244 | −148 |
+
+**The r=4 frontier is more comfortable than registered** — at the 70 % zeros
+an `l1`/`rate`-regularised run can plausibly reach, r=4/N=48 costs 3,945 B
+with 151 spare, where the same shape at the trained 43 % cost 4,048 with 48.
+
+**The r=5 rows above are pessimistic and should not be read as a refutation.**
+`make_factor_proto.py` packs FEATURE-MAJOR with the last trit group
+zero-padded, which is exact at r=4 (one digit per feature, byte-for-byte the
+shipped stream) and wastes ~25 % at r=5 (two digits per feature carrying five
+trits). The flat four-trits-per-digit stream the tool used first measured
+**4,134 B at r=5/N=16 and 43 % zeros — over by 38** — and at 70 % zeros that
+container has not been measured. So the honest statement is:
+
+- **r = 4 fits comfortably at every width up to 48.**
+- **r = 5 is MARGINAL — over by 38 B on the best container measured, with an
+  unmeasured sparsity lever and the staged base-48 two-stream container both
+  pointing the right way.** It is not closed, it is unpriced.
+
+That matters more than a byte: r=5 is the shipped net's own direction count,
+so a factored net at r=5 would dominate it on units without giving up a
+single direction, while r=4 must pay for its units with one.
+
+### (b) REGISTERED: when the upper bound is SOFT, and what happens then
+
+The gate rests on `val(free table, N)` lower-bounding every factored net of
+width N. That inequality is exact, but the *measured* free-table val is only
+an upper bound on quality if the run converged: an under-trained wide arm
+reports a loose number and would refute the design for the wrong reason. The
+recipe is 6 epochs, chosen for N=5, and a 32-lane net is not obliged to
+optimise on the same budget.
+
+**Criterion, fixed before the numbers land.** For the arm that comes closest
+to the bars, take the mean val of the last two epochs minus the mean of the
+two before them. If that difference is **more negative than −σ (−2.2e-5)**,
+the arm was still descending when the schedule ended, the bound is **SOFT**,
+and no branch fires until one arm is re-run at 18 epochs (3× the schedule, the
+smallest multiple that would have caught the ledger's own 30-vs-60-epoch
+null). If it is within ±σ, the arm has converged on this recipe and the bound
+is **FIRM** and the registered branches apply as written.
+
+This is deliberately asymmetric: a soft bound can only *delay* a refutation,
+never manufacture a pass. The ledger's existing evidence says FIRM is the
+likely reading — 60 epochs bought nothing over 30 on the ml2 recipe, and 50×
+data plus 6× passes bought 0.2 % on this one — but that evidence is at N≤6 and
+the arms under test are at N=16..64.
