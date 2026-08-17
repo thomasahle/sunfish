@@ -17326,3 +17326,284 @@ neither is data.** The flat val predicted this: a model that does not absorb
 The distilled-PST entry survives for the reason it always has — its 384 values
 ride hand-built nonlinear machinery (K_MID/K_END, khold2, pend) that the
 linear-in-ps768 family has no way to express.
+
+---
+
+## 2026-08-17 — FACTORED COMPRESSION, PRE-REGISTERED: the archaeology, a measured container price list, a measured (rank × width) byte table, and one cheap upper bound that can close the whole design space before a line of trainer code is written
+
+Registered before any training number exists. Thomas asked for a lane that
+revives "the original best einsum/factoring based compression" on top of the
+current big-int inference path. This entry is the archaeology, the pricing,
+and the gate — all of it pre-number except the byte and speed measurements,
+which are properties of the container and the interpreter and could not be
+biased by a result that does not exist yet.
+
+### (1) ARCHAEOLOGY: what "the original best" actually was, and it never shipped
+
+Searched the box's 197 run directories, the trainer source, and the whole
+ledger. **Exactly two trained structure runs exist, and no einsum, Kronecker,
+Tucker or CP decomposition exists anywhere in this project.**
+
+| run | arch | data | best val | vs same-data control |
+|---|---|---|---|---|
+| `41_c1024_lr` | `lowrank`, rank 1 + full ternary residual | 4.1 M | **0.013835915774703026** (ep 8/40) | +7.9 % **worse** |
+| `40_c1024_cb` | `cb`, codebook K=32 block=8 | 4.1 M | 0.014148045234680176 | +10.3 % worse |
+| `80_replnet_ml2` | the control | 4.1 M | 0.01283 | — |
+
+`41_c1024_lr` is the best factored artifact this project has ever trained, and
+its config is (non-default keys) `arch: lowrank`, `lr_rank: 1`, `lr_wmax: 1`,
+`N: 4`, `kb: 1`, `factor: 1`, `ternary: 0.85`, `base: mat`, `l1: 0.001`,
+`losspow 2.0`, `sigK 400`, `satpen 0.03/480`, 40 epochs, batch 8192, lr 3e-3,
+AdamW wd 1e-5, seed 0, corpus `cache_repl4M.pkl` (4,027,406 val positions,
+`split: legacy-perm`).
+
+**Its inference path was: none.** The run has a `certificate.json`, a
+`best.pickle.payload` and a green `struct lowrank OK` (meaning
+`structures.reconstruct()` rebuilt the exported trits bit-exactly), but the
+ledger's own verdict on the pair was "**Neither trained structure beats
+0.01280, so the export candidate is unchanged**". Neither was ever spliced
+into an entry, neither was ever packed, and neither ever played a game. There
+is no `.packed` file anywhere under the training checkout.
+
+**And it was not a compression scheme.** `structures.LowRankResidual` is
+
+    T = clamp(U_q @ V_q + R * 32, -wmax, +wmax) / 32     U (768, r), V (r, N)
+
+with `R` a **full 768 × N ternary residual** and `wmax = 1` clipping the
+composite **back onto the ternary grid**. So the payload it implies is the
+full table *plus* the factors, and the product's extra resolution is thrown
+away by the clip. It is a trained regulariser, not a smaller payload. The one
+genuine compressor, `train/compress/arms/lowrank.py` (`name = "lr_svd"`,
+`torch.linalg.svd` over `r ∈ 1..min(3, N+1)` with a percentile-thresholded
+gap-coded residual), is **post-hoc** — it factorises an already-trained float
+table, which is precisely the export-fidelity mistake this campaign has paid
+for twice.
+
+The other "factorisation" in the trainer, `--factor` / `ModelCfg.factor: 1`
+(active in every run including the shipped ones), is nnue-pytorch's virtual
+feature trick: `W_b[f] = raw[b·768+f] + shared[f] + typ[f//64]`, a 12 × N
+per-piece-type table **folded at export**. It is a training-time
+reparametrisation with no payload consequence at all.
+
+**So there is no "original best" to beat on its own terms.** The honest
+statement is: the factored direction was opened twice, lost to its control
+both times on val at N=4 with a residual that made it not-a-compressor, and
+was never carried to an artifact. The design below stands on its own.
+
+### (2) WHAT THE FACTORISATION IS FOR — a mechanism, not a size
+
+The shipped format stores one free ternary weight per (feature, lane). That
+welds together two numbers which have no reason to be equal: the number of
+**input directions** the net looks along, and the number of clipped-relu
+**units** it spends on them. Writing `W[f,k] = Σ_j U[f,j]·V[j,k]` unwelds
+them — `r` directions, `N` units, a dense `r × N` mixing — and the shipped
+net is the special case `r = N`, `V = diag(gains)`. Because the product is
+folded into the weight table **at load**, `Position.move`'s delta and `nn_cp`
+never learn that a factorisation happened.
+
+That reframes the whole question. The payoff is not "more parameters per
+byte" — a factored table has *fewer* degrees of freedom than the free table
+it replaces. The payoff is that `N` units over `r` directions is a genuine
+one-hidden-layer function of `r` scalars, where the shipped format gives `r`
+units each seeing exactly one direction, and the second thing costs `r·N`
+digits instead of `768·(N−r)` trits.
+
+### (3) MEASURED: the container price list, which the ledger did not have
+
+The ledger carried one point — "1.67 bits/trit, four trits per base-90 digit"
+— and a factored payload is a different stream, so its price could not be
+read off that point. `packed/price_container.py` splices synthetic digit
+streams into the real entry and runs the real `tools/build/pack.sh`; every
+number is a size read off a built file, at code side **3,170 B**
+(the bytes-literal decoder, `b605999`).
+
+| digit alphabet | B/digit | bits/digit | vs log2(alphabet) |
+|---|---|---|---|
+| 3 | 0.299 | 2.39 | +51 % |
+| 9 | 0.445 | 3.56 | +12 % |
+| 27 | 0.632 | 5.06 | +6.5 % |
+| 81 | 0.841 | 6.73 | +6.2 % |
+| **90 (uniform)** | **0.856** | **6.85** | **+5.5 %** |
+
+| zeros at alphabet 90 | 0 % | 20 % | 40 % | 55 % | 70 % |
+|---|---|---|---|---|---|
+| B/digit | 0.850 | 0.797 | 0.694 | 0.613 | 0.474 |
+
+The full-table family's own stream reproduces its ledgered price exactly:
+3,072 trits four-to-a-digit at 43 % zeros cost **1.680 bits/trit**, at 55 %
+zeros **1.594**.
+
+Three things follow, and the first two are new.
+
+1. **Small alphabets are inefficient per bit.** A base-3 digit spends 2.39
+   bits to carry 1.585 — 51 % overhead — because a digit is a whole source
+   byte and lzma recovers only part of it. Anything worth storing should be
+   packed up to the full 90-value alphabet before it is written. This is why
+   the trit-grouping matters and why a 5-level factor alphabet would be a
+   mistake.
+2. **Sparsity is worth ~45 %** of the payload at the extremes (0.850 →
+   0.474 B/digit), which is a larger lever than the choice of alphabet.
+3. B/digit is essentially constant in stream length (0.880 at 200 digits,
+   0.846 at 2,000), so payload cost is linear and can be composed.
+
+### (4) MEASURED: the (rank × width) byte table, on artifacts that RUN
+
+`packed/make_factor_proto.py` derives the factored variant from
+`replnet_proto.py` by assert-on-drift string substitution (8 hunks, the
+`make_ml2_proto.py` pattern), at any `(r, N)` and any lane width, and emits
+the matching payload. Random weights at the trained sparsity (43 % zeros),
+so these price the **engine and container**, not a net. Every row below was
+**built and run** — `uci` / `position startpos` / `go nodes 2000` returns a
+legal `bestmove`.
+
+| shape | directions r | units N | packed B | spare | reconstructed table entries |
+|---|---|---|---|---|---|
+| shipped diagonal | 4 | 4 | **3,790** | 306 | 3,072 |
+| shipped diagonal | 5 | 5 | ≈3,980 | 116 | 3,840 |
+| **factored** | **4** | **16** | **3,918** | **178** | 12,288 |
+| **factored** | **4** | **32** | **3,982** | **114** | 24,576 |
+| **factored** | **4** | **48** | **4,048** | **48** | 36,864 |
+| factored | 4 | 56 | 4,079 | 17 | 43,008 |
+| factored | 5 | 16 | 4,134 | **OVER by 38** | — |
+| factored | 6 | 8 | ≈4,256 | **OVER** | — |
+
+(The N=5 diagonal row is the ledgered 4,002 B minus the −22 B the
+bytes-literal decoder landed. The r=5 row uses the flat four-trits-per-digit
+packing, which beats one-digit-per-feature there; feature-major padding costs
+it a further 174 B.)
+
+**The headline: r=4 / N=32 costs 3,982 B — two bytes MORE than the shipped
+five-direction net — and buys 6.4× the clipped-relu units.** And **r ≥ 5 does
+not fit at any width**, because `U` alone is 192·r digits: the affordable
+factored space is exactly four directions, one fewer than the shipped net
+already has. That is the trade the experiment has to justify.
+
+The reconstruction is **pure Python and needs no numpy**: the per-feature work
+in the shipped decoder is already a function of one payload digit alone, so
+hoisting it into an 81-entry lane-word table absorbs the mixing *and* removes
+the inner loop. Measured code-side cost of the whole factored decode, payload
+elided: **3,170 → 3,251 B, i.e. +81 B** (+74 B before the r ≤ 4 short form was
+added). Consuming the byte-golf lane's finding rather than re-deriving it:
+numpy at load loses +16 B in identifier tokens and carries an int8-wraparound
+landmine that factor *products* would amplify, so numpy is not imported here
+even though the rules permit it.
+
+### (5) MEASURED: the width tax, out to the widths a factored payload can buy
+
+The ledger's ACCUMULATOR PRICING entry has three points (N=4/5/6) and the
+factored design lives at N=16..48, so the extrapolation had to be replaced by
+a measurement. `packed/price_width.py`, same two primitives, min of three
+repeats, empty-loop overhead subtracted. **Instrument: PyPy 7.3.23 on arm64
+(this laptop) — the box's absolute numbers are not comparable and the
+relative column is the deliverable.**
+
+| N | delta ns | read-out ns | combined | vs N=4 | ledger's box figure |
+|---|---|---|---|---|---|
+| 4 | 51.9 | 199.9 | 251.8 | — | — |
+| 5 | 53.8 | 213.3 | 267.2 | +6.1 % | +18.8 % |
+| 6 | 53.6 | 263.5 | 317.1 | +25.9 % | +25.2 % |
+| 8 | 54.6 | 254.9 | 309.5 | +22.9 % | — |
+| **16** | 62.0 | 436.6 | 498.6 | **+98.0 %** | — |
+| 24 | 69.5 | 642.8 | 712.3 | +182.9 % | — |
+| **32** | 80.0 | 872.4 | 952.4 | **+278.3 %** | — |
+| **48** | 93.1 | 1374.5 | 1467.5 | **+482.9 %** | — |
+
+The two instruments agree at N=6 (+25.9 vs +25.2) and disagree at N=5 (+6.1 vs
++18.8), and N=8 reads *below* N=6 here — so the N=4..8 region is at the noise
+floor on both machines and the projection below carries at least that slop.
+The N≥16 growth is far above it.
+
+Projected through the ledger's own conversion (net share of node time
+8.210 µs at N=4, entry node 9.909 µs, 1.28 Elo per nps %):
+
+| N | node µs | nps vs entry | timed term | **extra vs the shipped N=5** |
+|---|---|---|---|---|
+| 4 | 18.1 | −45.3 % | −58.0 Elo | +1.8 |
+| 5 | 18.6 | −46.8 % | −59.9 Elo | — |
+| **16** | 26.2 | −62.1 % | **−79.5 Elo** | **−19.6** |
+| 24 | 33.1 | −70.1 % | −89.7 Elo | −29.8 |
+| **32** | 41.0 | −75.8 % | **−97.0 Elo** | **−37.1** |
+| **48** | 57.8 | −82.8 % | **−106.0 Elo** | **−46.2** |
+
+This is a **projection, not a measurement** — mine is the ρ column, the
+conversion constants are the box's — and the registered two-part promotion
+rule still requires a direct nps read on the box before anything is claimed.
+
+**Stated plainly, and before any val number exists: the design is priced
+NEGATIVE.** The shipped N=5 net measured **31.00 %** against the entry at
+fixed nodes, and a factored N=32 has to erase that *and* pay a further ~37 Elo
+of read-out. The bet is therefore not "more parameters per byte" — it is that
+32 units over 4 directions is worth more than 5 units over 5 directions by a
+margin this campaign has never seen a linear-in-ps768 arm produce.
+
+### (6) THE GATE — one cheap upper bound closes the space, or opens it
+
+A factored table `W = U·V` with `U` of rank `r ≤ N` is a **strict subset** of
+the free 768 × N table. Therefore, for every `r`,
+
+    val(factored r, N)  ≥  val(free table, N)
+
+and the free-table sweep **lower-bounds the loss the whole factored family can
+reach at each width** — it prices the entire design space without a line of
+trainer code. Four arms, queued as `330..333_factor_ub_*` on `pool10m.npz`
+(`corpus_sha 20d11868fffc5521`), each **identical to `220_cap_n5b_s0` in every
+field except the one named**, seed 0, 6 epochs, linear schedule, l1 5e-4,
+ternary 0.85, gridste 1:
+
+| arm | change | what it prices |
+|---|---|---|
+| `330_factor_ub_n16` | `N: 16` | the affordable width |
+| `331_factor_ub_n32` | `N: 32` | the headline width |
+| `332_factor_ub_n64` | `N: 64` | width past anything affordable |
+| `333_factor_ub_f32` | `N: 32`, `ternary: 0`, `l1: 0` | whether QUANTIZATION or ARCHITECTURE binds |
+
+(`l1` must be 0 on the float arm: `l1_pressure` reads `model._u`, which exists
+only on the ternary STE path. Two changed fields, named here so the read is
+not attributed to width alone.) All four were **pre-flighted** at 1 epoch on
+`sac_corpus.npz` (19,168 positions) before being queued: three passed
+first time, the float arm crashed on exactly that `_u` attribute and was fixed
+before it could waste a queue slot.
+
+**Anchors, quoted at the point of use.** N=5 seeds `220/221/222_cap_n5b_s*`:
+val **0.0176490 / 0.0176273 / 0.0176347**, spread 2.2e-5 ⇒ **σ = 2.2e-5**.
+Material anchor on the same split **0.02054**; zero anchor 0.02637; N=6 control
+`100_cap_n6_s0` **0.0174953**, which is **not** a clean comparator because it
+trained under the defective ±0.019 bias clamp.
+
+**Two bars, both fixed now, against the BEST N=5 seed (0.0176273) so seed luck
+cannot manufacture a pass:**
+
+- **NOISE BAR** — necessary for any claim at all: best arm must reach
+  **val ≤ 0.0175173** (= 0.0176273 − 5σ).
+- **FUNDING BAR** — necessary to write the factored trainer and spend selector
+  games: **val ≤ 0.0168991** (= 0.0176273 − 25 % of the 0.0029127 of learned
+  signal the N=5 net holds over the material anchor).
+
+The 25 % is a **judgement call, priced against the Elo requirement and
+registered as such**: no val→Elo calibration exists inside this family, the
+arm has to find ~140 Elo of eval plus ~20–46 Elo of read-out tax, and a width
+increase that adds less than a quarter again of the net's entire learned
+signal cannot plausibly do that.
+
+**Branches, fixed in advance.**
+
+- Both bars missed ⇒ **the factored design is refuted by an upper bound**, at
+  the cost of four 10-minute CPU runs and no games. No trainer code is
+  written. This is a real result and it is the expected one.
+- Noise bar met, funding bar missed ⇒ width is a real but small lever;
+  recorded, not funded, because the read-out tax eats it.
+- Funding bar met ⇒ the factored parametrisation gets written (`U` ternary via
+  the existing STE, `V` on the payload's own integer grid, **no residual and no
+  ternary clamp on the composite** — the two things that made `41_c1024_lr`
+  not-a-compressor), certified with the `verify_export` triangle
+  (payload decode == trainer quantization; entry == int-ref == torch-mirror on
+  200 fens × 3 views + a 60-ply walk), and only then does a 50-game selector
+  against `pst_entry @ d0a6e60` get requested.
+- **`333_factor_ub_f32` also lands ≥ 0.0175** ⇒ neither width nor quantization
+  binds, and the ps768 feature set itself is exhausted on this corpus. That
+  reading is larger than this lane and would be handed up rather than acted on.
+
+Nothing is promoted on val in any branch: val is being used here only as a
+**screen inside one family**, which is the one use the truncation verdict
+licenses (`val ranks arms INSIDE a family and INVERTS across family
+boundaries`), and only ever to refuse work.
