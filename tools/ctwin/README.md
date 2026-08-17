@@ -367,8 +367,11 @@ shape (it is the only cell that introduces floor moves at 60+0).
 
 The ranking pass above left one question unanswered and the classic landing had
 to answer it: the pool is TWO changes, a budget and a stop rule, and classic
-pays for them separately — the budget is three statements, the bracket rule is
-four more lines on a 150-line engine. Two arms were added to price them.
+pays for them separately — the budget is three statements and the bracket rule
+four more, which on a ~150-line engine is a real question and not a rhetorical
+one. (It was answered twice over: the arms below priced the Elo, and the
+landing then golfed the whole port down to ZERO minified lines, so the cheap
+half would have saved nothing in the end either.) Two arms priced them.
 **Both DELEGATE their parent's numbers** rather than restating the arithmetic,
 so a cell meant to isolate one change cannot be measuring two
 (`test_tm_surrogate.py` asserts exactly that):

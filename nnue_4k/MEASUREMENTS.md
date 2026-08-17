@@ -238,6 +238,8 @@ zero clean lines** — strictly cheaper than what landed — and it reads
 | `e499dae` | 3369 B | 3451 B | +82 B | 150 → 154 | 642 → 670 |
 | `5a7d744` (arms' base) | 3426 B | 3503 B | +77 B | 152 → 156 | — |
 
+**THE REGISTRATION PROMISED A WORSE PRICE THAN THE LANDING PAYS, and it is left as written.** Its wins-clear branch says "+77 B and +4 clean lines" with the README moving 152 → 156. That was true of the form the games were played with; the golf came after, at Thomas's ask on #217, and the shipped form is cheaper on both axes with the same mechanism. The registration is append-only and is not edited — this entry is the correction, which is what that rule is for.
+
 **IT LANDS LINE-NEUTRAL ON THE MINIFIED ENGINE, at Thomas's ask on #217.** The
 first three rows are the same port before the golf, and they cost four minified
 lines; the shipped form costs **zero**. Two of those four were the bracket
