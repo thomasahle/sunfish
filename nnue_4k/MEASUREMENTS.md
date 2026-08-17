@@ -18100,3 +18100,68 @@ progress both track `sigK` and their controls (`315`, `320`) have not run.
 The honest one-line summary is: **the objective axis is the first axis in this
 campaign to move a held-out statistic by more than a seed, and it has not yet
 been shown to move Elo.**
+
+## ARM 2 — the clean ml2 instrument: FAILS its gate, and it says something exact
+
+| statistic | control (mirror, n=3) | `313_arm2_ml2_n4` | verdict |
+|---|---|---|---|
+| refval_mirror | 0.0176370 | **0.0178667** | far worse |
+| outval Brier (mirror) | 0.1278096 | **0.1279220** | worse — **FAIL** |
+| outval AUC | 0.846176 | **0.845830** | worse |
+
+**Val trajectory** (its own objective, comparable to the control's because it
+trains at sigK=400/lam=1 on the same split): 0.0179413 → 0.0179135 →
+0.0179180 → 0.0178942 → 0.0178771 → **0.0178667**. Monotone, and it never
+reaches the N=5 control's 0.0176370.
+
+### Why, and it is not the reason the old −234 verdict gave
+
+**The exported read-out is DEAD: `u2_digits = [0, 0, 0, 0]` — with
+`u2grid: 1` set.** The exporter's own diagnosis prints the exact pre-image:
+the trained read-out wants **0.487, 0.488, 0.488, 0.487** digits, and the
+smallest representable step is 1. It missed by 2.7%.
+
+So `u2grid` — registered as the fix for exactly this, on the strength of the
+2026-08-15 finding that the old arm's `u2` rounded to `[0.17, 0.08, 0.14,
+0.11]` → all zero — **does not fix it**. Training against the artifact's
+resolution let the read-out grow 4× closer to the threshold and still leaves
+it below. This arm therefore did not merely reproduce the old verdict's
+number; it reproduced its *mechanism*, on a clean instrument, and measured it:
+
+> **The ml2 seam's read-out resolution is about 2× too coarse for what the
+> architecture wants at N=4, shift 4.** The net's preferred second layer is
+> half of one digit. Rounding it up to 1 would not be a fix — it would
+> overshoot the wanted contribution by ~2×.
+
+What ARM 2 actually measured, then, is a **single-layer N=4 net** paying ml2's
++130 B and its ~0.90× nps for a layer that never fires — which is why it
+loses to a single-layer N=5 control on every statistic. **The old −234 Elo
+was never a verdict on two-layer nets. Neither is this. Two clean attempts
+have now failed to produce a two-layer net at all.**
+
+**The knob, priced from the exporter's own table** (printed on refusal, which
+is that guard doing its job): the L1 shift. Dropping shift 4 → 3 makes
+`U2 = [2, 2, 2, 2]` representable, at the cost of halving the layer-1 gains
+(`[68, 71, 72, 67]` → `[34, 36, 36, 33]`) — i.e. **buying a barely-resolved
+second layer with half of layer one's weight resolution.** Not run: the arm
+already loses by a wide margin as an N=4 net, the purchasable L2 is 2 digits
+of 127, and the trainer would need a config knob to force a non-L1 shift.
+Recorded as the next ml2 step if anyone funds one, with the trade named.
+
+**Byte number:** 786-character payload, in line with the registered ~781 B
+estimate. **Bias digits `[0, 89, 89, 89]` — four of four pinned on the
+rails**, a second independent confirmation of ARM 1's binding-bias finding on
+a different architecture.
+
+### The scorer's ml2 branch: what is and is not verified
+
+`refval_mirror` = **0.01786671** against the run's own `metrics.jsonl` best
+val of **0.01786671** — an exact end-to-end receipt for the ml2 pickle path,
+the frozen metric and the frozen slice.
+
+**Stated honestly: that receipt does not exercise the second-layer term**,
+because this net's `u2` is zero, so the ml2 forward *is* the single-layer
+forward here. The conv term is covered separately and non-trivially — on
+`61_replnet_clamp` it moves the eval by a mean of 34 cp (max 352), and
+zeroing its digits reproduces the single-layer path to max |Δ| = 0.0 cp. The
+two checks together cover the branch; neither alone does.
