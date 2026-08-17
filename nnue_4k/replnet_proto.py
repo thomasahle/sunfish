@@ -27,17 +27,17 @@ version = "sunfish replnet"
 # payload-shebang strip, -26 on every build in this block). The golf round's
 # own column is kept beside it, because the ladder above was gated there and a
 # bare re-quote would silently re-anchor it:
-#                                          golf round 2   LANDED (eb8897c)
-#   code side (payload string elided)      3449 -> 3217   3186
-#   trained v1 payload spliced (l1=0.001)  3831 -> 3594   3567  (529 spare)
-#   payload capacity that fits 4096        878 B in-ctx   909 B in-ctx
-#     at the 30-B safety margin            849 B          880 B
-#     (--feats 1135/1095)                                 (--feats 1170/1130)
-#   Thomas's 1024-B payload budget         4238, 142 over 4212, 116 over
-#     (--feats 1330)
+#                                          golf round 2   LANDED (eb8897c)  BYTES-LITERAL DECODE
+#   code side (payload string elided)      3449 -> 3217   3186              3170
+#   trained v1 payload spliced (l1=0.001)  3831 -> 3594   3567  (529 spare)  --
+#   payload capacity that fits 4096        878 B in-ctx   909 B in-ctx      924 B in-ctx
+#     at the 30-B safety margin            849 B          880 B             896 B
+#     (--feats 1135/1095)                                 (--feats 1170/1130) (--feats 1168/1131)
+#   Thomas's 1024-B payload budget         4238, 142 over 4212, 116 over    4194, 98 over
+#     (--feats 1330)                                                        (--feats 1299)
 # Capacity is measured with random ternary @59.6% zeros through the codec
 # (make_proto_payload.py); in-context = total minus the payload-elided total.
-# The remaining 116 B is code-side and belongs to the screened lanes, not to
+# The remaining 98 B is code-side and belongs to the screened lanes, not to
 # golf. Step ledger: MEASUREMENTS.md 2026-08-14 (both entries).
 # Invariant suite: packed/replnet_check.py.
 # The distilled positional tables are GONE. The score base is a flat MATERIAL
