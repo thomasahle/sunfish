@@ -282,7 +282,8 @@ def stop_softly(searcher, gen):
 
 
 def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False,
-            max_nodes=0, requested_depth=None, open_ended=False, soft_movetime=None):
+            max_nodes=0, requested_depth=None, open_ended=False, soft_movetime=None,
+            hclock=0):
     # requested_depth: the depth the GUI actually typed, or None - max_depth
     # defaults to 100 and would otherwise be reported as if it were asked for.
     # open_ended: "go infinite"/"go ponder", where a stop is the terminating
@@ -396,7 +397,7 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
                 break
             fields["score cp"] = f"{score} lowerbound"
             cand, cand_score = render_move(move, white_pov=len(hist) % 2 == 1), score
-            fields["pv"] = " ".join(pv(searcher, hist[-1], include_scores=False))
+            fields["pv"] = " ".join(pv(searcher, hist[-1], include_scores=False, hclock=hclock))
         else:
             fields["score cp"] = f"{score} upperbound"
         print("info", " ".join(f"{k} {v}" for k, v in fields.items()))
@@ -504,7 +505,7 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
               f"(nodes {searcher.nodes}, {elapsed:.2f}s) before requested {asked}")
 
     played = best_move or cand
-    my_pv = pv(searcher, hist[-1], include_scores=False)
+    my_pv = pv(searcher, hist[-1], include_scores=False, hclock=hclock)
     if played and len(my_pv) > 1 and my_pv[0] == played:
         # Suggest the expected reply for the GUI to let us ponder on
         print("bestmove", played, "ponder", my_pv[1])
@@ -520,6 +521,7 @@ def mate_loop(
     max_depth=0,
     find_draw=False,
     debug=False,
+    hclock=0,
 ):
     start = time.time()
     try:
@@ -544,7 +546,7 @@ def mate_loop(
                 "time",
                 round(1000 * elapsed),
                 "pv",
-                " ".join(pv(searcher, hist[-1], include_scores=False)),
+                " ".join(pv(searcher, hist[-1], include_scores=False, hclock=hclock)),
             )
             if score >= sunfish.MATE_LOWER:
                 break
@@ -592,6 +594,10 @@ def run(sunfish_module, startpos):
 
     debug = False
     hist = [startpos]
+    # The fifty-move clock at hist[-1]. Position cannot carry it (the engine is
+    # size-constrained, and by design ignores the rule - see README), so the UI
+    # tracks it alongside hist. Reporting only: it never reaches the search.
+    hclock = 0
     searcher = sunfish.Searcher()
 
     with ThreadPoolExecutor(max_workers=1) as executor:
@@ -685,17 +691,22 @@ def run(sunfish_module, startpos):
                     searcher = sunfish.Searcher()
 
                 elif args[:2] == ["position", "startpos"]:
-                    hist = [startpos]
+                    hist, hclock = [startpos], 0
                     for ply, move in enumerate(args[3:]):
-                        hist.append(hist[-1].move(parse_move(move, ply % 2 == 0)))
+                        mv = parse_move(move, ply % 2 == 0)
+                        hclock = hclock + 1 if quiet_move(hist[-1], mv) else 0
+                        hist.append(hist[-1].move(mv))
 
                 elif args[:2] == ["position", "fen"]:
                     pos = from_fen(*args[2:8])
                     hist = [pos] if get_color(pos) == WHITE else [pos.rotate(), pos]
+                    hclock = int(args[6])
                     if len(args) > 8:
                         assert args[8] == "moves"
                         for move in args[9:]:
-                            hist.append(hist[-1].move(parse_move(move, len(hist) % 2 == 1)))
+                            mv = parse_move(move, len(hist) % 2 == 1)
+                            hclock = hclock + 1 if quiet_move(hist[-1], mv) else 0
+                            hist.append(hist[-1].move(mv))
 
                 elif args[0] == "go":
                     think = 10**6
@@ -831,6 +842,9 @@ def run(sunfish_module, startpos):
                         think,
                         max_depth,
                         debug=debug,
+                        # Both loops report a PV, and both must stop it at the
+                        # fifty-move rule; only the UI knows where the clock sits.
+                        hclock=hclock,
                         # mate_loop has no node budget; fixed-node play is a
                         # go_loop concern only. Same for the abort marker's
                         # two inputs: what the GUI actually asked for, and
@@ -900,7 +914,17 @@ def can_kill_king(pos):
     return any(pos.board[m.j] == 'k' or abs(m.j - pos.kp) < 2 for m in pos.gen_moves())
 
 
-def pv(searcher, pos, include_scores=True, include_loop=False):
+def quiet_move(pos, move):
+    """True if move neither captures nor pushes a pawn, i.e. it advances the fifty-move clock.
+
+    The mover's own pieces are always uppercase, so a pawn push is board[i] == "P" - which
+    also covers en passant, whose destination looks empty. Castling is a king move onto an
+    empty square, and correctly does not reset the clock.
+    """
+    return pos.board[move.i] != "P" and pos.board[move.j] == "."
+
+
+def pv(searcher, pos, include_scores=True, include_loop=False, hclock=0):
     res = []
     seen_pos = set()
     color = get_color(pos)
@@ -918,8 +942,15 @@ def pv(searcher, pos, include_scores=True, include_loop=False):
         if move is None or can_kill_king(pos.move(move)):
             break
         res.append(render_move(move, get_color(pos) == WHITE))
+        # Stop at the fifty-move rule. The line beyond a drawn position is not a
+        # continuation of the game, and reporting it drew 1,232 "PV continues after
+        # fifty-move rule" warnings from the tournament manager in one 300-game run:
+        # 4 MB of log. hclock is the clock at the root, so the stop needs at least one
+        # move already in res and can never starve the bestmove fallback below.
+        hclock = hclock + 1 if quiet_move(pos, move) else 0
         pos, color = pos.move(move), 1 - color
 
+        if hclock >= 100: break
         if hasattr(pos, "wf"):
             if pos.hash() in seen_pos:
                 if include_loop:

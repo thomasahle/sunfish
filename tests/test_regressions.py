@@ -298,7 +298,8 @@ class TestStaticMoveCap:
     """Ordinary depth-two and depth-three moves have a fixed static upper cap.
 
     A cap below the current window proves fail-low without a child search.
-    Only a king capture bypasses it and retains the exact mate sentinel.
+    Only a king capture bypasses it and retains the exact mate sentinel -
+    promotions do not, since pos.value already prices the promoted piece.
     """
 
     def test_fail_low_caps_skip_all_starting_children(self):
@@ -333,6 +334,47 @@ class TestStaticMoveCap:
 
         searcher.bound = observed
         searcher.bound(pos, 1000, 2, root=True)
+
+        assert child not in calls
+
+    # A promotion at depth 2-3 is capped like anything else. #213 removed the
+    # "and not move.prom" exemption the gate used to carry, and nothing in the
+    # suite noticed: re-adding it leaves every other test green (mutation run,
+    # 2026-08-17). It is a sound cap because pos.value(move) already adds
+    # pst[prom][j] - pst["P"][j], so the promoted piece is inside the bound.
+    # The exemption instead searches the child and reports a value below the
+    # cap (here 1489 against a cap of 1544 at depth 2), which is exactly the
+    # instability the fixed cap exists to remove.
+    PROM_FEN = "4k3/P7/8/8/8/8/8/R3K3 w - - 0 1"
+
+    def test_promotion_uses_the_ordinary_move_cap(self):
+        for depth in (2, 3):
+            pos = hist_from_fen(self.PROM_FEN)[-1]
+            searcher = sf.Searcher()
+            searcher.root, searcher.history = pos, set()
+            score = searcher.bound(pos, 2000, depth, root=True)
+            caps = [min(sf.MATE_LOWER - 1, pos.score + pos.value(m) + (depth - 1) * sf.QS_A)
+                for m in pos.gen_moves()]
+
+            # The queen promotion owns the largest static gain, so the whole
+            # fail-low bound is its cap - proved without searching one child.
+            assert score == max(caps)
+            assert searcher.nodes == 1
+
+    def test_promotion_child_is_never_searched_below_its_cap(self):
+        pos = hist_from_fen(self.PROM_FEN)[-1]
+        prom = next(move for move in pos.gen_moves() if render([pos], move) == "a7a8q")
+        child = pos.move(prom)
+        searcher = sf.Searcher()
+        searcher.root, searcher.history = pos, set()
+        calls, bound = [], searcher.bound
+
+        def observed(pos, gamma, depth, root=False):
+            calls.append(pos)
+            return bound(pos, gamma, depth, root)
+
+        searcher.bound = observed
+        searcher.bound(pos, 2000, 2, root=True)
 
         assert child not in calls
 
