@@ -17938,8 +17938,8 @@ Against the bars registered before any of this existed:
 
 | bar | value | result |
 |---|---|---|
-| NOISE (5σ) | ≤ 0.0175173 | **PASSED by 0.0036** — 165σ |
-| FUNDING (25 % of the learned signal) | ≤ 0.0168991 | **PASSED by 0.0030** |
+| NOISE (5σ) | ≤ 0.0175173 | **PASSED by 0.0035773** — 162.6σ |
+| FUNDING (25 % of the learned signal) | ≤ 0.0168991 | **PASSED by 0.0029591** |
 | SOFT/FIRM (last-2 mean − prev-2 mean vs −σ) | −2.2e-5 | **+1.0e-5 → FIRM**, converged |
 
 **−20.9 % of val against the best N=5 seed.** In signal terms: the material
