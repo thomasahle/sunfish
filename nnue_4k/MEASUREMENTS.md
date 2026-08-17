@@ -17779,3 +17779,27 @@ decoder, it measures **3,799 B against 3,790 — +9 B.** Recorded so the
 byte-golf lane does not spend the idea: it is a load-speed win and a byte loss
 on the diagonal, and it is only free in the factored form because there it
 also absorbs the mixing.
+
+### FACTOR LANE addendum — "free at runtime" is proved by textual identity, not by a timing
+
+The design's central runtime claim is that folding `U·V` into the weight table
+at load leaves the hot loop untouched. That is checkable exactly rather than
+statistically, and it was: at matched width the factored variant's
+**`nn_cp` is character-identical to the shipped diagonal's**, and so are all
+four lane-geometry sites (`_U`, `_R2`, `MH/MVAL/MLO`, the `<< 64` row
+composition). Nothing in the per-node path differs; only the weight VALUES do.
+
+The timing agrees to within its own noise and is quoted only to show it does
+not contradict the identity (pypy 7.3.23, min of 3 × 400k, empty loop
+subtracted):
+
+| engine | delta | read-out | combined |
+|---|---|---|---|
+| shipped diagonal N=4 | 52.1 | 196.3 | 248.4 |
+| factored r=4 N=4 (matched) | 51.5 | 206.9 | 258.4 |
+| factored r=2 N=4 | 51.1 | 204.2 | 255.3 |
+
+The 4 % spread across three engines whose hot loops are the same text is the
+instrument's noise floor at this width, and it is the same floor that made the
+N=4..8 rows of the width table unusable. **The width tax at N≥16 is 5–20× that
+floor, so that part of the table stands.**
