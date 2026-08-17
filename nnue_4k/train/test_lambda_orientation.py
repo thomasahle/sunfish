@@ -100,6 +100,41 @@ def main():
             fails.append("labels must not be re-framed; they are already mover-relative")
     print("  the BOARD is flipped for black to move; the LABELS are not: ok")
 
+    # ---- the split-half frame gate itself -----------------------------
+    # It must PASS both label sources in their correct frame even though they
+    # differ hugely in how linear they are, and FAIL each corresponding frame
+    # error.  Synthetic corpora reproduce the measured correlations.
+    print()
+    print("frame gate (split-half):")
+    import numpy as np
+    from data import frame_gate
+
+    rng = np.random.default_rng(20260817)
+    n = 20000
+    wtm = (rng.random(n) < 0.5).astype(np.int8)
+    mat = rng.normal(0, 300, n)
+    for name, noise in (("twin-like (near-linear, r~0.89)", 150.0),
+                        ("SF-like (weakly linear, r~0.31)", 900.0)):
+        label = mat + rng.normal(0, noise, n)
+        try:
+            frame_gate(mat, label, wtm)
+            good = True
+        except SystemExit:
+            good = False
+        print("    %-34s correct frame -> %s" % (name, "PASS" if good else "FAIL"))
+        if not good:
+            fails.append("gate rejected a correctly framed %s corpus" % name)
+        # the frame error: exactly the black-to-move half inverted
+        broken = np.where(wtm == 1, label, -label)
+        try:
+            frame_gate(mat, broken, wtm)
+            caught = False
+        except SystemExit:
+            caught = True
+        print("    %-34s broken frame  -> %s" % ("", "caught" if caught else "MISSED"))
+        if not caught:
+            fails.append("gate missed a frame error on a %s corpus" % name)
+
     print()
     if fails:
         print("LAMBDA ORIENTATION TEST FAILED:")

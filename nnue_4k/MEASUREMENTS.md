@@ -16572,3 +16572,58 @@ at batch 8192 = 7,324 steps**. This is deliberately *compute-neutral*:
 40 epochs × 1.5M and 6 passes × 10M are both 60M sample presentations. The
 arm therefore buys 6.7× more unique data at identical optimiser cost, each
 position seen 6 times instead of 40 — the whole point of the label-null.
+
+### D. Frame-gate amendment — the old gate would have refused good data
+
+Building the pooled corpus surfaced a defect in the gate that exists to stop
+frame bugs. The gate was `corr(material base, label) > 0.5`, calibrated at
+0.883 on twin depth-8 labels. Twin labels are nearly linear in material
+because the twin's own eval largely *is* material plus PSTs. Stockfish
+depth-28 labels are not: measured on a **correctly framed** dump corpus the
+same statistic is **0.3113**. The old gate would have hard-failed a corpus
+whose frame was perfect — and a gate that cries wolf is worse than no gate,
+because the next person to see it weakens the threshold and then a real frame
+bug walks through.
+
+Replaced with a **split-half** gate, which tests the thing the old one only
+proxied. A frame error does not move both halves of the corpus together; it
+inverts exactly the black-to-move half. So correlate the same-frame material
+base against the label *within each side-to-move half* and require both to be
+positive and to agree. Label linearity shifts both halves together and cannot
+trip it; a frame error splits them and always does:
+
+| corpus / frame | wtm | btm | spread | verdict |
+|---|---|---|---|---|
+| dump, correct (negated for black) | +0.3266 | +0.3012 | 0.025 | PASS |
+| dump, left white-POV | +0.3266 | −0.3012 | 0.628 | FAIL |
+| self-play, correct (as stored) | +0.8948 | +0.8955 | 0.001 | PASS |
+| self-play, the original λ bug | +0.8948 | −0.8955 | 1.790 | FAIL |
+
+Thresholds: both halves > 0.15, spread < 0.15 — roughly 2× margin on the
+weaker corpus's floor and 6× on its spread. The last row is the exact bug
+that voided three λ arms, so the new gate loses none of the old protection
+while dropping the false alarm. It now lives in `parse_lambda_npz`, the only
+scope that still knows each position's side to move, and a λ corpus is never
+cached, so it cannot be bypassed. `test_lambda_orientation.py` gained a case
+that PASSES both linearity regimes in the correct frame and CATCHES both
+frame errors.
+
+The gate earned its keep immediately: it passes the **mixed** corpus at
++0.7446 / +0.7542, spread 0.0096, which is the direct evidence that the two
+label sources — self-play already side-to-move, dump negated for black — are
+correctly co-registered. Pooling them with the wrong convention on either
+side would have shown up here as a large spread.
+
+### E. numpy in preprocessing — adopted, per owner direction
+
+Thomas's direction: use numpy in preprocessing for brevity and speed, keep
+pytorch for training, and leave the runtime artifact pure-Python big-int.
+Adopted exactly there. In `build_pool.py` the whole-corpus stage is
+vectorized — piece-count histograms (`np.bincount`), the flattening
+water-fill, the WDL-vs-score comparison mask, the ply-cutoff mask, dedup via
+`np.unique` on position hashes, the material base, and the frame-gate
+correlations are array operations over 10M-row arrays rather than Python
+loops. The per-position stage stays scalar because it needs a board object
+per row (SEE, capture detection) and does not vectorize. No working tool was
+rewritten for its own sake. The shipped artifact is untouched: nothing in
+this path runs at play time.

@@ -181,6 +181,58 @@ def parse_labeled_npz(path, split_seed=20260813, limit=0):
     return FEATS, OFFS, PSTC, Y, KB4, KB8, KB16, FH
 
 
+MATVAL = {"P": 100, "N": 320, "B": 330, "R": 500, "Q": 900}
+GATE_FLOOR = 0.15       # each half must beat this
+GATE_SPREAD = 0.15      # and the two halves must agree this closely
+
+
+def frame_gate(mat, y, wtm, n_max=200000):
+    """Refuse a corpus whose labels and base live in different frames.
+
+    SPLIT-HALF form, and it replaces a single corr(base, label) > 0.5
+    threshold.  That threshold was calibrated on twin depth-8 labels, which
+    are nearly linear in material (measured 0.89).  Stockfish depth-28 labels
+    are not: a CORRECTLY framed SF corpus measures 0.31, so the old gate
+    would have refused good data -- a false alarm that pushes the next person
+    to weaken the gate, which is how a real frame bug gets through.
+
+    A frame error does not shift both halves together; it inverts exactly the
+    black-to-move half.  So test the halves separately against the same-frame
+    material base and require both to be positive and to AGREE.  Label
+    linearity moves both halves together and cannot trip it; a frame error
+    splits them and always does.  Measured:
+
+        dump, correct    wtm +0.3266  btm +0.3012  spread 0.025  PASS
+        dump, white-POV  wtm +0.3266  btm -0.3012  spread 0.628  FAIL
+        self-play, ok    wtm +0.8948  btm +0.8955  spread 0.001  PASS
+        self-play, bug   wtm +0.8948  btm -0.8955  spread 1.790  FAIL
+
+    the last row being the exact bug that voided three lambda arms.
+    """
+    m = np.asarray(mat[:n_max], dtype=np.float64)
+    yy = np.asarray(y[:n_max], dtype=np.float64)
+    w = np.asarray(wtm[:n_max], dtype=bool)
+    rs = []
+    for name, sel in (("wtm", w), ("btm", ~w)):
+        if int(sel.sum()) < 1000:
+            raise SystemExit("FRAME GATE: only %d %s positions, too few to "
+                             "verify the frame.  Refusing to train." % (int(sel.sum()), name))
+        rs.append(float(np.corrcoef(m[sel], yy[sel])[0, 1]))
+    rw, rb = rs
+    spread = abs(rw - rb)
+    print("frame gate: corr(material, label)  wtm %+.4f  btm %+.4f  spread %.4f"
+          % (rw, rb, spread), flush=True)
+    if not (rw > GATE_FLOOR and rb > GATE_FLOOR and spread < GATE_SPREAD):
+        raise SystemExit(
+            "FRAME GATE FAILED: wtm %+.4f, btm %+.4f, spread %.4f (need both "
+            "> %.2f and spread < %.2f).  One side-to-move half is in the wrong "
+            "frame.  Our twin and the self-play outcomes are ALREADY "
+            "side-to-move -- flip the board, never the label -- while the "
+            "Lichess dump's evals are WHITE-POV and must be negated for black. "
+            "Mixing those two conventions breaks exactly one half.  Refusing "
+            "to train." % (rw, rb, spread, GATE_FLOOR, GATE_SPREAD))
+
+
 def parse_lambda_npz(path, split_seed=20260813, limit=0):
     """The lambda corpus (build_lambda_corpus.py): fens + cp + outcome.
 
@@ -205,14 +257,20 @@ def parse_lambda_npz(path, split_seed=20260813, limit=0):
         fens, ys, ocs = fens[:limit], ys[:limit], ocs[:limit]
     FEATS, OFFS, PSTC, Y = array("i"), array("q"), array("i"), array("i")
     KB4, KB8, KB16, FH, OUT = array("h"), array("h"), array("h"), array("L"), array("f")
+    MAT, WTM = array("i"), array("b")
     off = 0
     for fen, cp, oc in zip(fens, ys, ocs):
         parts = fen.split()
         board = features.fen_to_board120(parts[0])
         oc = float(oc)
-        if parts[1] == "b":
+        wtm = parts[1] != "b"
+        if not wtm:
             # board only: cp and oc are already mover-relative (see docstring)
             board = board[::-1].swapcase()
+        # material AFTER the flip, so it is mover-relative like the label
+        MAT.append(sum(v * (board.count(c) - board.count(c.lower()))
+                       for c, v in MATVAL.items()))
+        WTM.append(1 if wtm else 0)
         fe, ps, kbs = features.extract(board)
         FEATS.extend(fe)
         OFFS.append(off)
@@ -224,6 +282,7 @@ def parse_lambda_npz(path, split_seed=20260813, limit=0):
         KB8.append(kbs[1])
         KB16.append(kbs[2])
         FH.append(fen_hash(fen, split_seed))
+    frame_gate(MAT, Y, WTM)
     return (FEATS, OFFS, PSTC, Y, KB4, KB8, KB16, FH), OUT
 
 
@@ -353,22 +412,18 @@ def load(cfg):
     ds = _from_arrays(*arrays, meta)
     if kind == "lambda-npz":
         ds.outcome = torch.tensor(outc, dtype=torch.float32)
-        # FRAME GATE.  The base and the label must live in the same frame; if
-        # they do not, every arm trains against a base uncorrelated with its
-        # target and the failure looks like "the idea does not work".  A
-        # material base and a search label agree strongly on real chess
-        # positions -- measured 0.834 here -- so anything near zero is a frame
-        # or alignment bug, not a property of the data.
+        # The FRAME GATE itself now runs inside parse_lambda_npz, in split-half
+        # form, because only that scope still knows each position's side to
+        # move.  It is strictly stronger than the single corr(base, label) >
+        # 0.5 threshold that used to live here: it catches the same bug (see
+        # frame_gate's docstring) without refusing correctly-framed corpora
+        # whose labels are simply less linear in material than the twin's.
+        # A lambda corpus is never cached, so that gate cannot be bypassed.
         n = min(20000, len(ds.y))
         r = float(np.corrcoef(ds.matc[:n].numpy(), ds.y[:n].numpy())[0, 1])
         print("lambda corpus: %d positions, outcome channel present, "
-              "corr(base, label) = %.3f" % (len(ds.outcome), r), flush=True)
-        if not r > 0.5:
-            raise SystemExit(
-                "FRAME GATE FAILED: corr(material base, label) = %.3f, expected "
-                ">0.5.  The label and the base are in different frames (the twin "
-                "scores side-to-move; parse_labeled_npz-style white-POV negation "
-                "breaks exactly the black-to-move half).  Refusing to train." % r)
+              "corr(base, label) = %.3f (pooled; the gate is per-half)"
+              % (len(ds.outcome), r), flush=True)
     return ds
 
 
