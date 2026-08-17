@@ -18399,3 +18399,45 @@ longer about landing anything — it is about knowing *what the yardstick
 measures*. "A genuine change in the training target improves outcome
 prediction by 15σ and buys zero Elo" is a sharper and more transferable
 lesson than "something changed and we never found out what."
+
+### The sharpest form of the lesson: on these three nets the yardstick is INVERTED
+
+The round-robin gives something this campaign has rarely had — **measured Elo
+and a held-out statistic on the same nets**. Three nets, identical but for
+one loss constant:
+
+| net | outval Brier (lower better) | outval rank | round-robin score% | Elo rank |
+|---|---|---|---|---|
+| k160 | **0.127099** | **1st** | 42.3% | **3rd** |
+| k250 | 0.127526 | 2nd | **46.3%** | **1st** |
+| capn5 (sigK 400) | 0.127782 | 3rd | 45.7% | 2nd |
+
+**The statistic's ranking is the reverse of the playing-strength ranking**, with
+its best net finishing last. n=3 with overlapping intervals, so this is not
+"outval is anti-correlated with Elo" as a law — but it is a good deal worse
+for the statistic than "uninformative", and it is the honest reading of the
+only direct comparison available.
+
+### What this points at, and it is ARM 10
+
+An eval inside a search is not asked "what is this position worth" — it is
+asked "which of these sibling moves is better". Static position-value accuracy
+against finished games is a *different question*, and the sweep has now
+measured a case where getting materially better at it costs strength.
+**The sweep's own negative result is an argument for the ordering arm**, which
+was deferred as the expensive one:
+
+> ARM 10 (pairwise ranking loss over sibling moves) is no longer the arm with
+> the weakest prior in this sweep. It is the one the sweep's evidence points
+> at, and its ~260-line price should be re-read in that light.
+
+**A cheap prerequisite that needs no training at all**, and which this
+round-robin makes possible for the first time: build a sibling-ranking
+statistic (agreement between a net's ordering of sibling moves and the
+searched ordering) and check it against these four engines' *measured* Elo
+before funding any arm on it. Four points is a weak calibration set, but it
+is four more than `outval` had — and had that check existed this morning, the
+fifty games this sweep spent chasing a 15σ statistic would have been spent
+better. **The rule this earns: a statistic proposed as a screen must be
+calibrated against measured Elo on at least a handful of nets BEFORE it gates
+anything, not after it passes something.**
