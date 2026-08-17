@@ -18288,3 +18288,69 @@ get materially better at the first while getting no better at the second.
 **Harness note, not a void:** fastchess logged "PV continues after fifty-move
 rule" for k250 and one game ended by the fifty-move rule. Fixed-node search
 in dead-drawn positions; worth knowing, not disqualifying.
+
+---
+
+## CORRECTION, form (a) — the capacity arm's 31.00% was scored against the WRONG BASELINE
+
+The capacity-arm verdict recorded "31.00% vs the pinned `entry`". **The
+opponent was not the pinned entry.** `screens/bin/e_entry.py` is
+`pst_entry.py` at commit **03beefe** ("Structural bestmove floor",
+2026-08-14) — md5 `c21b563f…`, **167 commits before `d0a6e60`**, and not a
+re-emit of it: it lacks the `P_MID`/`P_END` passed-pawn endgame tables
+entirely. It was used because it was the file called `e_entry.py` in the
+arena, and nobody checked what it was.
+
+Re-measured against a `d0a6e60` build verified byte-exact
+(md5 `45c55afc64dcf26a09f27dece29c3c3b`, confirmed equal to
+`git show d0a6e60:nnue_4k/pst_entry.py`):
+
+| screen | opponent | score% |
+|---|---|---|
+| capn5 (recorded) | `e_entry.py` @ 03beefe — **stale** | 31.00% |
+| **capn5 (corrected, round-robin)** | **`e_entryd0.py` @ d0a6e60** | **36.00%** |
+
+The capacity arm's *conclusion* is unaffected — it loses to the entry either
+way, and the linear family is still far behind — but **the number in the
+ledger is against an engine 167 commits stale, and the "35.00% vs 31.00%"
+comparison this sweep drew from it was never like-for-like.** Both nets score
+36% and 35% against the correct baseline, which is the same number twice.
+The pinned build is now installed as `bin/e_entryd0.py` and is what every
+screen in this sweep used.
+
+### Three more harness defects found by checking rather than assuming
+
+**1. A gate that has never fired.** Every screen prints
+`starvation  <engine>` followed by nothing, because `legality_gate.py` never
+emits the `FIRST-YIELD` token the harness greps for. It is a **missing gate
+rendered as a passing one**, in this sweep's screens and in every prior one.
+Same class as the `conv`/coverage/determinism gates that were all green while
+60 FENs returned one number: *a check that cannot fail is not a check.*
+
+**2. `pair_elo.py`'s "engine A" is the ALPHABETICALLY FIRST name, not the
+candidate.** In the capacity arm's screen the candidate happened to sort
+first, so the column read as the candidate's score; in this sweep's it did
+not. Reading that column positionally rather than by name inverts the result.
+Both of this sweep's numbers were confirmed by an independent tally of the
+PGN.
+
+**3. `make_n6_proto.py` is not at HEAD** — it exists only at commit
+`4435faa`. The splice recipe was validated before being trusted: the
+regenerated N=5 proto reproduces the existing `bin/e_capn5.py` byte-for-byte
+outside the payload line.
+
+### The opening-slice noise floor, measured rather than assumed
+
+`k160` vs `entryd0` was played twice on **disjoint** opening slices: **35.00%**
+and **41.00%**. **Six points of swing from the book alone at n=50**, which is
+squarely inside the ±6.7-point standard error and is the cleanest available
+demonstration of why the 4-point "gain" in the first screen was never a
+result. Pooled over the 100 games the pairing reads 38.00%. Recorded as an
+observation; the registered screen statistic stays 35.00%.
+
+**Independent check of this sweep's own premise:** the agent verified rather
+than assumed that the three ladder nets differ only in `sigK`, and caught
+that `config.py` was edited at 22:08 — between run 310 (22:04) and run 311
+(22:08) — by the `biasscale` patch. Confirmed a genuine no-op at S=1 from
+both directions: the two `model.py` use sites reduce to multiply and divide
+by 1.0, and `verify_noop.py` re-exports run 220's payload byte-identically.
