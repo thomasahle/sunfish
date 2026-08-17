@@ -18574,3 +18574,52 @@ discriminates between them rather than merely adding data to one. A negative
 is worth more than a confirmation here, because work has just been funded on
 the strength of the calibration — and it is registered as a falsification
 condition rather than left as something to reinterpret afterwards.
+
+## ARM 10, REDESIGNED — the calibration cut its price by most of the way
+
+The original pricing assumed the expensive part was **labels**: harvest
+sibling positions, label ~400k children with the twin at depth 8, ~1.5
+box-hours, ~130 lines of harvest code, ~260 lines total.
+
+Building the calibration instrument made that obsolete. `siblingrank.py`
+extracts, from a PGN alone, exactly the training signal ARM 10 wants:
+
+> for a position, the set of legal moves, and **which one a strong search
+> actually chose**.
+
+No labelling. The reference is the played move, and the calibration just
+established that agreement with it **tracks measured Elo** where the
+outcome-prediction statistic **inverted** it. So the arm's supervision target
+is the same quantity its screen-gate now measures — which is the right
+relationship between a training objective and its gate, and the opposite of
+the relationship ARM 11 had.
+
+**Revised price:**
+
+| piece | original | revised |
+|---|---|---|
+| sibling harvest | ~130 lines + 1.5 box-hours of twin labelling | **already written** (`siblingrank.harvest`), **zero labelling** |
+| grouped batching in `data.py` | ~45 lines | ~45 lines (unchanged) |
+| ranking loss in `model.py` | ~25 lines | ~25 lines (unchanged) |
+| trainer dispatch + refusal | ~15 lines | ~15 lines (unchanged) |
+| `LossCfg` field (global config-hash bump) | 2 lines | 2 lines (unchanged) |
+| unit tests (zero loss at perfect order; shift-invariance) | ~40 lines | ~40 lines (unchanged) |
+| **total** | **~260 lines + 1.5 box-hours** | **~130 lines, no labelling** |
+
+**And the data is already on the box, in quantity.** The round-robin PGN is
+6,023 entry-faced positions; the archive `build_lambda_corpus` drew on is
+**74,766 games / ~7M plies**, every one carrying the move its engine played.
+The obvious refinement, registered now rather than discovered later: **filter
+by the strength of the engine that played the move**. A played move is only a
+good target if a good search chose it, and that archive contains weak engines
+too. The round-robin's own PGN is the clean high-strength slice; the archive
+needs a per-game filter before it is used, and using it unfiltered would
+train the net to imitate whatever happened to be playing.
+
+**One honest risk, named before the arm runs.** The screen-gate and the
+training target are now the same construct measured two ways. That is
+appropriate here — the gate was calibrated against *Elo*, independently of
+any arm — but it means the gate can no longer be treated as an independent
+check on THIS arm specifically. ARM 10's promotion must rest on games, not on
+its own gate reading. Registered as a constraint on ARM 10, not a reason to
+avoid it.
