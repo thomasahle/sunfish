@@ -17751,3 +17751,31 @@ Recorded, not started: it needs engine machinery (a bucket index and a
 rebuild-on-cross path) that is outside this lane's mandate of reconstructing
 into the *standard* accumulator, and it is downstream of the same question —
 whether anything in the linear-in-ps768 family can move at all.
+
+### FACTOR LANE addendum — load-time reconstruction is FREE, and the hoist that makes it free costs the diagonal 9 bytes
+
+Two more pre-number measurements, both on built files.
+
+**Load time** (pypy 7.3.23, min of 5 module loads, this laptop):
+
+| variant | load |
+|---|---|
+| shipped diagonal N=4 | 5.95 ms |
+| **factored r=4 N=4** | **4.58 ms** |
+| factored r=4 N=16 | 7.56 ms |
+| factored r=4 N=32 | 8.00 ms |
+| factored r=4 N=48 | 9.00 ms |
+
+Against a 60,000 ms TCEC startup budget, **the reconstruction is free at every
+width** — and at matched shape the factored decode is *faster to load than the
+shipped diagonal*, because hoisting the per-feature work into an 81-entry
+lane-word table removes the inner loop. So the load-time half of Thomas's
+numpy ruling never has to be spent: pure Python is already 4–9 ms.
+
+**The hoist does not transfer to the diagonal as a byte win.** The shipped
+decoder's per-feature work is also a pure function of one digit, so the same
+81-entry table applies; built and packed, ROWS **bit-identical** to the shipped
+decoder, it measures **3,799 B against 3,790 — +9 B.** Recorded so the
+byte-golf lane does not spend the idea: it is a load-speed win and a byte loss
+on the diagonal, and it is only free in the factored form because there it
+also absorbs the mixing.
