@@ -17905,3 +17905,40 @@ Both are `220_cap_n5b_s0` verbatim except for the one named knob, both are
 judged on the same registered bar, and both were queued before the k160
 screen returned so that the confound test cannot be accused of being shaped
 by the screen's answer.
+
+### What the outval numbers MEAN — two anchors, measured on the same slice
+
+A statistic nobody can put on a scale is a statistic nobody can argue with.
+Both ends of the range are cheap to measure and were:
+
+| evaluator | outval Brier | outval AUC |
+|---|---|---|
+| **material only** (the do-nothing anchor) | 0.130100 | 0.83694 |
+| control net (N=5, sigK=400) | 0.127781 | 0.84620 |
+| **`310_obj11_k160`** | **0.127099** | **0.84820** |
+| **twin depth-8 SEARCH** (not a static eval) | 0.119443 | 0.87097 |
+
+The ordering is the sanity check — raw material worse than a trained static
+eval, a trained static eval worse than an eight-ply search — and it holds,
+which is some evidence that outval measures eval quality rather than noise.
+
+The scale is the interesting part. **Everything the trained net adds over
+counting material is 0.00232 Brier (AUC +0.0093). Changing one constant in
+the loss moved 0.00068 of it (AUC +0.0020) — 29% by Brier, 22% by AUC, of
+the net's entire contribution.** That is a large relative effect for a
+one-line change, and it is the reason the confound control queued above
+matters so much: an effect that big deserves to have its alternative
+explanation shot at properly.
+
+For distance-to-go: the gap from the control net to a depth-8 search is
+0.00834 Brier, and rung 1 closes 8.2% of it.
+
+**The ml2 branch of the scorer was unit-tested before ARM 2 needs it.**
+Zeroing `u2_digits` makes the two-layer forward reproduce the single-layer
+forward to **max |Δ| = 0.0 cp** across 4,000 positions, while the live second
+layer moves the eval by a mean of 34 cp (max 352) — so the branch is wired
+and is not a silent no-op. ARM 2 will supply the end-to-end receipt for free:
+it trains at sigK=400, lam=1 on pool10m's fenkey split, which IS the frozen
+refval metric on the frozen refval slice, so its `refval_mirror` must
+reproduce its own `metrics.jsonl` best val to eight decimals the way all
+three control seeds did.
