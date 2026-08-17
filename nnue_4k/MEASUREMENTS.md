@@ -17906,3 +17906,98 @@ was ~25× off, and used it to prefer N=5 over N=6. Its *end-to-end* figures
 all along and were explained away as being below noise; they were simply
 correct. **Width is cheap, and the reason N=6 lost was bytes, which that entry
 also said and which remains true.**
+
+---
+
+## 2026-08-18 — GATE VERDICT: THE UPPER BOUND FIRES, AND IT IS NOT CLOSE. Width is worth 21 % of val on the same corpus, the same split and the same recipe — and "capacity is not the missing ingredient" was a statement about FIVE LANES, not about the family
+
+The registered gate resolved on its first arm, because that arm is the exact
+upper bound for the whole design space: a free 768 × N table at N=64 contains
+every free table at every smaller width (zero a lane's weights AND its bias
+and it contributes `clip(relu(b),0,G)` to *both* perspective blocks, which
+cancels in the us−them difference), and it contains every factored table at
+every rank. So `329_factor_ub_n64` bounds everything below it.
+
+### The number
+
+| | `220_cap_n5b_s0` (N=5) | `221` (N=5, best seed) | **`329_factor_ub_n64`** |
+|---|---|---|---|
+| **best val** | 0.0176490 | 0.0176273 | **0.0139400** |
+| val-MAE | 174 cp | — | **156 cp** |
+| zeros | 43.7 % | 43.1 % | 22.7 % |
+| epochs / sched | 6, linear | 6, linear | 6, linear |
+| **val-sha** | **a0aa553db6908e91** | a0aa553db6908e91 | **a0aa553db6908e91** |
+| split | 9,499,914 / 500,086 | same | same |
+| frame gate | — | — | wtm +0.4879 btm +0.4707 spread 0.0172 |
+
+**Same corpus, same split, same 500,086-position val set by sha, same recipe,
+same seed, one field changed.** Trajectory: 0.01410, 0.01399, 0.01403,
+0.01394, 0.01394, 0.01396.
+
+Against the bars registered before any of this existed:
+
+| bar | value | result |
+|---|---|---|
+| NOISE (5σ) | ≤ 0.0175173 | **PASSED by 0.0036** — 165σ |
+| FUNDING (25 % of the learned signal) | ≤ 0.0168991 | **PASSED by 0.0030** |
+| SOFT/FIRM (last-2 mean − prev-2 mean vs −σ) | −2.2e-5 | **+1.0e-5 → FIRM**, converged |
+
+**−20.9 % of val against the best N=5 seed.** In signal terms: the material
+anchor is 0.02054, so N=5 holds 0.0029127 of learned signal and N=64 holds
+0.0066000 — **2.27× as much**. The funding bar asked for a quarter again; the
+arm delivered 127 % again.
+
+### What this overturns
+
+The CAPACITY ARM VERDICT concluded, on the same corpus and the same trainer:
+"**Capacity was not the missing ingredient and neither is data.** The flat val
+predicted it: a model that does not absorb 50× more data was never going to
+convert it to strength." That generalisation is **refuted for capacity**. The
+arm it rested on had five lanes; the flat val was a property of *five lanes*,
+not of the linear-in-ps768 family. At 64 lanes the same architecture, corpus,
+recipe and val set moves val by 21 %, and the run is converged rather than
+starved. The DATA half of that verdict is untouched — nothing here re-tests
+it — and so is its Elo half: **no game has been played, and val has never
+ranked across a family boundary in this project.** This is a val result inside
+one family, which is the one thing the truncation verdict licenses it for.
+
+It also retires this lane's own gloom. Together with the `nn_cp`-per-node
+correction above, both pillars of "the design is priced negative" are gone:
+width costs ~12 Elo, not 37, and width buys 21 % of val, not nothing.
+
+### What it does NOT establish, stated plainly
+
+**N=64 is not shippable.** A free 768×64 table is 49,152 trits ≈ 9.8 kB of
+payload against a 924 B ceiling — the bound is deliberately byte-blind. The
+shippable question is whether a **rank-4** factored table at an affordable
+width keeps the gain, and the first evidence is discouraging: the SVD spectrum
+of the trained N=64 table (identical for the float table and the shipped
+trits, and for the gain-weighted form) is flat —
+
+| rank | 1 | 2 | 3 | **4** | 6 | 8 | 12 | 16 | 24 | 32 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| energy | 0.361 | 0.493 | 0.584 | **0.626** | 0.697 | 0.747 | 0.809 | 0.850 | 0.899 | 0.934 |
+
+A post-hoc rank-4 truncation keeps **62.6 %** of the table's energy. That is
+suggestive and no more: a *trained* rank-4 net finds the best rank-4 optimum
+rather than the truncation of an unconstrained one, and post-hoc SVD on a
+trained table is exactly the instrument this campaign has been burned by
+twice — which is why **no post-hoc val number is quoted here**, though it was
+easy to produce. The trained factored arm is the instrument, and it is now
+funded by the registered branch.
+
+### Immediately next, in order
+
+1. **The width curve** — `330_factor_ub_n16` and `331_factor_ub_n32` are
+   running (pulled from the shared queue and launched directly at the standard
+   `--threads 8 --workers 8`, so they stay comparable, after the gate fired and
+   four other lanes' arms queued ahead of them). These say how much of the 21 %
+   survives at a width a factored payload can carry: r=4/N=16 is 3,918 B with
+   178 spare and r=4/N=32 is 3,982 B with 114.
+2. **`333_factor_ub_f32`** (float, N=32) stays in the queue and says whether
+   quantization costs anything at width.
+3. **The trained factored arch** — the spec is written above; the two deletions
+   from `LowRankResidual` (no residual, no ternary clamp on the composite) plus
+   an in-forward grid snap for `V`.
+4. **Only then a selector.** Nothing is promoted on val, and the fixed-node
+   31.00 % that the N=5 arm scored is the standing reminder of why.
