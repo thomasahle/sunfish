@@ -55,16 +55,17 @@ python3 tools/tune/logistic_gp/adaptive_gp.py \
   --openings /path/to/openings.epd --cycle-openings \
   --gate "python3 tools/tune/logistic_gp/sunfish_gate.py --horizon-only" \
   --gate-design --gate-workers 20 \
-  --slots 20 --queue-batches 20 --refill-batches 1 \
+  --slots 20 --queue-batches 60 --refill-batches 20 \
   --pairs 1 --initial-design 256 --inducing 128 --update-batches 8 \
   --explore-start .5 --explore-floor .2 --duel-fraction .3 \
   --wall-time 3d --batches 1000000
 ```
 
-One pair per update is intentional: robustness comes from the posterior, not
-from hiding noisy observations inside large batches. Opening reuse is balanced
-by a deterministic shuffle per epoch; final confirmation still needs an
-independent book.
+One pair per observation is intentional: robustness comes from the posterior,
+not from hiding noisy results inside large batches. The larger pending FIFO
+only keeps game lanes occupied while acquisition runs; fantasy variance keeps
+its look-ahead choices diverse. Opening reuse is balanced by a deterministic
+shuffle per epoch; final confirmation still needs an independent book.
 
 `--baseline-options default` pins the configured default point to zero. The
 Sunfish space covers every live search/evaluation constant except memory and
