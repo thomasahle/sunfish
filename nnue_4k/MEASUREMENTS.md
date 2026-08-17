@@ -18354,3 +18354,48 @@ that `config.py` was edited at 22:08 — between run 310 (22:04) and run 311
 (22:08) — by the `biasscale` patch. Confirmed a genuine no-op at S=1 from
 both directions: the two `model.py` use sites reduce to multiply and divide
 by 1.0, and `verify_noop.py` re-exports run 220's payload byte-identically.
+
+## CONFOUND CONTROL 1 — the density explanation is REFUTED
+
+The prediction was written down before the run: *if density is the mechanism,
+sigK=400 with l1 off lands near rung 1 (Brier ≈ 0.1271, AUC ≈ 0.848); if the
+target's shape is the mechanism, it stays near the control and merely gets
+denser.*
+
+| net | zeros | outval Brier | outval AUC | refval |
+|---|---|---|---|---|
+| control (sigK 400, l1 5e-4) | 43.7% | 0.127782 | 0.84621 | 0.017653 |
+| **`315` (sigK 400, l1 = 0)** | **4.1%** | **0.127905** | **0.84583** | 0.018178 |
+| `310` (sigK 160, l1 5e-4) | 14.4% | **0.127099** | **0.84812** | 0.018323 |
+
+**The second prediction is what happened, and emphatically.** Turning l1 off
+produced the densest net in the sweep — **4.1% zeros, three and a half times
+denser than rung 1** — and its outcome prediction is *worse* than the
+control's on both statistics, not better. Density is not merely insufficient
+to explain the gain; **pushed further than rung 1 ever went, it moves the
+wrong way.**
+
+So the k160 gain is **not** the weaker effective l1. It is the target.
+
+Two things worth keeping from the control's own behaviour. Its val curve is
+non-monotone and **rising** — 0.0181723, 0.0181954, 0.0182010, 0.0182172,
+0.0181966, 0.0182105, best at **epoch 0** — so with no sparsity pressure the
+run degrades from its first pass. And its own val (0.0181723) is far worse
+than the control's (0.0176490), which is a clean incidental confirmation that
+**`l1 = 5e-4` is carrying real weight in this recipe** rather than being
+inherited furniture.
+
+**Where the mechanism question now stands:**
+
+| candidate mechanism | status |
+|---|---|
+| weaker effective l1 → denser net | **REFUTED** by `315` |
+| more optimization progress | pending `320` (4× lr at sigK 400) |
+| the target's shape | **surviving** |
+
+And the stake has changed shape rather than disappeared. The round-robin
+already established that the gain does not convert to Elo, so this is no
+longer about landing anything — it is about knowing *what the yardstick
+measures*. "A genuine change in the training target improves outcome
+prediction by 15σ and buys zero Elo" is a sharper and more transferable
+lesson than "something changed and we never found out what."
