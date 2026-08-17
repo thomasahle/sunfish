@@ -284,7 +284,11 @@ moves is `k = 2n - 1` plies -- and currently spends `3k + 4`:
 
 The shipped column is the one a CI depth may be lowered to. The gap between
 the columns is the shallow cap, and it is not academic: at depth 3 the suite's
-mate-in-1 positions are all missed, and at depth 4 all eight are found.
+mate-in-1 positions are all missed, and at depth 4 all eight are found. The
+fuel-model column -- 2 / 9 / 15 -- costs the whole cap, on both branches of
+the consumer, at the Elo the correction under the menu records; the cheap
+route to it is refuted there, so those three depths are not reachable that
+way.
 
 **Menu instances.** The bound is generic in the edge-cost cap `C` and in the
 sub-horizon guard, so the price of each mechanism is a corollary rather than a
@@ -296,7 +300,8 @@ new proof:
 | one reduction bit (`C = 2`) | `2k + 2` | `forcedMate_fuelValueD2C_C2` |
 | no reductions (`C = 1`) | `k + 4` | `forcedMate_fuelValueD2C_C1` |
 | delete the sub-horizon pass ONLY | `3k + 1` -- unchanged | `code_mate_depth_bound_sharp_k3_guardOff` |
-| delete the shallow cap ONLY | `3k` | `forcedMate_fuelValueD2_sharp`, sharp per `sharp_mate3_at_8` |
+| delete the shallow cap ONLY -- on BOTH branches | `3k` | `forcedMate_fuelValueD2_sharp`, sharp per `sharp_mate3_at_8` |
+| exempt only the SEARCHED report from the cap | `3k` for the declared value | **REFUTED on correctness** -- gamma-dependent, see below |
 | delete both | `max 2 (C*k + 4 - 3*C)`, i.e. `3k - 5` | `forcedMate_fuelValueD2_noSubPass` |
 
 The fourth row is the useful surprise: the cap and the sub-horizon pass mask
@@ -308,6 +313,53 @@ the capped attacker node.
 `defender_le_of_replies` is the step those last two share: a defender node
 reports at or below `-MATE_LOWER` as soon as its fold carries no pass term --
 either above the horizon, or with the guard off at every depth.
+
+**Correction: the cheap instance of the `3k` row is REFUTED (2026-08-17).**
+That row invites an obvious ten-byte reading -- keep the clamp, but exempt a
+child report that came back at or above `MATE_LOWER` -- which was expected to
+be Elo-flat, since it moves no node the search would otherwise visit. The
+measurement lane built that arm, and it is unsound. Exempting only the
+*searched* report makes `bound()` **gamma-dependent**: the consumer runs two
+branches under one cap,
+
+```python
+if cap < gamma: move, score = None, cap
+else: score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
+```
+
+and the exemption lifts the clamp off the second while the first still claims
+the move is worth at most its static estimate. Both write the same
+`(pos, depth)` table key, so the entry holds both claims at once. The measured
+witness is one key at depth 2 with `Entry(lower=47938, upper=1204)`:
+`47938 = MATE_LOWER + EVAL_ROUGHNESS` is the exempted mate returning from a
+child checkmated one ply down, `1204` is the same key's static estimate from
+the fail-low branch, and `lower > upper` by 46,734. Twelve
+`tests/test_terminal_bench.py` positions and a `tests/test_tt_consistency.py`
+fortress fail, all with "ladder crossing". The mates themselves do arrive --
+`mate1.fen` 0/8 to 6/8 at depths 2 and 3, with the 24-opening depth-8 node
+battery byte-identical -- so what the exemption costs is exactly the table
+invariant and nothing else.
+
+**The error was not the transformer monotonicity.** `capClamp_le` is true and
+stays true: the clamp only lowers, so dropping it on a searched report can
+only raise the declared value, and `forcedMate_fuelValueD2_sharp` does give
+`3k` for that value. The declared-value change is fine. What does not follow
+is the code change, because the theorem bounds ONE `(pos, depth, gamma)`
+report while the engine keeps ONE entry per `(pos, depth)` and both branches
+of the cap write it -- `WindowReport` and table consistency are what break,
+not the fold bound. Stated generally: **a cap may be dropped on a searched
+report only if it is also dropped on the unsearched one**, and no static rule
+can know that an unsearched child mates. Under a `(pos, depth)`-keyed table,
+shallow futility and shallow mate detection are mutually exclusive.
+
+Two sound routes survive, and neither is cheap. Dropping the cap on *both*
+branches is the row above as written -- gamma-independent, because no second
+branch is left to contradict -- and that engine is already priced at
+**-60.41 +/- 26.61 Elo** over 488 games (SPRT H0), i.e. the ply is buyable at
+about sixty Elo, which is Elo-inadmissible. A `(pos, depth, bound-type)`-aware
+treatment, which would let the two branches disagree without lying to the
+table, is unpriced and recorded here as a note only. Evidence:
+`measure/search-features-ledger` at `0af3507`, arm `exp/mate-band-exempt`.
 
 **Validity against the current search.** These bounds were first proved
 against pre-#216 `bound()`. #215 and #218 moved the fuel probe and the
