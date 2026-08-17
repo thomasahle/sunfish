@@ -17812,3 +17812,68 @@ incidents; this is the same lesson applied before the fact instead of after.
 
 Gate as registered: refval ≤ 0.01760778 or outval Brier ≤ 0.12764673, and
 better than the best control seed on that statistic.
+
+---
+
+## ARM 11, RUNG 1 (sigK=160) — PASSES ITS VAL GATE, and the instrument is the reason we know
+
+| statistic | control mean (sd, n=3) | `310_obj11_k160` | verdict |
+|---|---|---|---|
+| **refval** (incumbent metric, K=400 vs SF cp) | 0.01764108 (1.11e-05) | **0.01832341** | **61σ WORSE** |
+| **outval Brier** (real game outcomes, scale fitted out of sample) | 0.12778113 (4.48e-05) | **0.12709854** | **15.2σ BETTER — PASS** |
+| **outval AUC** (scale-FREE, ordering only) | 0.846197 (1.80e-04) | **0.848196** | **11.1σ BETTER** |
+| best control seed (Brier) | 0.12773567 | 0.12709854 | clause (ii) **PASS** |
+
+**Read the first two rows together, because that is the whole point of the
+instrument.** The same net is sixty sigma worse at the objective the
+incumbent optimises and fifteen sigma better at predicting how our games
+actually finished. Had this arm been judged on `val` — or on `refval`, the
+incumbent-favouring statistic — it would have been recorded as a catastrophic
+failure and the axis closed. The registered two-yardstick design was built
+for exactly this case, before the case existed.
+
+**The gain is not a scale artifact, and that was checked rather than argued.**
+`outval` already fits each net's own cp→win scale out of sample, so a
+differently-scaled net cannot win on scale — but a fitted scalar could still
+flatter one net's output *shape*. `outval_auc` is pure concordance between
+the eval's ORDER and the game result over won-vs-lost positions: no mapping
+of any kind enters it. It moves +11σ in the same direction. The arm genuinely
+separates winning from losing positions better.
+
+**Mechanism, stated as a claim that could be wrong.** `sigK` is not a
+cosmetic rescale — it is the loss's *weighting* over the cp axis, since the
+error in cp space is weighted by σ'(y/K)²/K². At K=400 the sigmoid is nearly
+linear across ±400 cp, so a 700-cp position and a 70-cp position pull with
+comparable force; at K=160 the target saturates fast and the fit concentrates
+where win probability actually moves — which, on our own games, the
+calibration fit says is much closer to equality than K=400 assumes. The
+trained net shows the change plainly: **weight zeros fall 43.7% → 14.4%** and
+the bias digits come off the rails (5 of 5 pinned → 3 of 5). It is a
+different solution, not a rescaled one.
+
+**Byte number: unchanged.** The payload is the same 949 characters — at N=5
+the dense mixed-radix codec is structure-blind, so the 14.4%-zeros table
+costs what the 43.7% one did. The artifact stays in budget at ~4,002 B.
+
+### Screen authorized and launched, under the registered spec
+
+Registered branch (a) fires: 50 games (25 colour-swapped pairs) vs
+`pst_entry @ d0a6e60`, 20,000 nodes, concurrency 8, in the same hardened
+arena the capacity arm's screen used — pinned clock so the node cap binds,
+deadline-relative dormancy gate, legality gate at the played budget for both
+engines, and a **fresh srand** (reusing 20260817 would replay the capacity
+arm's openings). The candidate is spliced and must pass `verify_export`
+bit-exact **before** any game is played. Statistic is **score%**, top-pick
+only; illegal moves, no-moves, time forfeits, a firing dormancy gate, or a
+count short of 50 all void it, and a void is reported rather than re-rolled.
+
+The comparison this buys: the capacity arm's N=5 net scored **31.00%** in
+this exact arena. That is the same architecture, the same corpus, the same
+schedule and the same seed as this net — differing only in `sigK` — so the
+two screens are directly comparable, which is worth more than either number
+alone.
+
+**Caveat carried forward, unchanged:** these statistics do not order Elo, and
+this ledger has said so all evening. A +11σ ordering gain against game
+outcomes is a reason to spend fifty games, not a prediction of what they will
+say.
