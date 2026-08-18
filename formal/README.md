@@ -489,8 +489,9 @@ not.
 
 The killer is the one move the break cannot see: it is yielded before the
 sorted stream, so its cap says nothing about what follows. The producer
-therefore admits it by its own ceiling - "every out-of-order real move
-yielded can reach gamma" - spelled as the unclamped disjunction
+therefore admits it by its own ceiling - "admit it only if its own ceiling
+still reaches gamma - the same number the consumer caps it at below", as
+the code's comment puts it - spelled as the unclamped disjunction
 `val >= MATE_LOWER or depth > 3 or pos.score + val + max(depth - 1, 0) *
 QS_A >= gamma`, which IS the old threshold with its `min` unfolded
 (`v >= min(a, b)` iff `v >= a` or `v >= b`), so the gate is exactly the
