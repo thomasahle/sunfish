@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-19 | **SPEEDOMETER: the entry is 2.3–2.5× faster than classic — the speed hypothesis SURVIVES a number, its point prediction does not, and the +99/−108 anomaly stops being anomalous** | The measurement registered in `55f21e9`: no games, no Elo, no gate. Same box, same pypy3.11, ten positions, `go movetime 3000`, arms interleaved per position. **entry/classic nps: median 2.45, mean 2.30, range 1.57–3.49 (n=10)**. **Split verdict**: the hypothesis registered **2.5–3×** and the median lands **just below** it, so the harness's own binary label ("NOT CONSISTENT") is the wrong reading and is corrected here — an interval of 1.57–3.49 around 2.45 does not refute 2.5–3×, it **prices it slightly high**. The load-bearing claim — the entry is *roughly two and a half times faster* — **holds**. **The decomposition then closes**: at ~1.28 Elo/%nps, 2.45× is worth **+186** and 2.30× is worth **+166**; subtracting this lane's own **measured** −99.4 per-node deficit predicts a timed gap of **+86 to +67** against METER 4's **measured +108.17 ± 24.64**. Two independent measurements — a fixed-node tournament and a movetime speedometer — combined through a third lane's constant, landing same sign, same order. **The anomaly is no longer anomalous**: classic is stronger per node, the entry is much faster, and at a real clock speed wins by more than the per-node deficit loses. **Consequence for the programme, unchanged from the registration: the moat is SPEED, and any NNUE must add eval strength WITHOUT SPENDING IT** — a net buying +50 Elo of eval at half the nps is a **net loss of ~30–40 Elo**, the opposite of the eval axis's implicit assumption. **What it is NOT**: ten positions, one movetime, one box; the spread is wide enough that another position set moves the median several tenths, so it says "about 2.3–2.5×", not 2.45. Read off the **byte-verified checkouts**, not the packed artifacts (same search; labelled anyway), and the 1.28 Elo/%nps constant is **another lane's, carried unverified** — if it is wrong the closure is wrong with it. **Gates nothing, promotes nothing** |
 | 2026-08-19 | **PROPOSAL FOR SIGN-OFF: METER 5 as a gauntlet** | **The +400 goal stays defined against classic** — a gauntlet measures where the entry IS, it does not move where the entry is GOING, and re-referencing the fifth point of a four-point series (+244.47 → +200.24 → +108.17) would destroy the series and the goal with it. Proposed shape: a **FROZEN 8-engine field** (pygone HEAD, molly, 4ku, sungorus 1.4, bbc11, sf512/1024/2048) whose INTERNAL cross-table is measured **once** by GRR-1 and carried forward as prior games, so each meter cycle plays only the rows that moved — **entry×classic at N=300** (the goal axis, same instrument as meters 1-4) plus **entry×field and classic×field at N=40**, 940 games ≈ 3.5 h. **Four numbers, never averaged**: M5-GOAL (entry−classic, the headline of the goal), M5-FIELD (pooled vs the frozen field, quoted only with its composition), **M5-NODE** (entry ≈ SF15 at N nodes/move — recommended for long-run tracking, the only figure reproducible on other hardware because a node budget is not a wall clock), and M5-CCRL (BT re-anchored on the two CCRL engines, carrying the 30+1-vs-2′+1″ and pool-dependence caveats). Two uncomfortable expectations registered in advance: the field may place us **below sf512** (the Lichess bot reads blitz **1756**; sunfish's own TCEC 4k entries were rated **2193** and **1903**, last both times), and the **0-180** record against the ice4/4ku/c4ke class is a distance to report, not a gap to promise. **AWAITING THOMAS** on composition, shares, and which number is the field headline; until then meter 5 runs in the meter-4 shape. |
 | 2026-08-19 | **HCAL INTERIM + PRE-REGISTRATION: `GRR-1`, the calibration round-robin** | **The clock is not a dial** (n=14/cell): 4ku is **+572.55 ± 209.65** at 1/15 of the anchor's clock, **+368.33 ± 300.85** at 1/60, and **−49.98 ± 120.61** at 1/240 — a ~420-Elo collapse across two halvings with nothing stable between, the far side below Move Overhead and scheduler jitter. Clock-handicap arms **RETIRED, not calibrated**. `nodestime` tried on the researcher's recommendation and **measured unusable**: the harness still enforces the wall clock, so realised spend collapsed to **20 / 43 nodes** a move against a probe's 530 / 1323; fixed `go nodes` holds **512 / 2049 exactly** and is what the published anchors are measured on. **All 14 HCAL forfeits are `pyg4kviii` at the FULL clock** — the 4kVIII artifact cannot manage 30+1, its row is a TM failure not a strength, and it is dropped; the sub-second cells forfeited **zero**. **The reader gate was FAILING OPEN** — `[Termination]` is written after `[Result]`, so it reported `forfeits: none` over ten of them and would equally have hidden an illegal move; fixed and verified against the known answer. **pygone HEAD is the peer**: −120.41 ± 334.55 (n=12) below classic, nine months past the artifact we beat by ≈+576. `GRR-1` registered: **10 engines, 45 pairings, fixed N=20, 900 games**, three independent scales (TCEC via pygone@1thread, CCRL Blitz via sungorus 2241 + bbc11 2019 at full strength, fixed-node via SF15 at 512/1024/2048) reported **separately, never pooled**. Manifest lands as `nnue_4k/GAUNTLET_FIELD.md`; **molly ships with no LICENSE at all**. Gate sweep **15/15 PASS**. Not meter 5 — that is a proposal for sign-off. |
 | 2026-08-19 | **PRE-REGISTRATION: STAGE B is a REPLICATION, not a descent — `1.g3` does NOT survive multiplicity; plus PHASE 2 HELD and a labelled hypothesis for the +99/−108 anomaly** | **The correction first**: Stage A's trigger fired legitimately (registered as the *uncorrected* 95% LCB excluding the pooled mean — a SCREEN), but **14 eligible cells at α=.05 expects 0.7 false positives and exactly 1 was observed**; Bonferroni z=2.914 widens g3 to **[61.5, 84.3], which CONTAINS the pooled 63.71**. So `1.g3` **does not survive multiplicity correction** — the screen bought a hypothesis, not a finding, and the Stage-A entry's unqualified "SEPARATES ABOVE" is corrected here by appendix (rule (a)) because it carried a decision. **Stage B therefore is the independent replication the hierarchy exists to demand**, with the descent as a secondary. **229 fresh lines, every one DISJOINT from Stage A's 280** (`stageb.pgn` `37625d9466e13c6e…`, seed 20260819): **g3 half 103** (25 each under d5/Nf6/e5, 14 each under c5/g6 — the five viable replies) and **control half 126** drawn fresh from the eight rich Stage-A cells. A pure descent contains no non-g3 games and so *cannot* replicate "g3 beats the field"; the control re-measures the reference inside the same tournament. **The reference is the RICH cells (mean 63.5%), not the 20-cell pooled 63.71%** — deliberately the harder test, since the thin junk cells would flatter g3; effect under test **+9.4 points**. Form: gauntlet, fixed 20000 nodes, srand 20260892, **N=916** = 229×2×2, gcd(229,2)=1. **THE MIRROR ARM IS DROPPED on Stage A's own evidence** — it measured **exactly 0.5000 ±0.00**, so re-measuring a known constant with a third of the budget is now indefensible; field is entry+weak and **every game is informative**. **PRIMARY, ONE pre-specified contrast (so no correction applies to it)**: g3 − control clustered on the line, SE(diff)=0.0332, 95% half-width **6.5 pp** against **+9.4**; replication declared iff the interval excludes zero upward. **SECONDARY and explicitly underpowered**: the five sub-cells (SE 5–6.7 pp, five more tests) — **no sub-cell claim is admissible from this round except as a hypothesis**. Venue: **concurrency 6, not 8, yielding to `hcal`** (tc=0.5+0.005, currently 120 games/16 forfeits, where flagging is close to inherent), with its forfeit census recorded before and after. **PHASE 2 HELD**, three reasons recorded before they can be reconstructed: (a) `book_v1` is timid exactly as registered (one node, root in [4.40, 5.89]) and Amendment 2's own arithmetic says +19.4 Elo is unlikely; (b) Stage B may yield a less-timid `book_v2` and the promotion candidate should be **the best book the programme can build, not the first**; (c) the live question has moved — the deployment book is becoming `repertoire.bin`, so `book3k`-reweighting is now purely measurement science with no deployment riding on it. **Re-fires when a candidate exists whose own registration expects it to clear the bar.** **THE ANOMALY, as a labelled HYPOTHESIS**: classic +99.4 at 20k nodes vs entry +108.17 at 30+1 decomposes as *the entry's entire edge is SPEED while classic's per-node strength has grown past it* — meter 1 read per-node parity, classic has since taken #216/#218/#230/#236, and at ~1.28 Elo/%nps a ~208 Elo timed gap implies a **2.5–3× nps advantage**. **THIS IS UNMEASURED** — arithmetic on someone else's conversion factor, no games or profile behind it in this lane. It is recorded for what it would mean: **if the moat is speed, any NNUE must add eval strength WITHOUT SPENDING THE SPEED EDGE**, and a net buying +50 Elo of eval at half the nps is a net loss — the opposite of what the 4k programme has implicitly assumed. **Registered as a cheap non-statistic**: nps of both artifacts on identical positions, same interpreter, same box, no games — a speedometer reported as a ratio with spread, gating nothing |
@@ -1258,6 +1259,70 @@ and #221 **+26.1 → +10.77** (n=1000). Screening Elo is not decision Elo.
 **This is a meter, not a promotion.** Nothing lands, nothing is retired, no
 direction opens or closes on `+108.17`. The bridge cell is in flight and gets its
 own entry.
+## 2026-08-19 — SPEEDOMETER: the entry is 2.3–2.5× faster than classic, and the speed hypothesis SURVIVES contact with a number (the point prediction does not)
+
+The measurement registered in `55f21e9` — no games, no Elo, no gate. Same box,
+same interpreter (pypy3.11), same ten positions, `go movetime 3000`, arms
+interleaved per position so a drifting load hits both equally. nps read from each
+arm's own `info … nodes` counter.
+
+| | classic | entry | ratio |
+|---|---|---|---|
+| median nps | — | — | **2.45** |
+| mean | — | — | **2.30** |
+| range over 10 positions | 14 339 – 30 887 | 46 618 – 62 604 | **1.57 – 3.49** |
+
+### The verdict, which is a split one
+
+> **THE MECHANISM IS CONFIRMED. THE POINT PREDICTION IS NOT.**
+
+The hypothesis registered a **2.5–3×** advantage. The observed **median is 2.45**
+and the **mean 2.30** — just below the band, with a wide position-dependent
+spread. So the harness's own binary label ("NOT CONSISTENT") is the wrong
+reading and is corrected here: an interval of 1.57–3.49 around a median of 2.45
+does not refute "2.5–3×", it **prices it slightly high**. What matters is that
+the entry really is **roughly two and a half times faster**, which is the load-
+bearing part of the hypothesis.
+
+### The decomposition roughly closes, and that is the real result
+
+At the ledger's ~1.28 Elo per %nps, and using this lane's own **measured** −99.4
+per-node deficit:
+
+| ratio | speed worth | + per-node −99.4 | predicted timed gap | measured |
+|---|---|---|---|---|
+| 2.45 (median) | +186 | | **+86** | **+108.17 ± 24.64** |
+| 2.30 (mean) | +166 | | **+67** | **+108.17 ± 24.64** |
+
+Two independent measurements — a fixed-node tournament and a movetime
+speedometer — combined through a third lane's conversion factor land **+67 to
++86 against a measured +108**. Same sign, same order, within the crudeness of a
+single linear Elo/nps constant. **The anomaly is no longer anomalous**: classic
+is stronger per node, the entry is much faster, and at a real clock the speed
+wins by more than the per-node deficit loses.
+
+### What it means for the 4k programme, unchanged from the registration
+
+> **The moat is SPEED. Any NNUE must add evaluation strength WITHOUT SPENDING
+> IT.** A net that buys +50 Elo of eval at half the nps is, on this arithmetic,
+> a **net loss of roughly 30–40 Elo**. That is the opposite of the implicit
+> assumption the eval axis has been working under.
+
+### What this is NOT
+
+**Ten positions, one movetime, one box, one interpreter.** The spread
+(1.57–3.49) is wide enough that a different position set moves the median
+several tenths. It is a **speedometer**: it says "about 2.3–2.5×", it does not
+say 2.45. And it was read off the **byte-verified checkout** forms (`sunfish.py`
+@ `ab3b490`, `pst_entry.py` @ `d0a6e60`), not the packed artifacts — the two
+forms share the search, and minification renames locals rather than changing the
+algorithm, but the reading is a checkout reading and is labelled as one. The
+conversion factor 1.28 Elo/%nps is **another lane's**, carried here unverified;
+if it is wrong, the closure above is wrong with it. **This entry gates nothing
+and promotes nothing.**
+
+---
+
 ## 2026-08-19 — PRE-REGISTRATION: STAGE B, the 1.g3 descent — which is really a REPLICATION, because the Stage-A finding does not survive multiplicity. Plus: PHASE 2 HELD, and a labelled hypothesis for the +99/−108 anomaly
 
 Registered before game 1. Three items, all from the coordinator's adjudication.
