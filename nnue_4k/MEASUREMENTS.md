@@ -18469,3 +18469,51 @@ it can ship at, rather than being re-derived at one it never saw), re-runs the
 `arch: residual` control to prove the shared trainer is still untouched, and
 only then trains `360_factor_r8n32m_final`. Encoding it is the point: the rule
 cannot drift once the numbers are in.
+
+---
+
+## 2026-08-18 — LR PROBE VERDICT: `lr4x` wins as the MIDDLE rung, the ladder brackets, and the reframe's big lr effect does NOT reproduce on this arch
+
+All three rungs complete. Identical in every field but `opt.lr`; `pool10m`,
+6 epochs, seed 0, `val-sha a0aa553db6908e91`.
+
+| rung | lr | best val | vs N=5 | vs the free N=32 bound | trajectory |
+|---|---|---|---|---|---|
+| `lr1x` | 3e-3 | 0.0152838 | −13.29 % | +1.41 % | .01572 .01544 .01541 .01545 .01551 .01528 |
+| **`lr4x`** | **1.2e-2** | **0.0152335** | **−13.58 %** | **+1.08 %** | .01552 .01542 .01530 .01533 .01523 .01579 |
+| `lr16x` | 4.8e-2 | 0.0153232 | −13.07 % | +1.67 % | .01566 .01549 .01574 .01544 **.01641** .01532 |
+
+**`lr4x` wins and it is the middle rung**, so the registered "top rung ⇒ the
+ladder does not bracket ⇒ add a rung before calling the arm" branch does **not**
+fire. The selection ran from `select_and_go.sh` rather than from judgement, and
+its log line is `07:44 SELECTION: winner lr4x (lr 0.012)`.
+
+**The interesting part is the spread, and it is a negative.** The full 16× lr
+range moves best val by **9.0e-5 — 4σ** at this recipe's 2.2e-5 seed noise.
+Against the LR REFRAME's finding on the FREE-table family (`e8e5fb0`: 4× lr was
+**19σ** better on refval and recovered a standing "does not absorb data"
+conclusion), **the same dial is worth about a fifth as much here, in sigma.**
+Two readings are consistent with the evidence and this lane cannot separate
+them: the factored arch may simply be better conditioned than the free table,
+or its V dead-zone (a digit does not move until `Vn` crosses `0.5/g_k`) may be
+quantizing the effective step so that the nominal lr matters less. Recorded as
+a bounded negative — **the reframe's magnitude is a property of the recipe it
+was measured on, and does not transfer to a new arch unmeasured.**
+
+Instability shows up at the top rung as expected: `lr16x` spikes to .01641 at
+epoch 4 before recovering, and `lr4x` ends on a .01523 → .01579 jump under a
+linear-to-zero schedule. `lr1x` is the only smooth curve. So `lr4x` is chosen
+on the registered statistic while sitting nearer the edge of stability than
+its margin over `lr1x` (2.3σ) can really justify — stated so nobody later
+reads 1.2e-2 as a tuned optimum.
+
+### The final arm is training, and the shared trainer is proved untouched a second time
+
+`launch_final.sh 0.012` applied the cap-sum-aware `export_shift` first, then
+re-ran the `arch: residual` control **after** that patch. It reproduces
+bit-identically for the third time: val 0.01366, gains
+`[67, 67, 60, 89, 70, 64, 70, 67, 62, 61, 62, 66, 73, 61, 70, 61]`, zeros
+60.4 %, shift 4. That control is at N=16, whose cap sum (34,304) is higher than
+anything the other lanes run, so it is a *stronger* inertness test than an N=5
+control would have been. `360_factor_r8n32m_final` is now training at lr 1.2e-2
+against the shift it can actually ship at.
