@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-18 | **PRE-REGISTRATION: METER 4, the post-#217 re-anchor — and the meter states WHICH CLASSIC it means: the PACKED builtin-budget loop** | The goalpost moved: master merged **#217** (builtin clock → per-move budget with a **five-fold wall**) plus #231/#235/#239 housekeeping, so meter 3's **+200.24 ± 38.35** now reads against a **pre-#217** classic (`f4f06d4`) that no longer exists. **Form decided and registered**: a checkout of `sunfish.py` delegates to `sunfish_ui/uci.py` (`TM_MANAGER=pool`), the PACKED artifact runs the builtin #217 loop — the meter means the **packed** classic, because the 4k-league framing demands an opponent of the same kind, because every prior timed meter used it, and because the two forms measure **level** head to head (`tmbudget` 60+0 N=200: **+3.47 ± 33.81**). Arms sha-pinned: entry **3410 B** `bf30904dfdf5…` (`d0a6e60`, the DEPLOYED artifact — **reused, not rebuilt**; provenance closed by a repack reproducing it bit-for-bit) vs classic **3361 B** `d177d79a66a1…` (`ab3b490`), **same packer both arms**; the same classic source under master's older packer is `d601382295…` = the box's already-played `budget.packed`, confirming `ab3b490` is the #217 engine. **TWO CELLS, because three axes move at once**: PRIMARY **N=600 at 30+1** on `openings_1991_valid.epd` (the house TC, the new anchor) and BRIDGE **N=300 at 60+1** on `book3k.pgn` — **meter 3's protocol verbatim with only the classic arm changed**, so that **BRIDGE − 200.24 is the pure #217 goalpost move** and the delta is not a three-axis mush. Gates all mandatory and read before any Elo: coprimality preflight (both cells gcd 1), arm-identity sha, boot smoke, ≥24 free cores (HOLD, never relocate), **zero illegal = STOP**, **zero forfeit = VOID**, count, `opening_gate.py`, `cluster_elo.py` inflation, PID liveness; dormancy **N/A** at a real clock, clocks recorded instead. Registered band for the primary **[+120, +200]**, central ≈ +165 — classic should be stronger, so the gap should narrow — and the band is a prediction under test, not a target. **METER, NOT PROMOTION: no branch fires on any number here** |
 | 2026-08-17 | **DISTRIBUTION CONFIRMATION: the NULL branch fires — distribution joins labels as a measured NON-LEVER, and the night's three headline gaps all dissolve into noise or venue** | N=300/side both-vs-entry on the box, hardened harness (fixed 20k nodes + pinned 150 s clock), **both gates PASS: 0 moves ≥15 s, 0.00% ≥1.45 s, max 1.231 s / 1.006 s, 0 illegal, 300/300 each**. **C self-play −93.70 ± 37.44** (63.17% to the entry), **B Lichess −134.95 ± 39.14** (31.50%). Registered gap **C−B = +41.25 ± 54.16, CI [−12.9, +95.4] — CONTAINS ZERO (0.76σ)** → **NULL as pre-written at `9abc2e1`**: no third pass at position/label sourcing at this capacity; the remaining lever is **capacity**, which needs the byte seam and Thomas's direction call. **No promotion** — both cells still lose to the entry. **Reconciliation**: every clean number sits inside the earlier intervals (matrix B −181.70 ± 87.88 vs clean −134.95; screen C −63.23 ± 93.36 vs clean −93.70), so **the matrix's +118 was n=50 noise** and **round-1's −240 was ~150 Elo of venue coupling**, not a correction. Both axes of the distribution×label matrix are now closed |
 | 2026-08-17 | **DISTRIBUTION×LABEL MATRIX: the LABEL axis is decisively NULL (0.28σ) and the DISTRIBUTION axis is the only live effect (1.81σ) — but no pair separates at n=50, so the AMBIGUOUS branch fires** | All three cells under ONE protocol (50 games vs entry @ `d0a6e60`, fixed 20k nodes, fresh srands, **150/150 games, 0 illegal, 0 forfeits**): **A Lichess+SF-deep −200.24 ± 93.38** (24%), **B Lichess+twin −181.70 ± 87.88** (26%), **C self-play+twin −63.23 ± 93.36** (41%). Holding positions fixed and swapping the label source moves **+18.54 Elo = 0.28σ** — labels are not the lever, and that is the cleanest null the campaign has produced. Holding labels fixed and swapping the distribution moves **+118.47 Elo = 1.81σ** in favour of our own self-play positions — the largest effect in the matrix and the only one worth chasing, but **not resolved**: all three intervals mutually overlap. Per the registration's AMBIGUOUS branch the response is **one fixed-N confirmation of the single contested pair (B vs C) at N=300** — not a re-run, not a new axis. **No promotion**: every cell still loses to the entry. Also note cell A re-measured at **−200** under this protocol against its historical **−107** (318-game SPRT screen) — cross-protocol, and a caution against quoting screen Elos as magnitudes | **POLL10 (passenger):** 300/300, count gate OK, 0 illegal, all `normal`, **zero time forfeits on both arms → SAFETY branch fires, the 4096-poll is SAFE at 10+0.1**. Elo: base **+20.87 ± 27.76** over poll4096 (53%) — **no gain where clock reads bind**, point negative for the arm and CI spanning zero, at **+1 byte** pack cost. Base sha `a997b137…` verified **bit-identical to the artifact that measured +244.47 at 60+1**. Safe-but-no-payoff → **no promotion, direction closed at this N/TC** |
 | 2026-08-16 | **λ SELECTOR VERDICT: BRANCH B FIRES — outcome-blended labels are strictly WORSE, the label hypothesis is weakened, and DISTRIBUTION is promoted to prime suspect** | Three 50-game fixed-node mini-matches vs the entry (`pst_entry.py` @ `d0a6e60`, 3410 B), per the SELECTOR SPEC, **0 illegal / 0 forfeits / 150 of 150 `normal`**: **λ=0 −190.85 ± 116.16 (25.0%)**, **λ=0.5 −181.70 ± 117.71 (26.0%)**, **λ=1 control −63.23 ± 93.36 (41.0%)**. **Monotone in λ** — pure cp best, every step toward game outcomes strictly worse at this corpus size. Applying `47a760a`'s pre-registration verbatim: Branch A required an experimental arm *meaningfully inside −100*; both sit 180+ behind, so **A does not fire**. Branch B required them to die *with a healthy control* — the control trained cleanly (corr(base,label) 0.883, beats both anchors, 57% sparsity) and is the best of the three, so **B FIRES**: the Leela-slice arm now outranks the λ dial. **NO PROMOTION**: top pick is λ=1 and it still LOSES to the entry — this is a direction verdict only. **The control's −63 point estimate is NOT claimable as beating the historical ≈−107 band**: n=50 screening, CI **[−156.59, +30.13]** spans both the band and zero, and the spec says a mini-match returns a pick, never an Elo for the ledger |
@@ -329,6 +330,152 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-18 — PRE-REGISTRATION: METER 4, the post-#217 goal-tracking number — and the classic form the meter means
+
+Registered before game 1. **The classic goalpost moved on 2026-08-18**: master
+merged **#217** (the builtin clock becomes a per-move budget with a five-fold
+wall) plus #231/#235/#239-class housekeeping. Meter 3's **+200.24 ± 38.35** was
+measured against **pre-#217** classic (`f4f06d4`), so the +400 needle is
+currently reading against a baseline that no longer exists.
+
+### WHICH CLASSIC, and why — the registration's first job
+
+A checkout of `sunfish.py` does **not** run the loop at the bottom of the file:
+the `minifier-hide` block imports `sunfish_ui.uci` and returns, so a checkout
+reaches the **driver** (`TM_MANAGER=pool`). `pack.sh` deletes that block, so the
+**packed** artifact runs `sunfish.py`'s **own builtin budget loop** — the #217
+code. These are two different engines and the meter has to say which one it is.
+
+> **THE METER MEANS THE PACKED CLASSIC — `sunfish.py`'s builtin budget loop.**
+
+Three reasons, registered:
+
+1. **The 4k-league framing is the goal's framing.** The standing goal is "the
+   4k entry at +400 over classic". The entry is a single self-contained ≤4096 B
+   artifact; the honest opponent is classic *as the same kind of object*, not
+   classic plus an unbounded support package it could never ship under TCEC 4k
+   rules. The driver is ~1500 lines that do not fit in the league.
+2. **Continuity with the number being replaced.** Every timed meter in this
+   ledger used the packed classic (landed 3246 B, meter 3 3392 B). Changing the
+   classic form and the classic commit in the same step would make the delta
+   uninterpretable.
+3. **The choice is measured, not asserted — and it is level.** The `tmbudget`
+   lane played the packed budget form against the pool spelling head to head at
+   60+0, N=200: **+3.47 ± 33.81, 0 illegal, 0 forfeits**. Within ±34 Elo the two
+   classic forms are the same opponent, so this choice does not hand the entry
+   an easier or a harder goalpost — it picks the one that is comparable.
+
+### Arms — both pre-existing or reproduced bit-for-bit, and sha-pinned
+
+| arm | source | packed | sha256 |
+|---|---|---|---|
+| **entry** | `nnue_4k/pst_entry.py` @ **`d0a6e60`** | **3410 B** | `bf30904dfdf5674d…` |
+| **classic** | `sunfish.py` @ **`ab3b490`** (master tip, post-#217) | **3361 B** | `d177d79a66a16cb6…` |
+
+**The entry is NOT rebuilt.** The measured artifact is the deployed artifact:
+`~/sunfish-bench/evalstruct-20260817/bin/incumbent.packed`, already on the box,
+copied into the arena and sha-verified there. Its provenance was closed
+independently before registration: packing `d0a6e60`'s `pst_entry.py` with
+`tools/build/pack.sh` @ `nnue-4k` reproduces **`bf30904dfdf5674d…`, 3410 B,
+bit-for-bit**. The repack was a *check*; the artifact that plays is the one that
+was already there.
+
+**Both arms are packed by the same packer** — `tools/build/pack.sh` @
+`origin/nnue-4k`, the current best (`--no-hoist-literals` + payload shebang
+strip). `origin/master` still carries the older packer; using it for classic and
+the newer one for the entry would put a minifier asymmetry inside the
+measurement, so it is not done. Cross-check that pins the classic commit anyway:
+the **same** `ab3b490` source under **master's older** packer is
+`d60138229546d82a…`, **3402 B — byte-identical to the box's
+`tmbudget-20260818/bin/budget.packed`**, the arm that already has 200 clean
+games here. So `ab3b490` is confirmed to be the #217 budget engine that lane
+measured, under an independent build.
+
+### Form — and the two axes that move with it, declared up front
+
+Meters 1–3 ran **60+1** on `book3k.pgn`. This meter's primary runs **30+1** on
+`openings_1991_valid.epd` — the house standard (`AGENTS.md`: "Python 30+1
+otherwise"). That is the right forward anchor, but it means **three things
+change at once** between +200.24 and the primary: the classic, the time control,
+and the book. A delta across three axes is not a goalpost delta, so the meter is
+**two cells**, and the second exists purely to make the delta honest.
+
+| | **PRIMARY — the new anchor** | **BRIDGE — the goalpost delta** |
+|---|---|---|
+| N | **fixed 600** (300 pairs) | **fixed 300** (150 pairs) |
+| TC | **30+1** | **60+1** |
+| book | `openings_1991_valid.epd`, order=random | `book3k.pgn`, order=random |
+| srand | **20260880** (fresh) | **20260881** (fresh) |
+| concurrency | **10** | **8** |
+| adjudication | none | none |
+| what it is | the post-#217 gap at the house TC | **meter 3's protocol verbatim, only the classic arm changed** |
+
+> **BRIDGE − 200.24 is the pure #217 goalpost move.** Same TC, same book, same
+> concurrency, same entry family as meter 3; the only thing that differs is that
+> classic gained #217. Nothing else in this registration can deliver that
+> number, which is why the cell is here.
+
+Cells run **sequentially**, primary first, `nice 10`, `-recover`, PGN kept with
+`nodes=true timeleft=true`. The bridge is **SECONDARY and best-effort**: if it
+does not complete, the primary stands alone and the delta is reported as
+confounded rather than quietly presented as clean.
+
+### Gates — all mandatory, read BEFORE any Elo
+
+| gate | rule |
+|---|---|
+| **coprimality preflight** | run before launch; `gcd(rounds, pairings)` must be 1 |
+| **arm identity** | both sha256 verified box-side after transfer, or do not play |
+| **boot smoke** | `uci`/`isready`/`bestmove` on each arm before games |
+| **venue** | ≥ 24 free cores of 96 at start; **HOLD AND REPORT**, never relocate |
+| **illegal moves** | **any illegal move = STOP**, instant fail |
+| **time forfeits** | **any forfeit = VOID** (increment TCs, so a forfeit is a real signal) |
+| **count** | 600 / 300 games exactly, all terminations accounted |
+| **opening diversity** | `opening_gate.py` on the artifact after the games |
+| **cluster inflation** | `cluster_elo.py`, opening as the cluster; the clustered interval is the one reported if it is wider |
+| **liveness** | driver PID recorded at launch and checked while running |
+| **deadline dormancy** | **N/A** — that gate is a fixed-node instrument; these are real clocks. Clocks are recorded instead (`nodes=true timeleft=true`) |
+
+**Co-tenancy, declared.** The box carries the owner's tuner campaigns
+(`classic-allparams-20260818`, `tuner-methods-20260818`, `nnuetwin-20260816`,
+`replnet-20260814`) at 3+0.1. Census at registration by parentage: **~20 of 96
+cores used, ~76 free**. Both cells here are **increment** TCs, which this ledger
+records as load-tolerant (651 lifetime clean games at 30+1/60+1, and a cotenant
+1000-game 3+0.1 run at conc 12 with zero forfeits on 2026-08-18); no sudden-death
+cell is registered. **Nothing of the owner's is signalled, reniced or paused**,
+and the free-core gate leaves ~55 cores free once the primary starts.
+
+### EXPECTATION, written down so the reading cannot drift
+
+#217 replaces one budget with a soft limit plus a **five-fold wall**. At 30+1
+the old classic's hard stop was `min(wtime/40 + 0.9·winc, wtime/4)` ≈ **1650 ms**;
+the new one keeps a comparable soft limit (**1550 ms**) but raises the wall to
+`min(5·budget, wtime/2 − DELAY)` ≈ **7750 ms**. Classic can now finish an
+unstable iteration instead of being cut mid-bracket, at both TCs.
+
+> **Direction: classic got stronger, so the gap should NARROW.** Registered
+> band for the primary: **[+120, +200]**, central ≈ +165.
+
+The band is a prediction under test, not a target. The magnitude is genuinely
+unpriced: the adjacent +3.47 ± 33.81 measures the budget form against the *pool*
+form, **not** against the pre-#217 *one-budget* form, so it does not price #217's
+gain. **The number that comes out is the number.**
+
+### Pre-registered outputs — and NOTHING branches on them
+
+1. The **new gap** with a 95% pentanomial interval (primary, 30+1, N=600).
+2. The **goalpost delta**: bridge − (+200.24 ± 38.35), with its own interval —
+   the pure #217 move — and the primary−bridge difference as the TC/book axis.
+3. **Progress toward +400**, and an honest statement of what remains and where
+   it plausibly lives (`#236`/`#241` are open and speed-class, ~+6 between them;
+   the classic-side tuner arms move the goalpost the other way).
+
+> **THIS IS A METER, NOT A PROMOTION. No branch fires on any number here.**
+> Nothing lands, nothing is retired, no direction opens or closes on this
+> result. Its only job is to make the +400 needle honest.
 
 ---
 
