@@ -74,11 +74,15 @@ the end.
 MECHANISM MAP (pre-#216 line -> post-#218 line).
 
 * fuel probe / hot bit: `:406-411` -> `:380-387`.  MOVED ONLY, out of the
-  `moves()` generator into `bound()`'s own scope.  Body byte-identical:
+  `moves()` generator into `bound()`'s own scope.  Body byte-identical then;
+  4673322 has since renamed the locals only (`target` -> `t`, `nullpos`
+  inlined at its single use, the bool subtraction spelled `int(...)`), so the
+  current text reads
   `guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board ...)`,
-  `target = pos.score + NULL_MARGIN`,
-  `d -= -self.bound(nullpos, 1 - target, depth - 7) >= target`.  Still ONE
-  ply (`d -= <bool>`), still probed at `depth - 7`.  `NULL_MARGIN = -200` and
+  `t = pos.score + NULL_MARGIN`,
+  `d -= int(-self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)`.
+  Still ONE ply (`d -= <0 or 1>`), still ONE probe, still at the fixed target
+  `pos.score + NULL_MARGIN` and depth `depth - 7`.  `NULL_MARGIN = -200` and
   its tuner range `(-400, 800)` are untouched; the reworded comment's "burn
   two plies" is the TOTAL real-move reduction (base ply + hot bit), not a
   second probe ply.  `C = 3` is intact.

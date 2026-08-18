@@ -95,12 +95,10 @@ shapes only how much depth the real moves spend:
 
 ```python
 d = depth
-guard = (depth >= 6 and abs(pos.score) < 750
-    and any(c in pos.board for c in "RBNQ"))
+guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
 if guard:
-    nullpos = pos.rotate(nullmove=True)
-    target = pos.score + NULL_MARGIN
-    d -= -self.bound(nullpos, 1 - target, depth - 7) >= target
+    t = pos.score + NULL_MARGIN
+    d -= int(-self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)
 
 move_depth = d - 1 - (not root and guard and val < LMR)
 ```
