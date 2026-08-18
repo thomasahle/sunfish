@@ -19392,3 +19392,114 @@ the ml2 seam's read-out resolution (the digits are straddling 0.5 at
 so even this net is not getting the full second layer). If it does not
 convert, that is the third agreement-free statistic to move without moving
 Elo, and the eval axis closes with ARM 10 as the last item.
+
+---
+
+# ARM 2b — THE SECOND LAYER DID NOT CONVERT. NONLINEARITY CLOSES.
+
+`AB_rr_ml2.txt`, srand 20260823, 300 games, **VALID**: legality on all four,
+300/300 games, 0 forfeits, dormancy 1.541 s, coprimality `gcd(25,6)=1`,
+**opening gate 300 distinct / 0 replays**.
+
+| engine | vs entryd0 | pooled mean score% |
+|---|---|---|
+| entryd0 | — | **74.67%** |
+| ctl1l (1-layer N=4, shift 3) | 22.00% | **44.33%** |
+| capn5 (1-layer N=5, shift 4) | 28.00% | 43.33% |
+| **arm2b (ml2, LIVE read-out)** | **26.00%** | **37.67%** |
+
+## (a) The decomposition is clean, and it indicts the layer
+
+The two-arm design paid off exactly as intended — the forced shift and the
+second layer separate:
+
+- **The forced shift costs nothing.** `ctl1l` 44.33% vs `capn5` 43.33%:
+  halving the layer-1 gains was free, within noise. The thing I was most
+  worried about confounding the test turned out not to be a factor.
+- **The second layer is what drops.** `arm2b` − `ctl1l` = **−6.66 points
+  pooled (−1.15 SE)**, head-to-head **45.00% (−0.71 SE)**.
+
+**No evidence of benefit, weak evidence of harm.** And that fixed-node read is
+an **UPPER BOUND**: the measured nps tax is **8.2% (≈ −12 Elo)**, which a
+timed match would subtract from an already-negative eval term.
+
+**Registered branch fires: CONTINUE fails.** The nonlinearity hypothesis
+**closes.**
+
+**Scope, stated honestly.** This closes **the bilinear second layer in the ml2
+form** — N=4, m=4, one forced shift, with half the read-out still rounding
+away at `[0.506, 0.494, 0.500, 0.492]`. It is not a proof that no nonlinearity
+could ever help. But it was **THE named hypothesis**, it had never once been
+tested on a net that actually had the property, and this test was clean: live
+read-out verified, confound controlled by construction, all gates green. A
+hypothesis that gets a clean test and fails it is closed, not deferred.
+
+## (b) THE PATTERN — the campaign's central epistemic fact
+
+**Three statistics in a row made confident predictions that games declined to
+honour:**
+
+| # | statistic | its verdict | games |
+|---|---|---|---|
+| 1 | sibling-ranking (calibrated, 8σ) | k160 clearly worst | k160 finished **2nd of 5**; calibration withdrawn |
+| 2 | move agreement (ARM 9, 20.5σ) | arm9 markedly more entry-like | arm9 scored **exactly capn5's 24.00%** |
+| 3 | **val — the largest gap ever measured here** | arm2b outside the family band by 2× its width | arm2b finished **last, −6.66** |
+
+The third is the most damning, because `val` is not an agreement statistic and
+is not circular: same corpus, same split, same anchors, same objective, a
+dividend larger than the entire spread of every other net measured — and it
+inverted in play.
+
+**The finding, stated as a finding:** *in this family, at this strength, no
+cheap statistic we have — not held-out loss, not outcome prediction, not move
+agreement — has predicted a single Elo difference correctly.* Every one that
+moved confidently moved in a direction the games contradicted or ignored. The
+only quantity that has ever tracked play here is play.
+
+That is worth more than any arm in this sweep. It should govern how the next
+program is designed: **statistics may be used to detect that something
+changed, and to kill obviously-broken runs. Nothing else.**
+
+## (c) `capn5` drift, fourth reading
+
+| tournament | capn5 vs entryd0 |
+|---|---|
+| rr_sigk | 36.00% |
+| rr6b | 28.12% |
+| rr_arm9 | 24.00% |
+| rr_ml2 | 28.00% |
+| **combined (182 games)** | **29.12% ± 3.7** |
+
+One byte-identical engine, one anchor, four tournaments, a **12-point
+spread**. This is the number future readers should reach for before believing
+any 50-game cell.
+
+## (d) Tooling findings, landed rather than noted
+
+- **`verify_export.py` asserts `kind == "replnet-ternary"`** — it
+  **structurally cannot verify an ml2 export** and refuses rather than
+  checking. Route ml2 artifacts through `ml2_check.py`, per `export.py`'s own
+  dispatch. *A verifier that cannot see a family is not a verifier for that
+  family*, and reading its refusal as a pass would ship an unverified
+  artifact.
+- **The one-layer control needed the native `replnet_proto` splicer, not the
+  `cand_B` variant** sitting in the arena. The wrong splicer yields an engine
+  that runs, plays legal chess, and **is not the net you trained** — a
+  silently-wrong-engine hazard. Pick the splicer from the payload's `kind`,
+  never from what happens to be in the directory.
+- **`make_ml2_proto.py` and `ml2_check.py` had to be recovered from git at
+  `c0d59f8`** — neither exists at HEAD. Both are now landed permanently at
+  `train/objsweep/ml2tools/` with a README recording both hazards, so the next
+  person does not repeat the archaeology.
+
+## (e) EVAL AXIS — FINAL STATE
+
+Capacity, data, optimisation, compression, cp→win scale, label source, bias
+format and **nonlinearity** are all closed. **ARM 10 alone remains.**
+
+Its pre-registered stop stands unchanged: **if it reads Elo-null against the
+entry contrast, the objective axis closes as a whole and this lane stops
+proposing eval arms.** It builds at **lr 1.2e-2**, supported by two
+independent ladders. Its verdict ends the eval program's questions either way,
+and after tonight the honest prior on it is low — it is being built because it
+is the last untested mechanism, not because the evidence favours it.
