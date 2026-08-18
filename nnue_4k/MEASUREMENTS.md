@@ -18398,3 +18398,37 @@ pass rather than by the gate itself.
 a gate that takes a target must be shown to have *read* the target, and a
 negative control must be shown to *fail*. Neither is implied by a PASS, and a
 reused module name or a hard-coded import will manufacture one.
+
+### FACTOR LANE addendum — nps of the TRAINED factored artifact, and it is worse than the random proxy said
+
+Three positions × 4 s, pypy 7.3.23 arm64, all three engines in one run so the
+ratio is internally consistent (absolute nps is load-dependent and this box
+was busier than the earlier session — `pst_entry` reads 133,620 here against
+164,032 before, which is exactly why only the ratio is quoted).
+
+| engine | nps | vs `pst_entry` | timed term @1.28 |
+|---|---|---|---|
+| `pst_entry` (the comparator) | 133,620 | — | — |
+| diagonal N=4 (shipped proto) | 78,801 | −41.0 % | −52.5 Elo |
+| **TRAINED factored r=8 N=32 mirrored** | **55,949** | **−58.1 %** | **−74.4 Elo** |
+
+**The random-payload proxy was optimistic by 8 points of nps** (it read −49.7 %
+at r=4/N=32). That is the search-tree confound the ledger already names —
+random weights change which nodes get searched, so a random-payload nps is not
+a pure cost measure — and it points the *opposite* way from the same proxy's
+behaviour on BYTES, where random was pessimistic by 64 B. **Neither direction
+transfers: a random payload is a proxy for the container, never for the
+engine's runtime or its tree.**
+
+**What this does to the arithmetic, stated before any game.** The timed term
+is ≈ **−74 Elo** (laptop projection, box re-measurement required by the
+registered two-part rule). So the eval term must clear **+74 Elo at fixed
+nodes** for the timed match to be positive at all. For scale: the free-table
+N=5 net, at val 0.01765, scored **31.00 %** — roughly −140 Elo — at fixed
+nodes. This net's val is 13.3 % better and it holds 1.80× the learned signal,
+but **no val-to-Elo mapping exists inside this family**, and the last time
+this lane's family looked good on a static number it lost by 140 Elo.
+
+That is precisely why the instruments were split in advance: the fixed-node
+screen answers "is the eval term positive at all", and **only the timed match
+can promote**.
