@@ -409,10 +409,26 @@ This is a fixed function of the position, move, and depth. At depths zero and
 one, natural subtraction makes the margin zero. The score identity then makes
 the cap exactly the existing stand-pat futility report; this is
 `shallowMoveCap_lowDepth` together with `futilityOK_discharged`. At depths two
-and three, the cap defines the selective move value. If it is below `gamma`,
-`cappedMove_failLow` proves that the cap itself is a valid fail-low report and
-the child search is skipped. Otherwise `WindowReport.cap` transports the full
-child report through `min`.
+and three, the cap defines the selective move value.
+
+The implementation now evaluates that same fixed fold in two lazy pieces. It
+solves `cap < gamma` for the intrinsic move value, giving
+
+```text
+threshold = max(base,
+    min(MATE_LOWER, gamma - pos.score - (depth - 1) * QS_A)).
+```
+
+Moves below the threshold need no child search. Rather than sorting and
+emitting each of their caps, Python emits their single maximum cap and then
+searches the complementary prefix. `lazyMoveTail_cap_lt_gamma` proves every
+tail cap is below the window, `lazyMoveTail_report` proves their maximum is a
+valid report for the capped tail, and `lazyMove_partition` proves that
+processing tail then prefix is exactly the original producer fold. The
+partition depends on `gamma`; the declared capped value does not. Above depth
+three the threshold equals `base`, the tail is empty, and the cap disappears.
+For searched prefix moves, `WindowReport.cap` still transports the child
+report through `min`.
 
 Only king captures bypass the cap. The cap is explicitly below the positive
 mate band, so it cannot create a positive mate value;
@@ -984,6 +1000,7 @@ King-capture substitution uses the position predicate directly, so its exact
 | positive-depth complete producer | `producerMoves_positive` |
 | exact king-capture producer report | `producedScore_exact_capture` |
 | shallow move cap and lazy child evaluation | `shallowMoveCap_lowDepth`, `cappedMove_report` |
+| one-report lazy cap tail | `lazyMoveTail_cap_lt_gamma`, `lazyMoveTail_report`, `lazyMove_partition` |
 | cap mate-band properties | `shallowMoveCap_below_positiveMate`, `cappedMove_preserves_negativeMate` |
 | filtered move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
 | sticky legality evidence and terminal override | terminal/finalizer results in `Stalemate.lean` |
@@ -1003,7 +1020,7 @@ tests and chess corpora validate those executable primitives.
 - `GameTree.lean`: chess-free negamax game model.
 - `Bound.lean`: core fail-soft search proof.
 - `CappedNull.lean`: capped-null report transport and score-band facts.
-- `CappedMove.lean`: positive-depth move production and shallow move caps.
+- `CappedMove.lean`: positive-depth production, shallow caps, and their exact lazy partition.
 - `Stalemate.lean`: selective-search fold, legality, and terminal finalizer.
 - `EvalBounds.lean`: numeric bounds induced by the piece-square tables.
 - `Killer.lean`: move-table legality and lifecycle.

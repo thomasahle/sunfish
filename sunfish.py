@@ -386,9 +386,10 @@ class Searcher:
             target = pos.score + NULL_MARGIN
             d -= -self.bound(nullpos, 1 - target, depth - 7) >= target
 
-        # At positive depth all real moves belong to the fixed fold. At the
-        # quiescence frontier, retain the tuned tactical threshold.
-        val_lower = QS if depth == 0 else -MATE_UPPER
+        # Moves whose fixed cap is below gamma share one maximum-cap report.
+        base = QS if depth == 0 else -MATE_UPPER
+        margin = max(depth - 1, 0) * QS_A
+        val_lower = max(base, min(MATE_LOWER, gamma - pos.score - margin)) if depth <= 3 else base
 
         # Yield resolved virtual reports or unresolved real moves lazily.
         def moves():
@@ -419,9 +420,12 @@ class Searcher:
             if killer and (val := pos.value(killer)) >= val_lower:
                 yield killer, MATE_UPPER if val >= MATE_LOWER else val
 
-            # Search the fixed move set by decreasing intrinsic value.
-            for val, move in sorted(((v, m) for m in pos.gen_moves()
-                    if (v:=pos.value(m)) >= val_lower), reverse=True):
+            # Aggregate the cap-pruned tail, then search the rest by intrinsic value.
+            values = [(pos.value(m), m) for m in pos.gen_moves()]
+            tail = (min(MATE_LOWER - 1, pos.score + v + margin)
+                for v, m in values if base <= v < val_lower)
+            yield None, max(tail, default=-MATE_UPPER)
+            for val, move in sorted((x for x in values if x[0] >= val_lower), reverse=True):
                 yield move, MATE_UPPER if val >= MATE_LOWER else val
 
         # Run through the moves, shortcutting when score >= gamma.
@@ -431,11 +435,9 @@ class Searcher:
             if move is not None and score < MATE_LOWER:
                 val = score
                 cap = (MATE_UPPER if depth > 3 else
-                    min(MATE_LOWER - 1, pos.score + val + max(depth - 1, 0) * QS_A))
-                if cap < gamma: move, score = None, cap
-                else:
-                    move_depth = d - 1 - (not root and guard and val < LMR)
-                    score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
+                    min(MATE_LOWER - 1, pos.score + val + margin))
+                move_depth = d - 1 - (not root and guard and val < LMR)
+                score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
             best = max(best, score)
             live |= move is not None and score > -MATE_UPPER
             if best >= gamma:
