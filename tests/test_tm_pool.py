@@ -678,3 +678,122 @@ def test_the_pool_manager_requires_the_engines_roughness(monkeypatch):
     monkeypatch.setattr(uci, "TM_MANAGER", "pool")
     with pytest.raises(TypeError, match="EVAL_ROUGHNESS"):
         uci.check_engine_module(Blind)
+
+
+# ---- (8) the measured overhead --------------------------------------------
+# O is a property of the VENUE, not of the engine, so the pool path measures
+# it as it plays: between the two gos that bracket one of our moves the server
+# charged (T_i + I) - T_{i+1} while the search spent (bestmove out) - (go in),
+# and an EMA of the difference replaces the constant. Two things have to hold
+# -- it changes NOTHING before it has measured anything, and it converges on
+# what a venue actually charges -- and both are asserted through the real
+# run() loop, because the mechanism IS the wiring: a ply counted from the
+# wrong place or a bestmove stamped in the wrong thread fails no other gate.
+
+
+def drive(monkeypatch, commands, step=0.04):
+    """Run the REAL run() loop over a scripted stdin, on the tape's clock.
+
+    perf_counter is the tape counter, so a search's spend is exactly the
+    tape's length; pool_budget is wrapped to record the overhead the driver
+    hands it, one entry per clock go, and that list is the whole observable.
+    """
+    cell = [0.0]
+    monkeypatch.setattr(uci.time, "perf_counter", Clock(cell))
+    monkeypatch.setattr(sunfish, "Searcher", lambda: TapeSearcher(TAPE, cell, step))
+    real, seen = uci.pool_budget, []
+
+    def recording(wtime, winc, movestogo=None, **kw):
+        seen.append(kw.get("overhead"))
+        return real(wtime, winc, movestogo, **kw)
+
+    monkeypatch.setattr(uci, "pool_budget", recording)
+    script = iter(commands)
+
+    def fake_input():
+        # A script that runs out is an EOF, which run() handles. A
+        # StopIteration escaping through the executor is not.
+        try:
+            return next(script)
+        except StopIteration:
+            raise EOFError
+
+    monkeypatch.setattr("builtins.input", fake_input)
+    uci.run(sunfish, sunfish.Position(sunfish.initial, 0, (True, True), (True, True), 0, 0))
+    return seen
+
+
+def game_script(lag_s, moves, clock=60.0, inc=1.0, spend=0.32):
+    """The commands lichess-bot sends for `moves` of OUR moves, at a known lag.
+
+    Shaped after the real stream at pin bedd1d9e: `go movetime 10000` for the
+    first move of the game, clock gos after it, a fresh `position startpos
+    moves ...` before each, and our clock falling by what the search spent
+    (`spend` is the tape's length) plus the lag the server charged on top.
+    """
+    ucis = ["e2e4 e7e5", "g1f3 b8c6", "f1b5 g8f6", "e1g1 f6e4", "d2d4 e4d6",
+            "b5c6 d7c6", "d4e5 d6f5", "d1d8 e8d8", "b1c3 c8e6", "f1d1 d8c8",
+            "h2h3 h7h6", "b2b3 c6c5"]
+    out, played, wtime = ["uci", "isready", "ucinewgame", "position startpos"], [], clock
+    for n in range(moves):
+        if n:
+            out.append("position startpos moves " + " ".join(played))
+        if n == 0:
+            out.append("go movetime 10000")
+        else:
+            out.append(f"go wtime {round(wtime * 1000)} btime {round(clock * 1000)} "
+                       f"winc {round(inc * 1000)} binc {round(inc * 1000)}")
+            wtime = wtime + inc - (spend + lag_s)
+        played.extend(ucis[n].split())
+    return out + ["quit"]
+
+
+def test_an_unmeasured_game_budgets_exactly_what_the_constant_did(monkeypatch):
+    """The regression that matters. `lag` is None until a pair of gos measures
+    something, and None IS pool_budget's default -- so the opening move of
+    every game, and every game that never gets a pair, budgets bit-identically
+    to the code that had no estimate at all. `==`, not approx: the same
+    expression with the same float, by construction rather than by matching
+    constants."""
+    for w in CLOCKS:
+        for i in INCS:
+            for mtg in (None, 1, 5, 40):
+                for ply in (0, 30):
+                    assert (pool(w, i, movestogo=mtg, ply=ply, overhead=None)
+                            == pool(w, i, movestogo=mtg, ply=ply))
+    assert drive(monkeypatch, game_script(0.3, 3))[0] is None, "the opening move was adaptive"
+    # A PONDERED game never gets a pair either, and that is deliberate:
+    # python-chess predicts the clock it puts in a ponder go and sends none at
+    # all on a ponderhit, so a ponder go may pair with neither its predecessor
+    # nor its successor. Measured against those, the estimate would converge
+    # on python-chess's arithmetic instead of the venue's lag.
+    assert drive(monkeypatch, [
+        "ucinewgame", "position startpos moves e2e4 e7e5",
+        "go wtime 60000 btime 60000 winc 1000 binc 1000",
+        "position startpos moves e2e4 e7e5 g1f3 b8c6",
+        "go ponder wtime 59000 btime 60000 winc 1000 binc 1000", "stop",
+        "position startpos moves e2e4 e7e5 g1f3 b8c6",
+        "go wtime 58000 btime 60000 winc 1000 binc 1000", "quit",
+    ]) == [None, None, None], "a predicted clock was measured"
+
+
+@pytest.mark.parametrize("lag", (0.05, 0.3, 0.9))
+def test_the_driver_converges_on_the_lag_the_venue_charges(monkeypatch, lag):
+    """Through the real parser, the real ply counter and the real bestmove
+    path: the k-th measured go budgets with max(O, lag + 0.7^k (0.2 - lag)),
+    the closed form of the EMA against its 200ms prior -- floored, because the
+    reserve only ever adapts UPWARD.
+
+    Pinned as algebra, not as a fitted tolerance: a changed weight has to move
+    this line. It also pins the three wiring facts nothing else can see -- that
+    consecutive gos pair two plies apart (the `go movetime` opener is not one
+    of them), that the spend subtracted is the search's own, stamped where the
+    bestmove leaves rather than a callback later, and that a venue faster than
+    the constant (0.05) changes nothing at all.
+    """
+    seen = drive(monkeypatch, game_script(lag, 12))
+    assert len(seen) == 11 and seen[0] is None, seen
+    for k, got in enumerate(seen[1:], start=1):
+        assert got == pytest.approx(max(O, lag + 0.7 ** k * (O - lag)), abs=1e-9), (k, got)
+    if lag < O:
+        assert set(seen[1:]) == {O}, "a venue faster than the constant moved the reserve"
