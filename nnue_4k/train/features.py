@@ -89,6 +89,14 @@ def phase_vector():
 
 
 PHASE_EDGES = {2: (11.5,), 4: (4.5, 11.5, 20.5)}
+PHASE_W = {"P": 0, "N": 1, "B": 1, "R": 2, "Q": 4, "K": 0}
+
+
+def phase_of(board):
+    """Material phase 0..24 of a 120-board -- the SCALAR twin of
+    phase_vector().  Same weights, so the batch path and the probe path
+    cannot disagree about which bucket a position is in."""
+    return sum(PHASE_W[c.upper()] for c in board if c.isalpha())
 
 
 def material_vector():
@@ -125,6 +133,30 @@ class Extractor:
             raise ValueError("kb must be 1/2/4/8/16, got %r" % kb)
         if self.pb not in (1, 2, 4):
             raise ValueError("pb must be 1/2/4, got %r" % pb)
+
+    def codes(self, kb4, kb8, kb16, phase):
+        """(own, opp) bucket codes for ONE position.
+
+        THE definition.  `buckets()` is its vectorised form over a Dataset and
+        probes.evalcp calls it directly, so there is exactly one place where a
+        bucket index is decided.  They used to be two, and the second copy is
+        what broke when kb=2 and pb arrived: it crashed on kb2 (loudly) and
+        silently ignored pb (quietly), which is the worse of the two.
+        """
+        if self.B == 1:
+            return 0, 0
+        if self.kb > 1:
+            src, div = {2: (kb4, 4), 4: (kb4, 4),
+                        8: (kb8, 8), 16: (kb16, 16)}[self.kb]
+            w, b = src // div, src % div
+            if self.kb == 2:
+                w, b = w // 2, b // 2
+        else:
+            w = b = 0
+        if self.pb > 1:
+            p = sum(phase > e for e in PHASE_EDGES[self.pb])
+            w, b = w * self.pb + p, b * self.pb + p
+        return w, b
 
     def buckets(self, ds):
         """(own_frame_white, own_frame_black) bucket tensors, or None."""

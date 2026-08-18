@@ -65,7 +65,7 @@ PROBES = [
 def evalcp(model, cfg, boards):
     """Model cp for a list of FEN board fields, base_cp = 0 (net only)."""
     MIRROR = features.mirror_map()
-    ext = features.extractor_for(cfg.model.kb)
+    ext = features.extractor_for(cfg.model.kb, getattr(cfg.model, "pb", 1))
     fis, mis, offs = [], [], [0]
     for fb in boards:
         b = features.fen_to_board120(fb)
@@ -73,9 +73,10 @@ def evalcp(model, cfg, boards):
         f = torch.tensor(feats, dtype=torch.long)
         m = MIRROR[f]
         if ext.B > 1:
-            kb = dict(zip((4, 8, 16), kbs))[ext.B]
-            f = f + 768 * (kb // ext.B)
-            m = m + 768 * (kb % ext.B)
+            # ONE definition of the offsets, shared with data.batches.
+            ow, ob = ext.codes(*kbs, features.phase_of(b))
+            f = f + 768 * ow
+            m = m + 768 * ob
         fis.append(f)
         mis.append(m)
         offs.append(offs[-1] + len(feats))
