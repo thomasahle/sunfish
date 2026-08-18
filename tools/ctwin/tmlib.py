@@ -219,6 +219,34 @@ def min40_4(wtime, winc, movestogo=None, ply=0, **kw):
     return Budget(0.8 * think, think, "yield_frac", 0.8)
 
 
+def simple(wtime, winc, movestogo=None, ply=0, **kw):
+    """CANDIDATE (Thomas, 2026-08-18): min40_4's OWN TWO TERMS, used as the
+    two limits instead of being collapsed by a min().
+
+        soft = wtime / 40 + 0.9 * winc     stop STARTING iterations
+        hard = wtime / 4                   the wall one iteration may reach
+
+    The pool's duality without the pool's bookkeeping: no (M+2)*O reserve, no
+    increment banking, no overhead model, and NO SUDDEN-DEATH CLIFF -- at
+    wtime = 5 s, winc = 0 this soft limit is 125 ms where the pool's pool is
+    empty (P == 0 below 8.4 s) and its soft limit is the 50 ms floor.
+
+    UNIT-INDEPENDENT for exactly min40_4's reason -- both terms are degree-1
+    homogeneous -- so there is no seconds/milliseconds version of it to get
+    wrong; only the TM_FLOOR is absolute, and it is the same floor the shipped
+    `max(think, .05)` applies.
+
+    hard/soft, which is what the bracket rule can spend, is 1/(1/10 + 3.6*I/T)
+    -- 10x at sudden death, 4.55x at 30+1, 6.25x at 60+1 -- against the pool's
+    flat 5x and min40_4's 1.25x.  So this arm keeps the property the 2x2 said
+    the pair pays for, and the question it exists to answer is whether the
+    pool's reserve arithmetic buys anything on top of that.
+    """
+    hard = max(wtime / 4, TM_FLOOR)
+    soft = min(max(wtime / 40 + 0.9 * winc, TM_FLOOR), hard)
+    return Budget(soft, hard, "mtd_converged", None)
+
+
 def onemax(wtime, winc, movestogo=None, ply=0, **kw):
     """CANDIDATE (classic lane, branch classic/tm-one-max-pool at 3a48984,
     sunfish.py:601).  MILLISECONDS -- the 8000 and the 50 are ms.
@@ -373,7 +401,7 @@ def cap_binds(manager, wtime, winc, ply=40, **knobs):
         return t * t / (2 * t + 4000) < t * (1000 + 20 * i) / (40000 + 240 * i) + 0.9 * i
     if manager == "legacy12":
         return wtime / 2 - 1 < wtime / 12 + 0.9 * winc
-    if manager in ("min40_4", "min40_4c"):
+    if manager in ("min40_4", "min40_4c", "simple"):
         return wtime / 4 < wtime / 40 + 0.9 * winc      # binds below T = 4*I
     if manager == "onemax":
         # No cap exists; the only shape change is the FLOOR, which the max()
@@ -394,7 +422,7 @@ def cap_binds(manager, wtime, winc, ply=40, **knobs):
 MANAGERS = {"legacy12": legacy12, "oldtm": oldtm, "steptm": steptm,
             "smooth": smooth, "pool": pool, "min40_4": min40_4,
             "onemax": onemax, "poolyield": poolyield,
-            "min40_4c": min40_4c}
+            "min40_4c": min40_4c, "simple": simple}
 # Which DRIVER each manager was measured in.  It selects exactly one thing:
 # classic's opening ramp (`if len(hist) < 8: think = min(think, len(hist) +
 # random())`, uci.py:474), which the packed artifact does not have.
@@ -416,7 +444,7 @@ FAMILY = {"legacy12": "classic", "oldtm": "packed", "steptm": "packed",
           # Same classic-builtin driver as min40_4: max(think, .05) deadline,
           # `(best or cand) and elapsed > think * 0.8` at every yield, no ramp.
           "onemax": "packed", "poolyield": "packed",
-          "min40_4c": "packed"}
+          "min40_4c": "packed", "simple": "packed"}
 
 
 # ----------------------------------------------------------------- verify ---
@@ -588,6 +616,9 @@ def verify(roots=(), verbose=True):
     report.append("  min40_4       RETIRED 2026-08-17 (classic's builtin clock "
                   "became the pool; see the pool_classic pin); mirror kept as "
                   "the CONTROL arm, not source-checked")
+    report.append("  simple        CANDIDATE (2026-08-18): not landed anywhere; "
+                  "mirror grid-checked against min40_4's two terms in "
+                  "test_tm_surrogate.py, no source to pin yet")
     report.append("  pool_ms       LANDED at 5f16bae into make_pst_entry.py's "
                   "_pooltm (make_variants.py no longer has it); that file does "
                   "not resolve on this checkout, so grid-assert only (below), "

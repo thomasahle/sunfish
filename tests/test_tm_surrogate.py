@@ -305,6 +305,55 @@ def test_the_2x2_arms_are_exactly_one_change_each_from_their_parents():
         assert c.rule == "mtd_converged" and m.rule == "yield_frac"
 
 
+def test_simple_is_min40_4s_two_terms_pulled_apart():
+    """`simple` (Thomas, 2026-08-18) is not a new formula: it is the SHIPPED
+    min40_4 expression with its `min()` removed, the two operands promoted to
+    the two limits the pool taught the loop to carry.
+
+    That is the whole elegance claim, so it is asserted rather than described:
+    soft is the share term, hard is the quarter clock, min40_4's `hard` is
+    exactly the smaller of the two, and there is no third constant anywhere.
+    """
+    for t, i in ((60, 0), (60, 0.1), (30, 1), (60, 1), (10, 0), (300, 3)):
+        b = tmlib.simple(t, i)
+        assert b.soft == pytest.approx(min(t / 40 + 0.9 * i, t / 4), rel=1e-12)
+        assert b.hard == pytest.approx(t / 4, rel=1e-12)
+        assert b.rule == "mtd_converged"
+        assert tmlib.min40_4(t, i).hard == pytest.approx(min(b.soft, b.hard), rel=1e-12)
+    # Unit-independent for min40_4's reason: every term is degree-1
+    # homogeneous, so there is no ms/s version of this to get wrong.
+    for t, i in ((60, 0), (30, 1), (2, 0.1)):
+        for k in (2, 7, 1000):
+            for got, want in ((tmlib.simple(k * t, k * i).hard, k * tmlib.simple(t, i).hard),
+                              (tmlib.simple(k * t, k * i).soft, k * tmlib.simple(t, i).soft)):
+                assert got == pytest.approx(want, rel=1e-12)
+
+
+def test_simple_has_no_sudden_death_cliff_where_the_pool_has_one():
+    """The measured difference between the two forms, as arithmetic.
+
+    The pool's pool empties at (M+2)*O = 8.4 s with no increment, so below
+    that clock its soft limit is the 0.05 s floor.  `simple` has no reserve to
+    empty: its soft limit stays a fortieth of whatever is left, all the way
+    down.  At a 5 s sudden-death clock that is 125 ms against 50 ms.
+    """
+    for t in (8.4, 5.0, 3.0, 1.0):
+        assert tmlib.pool(t, 0).soft == pytest.approx(tmlib.TM_FLOOR)
+        assert tmlib.simple(t, 0).soft == pytest.approx(max(t / 40, tmlib.TM_FLOOR))
+    assert tmlib.simple(5.0, 0).soft == pytest.approx(0.125)
+    # ...and above the knee the two forms agree to within a fifth: the pool
+    # reserves (M+2)*O and banks (M-1) increments, `simple` does neither.
+    for t, i in ((60, 0), (30, 1), (60, 1)):
+        assert tmlib.simple(t, i).soft == pytest.approx(tmlib.pool(t, i).soft, rel=0.2)
+    # The stop rule's headroom, which the 2x2 says is what pays, survives:
+    # hard/soft is 1/(1/10 + 3.6*I/T) -- 10x at sudden death, 6.25x at 60+1,
+    # 4.55x at 30+1 -- never min40_4's 1.25x, and never below the pool's 5x
+    # by much.  It is the one property the cheap port must not lose.
+    for t, i, want in ((60, 0, 10.0), (30, 1, 4.5454545), (60, 1, 6.25)):
+        b = tmlib.simple(t, i)
+        assert b.hard / b.soft == pytest.approx(want, rel=1e-6)
+
+
 def test_the_stop_rule_can_only_pay_off_where_the_wall_is_far_above_the_target():
     """Why min40_4c is predicted small and the pool is not, as arithmetic.
 

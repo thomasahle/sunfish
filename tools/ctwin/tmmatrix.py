@@ -26,7 +26,8 @@ import sys
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 
-def run_cell(arm, baseline, tc, rounds, overhead, elo0, elo1, seed, outdir):
+def run_cell(arm, baseline, tc, rounds, overhead, elo0, elo1, alpha, beta,
+             seed, outdir):
     tag = "%s__vs__%s__%s" % (arm.replace(":", "_").replace("=", ""),
                               baseline.replace(":", "_").replace("=", ""),
                               tc.replace("+", "p"))
@@ -36,7 +37,8 @@ def run_cell(arm, baseline, tc, rounds, overhead, elo0, elo1, seed, outdir):
     cmd = [sys.executable, os.path.join(HERE, "vmatch.py"),
            "--arm-a", arm, "--arm-b", baseline, "--tc", tc,
            "--rounds", str(rounds), "--overhead", str(overhead),
-           "--elo0", str(elo0), "--elo1", str(elo1), "--seed", str(seed),
+           "--elo0", str(elo0), "--elo1", str(elo1),
+           "--alpha", str(alpha), "--beta", str(beta), "--seed", str(seed),
            "--json", path, "--quiet"]
     p = subprocess.run(cmd, capture_output=True, text=True)
     if p.returncode != 0:
@@ -53,6 +55,13 @@ def main():
     ap.add_argument("--overhead", type=float, default=0.05)
     ap.add_argument("--elo0", type=float, default=-10.0)
     ap.add_argument("--elo1", type=float, default=10.0)
+    # A MATRIX CELL IS A FIXED-N READ unless you say otherwise.  vmatch's own
+    # 0.05/0.05 defaults let a cell accept H0/H1 and stop at whatever game
+    # count it happened to reach, which is not the same read across cells and
+    # is not the read a registered table promises.  Pass 1e-30 to disarm the
+    # SPRT entirely and harvest every cell at exactly --rounds pairs.
+    ap.add_argument("--alpha", type=float, default=0.05)
+    ap.add_argument("--beta", type=float, default=0.05)
     ap.add_argument("--seed", type=int, default=2026)
     ap.add_argument("--jobs", type=int, default=4)
     ap.add_argument("--outdir", default=os.path.join(HERE, "matrix"))
@@ -63,8 +72,9 @@ def main():
     results = {}
     with concurrent.futures.ThreadPoolExecutor(args.jobs) as ex:
         futs = [ex.submit(run_cell, a, args.baseline, tc, args.rounds,
-                          args.overhead, args.elo0, args.elo1, args.seed,
-                          args.outdir) for a, tc in cells]
+                          args.overhead, args.elo0, args.elo1, args.alpha,
+                          args.beta, args.seed, args.outdir)
+                for a, tc in cells]
         for f in concurrent.futures.as_completed(futs):
             arm, tc, out = f.result()
             results[(arm, tc)] = out

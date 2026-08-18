@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-18 | **PRE-REGISTERED: the SIMPLE form takes the pool's place in `sunfish.py` — `soft = wtime/40 + 0.9*winc`, `hard = wtime/4`, i.e. the SHIPPED min40_4 expression with its `min()` removed and its two operands promoted to the two limits — with #217's bracket-break stop rule held fixed** | Thomas rejected #217's budget as over-dressed ("Why do we need both a deadline and a soft?"); the 2×2 says the soft/hard PAIR is what pays (+41.9 / +64.4 / +223.3), so only the pool's BOOKKEEPING is on trial: no reserve, no increment banking, no overhead model, no sudden-death cliff. Stage 1 surrogate, 12 cells × 120 games, `pool` as baseline and `min40_4` as the re-anchoring control, 6 TCs incl. 3 sudden-death; branches written before cell 1. Stage 2 (only if simple wins): rebuild #217 and ONE fixed N=300 at 30+1. Stage 3 regardless: 60+0 N=200, the cliff-vs-no-cliff regime |
 | 2026-08-17 | **CLASSIC POOL VERDICT: the pool takes classic's builtin clock and its packed artifact at +96.19 ± 33.81 (95%, pentanomial) over a FIXED 300 at 30+1 — WINS CLEAR, the pre-written branch** | 150W/69L/81D = 63.50%, Ptnml [7,19,46,42,36] over 150 pairs, **0 illegal, 0 forfeits, 300/300 normal**. The surrogate ranked right and read HIGH (+117 to +223 vs +96.19) — a calibration datum. Mechanism predicted to 4%: identical median spend (1.277 s vs 1.258 s), max spend **7.729 s vs 1.944 s**, 14.2% of pool moves over 2 s against 0.0%. Elo lives in the PAIR: budget alone +41.9 [−0.4,+85.5], stop rule alone +64.4 [+8.1,+124.3], both +223.3 on the surrogate. Price **+36 B and ZERO minified lines** as landed (142 → 142): `Searcher.search()` reads the soft clock at the bracket boundary it already owns, so the UCI loop duplicates no search state. Raises the +400 goalpost by ~96 Elo; meter 3 is now historical |
 | 2026-08-17 | **PRE-REGISTERED: the POOL takes classic's builtin clock (and its packed artifact) — the record shows the pool WON this venue's Elo cells in 2026-08-15's ranking pass (`min40_4` vs `pool` −114/−134/−114) and lost it only on the one-line elegance tiebreak, so the merits were never settled** | Fixed **N=300 at 30+1**, real clock, box, no SPRT, adjudication NONE, srand 20260901; branches written before game 1 (wins-clear → land / null → do not land / loses → record a reversed surrogate rank). Surrogate replication of the decision cell: **−223.3 [−345.5, −136.6]** for `min40_4` vs `pool`, 60 games, zero floor substitutions. Port priced: budget alone **+37 B / +0 lines** and NOT the measured object; budget + MTD-bracket soft rule **+77 B / +4 lines**. Raises the +400 goalpost by design |
 | 2026-08-17 | Classic consumer-side scoring and exact captures | **+25.4 ± 19.0 Elo fixed-node**, −2.36% nodes, 149→142 lines; real-clock pending |
@@ -137,6 +138,133 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-18 — PRE-REGISTRATION: the SIMPLE form against the pool's soft, with the stop rule held fixed
+
+**Written before cell 1 of the screen.** Thomas read PR #217 and rejected its
+budget as over-dressed: *"Why do we need both a deadline and a soft?"* The
+question has two halves and the record already answers one of them.
+
+### What is NOT on trial: the pair
+
+The 2×2 of 2026-08-17 priced the pool's two ingredients separately and found
+the interaction is the whole thing — budget alone **+40.7 / +41.9**, stop rule
+alone **+64.4**, the pair **+223.3**. The duality is measured load-bearing and
+it stays. What is on trial is the pool's BOOKKEEPING: the `(M+2)·O` reserve,
+the `(M-1)·I` increment banking, the 200 ms overhead model, and the
+sudden-death cliff those three produce.
+
+### The object
+
+Thomas's form is not a new formula. It is the SHIPPED `min40_4` expression
+with its `min()` removed and its two operands promoted to the two limits the
+loop already carries:
+
+| | soft (stop STARTING an iteration) | hard (the wall) |
+|---|---|---|
+| master `min40_4` | `0.8 · min(T/40 + 0.9I, T/4)` | `min(T/40 + 0.9I, T/4)` |
+| #217 `pool` | `min(max(0, T + 39I − 42·200)/40, max(0, T−400)/4)` | `min(5·soft, (T−400)/2)` |
+| **`simple`** | **`T/40 + 0.9I`** | **`T/4`** |
+
+Three consequences, all arithmetic and all checked in
+`tests/test_tm_surrogate.py` before any game:
+
+1. **No cliff.** The pool empties at `(M+2)·O` = 8.4 s with no increment, so
+   below that clock its soft limit IS the 0.05 s floor — the one hole #217
+   disclosed rather than fixed. `simple` has no reserve to empty: at a 5 s
+   sudden-death clock it plays **125 ms** where the pool plays 50 ms.
+2. **The headroom the stop rule needs survives.** `hard/soft` is
+   `1/(1/10 + 3.6·I/T)` — **10× at sudden death, 6.25× at 60+1, 4.55× at
+   30+1** — against the pool's flat 5× and `min40_4`'s 1.25×. The 2×2 says
+   that ratio is what the bracket rule can spend, so the cheap-port failure
+   mode (a 1.25× wall with nowhere to put an unsettled move) is not in play.
+3. **Unit-independent**, alone with `min40_4` among the managers: both terms
+   are degree-1 homogeneous, so there is no seconds/milliseconds version of
+   it to get wrong. Only the 0.05 s floor is absolute.
+
+Above the knee the two soft limits agree to within a fifth (asserted), so the
+screen is a test of the bookkeeping in the regimes where it differs, not of
+two unrelated formulas.
+
+### STAGE 1 — the surrogate, and its bars
+
+`tools/ctwin` virtual clock, twin binary as built 2026-08-17, 50 ms/move
+charge (the local-arena charge every prior TM cell in this ledger used),
+seed 2026, `--alpha --beta 1e-30` **so no cell can stop itself early** —
+`tmmatrix.py` did not pass those through and now does, because a matrix cell
+that accepts H0 at whatever game count it reached is not the same read as its
+neighbours and not the read a registered table promises.
+
+- **arms:** `simple` and `min40_4`, both against baseline `pool`. The stop
+  rule is held FIXED at the bracket-converged break for `simple` and `pool`;
+  `min40_4` runs its own shipped rule and is there as the RE-ANCHORING
+  CONTROL — its cells replicate the published −114 / −134 / −114 and say
+  whether this run reproduces the pass it is being compared to.
+- **TCs (6):** `30+1`, `60+1`, `60+0.1` (increments — where the pool's
+  banking must show its value if it has any) and `30+0`, `60+0`, `10+0`
+  (sudden death — where the cliff and the no-cliff behaviour differ most).
+- **N:** 120 games per cell (60 opening pairs, both colours), 12 cells,
+  1,440 games. Harvest at exactly 120; no continuation.
+- **secondary, telemetry only:** `60+0` and `10+0` re-run at a **200 ms**
+  charge (the lichess deployment) for flags/min-clock. Not Elo-decisive, and
+  labelled so.
+- **reading:** trinomial Elo with a 95% interval, plus the mechanism columns
+  that matter more than the Elo — median and max spend, min clock, blind%,
+  floor substitutions (`floorbk`), flags, and the stop-reason histogram.
+
+**Branches, written before cell 1:**
+
+- **WITHIN-NOISE** (every primary cell's 95% interval contains 0): the simple
+  form gives up nothing measurable and wins on the elegance bar → rebuild
+  #217 around it, then STAGE 2.
+- **A′, the one-sided refinement of the same branch** (some cell's interval
+  lies entirely ABOVE 0 for `simple` and none lies below): also proceed —
+  that is the simple form winning outright, not a mixed read — and say so
+  explicitly in the report rather than filing it as "within noise".
+- **POOL CLEARLY BETTER AT INCREMENTS** (any of `30+1`, `60+1`, `60+0.1` with
+  its whole interval below 0 for `simple`, and none above): report the
+  number; **#217 stands as-is**, its complexity now justified BY
+  MEASUREMENT; no rebuild.
+- **MIXED** (anything else — in particular a sudden-death cell clearly for
+  `simple` together with an increment cell clearly against it): report the
+  per-TC table and **stop for Thomas's read**. No rebuild on a split.
+
+**What the surrogate may not be asked.** It ranks; it does not size. Its own
+calibration record is that it read this very object 1.2×–2.3× HIGH (+117…+223
+against the real clock's +96.19), it cannot see lag variance, JIT warmup or
+cotenancy, and it does not certify flag safety. So a `simple` win here buys
+exactly one thing: the right to spend real games.
+
+### STAGE 2 — the real-clock confirmation, only if `simple` wins stage 1
+
+The budget function changes, so **this is not the measured mechanism and it
+does not inherit +96.19.** It gets its own fixed N.
+
+| | |
+|---|---|
+| arms | packed classic artifact: `simple` + bracket-break vs **shipped `min40_4`** (master's builtin clock), sha-verified after transfer |
+| form | **fixed N=300, 30+1, no SPRT, no stopping rule, adjudication NONE** |
+| venue | bench box, census by parentage, the owner's tuner fleet untouchable, yield-first |
+| book | `book3k.pgn`; opening diversity stated in the report |
+| srand | fresh, stated at launch |
+| reading | pentanomial Elo with a 95% interval, W/L/D, game count verified against the fixed 300 |
+| tripwires | **any illegal move = STOP. any time forfeit = INVESTIGATE before reading Elo.** Both counted from the PGN, per arm |
+| coprimality | N/A — two engines, no round-robin |
+
+- **WINS CLEAR** (whole interval above 0): #217 becomes the simple form, with
+  the new number and the new line/byte accounting in the PR body.
+- **NULL or LOSES**: report it; **#217 stays the pool form**, and the null is
+  the evidence that the bookkeeping pays for itself.
+
+### STAGE 3 — one sudden-death cell in real games, run either way
+
+`60+0`, **N=200**, same venue and tripwires. The two forms differ most in
+exactly this regime (cliff vs no cliff) and lichess plays `winc == 0` about
+one game in eight, so the regime question gets closed on real games rather
+than on the instrument that cannot certify flag safety. Registered as
+DESCRIPTIVE: it does not gate the landing either way, and its Elo is reported
+with the flag counts beside it.
+
 
 ## 2026-08-17 — CLASSIC POOL VERDICT: +96.19 ± 33.81 at 30+1 over a fixed 300, and the Elo lives in the PAIR rather than either half
 
