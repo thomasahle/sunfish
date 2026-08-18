@@ -126,6 +126,20 @@ ANCHORS = [
     "self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)",
     "lower, upper = 1 - MATE_UPPER, MATE_UPPER",
     "if depth > 0 and pos in self.history:",
+    # The docstring is a model claim, so it is pinned like code: the two
+    # exact clauses, the reservation sentence that says WHY they are exact,
+    # and the zone map at the constants that names each landmark.
+    "It is assumed 1 - MATE_UPPER < gamma <= MATE_UPPER.",
+    "- our own king already captured: r = -MATE_UPPER.",
+    "if the opponent king capturable: r = MATE_UPPER",
+    "tokens the fold compares for equality, never scores",
+    "so an exact MATE_UPPER proves a",
+    "Only a searched real move sets",
+    "every move in tp_move is legal.",
+    "RESERVED TOKENS, never an evaluation",
+    "band admission edges",
+    "mate DISTANCE, strictly between the two",
+    "Two jobs, deliberately one number",
 ]
 
 # Raw "line N" citations in the Lean sources are fragile: they rot silently.
