@@ -15,8 +15,6 @@
      "off_values": [0], "scale": 500},
     {"name": "NULL_CUT_RED", "type": "integer", "default": 3,
      "min": 1, "max": 5, "scale": 1},
-    {"name": "NULL_RED", "type": "integer", "default": 7,
-     "min": 3, "max": 10, "scale": 2},
     {"name": "NULL_MIN_DEPTH", "type": "discrete", "default": 2,
      "values": [1, 2, 3, 4, 5, 99], "off_values": [99], "scale": 1.5},
     {"name": "FUEL_MIN_DEPTH", "type": "discrete", "default": 6,
@@ -68,11 +66,11 @@
     {"when": {"NULL_MIN_DEPTH": [99]},
      "reset": ["NULL_CAP_MARGIN", "NULL_CUT_RED"]},
     {"when": {"FUEL_MIN_DEPTH": [99]},
-     "reset": ["NULL_MARGIN", "NULL_RED", "FUEL_NULL", "LMR"]},
+     "reset": ["NULL_MARGIN", "FUEL_NULL", "LMR"]},
     {"when": {"FUEL_NULL": [0]},
-     "reset": ["NULL_MARGIN", "NULL_RED"]},
+     "reset": ["NULL_MARGIN"]},
     {"when": {"NULL_LIMIT": [0]},
-     "reset": ["NULL_CAP_MARGIN", "NULL_MARGIN", "NULL_CUT_RED", "NULL_RED",
+     "reset": ["NULL_CAP_MARGIN", "NULL_MARGIN", "NULL_CUT_RED",
                "NULL_MIN_DEPTH", "FUEL_MIN_DEPTH", "FUEL_NULL", "LMR"]}
   ],
   "required": [

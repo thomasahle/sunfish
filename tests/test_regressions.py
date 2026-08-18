@@ -150,9 +150,9 @@ class TestCappedNullMove:
 class TestFuelOracle:
     """From depth 6 the pass is a fuel oracle, not a score candidate.
 
-    The probe runs at ONE fixed target, `pos.score + NULL_MARGIN`, which
-    depends on `(pos, depth)` and not on the caller's `gamma`. That is what
-    makes the "hot" bit position-determined -- and so table-cacheable and
+    The probe runs at ONE fixed target, `pos.score + NULL_MARGIN`, against
+    the null position's QSearch value. Neither depends on the caller's
+    `gamma`. That makes the "hot" bit position-determined and table-cacheable,
     stable across the driver's windows -- and it is the premise the Lean
     proof leans on (`hot_bit_determined`, `hot_bit_stable`). If the window
     ever picks up a `gamma`, the bit stops being a function of the position
@@ -183,9 +183,9 @@ class TestFuelOracle:
         windows = [self.probe_windows(g) for g in (0, 200, -200, sf.MATE_LOWER)]
         for gamma, seen in zip((0, 200, -200, sf.MATE_LOWER), windows):
             assert seen, f"gamma {gamma}: the fuel probe never ran"
-            assert all(g == 1 - target and d == 1 for g, d in seen), (
+            assert all(g == 1 - target and d == 0 for g, d in seen), (
                 f"gamma {gamma}: probe windows {seen} - expected only "
-                f"({1 - target}, 1), the gamma-free fixed target"
+                f"({1 - target}, 0), the gamma-free QSearch target"
             )
         assert len({tuple(w) for w in windows}) == 1, (
             f"the probe window moved with gamma: {windows}"

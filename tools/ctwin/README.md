@@ -151,10 +151,10 @@ make bench      # C-vs-PyPy wall-time ratio at identical nodes
 Tuning knobs (no recompile): UCI `setoption name NAME value VALUE`, lab
 `set NAME VALUE`, `SF_NAME=` env, or `NAME=VALUE` argv after the table path —
 `QS QS_A LMR EVAL_ROUGHNESS TABLE_SIZE NULL_CAP_MARGIN NULL_MARGIN
-NULL_MIN_DEPTH NULL_LIMIT NULL_CUT_RED NULL_RED IID_MIN_DEPTH IID_RED FUT_MAX FUT_CAP FUT_CAP_DEPTH
+NULL_MIN_DEPTH NULL_LIMIT NULL_CUT_RED IID_MIN_DEPTH IID_RED FUT_MAX FUT_CAP FUT_CAP_DEPTH
 MATE_DIST FUEL_NULL FUEL_MIN_DEPTH FEN_HIST` (`NULL_CAP_MARGIN=-1` follows
-`EVAL_ROUGHNESS`, `NULL_MARGIN` is the fuel-probe target margin, and the two
-`NULL_*_RED` knobs control the shallow and deep probes; `FUEL_NULL` controls
+`EVAL_ROUGHNESS`, `NULL_MARGIN` is the fuel-probe target margin, and
+`NULL_CUT_RED` controls the shallow probe; `FUEL_NULL` controls
 the hot node's extra depth cost, while zero skips the probe but retains the
 static intrinsic-LMR guard). `FUT_CAP` selects no shallow cap, the current
 ordinary-move cap, or the simpler negative-`value()` cap;

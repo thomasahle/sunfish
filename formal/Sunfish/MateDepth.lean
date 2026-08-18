@@ -73,15 +73,12 @@ the end.
 
 MECHANISM MAP (pre-#216 line -> post-#218 line).
 
-* fuel probe / hot bit: `:406-411` -> `:380-387`.  MOVED ONLY, out of the
-  `moves()` generator into `bound()`'s own scope.  Body byte-identical:
+* fuel probe / hot bit: the static guard is
   `guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board ...)`,
   `target = pos.score + NULL_MARGIN`,
-  `d -= -self.bound(nullpos, 1 - target, depth - 7) >= target`.  Still ONE
-  ply (`d -= <bool>`), still probed at `depth - 7`.  `NULL_MARGIN = -200` and
-  its tuner range `(-400, 800)` are untouched; the reworded comment's "burn
-  two plies" is the TOTAL real-move reduction (base ply + hot bit), not a
-  second probe ply.  `C = 3` is intact.
+  `d -= -self.bound(pos.rotate(nullmove=True), 1 - target, 0) >= target`.
+  The position-only QSearch classifier subtracts at most one ply. Together
+  with intrinsic LMR, `C = 3` is intact.
 
 * intrinsic-LMR bit: `:439` -> `:437`.  MOVED ONLY, out of the deleted
   `score_move` helper into the consumer loop.  Expression byte-identical,

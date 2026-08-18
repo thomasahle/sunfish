@@ -46,7 +46,7 @@ EXPECTED = {
     "Position.move": "69bb2460cd611c9e",
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "11d52eaa8a661352",
-    "Searcher.bound": "2b3c3adc21af59d7",
+    "Searcher.bound": "18f75e5fa3737100",
     "Searcher.search": "f9aa8c81b84ff44b",
     "constants": "62b96e206341a2fb",
 }
@@ -101,7 +101,7 @@ ANCHORS = [
     "if (not root and 2 < depth < 6 and abs(pos.score) < 750",
     "guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in \"RBNQ\")",
     "target = pos.score + NULL_MARGIN",
-    "d -= -self.bound(nullpos, 1 - target, depth - 7) >= target",
+    "d -= -self.bound(pos.rotate(nullmove=True), 1 - target, 0) >= target",
     "yield None, pos.score",
     "score = cap if (cap := pos.score + EVAL_ROUGHNESS) < gamma else min(cap,",
     "-self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))",

@@ -90,28 +90,32 @@ pawn-only zugzwangs.
 
 ## The deep-null fuel oracle
 
-From depth 6 on the pass is not a score candidate at all. One fixed target
-shapes only how much depth the real moves spend:
+From depth 6 on the pass is not a score candidate at all. A fixed-target
+QSearch of the null position shapes only how much depth the real moves spend:
 
 ```python
 d = depth
 guard = (depth >= 6 and abs(pos.score) < 750
     and any(c in pos.board for c in "RBNQ"))
 if guard:
-    nullpos = pos.rotate(nullmove=True)
     target = pos.score + NULL_MARGIN
-    d -= -self.bound(nullpos, 1 - target, depth - 7) >= target
+    d -= -self.bound(pos.rotate(nullmove=True), 1 - target, 0) >= target
 
 move_depth = d - 1 - (not root and guard and val < LMR)
 ```
 
-The target depends on `(pos, depth)` alone -- `gamma` does not enter. Table
-state may still change the numeric report. Stability therefore uses the normal
-TT invariant: every reused interval reports on the same null-child value.
+The target and QSearch child depend on `pos` alone -- `gamma` does not enter.
+Table state may still change the numeric report. Stability therefore uses the
+normal TT invariant: every reused interval reports on the same null-child
+QSearch value.
 Given valid reports, side-exactness makes the hot classification stable under
 different caller windows and table states (`hot_bit_stable`). A fixed target
 alone would not repair an invalid or cross-semantics TT entry. Move reduction
 uses only the static null-eligibility guard, so it needs no report theorem.
+
+`EventuallyWide.lean` quantifies over an arbitrary fixed `hot` selector, so
+using the depth-zero value changes no eventual-completeness obligation. The
+local report proof remains `hot_bit_determined`; its child value is QSearch.
 
 Nominal `depth` still keys the tables and QS admission; intrinsic move value
 only selects the recursion depth. Every real edge spends one to three plies,
@@ -309,19 +313,13 @@ the capped attacker node.
 reports at or below `-MATE_LOWER` as soon as its fold carries no pass term --
 either above the horizon, or with the guard off at every depth.
 
-**Validity against the current search.** These bounds were first proved
-against pre-#216 `bound()`. #215 and #218 moved the fuel probe and the
-intrinsic-LMR bit out of the `moves()` generator, deleted the depth-one lazy
-tail and the `depth <= 1` futility break, made admission unconditional at
-positive depth, and widened the cap band to `depth <= 3`. The two mechanisms
-the bounds spend are byte-identical after the move -- the probe is still one
-ply at `depth - 7`, and `move_depth` is still
-`d - 1 - (not root and guard and val < LMR)`, so `C = 3` holds -- and the
-admission change cannot reach the proofs, which never fold at nominal depth
-one. `MateDepth.lean`'s header carries the mechanism-by-mechanism audit. The
-suites confirm it: first-success depths are unchanged across the refactor at
-`mate1` 4, `mate2_eventual` 7, and `mate3_eventual` 15, with `mate1` still
-missed at 3 -- the mate-in-1 corner is exactly tight at `3k + 1`.
+**Validity against the current search.** The hot classifier is one fixed-target
+null QSearch and subtracts at most one ply. Intrinsic LMR independently
+subtracts at most one more, so `move_depth = d - 1 - (...)` gives `C = 3`.
+Positive-depth admission is complete and the cap is confined to depths at
+most three. `MateDepth.lean` carries the mechanism-by-mechanism audit. The
+suites confirm the sharp first-success depths: `mate1` 4, `mate2_eventual` 7,
+and `mate3_eventual` 15, with `mate1` still missed at 3.
 
 ## Positive-depth moves and shallow move caps
 
@@ -925,7 +923,7 @@ King-capture substitution uses the position predicate directly, so its exact
 | recursive zero-window move search | `Bound.bound_spec` |
 | null child report negation | `WindowReport.negate` |
 | lazy `min(pos.score + EVAL_ROUGHNESS, pass_report)` (depth < 6) | `cap_failLow`, `cappedNull_report` |
-| fixed-target fuel probe | `hot_bit_determined`, `hot_bit_stable`, `fuel_edge_cost` |
+| fixed-target null QSearch | `hot_bit_determined`, `hot_bit_stable`, `fuel_edge_cost` |
 | static LMR eligibility and intrinsic move reduction | `intrinsic_edge_cost` |
 | real-move recursion at the reduced `d - 1` | `fuelValueD2t`, `eventual_classification_fuel` |
 | static cap below positive mate | `staticCap_in_scoreBand`, `staticCappedNull_below_positiveMate` |
