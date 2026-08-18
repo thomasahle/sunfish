@@ -19193,3 +19193,98 @@ mechanism argument, not on optimism.
 Recorded either way, as asked: the defensible alternative was to descope now
 on the two-caution argument, and I am choosing to spend ~130 lines and one
 tournament against a stated stop condition instead.
+
+---
+
+# ARM 2 — THE READ, and why it does NOT close the nonlinearity hypothesis
+
+Executed per the registered conventions. `313_arm2_ml2_n4` shares the corpus,
+the split (**val-sha `a0aa553db6908e91`**, identical to the one-layer family),
+the anchors and sigK with the control, so — unlike ARM 9 — **its val is
+directly comparable and no anchor-relative rescue is needed.**
+
+| run | arch | best val | **% of the material-anchor gap closed** |
+|---|---|---|---|
+| `220_cap_n5b_s0` | 1-layer, N=5 | 0.017649 | **14.1%** |
+| **`313_arm2_ml2_n4`** | ml2, N=4 | 0.017867 | **13.0%** |
+
+(both against zero 0.02637 / material 0.02054). Descriptive statistics,
+already ledgered at `33811bf`: refval_mirror 0.0178667, outval Brier 0.127922,
+AUC 0.845830 — all in-family, all slightly below the one-layer N=5 control.
+Comparability caveats: **different architecture and different width** (N=4 vs
+N=5, both forced — the exporter is corrupt at N≥5 for ml2 and the engine
+hardcodes four lanes), same corpus, same split, same anchors, same objective.
+
+## The read lands in-family — and that closes NOTHING, because the second layer never fired
+
+`u2_digits = [0, 0, 0, 0]`. The exporter printed the pre-image: the trained
+read-out wants **0.487, 0.488, 0.488, 0.487** digits against a smallest step
+of **1**. It missed by 2.7%, and the shipped net evaluates as a **one-layer
+N=4 net** while paying ml2's +130 B and ~0.90× nps.
+
+So the branch "if its val lands in-family, the nonlinearity hypothesis closes
+at the val level" **does not apply to this run.** Its val landed in-family
+because it *is* in the family: a net whose nonlinear term is identically zero
+is a linear net, and it cannot be evidence about nonlinearity in either
+direction. **Closing the hypothesis on this measurement would be closing it on
+a net that never had the property under test.** That is the same error shape
+as the contaminated −234 verdict it was funded to replace — different cause,
+same conclusion drawn from a net that wasn't the net.
+
+Two clean attempts have now failed to produce a two-layer net **at all**, and
+`u2grid=1` — registered as the fix, on the strength of the 2026-08-15 finding
+— is measured NOT to be one: it moved the read-out 4× closer to the threshold
+and still left it silent.
+
+## So the hypothesis is now testable, cheaply, for the first time
+
+The exporter's refusal table names the knob and prices it. The read-out scale
+is `2^SHIFT2 / (100 · 2^(2·shift))`, so **dropping the L1 shift multiplies the
+layer-2 digit by 4 per step**: at shift 3 the *same trained* `u2` lands on
+`U2 = [2, 2, 2, 2]` — live. The price is layer one, gains `[68,71,72,67] →
+[34,36,36,33]`.
+
+`model.mlshift` now forces the shift, read by the trainer's `export_shift`
+**and** both exporters from one place so they cannot diverge. Default 0 keeps
+the derived rule and is **verified byte-identical** — `220_cap_n5b_s0`
+re-exports its 949-character payload unchanged, the same receipt discipline
+`biasscale` got.
+
+**Queued, both arms, because the shift is not free:**
+
+| run | arch | mlshift | what it isolates |
+|---|---|---|---|
+| `3170_arm2b_ml2_s3` | ml2, N=4 | 3 | live second layer + halved L1 resolution |
+| `3171_arm2ctl_1layer_s3` | 1-layer, N=4 | 3 | halved L1 resolution alone |
+
+**ARM 2b minus that control is the second layer and nothing else.** Without
+the control, "does layer 2 help" is confounded with "does halving layer-1
+resolution hurt", and after tonight I am not spending another arm on a
+comparison that cannot separate its own two effects.
+
+**The bar, stated up front as required.** If the pair shows a genuine
+nonlinearity dividend, the CONTINUE screen is the 50-game entry comparison
+under the mandatory gates (coprimality pre-flight + `opening_gate.py`), and
+the dividend must clear the **nps tax measured on the actual artifact**, not
+the ~+11%/node estimate — at ~0.90× nps and the ledger's 102 Elo/doubling
+speed model that is roughly **−15 Elo** to overcome before the first point of
+gain. And it must clear it against a **12-point empirical noise floor** on a
+50-game cell (the `capn5` drift table). Those two facts together mean a
+CONTINUE screen is only worth running on a *large* val dividend, and I will
+say so rather than spend games on a small one.
+
+## Status of the eval axis, stated plainly
+
+The nonlinearity hypothesis is **NOT closed** and **not yet tested**. It is,
+for the first time, *testable*, and the test is queued at a cost of two
+ten-minute runs.
+
+If ARM 2b lands in-family **with a live read-out**, the hypothesis closes at
+the val level on evidence that actually bears on it, and **only ARM 10 remains
+on the eval axis.** If it does not, ARM 10 is not alone.
+
+**ARM 10 sequencing, noted:** the factored lane's lr ladder puts **lr4x
+(1.2e-2)** in the lead at width, which matches this lane's own `3161` result
+(19σ on refval, 1.4% val movement against 0.3%). ARM 10's lr-corrected recipe
+adopts **1.2e-2**, and that now rests on two independent ladders rather than
+one run.
