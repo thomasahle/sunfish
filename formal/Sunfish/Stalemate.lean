@@ -1070,7 +1070,8 @@ theorem boundA1_of_capture (G : QSGame) (probe : G.Pos → Bool)
 /-- Exhaustion of the loop, converse of `searchMoves_eq_init`: a
 below-window loop that ends AT its initial value saw every move fail at
 or below it -- "the consumption break needs `best >= gamma`", the code's
-own argument at lines 462-464. -/
+own comment ("Run through the moves, shortcutting when score >=
+gamma"). -/
 theorem searchMoves_eq_init_all {α : Type _} (gamma : Int) (f : α → Int) :
     ∀ (ms : List α) (b : Int), b < gamma → searchMoves gamma f ms b = b →
       ∀ m ∈ ms, f m ≤ b := by

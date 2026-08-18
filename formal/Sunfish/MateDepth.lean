@@ -114,8 +114,10 @@ MECHANISM MAP (pre-#216 line -> post-#218 line).
   and master has already made `shallowMoveCap` use natural subtraction to
   match).  This was the only real model delta and `capClamp` now carries the
   widened band -- see the closing section.  The cap's guard
-  `val < MATE_LOWER` and its ceiling `MATE_LOWER - 1` are unchanged, so
-  `shallowMoveCap_below_positiveMate` still applies.
+  `val < MATE_LOWER` is unchanged; its `MATE_LOWER - 1` ceiling has since
+  been dropped from the code as dead under the both-kings material
+  invariant, so `shallowMoveCap_below_positiveMate` now applies through
+  `CapInBand` (localized here by `capClamp_eq_shipped`).
 
 * QS admission: `val_lower = QS - depth * QS_A` (`:421`) plus the depth-one
   lazy tail (`:422-429`) -> a fixed producer floor of `QS` at depth zero and
@@ -623,15 +625,16 @@ theorem forcedMate_fuelValueD2_sharp_C1 (G : QSGame) (guard : G.Pos → Bool)
 Part I's sharpened `3k` -- does NOT model one mechanism the shipped search
 has: the shallow static cap
 
-    margin = max(depth - 1, 0) * QS_A
-    val_lower = max(base,
-        min(MATE_LOWER, gamma - pos.score - margin)) if depth <= 3 else base
-    yield None, max(cap(v) for base <= v < val_lower)
-    score = min(cap(val), -self.bound(pos.move(move), 1 - gamma, move_depth))
+    cap = MATE_UPPER if depth > 3 else pos.score + val + max(depth - 1, 0) * QS_A
+    if cap < gamma: best = max(best, cap); break
+    score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
 
 At every nominal depth `≤ 3` EVERY move that is not a king capture reports
 at most `shallowMoveCap`, which `shallowMoveCap_below_positiveMate`
-(CappedMove.lean) puts strictly below `MATE_LOWER`.  Such a node cannot
+(CappedMove.lean) puts strictly below `MATE_LOWER` under the both-kings
+material invariant `CapInBand` - the spine below consumes it through
+`capClamp`'s envelope, which needs no premise (`capClamp_eq_shipped`
+localizes the invariant).  Such a node cannot
 report a mate at all -- the cap "can delay a mate proof found exactly at
 the selective frontier", as formal/README.md puts it, and this is the
 delay, priced.  The cap only ever LOWERS a report, so it cannot hurt a
@@ -682,12 +685,32 @@ at -60.41 ± 26.61 Elo, so Elo-inadmissible -- or a
 `(pos, depth, bound-type)`-aware table, which is unpriced.  Ledger:
 `measure/search-features-ledger` at 0af3507, arm `exp/mate-band-exempt`. -/
 
-/-- The shipped clamp, as a fold weight transformer.  The band is the
-consumer's own `depth > 3` test, so it covers depths 0 through 3. -/
+/-- The shipped cap as a fold weight transformer, under the model's band
+ENVELOPE `min (MATE_LOWER - 1) ·`.  The band is the consumer's own
+`depth > 3` test, so it covers depths 0 through 3.  The code carries no
+such envelope; `capClamp_eq_shipped` proves the two agree under the
+material invariant `CapInBand`, which localizes the both-kings premise to
+that one lemma and lets the whole mate-depth spine below keep consuming
+the envelope's unconditional band-safety. -/
 def capClamp (G : QSGame) (p : G.Pos) (d : Nat) (m : G.Pos) (x : Int) : Int :=
   if d ≤ 3 ∧ G.val p m < MATE_LOWER then
-    min (shallowMoveCap (G.eval p) (G.val p m) d) x
+    min (min (MATE_LOWER - 1) (shallowMoveCap (G.eval p) (G.val p m) d)) x
   else x
+
+/-- Under the both-kings material invariant the envelope is dead and the
+model's fold weight is exactly the shipped `min(cap, child)`. -/
+theorem capClamp_eq_shipped (G : QSGame) (p : G.Pos) (d : Nat) (m : G.Pos)
+    (x : Int) (hband : CapInBand (G.eval p) (G.val p m) d) :
+    capClamp G p d m x =
+      if d ≤ 3 ∧ G.val p m < MATE_LOWER then
+        min (shallowMoveCap (G.eval p) (G.val p m) d) x
+      else x := by
+  have hb : G.eval p + G.val p m + ((d - 1 : Nat) : Int) * QS_A
+      < MATE_LOWER := hband
+  unfold capClamp shallowMoveCap
+  split
+  · omega
+  · rfl
 
 /-- The cap only lowers: the defender side never pays for it.  Monotonicity
 of the transformer is NOT a licence to drop the clamp in the code on the
@@ -714,7 +737,10 @@ theorem capClamp_lt_ML (G : QSGame) (p : G.Pos) {d : Nat} (hd3 : d ≤ 3)
     capClamp G p d m x < MATE_LOWER := by
   unfold capClamp
   rw [if_pos ⟨hd3, hval⟩]
-  have := shallowMoveCap_below_positiveMate (G.eval p) (G.val p m) d
+  have h1 := Int.min_le_left (MATE_LOWER - 1)
+    (shallowMoveCap (G.eval p) (G.val p m) d)
+  have h2 := Int.min_le_left
+    (min (MATE_LOWER - 1) (shallowMoveCap (G.eval p) (G.val p m) d)) x
   omega
 
 /-- **The fuel-shaped declared value WITH the shipped shallow cap.**

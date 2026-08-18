@@ -46,7 +46,7 @@ EXPECTED = {
     "Position.move": "69bb2460cd611c9e",
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "11d52eaa8a661352",
-    "Searcher.bound": "663bfc29433b2bc5",
+    "Searcher.bound": "adb70d639eb40543",
     "Searcher.search": "089a324cf1028953",
     "constants": "62b96e206341a2fb",
 }
@@ -97,28 +97,26 @@ def extract_regions():
 ANCHORS = [
     "def king_capture",
     "killer = self.tp_move.get(pos)",
-    "base = QS if depth == 0 else -MATE_UPPER",
-    "margin = max(depth - 1, 0) * QS_A",
-    "val_lower = max(base, min(MATE_LOWER, gamma - pos.score - margin)) if depth <= 3 else base",
-    "if (not root and 2 < depth < 6 and abs(pos.score) < 750",
-    "guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in \"RBNQ\")",
+    "calm = abs(pos.score) < 750 and any(c in pos.board for c in \"RBNQ\")",
+    "guard = not root and calm",
     "t = pos.score + NULL_MARGIN",
-    "d -= int(-self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)",
-    "yield None, pos.score",
-    "score = cap if (cap := pos.score + EVAL_ROUGHNESS) < gamma else min(cap,",
-    "-self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))",
-    "proof = score >= gamma and pos.king_capture()",
-    "if killer and (val := pos.value(killer)) >= val_lower:",
-    "yield killer, MATE_UPPER if val >= MATE_LOWER else val",
-    "values = sorted(((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= base), reverse=True)",
-    "n = sum(v >= val_lower for v, m in values)",
-    "yield from ((m, MATE_UPPER if v >= MATE_LOWER else v) for v, m in values[:n])",
-    "if n < len(values): yield None, min(MATE_LOWER - 1, pos.score + values[n][0] + margin)",
-    "if move is not None and score < MATE_LOWER:",
-    "cap = (MATE_UPPER if depth > 3 else",
-    "min(MATE_LOWER - 1, pos.score + val + margin))",
-    "move_depth = d - 1 - (not root and guard and val < LMR)",
+    "nmr = (calm and depth >= 6 and",
+    "-self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)",
+    "if 2 < depth < 6 and guard:",
+    "if (cap := pos.score + EVAL_ROUGHNESS) >= gamma:",
+    "score = min(cap, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))",
+    "if score >= gamma and (proof := pos.king_capture()):",
+    "move, score, live = proof, MATE_UPPER, True",
+    "if killer and ((val := pos.value(killer)) >= QS or depth) and (val >= MATE_LOWER or depth > 3",
+    "or pos.score + val + max(depth - 1, 0) * QS_A >= gamma):",
+    "yield val, killer",
+    "yield from sorted(((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= QS or depth), reverse=True)",
+    "for val, move in moves():",
+    "cap = MATE_UPPER if depth > 3 else pos.score + val + max(depth - 1, 0) * QS_A",
+    "if cap < gamma: best = max(best, cap); break",
+    "move_depth = depth - 1 - (guard and depth >= 6 and val < LMR) - int(nmr)",
     "score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))",
+    "live |= score > -MATE_UPPER",
     "best, live = -MATE_UPPER, False",
     "if depth and not live and all(",
     "pos.rotate(nullmove=True).king_capture()",
@@ -144,7 +142,7 @@ ANCHORS = [
 
 # Raw "line N" citations in the Lean sources are fragile: they rot silently.
 # We ratchet rather than ban outright -- the count may fall, never rise.
-LINE_CITATION_BUDGET = 146
+LINE_CITATION_BUDGET = 140
 
 
 def check_anchors(src):

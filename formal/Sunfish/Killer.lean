@@ -2,9 +2,9 @@
 KillerIsKingCapture: the killer-cutoff exception is provably impossible.
 
 `Sunfish/Stalemate.lean` (module comment, point 2) records a potential gap
-in sunfish: the killer move is yielded before the sorted moves (sunfish.py
-the killer yield, sunfish.py lines 422-423), so a non-capture killer that
-fails high would let `bound`
+in sunfish: the killer move is yielded before the sorted moves (the killer
+yield, `yield val, killer`), so a
+non-capture killer that fails high would let `bound`
 return a value `< MATE_UPPER` at a king-capturable position, breaking the
 sentinel requirement of lines 398-401.  This file upgrades that exception
 from "empirically absent" to impossible:
@@ -53,15 +53,20 @@ The model omits the TT-score table and the null move (simplification 5 of
 the proof architecture); the null-move residual exception is stated as its
 own named condition `NullGuardBlocksAtCaptures` below.
 
-Audit note (exactness): sunfish gates the killer yield by
-`pos.value(killer) >= val_lower` (the killer val-gate, sunfish.py line
-422).  The gate is not modeled
-here; it CANNOT affect `boundKill_spec`, because the load-bearing killer
-is a king capture with `val ≥ MATE_LOWER = 47923`, far above every
-`val_lower = QS - depth * QS_A ≤ 40` -- a king-capture killer always
-passes the gate, and a quiet killer that the gate suppresses only removes
-a yield, which the sorted loop re-supplies.  Exactness of a full-engine
-model would require it; this file's invariant does not.
+Audit note (exactness): sunfish gates the killer yield by the
+producer's admission floor AND by the killer's own unclamped ceiling --
+`(val >= QS or depth) and (val >= MATE_LOWER or depth > 3 or pos.score
++ val + max(depth - 1, 0) * QS_A >= gamma)`, the retired `val_lower`
+threshold with its `min` unfolded -- so that the consumer's settled
+break, which is only sound on the sorted stream, can never fire on the
+out-of-order killer yield.
+The gate is not modeled here; it CANNOT affect `boundKill_spec`,
+because the load-bearing killer is a king capture with `val ≥
+MATE_LOWER = 47923`: its `val >= MATE_LOWER` arm clears the gate at
+every window, so a king-capture killer always passes.  A quiet killer
+the gate suppresses only loses an early yield of a move the sorted
+loop still carries.  Exactness of a full-engine model would require
+modeling it; this file's invariant does not.
 -/
 
 import Sunfish.Stalemate
@@ -165,7 +170,8 @@ def killLoop (G : Game) [DecidableEq G.Pos] (gamma : Int)
 /-- `bound` with the killer heuristic, threading `tp_move`:
 
 * line 302-303: king gone -> `-MATE_UPPER`, no store;
-* the killer read (line 391) + the killer yield (lines 422-423): try the
+* the killer read (`killer = self.tp_move.get(pos)`) + the killer yield
+  (`yield val, killer`): try the
   position-keyed killer first; on a fail-high
   cutoff store it back (lines 382-387) -- on a fail low, continue into the
   sorted loop with `best` updated by the killer's score;
