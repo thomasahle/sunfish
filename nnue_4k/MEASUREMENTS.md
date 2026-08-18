@@ -252,6 +252,31 @@ Recorded because it is the shape of the answer, not just this cell's result:
    measures an overhead EMA and forwards `winc' = max(0, winc − (overhead_ema
    − 200))`, exact algebra, engine untouched. Backlogged.
 
+### ADDENDUM, registered before its games: the venue question needs the venue's CHARGE
+
+The first two venue cells came back inverted and they explain why the question
+was mis-posed, mine as much as anyone's. At **3+0.1** `DELAY=10` loses
+**−668.8** and at **10+0.1** **−447.1** — not because it plays worse but
+because it **flags 117 and 106 games of 120** where `DELAY=200` flags none.
+
+The mechanism is one line: **DELAY must be at least what the venue actually
+charges per move.** The surrogate's local arena charge is the calibrated
+**50 ms**, so an engine reserving 10 ms is systematically optimistic by 40 ms
+every move and drains its own clock. There is no "handicap of shipping 200"
+to measure at these TCs; on this venue 200 is *protective*.
+
+That leaves the real question unanswered rather than answered, so it is being
+asked properly, and registered here first: the same two cells re-run at
+**`--overhead 0.005`**, the 1–5 ms same-box lag the rescope actually names.
+The prediction, written before the games: with a 5 ms charge `DELAY=10` should
+stop flagging and its 1.65×–2.27× larger soft limit should show up as a
+positive, which is the handicap number the local-match flag is worth.
+
+**The decision output either way is a rule, not a constant change:** a local
+match harness must set a venue DELAY **no smaller than the arena's measured
+per-move charge**, and the shipped 200 is never lowered for a venue that
+cannot prove its charge.
+
 ### Real-clock cell, running
 
 `budget` at DELAY=200 vs the pool spelling (`5d16f5c`), **fixed N=200 at
