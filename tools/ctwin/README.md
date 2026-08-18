@@ -400,5 +400,8 @@ pypy3 npsprofile.py measure && python3 npsprofile.py fit   # re-measure nps
   sides are exactly classic. The twin-vs-pypy sanity match at fixed nodes
   is the driver's regression test.
 - Repetition handling equals classic's: `history` = positions of the
-  game line only, compared with score included; the known classic quirk
-  that a K-table swap hides old history entries is reproduced, not fixed.
+  game line only, consulted at the root move boundary, compared with score
+  included; the known classic quirk that a K-table swap hides old history
+  entries is reproduced, not fixed.  The score table follows classic's
+  lifecycle too: it survives played moves and is cleared by the K-table
+  phase transition, by `ucinewgame`/`reset`, and by any knob change.
