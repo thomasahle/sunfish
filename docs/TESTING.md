@@ -16,17 +16,18 @@ git archive master     sunfish.py sunfish_ui | tar -x -C /tmp/elo/old
 git archive my-change  sunfish.py sunfish_ui | tar -x -C /tmp/elo/new
 chmod +x /tmp/elo/old/sunfish.py /tmp/elo/new/sunfish.py
 
-# 2. Get fastchess and an opening book
-#    https://github.com/Disservin/fastchess/releases  (the release tar also
-#    contains a usable book at app/tests/data/openings.epd)
+# 2. Get fastchess and a 2000+ position opening book
+#    https://github.com/Disservin/fastchess/releases  (its small test book is
+#    useful for smoke tests, but it is too short for this SPRT maximum)
 
-# 3. Run the match — then LEAVE THE MACHINE ALONE until it finishes
+# 3. Run a pentanomial SPRT — then LEAVE THE MACHINE ALONE until it finishes
 fastchess \
   -engine cmd=/tmp/elo/new/sunfish.py name=new \
   -engine cmd=/tmp/elo/old/sunfish.py name=old \
-  -each proto=uci tc=4+0.04 \
+  -each proto=uci tc=30+1 \
   -openings file=openings.epd format=epd order=random \
-  -rounds 150 -games 2 -concurrency 6 -recover \
+  -sprt elo0=0 elo1=10 alpha=0.05 beta=0.05 model=logistic \
+  -rounds 2000 -games 2 -concurrency 6 -recover \
   -draw movenumber=40 movecount=8 score=10 \
   -resign movecount=4 score=500
 ```
@@ -57,12 +58,29 @@ fastchess \
    from the lichess eval dump: early-middlegame, both queens on, ≥26 men,
    |eval| ≤ 80cp, deduplicated by the first four FEN fields).
 
-4. **Size the match to the effect you are hunting.**
-   ~300 games at fast TC gives roughly ±30 ELO (95%). That detects blunders,
-   not refinements. A few-percent speedup is worth a few ELO and needs
-   thousands of games — or better, use SPRT so the match stops itself:
-   `-sprt elo0=0 elo1=10 alpha=0.05 beta=0.05` (accepts/rejects "at least
-   10 ELO better" with 5% error rates).
+4. **Use fastchess's pentanomial SPRT by default.** Pick the hypotheses before
+   starting the match, then let the evidence choose the game count. With
+   color-swapped pairs, fastchess updates the test from five paired outcomes
+   instead of pretending that the two games in an opening are independent.
+
+   For a change intended to add strength, use:
+
+   `-sprt elo0=0 elo1=10 alpha=0.05 beta=0.05 model=logistic`
+
+   For a simplification allowed to lose `B` Elo, use `elo0=-B elo1=0`. The
+   standing source-size exchange rate is `B = 5 * removed cleaned lines`.
+   `model=logistic` keeps these hypotheses in the conventional Elo units used
+   elsewhere in this document; do not silently compare them with normalized
+   Elo (`model=normalized`).
+
+   Set `-rounds` to a generous maximum, not a desired sample size. The opening
+   book must cover that maximum without cycling. A test stops early when either
+   hypothesis wins; a candidate in the indifference region may consume the
+   whole maximum, which is the correct price of an ambiguous result. Fixed-game
+   matches are reserved for harness calibration, league-placement estimates,
+   or cases where the full confidence interval itself is the requested result.
+   Report the SPRT hypotheses, error rates, decision, LLR bounds, game count,
+   and pentanomial counts.
 
 5. **Time-management changes need validation at MULTIPLE time controls.**
    Fast-TC matches are structurally blind to long-TC time bugs: a change
