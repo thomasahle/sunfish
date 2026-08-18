@@ -47,11 +47,11 @@ def shift_for(v):
     return 0
 
 
-def payload(ck):
+def payload(ck, force_shift=None):
     """Trained state -> the decoder's digit stream, with every field checked."""
     r, N, mirror = ck["rank"], ck["N"], ck["mirror"]
     U, V, b, v = ck["U"], ck["V"], ck["bias"], ck["v"]
-    s = shift_for(v)
+    s = shift_for(v) if force_shift is None else int(force_shift)
     g = [min(89, max(1, int(round(abs(x) * (1 << s) / 32.0)))) for x in v]
     capsum = 32 * sum(g)
     if capsum > 65534:
@@ -107,12 +107,22 @@ def main():
     ap.add_argument("ckpt")
     ap.add_argument("--out", default="/tmp/factor_entry.py")
     ap.add_argument("--packed", default="/tmp/factor_entry.packed")
+    ap.add_argument("--force-shift", type=int, default=None,
+                    help="WHAT-IF ONLY: override the export shift to price a "
+                         "shape before retraining at it. The artifact this "
+                         "produces is a TRAIN/SHIP DIVERGENCE and must never be "
+                         "screened or shipped -- it evaluates a net that was "
+                         "trained against a different resolution.")
     a = ap.parse_args()
     ck = pickle.load(open(a.ckpt, "rb"))
     if ck.get("kind") != "factor":
         raise SystemExit("not an arch=factor checkpoint: kind=%r" % ck.get("kind"))
     r, N, mirror = ck["rank"], ck["N"], ck["mirror"]
-    q, s, g, bd, clipped, rows = payload(ck)
+    q, s, g, bd, clipped, rows = payload(ck, a.force_shift)
+    if a.force_shift is not None:
+        print("*** WHAT-IF BUILD at forced shift %d: this artifact is a "
+              "TRAIN/SHIP DIVERGENCE and prices bytes ONLY. Do not screen it."
+              % a.force_shift)
 
     src = open(os.path.join(REPO, "nnue_4k", "replnet_proto.py")).read()
     eng, ndig, _ = M.build(src, r, N, 16, 0.43, mirror=mirror)
