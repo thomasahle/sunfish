@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-18 | **CORRECTION 2 to METER 4: #217 is NOT the goalpost move — the classic POOL is, and it was measured at +96.19 ± 33.81 at this meter's own TC** | **Recorded before any Elo exists** (primary ~40/600, count gate still refusing). The registration frames the meter around #217 as the classic's "biggest strength-relevant change since the last meter"; **wrong commit**. `git log f4f06d4..ab3b490 -- sunfish.py` has sixteen commits, and the mover is **`eef299b`, the classic builtin clock becoming the POOL** — **+96.19 ± 33.81, fixed N=300 at 30+1, no stopping rule**. **#217 (`6087cfa`) merely RESPELLS that pool as a per-move budget and measured LEVEL against it (+3.47 ± 33.81, N=200, 60+0)** — the registration's use of that same +3.47 to justify the packed classic *form* stands and is unaffected; what was wrong is crediting #217 with the goalpost move. Also in the arm and unpriced here: the shallow-cap/lazy-tail search work (`8ea6d5d`, `42c0816`, `c01915f`, `faf3e06`, `edc1a87`). **The classic lane already said this in `82f0fa1`, verbatim: "The goalpost moved by ~96 Elo … meter 3's +200.24 ± 38.35 is now historical"** — written three commits before this lane registered, and not read. The +96.19 is unusually well matched to this meter: fixed N, no stopping rule, **at 30+1, the primary's exact TC** (its SPRT decider read +124.50 ± 38.79 at 288 and the fixed 300 read +102.47 ± 32.43, so the stopped figure is 20-40 high). **Premise-corrected expectation: 200.24 − 96.19 + 23.0 ≈ +127** (±~53; the +23.0 Design B term is a **projection with zero games**). **THE REGISTERED BAND [+120, +200] IS NOT MOVED** — harvest reports against it verbatim AND against ≈ +127 separately, both fixed here before any number exists. The band's lower edge sits near the corrected value, so an in-band landing would be **luck, and will be reported as luck**. Nothing re-run: `ab3b490` is the right arm. With Correction 1, the meter has **four** moving parts — entry Design B, classic pool, #217's respelling, classic search — two measured, one projected, one unpriced. Still a meter; no branch fires |
 | 2026-08-18 | **CORRECTION 1 to METER 4: the BRIDGE does not isolate #217 — the ENTRY moved too, and what moved is Design B** | **Recorded before any Elo existed** (primary at ~30/600, count gate still refusing harvest), so it is a self-caught registration error, not a result-driven reinterpretation. The registration (`01afb5e`) and Amendment 1 (`7e4db94`) both claim the bridge is "meter 3's protocol VERBATIM with only the classic arm changed" and conclude twice that **"BRIDGE − 200.24 is the pure #217 goalpost move"**. **False — both arms moved.** Entry went **3376 B `a997b137…` (`1b6b94d`) → 3410 B `bf30904d…` (`d0a6e60`)**, and `git log 1b6b94d..d0a6e60 -- nnue_4k/pst_entry.py` returns **exactly one commit**: **`1250251` "Cache the rotation instead of recomputing it"** — **Design B**, the +34 B rotation-caching speed landing that meter 3's verdict itself said *"rides the NEXT meter"*, priced there at **+23.0 ± 11.4**. This meter is that next meter. **Control making the delta exact**: repacking `1b6b94d`'s source with **this meter's packer** reproduces `a997b137…` **bit-for-bit**, and `pack.sh` is **unchanged** across the interval — so the packer is a constant and the entry difference is that one commit and nothing else (which also confirms meter 3's arm used the `nnue-4k` packer, as this registration chose for both arms). **Restated**: `bridge − 200.24` = **Δ(Design B) + Δ(#217)**, the NET arms move; `primary − bridge` is **unaffected and still a clean TC axis** (same two arms in both cells); `primary − 200.24` carries all four axes. The available decomposition **Δ(#217) ≈ (bridge − 200.24) − 23.0** leans on a **projection with zero games behind it** and will be reported as an attribution, never as the measurement — meter 3's "lean, labelled as a lean" is the precedent. **Nothing is re-run, relaunched or re-drawn**: the in-flight arms are the correct, sha-pinned, briefed arms. What changes is only what the numbers may be CALLED at harvest. Still a meter; no branch fires |
 | 2026-08-18 | **AMENDMENT 1 to METER 4: the registered EPD book is STRUCTURALLY UNPLAYABLE by a packed arm — cell VOID at 427 games, and the fix removes an axis** | The primary cell stopped itself: **427 of 427 games `illegal move`**, both arms playing **`g1f3`** (White's move from the *initial* position) into a book FEN. Cause is the packed build, not a bug: `sunfish.py`'s builtin loop has only `position startpos`, and the `position fen` branch lives in `sunfish_ui/uci.py` inside the `minifier-hide` block that `pack.sh` **deletes**. Probed both arms after the stop — `position fen …` → **`g1f3`** from each; `position startpos moves g1f3` → `b8c6` (classic) / `d7d5` (entry), correct. **The ENTRY ignores FEN too**, so this is not dodgeable by picking a different classic form: **no EPD book can ever be played against the 4k artifact**, and a book for this pair must be **PGN** (replayed as `position startpos moves …`). That is why meters 1–3 used `book3k.pgn`; the reason was never recorded, and now is. **Correction**: primary book → `book3k.pgn`, fresh srands 20260882/20260883 (20260880/1 burned), coprimality re-run and passing; everything else in `01afb5e` stands. **The fix improves the design** — it deletes the book axis, so **bridge − meter 3 = classic (#217) alone**, **primary − meter 3 = classic + TC**, and **primary − bridge = a clean TC slope**. Two structural gates added before relaunch: the runner now **refuses an EPD book** outright, and the boot smoke sends the **book's actual command form** (`position startpos moves g1f3`, reply must not be `g1f3`) — the check that would have caught this in under a second instead of 427 games. **Zero illegal = STOP worked exactly as registered.** No branch fires; still a meter, not a promotion |
 | 2026-08-18 | **PRE-REGISTRATION: METER 4, the post-#217 re-anchor — and the meter states WHICH CLASSIC it means: the PACKED builtin-budget loop** | The goalpost moved: master merged **#217** (builtin clock → per-move budget with a **five-fold wall**) plus #231/#235/#239 housekeeping, so meter 3's **+200.24 ± 38.35** now reads against a **pre-#217** classic (`f4f06d4`) that no longer exists. **Form decided and registered**: a checkout of `sunfish.py` delegates to `sunfish_ui/uci.py` (`TM_MANAGER=pool`), the PACKED artifact runs the builtin #217 loop — the meter means the **packed** classic, because the 4k-league framing demands an opponent of the same kind, because every prior timed meter used it, and because the two forms measure **level** head to head (`tmbudget` 60+0 N=200: **+3.47 ± 33.81**). Arms sha-pinned: entry **3410 B** `bf30904dfdf5…` (`d0a6e60`, the DEPLOYED artifact — **reused, not rebuilt**; provenance closed by a repack reproducing it bit-for-bit) vs classic **3361 B** `d177d79a66a1…` (`ab3b490`), **same packer both arms**; the same classic source under master's older packer is `d601382295…` = the box's already-played `budget.packed`, confirming `ab3b490` is the #217 engine. **TWO CELLS, because three axes move at once**: PRIMARY **N=600 at 30+1** on `openings_1991_valid.epd` (the house TC, the new anchor) and BRIDGE **N=300 at 60+1** on `book3k.pgn` — **meter 3's protocol verbatim with only the classic arm changed**, so that **BRIDGE − 200.24 is the pure #217 goalpost move** and the delta is not a three-axis mush. Gates all mandatory and read before any Elo: coprimality preflight (both cells gcd 1), arm-identity sha, boot smoke, ≥24 free cores (HOLD, never relocate), **zero illegal = STOP**, **zero forfeit = VOID**, count, `opening_gate.py`, `cluster_elo.py` inflation, PID liveness; dormancy **N/A** at a real clock, clocks recorded instead. Registered band for the primary **[+120, +200]**, central ≈ +165 — classic should be stronger, so the gap should narrow — and the band is a prediction under test, not a target. **METER, NOT PROMOTION: no branch fires on any number here** |
@@ -332,6 +333,85 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-18 — CORRECTION 2 to METER 4: #217 is NOT the goalpost move — the classic POOL is, and it was measured at +96.19 ± 33.81 at this meter's own TC
+
+**Recorded before any Elo exists.** The primary is at ~40 of 600 games and the
+count gate has refused every harvest. Like Correction 1, this is a registration
+premise that inspection falsified, not a reading being massaged.
+
+### The false premise
+
+The registration (`01afb5e`) frames the whole meter around #217, calling it the
+classic's *"biggest strength-relevant change since the last meter"*, and
+Amendment 1 and Correction 1 both repeat the framing. **It is the wrong commit.**
+
+`git log f4f06d4..ab3b490 -- sunfish.py` — meter 3's classic to this meter's —
+contains **sixteen** commits, and the strength-relevant ones are:
+
+| commit | what | measured |
+|---|---|---|
+| **`eef299b`** | **the classic builtin clock becomes the POOL: two limits, and a wall that cannot go negative** | **+96.19 ± 33.81**, fixed **N=300 at 30+1**, no stopping rule |
+| `6087cfa` (**#217**) | respells that pool as a per-move budget | **+3.47 ± 33.81** vs the pool spelling, N=200 at 60+0 — **level** |
+| `8ea6d5d`, `42c0816`, `c01915f`, `faf3e06`, `edc1a87` | cap every shallow move by static gain; unify shallow pruning under lazy caps; unify real-move scoring; evaluate shallow caps as one lazy tail | present in the arm, **not priced in this note** |
+
+So **#217 is a respelling of the change that actually moved the goalpost**, and
+it measured level against the thing it respells. The registration's own
+justification for the packed classic form cited that +3.47 as evidence the form
+choice is neutral — **that use of it stands and is unaffected**; what is wrong is
+treating #217 as the source of the goalpost move.
+
+### The classic lane said so, in the commit that landed it
+
+`82f0fa1`, verbatim:
+
+> **"The goalpost moved by ~96 Elo, as registered before game 1: classic.packed
+> is the +400 meter's opponent, so meter 3's +200.24 ± 38.35 is now historical"**
+
+That is this meter's own premise, written by another lane three commits before
+this lane registered, and it was available to read. It was not read.
+
+**And the +96.19 is unusually well-matched to this meter**: fixed N=300, **no
+stopping rule**, at **30+1** — the primary's exact time control. The same landing
+records that its SPRT decider stopped at 288 games reading **+124.50 ± 38.79**
+while the pre-registered fixed 300 read **+102.47 ± 32.43**, so the fixed-N
+figure is the one to use and the stopped one is 20-40 Elo high.
+
+### What this does to the registered band — disclosed, NOT moved
+
+The band **[+120, +200], central ≈ +165** was set on the false premise. The
+premise-corrected arithmetic, from measured components where they exist:
+
+| component | value | basis |
+|---|---|---|
+| meter 3 | **+200.24 ± 38.35** | measured, N=300, 60+1 |
+| classic gains the pool | **−96.19 ± 33.81** | measured, N=300, **30+1** |
+| entry gains Design B | **+23.0 ± 11.4** | **projected from nps, ZERO games** |
+| ⇒ premise-corrected expectation | **≈ +127** | ±~53 in quadrature, before any TC term |
+
+> **THE REGISTERED BAND IS NOT MOVED.** Moving a band toward a better guess after
+> learning the guess was bad is exactly what a band exists to prevent, and this
+> lane has a precedent for reporting an out-of-band result as a result. The
+> harvest will report **against [+120, +200] verbatim**, and **separately**
+> against the ≈ +127 above, with both stated here before a number exists so
+> neither can be chosen after the fact.
+
+Note the band's lower edge, +120, sits close to the corrected ≈ +127 — so the
+registration may well land in-band for a reason it did not know it had. That
+would be luck, and it will be reported as luck.
+
+### What does not change
+
+The arm is right: `ab3b490` already contains the pool, #217, and the search
+changes, and it is the classic the goal is now measured against. Nothing is
+re-run, re-drawn or relaunched. Corrections 1 and 2 together mean the meter
+measures **four** moving parts — entry Design B, classic pool, #217's respelling,
+classic search changes — of which two carry their own measured numbers and one
+carries a projection.
+
+**Still a meter, not a promotion. No branch fires.**
 
 ---
 
