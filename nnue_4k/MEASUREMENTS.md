@@ -141,6 +141,59 @@ how much effort it cost.
 
 ---
 
+## 2026-08-19 — REGISTERED before game 1: the post-#236 gate ladders, timed on the C twin
+
+Thomas's critique of the merged #236 names three uglies; two are semantic
+and get measured, per his standing directive (box COORDINATION.md,
+2026-08-18: use the C twins at 3+0.1 for tuning and testing). Bars,
+branches, arms and gates are fixed here ahead of any game.
+
+**Instrument.** sunfish_c from `experiment/twin-lmr-killer-gates`
+(d77ee87), two new lab knobs whose defaults reproduce master bit for bit;
+the full node-identity gate (`make gate`: 40-position sweep + walk at
+depth 6, depth 7, and the QS/EVAL_ROUGHNESS/LMR/TABLE_SIZE sweeps) is
+re-passed against merged master e670434 before any number counts, and its
+result is recorded in the launch note below this entry. Venue:
+fastchess, tc=3+0.1, chessathome book, `-games 2 -repeat` color-paired,
+`order=sequential` with disjoint `start` offsets 1/1001/2001/3001,
+concurrency 2 per arm (8 total), nice 5, `-recover`.
+
+**Arms, each vs master defaults, simplest first.**
+
+- **A1** `LMR_MODE=1`: intrinsic LMR gated by `val < LMR` alone. NOTE:
+  reduces at the ROOT too — the twin expresses root exactly, so the arm
+  is structurally faithful to the python it proposes.
+- **A2** `LMR_MODE=2`: `not root and val < LMR`.
+- **A3** `LMR_MODE=3`: `not root and calm and val < LMR` — drops only
+  `depth >= 6` (the unbundling question).
+- **B1** `KILLER_GATE=1`: the killer's ceiling gates at every depth (no
+  `depth > 3` exemption; margin grows with depth). Skipping a killer is
+  sound by construction — it reappears in the sorted stream — so the arm
+  trades only killer-first cutoffs.
+
+Depth-7 startpos node smoke: 52444 (master) / 2660 (A1) / 6342 (A2) /
+6342 (A3, ≡A2 while calm holds) / 52442 (B1).
+
+**Decision rule.** SPRT elo0=−10 elo1=0, alpha=beta=0.05, cap 400 rounds
+(800 games) per arm. Accept-H1 = the simplification is non-inferior at
+the 10-Elo bar and SHIPS; accept-H0 = rejected. Ship recommendation =
+the simplest A-arm that holds, plus B1 if it holds. Undecided-at-cap is
+reported as undecided with the interval.
+
+**Gates that void a number.** Any illegal move; time forfeits above zero
+on either side of an arm; a box-load event that pauses either engine of
+a timed pair (owner-forfeit check before launch, census by parentage).
+
+**Not run, documented.** B2 (drop the killer ceiling entirely) is BLOCKED
+by the constraint square: an ungated sub-window killer reaches the
+consumer, whose break is only sound on the sorted stream — preventing
+that needs skip-not-break, i.e. a flag or object identity, both rejected
+for the landed form. {killer-first speed, single rule statement, no
+flag/no identity, tail break}: any three are achievable, all four are
+not; every corner is now built and priced (#240 no-break 1.100x, #241
+identity 0.981x, old-V7 flag 0.929x, merged duplicated-gate 0.912x). B1
+is the reachable simplification: one disjunct off the duplicated gate.
+
 ## 2026-08-17 — Two orderings screened, both flat: butterfly history and a countermove table
 
 Verdicts against the bars registered below, before game 1.
