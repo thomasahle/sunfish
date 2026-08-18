@@ -22,6 +22,21 @@ Box etiquette (labeller-class, the recorded rules):
     SIGSTOPs the training, writes PAUSED_REPORT.txt beside the run and
     waits.  Removing the report file SIGCONTs (operator decision, never
     automatic) -- pause-and-report, not pause-and-guess.
+  * TRIPWIRE EXEMPTION, opt-in per arena: an arena directory containing a
+    file named FORFEITS_EXPECTED (one line saying why) is excluded from the
+    count, and so is everything beneath it.  It exists because the guard's
+    all-pgn glob counts forfeits from arenas where a forfeit is the
+    INSTRUMENT, not the harm -- gauntlet-20260818's hcal cells run at
+    tc=0.5+0.005, where flagging is close to inherent, and
+    tmsimple-20260818/sd60.pgn registered its forfeits as data before game 1
+    ("3 time forfeits, all on `simple`, as registered: data, not a void").
+    With any such arena live the always-training rule could not hold: on
+    2026-08-19 the trainer paused on two hcal forfeits with six arms queued.
+    THE DEFAULT STAYS PARANOID -- an unmarked arena counts, exactly as
+    before -- and the exemption CANNOT be made global: the marker is only
+    consulted in directories strictly BELOW ~/sunfish-bench, so dropping one
+    at the bench root does nothing.  Marking someone else's arena is a
+    coordination act; mark your own, and say why in the file.
 
 usage: queue_runner.py [--queue-dir DIR] [--once] [--pgn-globs G1:G2:...]
 """
@@ -41,10 +56,57 @@ DEFAULT_GLOBS = os.pathsep.join((
 ))
 
 
+EXEMPT_MARKER = "FORFEITS_EXPECTED"
+BENCH_ROOT = os.path.abspath(os.path.expanduser("~/sunfish-bench"))
+
+
+def _exempt_dir(d, cache):
+    """Is `d` inside an arena that opted out of the tripwire?
+
+    Walks up to, but NEVER reaches, BENCH_ROOT: a marker at the bench root
+    is not consulted, so the exemption cannot be turned into a global off
+    switch by dropping one file in the obvious place.  `cache` is per-call,
+    not per-process, so an arena that marks itself mid-run is honoured at the
+    next poll instead of at the next restart.
+    """
+    d = os.path.abspath(d)
+    seen = []
+    while d.startswith(BENCH_ROOT + os.sep):
+        if d in cache:
+            hit = cache[d]
+            break
+        seen.append(d)
+        if os.path.exists(os.path.join(d, EXEMPT_MARKER)):
+            hit = True
+            break
+        d = os.path.dirname(d)
+    else:
+        hit = False
+    for x in seen:
+        cache[x] = hit
+    return hit
+
+
+def exempt_arenas():
+    """(dir, reason) for every arena currently opted out -- for the log."""
+    out = []
+    for m in sorted(glob.glob(os.path.join(BENCH_ROOT, "*", EXEMPT_MARKER)) +
+                    glob.glob(os.path.join(BENCH_ROOT, "*", "*", EXEMPT_MARKER))):
+        try:
+            why = open(m).readline().strip()
+        except OSError:
+            why = ""
+        out.append((os.path.dirname(m), why))
+    return out
+
+
 def forfeit_count(globs):
-    n = 0
+    """"loses on time" across the globs, skipping opted-out arenas."""
+    n, cache = 0, {}
     for g in globs:
         for path in glob.glob(g):
+            if _exempt_dir(os.path.dirname(path), cache):
+                continue
             try:
                 with open(path, "rb") as f:
                     n += f.read().count(b"loses on time")
@@ -98,7 +160,11 @@ def run_one(cfg_path, qdir, globs):
     run_dir = os.path.join(_here, "runs", name.rsplit(".", 1)[0])
     os.makedirs(run_dir, exist_ok=True)
     base = forfeit_count(globs)
-    print("[queue] starting %s (forfeit baseline %d)" % (name, base), flush=True)
+    ex = exempt_arenas()
+    print("[queue] starting %s (forfeit baseline %d%s)"
+          % (name, base,
+             "".join("; EXEMPT %s: %s" % (os.path.basename(d), w or "no reason given")
+                     for d, w in ex)), flush=True)
     proc = subprocess.Popen(
         ["nice", "-n", "19", sys.executable, os.path.join(_here, "train.py"),
          cfg_path, "--resume", "--out-dir", run_dir, "--threads", "8", "--workers", "8"],
@@ -118,7 +184,15 @@ def run_one(cfg_path, qdir, globs):
                 f.write("TRIPWIRE: time forfeits rose %d -> %d while %s trained.\n"
                         "Training is SIGSTOPped (pid %d).  Investigate the live\n"
                         "match; delete this file to SIGCONT and continue.\n"
-                        % (base, now, name, proc.pid))
+                        "\nCounted arenas exclude any directory holding a\n"
+                        "FORFEITS_EXPECTED marker; %d are exempt right now%s.\n"
+                        "If the arena that just flagged is one where forfeits\n"
+                        "are the instrument rather than the harm, the fix is\n"
+                        "for ITS owner to drop that marker, not to delete this\n"
+                        "file on every run.\n"
+                        % (base, now, name, proc.pid, len(ex),
+                           "".join("\n  - %s: %s" % (os.path.basename(d), w or "no reason given")
+                                   for d, w in ex)))
             print("[queue] TRIPWIRE: forfeits %d -> %d; %s PAUSED (see %s)"
                   % (base, now, name, paused_report), flush=True)
         if paused and not os.path.exists(paused_report):
