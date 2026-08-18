@@ -132,6 +132,24 @@ directions = {
 # Mate value must be greater than 8*queen + 2*(rook+knight+bishop)
 # King value is set to twice this value such that if the opponent is
 # 8 queens up, but we got the king, we still exceed MATE_VALUE.
+#
+# The band and what each landmark MEANS - the search reads these as three
+# different kinds of thing, and only the first kind is compared for equality:
+#
+#   +-MATE_UPPER  RESERVED TOKENS, never an evaluation. -MATE_UPPER is the
+#                 fold's init and the illegal-move sentinel: "score >
+#                 -MATE_UPPER" is the legality test, so a king-capturable
+#                 child must report the EXACT +MATE_UPPER (the same token,
+#                 seen from the parent) or a mated node looks alive.
+#   +-MATE_LOWER  band admission edges: |x| >= MATE_LOWER says "mate", below
+#                 says "evaluation". The 13-queen margin puts them out of
+#                 reach of any both-kings score and any non-capture move
+#                 value, which is what lets both tests be score tests.
+#   the gap       mate DISTANCE, strictly between the two: a mated node is
+#                 -MATE_LOWER - depth*EVAL_ROUGHNESS, floored at 1-MATE_UPPER
+#                 so it can never come back up the tree as the sentinel.
+#                 Only ever compared by size, never for equality.
+#
 # A mate found with `depth` still to spend scores MATE_LOWER + depth*EVAL_ROUGHNESS,
 # so a mate delivered near the root outscores one delivered near the horizon:
 # among winning lines the search takes the SHORTEST, and the losing side
@@ -145,6 +163,9 @@ MATE_UPPER = piece["K"] + 10 * piece["Q"]
 QS = 40
 QS_A = 140
 LMR = 75
+# Two jobs, deliberately one number: the width the MTD-bi bracket stops at,
+# and what one ply of mate distance is worth. Distances must be more than a
+# bracket apart or the driver's last window could not order two mates.
 EVAL_ROUGHNESS = 15
 # Target margin of the deep-null fuel probe (depth >= 6): the pass must
 # beat pos.score + NULL_MARGIN for real moves to burn two plies. Its own
