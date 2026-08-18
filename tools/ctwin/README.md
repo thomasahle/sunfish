@@ -187,11 +187,14 @@ when their depth completes, and bestmove has the structural floor (never
 abort made the twin play one depth staler than pypy at stop points — the
 calibration match caught it at -54 ± 43 and the run was voided.
 
-## Calibration plan (stage 1 PASSED 2026-08-14; stages 2-3 staged)
+## Fidelity and transfer calibration
 
-Node-identity proves the twin searches classic's tree; it does not yet
-prove that *match results* from the twin transfer. Before any twin number
-feeds a merge/decline decision (docs/TESTING.md rule 14), run, in order:
+Node identity proves exact classic semantics at fixed depth and node count.
+It does not make C and Python runtimes identical: a timed match prices C
+operations, and Python-only allocation or interface changes are invisible.
+For a node-identical classic search or table-eval diff, `docs/TESTING.md` uses
+the timed C `3+0.1` match as the primary decision instrument. Rerun these
+transfer checks after material harness changes and periodically to catch drift:
 
 1. **Sanity match:** ctwin vs `sunfish.py` under pypy3, both at the same
    fixed node budget, standard book, 200+ paired games. Expected ~50%
@@ -209,9 +212,9 @@ feeds a merge/decline decision (docs/TESTING.md rule 14), run, in order:
    real-match gap (e.g. `QS`/`EVAL_ROUGHNESS` shifted to a previously
    measured losing setting). Same acceptance test.
 
-Only after all three: twin grids/SPSA results are decision-grade at
-*fixed effort* — rule 12 of docs/TESTING.md still applies before any
-wall-clock claim.
+Stage 1 passed on 2026-08-14; stages 2-3 remain useful known-effect checks.
+Rule 12 of `docs/TESTING.md` still makes fixed-node matches screens rather than
+timed Elo decisions.
 
 ## Time management on a virtual clock
 
@@ -386,11 +389,10 @@ pypy3 npsprofile.py measure && python3 npsprofile.py fit   # re-measure nps
 
 ## Caveats (deliberate, documented)
 
-- The clock-management branch of classic's `main()` (wtime/winc budgets)
-  is *not* cloned — the twin itself is for clock-free games. `go` without
-  limits runs to depth 999; always pass `nodes`, `depth` or `movetime`.
-  Clocked play is supplied *around* the twin by `vmatch.py`'s virtual
-  clock (above), which drives the same `go nodes` path.
+- The shipping clock manager is *not* cloned. Standard UCI clocks use the
+  fixed search-only budget below for timed search matches; `vmatch.py` drives
+  `go nodes` when the time manager itself is under test. `go` without limits
+  runs to depth 999, so always pass a limit or a clock.
 - Standard UCI clock games use a fixed `time/12 + 0.9*increment` budget and
   half-clock cap for calibrated search-only screens. This is deliberately
   not the shipping time manager; compare time policies through `vmatch.py`.

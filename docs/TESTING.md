@@ -10,36 +10,45 @@ methodology; it exists because shortcuts here produce confident, wrong numbers.
 ## TL;DR recipe
 
 ```bash
-# 1. Freeze BOTH engines completely (code + interface, no shared files!)
+# 1. For a classic search/eval change, freeze and verify BOTH C twins.
 mkdir -p /tmp/elo/old /tmp/elo/new
-git archive master     sunfish.py sunfish_ui | tar -x -C /tmp/elo/old
-git archive my-change  sunfish.py sunfish_ui | tar -x -C /tmp/elo/new
-chmod +x /tmp/elo/old/sunfish.py /tmp/elo/new/sunfish.py
+git archive master     sunfish.py tools/ctwin tests/files | tar -x -C /tmp/elo/old
+git archive my-change  sunfish.py tools/ctwin tests/files | tar -x -C /tmp/elo/new
+make -C /tmp/elo/old/tools/ctwin gate
+make -C /tmp/elo/new/tools/ctwin gate
 
-# 2. Get fastchess and an opening book
-#    https://github.com/Disservin/fastchess/releases  (the release tar also
-#    contains a usable book at app/tests/data/openings.epd)
+# 2. Get fastchess and a 2000+ position opening book
+#    https://github.com/Disservin/fastchess/releases  (its small test book is
+#    useful for smoke tests, but it is too short for this SPRT maximum)
 
-# 3. Run the match — then LEAVE THE MACHINE ALONE until it finishes
+# 3. Run a pentanomial SPRT — then LEAVE THE MACHINE ALONE until it finishes
 fastchess \
-  -engine cmd=/tmp/elo/new/sunfish.py name=new \
-  -engine cmd=/tmp/elo/old/sunfish.py name=old \
-  -each proto=uci tc=4+0.04 \
+  -engine cmd=/tmp/elo/new/tools/ctwin/sunfish_c \
+          args=/tmp/elo/new/tools/ctwin/tables_classic.txt name=new \
+  -engine cmd=/tmp/elo/old/tools/ctwin/sunfish_c \
+          args=/tmp/elo/old/tools/ctwin/tables_classic.txt name=old \
+  -each proto=uci tc=3+0.1 \
   -openings file=openings.epd format=epd order=random \
-  -rounds 150 -games 2 -concurrency 6 -recover \
+  -sprt elo0=0 elo1=10 alpha=0.05 beta=0.05 model=logistic \
+  -rounds 2000 -games 2 -concurrency 6 -recover \
   -draw movenumber=40 movecount=8 score=10 \
   -resign movecount=4 score=500
 ```
 
+This is the default for changes represented node-for-node by the classic C
+twin. If the diff changes Python throughput, time management, the interface,
+or behavior absent from the twin, freeze `sunfish.py` plus `sunfish_ui/` and
+run those engines at `30+1` instead.
+
 ## The rules, and why each one exists
 
-1. **Freeze both engines with `git archive`, including `sunfish_ui/`.**
-   `sunfish.py` imports `sunfish_ui/uci.py`, so an engine run from the working tree
-   picks up whatever is in the tree *at process start*. If both engines share a
-   live checkout — or you edit any imported file mid-match — you are no longer
-   testing the diff you think you are testing. This is not hypothetical: a
-   contaminated run in this repo once measured **-60 ELO (LOS 0.02%)** for a
-   change that was later shown to search bit-identical node counts.
+1. **Freeze every file that either engine reads.** The C recipe above archives
+   `sunfish.py`, `tools/ctwin/`, and its differential-test positions. A Python
+   match must also archive `sunfish_ui/`, which `sunfish.py` imports. If both
+   engines share a live checkout — or you edit a loaded file mid-match — you
+   are no longer testing the intended diff. This is not hypothetical: one
+   contaminated run measured **-60 ELO (LOS 0.02%)** for a change later shown
+   to search bit-identical node counts.
 
 2. **Do nothing else on the machine while the match runs.**
    Sunfish plays on a real clock. Compiles, test suites, or other engine
@@ -55,14 +64,44 @@ fastchess \
    shrink the effective sample. The 99-position fastchess test book is too
    small for 150+ round matches; use a 2000+ position book (e.g. sampled
    from the lichess eval dump: early-middlegame, both queens on, ≥26 men,
-   |eval| ≤ 80cp, deduplicated by the first four FEN fields).
+   |eval| ≤ 80cp, deduplicated by the first four FEN fields). In a
+   multi-engine schedule book size is a per-*pairing* question, and the deal
+   can starve a pairing however large the book is — see rule 16.
 
-4. **Size the match to the effect you are hunting.**
-   ~300 games at fast TC gives roughly ±30 ELO (95%). That detects blunders,
-   not refinements. A few-percent speedup is worth a few ELO and needs
-   thousands of games — or better, use SPRT so the match stops itself:
-   `-sprt elo0=0 elo1=10 alpha=0.05 beta=0.05` (accepts/rejects "at least
-   10 ELO better" with 5% error rates).
+4. **Use fastchess's pentanomial SPRT by default.** Pick the hypotheses before
+   starting the match, then let the evidence choose the game count. With
+   color-swapped pairs, fastchess updates the test from five paired outcomes
+   instead of pretending that the two games in an opening are independent.
+
+   For a change intended to add strength, use:
+
+   `-sprt elo0=0 elo1=10 alpha=0.05 beta=0.05 model=logistic`
+
+   For a simplification allowed to lose `B` Elo, use `elo0=-B elo1=0`. The
+   standing source-size exchange rate is `B = 5 * removed cleaned lines`.
+   `model=logistic` keeps these hypotheses in the conventional Elo units used
+   elsewhere in this document; do not silently compare them with normalized
+   Elo (`model=normalized`).
+
+   Set `-rounds` to a generous maximum, not a desired sample size. The opening
+   book must cover that maximum without cycling. A test stops early when either
+   hypothesis wins; a candidate in the indifference region may consume the
+   whole maximum, which is the correct price of an ambiguous result. Report the
+   SPRT hypotheses, error rates, decision, LLR bounds, game count, and
+   pentanomial counts.
+
+   **SPRT decides; it does not measure.** A stopped test pays for its
+   optionality in width *and* in location: it is likeliest to cross a boundary
+   on a lucky stretch, so its point estimate reads high. Measured here on the
+   classic time-manager pool at 30+1 — the SPRT decider stopped at 288 games
+   reading **+124.50 ± 38.79**; the pre-registered fixed 300 at the same TC
+   read **+102.47 ± 32.43**, 22 Elo lower, 17.7% of the SPRT's own reading,
+   and *tighter* on twelve more games. A second fixed 300 shows the same walk
+   inside one match: **+136.97** at 152 games, **+115.23** at 200, **+115.67**
+   at 246, **+96.19 ± 33.81** at 300. So: **SPRT settles GO/NO-GO, and every
+   magnitude you QUOTE** — in a ledger entry, a PR body, or a goalpost —
+   **comes from a fixed-N run with the N stated.** Harness calibration and
+   league-placement estimates are fixed-N for the same reason.
 
 5. **Time-management changes need validation at MULTIPLE time controls.**
    Fast-TC matches are structurally blind to long-TC time bugs: a change
@@ -73,20 +112,19 @@ fastchess \
    directly at a long TC (drive the engine over a scripted game and assert
    the budget is actually reached mid-game).
 
-6. **Time control: 30+1 minimum for anything decision-grade.**
-   Sunfish is slow; sudden-death blitz makes every game a timeout lottery,
-   and very fast TCs measure interpreter overhead as much as chess (two
-   changes on record flipped sign between fast TC and 60+1). `tc=4+0.04`
-   is for regression tests and lockstep sanity only. Any match whose
-   result feeds a merge/decline decision runs at `tc=30+1` or slower;
-   final confirmation of a winner stays at 60+1. A handful of time losses
-   over hundreds of games is normal; dozens mean the TC is too fast.
+6. **Use C `3+0.1` for node-identical classic search; Python `30+1` otherwise.**
+   The full differential gate proves that the twin searches the same moves,
+   windows, scores, and nodes as Python. Its scaled `3+0.1` clock reaches the
+   same useful depth regime at a fraction of the cost, so it is the primary
+   decision instrument for classic search rules, search parameters, and
+   PST-shaped evaluation changes represented by the twin.
 
-   For search-only changes, the node-identical C twin may screen at `3+0.1`:
-   it applies the same clock formula while making long parameter screens
-   affordable. Treat it as a provisional surrogate for Python `30+1` until
-   the calibration plan below reproduces known Python Elo effects. It cannot
-   validate time-management or Python-throughput changes.
+   Node identity does not make runtimes identical. A Python list-allocation
+   cleanup can change Python NPS while leaving C untouched; time-management,
+   interface, and NNUE changes may not exist in the twin at all. Test those on
+   the shipping engine at `30+1` or slower, with final confirmation at `60+1`.
+   `tc=4+0.04` remains a regression smoke test only. At either decision TC, a
+   few time losses over hundreds of games are normal; dozens invalidate it.
 7. **Adjudicate finished games** (`-draw`/`-resign` flags above) — sunfish has
    no resign logic and weak endgames, so unadjudicated games drag on and waste
    most of the wall time on decided positions.
@@ -196,11 +234,10 @@ fastchess \
    the deep sweep, both tuned-knob sweeps, both `TABLE_SIZE` eviction
    sweeps) before any number from the twin counts. When diffing a knob,
    apply it to **both** sides (`difftest.py --set NAME=V` does this); a
-   knob set on one side measures the knob *plus* an engine mismatch. And
-   twin results are decision-grade only after the known-Elo calibration
-   plan passes (see below and `tools/ctwin/README.md`); before that they
-   are screening signals, subject to rule 12 like every fixed-effort
-   number.
+   knob set on one side measures the knob *plus* an engine mismatch. A
+   candidate that passes this gate may use the timed C-twin match as its
+   decision result. The known-effect calibration in `tools/ctwin/README.md`
+   remains a periodic harness health check, not a per-PR prerequisite.
 
 15. **Long/realistic time controls are expensive; spend them on exactly two
    things.** Timed games at 300+0 or 30+1-at-scale are reserved for (1)
@@ -227,8 +264,8 @@ fastchess \
    overhead cannot certify. Surrogate output is never a verdict on its own,
    and the surrogate may rank nothing until its calibration gate passes
    (`tools/ctwin/README.md`, "Time management on a virtual clock").
-   Search-only changes may screen at C `3+0.1`, subject to the calibration
-   gate below; that compares search quality and throughput, not time managers.
+   Search-only changes use C `3+0.1`; that compares search quality under a
+   scaled clock, not time managers.
    For TM validation itself, order the spend by stress per game-minute:
    sudden-death drain is an *absolute-clock* pathology, so short sudden
    death (60+0, or a 1+0 hammer) stresses the mechanism harder per minute
@@ -238,6 +275,54 @@ fastchess \
    mechanism check, then one 300+0 SPRT confirmation, with the full-field
    round-robin dropped entirely.
 
+16. **Three gates run before an Elo number is read, and each one is a
+   script.** Every gate the harness already had — legality, count, forfeits
+   — passed on the runs below, because none of them asks whether the games
+   differ or whether the stop you asked for is the one that fired.
+
+   - **Coprimality pre-flight**, before any games are spent:
+     `tools/screens/coprime_preflight.sh ROUNDS N_ENGINES` refuses a schedule
+     whose `gcd(rounds, pairings)` is not 1. fastchess deals openings by the
+     *flattened pair index*, so each pairing sees only
+     `rounds / gcd(rounds, pairings)` distinct openings. Six engines (15
+     pairings) at `-rounds 15` is gcd 15: every pairing replayed one opening
+     15 times, and deterministic engines replayed the same game — the
+     tournament **reported 450 games and contained 31 distinct ones**, and a
+     30-game sample printed **± 0.00**. Choose rounds coprime to the pairing
+     count, or run the pairings as separate two-engine matches. **A
+     three-engine gauntlet is a round-robin for this purpose**: 2 pairings, so
+     the gcd is 2 at *any* even round count and the opening pool is halved.
+     That is this campaign's most common shape, and it had been quietly
+     halving its own pools for months.
+
+   - **Opening diversity read off the ARTIFACT**, after:
+     `tools/screens/opening_gate.py GAMES.pgn ROUNDS` measures distinct
+     opening FENs and byte-distinct games per ordered (White, Black) cell.
+     Coprimality is necessary, not sufficient — the hole round-robin passed
+     rule 3's book-size check and still dealt **20 book positions per
+     pairing** across 4000 games. Record both counts beside every game count
+     this document asks you to report. For an artifact already played with
+     replays, `tools/screens/cluster_elo.py` recomputes the interval with the
+     opening as the cluster rather than guessing a variance-inflation factor
+     (measured inflation 1.49-1.76x, where a blanket √6 would have been
+     2.45x).
+
+   - **A pinned clock and a deadline-dormancy gate on every fixed-node
+     match.** `go nodes N` sends no clock, so whatever the engine defaults
+     becomes a hidden wall-clock stop: a 4k entry's loop defaulted a missing
+     clock into a **1.5 s internal deadline**, truncated its searches, and
+     voided a whole confirmation — and even `sunfish_ui/uci.py` arms
+     `UNBOUNDED_MAX_SECONDS` (600 s) on an unclocked search. Fixed nodes is
+     not a pure node stop unless you make it one: pass an explicit huge TC
+     beside the node limit so the deadline cannot bind, then void the match
+     if any move reaches **deadline/10**. Deadline-relative, not a wall-time
+     constant, because the quantity of interest is proximity to the stop. The
+     pin's own size is a measurement: one sized off a 2-game smoke whose worst
+     move was 4.5 s met a 17.5 s move in the match, and the gate voided it at
+     game 53. Under a non-binding deadline the search is deterministic in
+     nodes — the load-immunity that fixed-node screening has always claimed,
+     and only has after the pin.
+
 ## Screening with the C twin (`tools/ctwin/`)
 
 `tools/ctwin/` holds a C transcription of classic `sunfish.py` that searches
@@ -246,38 +331,27 @@ scores, verified byte-for-byte by `difftest.py` against the live
 `sunfish.py` — at ~22x the speed of warm pypy3. It is a lab instrument and
 never ships.
 
-**Use it for:** any *search-quality* question at classic semantics where
-games are the bottleneck — fixed-node screening matches, hyperparameter
-grids and SPSA over the exposed knobs (`QS`, `QS_A`, `EVAL_ROUGHNESS`,
-`TABLE_SIZE`, the null-move/IID/futility family, the tp_move
-replacement-policy battery), and PST-shaped eval variants injected via
-`gen_tables.py` without recompiling. A fixed-node game costs ~1/22nd of
-the pypy equivalent, so grids that were unaffordable become overnight
-jobs.
+**Use it for:** classic search-quality decisions, fixed-node screens,
+hyperparameter tuning, and PST-shaped evaluation variants injected through
+`gen_tables.py`. A fixed-node game costs ~1/22nd of the PyPy equivalent, and
+a timed `3+0.1` SPRT is the default decision match for a node-identical diff.
 
-**Timed questions go through the virtual clock, not the twin directly.**
-The clock-budgeting branch of classic's `main()` is deliberately not cloned
-and the twin itself only plays clock-free games (`go nodes N`); `vmatch.py`
-wraps it in a virtual clock so that time management is *rankable* here —
-see rule 15 and the README's "Time management on a virtual clock". Ranking
-is not deciding: a real-clock match still validates the candidate.
+**Search changes use the twin's clock; time-manager changes use the virtual
+clock.** The twin accepts ordinary UCI clocks with a fixed search-only budget.
+`vmatch.py` instead wraps `go nodes N` in the shipping manager's virtual clock
+so time-management policies can be ranked quickly. A real-engine match still
+validates the winning time manager; see rule 15.
 
-**Do not use it for:** NNUE-eval questions — it clones classic's
-search over table-file evaluations, so anything the 4k NNUE work changes
-outside PST-shaped eval is invisible to it. Rule 12 also applies with full
-force: fixed-node results hold search effort constant, so they screen;
-only a wall-clock match on the real engine decides.
+**Do not use it for:** Python-throughput, shipping time-management, interface,
+or NNUE-eval questions. Those effects are absent or differently priced in C.
+Rule 12 still applies to *fixed-node* twin results; the timed `3+0.1` SPRT is
+what makes the search-only decision.
 
-The twin also accepts UCI clocks for provisional `3+0.1` search screens. That
-fixed budget policy is not a model of the shipping time manager; use `vmatch.py`
-to compare time policies and a real-clock match to validate the winner.
-
-**Before believing twin match numbers**, the calibration plan staged in
-[`tools/ctwin/README.md`](../tools/ctwin/README.md) (section "Calibration
-plan") must have passed: a sanity match of ctwin vs pypy classic at fixed
-nodes scoring ~50%, plus reproduction of two knob-expressible pairs whose
-Elo gap is already known from real matches. Until then, treat twin output
-as directional.
+The twin accepts UCI clocks for the `3+0.1` search match. That fixed budget is
+not a model of the shipping time manager; use `vmatch.py` to rank time policies
+and a real-engine match to validate the winner. Periodically rerun the
+calibration plan in [`tools/ctwin/README.md`](../tools/ctwin/README.md) to catch
+harness drift.
 
 ### Joint search-parameter tuning (2026-08)
 

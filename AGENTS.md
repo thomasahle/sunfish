@@ -56,9 +56,9 @@ every design argument here is settled by asking which one you are touching.
 
 - **Measurement decides.** Fixed-depth floors are a regression net, not
   evidence of strength; playing strength comes from games. See
-  `docs/TESTING.md` for the tournament methodology — 30+1 minimum for a
-  decision, a book that covers the round count, and verify the game count
-  before believing an Elo number.
+  `docs/TESTING.md` for the tournament methodology — C 3+0.1 for a
+  node-identical classic change, Python 30+1 otherwise, and a book that covers
+  the round count.
 - **Never hide an error.** No `except: pass`, no silent fallback, no degraded
   mode that keeps running quietly. An engine that cannot find its interface
   says so and stops.
