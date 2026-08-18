@@ -21779,3 +21779,92 @@ The reason to run it anyway is that every prior arm changed *how the same
 king-blind function was fitted*, and these two change *what function can be
 represented* — which is the one thing the closure explicitly said the family
 could not do.
+
+## AMENDMENT to the portfolio registration — a FOURTH cost of width, and the state of the queue (2026-08-19)
+
+### 1. Width has a RESOLUTION price, and the memo above priced only three of its four costs
+
+The registration priced width in bytes (160 B/lane on the diagonal, far less
+through the factored carrier), in speed (13.3 Elo from N=5 to N=32, measured
+end to end), and in data. It missed a fourth, and the missing one is the sort
+this campaign has been burned by: **invisible in training, binding only at
+export.** The `pb2` smoke's own field-budget certificate printed it
+unprompted, at r=4 / N=32:
+
+> read-out lane-sum fold (|lane| <= 65534) — a legal gain vector exists at
+> this width: value **63**, limit 1, margin −62.
+> *"BINDING ON THE EXPORTER, not on training: sum_k G_k = 32·sum_k g_k must be
+> <= 65534 or a saturating position wraps the fold and the eval is garbage.
+> At N=32 the MEAN gain may not exceed 63 (worst case at g=89 for every lane
+> would be 91,136). This is a RESOLUTION cost of width that is invisible in
+> training — the trainer's forward has no fold — and it is why width, though
+> byte-cheap and speed-cheap, is not free: the per-lane cp ceiling falls as
+> 1/N."*
+
+So the honest width ladder is: mean gain ≤ 89 at N ≤ 23, **≤ 63 at N=32**,
+**≤ 31 at N=64**, ≤ 15 at N=128. `v_k` is the cp value of a saturated lane and
+the gain is its quantisation grid, so **doubling the width halves the cp
+resolution each lane can express.** The trained r=8/N=32 arm sits at caps sum
+34,304 of 65,534, i.e. mean gain ~33 — comfortably inside, but it did not get
+there by choosing to.
+
+Three consequences, all registered rather than argued:
+
+1. **Every arm in this portfolio reports its cap sum against 65,534 beside its
+   bias-rail counts.** It joins the mandatory export report; a run that only
+   fits by accident should say so.
+2. **`13_rl_f4n64` and `14_rl_pb2f4n64` are the arms where this bites**, and
+   that is now the stated reason to watch them, over and above bytes. If N=64
+   lands with a cap sum near the fold, the width axis has a ceiling that no
+   amount of sparsity buys back.
+3. It supplies a *mechanism* for something the closed axis observed and could
+   not explain: statistics that look better at width converting worse in play.
+   A net whose lanes are individually coarser can improve a mean-squared val
+   while getting more positions wrong at the margins the search actually acts
+   on. **That is a hypothesis, not a result** — it is exactly the shape of
+   claim this ledger has withdrawn before — and it is written down only so it
+   can be tested rather than rediscovered.
+
+### 2. The queue is armed and the runner is PAUSED, by another lane's forfeits
+
+Six arms sit in `queue/10_rl_f4n32 … 15_rl_pb2f4n32_l1hi`, ahead of the filler
+in sort order. **None of them has run**, because the runner's forfeit tripwire
+fired on the filler job that preceded them:
+
+> TRIPWIRE: time forfeits rose 69 → 71 while `99_tail215.yaml` trained.
+> Training is SIGSTOPped (pid 3040613).
+
+Attribution, by file mtime and content rather than by assumption: both new
+forfeits are in `gauntlet-20260818/hcal.pgn`, a hardware-calibration gauntlet
+whose `hcal.sh` runs `tc=30+1`, `tc=2+0.02` **and `tc=0.5+0.005`** — at a
+half-second base, forfeits are close to inherent, and that lane very likely
+counts them as its instrument. The owner tuner campaigns
+(`recovery-1000-20260818`, three fleets at 3+0.1) were censused by parentage
+before and after and are untouched.
+
+**`PAUSED_REPORT.txt` has NOT been deleted.** Resuming is an operator decision
+by the runner's own design; the pause is protecting a live 0.5+0.005
+calibration belonging to someone else; and "it is blocking my arms" is the
+worst available reason to clear another lane's tripwire. Recorded in
+`COORDINATION.md` with the attribution so whoever owns that call can make it
+with the facts.
+
+One design note, deliberately not acted on: the tripwire globs every pgn under
+`~/sunfish-bench`, so it counts forfeits from calibration runs where forfeits
+ARE the measurement, and from lanes that registered their forfeits as data
+(`tmsimple-20260818/sd60.pgn`, "3 time forfeits … data, not a void"). With any
+fast calibration live, the always-training rule cannot hold. A per-glob
+allowlist, or ignoring pgns whose own tc is under ~1 s, would keep the guard's
+intent without freezing the queue — but that is the training lane's rule to
+change, so it is a note and not a patch.
+
+### 3. What is NOT yet armed, stated so the next lane does not assume it is
+
+The **screen cannot launch**, and the two blockers named in the registration
+are both still open: `export.py`'s factored path writes no payload (the packed
+emitter is stage 2 and lives only on branch `factor/compression`, with no
+bucket support), and the bucket machinery's byte price — the one COMPOSED
+number in the price table — has not been through `pack.sh` on a built stub.
+Until both close, the six arms produce val numbers and export reports and
+**nothing that can play a game**, which under this lane's own rules means they
+produce nothing that can promote anything.
