@@ -29,20 +29,21 @@ producer yields bare moves in decreasing intrinsic value (floored at depth
 zero, as `producerMoves` states), and the consumer caps each one at its
 single scoring site.  When the cap is below the window
 it folds the cap in place of the child search (`cappedMove_failLow`) and
-moves on.  `shippedCap_iff_tail` is what makes that faithful - the shipped
-test `cap < gamma` holds on exactly the moves the threshold would have cut,
-for every window below the mate band.  The per-move folds report the same
-number the counted form aggregated: the cap is monotone in the intrinsic
-value, so the maximum of the tail's caps is the cap of the largest move in
-the tail (`shallowMoveCap_max`, `foldMax_shallowMoveCap`, specialised as
-`lazyMoveTail_maxCap`), and folding every member reaches that maximum
-(`WindowReport.max`, `lazyMoveTail_report`).  The threshold changes with the
-window, but the value being reported does not; the last section proves the
+STOPS the consumer there.  `shippedCap_iff_tail` is what makes that faithful
+- the shipped test `cap < gamma` holds on exactly the moves the threshold
+would have cut, for every window below the mate band.  The one report is the
+whole tail's: the cap is monotone in the intrinsic value, so the first
+settled move of the decreasing sort carries the maximum cap of the tail
+(`shallowMoveCap_max`, `foldMax_shallowMoveCap`, specialised as
+`lazyMoveTail_maxCap`), which is exactly the aggregate report
+`lazyMoveTail_report` validates.  Stopping there is sound because the
 partition is an evaluation ORDER, never a change of value
 (`lazyMove_partition`, `lazyMove_partition_prefixFirst`,
 `lazyMove_partition_emptyTail`).  The killer is yielded bare too, early and
-ungated; the consumer meets it a second time inside the sorted stream, and
-`max` absorbs the duplicate report.
+out of sorted order, so its cap bounds nothing that follows and the stop
+must not fire on it: the consumer knows the early occurrence by object
+identity (`move is not killer` - `gen_moves` rebuilds the sorted occurrence
+fresh), folds its cap without stopping, and `max` absorbs the duplicate.
 -/
 
 import Sunfish.CappedNull

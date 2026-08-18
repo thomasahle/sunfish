@@ -628,7 +628,7 @@ has: the shallow static cap
     margin = max(depth - 1, 0) * QS_A
     elif (cap := MATE_UPPER if depth > 3 or val >= MATE_LOWER
             else pos.score + val + margin) < gamma:
-        best = max(best, cap); continue
+        move, score, capped = None, cap, move is not killer
     else: score = MATE_UPPER if val >= MATE_LOWER else min(cap,
         -self.bound(pos.move(move), 1 - gamma, ...))
 

@@ -56,14 +56,17 @@ own named condition `NullGuardBlocksAtCaptures` below.
 Audit note (exactness): sunfish yields the killer bare and ungated; the
 consumer applies to it the same admission floor the sorted stream is
 built over, and the same cap as any sorted move, at the one scoring
-site.  That treatment is not modeled
-here; it CANNOT affect `boundKill_spec`, because the load-bearing killer
-is a king capture with `val ≥ MATE_LOWER = 47923`, which the consumer
-resolves to the exact `MATE_UPPER` before any floor or cap can touch it.
-A quiet killer the consumer settles (cap below the window) only loses a
-child search the same cap denies it in the sorted loop.  Exactness of a
-full-engine model would require modeling it; this file's invariant does
-not.
+site.  The consumer's settled STOP - sound only on the sorted stream -
+must not fire on the out-of-order killer, and the code tells the two
+apart by object identity: the early candidate IS the `tp_move` object,
+the sorted stream re-yields an equal tuple built fresh by `gen_moves`.
+None of that is modeled here, and it CANNOT affect `boundKill_spec`:
+the load-bearing killer is a king capture with `val ≥ MATE_LOWER =
+47923`, which the consumer resolves to the exact `MATE_UPPER` before
+any floor, cap or stop can touch it.  A quiet killer the consumer
+settles (cap below the window) only loses a child search the same cap
+denies it in the sorted loop.  Exactness of a full-engine model would
+require modeling it; this file's invariant does not.
 -/
 
 import Sunfish.Stalemate
