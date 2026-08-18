@@ -123,6 +123,13 @@ if TM_MANAGER not in ("legacy", "pool"):
 # forensics reproduce the same figure from the other side. A knob because it
 # is a property of the deployment, not of the engine.
 MOVE_OVERHEAD = float(os.environ.get("TM_OVERHEAD_MS", "200")) / 1000
+# ...and it is only the PRIOR. Between the two gos that bracket one of our
+# moves the server charged (T_i + I) - T_{i+1} while the search spent
+# (bestmove out) - (go in); the difference is lag nobody can see from inside,
+# and the pool path in run() averages it into the O it budgets with. SENT is
+# the half of that the main thread cannot time itself: the search runs in the
+# executor, so it stamps the instant its own bestmove leaves.
+SENT = [0.0]
 # M when the GUI does not send movestogo. Sudden death has no horizon, so one
 # has to be assumed; 40 is the classic choice and the one the /40 sudden-death
 # evidence was gathered under.
@@ -511,6 +518,9 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
         print("bestmove", played, "ponder", my_pv[1])
     else:
         print("bestmove", played or (my_pv[0] if my_pv else "(none)"))
+    # Here, not in a done-callback: a Future wakes its waiters BEFORE it
+    # invokes callbacks, so the main thread can read the next go first.
+    SENT[0] = time.perf_counter()
 
 
 def mate_loop(
@@ -559,6 +569,7 @@ def mate_loop(
     move = searcher.tp_move.get(hist[-1])
     move_str = render_move(move, white_pov=len(hist) % 2 == 1)
     print("bestmove", move_str)
+    SENT[0] = time.perf_counter()                    # as in go_loop
 
 
 def perft(pos, depth, debug=False):
@@ -599,6 +610,9 @@ def run(sunfish_module, startpos):
     # tracks it alongside hist. Reporting only: it never reaches the search.
     hclock = 0
     searcher = sunfish.Searcher()
+    # The measured per-move overhead, and the go whose move is being timed:
+    # (ply, clock + increment, when it arrived). Both per game.
+    lag = prev = None
 
     with ThreadPoolExecutor(max_workers=1) as executor:
         # Noop future to get started
@@ -689,6 +703,7 @@ def run(sunfish_module, startpos):
                 # cross-game entries actually cost strength.
                 elif args[0] == "ucinewgame":
                     searcher = sunfish.Searcher()
+                    lag = prev = None
 
                 elif args[:2] == ["position", "startpos"]:
                     hist, hclock = [startpos], 0
@@ -749,7 +764,41 @@ def run(sunfish_module, startpos):
                             # SECONDS in, SECONDS out. think is the WALL (it
                             # arms the deadline below, exactly as before);
                             # soft_think is where new iterations stop.
-                            soft_think, think = pool_budget(wtime, winc, movestogo, ply=len(hist))
+                            #
+                            # ADAPTIVE O: what the server charged for our last
+                            # move, less what the search spent of it. Only
+                            # across gos exactly two plies apart, which is
+                            # what makes them OUR consecutive moves in ONE
+                            # game -- a new game, a takeback, a re-sent
+                            # position and lichess-bot's `go movetime` opener
+                            # all fail that. The sample clamp bounds a clock
+                            # that moved for some other reason (berserk, an
+                            # arbiter's gift, the 1ms wtime floor). lag stays
+                            # None until something is measured, and None is
+                            # pool_budget's own default: the constant.
+                            #
+                            # UPWARD ONLY, and that is the whole safety
+                            # argument: 200ms stays a FLOOR under the reserve,
+                            # so a measurement can add to it and never take it
+                            # away. A venue charging less than the constant
+                            # was screened and buys nothing (12 of 12 cells
+                            # contain zero at 40x less lag), while lifting an
+                            # engine off its reserve at a small clock is how
+                            # the venue arm lost 110 of 120 games at 3+0.1.
+                            if "ponder" in opts:
+                                # python-chess PREDICTS the clock for a ponder
+                                # go and sends none at all on a ponderhit, so
+                                # nothing can be measured against one.
+                                prev = None
+                            else:
+                                if prev and prev[0] + 2 == len(hist):
+                                    sample = min(2.0, max(0.0, prev[1] - wtime - (SENT[0] - prev[2])))
+                                    lag = max(MOVE_OVERHEAD, 0.7 * (lag or MOVE_OVERHEAD) + 0.3 * sample)
+                                    print(f"info string overhead {1000 * lag:.0f}ms"
+                                          f" (sample {1000 * sample:.0f}ms)")
+                                prev = (len(hist), wtime + winc, time.perf_counter())
+                            soft_think, think = pool_budget(wtime, winc, movestogo,
+                                                            ply=len(hist), overhead=lag)
                         elif movestogo:
                             # an explicit movestogo is a real constraint
                             think = min(wtime / movestogo + winc, wtime / 2 - 1)
