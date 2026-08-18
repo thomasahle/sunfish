@@ -39,8 +39,8 @@ in the git history of this file.
   Every division that can see a negative operand (`gamma = (lower +
   upper + 1) // 2` with mate-band bounds, `render`) goes through
   `pyfloordiv`/`pymod`.
-- **Sort order.** `sorted(((v, m) …), reverse=True)` orders full
-  `(val, Move)` tuples; keys are unique, so the order is total —
+- **Sort order.** Python sorts moves by descending `(val, Move)` (today
+  spelled `key=lambda m: (pos.value(m), m)`); keys are unique, so the order is total —
   descending `(val, i, j, prom)` with `prom` compared as a byte
   (`'\0' < 'B' < 'N' < 'Q' < 'R'`). No stability question remains, and
   `qsort`'s instability is harmless.
@@ -52,9 +52,9 @@ in the git history of this file.
 - **Generator laziness.** `bound()`'s move phases run in Python's exact
   order: the killer is read before null search, capture substitution scans
   the board directly, king captures resolve before recursion, the sorted
-  list is never built if the killer cuts, and the sub-window tail's single
-  maximum cap is emitted AFTER the sorted prefix, so a prefix cutoff skips
-  it on both sides.
+  list is never built if the killer cuts, and a sub-window cap answers for
+  its move (and, in the twin's counted form, for the whole sorted tail at
+  once) without a child search, so a prefix cutoff skips it on both sides.
 - **Node counting.** `nodes` increments at exactly one site: `bound()`
   entry, including driver probes and TT-hit returns.
 - **Module state.** `pst["K"]` swaps to the endgame table per search and

@@ -798,8 +798,8 @@ The three store species (`KillStore`) are covered:
   full `MATE_UPPER`);
 * eviction stores nothing.
 
-The killer's own yield (`yield killer, -self.bound(pos.move(killer), 1
-- gamma, depth - 1)`) is a searched real yield of an admitted move --
+The killer's own early yield (the bare `yield killer`, scored and
+searched by the consumer) is a searched real yield of an admitted move --
 move ordering, which the model does not order, so it is one of the fold
 members covered by the first bullet. -/
 

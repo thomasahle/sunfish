@@ -624,10 +624,11 @@ Part I's sharpened `3k` -- does NOT model one mechanism the shipped search
 has: the shallow static cap
 
     margin = max(depth - 1, 0) * QS_A
-    val_lower = max(base,
-        min(MATE_LOWER, gamma - pos.score - margin)) if depth <= 3 else base
-    yield None, max(cap(v) for base <= v < val_lower)
-    score = min(cap(val), -self.bound(pos.move(move), 1 - gamma, move_depth))
+    elif (cap := MATE_UPPER if depth > 3 or val >= MATE_LOWER
+            else min(MATE_LOWER - 1, pos.score + val + margin)) < gamma:
+        best = max(best, cap); continue
+    else: score = MATE_UPPER if val >= MATE_LOWER else min(cap,
+        -self.bound(pos.move(move), 1 - gamma, ...))
 
 At every nominal depth `≤ 3` EVERY move that is not a king capture reports
 at most `shallowMoveCap`, which `shallowMoveCap_below_positiveMate`
