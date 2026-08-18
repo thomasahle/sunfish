@@ -54,6 +54,8 @@ field plays.
 | STRO4K-1t | OK | hang | hang | hang | hang | **FAIL** |
 | molly | OK | **dies** | **dies** | **dies** | **dies** | OK |
 | pygone | OK | hang | hang | hang | hang | **FAIL** |
+| sungorus 1.4 | OK | hang | OK | hang | OK | **dies** |
+| bbc11 | OK | OK | OK | hang | OK | OK |
 | classic / entry | OK | OK | OK | OK | OK | OK |
 | Stockfish 15 | OK | OK | **OK** | **OK** | OK | OK |
 
@@ -108,15 +110,70 @@ Bayeselo scale as the 4k engines** (`tcec-chess.com/bayeselo.txt`), having run
 it against them in the S26 *"Old vs 4K Top Bonus"* event. So the rungs are not
 an invention of ours — they are the 4k field's own yardstick.
 
-| name | source | pin | licence | configuration |
-|---|---|---|---|---|
-| **Stockfish 15** | github.com/official-stockfish/Stockfish | tag `sf_15`, `e6e324eb28fd49c1fc44b3b65784f85a773ec61c` | **GPL-3.0** | `make build ARCH=x86-64-avx2`, `Threads=1`, fixed `go nodes N` |
+| name | source | pin | licence | build | sha256 |
+|---|---|---|---|---|---|
+| **Stockfish 15** | github.com/official-stockfish/Stockfish | tag `sf_15`, `e6e324eb28fd49c1fc44b3b65784f85a773ec61c` | **GPL-3.0** | `make build ARCH=x86-64-avx2` | `8d98fae296d51ae94b66fef2ab96d2306a248b0dfd84073506fe3f202d56e344` |
 
-Rungs used: `sf1k` (1 000 nodes), `sf3k` (3 000), `sf10k` (10 000).
+Rungs, all at `Threads=1 Hash=16`, driven by fastchess `nodes=N tc=6000+0`
+(the large clock is a wall-clock safety net, never the budget):
 
-Two properties make this the best instrument in the field: it is **exactly
-tunable** to any band, and being node-limited it is **hardware-independent and
-reproducible** — unlike every clock-driven opponent here.
+| rung | per-move nodes | realised median / p90 | Blass SF16.1 reference |
+|---|---|---|---|
+| `sf512` | 512 | **512 / 513** | ≈**1700** |
+| `sf1024` | 1024 | (measured in run) | ≈**2050** |
+| `sf2048` | 2048 | **2049 / 2051** | ≈**2292** |
+
+**Fixed `go nodes`, NOT the `nodestime` option — and the reason is measured.**
+`nodestime` was tried first, because it keeps Stockfish's own time manager and
+was the recommendation this lane received. It does not survive contact with the
+harness: `nodestime` makes the *engine* account elapsed time in nodes, but the
+*harness* still enforces the wall clock, and a nominal clock small enough to
+imply a ~512-node budget is also small enough for per-move process overhead to
+drain it. Realised median spend collapsed to **20 and 43 nodes a move**
+(`sfcheck.pgn`) against a single-position probe's 530 and 1323. Fixed `go
+nodes` holds the budget exactly, and is additionally **the quantity the
+published anchors are measured on** — Blass's SF16.1 fixed-node league and
+Sopel97's slope are both per-move node limits.
+
+Version note to keep attached: Blass's absolute anchors are **SF16.1**; we run
+**SF15**, which is weaker per node, so those figures **overstate** our rungs by
+an unmeasured amount. SF15 is chosen deliberately anyway — it is the version
+TCEC's own published node ladder uses, so the rungs cross-link to the 4k
+field's yardstick as well as to Blass's.
+
+Three properties make this the best instrument in the field: it is **exactly
+tunable** to any band; being node-limited it is **hardware- and load-
+independent**, unlike every clock-driven opponent here; and it is
+**reproducible in five years**, because a node budget is not a wall clock.
+
+⚠ **Expect a spiky profile.** Node-limited modern Stockfish is tactically
+*above* its nominal rating and positionally *below* it. That is why real rated
+engines sit beside it in the field rather than instead of it: if the entry's
+shape is unusually soft or hard against search-limited play, it shows up as the
+SF rungs disagreeing with the CCRL anchors.
+
+### 2c-bis. CCRL-listed anchors, played at FULL strength
+
+Every published absolute scale is opponent-pool dependent — the Stockfish
+developers' own skill-level anchoring admits **±100 against CCRL** and
+documents a **33% Elo-scale compression** in a closed round-robin, and two
+careful large-N studies of the same nominal setting disagree by **~500**. So
+the ladder is anchored *locally*, with real rated engines playing unhandicapped.
+
+| engine | source | pin | licence | build | CCRL Blitz |
+|---|---|---|---|---|---|
+| **Sungorus 1.4** | github.com/rofl0r/sungorus | `0af8dd0b` | none stated | `gcc -O3 -DHAVE_POPCNT -march=native -msse2 -flto *.c` | **2241 ± 16** (1280 games) |
+| **BBC 1.1** | github.com/maksimKorzh/bbc | `75544dff`, `src/old_versions/bbc_1.1.c` | **GPL-3.0** | `gcc -O3 -march=native bbc_1.1.c -lm` | **2019 ± 17** (1243 games) |
+
+Dialect: **sungorus** answers the clock and `go depth`, hangs on `movetime` and
+`nodes`, and **dies on `position fen`** — harmless here because the book is
+moves-based, but recorded. **bbc11** answers clock, `movetime`, `depth` and FEN,
+and hangs on `nodes`.
+
+⚠ **TC caveat on both numbers.** CCRL Blitz is 2′+1″; we play **30+1**, about
+two doublings faster. Every CCRL figure quoted here therefore overstates what
+that engine will show in this venue — by a similar amount across engines, but
+not identically.
 
 ### 2d. Python engines outside the 4k class
 
@@ -237,3 +294,25 @@ from real TCEC 4k games, moves-based (see §1.2).
 Match discipline: concurrency 8, `nice 5`, `-recover` always, census the box by
 **parentage** before launching, yield to the owner's work, and never touch a
 process this lane did not start.
+
+---
+
+## 6. Gate results — 15 of 15 PASS
+
+`legality_gate_clock.py`, 100 positions per engine (40 FORCED: in check with
+≤2 legal replies), one fresh process per position, **0 no-move and 0 illegal**
+for every engine in the table:
+
+entry · classic · pygone · pygone2-11b142 · molly · 4ku · ice4 · c4ke · 4k.c ·
+M4sseur · STRO4K-1t · sungorus · bbc11 · stockfish15 · d-house
+
+## 7. Known defects in field members — recorded, not hidden
+
+- **pygone2-11b142 cannot manage a 30+1 clock.** It lost **14 of its first 14
+  decided games on time** in the HCAL screen, at the full clock, unhandicapped.
+  Its row measures a time manager, not a strength, and it is excluded from the
+  round-robin. pygone HEAD (`cbaebee`) has forfeited nothing.
+- **sungorus 1.4 exits on `position fen`.** Only reachable via an EPD book,
+  which this field never uses.
+- **molly dies on `go movetime`, `go depth`, `go nodes` and `stop`.** Drive it
+  with the clock form and nothing else.
