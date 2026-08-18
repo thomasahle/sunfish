@@ -64,7 +64,9 @@ run those engines at `30+1` instead.
    shrink the effective sample. The 99-position fastchess test book is too
    small for 150+ round matches; use a 2000+ position book (e.g. sampled
    from the lichess eval dump: early-middlegame, both queens on, ≥26 men,
-   |eval| ≤ 80cp, deduplicated by the first four FEN fields).
+   |eval| ≤ 80cp, deduplicated by the first four FEN fields). In a
+   multi-engine schedule book size is a per-*pairing* question, and the deal
+   can starve a pairing however large the book is — see rule 16.
 
 4. **Use fastchess's pentanomial SPRT by default.** Pick the hypotheses before
    starting the match, then let the evidence choose the game count. With
@@ -84,11 +86,22 @@ run those engines at `30+1` instead.
    Set `-rounds` to a generous maximum, not a desired sample size. The opening
    book must cover that maximum without cycling. A test stops early when either
    hypothesis wins; a candidate in the indifference region may consume the
-   whole maximum, which is the correct price of an ambiguous result. Fixed-game
-   matches are reserved for harness calibration, league-placement estimates,
-   or cases where the full confidence interval itself is the requested result.
-   Report the SPRT hypotheses, error rates, decision, LLR bounds, game count,
-   and pentanomial counts.
+   whole maximum, which is the correct price of an ambiguous result. Report the
+   SPRT hypotheses, error rates, decision, LLR bounds, game count, and
+   pentanomial counts.
+
+   **SPRT decides; it does not measure.** A stopped test pays for its
+   optionality in width *and* in location: it is likeliest to cross a boundary
+   on a lucky stretch, so its point estimate reads high. Measured here on the
+   classic time-manager pool at 30+1 — the SPRT decider stopped at 288 games
+   reading **+124.50 ± 38.79**; the pre-registered fixed 300 at the same TC
+   read **+102.47 ± 32.43**, 22 Elo lower, 17.7% of the SPRT's own reading,
+   and *tighter* on twelve more games. A second fixed 300 shows the same walk
+   inside one match: **+136.97** at 152 games, **+115.23** at 200, **+115.67**
+   at 246, **+96.19 ± 33.81** at 300. So: **SPRT settles GO/NO-GO, and every
+   magnitude you QUOTE** — in a ledger entry, a PR body, or a goalpost —
+   **comes from a fixed-N run with the N stated.** Harness calibration and
+   league-placement estimates are fixed-N for the same reason.
 
 5. **Time-management changes need validation at MULTIPLE time controls.**
    Fast-TC matches are structurally blind to long-TC time bugs: a change
@@ -261,6 +274,54 @@ run those engines at `30+1` instead.
    passed. Worked example: the restructured TM-fix plan — a 60+0 SPRT
    mechanism check, then one 300+0 SPRT confirmation, with the full-field
    round-robin dropped entirely.
+
+16. **Three gates run before an Elo number is read, and each one is a
+   script.** Every gate the harness already had — legality, count, forfeits
+   — passed on the runs below, because none of them asks whether the games
+   differ or whether the stop you asked for is the one that fired.
+
+   - **Coprimality pre-flight**, before any games are spent:
+     `tools/screens/coprime_preflight.sh ROUNDS N_ENGINES` refuses a schedule
+     whose `gcd(rounds, pairings)` is not 1. fastchess deals openings by the
+     *flattened pair index*, so each pairing sees only
+     `rounds / gcd(rounds, pairings)` distinct openings. Six engines (15
+     pairings) at `-rounds 15` is gcd 15: every pairing replayed one opening
+     15 times, and deterministic engines replayed the same game — the
+     tournament **reported 450 games and contained 31 distinct ones**, and a
+     30-game sample printed **± 0.00**. Choose rounds coprime to the pairing
+     count, or run the pairings as separate two-engine matches. **A
+     three-engine gauntlet is a round-robin for this purpose**: 2 pairings, so
+     the gcd is 2 at *any* even round count and the opening pool is halved.
+     That is this campaign's most common shape, and it had been quietly
+     halving its own pools for months.
+
+   - **Opening diversity read off the ARTIFACT**, after:
+     `tools/screens/opening_gate.py GAMES.pgn ROUNDS` measures distinct
+     opening FENs and byte-distinct games per ordered (White, Black) cell.
+     Coprimality is necessary, not sufficient — the hole round-robin passed
+     rule 3's book-size check and still dealt **20 book positions per
+     pairing** across 4000 games. Record both counts beside every game count
+     this document asks you to report. For an artifact already played with
+     replays, `tools/screens/cluster_elo.py` recomputes the interval with the
+     opening as the cluster rather than guessing a variance-inflation factor
+     (measured inflation 1.49-1.76x, where a blanket √6 would have been
+     2.45x).
+
+   - **A pinned clock and a deadline-dormancy gate on every fixed-node
+     match.** `go nodes N` sends no clock, so whatever the engine defaults
+     becomes a hidden wall-clock stop: a 4k entry's loop defaulted a missing
+     clock into a **1.5 s internal deadline**, truncated its searches, and
+     voided a whole confirmation — and even `sunfish_ui/uci.py` arms
+     `UNBOUNDED_MAX_SECONDS` (600 s) on an unclocked search. Fixed nodes is
+     not a pure node stop unless you make it one: pass an explicit huge TC
+     beside the node limit so the deadline cannot bind, then void the match
+     if any move reaches **deadline/10**. Deadline-relative, not a wall-time
+     constant, because the quantity of interest is proximity to the stop. The
+     pin's own size is a measurement: one sized off a 2-game smoke whose worst
+     move was 4.5 s met a 17.5 s move in the match, and the gate voided it at
+     game 53. Under a non-binding deadline the search is deterministic in
+     nodes — the load-immunity that fixed-node screening has always claimed,
+     and only has after the pin.
 
 ## Screening with the C twin (`tools/ctwin/`)
 
