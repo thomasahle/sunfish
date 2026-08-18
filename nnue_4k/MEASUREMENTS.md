@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-18 | **AMENDMENT 1 to METER 4: the registered EPD book is STRUCTURALLY UNPLAYABLE by a packed arm — cell VOID at 427 games, and the fix removes an axis** | The primary cell stopped itself: **427 of 427 games `illegal move`**, both arms playing **`g1f3`** (White's move from the *initial* position) into a book FEN. Cause is the packed build, not a bug: `sunfish.py`'s builtin loop has only `position startpos`, and the `position fen` branch lives in `sunfish_ui/uci.py` inside the `minifier-hide` block that `pack.sh` **deletes**. Probed both arms after the stop — `position fen …` → **`g1f3`** from each; `position startpos moves g1f3` → `b8c6` (classic) / `d7d5` (entry), correct. **The ENTRY ignores FEN too**, so this is not dodgeable by picking a different classic form: **no EPD book can ever be played against the 4k artifact**, and a book for this pair must be **PGN** (replayed as `position startpos moves …`). That is why meters 1–3 used `book3k.pgn`; the reason was never recorded, and now is. **Correction**: primary book → `book3k.pgn`, fresh srands 20260882/20260883 (20260880/1 burned), coprimality re-run and passing; everything else in `01afb5e` stands. **The fix improves the design** — it deletes the book axis, so **bridge − meter 3 = classic (#217) alone**, **primary − meter 3 = classic + TC**, and **primary − bridge = a clean TC slope**. Two structural gates added before relaunch: the runner now **refuses an EPD book** outright, and the boot smoke sends the **book's actual command form** (`position startpos moves g1f3`, reply must not be `g1f3`) — the check that would have caught this in under a second instead of 427 games. **Zero illegal = STOP worked exactly as registered.** No branch fires; still a meter, not a promotion |
 | 2026-08-18 | **PRE-REGISTRATION: METER 4, the post-#217 re-anchor — and the meter states WHICH CLASSIC it means: the PACKED builtin-budget loop** | The goalpost moved: master merged **#217** (builtin clock → per-move budget with a **five-fold wall**) plus #231/#235/#239 housekeeping, so meter 3's **+200.24 ± 38.35** now reads against a **pre-#217** classic (`f4f06d4`) that no longer exists. **Form decided and registered**: a checkout of `sunfish.py` delegates to `sunfish_ui/uci.py` (`TM_MANAGER=pool`), the PACKED artifact runs the builtin #217 loop — the meter means the **packed** classic, because the 4k-league framing demands an opponent of the same kind, because every prior timed meter used it, and because the two forms measure **level** head to head (`tmbudget` 60+0 N=200: **+3.47 ± 33.81**). Arms sha-pinned: entry **3410 B** `bf30904dfdf5…` (`d0a6e60`, the DEPLOYED artifact — **reused, not rebuilt**; provenance closed by a repack reproducing it bit-for-bit) vs classic **3361 B** `d177d79a66a1…` (`ab3b490`), **same packer both arms**; the same classic source under master's older packer is `d601382295…` = the box's already-played `budget.packed`, confirming `ab3b490` is the #217 engine. **TWO CELLS, because three axes move at once**: PRIMARY **N=600 at 30+1** on `openings_1991_valid.epd` (the house TC, the new anchor) and BRIDGE **N=300 at 60+1** on `book3k.pgn` — **meter 3's protocol verbatim with only the classic arm changed**, so that **BRIDGE − 200.24 is the pure #217 goalpost move** and the delta is not a three-axis mush. Gates all mandatory and read before any Elo: coprimality preflight (both cells gcd 1), arm-identity sha, boot smoke, ≥24 free cores (HOLD, never relocate), **zero illegal = STOP**, **zero forfeit = VOID**, count, `opening_gate.py`, `cluster_elo.py` inflation, PID liveness; dormancy **N/A** at a real clock, clocks recorded instead. Registered band for the primary **[+120, +200]**, central ≈ +165 — classic should be stronger, so the gap should narrow — and the band is a prediction under test, not a target. **METER, NOT PROMOTION: no branch fires on any number here** |
 | 2026-08-17 | **DISTRIBUTION CONFIRMATION: the NULL branch fires — distribution joins labels as a measured NON-LEVER, and the night's three headline gaps all dissolve into noise or venue** | N=300/side both-vs-entry on the box, hardened harness (fixed 20k nodes + pinned 150 s clock), **both gates PASS: 0 moves ≥15 s, 0.00% ≥1.45 s, max 1.231 s / 1.006 s, 0 illegal, 300/300 each**. **C self-play −93.70 ± 37.44** (63.17% to the entry), **B Lichess −134.95 ± 39.14** (31.50%). Registered gap **C−B = +41.25 ± 54.16, CI [−12.9, +95.4] — CONTAINS ZERO (0.76σ)** → **NULL as pre-written at `9abc2e1`**: no third pass at position/label sourcing at this capacity; the remaining lever is **capacity**, which needs the byte seam and Thomas's direction call. **No promotion** — both cells still lose to the entry. **Reconciliation**: every clean number sits inside the earlier intervals (matrix B −181.70 ± 87.88 vs clean −134.95; screen C −63.23 ± 93.36 vs clean −93.70), so **the matrix's +118 was n=50 noise** and **round-1's −240 was ~150 Elo of venue coupling**, not a correction. Both axes of the distribution×label matrix are now closed |
 | 2026-08-17 | **DISTRIBUTION×LABEL MATRIX: the LABEL axis is decisively NULL (0.28σ) and the DISTRIBUTION axis is the only live effect (1.81σ) — but no pair separates at n=50, so the AMBIGUOUS branch fires** | All three cells under ONE protocol (50 games vs entry @ `d0a6e60`, fixed 20k nodes, fresh srands, **150/150 games, 0 illegal, 0 forfeits**): **A Lichess+SF-deep −200.24 ± 93.38** (24%), **B Lichess+twin −181.70 ± 87.88** (26%), **C self-play+twin −63.23 ± 93.36** (41%). Holding positions fixed and swapping the label source moves **+18.54 Elo = 0.28σ** — labels are not the lever, and that is the cleanest null the campaign has produced. Holding labels fixed and swapping the distribution moves **+118.47 Elo = 1.81σ** in favour of our own self-play positions — the largest effect in the matrix and the only one worth chasing, but **not resolved**: all three intervals mutually overlap. Per the registration's AMBIGUOUS branch the response is **one fixed-N confirmation of the single contested pair (B vs C) at N=300** — not a re-run, not a new axis. **No promotion**: every cell still loses to the entry. Also note cell A re-measured at **−200** under this protocol against its historical **−107** (318-game SPRT screen) — cross-protocol, and a caution against quoting screen Elos as magnitudes | **POLL10 (passenger):** 300/300, count gate OK, 0 illegal, all `normal`, **zero time forfeits on both arms → SAFETY branch fires, the 4096-poll is SAFE at 10+0.1**. Elo: base **+20.87 ± 27.76** over poll4096 (53%) — **no gain where clock reads bind**, point negative for the arm and CI spanning zero, at **+1 byte** pack cost. Base sha `a997b137…` verified **bit-identical to the artifact that measured +244.47 at 60+1**. Safe-but-no-payoff → **no promotion, direction closed at this N/TC** |
@@ -330,6 +331,91 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-18 — AMENDMENT 1 to METER 4: the registered book is STRUCTURALLY INCOMPATIBLE with a packed arm — the EPD cell is VOID, and the fix removes an axis
+
+The METER 4 registration (`01afb5e`, immediately below — left intact, per this
+file's correction rule (a)) named `openings_1991_valid.epd` for the primary
+cell. **That book cannot be played by either arm.** The primary was stopped at
+game 427 of 600 by its own tripwire.
+
+### What happened
+
+| | |
+|---|---|
+| games before STOP | **427** |
+| terminations | **427 of 427 `illegal move`** |
+| the move | both arms played **`g1f3`** — White's first move from the *initial* position — into a book FEN where it is illegal |
+
+The registered rule is **zero illegal = STOP, instant fail**. It fired. The cell
+is **VOID**; nothing was harvested from it and no Elo was computed. The evidence
+is kept at `meter4-20260818/VOID_epd_book_20260818T1820Z.{pgn,log,RESULT.txt}`.
+
+### Why — and it is not a bug, it is the packed build
+
+`sunfish.py`'s builtin loop implements exactly one position command:
+
+    elif args[:2] == ["position", "startpos"]:
+
+There is **no `position fen` branch**. FEN parsing lives in `sunfish_ui/uci.py`,
+inside the `minifier-hide` block that `pack.sh` **deletes**. So a packed artifact
+silently ignores a FEN and answers from the initial position. Probed directly on
+the box, both arms, after the stop:
+
+| command sent | classic replies | entry replies |
+|---|---|---|
+| `position fen rnbqkb1r/…/RNBQKB1R w KQkq - 0 10` | **`g1f3`** (ignored, startpos move) | **`g1f3`** (ignored) |
+| `position startpos moves g1f3` | `b8c6` ✓ | `d7d5` ✓ |
+
+> **This is NOT a classic-form problem that a different classic would dodge.
+> The 4k ENTRY ignores FEN too.** The entry *is* the packed artifact — that is
+> the whole point of the goal — so **no EPD book can ever be used against it.**
+> An opening book for this pair must be **PGN**, which fastchess replays as
+> `position startpos moves …`. That is why meters 1–3 used `book3k.pgn`, and the
+> reason was never written down. It is written down now.
+
+### The correction — which happens to make the meter *better*
+
+**Primary book: `openings_1991_valid.epd` → `book3k.pgn`** (PGN, order=random),
+the same book meters 1–3 used. Everything else in the registration stands: arms,
+shas, N, TCs, concurrency, gates, band, and the two-cell design.
+
+This **removes the book axis from the comparison**, which the registration had
+gone to the trouble of building a whole BRIDGE cell to work around:
+
+| comparison | axes that differ | before this amendment |
+|---|---|---|
+| **bridge − meter 3** | **classic (#217) only** | classic only |
+| **primary − meter 3** | **classic + TC** | classic + TC + book |
+| **primary − bridge** | **TC only** | TC + book |
+
+So the goalpost delta is now readable off the bridge *and* cross-checkable
+through the primary, and `primary − bridge` becomes a clean 30+1↔60+1 slope for
+this pair rather than a TC/book blend.
+
+**Fresh srands**, since 20260880/20260881 are burned by the voided launch:
+**primary 20260882, bridge 20260883.** Coprimality re-run and passing for both
+(300 and 150 rounds, 1 pairing, gcd 1).
+
+### The gate that should have caught this, now added
+
+The boot smoke tested `position startpos` — which is **not** what an opening book
+sends, so it passed on both arms and told us nothing. Two structural fixes land
+in the run script before relaunch:
+
+1. **The script refuses an EPD book outright.** A packed arm plus `format=epd` is
+   a launch-time error, not a 427-game discovery.
+2. **The boot smoke now sends the book's actual command form.** It issues
+   `position startpos moves g1f3` and requires a reply that is **not** `g1f3` —
+   an arm that ignores the position command replays the startpos move, which is
+   exactly the observed failure. Both arms pass it; the EPD configuration would
+   have failed it in under a second.
+
+**No branch fires on any of this.** METER 4 remains a meter: the void cost 427
+games and about four minutes of a 96-core box, and bought a rule this ledger
+did not have written down.
 
 ---
 
