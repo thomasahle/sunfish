@@ -948,12 +948,56 @@ also legality evidence.
 Mate and stalemate are a final classification, not another input to `max`.
 When no legal move has been witnessed at positive depth, the post-fold scan
 checks every generated move. If none is legal, it replaces the accumulated
-numeric report with exact checkmate (`-MATE_LOWER`) or stalemate (`0`). This
+numeric report with exact checkmate (`max(1 - MATE_UPPER, -MATE_LOWER - depth *
+EVAL_ROUGHNESS)`, the distance-carrying value) or stalemate (`0`). This
 placement is necessary because exact terminal classification may lower a
 virtual cutoff.
 
 At a terminal root, a fail-high has no move. Both UCI loops therefore stop
 iterative deepening and emit `bestmove (none)` without dereferencing `move`.
+
+## The exact king-capture clauses cannot be weakened (`BandContract.lean`)
+
+The docstring makes two EXACT promises about king capture: a kingless node
+returns `-MATE_UPPER`, and at positive depth a king-capturable node returns
+`MATE_UPPER`. Asked whether band membership (`r <= -MATE_LOWER`,
+`MATE_LOWER <= r`) would do instead -- which would let the producer yield a
+king capture's raw `pos.value` and drop the normalization -- the answer is no,
+and the reason is short. Boundedness already gives `r <= MATE_UPPER`, so the
+clause's content is exactly `MATE_UPPER <= r`, and the proposed band is the
+half that was free (`yield_at_identity_iff_exact`).
+
+Four consumers need the half the band drops:
+
+| consumer | what breaks | result |
+|---|---|---|
+| the fail-soft bracket | the declared value at a capturable node IS `MATE_UPPER`, so a band report may fail low where no spec-valid report can | `capture_report_must_fail_high`, `band_report_can_fail_low` |
+| the `live` bit | an illegal move's yield leaves the fold identity, so `not live` never holds at a mated or stalemated node | `bandLeaf_correction_misses`, `correction_fires_iff_exact` |
+| `tp_move` legality | an illegal move can fail high and be stored as the score witness | `storedMoveLegal_band_refuted` |
+| the fold identity | an exact illegal yield is neutral in the `max`; a band yield clamps a deep mate score | `sentinel_is_fold_identity`, `bandYield_clamps_mate_score` |
+
+`CexB` is the smallest game separating the two contracts: one stalemated
+position, one pseudo-move, every fidelity premise discharged, and the only
+difference is what the king-capturable child reports. With the exact clause the
+override assigns `0`; with a band report it assigns `-60000`.
+
+Mate distance also lives in the band, and it is safe there, because every
+consumer of the distance zone compares magnitudes while the two band edges are
+compared for equality: `score > -MATE_UPPER` and `bound(child, MATE_UPPER, 0)
+== MATE_UPPER` read them as tokens. Yielded scores are exactly `MATE_UPPER` or
+below `MATE_LOWER`, never in the gap; searched scores stay strictly below the
+token because the finalizer floors the child at `1 - MATE_UPPER`
+(`searched_score_below_MU`), so reaching the token has king-capture provenance
+(`MU_provenance`); and the seed entry `Entry(-MATE_UPPER, MATE_UPPER)` is
+unreturnable at every window the driver uses
+(`tt_sentinel_defaults_never_returned`).
+
+The same file pins the DIRECTION of the mate value. `-MATE_LOWER - depth *
+EVAL_ROUGHNESS` is antitone in unspent depth, so the mating side prefers the
+faster mate; the alternative `-MATE_UPPER + depth * EVAL_ROUGHNESS` is monotone
+and inverts both halves of `dtm_optimal` (`matedAlt_inverts_preference`), while
+spending the sentinel margin down from the whole distance zone to one
+`EVAL_ROUGHNESS` (`matedAlt_margin_is_one_step`).
 
 ## Move-table contract
 
@@ -982,13 +1026,13 @@ King-capture substitution uses the position predicate directly, so its exact
 | real-move recursion at the reduced `d - 1` | `fuelValueD2t`, `eventual_classification_fuel` |
 | static cap below positive mate | `staticCap_in_scoreBand`, `staticCappedNull_below_positiveMate` |
 | positive-depth complete producer | `producerMoves_positive` |
-| exact king-capture producer report | `producedScore_exact_capture` |
+| exact king-capture producer report | `producedScore_exact_capture` (and why the band restatement does not do, `BandContract.lean`) |
 | shallow move cap and lazy child evaluation | `shallowMoveCap_lowDepth`, `cappedMove_report` |
 | cap mate-band properties | `shallowMoveCap_below_positiveMate`, `cappedMove_preserves_negativeMate` |
 | filtered move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
 | sticky legality evidence and terminal override | terminal/finalizer results in `Stalemate.lean` |
 | king-capture evaluation margins and ordering | `EvalBounds.lean` |
-| `mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)` | `terminalValue`, `terminalValue_exact` |
+| `mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)` | `terminalValue`, `terminalValue_exact`, `terminalValue_reserves_sentinel` |
 | legal killer lifecycle and eviction | `Killer.lean` |
 | root versus interior null behavior | `CanNull.lean` |
 | transposition-table interval updates | `TableSwap.lean` and table results in `Stalemate.lean` |
@@ -1006,6 +1050,9 @@ tests and chess corpora validate those executable primitives.
 - `CappedMove.lean`: positive-depth move production and shallow move caps.
 - `Stalemate.lean`: selective-search fold, legality, and terminal finalizer.
 - `EvalBounds.lean`: numeric bounds induced by the piece-square tables.
+- `BandContract.lean`: what the two exact king-capture clauses buy, the
+  countermodel refuting their band weakening, and the band-cohabitation
+  facts that keep mate distance and the king-capture tokens apart.
 - `Killer.lean`: move-table legality and lifecycle.
 - `CanNull.lean`: root/interior null and table-key conditions.
 - `Driver.lean`: MTD-bi bracket invariants and convergence.

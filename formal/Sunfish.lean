@@ -18,3 +18,4 @@ import Sunfish.IntrinsicLMR
 import Sunfish.Repetition
 import Sunfish.EventuallyFinite
 import Sunfish.MateDepth
+import Sunfish.BandContract
