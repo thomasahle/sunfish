@@ -13,13 +13,14 @@ vintage and have never been fitted to anything this project measured.
 usage: texel_tune.py DATA.npz OUT.json
 """
 import json
+import pathlib
 import re
 import sys
 
 import numpy as np
 
 DATA, OUT = sys.argv[1], sys.argv[2]
-REPO = "/Users/ahle/repos/sunfish-packed"
+REPO = pathlib.Path(__file__).resolve().parents[3]
 PIECES = "PNBRQK"
 
 d = np.load(DATA, allow_pickle=True)
@@ -29,7 +30,7 @@ n = len(y)
 print("positions %d, features %d" % (n, X.shape[1]))
 
 # ---- warm start: classic's piece values folded into its tables --------------
-src = open(REPO + "/sunfish.py").read()
+src = (REPO / "sunfish.py").read_text()
 piece = eval(re.search(r"^piece = (\{[^}]*\})", src, re.M).group(1))
 pst_txt = re.search(r"^pst = (\{.*?^\})", src, re.M | re.S).group(1)
 pst0 = eval(pst_txt)

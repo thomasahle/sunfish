@@ -18,6 +18,7 @@ scaled by phase/24 and (24-phase)/24 respectively.
 usage: texel_taper.py DATA.npz OUT.json
 """
 import json
+import pathlib
 import re
 import sys
 
@@ -25,7 +26,7 @@ import chess
 import numpy as np
 
 DATA, OUT = sys.argv[1], sys.argv[2]
-REPO = "/Users/ahle/repos/sunfish-packed"
+REPO = pathlib.Path(__file__).resolve().parents[3]
 PIECES = "PNBRQK"
 PHASE = {"P": 0, "N": 1, "B": 1, "R": 2, "Q": 4, "K": 0}   # 4ku's weights
 
@@ -49,7 +50,7 @@ Xmg = X * (ph / 24.0)[:, None]
 Xeg = X * (1 - ph / 24.0)[:, None]
 XX = np.concatenate([Xmg, Xeg], axis=1)          # (n, 768)
 
-src = open(REPO + "/sunfish.py").read()
+src = (REPO / "sunfish.py").read_text()
 piece = eval(re.search(r"^piece = (\{[^}]*\})", src, re.M).group(1))
 pst0 = eval(re.search(r"^pst = (\{.*?^\})", src, re.M | re.S).group(1))
 w0 = np.zeros(384, dtype=np.float32)

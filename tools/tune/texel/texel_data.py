@@ -13,6 +13,7 @@ usage: texel_data.py OUT.npz [NPOS] [DEPTH]
 """
 import glob
 import os
+import pathlib
 import random
 import re
 import subprocess
@@ -25,8 +26,8 @@ import numpy as np
 OUT = sys.argv[1]
 NPOS = int(sys.argv[2]) if len(sys.argv) > 2 else 30000
 DEPTH = int(sys.argv[3]) if len(sys.argv) > 3 else 8
-ARENA = os.path.dirname(os.path.abspath(__file__)) + "/arena"
-SF = "/opt/homebrew/bin/stockfish"
+ARENA = os.environ.get("ARENA", str(pathlib.Path(__file__).resolve().parent.parent / "arena"))
+SF = os.environ.get("STOCKFISH", "stockfish")
 
 # ---- collect FENs -----------------------------------------------------------
 rng = random.Random(20260812)

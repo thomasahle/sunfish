@@ -80,10 +80,9 @@ in the git history of this file.
   C-only node/movegen screen over it, and the paired-openings fixed-node
   match driver (python-chess arbiter, trinomial SPRT, zero tolerance for
   illegal moves).
-- `adaptive_gp.py`, `logistic_gp.py`, `all_parameters.json` — an
-  asynchronous logistic-GP game tuner and its mixed search/evaluation space.
-  `sunfish_gate.py` prevents policies that lose the curated eventual-mate
-  guarantees from consuming games.
+- `../tune/logistic_gp/` — the general asynchronous game-result tuner.
+  Its Sunfish example uses this twin for fast experiments and a deterministic
+  mate-safety gate before games are allocated.
 - `tmlib.py`, `tmsim.py`, `vmatch.py`, `tmmatrix.py`, `npsprofile.py`,
   `npsmodel.json` — the TIME-MANAGEMENT surrogate (see below): the formula
   mirrors, the stage-0 trajectory simulator, the virtual-clock match driver,
@@ -170,62 +169,10 @@ evict-before-insert, 2 depth-stored bounded scan with `EVICT_SCAN_K`,
 distinct killers), `USE_VARIANT` (Python-side transcription proof; no-op
 in C). Unknown or out-of-range knobs are hard errors on every input path.
 
-For long joint studies, one color-swapped opening pair is one posterior
-update. Forty engine processes means twenty scheduler slots:
-
-`all_parameters.json` covers every live search/evaluation constant, including
-the null-oracle fuel amount. It excludes
-`TABLE_SIZE` (a memory budget) and
-the historical or PR-only flavor selectors above; those belong in separate
-ablation matches, not in the production-parameter posterior. Its default
-point is current master, including `NULL_LIMIT=750`. Every proposed challenger
-must pass the mate-floor correctness gate before games are spent.
-The numeric search domains cover the source's declared tuning ranges, except
-that `QS_A=0` is excluded because it would permanently filter moves instead
-of eventually widening the real tree. Evaluation ranges are limited by the
-corner-checked mate-band, promotion, and nonnegative-table invariants; a
-posterior maximum on one of those boundaries is a proof constraint, not an
-invitation to sample an invalid table.
-
-```sh
-python3 adaptive_gp.py \
-  --fastchess /path/to/fastchess \
-  --engine ./sunfish_c --engine-args ./tables_classic.txt \
-  --baseline-options default \
-  --space all_parameters.json --openings openings.fen \
-  --gate "python3 sunfish_gate.py" --gate-design --gate-workers 20 \
-  --cycle-openings \
-  --slots 20 --queue-batches 60 --refill-batches 20 \
-  --pairs 1 --initial-design 256 --inducing 128 --update-batches 8 \
-  --explore-start .5 --explore-floor .2 --duel-fraction .3 \
-  --wall-time 3d --batches 1000000
-```
-
-`--baseline-options default` pins the exact default point to zero. Opening
-reuse is balanced by a fresh deterministic shuffle per epoch, and independent
-books remain mandatory for final confirmation. A fixed inducing basis permits
-online Laplace updates without rebuilding a quadratic comparison matrix. The
-optimizer keeps its small matrix operations single-threaded so its 128-site
-model does not compete with the 20 game lanes. Its 2,048-point global design is
-used for the initial design, acquisition restarts, and inducing sites. It
-reserves 512 points for the default, every one-axis setting, and nearby two-axis
-combinations; the rest retain broad global coverage. Coordinate refinements
-are gated on demand. The pure-variance arm explores finite-design policies and
-validated coordinate refinements. It covers the unseen, gate-safe global
-design before revisiting a policy; afterward, statistically dominated policies
-leave the pure arm. UCB is free to replicate promising policies throughout.
-Proposals pass the correctness gate before games are spent. Rejected policies
-consume neither games nor allocation credit.
-Three reserved pairs per lane,
-replenished while two remain, hide that latency. `--gate-all` instead
-prevalidates the finite design and confines every acquisition to it; use that
-for a broad census, not the final joint refinement. `--gate-design` rejects
-unsafe design points up front while still allowing gated coordinate
-refinements. Results append to a JSONL journal and compact every 1,000 pairs,
-avoiding quadratic checkpoint I/O while remaining restartable. At the
-wall-time limit, the scheduler finishes every reserved color pair before its
-final checkpoint. `--seed-state` replays that journal and inherits its
-allocation clock; pass `--seed-selections 0` only to restart exploration.
+The complete optimizer documentation and the Sunfish joint-parameter example
+now live in [`../tune/logistic_gp/`](../tune/logistic_gp/README.md). Keeping the
+tournament model outside `ctwin` makes explicit that it works with any UCI
+engine; the C twin is only Sunfish's high-throughput engine under test.
 
 Game use: `position startpos moves …` / `position fen …`, then
 `go nodes N` (primary — clock-free surrogate games), `go depth D`,

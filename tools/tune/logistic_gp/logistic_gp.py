@@ -615,7 +615,8 @@ def read_observations(directory, battery, effective_weight, space=None):
 
 
 def main():
-    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+    ctwin = pathlib.Path(__file__).resolve().parents[2] / "ctwin"
+    sys.path.insert(0, str(ctwin))
     import difftest
     import nodescreen
 
@@ -628,8 +629,8 @@ def main():
     parser.add_argument("--screen-depth", type=int, default=6)
     parser.add_argument("--min-node-saving", type=float, default=0.5)
     parser.add_argument("--safe-only", action="store_true")
-    parser.add_argument("--binary", default=str(pathlib.Path(__file__).with_name("sunfish_c")))
-    parser.add_argument("--tables", default=str(pathlib.Path(__file__).with_name("tables_classic.txt")))
+    parser.add_argument("--binary", default=str(ctwin / "sunfish_c"))
+    parser.add_argument("--tables", default=str(ctwin / "tables_classic.txt"))
     args = parser.parse_args()
 
     observed, success, trials, names = read_observations(
