@@ -19503,3 +19503,72 @@ proposing eval arms.** It builds at **lr 1.2e-2**, supported by two
 independent ladders. Its verdict ends the eval program's questions either way,
 and after tonight the honest prior on it is low — it is being built because it
 is the last untested mechanism, not because the evidence favours it.
+
+---
+
+## ARM 10 — BUILT. The last eval mechanism, and the first objective that never asks for a number.
+
+Implemented per item (e), at **lr 1.2e-2** (two independent ladders). ~120
+lines across five files, no labelling beyond the harvest.
+
+**The loss.** For each position, K=16 legal moves; the net evaluates the
+children; the parent's preference for a move is `-pred(child)`; the objective
+is `-log softmax(-pred/sigK)` at the searched-best child's local index 0.
+`sigK` doubles as the softmax temperature rather than adding a dial — it is
+already this campaign's cp→preference scale.
+
+**It REPLACES the pointwise term rather than adding to it.** Keeping a cp
+regression alongside would be testing something else: the arm's premise is
+that *requiring magnitudes* is what this family cannot do, and the
+representability result (31.6% vs 15.0% of the material gap) is the evidence
+for that. A ranking loss asks only for order.
+
+### The loss is asserted, not trusted (`test_arm10_rank.py`, all passing)
+
+| assertion | result |
+|---|---|
+| shift-invariance, global and **per-group** (adding any constant to a group's evals cannot change the loss) | exact to 1e-9 |
+| perfect order → zero loss, top1 = 1.000 | −0.000e+00 |
+| worst order (searched move ranked last) costs more than random, top1 = 0.000 | 1500.0 |
+| gradient pushes the searched child's eval **down** (better for the parent) | **100% of groups** |
+
+Shift-invariance is the property under test, not a nicety: **if the loss
+could be reduced by moving the eval's level instead of its order, the arm
+would not be testing its own hypothesis.**
+
+### Guards, because a grouped corpus has new ways to be silently wrong
+
+- `data.batches` **refuses** unless K divides the id list — the cheapest check
+  that the corpus is K-contiguous and that local index 0 really is the
+  searched move.
+- Groups are shuffled **whole**, never within: row shuffling would silently
+  relabel which sibling was best.
+- The corpus split is **PARENT-keyed**, not child-keyed. Child-keying would
+  scatter a group across train and val and leave the val groups incomplete.
+- Parents with `< K` legal moves are **dropped, not padded** — padding by
+  repetition puts duplicate positions in a softmax and reweights the loss.
+  (Measured on the smoke: 23.6% of positions have fewer than 16 legal moves.)
+- `rank > 0` with `lam < 1` is **refused** as an ambiguous objective.
+- **No-op receipt:** `rank = 0.0` leaves every historical config untouched —
+  `220_cap_n5b_s0` re-exports its 949-character payload byte-identically, the
+  third such receipt tonight after `biasscale` and `mlshift`.
+
+### The harvest, and one repair-shape lesson applied
+
+The labeller now emits the searched **bestmove** alongside the score, so the
+ARM 10 signal costs nothing beyond the run it was already doing. 80,000
+pool10m parents at `go nodes 20000` are labelling now; the smoke returned
+**0 unusable bestmoves** and 299 distinct moves in 398 positions.
+
+The resume repair that destroyed 244,897 labels yesterday was hardcoded to
+the field count it was written against. Adding the `bestmove` field would
+have destroyed every 3-field shard the same way, so **the repair is now
+width-agnostic (`>= 3` fields, not `== 3`)** — validating a floor rather than
+an exact shape. The lesson is applied where it was learned, not just recorded.
+
+**Its pre-registered stop is unchanged and binding:** games-only promotion
+against the entry contrast, and a null closes the objective axis as a whole.
+After tonight — three statistics that predicted confidently and were
+contradicted, eight mechanisms closed — the honest prior on this arm is low.
+It is being built because it is the last untested mechanism, not because the
+evidence favours it.
