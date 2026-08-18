@@ -18439,3 +18439,33 @@ times the diagonal's decode — 384 folded rows gathered to 768, an
 81-entry lane-word table per trit chunk at N=32 — and still four thousand
 times inside the budget, so the pure-Python reconstruction remains the right
 call and numpy is still not needed.
+
+### FACTOR LANE — the lr probe, two rungs of three, and the selection encoded rather than judged
+
+| rung | lr | best val | vs N=5 | vs the free N=32 bound | trajectory |
+|---|---|---|---|---|---|
+| `lr1x` | 3e-3 | 0.0152838 | −13.29 % | +1.41 % | .01572 .01544 .01541 .01545 .01551 .01528 |
+| **`lr4x`** | **1.2e-2** | **0.0152335** | **−13.58 %** | **+1.08 %** | .01552 .01542 .01530 .01533 .01523 **.01579** |
+| `lr16x` | 4.8e-2 | *running* | | | |
+
+`lr4x` leads by 5.0e-5 — **2.3σ** at this recipe's 2.2e-5 seed noise, so a real
+but small gap, and consistent in direction with the LR REFRAME's finding on the
+free-table family. Its final epoch jumping to .01579 from .01523 under a
+linear-to-zero schedule is the shape of an lr that is *near* the edge of
+stability rather than past it; `lr1x` shows no such jump.
+
+Byte number for the leader, same what-if build (shift forced to 3, artifact is
+a train/ship divergence and prices bytes only): **4,040 B, 56 spare**, U zeros
+38.3 %, caps sum 35,712/65,534, **bias digits clipped 0/32**, runs `bestmove
+g1f3`. So both trained rungs fit, at 4,053 and 4,040 B.
+
+**The selection is encoded, not judged.** `factor_smoke/select_and_go.sh` waits
+for the probe, reads the three `metrics.jsonl` files, and applies the rule
+registered before any rung was read — best val wins; **if the winner is the TOP
+rung the ladder does not bracket, so it trains an `lr64x` rung and explicitly
+does NOT launch the final arm**. Otherwise it runs `launch_final.sh`, which
+first applies the cap-sum-aware `export_shift` (so the net trains at the shift
+it can ship at, rather than being re-derived at one it never saw), re-runs the
+`arch: residual` control to prove the shared trainer is still untouched, and
+only then trains `360_factor_r8n32m_final`. Encoding it is the point: the rule
+cannot drift once the numbers are in.
