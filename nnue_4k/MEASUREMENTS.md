@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-18 | **AMENDMENT 1 to the BOOK LINE-FIT registration: Phase 2 becomes DEALT OPENINGS against the MIXED FIELD — and the design it replaces was information-free by this lane's own argument** | Per Thomas, and **legal for a specific reason: no Phase-2 game has been played** (Phase 1 untouched and still running). **Two things were wrong.** (1) The superseded Phase 2 was `book_v1` vs `book3k` with **the same engine both arms** — which is exactly the symmetry this very registration had already written down three paragraphs earlier about the mirror arm: *under paired colours the subject's expected score against its own binary is exactly 0.5 for every line*. Having knowingly spent a third of the Phase-1 budget on that symmetry, the lane then registered it as the **promotion** cell. The right question is Thomas's: does the reweighted distribution improve the subject's score against a **FIELD**. (2) **The book-adapter requirement is DROPPED** — fastchess already deals openings, so sample openings *from* the book distribution instead of putting a book behind each engine. That retires the adapter, its `get_book_move` validation, and — the part that matters — lets the arms be the **PACKED ARTIFACTS**, the deployed objects; Phase 1 was forced onto checkouts only because a packed arm cannot be node-limited, and a timed cell dealing PGN openings has no such problem. **New design**: openings sampled `weighted_random` to the 15-ply deployed horizon, **with repetition**, seeded, frozen and sha-recorded before game 1. **A** = sampled from `book_v1`, **B** = sampled from `book3k` uniform, both subject vs mixed field (packed entry + `weak`; **the mirror is gone**), 30+1, fixed N=600 each; **bar unchanged: LB > 0 at 95% on A − B**. **C** (sampled from `book_wide` uniform) is SECONDARY, because `book_v1` reweights `book_wide` and **not** `book3k`, so A − B carries **two axes** — A − C is the pure reweighting, C − B the pure width, the METER 4 PRIMARY/BRIDGE structure again. **Limitations registered, not discovered**: dealt openings put BOTH sides down one fixed line, so the cell **cannot see the in-book-reply dynamic** (lichess reality: the opponent leaves book by ply 2 while our book still guides our replies to ply 15) — that component stays validated by the **live lichess watch, not the box**; and it **cannot see the clock savings either**, which retires this lane's original reason for making the cell timed (measured live in `OmnzTMRj`: book moves 0.12–0.20 s against 4.76 s, clock GROWING 60.00 → 66.03 s). **So a null on A − B means "the line distribution does not pay", never "the book does not pay".** `opening_gate` reinterpreted a second time: duplicate openings are **the treatment**, so the per-cell distinct-opening test is dropped and the duplicate-GAME test kept — safe here and not at fixed nodes because `rr6_sigk`'s replays were fatal only since deterministic fixed-node engines replay the *identical game*; the analysis clusters on the OPENING. Power: SE(A − B) ≈ 2.6% score, so the bar needs ~**+36 Elo**, *harder* than the superseded design's ~+26, and Phase 1 predicts it will correctly fail. Cost ~11 h at conc 8; C best-effort. Two hard preconditions added: opening files frozen before game 1, and **the `weak` arm's time management is UNVALIDATED** (every number it has is fixed-node) so it must pass a forfeit-free 30+1 smoke or be dropped from the field. **Phase 2 remains NOT AUTHORISED TO RUN** |
 | 2026-08-18 | **PRE-REGISTRATION: the BOOK LINE-FIT gauntlet — an opening book measured at the only resolution 1680 games can pay for, plus a second structural fact about packed artifacts** | `book3k.bin` has been on both lichess bots since 2026-08-18 and **nothing has ever measured whether any line in it helps**. Instruments are PR #242 (`tools/book/attribute.py` + `rebuild.py`, 19 tests, tools-only; empty stats reproduce a book bit-for-bit, α = 2·N_min calibrated so N_min games of a 100/0 split buys exactly one doubling). Candidate **`book_wide.bin`, 32321 entries, `8c7377c4…`** = book3k ∪ gm2001 ∪ lichess `chess-openings` (CC0), uniform, capped at the **deployed 15-ply horizon**; licence-clean subset 25574 entries recorded per-entry because promoting gm2001-only lines would re-open the question PR #238 closed. **280 candidate lines** (`candidates.pgn`, `bf122449…`) = maximal in-book prefixes capped at 8 plies, globally de-duplicated, thin cells claiming first. **A finding before a game is played**: book3k gives each of its 12 first moves a uniform 8.33%, but behind `1.a3` there are six distinct 8-ply continuations in *any* source and behind `1.d3` four — uniform weights are a claim about variety the book's depth does not support. Form: **gauntlet** (not RR — the variants are OPENINGS, so every game must involve the subject), **fixed N=1680**, 20000 nodes, `tc=6000+0`, conc 8 nice 5, srand 20260891. **THE RESOLUTION GOVERNS EVERYTHING: 6 games per line, so a CELL IS A ROOT MOVE and no claim below cell resolution is admissible; `book_v1` moves the root node and nothing else.** Power computed, clustered on the line: ±10.2% score (±72 Elo) for the nine rich cells, ≥±20% for the thin ones — **powered to find JUNK, not to fine-tune**, and the tension is registered: the cells most likely to be junk are exactly the cells with the least power, so a null there means "not measured", never "measured level". Selector: **LCB = θ − 1.96·SE_cluster**, α=60 shared with `rebuild.py`, minimum-N gate n_lines ≥ 6 (admits 14 of 20 cells), design-effect deflation before the rebuild. **The `mirror` arm is registered as information-free on the primary**: under paired colours the subject's expected score against its own binary is exactly 0.5 for every line, so it is excluded from the primary and from the rebuild and measures line imbalance/decisiveness only — one third of the budget, priced up front. **SECOND STRUCTURAL FACT, new and beside AMENDMENT 1's:** the packed artifact contains **no `nodes` token at all**, so it ignores `go nodes` and spends the pinned clock — observed live as eight pypy3 processes at 98% CPU with zero games finished in ten minutes, killed and unharvested. *A packed artifact cannot read a FEN and cannot be node-limited*; both live in the `minifier-hide` block `pack.sh` deletes. **A fixed-node cell and a packed arm are mutually exclusive**, so the arms are byte-verified checkouts (`sunfish.py` @ `ab3b490`, `pst_entry.py` @ `d0a6e60`, each under its own branch's `sunfish_ui`) — which costs nothing, because at a fixed node budget the two forms search the same tree. Registered prediction under test: **no cell separates at 95%** and Phase 2 returns null. **NO PROMOTION FIRES HERE**; Phase 2 (book_v1 vs book3k, 30+1, N=600, bar LB > 0) is registered in the same entry and is **NOT authorised to run** |
 | 2026-08-18 | **CORRECTION 2 to METER 4: #217 is NOT the goalpost move — the classic POOL is, and it was measured at +96.19 ± 33.81 at this meter's own TC** | **Recorded before any Elo exists** (primary ~40/600, count gate still refusing). The registration frames the meter around #217 as the classic's "biggest strength-relevant change since the last meter"; **wrong commit**. `git log f4f06d4..ab3b490 -- sunfish.py` has sixteen commits, and the mover is **`eef299b`, the classic builtin clock becoming the POOL** — **+96.19 ± 33.81, fixed N=300 at 30+1, no stopping rule**. **#217 (`6087cfa`) merely RESPELLS that pool as a per-move budget and measured LEVEL against it (+3.47 ± 33.81, N=200, 60+0)** — the registration's use of that same +3.47 to justify the packed classic *form* stands and is unaffected; what was wrong is crediting #217 with the goalpost move. Also in the arm and unpriced here: the shallow-cap/lazy-tail search work (`8ea6d5d`, `42c0816`, `c01915f`, `faf3e06`, `edc1a87`). **The classic lane already said this in `82f0fa1`, verbatim: "The goalpost moved by ~96 Elo … meter 3's +200.24 ± 38.35 is now historical"** — written three commits before this lane registered, and not read. The +96.19 is unusually well matched to this meter: fixed N, no stopping rule, **at 30+1, the primary's exact TC** (its SPRT decider read +124.50 ± 38.79 at 288 and the fixed 300 read +102.47 ± 32.43, so the stopped figure is 20-40 high). **Premise-corrected expectation: 200.24 − 96.19 + 23.0 ≈ +127** (±~53; the +23.0 Design B term is a **projection with zero games**). **THE REGISTERED BAND [+120, +200] IS NOT MOVED** — harvest reports against it verbatim AND against ≈ +127 separately, both fixed here before any number exists. The band's lower edge sits near the corrected value, so an in-band landing would be **luck, and will be reported as luck**. Nothing re-run: `ab3b490` is the right arm. With Correction 1, the meter has **four** moving parts — entry Design B, classic pool, #217's respelling, classic search — two measured, one projected, one unpriced. Still a meter; no branch fires |
 | 2026-08-18 | **CORRECTION 1 to METER 4: the BRIDGE does not isolate #217 — the ENTRY moved too, and what moved is Design B** | **Recorded before any Elo existed** (primary at ~30/600, count gate still refusing harvest), so it is a self-caught registration error, not a result-driven reinterpretation. The registration (`01afb5e`) and Amendment 1 (`7e4db94`) both claim the bridge is "meter 3's protocol VERBATIM with only the classic arm changed" and conclude twice that **"BRIDGE − 200.24 is the pure #217 goalpost move"**. **False — both arms moved.** Entry went **3376 B `a997b137…` (`1b6b94d`) → 3410 B `bf30904d…` (`d0a6e60`)**, and `git log 1b6b94d..d0a6e60 -- nnue_4k/pst_entry.py` returns **exactly one commit**: **`1250251` "Cache the rotation instead of recomputing it"** — **Design B**, the +34 B rotation-caching speed landing that meter 3's verdict itself said *"rides the NEXT meter"*, priced there at **+23.0 ± 11.4**. This meter is that next meter. **Control making the delta exact**: repacking `1b6b94d`'s source with **this meter's packer** reproduces `a997b137…` **bit-for-bit**, and `pack.sh` is **unchanged** across the interval — so the packer is a constant and the entry difference is that one commit and nothing else (which also confirms meter 3's arm used the `nnue-4k` packer, as this registration chose for both arms). **Restated**: `bridge − 200.24` = **Δ(Design B) + Δ(#217)**, the NET arms move; `primary − bridge` is **unaffected and still a clean TC axis** (same two arms in both cells); `primary − 200.24` carries all four axes. The available decomposition **Δ(#217) ≈ (bridge − 200.24) − 23.0** leans on a **projection with zero games behind it** and will be reported as an attribution, never as the measurement — meter 3's "lean, labelled as a lean" is the precedent. **Nothing is re-run, relaunched or re-drawn**: the in-flight arms are the correct, sha-pinned, briefed arms. What changes is only what the numbers may be CALLED at harvest. Still a meter; no branch fires |
@@ -334,6 +335,126 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-18 — AMENDMENT 1 to the BOOK LINE-FIT registration: Phase 2 becomes DEALT OPENINGS against the MIXED FIELD — and the design it replaces was information-free by my own argument
+
+Per Thomas. **Legal, and legal for a specific reason: no Phase-2 game has been
+played.** The Phase-2 block in `a5ef9e9` (immediately below, left intact per this
+file's correction rule (a), because a registration carries a decision) is
+replaced in full by what follows. Phase 1 is untouched and still running.
+
+### Two things were wrong with the design this replaces
+
+**1. It was information-free on its own primary, by the argument I had already
+written three paragraphs earlier.** The old Phase 2 was `book_v1` vs `book3k`
+with **the same engine on both arms**. But the Phase-1 registration states, about
+the mirror arm: *under paired colours the subject's expected score against its
+own binary is exactly 0.5 for every line, by symmetry.* That is precisely the old
+Phase-2 design. Having spent one third of the Phase-1 budget knowingly on that
+symmetry, I then registered it as the *promotion* cell without noticing. The
+correct reading is Thomas's: the question is **"does the reweighted distribution
+improve the subject's score against a FIELD"**, and a field is what the cell must
+contain.
+
+**2. The book-adapter requirement is DROPPED.** The old design needed a UCI proxy
+holding a polyglot book, because fastchess has no per-engine book. Thomas's point
+retires the whole apparatus: **fastchess already deals openings**, so sample the
+openings *from* the book distribution and deal them. No engine-side book, no
+adapter, nothing to validate against `get_book_move`, and — the part that matters
+— **the arms can be the PACKED ARTIFACTS**, the deployed objects themselves.
+Phase 1 was forced onto byte-verified checkouts because a packed arm cannot be
+node-limited; Phase 2 is timed and deals PGN openings, both of which a packed arm
+handles, so the confound Phase 1 had to accept does not arise here.
+
+### The cells
+
+Openings are **sampled from a book's own distribution** — walk the book by
+`weighted_random` to the deployed 15-ply horizon, exactly as lichess-bot would,
+**with repetition**, seeded, written to a PGN opening file whose sha256, seed and
+distinct-opening count are recorded before game 1.
+
+| | **A — the product** | **B — what is live** | **C — width alone** |
+|---|---|---|---|
+| openings sampled from | **`book_v1`** weighted | **`book3k`** uniform | **`book_wide`** uniform |
+| arms | subject vs **mixed field** | same field | same field |
+| N | **fixed 600** | **fixed 600** | **fixed 600** |
+| TC | **30+1** | **30+1** | **30+1** |
+| status | **PRIMARY** | **PRIMARY** | **SECONDARY, best-effort** |
+
+Subject: the **packed classic** `d177d79a66a16cb6…` (`ab3b490`). Field: the
+**packed entry** `bf30904dfdf5674d…` (`d0a6e60`) and the `weak` ctwin arm. **The
+mirror is gone** — it is the thing this amendment exists to remove.
+
+**Bar for promotion: LB > 0 at 95% on A − B.** Unchanged.
+
+**Why C exists.** `book_v1` is a reweighting of **`book_wide`**, not of
+`book3k`, so **A − B carries two axes**: the width of the candidate book *and*
+the root reweighting. A − B is still the right promotion bar, because
+product-versus-deployed is the decision, but it is not the reweighting's own
+number. **A − C is the pure reweighting and C − B the pure width.** Same
+PRIMARY/BRIDGE structure METER 4 used, and for the same reason.
+
+### The limitations, registered rather than discovered
+
+**1. This measures the LINE-DISTRIBUTION effect and nothing else.** Dealt
+openings put **both** sides down the same fixed line. The deployed reality is not
+that: the opponent typically leaves book by ply 2 and our bot's book **still
+guides its own replies to ply 15**. That in-book-reply dynamic — the book
+answering a non-book opponent — **cannot be seen by this cell at all**, and it
+may be where most of a book's value sits. It stays validated by the **live
+lichess watch**, not by the box.
+
+**2. It cannot see the clock savings either, and that retires my original
+rationale for making the cell timed.** A dealt opening costs neither engine any
+clock, so the effect measured live in game `OmnzTMRj` — book moves at 0.12–0.20 s
+against 4.76 s for the first engine move, the clock *growing* 60.00 → 66.03 s
+through the book phase — is invisible here. The cell stays at **30+1 because that
+is the deployment time control** and strength is TC-dependent, not because it can
+price the clock. Book value therefore has **two components this design excludes**,
+and a null on A − B must be reported as "the line distribution does not pay",
+never as "the book does not pay".
+
+**3. `opening_gate`, reinterpreted again and for a new reason.** Sampling with
+repetition produces **duplicate openings by design — the duplication IS the
+treatment**, since a distribution that concentrates mass is supposed to replay
+its favourite lines. The per-cell distinct-opening test is therefore **dropped
+for these cells**; the full-movetext duplicate-GAME test is **kept**. What makes
+that safe here and not at fixed nodes: `rr6_sigk`'s replayed openings were fatal
+because deterministic fixed-node engines replay the *identical game*, whereas at
+30+1 they do not. Repetition still induces clustering, so **the analysis clusters
+on the OPENING**, exactly as Phase 1 clusters on the line.
+
+**4. Power, and the negative this is built to be able to return.** A and B are
+independent N=600 cells, so SE(A − B) ≈ 2.6% score and the bar needs roughly
+**+36 Elo** before the opening-clustering design effect inflates it further —
+*harder* than the ~+26 the superseded design faced. Phase 1 predicts a root
+reweighting worth a few percent of root mass. **If that holds, A − B will
+correctly fail its bar**, and the finding is: at this data budget the line
+distribution is not worth deploying, and the next lever is the in-book-reply
+dynamic that only lichess can see.
+
+**5. Cost, stated because it is large.** Three timed cells of 600 games at 30+1
+is ~11 h at concurrency 8. **C is best-effort** and A/B run first.
+
+### Preconditions on game 1, all of them hard
+
+Unchanged from the superseded block except where the adapter is gone:
+coprimality, book-form boot smoke, arm identity by sha, ≥24 free cores for a
+timed cell, **zero illegal = STOP**, **zero time forfeit = VOID**, exact count or
+VOID, clocks recorded, neighbour forfeit census before and after. Two additions:
+
+* **the sampled opening files are frozen and sha-recorded before game 1** — a
+  distribution re-sampled after seeing a number is not a registration;
+* **the `weak` arm's time management at a real clock is UNVALIDATED.** Every
+  number it has is fixed-node. It must pass a forfeit-free 30+1 smoke before it
+  is allowed into a timed cell, or it is dropped from the field and the field is
+  the entry alone. This is the same class of precondition the adapter validation
+  was, and it is not waived just because the adapter is gone.
+
+**Phase 2 remains NOT AUTHORISED TO RUN.** This amendment fixes the design; it
+does not release it.
 
 ---
 
