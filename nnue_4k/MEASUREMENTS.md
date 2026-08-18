@@ -24245,3 +24245,39 @@ decoder is already proven against the emitter's own factors.
 
 **Blocker (ii) — the composed bucket price — is CLOSED.** It is 150–185 B and
 it changed which arms can ship.
+
+### COHORT 1 STATUS CORRECTION — two arms died on a yaml typo, not on the physics (2026-08-19)
+
+The queue resumed when the field lane's adjudication cleared the pause, and
+`10_rl_f4n32` and `11_rl_pb2f4n32` both returned rc=1 in two minutes, before
+reading a position. **Cause: my yaml generator, not the trainer, the corpus or
+the `pb` knob.** `notes:` was written as a bare scalar and three of the seven
+notes strings contain `": "`, which is a yaml mapping token:
+
+```
+notes: carrier control: mirrored r=4 N=32 B=1, the unt ...
+                      ^ ScannerError: mapping values are not allowed here
+```
+
+Broken: **10, 11, 15**. Unaffected: **12, 13, 14, 16**, whose notes happen not
+to contain `": "` — which is why `12_rl_kb2f4n32` was running healthily
+throughout and why this presented as a shared defect that it was not. 15 was
+still pending, so it was fixed before it could burn its slot.
+
+Fixed in all seven rather than in the three that broke; the patcher refuses to
+write a file it cannot then re-parse; every knob was re-read from the parsed
+yaml afterwards rather than eyeballed in the diff. 10 and 11 are requeued
+ahead of 13–16 so the carrier control does not trail the arms it is the
+control for, and their failed run dirs are kept as `FAILED_yamlquote_*`.
+
+**Two runner fixes, because the filing is what let it slip.** An unparseable
+config is now rejected *before* the trainer launches (a typo used to cost a
+full queue slot to discover), and a nonzero rc files the config in
+`queue/failed/` rather than `queue/done/`. Both dead arms had been filed next
+to the runs that worked, so "the queue advanced" and "the work happened" were
+indistinguishable without reading `LOG.md` line by line.
+
+**Nothing about the portfolio's content changes**, and it is worth being
+explicit that this was a clerical failure with no bearing on any registered
+bar: no arm produced a number, no bar moved, and the byte prices in the
+sections above were measured from built artifacts and not from these runs.
