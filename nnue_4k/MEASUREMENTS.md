@@ -18357,3 +18357,44 @@ magnitude here.**
 Not yet claimed: an lr choice (two rungs outstanding), a byte number for
 *this* checkpoint (the payload emitter refuses until the cap-sum bound is met
 — see below), and any Elo whatsoever.
+
+### FACTOR LANE addendum — the trained artifact's gates, and two ways a negative control lied to me in five minutes
+
+The what-if build at shift 3 (byte number only — see the entry above) was put
+through every gate available, and two of the three attempts were invalid
+before they were valid. Both failures are the same shape as the harness
+defects this file already records, and both were caught by disbelieving a
+pass rather than by the gate itself.
+
+1. **`replnet_check.py <file>` ignores its argument.** It does
+   `import replnet_proto` at line 19, so handing it the factored entry
+   re-checks the stock engine and reports PASS. Run properly (the artifact
+   copied in as `replnet_proto.py` on `PYTHONPATH`) it passes for real:
+   mirror, a 40-ply accumulator walk on acc/ps/score, antisymmetry, nn-fires,
+   sentinel margin 1558 > 600. The identical sentinel margin in both runs is
+   what gave the first one away — and it is *not* proof on its own, since
+   that margin is a function of the piece values and CLAMP, not of the
+   weights.
+2. **A single perturbed weight legitimately passes `replnet_check`,** which
+   is not a defect: it is an INVARIANT gate (symmetry, accumulator
+   consistency, liveness), not a fidelity gate, and one changed weight
+   preserves every invariant it tests. Fidelity is `build_factor_entry`'s
+   own job.
+3. **My fidelity negative control then lied too** — it reported MATCH on a
+   deliberately corrupted payload. Cause: both loads used the same module
+   name and the same temp path, so Python served the cached module the
+   second time and I compared the clean net against itself. With distinct
+   names the control fires exactly as it should:
+
+   | | `q[70]` | V entries differing from the checkpoint |
+   |---|---|---|
+   | clean | 84 | **0 of 256** |
+   | one digit perturbed | 85 | **1 of 256** |
+
+   so `build_factor_entry`'s `assert Vd == ck["V"]` does refuse a corrupted
+   payload.
+
+**The transferable rule, since this is now the third instance in this file:**
+a gate that takes a target must be shown to have *read* the target, and a
+negative control must be shown to *fail*. Neither is implied by a PASS, and a
+reused module name or a hard-coded import will manufacture one.
