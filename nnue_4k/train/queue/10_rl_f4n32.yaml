@@ -78,4 +78,4 @@ opt:
   wclip: 1.0
   weight_decay: 1.0e-05
 out_dir: runs/rl_f4n32
-notes: carrier control: mirrored r=4 N=32 B=1, the untrained half of the factored lane's own byte table; the cell every bucketed arm is read against
+notes: 'carrier control: mirrored r=4 N=32 B=1, the untrained half of the factored lane''s own byte table; the cell every bucketed arm is read against'

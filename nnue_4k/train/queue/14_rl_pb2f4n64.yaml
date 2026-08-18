@@ -79,4 +79,4 @@ opt:
   wclip: 1.0
   weight_decay: 1.0e-05
 out_dir: runs/rl_pb2f4n64
-notes: family 4+8 -- phase taper at N=64; BYTE-CONDITIONAL, may not be built unless the trained payload prices under 4066 B through pack.sh
+notes: 'family 4+8 -- phase taper at N=64; BYTE-CONDITIONAL, may not be built unless the trained payload prices under 4066 B through pack.sh'

@@ -82,4 +82,4 @@ opt:
   wclip: 1.0
   weight_decay: 1.0e-05
 out_dir: runs/rl_f4n64
-notes: family 3+8 -- width control at N=64 with a sparsity target; the resolution cost of width is the thing to watch here
+notes: 'family 3+8 -- width control at N=64 with a sparsity target; the resolution cost of width is the thing to watch here'

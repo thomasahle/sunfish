@@ -88,4 +88,4 @@ opt:
   wclip: 1.0
   weight_decay: 1.0e-05
 out_dir: runs/rl_kb2f4n32_l1hi
-notes: the BUILDABLE king-bucket arm -- kb2 at l1=2e-3, added after pack.sh measured that the l1=5e-4 version cannot fit (4095 B at 43% U zeros, and the bucket machinery is 150 B, not the ~35 B the registration composed)
+notes: 'the BUILDABLE king-bucket arm -- kb2 at l1=2e-3, added after pack.sh measured that the l1=5e-4 version cannot fit (4095 B at 43% U zeros, and the bucket machinery is 150 B, not the ~35 B the registration composed)'

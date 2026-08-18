@@ -84,4 +84,4 @@ opt:
   wclip: 1.0
   weight_decay: 1.0e-05
 out_dir: runs/rl_kb2f4n32
-notes: family 1 -- own-king rank-band buckets on the factored carrier, one variable against 10_rl_f4n32 and byte-identical to the pb2 arm
+notes: 'family 1 -- own-king rank-band buckets on the factored carrier, one variable against 10_rl_f4n32 and byte-identical to the pb2 arm'

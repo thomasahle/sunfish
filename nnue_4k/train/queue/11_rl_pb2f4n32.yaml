@@ -83,4 +83,4 @@ opt:
   wclip: 1.0
   weight_decay: 1.0e-05
 out_dir: runs/rl_pb2f4n32
-notes: family 4 -- the learned K_MID/K_END: two phase-conditioned input tables on the factored carrier, one variable against 10_rl_f4n32
+notes: 'family 4 -- the learned K_MID/K_END: two phase-conditioned input tables on the factored carrier, one variable against 10_rl_f4n32'

@@ -211,7 +211,9 @@ def main():
     a = p.parse_args()
     qdir = a.queue_dir
     done = os.path.join(qdir, "done")
+    failed = os.path.join(qdir, "failed")
     os.makedirs(done, exist_ok=True)
+    os.makedirs(failed, exist_ok=True)
     globs = [g for g in a.pgn_globs.split(os.pathsep) if g]
     lock = acquire_lock(qdir)
     try:
@@ -233,6 +235,24 @@ def main():
                 time.sleep(600)
                 continue
             cfg = pending[0]
+            # PARSE FIRST.  A yaml typo used to cost a full queue slot to
+            # discover: the trainer started, died on the config, and the entry
+            # was filed in done/ next to the runs that worked.  Two arms went
+            # that way on 2026-08-19 (an unquoted `notes:` containing ": ").
+            # Catching it here costs nothing and names the file and the line.
+            try:
+                import yaml
+                with open(cfg) as f:
+                    yaml.safe_load(f)
+            except Exception as e:
+                print("[queue] UNPARSEABLE %s -- moved to failed/, NOT run:\n  %s"
+                      % (os.path.basename(cfg), e), flush=True)
+                with open(os.path.join(qdir, "LOG.md"), "a") as f:
+                    f.write("- %s: %s UNPARSEABLE, not run\n"
+                            % (time.strftime("%Y-%m-%d %H:%M"),
+                               os.path.basename(cfg)))
+                os.rename(cfg, os.path.join(failed, os.path.basename(cfg)))
+                continue
             t0 = time.time()
             rc = run_one(cfg, qdir, globs)
             line = "- %s: %s rc=%d in %.0f min\n" % (
@@ -241,7 +261,11 @@ def main():
             with open(os.path.join(qdir, "LOG.md"), "a") as f:
                 f.write(line)
             print("[queue] " + line.strip(), flush=True)
-            os.rename(cfg, os.path.join(done, os.path.basename(cfg)))
+            # done/ means IT WORKED.  A nonzero rc goes to failed/, so a
+            # dead arm is visibly distinct from a finished one instead of
+            # being discovered by reading LOG.md line by line.
+            os.rename(cfg, os.path.join(done if rc == 0 else failed,
+                                        os.path.basename(cfg)))
             if a.once:
                 return
     finally:

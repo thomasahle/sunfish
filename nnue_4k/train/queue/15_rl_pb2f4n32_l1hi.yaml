@@ -77,4 +77,4 @@ opt:
   wclip: 1.0
   weight_decay: 1.0e-05
 out_dir: runs/rl_pb2f4n32_l1hi
-notes: sparsity reading at the structure point: l1=2e-3 against 11's 5e-4, to price the byte/val exchange rate the byte-conditional arms depend on
+notes: 'sparsity reading at the structure point: l1=2e-3 against 11''s 5e-4, to price the byte/val exchange rate the byte-conditional arms depend on'
