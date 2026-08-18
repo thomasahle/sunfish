@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-18 | **BUDGET-FORM VERDICT: the respelling holds the pool's Elo everywhere — every one of 12 cells contains zero — and the pre-registered rules SHIP DELAY = 200** | `budget:delay=200` vs the pool spelling: 30+1 −5.8 [−57,+45], 60+1 −52.5 [−109,+1], 60+0.1 +8.7, 30+0 −8.7, 60+0 −26.1, 10+0 +29.0. `delay=100`: +26.1 / −11.6 / −29.0 / +26.1 / +17.4 / +37.8. No increment cell declines either arm; 100 leads in 5 of 6 and the registered bar was **all six**, so the measured lichess lag stands. Contrast the SIMPLE form, which lost 30+1 by −79.5: the structure (5× wall off a share, reserve) is what carried the +96.19, not the pool's exact constants. **SCOPE, corrected mid-flight by Thomas: this ran under LOCAL lag and cannot decide the shipped constant** — re-registered as a VENUE question (DELAY=10 vs 200 head-to-head at 3+0.1 / 10+0.1 / 30+1 / 60+0), whose output is a required flag for future local matches, never a ship change |
 | 2026-08-18 | **PRE-REGISTERED: Thomas's BUDGET respelling replaces the pool in the classic builtin loop — `budget = wtime/40 + winc - DELAY`, `soft = max(min(budget, wtime/4 - DELAY), 100)/1000`, `think = max(min(5*budget, wtime/2 - DELAY), 200)/1000`, and `movetime` is REMOVED there (sunfish.py = the simplified clock-only UCI of the TCEC-4k rules; `sunfish_ui/uci.py` keeps full UCI)** | Four deliberate deltas vs the pool: winc coefficient **1.0** (not 39/40), lag **subtracted per limit** (not an (M+2)·O pool reserve), clamps **wtime/4 − DELAY** and **wtime/2 − DELAY**, floors **100/200 ms** (not 50/50). `think ≥ soft` is STRUCTURAL, so the clip line dies with movetime. DELAY ∈ {100, 200} decided by surrogate; 12 cells × 120 games vs `pool`, then a real-clock 60+0 N=200 forfeit cell for the winner. Artifact-vs-mirror grid identity **0/378 on BOTH arms** before game 1. Cost vs #217's head: **+1 clean line** (the named DELAY, priced at 1 line / 5 B), packed **3426 → 3402 = −24 B** |
 | 2026-08-18 | #217 rebased onto master `8c00405` (from base `4c8770e`, seven merges of search, audit and docs work behind it) | **Textual only** — the TM block is byte-identical across the rebase and `Searcher.bound` is master's verbatim. Re-measured on the new base: cleaned **140 → 140** (README's own claim, unchanged), packed **3389 → 3426 = +37 B**. Gates **451 passed / 2 skipped / 0 failed**, model audit GREEN, TM trio 141, tmlib 47,599 values no drift. Only `Searcher.search` is re-pinned — the branch's own change. No re-measurement: **+96.19 ± 33.81** stands as measured at its own base |
 | 2026-08-18 | **SIMPLE-FORM VERDICT: the pool's bookkeeping is NOT decoration — `soft = wtime/40 + 0.9*winc`, `hard = wtime/4` loses the pre-registered increment cells and PR #217 STANDS AS IT IS, its complexity now justified BY MEASUREMENT** | 12 cells x 120 games. `simple` vs `pool`: **30+1 −79.5 [−135.7, −27.2]**, **60+1 −58.5 [−112.7, −6.9]**, 60+0.1 +29.0 [−24.1, +83.5], 30+0 −49.6, 60+0 +11.6, **10+0 −61.4 [−126, −1]**; control `min40_4` vs `pool` replicates the published pass (−161.2 / −120.4 / −127.0). MECHANISM: a wall read off the RAW CLOCK inverts against a soft limit the increment holds up — at 30+1 `simple` parks near 3 s where `hard = T/4` falls BELOW `soft`, and **59% of its searches end at the wall** against the pool's 6%, so the bracket rule the 2x2 paid for stops firing. And no reserve means flags: 43/120 at 30+0, 68/120 at 10+0, pool 0. Real clock, N=200 at 60+0: **+20.87 ± 35.73**, 0 illegal, **3 time forfeits all `simple`** — and the surrogate had predicted +11.6 [−45, +69] for that cell, so this instrument's altitude bias is not a fixed multiplier. Price the simple form would have saved: 23 B |
@@ -141,6 +142,123 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-18 — BUDGET-FORM VERDICT: the structure carried the Elo, not the pool's constants
+
+**All 12 registered cells landed and every one of them contains zero.** The
+respelling costs nothing measurable against the spelling that was measured,
+and the pre-registered rules select **DELAY = 200**, the shipped default —
+confirming it rather than flipping it.
+
+### The registered table — 120 games a cell, virtual clock, 50 ms/move charge
+
+Elo is arm-minus-`pool`, so negative means the pool spelling won that cell.
+
+| TC | `DELAY=100` | `DELAY=200` (ships) |
+|---|---|---|
+| 30+1 | +26.1 [−25, +79] | −5.8 [−57, +45] |
+| 60+1 | −11.6 [−68, +44] | −52.5 [−109, **+1**] |
+| 60+0.1 | −29.0 [−82, +23] | +8.7 [−44, +62] |
+| 30+0 | +26.1 [−31, +85] | −8.7 [−65, +47] |
+| 60+0 | +17.4 [−38, +73] | −26.1 [−83, +29] |
+| 10+0 | +37.8 [−23, +101] | +29.0 [−32, +92] |
+
+**The branch rules, applied as written.** No increment cell lies entirely
+below zero for either arm, so neither declines and the form stands. `DELAY=100`
+leads on the point estimate in **5 of 6** cells and the registered bar for
+displacing the measured lag was **all six**, so it does not displace it.
+**DELAY = 200 ships.** The 60+1 cell at [−109, +1] is a knife-edge and is
+reported as one: a hair more sampling either way and that arm would have
+declined itself. It did not, and the bar does not move after the fact.
+
+### What this actually establishes, which is bigger than the table
+
+Put beside the SIMPLE form measured the same day, on the same instrument:
+
+| | 30+1 vs pool | 60+1 vs pool |
+|---|---|---|
+| `simple` (`soft = wtime/40 + 0.9winc`, `hard = wtime/4`) | **−79.5** [−136, −27] | **−58.5** [−113, −7] |
+| `budget` at DELAY=200 | **−5.8** [−57, +45] | −52.5 [−109, +1] |
+
+Both are three-line respellings that drop the pool's bookkeeping. One loses
+the increment cells outright and one does not, and the difference is
+structural rather than numerical: `simple` derived its wall from the RAW CLOCK,
+so at the park the wall fell below the soft limit and 59% of its searches
+ended at the wall. `budget` keeps the wall at **5× a share** — never
+inverting — and keeps a reserve, just spelled as a subtraction instead of a
+pool. **So what the +96.19 bought was the STRUCTURE, and the exact constants
+of the pool spelling were not what it bought.** That is the load-bearing
+finding of the day, and it is what licenses this respelling at all.
+
+### Telemetry: where the two DELAYs actually differ
+
+Neither arm spends more than the pool at 30+1 (median 1.163 s and 1.203 s
+against 1.212 s), and both end ~95% of searches on the soft limit. The
+difference is entirely at sudden death, where the asymmetric floors pace
+instead of going blind:
+
+| 10+0 | median spend | blind% | flags/120 | min clock |
+|---|---|---|---|---|
+| `DELAY=10` | 0.178 s | 0.0% | **46** | −0.23 s |
+| `DELAY=200` | 0.166 s | 0.0% | **44** | −0.24 s |
+| `pool` | 0.050 s | **75.6%** | 0 | +4.47 s |
+
+The pool survives 10+0 by not searching; the budget form searches and flags.
+It still wins the cell on Elo (+29.0), which is the trade stated plainly —
+and it is exactly why the registered real-clock forfeit cell exists.
+
+### SCOPE CORRECTION, mid-flight, and what it does and does not touch
+
+Thomas raised the venue mismatch while the last cells were running: **these
+matches run under LOCAL lag** (same-box fastchess, ~1–5 ms; the surrogate
+charges the calibrated 50 ms), so a 100-vs-200 comparison here **cannot decide
+the shipped constant**. It does not, and nothing above is used that way: 200
+is the lichess-measured lag, a bleed re-opens near 10 (the classic bot
+measured 30.8% forfeits at `winc == 0` under a no-reserve manager), and it
+stays in `sunfish.py`. What the table legitimately says is narrower and still
+useful: **at these TCs the shipped constant costs nothing measurable even on a
+venue whose real lag is 40× smaller.**
+
+**Re-registered, before its games, as a VENUE question** — `DELAY=10` vs
+`DELAY=200` head-to-head at **3+0.1, 10+0.1, 30+1, 60+0**, 120 games a cell.
+Its output is *a required flag for future local matches* and the size of the
+handicap in Elo. It is **never** a ship change. The arithmetic says where to
+expect it: at 3+0.1 with DELAY=200 the budget is `wtime/40 + 100 − 200`, which
+is negative below 4 s of clock, so the engine sits on its floors; DELAY=10
+restores `wtime/40 + 90`. Start-of-game soft limits:
+
+| TC | DELAY=10 | DELAY=200 | ratio |
+|---|---|---|---|
+| 3+0.1 | 0.165 s | 0.100 s | **1.65×** |
+| 10+0.1 | 0.340 s | 0.150 s | **2.27×** |
+| 30+1 | 1.740 s | 1.550 s | 1.12× |
+| 60+0 | 1.490 s | 1.300 s | 1.15× |
+
+At 30+1 the increment dwarfs the delta and little should move — said in
+advance rather than discovered afterwards. The DELAY=10 build is a **sed
+variant, labelled a venue artifact and never a ship candidate**; it passed the
+same mirror grid gate as the shipped one (**0 mismatches of 378**, both).
+
+### THE THREE-VENUE DESIGN this is converging on
+
+Recorded because it is the shape of the answer, not just this cell's result:
+
+1. **`sunfish.py` ships `DELAY = 200`** — lichess truth, one constant, no
+   option parsing in the simplified UCI.
+2. **The C twin gets `DELAY` in its option table** — default 200 so the
+   node-identity gate is unchanged, `option.DELAY=10` for local matches. The
+   twin's port of the budget form is owed separately and is not in this PR.
+3. **lichess gets adaptivity in the BRIDGE, not the engine** — the bot
+   measures an overhead EMA and forwards `winc' = max(0, winc − (overhead_ema
+   − 200))`, exact algebra, engine untouched. Backlogged.
+
+### Real-clock cell, running
+
+`budget` at DELAY=200 vs the pool spelling (`5d16f5c`), **fixed N=200 at
+60+0**, both artifacts on one search core (master `8c00405`), box, conc 8,
+`nice 10`, srand 20260820, forfeits registered as DATA. Launched with 88 free
+cores of 96.
+
 
 ## 2026-08-18 — PRE-REGISTRATION: the BUDGET respelling, and movetime leaves the packed loop
 
