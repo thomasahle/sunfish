@@ -18542,3 +18542,69 @@ named `e_factor_preflight.py` rather than `e_factor.py` **on purpose**: it is
 a train/ship divergence (shift forced to 3 on a net trained at 4) and must
 never be the thing a screen plays. It is deleted the moment the real entry
 lands.
+
+---
+
+## 2026-08-18 — THE FACTORED ARM IS BUILT, IN BUDGET AND CERTIFIED: 4,053 bytes, val 0.01518, within 0.7 % of the free table it approximates — and the fixed-node screen is playing
+
+`360_factor_r8n32m_final` — `arch: factor`, mirrored, r=8, N=32, lr 1.2e-2
+(the probe's winner), trained against the **cap-sum-aware export shift** so the
+net trains at the resolution it can ship at. `pool10m`, 6 epochs, seed 0,
+`val-sha a0aa553db6908e91`.
+
+| | best val | vs N=5 anchor | vs the FREE N=32 bound | learned signal × N=5 |
+|---|---|---|---|---|
+| N=5 anchor `221` | 0.0176273 | — | +17.0 % | 1.00 |
+| **factored r=8 N=32 mirrored, FINAL** | **0.0151800** | **−13.87 %** | **+0.72 %** | **1.84** |
+| free N=32 (`331`, the upper bound) | 0.0150709 | −14.50 % | — | 1.88 |
+
+Trajectory `.01549 .01557 .01535 .01541 .01552 .01518`; last2−prev2 −3.0e-5,
+marginally SOFT, so still a pessimistic reading.
+
+**The rank-8 mirrored constraint now costs 0.72 % of the free table** — down
+from 1.41 % at lr1x — and the arm holds **98 % of the free table's
+learned-signal gain over N=5**. It also **beats its own lr4x probe rung by
+5.4e-5 (2.4σ) while training at a COARSER shift**, so the bit of cp resolution
+the cap-sum bound costs is not visible in val and may even regularise.
+
+### The artifact, built with NO forced shift
+
+    shape    r=8 N=32 mirrored, 384 stored rows, U zeros 39.2%
+    payload  1089 base-90 digits
+    shift 3  caps sum 34,304 / 65,534      bias digits clipped 0/32
+    decode   literal round-trips; V exact; all 768 rows == U@V
+    PACKED   4,053 B   (43 spare against 4,096)      runs: bestmove g1f3
+
+**`--force-shift` was not needed**, which is the point: the trainer and the
+builder now carry the identical two-clause shift rule, so the net ships at the
+shift it trained at and there is no train/ship divergence to argue about.
+
+### The timed term, measured against the right comparator
+
+Earlier this lane quoted −74 Elo against a differently-loaded baseline. The
+comparison that matters is against the **N=5 shape the capacity arm actually
+ran**, both measured in one run (3 positions × 4 s, pypy 7.3.23 arm64):
+
+| engine | nps | vs `pst_entry` | timed @1.28 |
+|---|---|---|---|
+| `pst_entry` | 165,489 | — | — |
+| free N=5 shape (the capacity arm) | 95,719 | −42.2 % | −54.0 Elo |
+| **TRAINED factored r=8 N=32 mirrored** | **78,438** | **−52.6 %** | **−67.3 Elo** |
+
+**So 32 units over 8 directions cost 13.3 Elo of speed against the 5-lane
+shape** — and buy 13.9 % of val. That is the trade, priced.
+
+### The screen is playing, and what it can and cannot decide
+
+`factor` vs the pinned `entry`, 50 games / 25 colour-swapped pairs, 20,000
+nodes, `tc=6000+0`, srand 20260818, concurrency 8. Both arms passed the
+legality gate **at the played budget** (FORCED 40, 0 no-move, 0 illegal). The
+dormancy, zero-illegal and opening-diversity gates run on the produced pgn.
+
+Registered before it started and repeated here because it is the whole point:
+**this screen decides CONTINUE, never PROMOTE.** It asks one question — is the
+eval term positive at all — and the answer it must clear for the timed match
+to be worth running is **+67 Elo**, the speed tax above. Only a timed match
+against the entry can promote. The kptap precedent (+56 fixed / +16 / +0.58
+timed on a zero-cost mechanism) is why those two roles were separated before
+either instrument ran.
