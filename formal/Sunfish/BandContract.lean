@@ -773,13 +773,13 @@ move is clamped strictly below the mate band, while a king capture bypasses the
 clamp entirely and reports the token: the two never overlap, so a shallow
 search can neither invent a mate nor hide a capture. -/
 theorem shallowCap_and_capture_disjoint (static gain : Int) (depth : Nat)
-    {v : Int} (hv : MATE_LOWER ≤ v) :
+    (hband : CapInBand static gain depth) {v : Int} (hv : MATE_LOWER ≤ v) :
     shallowMoveCap static gain depth < MATE_LOWER ∧
     shallowMoveCap static gain depth < producedScore v :=
-  ⟨shallowMoveCap_below_positiveMate static gain depth, by
+  ⟨shallowMoveCap_below_positiveMate static gain depth hband, by
     have hMU : MATE_UPPER = 69290 := rfl
     have hML : MATE_LOWER = 47923 := rfl
-    have h := shallowMoveCap_below_positiveMate static gain depth
+    have h := shallowMoveCap_below_positiveMate static gain depth hband
     rw [producedScore_capture v hv]
     omega⟩
 
@@ -811,9 +811,12 @@ theorem mateBand_step_needs_only_band {r acc : Int} (h : BandReport r) :
 
 /-- The shallow cap's separation lemmas (`shallowMoveCap_below_positiveMate`,
 `cappedMove_preserves_negativeMate`) are already band-shaped: they only ever
-compare against `±MATE_LOWER`, never against the token. -/
-theorem cap_separation_is_band_shaped (static gain : Int) (depth : Nat) :
+compare against `±MATE_LOWER`, never against the token.  Since the clamp was
+dropped they carry the material invariant `CapInBand` instead of a syntactic
+ceiling. -/
+theorem cap_separation_is_band_shaped (static gain : Int) (depth : Nat)
+    (hband : CapInBand static gain depth) :
     shallowMoveCap static gain depth < MATE_LOWER :=
-  shallowMoveCap_below_positiveMate static gain depth
+  shallowMoveCap_below_positiveMate static gain depth hband
 
 end Sunfish

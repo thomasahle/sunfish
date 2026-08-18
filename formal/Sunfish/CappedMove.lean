@@ -9,8 +9,12 @@ capture, whose recursive child would immediately return `-MATE_UPPER`.
 
 Every other move at depths zero through three has the fixed cap
 
-    min (MATE_LOWER - 1) (static + gain + (depth - 1) * QS_A).
+    static + gain + (depth - 1) * QS_A.
 
+It carries no mate-band clamp: with king captures peeled first, `CapInBand`
+(the both-kings material invariant, stated below with its tuner-space
+caveat) keeps the sum a third of the way to `MATE_LOWER`, so the ceiling
+the code used to spell never bound.
 Natural subtraction makes the margin zero at depths zero and one. There the
 cap is the existing exact stand-pat futility estimate: the score identity and
 `futilityOK_discharged` show that it targets the ordinary child value. At
@@ -47,19 +51,38 @@ import Sunfish.Stalemate
 
 namespace Sunfish
 
-/-- The exact fixed cap used for an eligible Python move. -/
+/-- The exact fixed cap used for an eligible Python move.  UNCLAMPED, like
+the code: the `min (MATE_LOWER - 1)` ceiling this definition used to carry
+was dead weight once king captures are peeled first - see `CapInBand`. -/
 def shallowMoveCap (static gain : Int) (depth : Nat) : Int :=
-  min (MATE_LOWER - 1) (static + gain + ((depth - 1 : Nat) : Int) * QS_A)
+  static + gain + ((depth - 1 : Nat) : Int) * QS_A
 
-/-- At depths zero and one, natural subtraction makes the margin vanish.
-Under the ordinary-move evaluation bound, the unified cap is exactly the old
-stand-pat futility estimate. -/
+/-- The both-kings material invariant, at the cap's inputs.  At every
+`bound()` call site both kings are on the board: the driver's roots are
+legal positions, a searched child exists only for a `val < MATE_LOWER`
+move (so no king was captured making it), and the null child shares the
+board.  Hence `|pos.score|` is material-bounded (about 15k - EvalBounds'
+headline proves the static eval alone sits strictly below the band), an
+ordinary move value is below ~2k, and the shallow margin is at most
+`2 * QS_A = 280` (the cap lives at `depth <= 3`) - the sum tops out around
+a third of `MATE_LOWER - 1 = 47922`, so the clamp the code used to spell
+could never bind.  CAVEAT: `MATE_LOWER` is derived, `piece[K] - 13 *
+piece[Q]`.  In twin-option space the headroom closes around `piece[Q] >~
+2400` (the bound rises with ~16 queens' worth of material while the band
+edge falls by 13) - a tuner range that wide must revisit this hypothesis
+BEFORE it widens, or the cap can reach the band and every lemma taking
+`CapInBand` goes silent exactly when it is needed. -/
+def CapInBand (static gain : Int) (depth : Nat) : Prop :=
+  static + gain + ((depth - 1 : Nat) : Int) * QS_A < MATE_LOWER
+
+/-- At depths zero and one, natural subtraction makes the margin vanish:
+the unified cap is exactly the old stand-pat futility estimate, now with
+no clamp to eliminate. -/
 theorem shallowMoveCap_lowDepth (static gain : Int) (depth : Nat)
-    (hdepth : depth ≤ 1) (hband : static + gain < MATE_LOWER) :
+    (hdepth : depth ≤ 1) (_hband : static + gain < MATE_LOWER) :
     shallowMoveCap static gain depth = static + gain := by
   have hzero : depth - 1 = 0 := by omega
-  simp [shallowMoveCap, hzero, Int.min_def]
-  omega
+  simp [shallowMoveCap, hzero]
 
 /-- A cap below the current window is a complete fail-low report for the
 capped value; no report about the full child is needed. -/
@@ -74,25 +97,23 @@ theorem cappedMove_report (cap gamma report value : Int)
     WindowReport gamma (min cap report) (min cap value) :=
   h.cap cap gamma report value
 
-/-- The explicit ceiling keeps every eligible cap below the positive mate
-band, independent of the static score and margin. -/
-theorem shallowMoveCap_below_positiveMate (static gain : Int) (depth : Nat) :
-    shallowMoveCap static gain depth < MATE_LOWER := by
-  unfold shallowMoveCap
-  simp only [Int.min_def]
-  split <;> omega
+/-- Every eligible cap stays below the positive mate band - no longer by a
+syntactic ceiling, but by the material invariant: `CapInBand` is what the
+deleted `min (MATE_LOWER - 1)` clamp enforced vacuously. -/
+theorem shallowMoveCap_below_positiveMate (static gain : Int) (depth : Nat)
+    (hband : CapInBand static gain depth) :
+    shallowMoveCap static gain depth < MATE_LOWER := hband
 
-/-- The lower clamp is unnecessary.  A both-kings child gives
-`-MATE_LOWER < static + gain`; the shipped positive margin can only raise
-that quantity, and the positive-band ceiling is itself above `-MATE_LOWER`. -/
+/-- No lower clamp is needed either.  A both-kings child gives
+`-MATE_LOWER < static + gain`, and the shipped margin is nonnegative. -/
 theorem shallowMoveCap_above_negativeMate (static gain : Int) (depth : Nat)
     (hstatic : -MATE_LOWER < static + gain) :
     -MATE_LOWER < shallowMoveCap static gain depth := by
-  have hML : MATE_LOWER = 47923 := rfl
   have hnn : (0 : Int) ≤ ((depth - 1 : Nat) : Int) := Int.ofNat_nonneg _
-  unfold shallowMoveCap QS_A
-  simp only [Int.min_def]
-  split <;> omega
+  have hQ : (0 : Int) ≤ QS_A := by decide
+  unfold shallowMoveCap
+  have := Int.mul_nonneg hnn hQ
+  omega
 
 /-- Capping cannot create a positive mate report: any positive mate in the
 capped value was already present in the full value. -/
@@ -228,34 +249,31 @@ theorem lazyMoveTail_cap_lt_gamma (G : QSGame) (hF : ValFloor G 192)
   have hx : G.val p m < gamma - static - margin := by
     have := Int.min_le_right MATE_LOWER (gamma - static - margin)
     omega
-  have hcap : shallowMoveCap static (G.val p m) depth ≤
-      static + G.val p m + margin := by
-    unfold shallowMoveCap
-    simpa [margin] using
-      (Int.min_le_right (MATE_LOWER - 1)
-        (static + G.val p m + ((depth - 1 : Nat) : Int) * QS_A))
+  have hcap : shallowMoveCap static (G.val p m) depth =
+      static + G.val p m + margin := rfl
   omega
 
 /-- The shipped consumer never computes the threshold: it caps each produced
-move and settles it in place when that cap is below the window.  Below the
-mate band the two descriptions are the same predicate, so the per-move reports
-the consumer folds are exactly the tail reports of `lazyMoveTail_report`.  The
-hypothesis `G.val p m < MATE_LOWER` is the Python dispatch `val >= MATE_LOWER`
-that keeps king captures out of the capped branch; `gamma <= MATE_LOWER - 1`
-is where the two clamps (`min MATE_LOWER` in the threshold, `min (MATE_LOWER
-- 1)` in the cap) agree.  In the mate band no ordinary move can reach the
-window at all, and the cap test is then the finer of the two. -/
+move and settles it in place when that cap is below the window.  The two
+descriptions are the same predicate, so the per-move reports the consumer
+folds are exactly the tail reports of `lazyMoveTail_report`.  The hypothesis
+`G.val p m < MATE_LOWER` is the Python dispatch `val >= MATE_LOWER` that
+keeps king captures out of the capped branch - with the cap unclamped it
+also carries the mate-band windows, where the threshold's `min MATE_LOWER`
+arm makes every ordinary move a tail member and the unclamped cap agrees
+because `val < MATE_LOWER` bounds it under the window.  Dropping the clamp
+made this iff UNCONDITIONAL in `gamma`: the old side condition
+`gamma <= MATE_LOWER - 1` marked exactly where the two clamps agreed. -/
 theorem shippedCap_iff_tail (G : QSGame) (hF : ValFloor G 192)
     (static gamma : Int) (depth : Nat) (p m : G.Pos) (hdepth : depth ≤ 3)
-    (hm : m ∈ producerMoves G depth p) (hval : G.val p m < MATE_LOWER)
-    (hband : gamma ≤ MATE_LOWER - 1) :
+    (hm : m ∈ producerMoves G depth p) (hval : G.val p m < MATE_LOWER) :
     shallowMoveCap static (G.val p m) depth < gamma ↔
       m ∈ lazyMoveTail G static gamma depth p := by
   constructor
   · intro hcap
     refine mem_lazyMoveTail.mpr ⟨hm, ?_⟩
-    have hcap' : min (MATE_LOWER - 1)
-        (static + G.val p m + ((depth - 1 : Nat) : Int) * QS_A) < gamma := hcap
+    have hcap' : static + G.val p m + ((depth - 1 : Nat) : Int) * QS_A
+        < gamma := hcap
     simp only [lazyMoveThreshold, if_pos hdepth]
     omega
   · exact fun hm' =>
@@ -329,7 +347,6 @@ theorem shallowMoveCap_max (static a b : Int) (depth : Nat) :
     shallowMoveCap static (max a b) depth =
       max (shallowMoveCap static a depth) (shallowMoveCap static b depth) := by
   unfold shallowMoveCap
-  generalize (MATE_LOWER - 1 : Int) = ceiling
   generalize ((depth - 1 : Nat) : Int) * QS_A = margin
   omega
 

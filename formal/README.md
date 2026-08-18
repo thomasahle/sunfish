@@ -216,12 +216,13 @@ forcedlyMated_fuelValueD2_sharp :  D >= max 6 (C*(k-1) + 6)   -- 3k+3  shipped (
 The fuel value omits
 
 ```python
-cap = (MATE_UPPER if depth > 3 else
-    min(MATE_LOWER - 1, pos.score + val + max(depth - 1, 0) * QS_A))
+cap = MATE_UPPER if depth > 3 or val >= MATE_LOWER else pos.score + val + margin
 ```
 
-and that clamp puts every non-king-capture report strictly below `MATE_LOWER`
-(`shallowMoveCap_below_positiveMate`): an attacker node at any nominal depth
+and that cap puts every non-king-capture report strictly below `MATE_LOWER`
+(`shallowMoveCap_below_positiveMate`, under the both-kings material
+invariant `CapInBand` - the clamp that used to make this syntactic was
+dead code and is gone): an attacker node at any nominal depth
 zero through three cannot report a mate at all. This is the delay the section
 above calls "a mate proof found exactly at the selective frontier", priced.
 `capClamp` carries the same `depth <= 3` band as the shipped `cap`, and the
@@ -429,12 +430,16 @@ At depths zero through three, every other admitted move passes through the
 same static cap
 
 ```text
-min(min(MATE_LOWER - 1,
-        pos.score + pos.value(move) + (depth - 1) * QS_A),
+min(pos.score + pos.value(move) + (depth - 1) * QS_A,
     full child value)
 ```
 
-This is a fixed function of the position, move, and depth. At depths zero and
+This is a fixed function of the position, move, and depth. It carries no
+mate-band clamp: king captures are peeled first, and `CapInBand` (the
+both-kings material invariant, with its `piece[Q] >~ 2400` tuner caveat
+stated at the definition) keeps the capped sum a third of the way to
+`MATE_LOWER`, so the `min(MATE_LOWER - 1, ...)` ceiling the code used to
+spell never bound - `EvalBounds`' headline is the concrete arithmetic. At depths zero and
 one, natural subtraction makes the margin zero. The score identity then makes
 the cap exactly the existing stand-pat futility report; this is
 `shallowMoveCap_lowDepth` together with `futilityOK_discharged`. At depths two
@@ -460,12 +465,11 @@ threshold = max(base,
 ```
 
 and `shippedCap_iff_tail` proves the shipped predicate `cap < gamma` holds on
-exactly the moves below that threshold - for every window below the mate band,
-which is where the threshold's `min(MATE_LOWER, ...)` clamp and the cap's
-`min(MATE_LOWER - 1, ...)` clamp agree. (Inside the mate band no ordinary move
-can reach the window at all and the cap test is the finer of the two; the
-`val >= MATE_LOWER` arm keeps king captures out of the capped branch
-entirely.)
+exactly the moves below that threshold - for EVERY window, now that the cap
+is unclamped. (The old side condition `gamma <= MATE_LOWER - 1` marked where
+the threshold's `min(MATE_LOWER, ...)` clamp and the cap's dropped
+`min(MATE_LOWER - 1, ...)` clamp agreed; the `val >= MATE_LOWER` arm keeps
+king captures out of the capped branch and carries the mate-band windows.)
 
 `lazyMoveTail_cap_lt_gamma` proves every tail cap is below the window, and
 `lazyMoveTail_report` proves the fold of those caps is a valid report for the
@@ -1198,6 +1202,7 @@ King-capture substitution uses the position predicate directly, so its exact
 | exact king-capture producer report | `producedScore_exact_capture` (and why the band restatement does not do, `BandContract.lean`) |
 | shallow move cap and lazy child evaluation | `shallowMoveCap_lowDepth`, `cappedMove_report` |
 | per-move lazy cap report | `cappedMove_failLow`, `shippedCap_iff_tail`, `lazyMoveTail_cap_lt_gamma`, `lazyMoveTail_report`, `lazyMove_partition` |
+| unclamped cap stays below the band | `CapInBand` (both-kings invariant + tuner caveat), `shallowMoveCap_below_positiveMate`, `capClamp_eq_shipped` |
 | monotone cap: the per-move folds are the one-number report | `shallowMoveCap_max`, `foldMax_shallowMoveCap`, `lazyMoveTail_maxCap` |
 | prefix-first order and the empty tail | `lazyMove_partition_prefixFirst`, `lazyMove_partition_emptyTail` |
 | cap mate-band properties | `shallowMoveCap_below_positiveMate`, `cappedMove_preserves_negativeMate` |

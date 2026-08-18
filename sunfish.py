@@ -479,11 +479,15 @@ class Searcher:
             # here; the sorted stream is already floored.
             elif (val := pos.value(move)) < base: continue
             # A shallow move is capped at a static estimate of what it wins;
-            # only a king capture is uncappable. A cap below gamma answers for
-            # the move by itself: fold the cap - a virtual result, so no search
-            # and no legality witness either.
-            elif (cap := MATE_UPPER if depth > 3 or val >= MATE_LOWER
-                    else min(MATE_LOWER - 1, pos.score + val + margin)) < gamma:
+            # only a king capture is uncappable. The cap needs no mate-band
+            # clamp: both kings stand on the board at every call site (roots
+            # are legal, searched children come from sub-band moves, the null
+            # child shares the board), so pos.score + val + margin tops out a
+            # third of the way to MATE_LOWER - CapInBand in CappedMove.lean,
+            # and its caveat if piece["Q"] ever grows past ~2400. A cap below
+            # gamma answers for the move by itself: fold the cap - a virtual
+            # result, so no search and no legality witness either.
+            elif (cap := MATE_UPPER if depth > 3 or val >= MATE_LOWER else pos.score + val + margin) < gamma:
                 best = max(best, cap); continue
             # An intrinsic mate-band value is a king capture: resolve it to the
             # exact MATE_UPPER token, never a search (the docstring's promise).
