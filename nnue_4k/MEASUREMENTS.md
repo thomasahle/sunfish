@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-19 | **THE GAUNTLET FIELD: survey, the handicap surface, and the `HCAL` placement screen registered before game 1** | Field re-verified and **licences recorded** (ice4/STRO4K GPL-3; 4ku/c4ke/4k.c/M4sseur/molly MIT; pygone GPL-3), plus **pygone HEAD `cbaebee` 4090 B** and the **TCEC-4kVIII artifact pygone2-11b142 4093 B** added. **Measured, not assumed: the handicap surface is nearly empty** — `go depth` and `go nodes` hang on ALL of 4ku/ice4/c4ke/4k.c/M4sseur/STRO4K-1t and KILL molly, so fastchess `nodes=`/`depth=` cannot handicap anything in this field; the clock is the only knob (plus `movetime` for 4k.c alone). `BUILD.txt`'s claim that none of them parse `position fen` is **corrected**: 4ku/ice4/c4ke/M4sseur/molly all do, only STRO4K-1t and pygone genuinely fail — the PGN-book conclusion survives. Strength matching stated honestly: our own data has classic at **0.0% vs 4k.c**, **0.5% vs STRO4K**, **10.5% vs molly** (n=100 each, 30+1), and ~50-70 Elo per clock doubling means **no clock handicap reaches a ~900-Elo gap** — so the strong 4k class is a **low-share ceiling anchor**, not a band filler. `HCAL` (168 games, n=24/pairing, anchor classic @30+1) registered to locate the rungs. Entry **3440 B `21d55236…`** @ `aa54a5a`, classic **3358 B `5b9baf20…`** @ `e670434`. Calibration RR and the meter-5 proposal are **NOT authorised by this entry**. |
 | 2026-08-18 | **PRE-REGISTRATION: the `tapp` SCREEN — the taper family's last unplayed arm, carried at last; plus a CORRECTION to the premise it was dispatched on** | Dispatched as *"do NOT rebuild, use the gated artifact, verify its sha against its build record."* **Neither object exists**: `e68f82e` changes exactly one file (`build_taper_arms.py`, +22 lines) and commits **no artifact**, the bench box holds none (`evalstruct-20260817/bin/` has base/kptap/ktap/tap/tapk and **no tapp**), and **no sha256 for `tapp` was ever recorded** anywhere — only a size. So it was **reproduced from its deterministic generator at its own pin and the generator proved by rebuilding the arms that DID play**: rebuilt `e_tap.py` **`b1c1c12e…`** and `e_tapk.py` **`4de9b628…`** are **bit-identical to the box files that played the 900-game screen**, so the `e_tapp.py` (**`56329a20…`**) emitted in the same run is the object `e68f82e` gated — and it packs to **3726 B `43a45b9c…`, reproducing the recorded 3726 exactly**. Base at this pin packs to **3410 B `bf30904d…` — the very artifact meter 4 measured**; box `e_kptap.py` verified at 3463 B `5d01f499…`. **GATES run fresh, because the recorded ones were partial** (`e68f82e` logged only the incremental invariant and the 100 ms conversion): byte ceiling **3726 B / 370 spare PASS**; mate-conversion **@500 ms 8/8 PASS**; **@100 ms 7/8, level with base on count** and reproducing the record exactly; mate1 @8 ms **7/8, level**; legality @20k nodes **130 positions, 0 no-move, 0 illegal**; first-yield **worst 582/2048**; packed standalone empty-dir **3/3, `bestmove d7d5`, zero files left**. **Battery PASSES — but two things are recorded against it**: at 100 ms the failure moves **in kind**, base failing the hard `kqk-approach` while `tapp` fails the *easier* **`kqk-mid`**; and `tapp` **converts slower even where it passes** (`krk-mid` **13 moves vs base's 8**). Instrument note: the eval-struct table's `tap` **6/8** at mate1 @8 ms re-runs here as **7/8** — an 8 ms budget does not travel between venues. **Form**: 3-arm RR `base`/`kptap`/`tapp` (one tournament with a baseline anchor), **fixed 20,000 nodes**, arms as **SOURCES** because a packed arm has no `nodes` token and silently ignores `go nodes`, **rounds 151 → 302 per pairing, 906 games**, **coprimality PASS** (gcd(151,3)=1, 151 distinct openings, 2.00× reuse) — note the lane's old `-rounds 150` **FAILS** at gcd 3 / 6× reuse, the exact defect `0e993b7` corrected, not repeated here; `book3k.pgn` order=random, srand **20260892**; adjudication draw+resign, symmetric because all three arms are sources emitting `score cp`; conc **8**, **nice 10** — one declared deviation from the dispatched nice 5, because this cell reads no clock so nice costs it nothing while the owner's timed tuners on this box are real, exactly the reasoning in the lane's proven `run_ktap_conf.sh`. **EXPECTATION, registered as NULL and derived not hoped**: `tapp` = `tap` (**−10.43 ± 37.23**) with `pend` (**+21.31 ± 15.73**) restored ⇒ **≈ +10.9 ± 40.4, an interval dominated by zero**, and it must beat `kptap`'s **+56.07 at 53 bytes** while costing **316**. Two reasons from this lane's own record: fitted eval has fitted better and played no better **five times** (this taper's selector read +48.96/+41.89 and its confirmation returned −10.43/+27.85 — screens here read HIGH), and the fixed-node→timed discipline has fired twice (**kptap +56.07 → +16.23 → +0.58**, #221 **+26.1 → +10.77**) — *mechanism real, clock indifferent* is the expected failure mode. **BRANCHES fixed before game 1**: ADVANCE (95% pentanomial **LB > 0 vs base** AND `tapp` ≥ `kptap`) buys **one** timed 30+1 confirmation and **nothing else — no landing on a screen**; anything else is **NULL and the direction CLOSES**, retiring the fitted second table set with a number. **Landing cost stated up front**: `tapp` is built on the 3410 B base but the entry has moved to **3440 B** (`1c4468c`), so shipping it would need re-derivation and re-gating at ~**3756 B (~340 spare)**. Tripwires: illegal = STOP, `(none)` = STOP, count gate refuses a short read |
 | 2026-08-18 | **AMENDMENT 2 to METER 4: the BRIDGE is SUPERSEDED mid-run by Thomas's twin directive — the PRIMARY stands as the meter, and the twin substitute turns out to be NOT CONSTRUCTIBLE** | Live directive from Thomas: *"You should always use the c-twins when tuning and testing. They can run at 3+0.1."* Bridge stopped at **14 of 300 games** (SIGTERM to its own fastchess PID 3022917, child of driver 2949039; driver exited clean; **0 illegal, 0 forfeits** at stop; kept as `SUPERSEDED_bridge_14games.*`; **not harvested — 14 games is not a measurement**). Owner tuner campaigns verified untouched by parentage before and after. **THE PRIMARY IS THE METER**: the goal is stated at **Python 30+1**, which is also the house standard, and the primary measured exactly that at the registered fixed N=600 with every gate passed → **METER 4 = +108.17 ± 24.64 → [+83.54, +132.81]**. **NUMBER CORRECTION, because the relay already drifted**: the meter-4 figure is **+108.17 ± 24.64 at N=600**, **not +110.32 ± 26.04**, which is fastchess's **N=550 interim** — the registered instrument was a *fixed* 600 and this file's rule is *quote the count at the point of quotation*; the interim reads 2.15 Elo high on an 8% smaller sample. **What is lost**: the bridge's only job was removing the TC from the meter-3 comparison, so **`primary − meter 3` = −92.07 ± 45.58 (z = 3.96) now carries the TC move as well as the arms moves**, and stays labelled so; no cell separates them and none will run. **The twin substitute is NOT CONSTRUCTIBLE as specified**: there is **no entry twin** — `tools/ctwin` twins *classic only* (`gen_tables.py`: "Dump the classic engine's evaluation tables") and the entry's search is structurally different (LMR/LMP/history/depth-free key are licensed for it and forbidden in classic); the nearest object is classic's search wearing entry tables, which is not the entry. **And `docs/TESTING.md` excludes it three ways at once** — rule 6 is "Use C 3+0.1 for node-identical classic search; **Python 30+1 otherwise**", and its "Do not use it for" list names **Python-throughput, shipping time-management, and NNUE-eval**, which is exactly this meter: the subject is the 4k entry, the goalpost move **was** a time manager (`eef299b` +96.19 ± 33.81 plus #217), and meter 1 measured this pair at **per-node parity (−1.74 ± 27.93, n=400)** — the entry's whole advantage is the speed and TM that C removes. **Lane's judgement, as Thomas delegated: the robustness check is NOT worth running, not even cheap** — it would swap a direct measurement for a proxy documented not to price the effect. The directive stands as the right default for classic search/tuning work; **the +400 meter is a documented exception, now written down rather than rediscovered next meter**. If a future lane wants the read, the honest form is the one stopped: Python, both packed arms, 60+1, N=300, `book3k.pgn`, ~2 h. **No branch fires. METER 4 complete at +108.17 ± 24.64** |
 | 2026-08-18 | **METER 4 PRIMARY VERDICT: the entry is +108.17 ± 24.64 over post-pool classic at 30+1 — the goalpost moved ~92 Elo, and the PRE-RESULT corrected expectation is CONFIRMED while the registered band is not** | Gates first and all passed before the Elo: **0 illegal, 0 forfeits, 600/600 `normal`**, count exact, coprimality gcd 1, both arms sha-verified box-side, boot **and** book-shaped smokes green, **71 free cores** at gate pass, driver PID 2949039 alive throughout. **Elo +108.17 ± 24.64 → [+83.54, +132.81]**, nElo **+130.37 ± 27.80**, **65.08%** (305 W / 124 L / 171 D), ptnml **[13, 38, 85, 83, 81]** over 300 pairs, PairsRatio 3.22, DrawRatio 28.33%, LOS 100%, 2 h 55 m at conc 10 cotenant. Arms entry **3410 B** `bf30904d…` (`d0a6e60`) vs **packed** classic **3361 B** `d177d79a…` (`ab3b490`). **Independent recompute mirrors fastchess to the digit, and the same script reproduces meter 3's +200.24 ± 38.35 and [1,11,33,41,64] from meter 3's PGN** — validated against a published number. Diversity: **600/600 distinct games, 0 replays, exactly 300 distinct 16-ply lines = 2.00× reuse**; clustered interval **±24.63 (inflation 1.02×)** agrees with the pentanomial **±24.64** to two decimals — **no inflation to price**. **Two harvest instruments found format-dependent and reported, not patched**: `opening_gate.py` VOIDs any PGN-book match because it keys on the absent `[FEN]` tag (**it VOIDs meter 3 too**), though its duplicate-game half passes; and `cluster_elo.py` never strips `{book}`, so it clusters on **8 plies, not 16** (errs safe, both readings given). Clocks recorded (dormancy N/A at a real clock): worst min-time-left **entry 1.389 s, classic 2.193 s**, thin but zero forfeits — and **`nodes=true` carries nothing, both arms report n=0**; the entry emits **no `info` lines at all**, so its `tl=0.000` is an artifact and its clock is reconstructed — which is also why **adjudication=none was right**, an adjudicator would have read `score cp` from classic only. **Against the registered band [+120, +200]: point estimate BELOW, interval overlaps on [+120, +132.81]. Against Correction 2's pre-result expectation +127.05 ± 52.38: −18.88 ± 57.89, z = 0.64 — CONSISTENT.** The band was centred on the wrong commit and the correction that fixed it was filed before the games finished; the band's lower edge landing inside the interval is **luck, as Correction 2 said in advance it would be called**. **Goalpost delta: −92.07 ± 45.58, z = 3.96 — real, not noise**, but it contains entry Design B (+23, projected), classic's pool (−96.19, measured at this TC), #217's level respelling, classic's unpriced search work **and** the TC move; the BRIDGE cell removes the TC term. **Progress toward +400: 27.0%** (upper bound 33.2%), down from 50% — **~292 Elo remain**, because classic got stronger, not because the entry got weaker. **Where the rest lives, honestly: mostly nowhere yet.** Entry side, measured and in budget, sums to ≈ 0 — #225 kptap's +56.07 was a fixed-node screen whose timed confirmations read **+16.23 (n=300)** then **+0.58 [−21.25, +22.41] (n=600, deciding)**; taper arms −10.43 ± 37.23 / +27.85 ± 34.32 neither clear zero and both delete a landed +21.31; **`tapp` is built, gated and never played** — the one untested upside; speed converts at **1.28 ± 0.63 Elo/%nps** but 292 needs **≈3.3×** and the cheap wins are spent. Closed with numbers: labels, distribution, capacity arm, mutable board, `er40` depth, the #205 port, the TT family. Classic keeps moving away: #232 **+21.6 ± 19.0** (screen only), #236/#241 **~+6**, plus unbounded tuner risk. **And screening Elo is not decision Elo — fixed-node has now read high twice (kptap +56→+0.58, #221 +26.1→+10.77).** **METER, NOT PROMOTION: no branch fires** |
@@ -339,6 +340,190 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-19 — THE GAUNTLET FIELD: the survey, the handicap surface (and why it is nearly empty), and the `HCAL` placement screen registered before game 1
+
+Thomas, 2026-08-18 night, verbatim: *"When you test nnue rating, you
+shouldn't just test against classic, but against a gauntlet of tcec 4k and
+python engines."* This entry builds that field. It does **not** redefine the
++400 goal — it measures where the entry sits among real opponents and
+**proposes** a meter-5 format for his sign-off.
+
+### 1. The field that already existed, re-verified
+
+Seven 4k-class engines were built on the bench box on 2026-08-07/08-10 with a
+build record (`c4k/BUILD.txt`). Provenance re-verified from the clones today;
+**licences recorded now, which the original record omitted**. All are used
+**run-only, locally, never redistributed** — GPL is therefore no obstacle, but
+it is recorded anyway.
+
+| engine | source | pinned | licence | built form |
+|---|---|---|---|---|
+| **ice4** | github.com/MinusKelvin/ice4 | `fabe3b1` (v6.1 + TCEC-crash fix) | **GPL-3.0** | `g++ -DOPENBENCH -O3` |
+| **4ku** | github.com/kz04px/4ku | `917a087` | **MIT** (kz04px, 2021) | `g++ -std=c++17 -O3 -march=native` |
+| **c4ke** | github.com/citrus610/c4ke | `22e318f` = tag v3.0 | **MIT** (citrus610, 2025) | `g++ -std=c++23 -O3 -march=native` |
+| **4k.c** | github.com/GediminasMasaitis/4k-dot-c | `1894f0e` | **MIT** (G. Masaitis, 2024) | `make EXE=bin/4kc` |
+| **M4sseur** | github.com/Diazepawn/M4sseur | `470fa53` | **MIT** (M. Guntermann, 2023) | `g++ -std=c++20 -O3 -march=native` |
+| **STRO4K** | github.com/ONE-RANDOM-HUMAN/STRO4K | `d4d5532` (branch version_4.0) | **GPL-3.0** | `./build4k bin/STRO4K-1t 1 32 --avx512` → **4008 B, the artifact IS the binary** |
+| **molly** | codeberg.org/latuernich/molly | `e317a0c7b8` (the TCEC commit) | **MIT** (latuernich, 2024) | native `rustc -O` |
+
+Added today, both **GPL-3.0**, both Python, both genuine ≤4096-byte artifacts:
+
+| engine | source | pinned | artifact | sha256 |
+|---|---|---|---|---|
+| **pygone (HEAD)** | github.com/scs-ben/pygone | `cbaebee` (2026-06-18) | `dist/pygone` **4090 B** | `62346a10e2b0e13b…` |
+| **pygone2-11b142** | same repo, `historical/` | the confirmed **TCEC 4kVIII entrant** | **4093 B** | `f44c111d821c5bff…` |
+
+Both are self-extracting `xz` launchers that exec `pypy3` — the same shape as
+our own packed entry. `pygone` is the only other Python program ever entered
+in a TCEC 4k season, so it is the one true peer in the field.
+
+**The two arms of the measurement**, built fresh today from the branch heads:
+
+| arm | source | pin | bytes | sha256 |
+|---|---|---|---|---|
+| **entry** | `nnue_4k/pst_entry.py` | nnue-4k **`aa54a5a`** | **3440** | `21d55236280dd8d6c63dc790e7e7a9e7cac2a7ce0f5cc4802927dd7efba46e99` |
+| **classic** | `sunfish.py` | master **`e670434`** | **3358** | `5b9baf2036f74afd71e3df14be92c1c84220871acaadfc62dd96bfb568f932de` |
+
+### 2. THE HANDICAP SURFACE IS NEARLY EMPTY — measured, not assumed
+
+The brief anticipated *"4ku at heavy node/depth handicap IF its UCI supports
+it."* **It does not, and neither does anything else in the field.** Every
+engine was probed with a fresh process per go-form (`gauntlet-20260818/probe/`,
+one file per engine, 12 s harness deadline):
+
+| engine | `go wtime/btime` | `go movetime` | `go depth` | `go nodes` | `go infinite`+`stop` | `position fen` |
+|---|---|---|---|---|---|---|
+| 4ku | **OK** | hang | hang | hang | hang | **OK** |
+| ice4 | **OK** | hang | hang | hang | OK | **OK** |
+| c4ke | **OK** | hang | hang | hang | OK | **OK** |
+| 4k.c | **OK** | **OK** | hang | hang | OK | (re-probe pending) |
+| M4sseur | **OK** | hang | hang | hang | hang | **OK** |
+| STRO4K-1t | **OK** | hang | hang | hang | hang | **FAIL** |
+| molly | **OK** | **dies** | **dies** | **dies** | **dies** | **OK** |
+| pygone | **OK** | hang | hang | hang | hang | **FAIL** |
+
+Three consequences, all load-bearing:
+
+1. **`nodes=` and `depth=` in fastchess are unusable against this entire
+   field.** A fixed-node or fixed-depth handicap — the cheap, clean way to
+   dial a strong engine down — **cannot be applied to any of them**. The only
+   knob is the **clock**, plus `movetime` for 4k.c alone.
+2. **The book must be moves-based PGN.** `position fen` fails on STRO4K-1t and
+   on pygone, so an EPD book silently starts them from the initial position —
+   the same structural void that killed meter 4's EPD cell. `c4k/tcec_book.pgn`
+   (330 five-move lines from real TCEC 4k games) is the field book.
+3. **`BUILD.txt` is wrong on one point and it is corrected here, not
+   silently.** Its verbatim claim was: *"Books must be moves-based ("position
+   startpos moves ..."): none of these engines parse "position fen ..."."*
+   Measured today: **4ku, ice4, c4ke, M4sseur and molly all parse FEN
+   correctly** (each returned a move that is legal only in the probe FEN
+   `7k/8/8/8/8/8/8/K6R w - - 0 1` and illegal from the start position). Only
+   STRO4K-1t genuinely fails. The *operational* conclusion — use a PGN book —
+   survives, because two engines in the field still cannot take FEN.
+
+### 3. STRENGTH MATCHING: stated honestly, before any game is played
+
+**A gauntlet that scores ~0% is uninformative, and most of this field will do
+exactly that.** The evidence is our own, and it is not close:
+
+| pairing | when | n | result |
+|---|---|---|---|
+| classic vs **4k.c** | 2026-08-11, 30+1 | 100 | **0.0%** (0-100-0) |
+| classic vs **STRO4K** | 2026-08-11, 30+1 | 100 | **0.5%**, −919.54 |
+| classic vs **molly** | 2026-08-11, 30+1 | 100 | **10.5%**, −372.25 ± 90.90 |
+| packed128v2 vs **molly** | 2026-08-11, 30+1 | 100 | **21.5%**, −224.97 ± 65.30 |
+| pesto2g32 vs **ice4/4ku/c4ke** | 2026-08, 60+1 | 180 | **0-180** |
+
+Since those readings the entry has gained (meter 3 **+200.24 ± 38.35**, meter
+4 **+108.17 ± 24.64** over a classic that itself gained **+96.19 ± 33.81** from
+the pool TM). Even granting the whole of that to the gap, the top of the 4k
+field stays several hundred Elo out of reach, and **no clock handicap can
+close it**: the field's own Elo-per-doubling is ~50-70, so pulling a
+~3000-class engine to ~2100 needs on the order of **thirteen** halvings of the
+clock — ~1 ms a move, where the measurement becomes a study of scheduler
+jitter and time forfeits rather than of chess.
+
+So the design is **not** "handicap the strong ones into the band". It is:
+
+- **(a) near-strength opponents** — molly, pygone HEAD, pygone2-11b142,
+  classic — carrying the informative game share;
+- **(b) one or two strong anchors at LOW game share** — 4ku and/or ice4 at
+  full strength, present to fix the scale and to keep the field honest about
+  where the entry actually stands, **expected to score ~0-2%** and priced
+  accordingly;
+- **(c) clock-handicapped rungs, clearly labelled**, used only where the
+  handicap lands *inside* the band — which is an empirical question, not an
+  assumption, and is exactly what the screen below measures.
+
+### 4. REGISTERED: `HCAL`, the placement screen — a rung-locator, not a decision
+
+**N is small on purpose. This screen locates rungs; it decides nothing.**
+Quote its numbers only with `n=24` attached.
+
+| | |
+|---|---|
+| form | fastchess **gauntlet**, `-seeds 1`, anchor = **classic** |
+| anchor TC | **30+1** (the meter's own TC — so placements transfer) |
+| N | **24 per pairing**, 12 rounds × 2 games, paired openings; **168 total** |
+| book | `c4k/tcec_book.pgn`, `format=pgn order=random` |
+| srand | **20260819** |
+| adjudication | **none** (meter form), `-maxmoves 300` as a safety only |
+| concurrency | **8**, `nice 5`, `-recover` |
+| tripwires | **any illegal move = STOP** (by an OPPONENT too — an opponent's illegal move voids its games); **forfeits are DATA here**, because the short-clock rungs are being tested for exactly that |
+
+Rows, with the handicap stated as part of the name:
+
+| row | engine | clock | it is here to answer |
+|---|---|---|---|
+| `4ku_t2` | 4ku | 2+0.02 (1/15) | does *any* clock handicap reach the band? |
+| `4ku_t05` | 4ku | 0.5+0.005 (1/60) | " |
+| `4ku_t0125` | 4ku | 0.125+0.00125 (1/240) | " — and does it forfeit? |
+| `ice4_t05` | ice4 | 0.5+0.005 | is the answer engine-specific? |
+| `molly` | molly | 30+1 | the nearest 4k engine, re-placed against today's classic |
+| `pygone` | pygone HEAD `cbaebee` | 30+1 | HEAD is 2026-06; our +576 was against the 4kVIII artifact |
+| `pyg4kviii` | pygone2-11b142 | 30+1 | the floor anchor, and the cross-link to the +576 record |
+
+**Registered expectations, so the reading cannot drift.** Against classic:
+molly ~30-40% (it was 10.5% against a classic ~96 Elo weaker); pyg4kviii
+**>85%**; pygone HEAD unknown and genuinely open — it is nine months of
+development past the artifact we beat, and if it lands near 50% the field has
+its peer. The 4ku rungs: **I expect all three to stay above 65% for 4ku**,
+i.e. the handicap does *not* reach the band; the honest outcome of this screen
+may well be "the strong 4k class is a ceiling anchor and nothing else", and
+that is a result, not a failure.
+
+### 5. Gates run before the field is allowed to play
+
+The zero-illegal floor applies to **opponents**, not only to us — an
+opponent's illegal move voids the games it played. The bookfit gate asks
+`go movetime`, which **six of seven** C engines cannot answer, so a
+clock-form gate was written (`legality_gate_clock.py`, same seed and same
+three position classes as the bookfit gate, so the position sets are
+identical): 100 positions per engine, 40 of them **FORCED** (in check, ≤2
+legal replies — the class that catches a pseudo-legal generator dropping the
+one escape). Results land in `gauntlet-20260818/gate/`. **entry: PASSED, 0
+no-move, 0 illegal.** The sweep over the rest is running.
+
+### 6. Venue and cotenancy
+
+Bench box, `~/sunfish-bench/gauntlet-20260818/`. Census at registration: load
+**38 of 96**, **58 free** — well above the ≥24-free gate. Cotenants: the
+book-line-fit gauntlet (1643/1680 games, finishing) and the owner's tuner
+fleets. `nice 5`, concurrency 8, **nothing of anyone else's is touched**;
+process counting is by **parentage**, never by a bare name match.
+
+### 7. What comes next, and what is NOT authorised
+
+The **calibration round-robin** — the first gauntlet-based meter reading, with
+per-pair intervals *and* a pooled entry-vs-field number — **gets its own
+registration once HCAL has located the rungs**, because its field composition
+and game shares depend on HCAL's answer. It is not authorised by this entry.
+Neither is any change to the +400 goal or to the standing meter: **meter 5's
+format is a PROPOSAL for Thomas's sign-off**, and it is written up alongside
+the RR result, not before it.
 
 ---
 
