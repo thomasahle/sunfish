@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-19 | **PROPOSAL FOR SIGN-OFF: METER 5 as a gauntlet** | **The +400 goal stays defined against classic** — a gauntlet measures where the entry IS, it does not move where the entry is GOING, and re-referencing the fifth point of a four-point series (+244.47 → +200.24 → +108.17) would destroy the series and the goal with it. Proposed shape: a **FROZEN 8-engine field** (pygone HEAD, molly, 4ku, sungorus 1.4, bbc11, sf512/1024/2048) whose INTERNAL cross-table is measured **once** by GRR-1 and carried forward as prior games, so each meter cycle plays only the rows that moved — **entry×classic at N=300** (the goal axis, same instrument as meters 1-4) plus **entry×field and classic×field at N=40**, 940 games ≈ 3.5 h. **Four numbers, never averaged**: M5-GOAL (entry−classic, the headline of the goal), M5-FIELD (pooled vs the frozen field, quoted only with its composition), **M5-NODE** (entry ≈ SF15 at N nodes/move — recommended for long-run tracking, the only figure reproducible on other hardware because a node budget is not a wall clock), and M5-CCRL (BT re-anchored on the two CCRL engines, carrying the 30+1-vs-2′+1″ and pool-dependence caveats). Two uncomfortable expectations registered in advance: the field may place us **below sf512** (the Lichess bot reads blitz **1756**; sunfish's own TCEC 4k entries were rated **2193** and **1903**, last both times), and the **0-180** record against the ice4/4ku/c4ke class is a distance to report, not a gap to promise. **AWAITING THOMAS** on composition, shares, and which number is the field headline; until then meter 5 runs in the meter-4 shape. |
 | 2026-08-19 | **HCAL INTERIM + PRE-REGISTRATION: `GRR-1`, the calibration round-robin** | **The clock is not a dial** (n=14/cell): 4ku is **+572.55 ± 209.65** at 1/15 of the anchor's clock, **+368.33 ± 300.85** at 1/60, and **−49.98 ± 120.61** at 1/240 — a ~420-Elo collapse across two halvings with nothing stable between, the far side below Move Overhead and scheduler jitter. Clock-handicap arms **RETIRED, not calibrated**. `nodestime` tried on the researcher's recommendation and **measured unusable**: the harness still enforces the wall clock, so realised spend collapsed to **20 / 43 nodes** a move against a probe's 530 / 1323; fixed `go nodes` holds **512 / 2049 exactly** and is what the published anchors are measured on. **All 14 HCAL forfeits are `pyg4kviii` at the FULL clock** — the 4kVIII artifact cannot manage 30+1, its row is a TM failure not a strength, and it is dropped; the sub-second cells forfeited **zero**. **The reader gate was FAILING OPEN** — `[Termination]` is written after `[Result]`, so it reported `forfeits: none` over ten of them and would equally have hidden an illegal move; fixed and verified against the known answer. **pygone HEAD is the peer**: −120.41 ± 334.55 (n=12) below classic, nine months past the artifact we beat by ≈+576. `GRR-1` registered: **10 engines, 45 pairings, fixed N=20, 900 games**, three independent scales (TCEC via pygone@1thread, CCRL Blitz via sungorus 2241 + bbc11 2019 at full strength, fixed-node via SF15 at 512/1024/2048) reported **separately, never pooled**. Manifest lands as `nnue_4k/GAUNTLET_FIELD.md`; **molly ships with no LICENSE at all**. Gate sweep **15/15 PASS**. Not meter 5 — that is a proposal for sign-off. |
 | 2026-08-19 | **THE GAUNTLET FIELD: survey, the handicap surface, and the `HCAL` placement screen registered before game 1** | Field re-verified and **licences recorded** (ice4/STRO4K GPL-3; 4ku/c4ke/4k.c/M4sseur/molly MIT; pygone GPL-3), plus **pygone HEAD `cbaebee` 4090 B** and the **TCEC-4kVIII artifact pygone2-11b142 4093 B** added. **Measured, not assumed: the handicap surface is nearly empty** — `go depth` and `go nodes` hang on ALL of 4ku/ice4/c4ke/4k.c/M4sseur/STRO4K-1t and KILL molly, so fastchess `nodes=`/`depth=` cannot handicap anything in this field; the clock is the only knob (plus `movetime` for 4k.c alone). `BUILD.txt`'s claim that none of them parse `position fen` is **corrected**: 4ku/ice4/c4ke/M4sseur/molly all do, only STRO4K-1t and pygone genuinely fail — the PGN-book conclusion survives. Strength matching stated honestly: our own data has classic at **0.0% vs 4k.c**, **0.5% vs STRO4K**, **10.5% vs molly** (n=100 each, 30+1), and ~50-70 Elo per clock doubling means **no clock handicap reaches a ~900-Elo gap** — so the strong 4k class is a **low-share ceiling anchor**, not a band filler. `HCAL` (168 games, n=24/pairing, anchor classic @30+1) registered to locate the rungs. Entry **3440 B `21d55236…`** @ `aa54a5a`, classic **3358 B `5b9baf20…`** @ `e670434`. Calibration RR and the meter-5 proposal are **NOT authorised by this entry**. |
 | 2026-08-18 | **PRE-REGISTRATION: the `tapp` SCREEN — the taper family's last unplayed arm, carried at last; plus a CORRECTION to the premise it was dispatched on** | Dispatched as *"do NOT rebuild, use the gated artifact, verify its sha against its build record."* **Neither object exists**: `e68f82e` changes exactly one file (`build_taper_arms.py`, +22 lines) and commits **no artifact**, the bench box holds none (`evalstruct-20260817/bin/` has base/kptap/ktap/tap/tapk and **no tapp**), and **no sha256 for `tapp` was ever recorded** anywhere — only a size. So it was **reproduced from its deterministic generator at its own pin and the generator proved by rebuilding the arms that DID play**: rebuilt `e_tap.py` **`b1c1c12e…`** and `e_tapk.py` **`4de9b628…`** are **bit-identical to the box files that played the 900-game screen**, so the `e_tapp.py` (**`56329a20…`**) emitted in the same run is the object `e68f82e` gated — and it packs to **3726 B `43a45b9c…`, reproducing the recorded 3726 exactly**. Base at this pin packs to **3410 B `bf30904d…` — the very artifact meter 4 measured**; box `e_kptap.py` verified at 3463 B `5d01f499…`. **GATES run fresh, because the recorded ones were partial** (`e68f82e` logged only the incremental invariant and the 100 ms conversion): byte ceiling **3726 B / 370 spare PASS**; mate-conversion **@500 ms 8/8 PASS**; **@100 ms 7/8, level with base on count** and reproducing the record exactly; mate1 @8 ms **7/8, level**; legality @20k nodes **130 positions, 0 no-move, 0 illegal**; first-yield **worst 582/2048**; packed standalone empty-dir **3/3, `bestmove d7d5`, zero files left**. **Battery PASSES — but two things are recorded against it**: at 100 ms the failure moves **in kind**, base failing the hard `kqk-approach` while `tapp` fails the *easier* **`kqk-mid`**; and `tapp` **converts slower even where it passes** (`krk-mid` **13 moves vs base's 8**). Instrument note: the eval-struct table's `tap` **6/8** at mate1 @8 ms re-runs here as **7/8** — an 8 ms budget does not travel between venues. **Form**: 3-arm RR `base`/`kptap`/`tapp` (one tournament with a baseline anchor), **fixed 20,000 nodes**, arms as **SOURCES** because a packed arm has no `nodes` token and silently ignores `go nodes`, **rounds 151 → 302 per pairing, 906 games**, **coprimality PASS** (gcd(151,3)=1, 151 distinct openings, 2.00× reuse) — note the lane's old `-rounds 150` **FAILS** at gcd 3 / 6× reuse, the exact defect `0e993b7` corrected, not repeated here; `book3k.pgn` order=random, srand **20260892**; adjudication draw+resign, symmetric because all three arms are sources emitting `score cp`; conc **8**, **nice 10** — one declared deviation from the dispatched nice 5, because this cell reads no clock so nice costs it nothing while the owner's timed tuners on this box are real, exactly the reasoning in the lane's proven `run_ktap_conf.sh`. **EXPECTATION, registered as NULL and derived not hoped**: `tapp` = `tap` (**−10.43 ± 37.23**) with `pend` (**+21.31 ± 15.73**) restored ⇒ **≈ +10.9 ± 40.4, an interval dominated by zero**, and it must beat `kptap`'s **+56.07 at 53 bytes** while costing **316**. Two reasons from this lane's own record: fitted eval has fitted better and played no better **five times** (this taper's selector read +48.96/+41.89 and its confirmation returned −10.43/+27.85 — screens here read HIGH), and the fixed-node→timed discipline has fired twice (**kptap +56.07 → +16.23 → +0.58**, #221 **+26.1 → +10.77**) — *mechanism real, clock indifferent* is the expected failure mode. **BRANCHES fixed before game 1**: ADVANCE (95% pentanomial **LB > 0 vs base** AND `tapp` ≥ `kptap`) buys **one** timed 30+1 confirmation and **nothing else — no landing on a screen**; anything else is **NULL and the direction CLOSES**, retiring the fitted second table set with a number. **Landing cost stated up front**: `tapp` is built on the 3410 B base but the entry has moved to **3440 B** (`1c4468c`), so shipping it would need re-derivation and re-gating at ~**3756 B (~340 spare)**. Tripwires: illegal = STOP, `(none)` = STOP, count gate refuses a short read |
@@ -343,6 +344,122 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-19 — PROPOSAL FOR SIGN-OFF: METER 5 as a gauntlet. Four numbers, a frozen field, and the goal left exactly where it is
+
+**This is a proposal. Nothing here is in force, and no number below is a
+result.** It exists so Thomas can say yes, no, or "cheaper" to a shape before
+the shape starts producing numbers that are awkward to withdraw. The numbers
+that will fill it come from `GRR-1`.
+
+### The thing this must not do
+
+Thomas asked for a gauntlet **rating**. The standing goal is **+400 over
+classic**. Those are compatible and must be kept so:
+
+> **The +400 goal stays defined against classic, unchanged.** A gauntlet
+> measures where the entry *is*; it does not get to move where the entry is
+> *going*. Meters 1–4 are a four-point series against classic (+244.47 →
+> +200.24 → +108.17) and silently re-referencing the fifth point would destroy
+> that series and the goal with it.
+
+So meter 5 **adds** a field axis and **keeps** the classic axis, from one run.
+If Thomas wants the goal itself restated in field terms, that is his call and
+this lane is not making it by choosing an instrument.
+
+### The frozen field
+
+Eight opponents, none of them ours, spanning roughly 1700 to 3040:
+
+| seat | engine | scale it carries |
+|---|---|---|
+| Python 4k peer | **pygone** HEAD | TCEC Bayeselo **1677 ± 132**, and the only 4k row TCEC measured at `Threads=1` |
+| 4k near | **molly** | our own history (−372.25 ± 90.90 vs classic, n=100) |
+| 4k ceiling | **4ku** | CCRL 40/15 **3030** / Blitz **3043**, single-CPU |
+| CCRL anchor | **sungorus 1.4** | CCRL Blitz **2241 ± 16** (1280 games) |
+| CCRL anchor | **bbc11** | CCRL Blitz **2019 ± 17** (1243 games) |
+| ladder | **sf512 / sf1024 / sf2048** | SF15 fixed nodes; Blass SF16.1 ≈**1700 / 2050 / 2292** |
+
+**FROZEN means frozen.** The pooled and fitted numbers are only comparable
+across meters if the composition does not move. Adding or dropping an engine
+requires a re-anchor run and **both** numbers reported for one cycle.
+
+### Game shares — measure the field once, not every time
+
+The field's *internal* cross-table does not change between meters. So it is
+measured **once** (that is `GRR-1`: 45 pairings, N=20) and **frozen as prior
+games for the fit**. Each meter cycle then only has to play the rows that
+actually moved:
+
+| pairing set | N per pairing | games | why |
+|---|---|---|---|
+| **entry × classic** | **300** | 300 | the goal axis; same instrument as meters 1–4, so the series survives |
+| **entry × each of the 8** | **40** | 320 | ±~105 per pair; pooled n=320 → ±~40 |
+| **classic × each of the 8** | **40** | 320 | keeps classic on the same scale, so a classic improvement cannot masquerade as a field shift |
+| field × field | **0** | 0 | carried over from the frozen cross-table |
+| | | **940** | ≈ **3.5 h** at concurrency 8 |
+
+If that is too expensive, the two cheapest cuts, in order: drop `4ku` (it is a
+near-shutout row bought for scale) and drop `sf2048`. That takes it to ~780
+games. **4ku's row is the one I would keep if only one anchor survives** — it
+is the only direct measurement of the distance to a division winner.
+
+### The four numbers, and which one is the headline
+
+1. **M5-GOAL — `entry − classic`, pentanomial, N=300, 30+1.** The +400 tracker.
+   Directly comparable to meter 4's **+108.17 ± 24.64**. *This stays the
+   headline of the goal.*
+2. **M5-FIELD — pooled `entry` vs the frozen field, pentanomial over
+   colour-swapped pairs, classic excluded.** The brief's pooled statistic. Say
+   it with its composition attached every single time: it is *"against this
+   field, weighted as played"*, not a rating, and it moves if the field moves.
+3. **M5-NODE — the entry's position interpolated between the SF fixed-node
+   rungs, reported as "entry ≈ SF15 at N nodes/move".** *This is the one I
+   recommend for long-run tracking of the field axis.* It is the only number
+   here that is exactly reproducible on other hardware and in five years, because
+   a node budget is not a wall clock. Its absolute translation carries Blass's
+   ±150 and the SF15-vs-SF16.1 version gap, both quoted whenever it is.
+4. **M5-CCRL — the Bradley-Terry fit re-anchored by least squares on sungorus
+   (2241) and bbc11 (2019).** An estimate *on the CCRL Blitz scale*, carrying
+   two caveats that must travel with it: our TC is **30+1**, about two doublings
+   faster than CCRL Blitz's 2′+1″, and every published absolute scale is
+   opponent-pool dependent — the Stockfish developers' own anchoring admits
+   ±100 against CCRL and documents a **33% Elo-scale compression** in a closed
+   round-robin, and two careful large-N studies of the same nominal setting
+   disagree by ~500.
+
+**The three external scales are reported side by side and never averaged.**
+Where they disagree, the disagreement is the finding.
+
+### Gates, unchanged and extended to opponents
+
+Zero illegal moves anywhere in the run, by **any** engine, or the run is void —
+an opponent's illegal move voids the games it played just as ours would. Every
+engine passes the clock-form legality gate before it enters. Forfeits are
+counted and **attributed per engine**: a forfeit by the subject is a defect, a
+forfeit by an opponent condemns that opponent's row and not the meter.
+
+### Honest expectations, written down before the sign-off
+
+Two things could make this uncomfortable, and both are better said now.
+
+**(a) The field may place us lower than the programme assumes.** The `sunfish`
+Lichess bot currently reads **blitz 1756 / rapid 1874** over 2986 games, and
+sunfish's own two TCEC 4k entries were rated **2193** (4kI) and **1903**
+(4kII), last of five and last of six. If the entry lands under `sf512`, that is
+the measurement talking and it will be reported as such.
+
+**(b) The gap to the top of the 4k field is not a gap this programme can close
+by tuning.** ice4, c4ke, 4ku, 4k.c and STRO4K sit at CCRL ~2965–3040
+single-CPU; our own record against that class is **0-180**. The gauntlet's
+honest service is to say *how far*, per opponent, with an interval — not to
+promise the distance is bridgeable.
+
+**Sign-off requested on:** the field composition, the game shares, and which of
+the four numbers is the field headline. Until then meter 5 runs in the meter-4
+shape.
 
 ---
 
