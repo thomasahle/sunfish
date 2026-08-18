@@ -10,11 +10,12 @@ methodology; it exists because shortcuts here produce confident, wrong numbers.
 ## TL;DR recipe
 
 ```bash
-# 1. Freeze BOTH engines completely (code + interface, no shared files!)
+# 1. For a classic search/eval change, freeze and verify BOTH C twins.
 mkdir -p /tmp/elo/old /tmp/elo/new
-git archive master     sunfish.py sunfish_ui | tar -x -C /tmp/elo/old
-git archive my-change  sunfish.py sunfish_ui | tar -x -C /tmp/elo/new
-chmod +x /tmp/elo/old/sunfish.py /tmp/elo/new/sunfish.py
+git archive master     sunfish.py tools/ctwin tests/files | tar -x -C /tmp/elo/old
+git archive my-change  sunfish.py tools/ctwin tests/files | tar -x -C /tmp/elo/new
+make -C /tmp/elo/old/tools/ctwin gate
+make -C /tmp/elo/new/tools/ctwin gate
 
 # 2. Get fastchess and a 2000+ position opening book
 #    https://github.com/Disservin/fastchess/releases  (its small test book is
@@ -22,9 +23,11 @@ chmod +x /tmp/elo/old/sunfish.py /tmp/elo/new/sunfish.py
 
 # 3. Run a pentanomial SPRT — then LEAVE THE MACHINE ALONE until it finishes
 fastchess \
-  -engine cmd=/tmp/elo/new/sunfish.py name=new \
-  -engine cmd=/tmp/elo/old/sunfish.py name=old \
-  -each proto=uci tc=30+1 \
+  -engine cmd=/tmp/elo/new/tools/ctwin/sunfish_c \
+          args=/tmp/elo/new/tools/ctwin/tables_classic.txt name=new \
+  -engine cmd=/tmp/elo/old/tools/ctwin/sunfish_c \
+          args=/tmp/elo/old/tools/ctwin/tables_classic.txt name=old \
+  -each proto=uci tc=3+0.1 \
   -openings file=openings.epd format=epd order=random \
   -sprt elo0=0 elo1=10 alpha=0.05 beta=0.05 model=logistic \
   -rounds 2000 -games 2 -concurrency 6 -recover \
@@ -32,15 +35,20 @@ fastchess \
   -resign movecount=4 score=500
 ```
 
+This is the default for changes represented node-for-node by the classic C
+twin. If the diff changes Python throughput, time management, the interface,
+or behavior absent from the twin, freeze `sunfish.py` plus `sunfish_ui/` and
+run those engines at `30+1` instead.
+
 ## The rules, and why each one exists
 
-1. **Freeze both engines with `git archive`, including `sunfish_ui/`.**
-   `sunfish.py` imports `sunfish_ui/uci.py`, so an engine run from the working tree
-   picks up whatever is in the tree *at process start*. If both engines share a
-   live checkout — or you edit any imported file mid-match — you are no longer
-   testing the diff you think you are testing. This is not hypothetical: a
-   contaminated run in this repo once measured **-60 ELO (LOS 0.02%)** for a
-   change that was later shown to search bit-identical node counts.
+1. **Freeze every file that either engine reads.** The C recipe above archives
+   `sunfish.py`, `tools/ctwin/`, and its differential-test positions. A Python
+   match must also archive `sunfish_ui/`, which `sunfish.py` imports. If both
+   engines share a live checkout — or you edit a loaded file mid-match — you
+   are no longer testing the intended diff. This is not hypothetical: one
+   contaminated run measured **-60 ELO (LOS 0.02%)** for a change later shown
+   to search bit-identical node counts.
 
 2. **Do nothing else on the machine while the match runs.**
    Sunfish plays on a real clock. Compiles, test suites, or other engine
@@ -91,20 +99,19 @@ fastchess \
    directly at a long TC (drive the engine over a scripted game and assert
    the budget is actually reached mid-game).
 
-6. **Time control: 30+1 minimum for anything decision-grade.**
-   Sunfish is slow; sudden-death blitz makes every game a timeout lottery,
-   and very fast TCs measure interpreter overhead as much as chess (two
-   changes on record flipped sign between fast TC and 60+1). `tc=4+0.04`
-   is for regression tests and lockstep sanity only. Any match whose
-   result feeds a merge/decline decision runs at `tc=30+1` or slower;
-   final confirmation of a winner stays at 60+1. A handful of time losses
-   over hundreds of games is normal; dozens mean the TC is too fast.
+6. **Use C `3+0.1` for node-identical classic search; Python `30+1` otherwise.**
+   The full differential gate proves that the twin searches the same moves,
+   windows, scores, and nodes as Python. Its scaled `3+0.1` clock reaches the
+   same useful depth regime at a fraction of the cost, so it is the primary
+   decision instrument for classic search rules, search parameters, and
+   PST-shaped evaluation changes represented by the twin.
 
-   For search-only changes, the node-identical C twin may screen at `3+0.1`:
-   it applies the same clock formula while making long parameter screens
-   affordable. Treat it as a provisional surrogate for Python `30+1` until
-   the calibration plan below reproduces known Python Elo effects. It cannot
-   validate time-management or Python-throughput changes.
+   Node identity does not make runtimes identical. A Python list-allocation
+   cleanup can change Python NPS while leaving C untouched; time-management,
+   interface, and NNUE changes may not exist in the twin at all. Test those on
+   the shipping engine at `30+1` or slower, with final confirmation at `60+1`.
+   `tc=4+0.04` remains a regression smoke test only. At either decision TC, a
+   few time losses over hundreds of games are normal; dozens invalidate it.
 7. **Adjudicate finished games** (`-draw`/`-resign` flags above) — sunfish has
    no resign logic and weak endgames, so unadjudicated games drag on and waste
    most of the wall time on decided positions.
@@ -214,11 +221,10 @@ fastchess \
    the deep sweep, both tuned-knob sweeps, both `TABLE_SIZE` eviction
    sweeps) before any number from the twin counts. When diffing a knob,
    apply it to **both** sides (`difftest.py --set NAME=V` does this); a
-   knob set on one side measures the knob *plus* an engine mismatch. And
-   twin results are decision-grade only after the known-Elo calibration
-   plan passes (see below and `tools/ctwin/README.md`); before that they
-   are screening signals, subject to rule 12 like every fixed-effort
-   number.
+   knob set on one side measures the knob *plus* an engine mismatch. A
+   candidate that passes this gate may use the timed C-twin match as its
+   decision result. The known-effect calibration in `tools/ctwin/README.md`
+   remains a periodic harness health check, not a per-PR prerequisite.
 
 15. **Long/realistic time controls are expensive; spend them on exactly two
    things.** Timed games at 300+0 or 30+1-at-scale are reserved for (1)
@@ -245,8 +251,8 @@ fastchess \
    overhead cannot certify. Surrogate output is never a verdict on its own,
    and the surrogate may rank nothing until its calibration gate passes
    (`tools/ctwin/README.md`, "Time management on a virtual clock").
-   Search-only changes may screen at C `3+0.1`, subject to the calibration
-   gate below; that compares search quality and throughput, not time managers.
+   Search-only changes use C `3+0.1`; that compares search quality under a
+   scaled clock, not time managers.
    For TM validation itself, order the spend by stress per game-minute:
    sudden-death drain is an *absolute-clock* pathology, so short sudden
    death (60+0, or a 1+0 hammer) stresses the mechanism harder per minute
@@ -264,38 +270,27 @@ scores, verified byte-for-byte by `difftest.py` against the live
 `sunfish.py` — at ~22x the speed of warm pypy3. It is a lab instrument and
 never ships.
 
-**Use it for:** any *search-quality* question at classic semantics where
-games are the bottleneck — fixed-node screening matches, hyperparameter
-grids and SPSA over the exposed knobs (`QS`, `QS_A`, `EVAL_ROUGHNESS`,
-`TABLE_SIZE`, the null-move/IID/futility family, the tp_move
-replacement-policy battery), and PST-shaped eval variants injected via
-`gen_tables.py` without recompiling. A fixed-node game costs ~1/22nd of
-the pypy equivalent, so grids that were unaffordable become overnight
-jobs.
+**Use it for:** classic search-quality decisions, fixed-node screens,
+hyperparameter tuning, and PST-shaped evaluation variants injected through
+`gen_tables.py`. A fixed-node game costs ~1/22nd of the PyPy equivalent, and
+a timed `3+0.1` SPRT is the default decision match for a node-identical diff.
 
-**Timed questions go through the virtual clock, not the twin directly.**
-The clock-budgeting branch of classic's `main()` is deliberately not cloned
-and the twin itself only plays clock-free games (`go nodes N`); `vmatch.py`
-wraps it in a virtual clock so that time management is *rankable* here —
-see rule 15 and the README's "Time management on a virtual clock". Ranking
-is not deciding: a real-clock match still validates the candidate.
+**Search changes use the twin's clock; time-manager changes use the virtual
+clock.** The twin accepts ordinary UCI clocks with a fixed search-only budget.
+`vmatch.py` instead wraps `go nodes N` in the shipping manager's virtual clock
+so time-management policies can be ranked quickly. A real-engine match still
+validates the winning time manager; see rule 15.
 
-**Do not use it for:** NNUE-eval questions — it clones classic's
-search over table-file evaluations, so anything the 4k NNUE work changes
-outside PST-shaped eval is invisible to it. Rule 12 also applies with full
-force: fixed-node results hold search effort constant, so they screen;
-only a wall-clock match on the real engine decides.
+**Do not use it for:** Python-throughput, shipping time-management, interface,
+or NNUE-eval questions. Those effects are absent or differently priced in C.
+Rule 12 still applies to *fixed-node* twin results; the timed `3+0.1` SPRT is
+what makes the search-only decision.
 
-The twin also accepts UCI clocks for provisional `3+0.1` search screens. That
-fixed budget policy is not a model of the shipping time manager; use `vmatch.py`
-to compare time policies and a real-clock match to validate the winner.
-
-**Before believing twin match numbers**, the calibration plan staged in
-[`tools/ctwin/README.md`](../tools/ctwin/README.md) (section "Calibration
-plan") must have passed: a sanity match of ctwin vs pypy classic at fixed
-nodes scoring ~50%, plus reproduction of two knob-expressible pairs whose
-Elo gap is already known from real matches. Until then, treat twin output
-as directional.
+The twin accepts UCI clocks for the `3+0.1` search match. That fixed budget is
+not a model of the shipping time manager; use `vmatch.py` to rank time policies
+and a real-engine match to validate the winner. Periodically rerun the
+calibration plan in [`tools/ctwin/README.md`](../tools/ctwin/README.md) to catch
+harness drift.
 
 ### Joint search-parameter tuning (2026-08)
 
