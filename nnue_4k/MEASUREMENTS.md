@@ -21369,3 +21369,413 @@ single-variable comparison gets in this campaign.
 Cotenancy was clean under the new standard: **68 meter4 games and a 500-game
 owner screen ran inside the window with zero forfeits on either**, at
 concurrency 8 / nice 5.
+
+## PORTFOLIO REGISTRATION — the NNUE relaunch: eight families, priced in BYTES and in SPEED before any training (2026-08-19)
+
+The eval program closed ONE family: linear-in-ps768, king-blind, clipped-relu,
+under nine mechanisms and zero conversions. This lane opens the families that
+closure did not touch. Thomas's standing want is unchanged — "a good bigint
+neural network that adds serious elo" — and the directive tonight is breadth:
+a portfolio, not a priority queue.
+
+**Nothing here is a result.** Everything below is a price or a bar. Four new
+instruments were built tonight and their numbers are measurements; every
+architecture number is a *price*, and every price that is composed rather than
+built is labelled COMPOSED in its own row.
+
+### Provenance, because this memo cites two ledgers
+
+Roughly a third of the numbers below — the whole factored-compression price
+table, the per-digit container list, the width/nps trio and the `nn_cp`
+call count — live in `nnue_4k/MEASUREMENTS.md` **on branch
+`factor/compression` @ `ff4f28a`, which has never been merged into
+`nnue-4k`**. That is a live divergence in the ledger of record, not a filing
+detail: anyone reading only this branch cannot check half of what follows.
+This memo quotes those numbers with their values so this branch carries them,
+but **reconciling the two ledgers is an open obligation** and it is named here
+rather than left for the next lane to discover. (This commit also merges
+`origin/nnue-4k`, which had itself diverged by ten commits.)
+
+### What this registration does NOT reopen
+
+Objectives (cp labels stand — five statistics, one half-vindication, no
+conversions), label sources, and the king-blind linear family itself. Any arm
+below that reduces to those is out of scope by its own registration.
+
+---
+
+### I. FOUR INSTRUMENTS, built tonight
+
+**(1) Marginal payload price, through `tools/build/pack.sh`.** Payload strings
+of a given length and character distribution spliced into the real
+`replnet_proto.py`; the code side is byte-identical across rows, so the
+difference between two rows is the payload's price and nothing else. The
+spliced builds do not run — this is a *price* instrument, the same method the
+ledger used for the N=5/N=6 random-weight rows. Calibration: the shipped N=4
+trained payload (777 chars) reproduces at **3,812 B**, the ledger's own number,
+exactly.
+
+| stream | 768 ch | 1536 ch | 3072 ch | marginal B/char |
+|---|---|---|---|---|
+| 4 trits/char, 50% trit zeros | 3,821 | 4,421 | 5,626 | 0.781 → 0.785 |
+| 4 trits/char, 70% trit zeros | 3,742 | 4,244 | 5,182 | 0.654 → 0.611 |
+| 4 trits/char, 85% trit zeros | 3,624 | 3,946 | 4,614 | 0.419 → 0.435 |
+| uniform base-90 digit | 3,851 | (1024) 4,062 | (1280) 4,277 | 0.824 → 0.840 |
+
+This independently reproduces the factor lane's `price_container.py` table
+(0.850 B/digit at 0% zeros, 0.474 at 70%) from a different direction: theirs
+parameterises sparsity at the DIGIT, mine at the TRIT, which is the knob `l1`
+actually pulls. **Sparsity is the only large byte lever there is** — 0.78 →
+0.42 B/char across the plausible range, a 46% swing, against ~6% total
+available from any change of alphabet (see family 8).
+
+**(2) Width tax, box pypy 7.3.20, search-free primitives** (`width_probe`,
+`nice 19`): the engine's own `nn_cp` and accumulator-delta arithmetic,
+parameterised by lane count.
+
+| N | 4 | 5 | 6 | 8 | 12 | 16 | 24 | 32 | 48 | 64 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| read-out ns | 405.9 | 419.9 | 491.2 | 531.8 | 656.7 | 742.7 | 972.8 | 1179.2 | 1721.3 | 2332.2 |
+| delta ns | 35.8 | 36.2 | 38.1 | 40.6 | 44.3 | 52.3 | 60.1 | 69.4 | 91.8 | 115.9 |
+| combined | **441.7** | 456.2 | 529.3 | 572.5 | 700.9 | **794.9** | 1032.9 | **1248.6** | 1813.0 | **2448.1** |
+| × N=4 | 1.00 | 1.03 | 1.20 | 1.30 | 1.59 | 1.80 | 2.34 | 2.83 | 4.10 | 5.54 |
+
+Same shape as the factor lane's arm64 numbers (+98% / +278% / +483% at
+16/32/48 against my +80% / +183% / +310%); different machines, so ratios
+travel and absolutes do not.
+
+**(3) `nn_cp` calls per node — the two live readings disagreed by 20×, and the
+count settles it.** The ACCUMULATOR PRICING section above reads the N=4 net's
+8.210 µs/node share as ≈21.5 read-outs per node ("consistent with `nn_cp`
+running once per *generated move*"). Counted directly, instrumenting
+`replnet_proto.nn_cp` over a depth-5 search from the start position:
+**1,622 calls against 1,568 searcher nodes = 1.03 per node.** This
+independently reproduces the factored lane's own count (0.99 / 1.01 / 1.02 /
+1.01 / 1.01 at N=4/8/16/32/48 over a depth-9 search) and its diagnosis:
+`nn_cp` has exactly two call sites, and the ~30x loop that motivated the
+"once per generated move" reading is the mate detector, which is almost never
+entered.
+
+**The 21.5-per-node reading is WITHDRAWN, and so is the bar built on it.**
+ACCUMULATOR PRICING set the N=6 break-even at "≈59-65 Elo" on that premise.
+The premise was ~25x off; measured end to end on one machine in one run,
+`pst_entry` 165,489 nps / free N=5 shape 95,719 (−42.2%, −54.0 Elo) /
+**trained r=8 N=32 mirrored 78,438 (−52.6%, −67.3 Elo)** — so 32 lanes over
+8 directions cost **13.3 Elo of speed against the 5-lane shape**, not 37 and
+not 70. Width is cheap; *having a net at all* is what costs ~45%. This is a
+correction to numbers this ledger has been quoting, not a new result.
+
+**(4) Bucket census and refresh-rate census.** Two pre-registration checks the
+ledger's own history demands: king-WING buckets were killed on data balance
+(80.4% of positions with the white king on the king side, 0.3 pos/param), and
+a per-side own-king bucket was declared "a different engine" because it
+invalidates the incremental accumulator. Both objections are now measured
+rather than assumed.
+
+Balance, 400,000 positions sampled from `pool10m`:
+
+| partition | shares | worst bucket | pos/trit at r=4 mirrored (1,536 trits/bucket) |
+|---|---|---|---|
+| **kb2** own-king rank band (back two ranks / advanced) | 74.63 / 25.37 | 25.4% | **~1,650** |
+| kb4 rank band × queenside/kingside | 11.19 / 63.44 / 9.92 / 15.45 | 9.9% | ~645 |
+| **pb2** material phase, cut at 11 | **50.4 / 49.6** | 49.6% | ~3,230 |
+| pb4 material phase, cuts at 4/11/20 | 26.6 / 23.9 / 26.3 / 23.3 | 23.3% | ~1,515 |
+
+**The data-starvation objection does not transfer.** It was recorded against a
+160-parameter hand PST bucket on a small labelled set; at 10M positions with a
+factored carrier the worst kb2 bucket still holds ~1,650 positions per stored
+trit. kb2 and pb2/pb4 are all clear; **pb2 is the best-conditioned partition on
+this corpus by a wide margin**, and that is a fact about the data, not a
+preference.
+
+Refresh rate — the fraction of GENERATED moves that would force an accumulator
+rebuild, since `Position.move()` is called once per generated move and is where
+the incremental update lives. 4,000 `pool10m` positions, classic `gen_moves`:
+
+| quantity | measured |
+|---|---|
+| generated moves per position | **29.5** |
+| king moves | 14.52% of generated |
+| **king moves crossing a rank band — the kb2 refresh rate** | **2.16%** |
+| captures | 5.57% of generated |
+| **captures crossing the phase cut — the pb2 refresh rate** | **0.07%** |
+
+---
+
+### II. THE PRICE MODEL
+
+**Bytes.** Machinery floors, all `pack.sh`, all on the bytes-literal decoder
+(`b605999`) unless stated: code floor **3,170**; + factored decode **+81**;
++ mirror index **+20**; + ml2 second layer **+98**; + n8 codec **+15**.
+Payload digits price by the measured curve above. The factored payload's digit
+count is exact (`packed/make_factor_proto.py`):
+
+> **digits = (nfeat / 2) · ceil(r / 4) + r · N + (2N + 1)**, with
+> **nfeat = 768 · B**, B = input buckets, mirror on.
+
+Calibration against two built-and-RUN artifacts: mirrored r=4/N=32/B=1 predicts
+3,701 against the built **3,677**; mirrored r=8/N=32/B=1 trained predicts 4,041
+against the built **4,053**. Both inside 25 B, both in the pessimistic
+direction for r=4 and optimistic for r=8 — so read every prediction below as
+**± 30 B**, and no arm ships on a predicted number.
+
+**Speed.** Two conversions, both anchored on end-to-end nps of real builds
+rather than on primitives alone, because that is what the Elo slope was fitted
+to (timed term = nps cost % × 1.28, ± 0.63):
+
+- **Primitive → node conversion, calibrated twice.** Same machine, same run,
+  random weights: N=4 97,854 nps (10.22 µs/node) → N=32 82,473 (12.12 µs/node),
+  Δnode = 1.90 µs against Δprimitive = 700.6 ns on that lane's own microbench
+  ⇒ **Δnode ≈ 2.71 × Δprimitive**. My box numbers give 2.83× by the same
+  construction across two machines. Take **Δnode ≈ 2.7 × Δprimitive**, with 1×
+  as the optimistic edge of the bracket, and re-measure with `nps_probe.py` on
+  the first built artifact of any arm that screens.
+- A bucket refresh is `from_board`, **3,586-3,654 ns and width-independent**.
+  Refresh cost per call = rate × 3,586 ns. The conversion above was calibrated
+  on lane arithmetic, not on a 120-square scan, so the refresh rows below are
+  bracketed 1x-2.7x rather than pinned.
+
+| design | Δ primitive per call | Δ entry-nps | Δ timed Elo |
+|---|---|---|---|
+| N=4 → N=32 (measured build) | +807 ns | −5.8 pp | −7.4 (67.3 vs 59.9) |
+| N=4 → N=64 (modelled) | +2,006 ns | −14.4 pp | **−78 total** COMPOSED |
+| **kb2 live refresh** (2.16%) | **+77.5 ns** | −0.3 to −0.9 pp | **−0.5 to −1.2** COMPOSED |
+| **pb2 live refresh** (0.07%) | +2.5 ns | −0.01 to −0.03 pp | **−0.04** COMPOSED |
+| ml2 second layer (ledger) | — | ×0.90 nps | −15 |
+
+**The headline of the speed side, and it reverses the prior worry: bucketed
+inputs are essentially FREE at runtime in this engine.** A per-side own-king
+bucket was declared "a different engine" on 2026-08-13, and the refresh RATE
+that would have priced it was promised inside two registrations and never
+delivered — the factored lane's audit records it as an open gap. **It is
+measured above: 2.16% of generated moves.** Against a per-call budget that
+already carries a 1,248 ns read-out at N=32, that is a rounding error. King
+buckets cost **≤3.5 Elo timed** (registered ceiling, the pessimistic end of
+the bracket; point estimate −1.2) and phase buckets cost nothing measurable.
+**No design in this portfolio is chosen or rejected on refresh cost**, and the
+"different engine" objection is retired on measurement rather than argued
+away.
+
+---
+
+### III. THE EIGHT FAMILIES, priced
+
+Prices at r=4/N=32 mirrored unless stated; "@40%" and "@70%" are trit zero
+fractions in the U stream, the range trained nets actually reach (the shipped
+nets land 39–43%; 70% requires an explicit `l1`/`rate` target).
+
+| # | family | B | digits | packed B @40% | @70% | speed | verdict |
+|---|---|---|---|---|---|---|---|
+| 3 | wide factored, carrier | 1 | 577 | **3,701** (built 3,677) | 3,610 | −67.3 | **CARRIER** — screened alone at 32.00%, fails |
+| 1 | **king-bucketed, kb2 rank band** | 2 | 961 | **4,003** (93 spare) | **3,834** (262) | −68.0 | **QUEUE** |
+| 4 | **phase-bucketed taper, pb2** | 2 | 961 | **4,003** (93 spare) | **3,834** (262) | −67.3 | **QUEUE — top of portfolio on price** |
+| 1/4 | kb4 or pb4 | 4 | 1,729 | 4,551 **OVER 455** | 4,213 **OVER 117** | — | **BYTE-BLOCKED** below ~78% U zeros |
+| 3+8 | wide factored N=64 | 1 | 705 | 3,864 (built 3,803) | 3,766 | −78 | **QUEUE** (width control) |
+| 1/4+8 | bucketed × N=64 | 2 | 1,153 | 4,166 **OVER 70** | **3,997** (99) | −78 | **QUEUE with a sparsity target** |
+| 6 | material-gated read-out | 1 | 581 | ~3,750 (346 spare) | — | ~−67.5 | **COHORT 2** — cheapest new mechanism |
+| 2/7 | bilinear m=4 + tail; 2-layer over new inputs | — | +98 B code | — | — | ×0.90 nps | **BLOCKED** — certifier defect |
+| 5 | mobility | — | — | — | — | — | **KILLED** |
+| 5 | pawn-structure flags | — | — | — | — | — | **DEFERRED** — cache bump |
+| 8 | quantization / digit base | — | — | — | — | — | **CLOSED BY MEASUREMENT** |
+
+Family notes, each with the prior evidence that decides it:
+
+**1 — King-bucketed inputs. QUEUE at B=2, rank band.** The recorded negative is
+`kb8fold`: bucketed training-form val 0.01267 against 0.01428 once the export
+**folded the buckets back onto shared ternary rows** — and the ledger's own
+consequence was "shared-rows-only folding is dead; only per-bucket DELTAS or
+products can carry king knowledge". The factored carrier does not fold: it
+stores B · 384 distinct rows and the buckets survive to the artifact. Positive
+prior: kb4 bought −5.7% relative val at width 128, kb8 0.00800 against v2's
+0.00875. The bucket is the **rank band only** (own king on its back two ranks
+vs advanced) because that is the file-invariant code, and the carrier
+file-mirrors U — a file-split bucket inside a file-mirrored table is the one
+combination that is internally contradictory, and it is also the one the data
+kills (63.4% in a single kb4 bucket).
+
+**4 — Phase-conditioned taper. QUEUE, and it is the best-priced arm in the
+portfolio.** The entry's `K_MID`/`K_END` is a hand taper, switched at the root;
+this is the learned two-table version, and "the entry's hand-built machinery
+remains unexpressed by this family" is the closure's own statement of what is
+missing. Balanced 50.4/49.6, refresh-free (0.07%), same bytes as kb2. **The
+contrary prior must not be mis-cited**: `net128phase` (0.00833) against its
+`net128phase1` single-global-scale control (0.00836) says a phase-bucketed
+SCALAR on the residual buys nothing. That is a scalar gate on one net. This arm
+is two tables. They are different mechanisms and only the first was tested.
+
+**3 — Wide factored. CARRIER, never a standalone arm again.** It was screened
+alone: **32.00%**, inside the family band, and its val moved −13.9%. It earns
+its place only as the capacity vehicle for 1 and 4, which is exactly the role
+the directive assigns it. Free-table width upper bounds on `pool10m`: N=16
+−8.69%, N=32 −14.50%, N=64 −20.93% against N=5, all SOFT-converged, so all
+pessimistic.
+
+**2 and 7 — Bilinear m=4 + narrow tail, and two-layer over new inputs.
+BLOCKED, with a named prerequisite.** The same operator in the ml2 form was
+built, screened and CLOSED (`arm2b` − `ctl1l` = −6.66 pooled, 45.00% head to
+head, plus an 8.2% nps tax). Over ps768 that axis is closed and the directive
+agrees. Over NEW inputs it is not closed — but it cannot be *certified*:
+`certify_ml2` ignores N and `bm`, producing byte-identical certificates for
+`n4` and `n5`, and `export_ml2` is silently corrupt at N ≥ 5 (ord to 279
+against a 35..126 codec) — the fix that repaired `export_replnet` was never
+carried across. **Prerequisite, registered: certify_ml2 must take N and bm, and
+export_ml2 must take the mixed-radix repair, before any bilinear arm trains.**
+Positive prior held for when it unblocks: `net128bilt` 0.00795 with the odd
+tail, beating kb8 with no buckets; m=8 ties m=4, so the fold stays m=4.
+
+**5 — Cheap non-PST features. Mobility KILLED, pawn flags DEFERRED.** The
+governing result is already in this ledger and it is decisive: **"our Elo/byte
+cost model is INVERTED vs ice4/4ku: incremental eval makes (piece, square)
+terms free and whole-position terms (mobility!) expensive — their 4.0 Elo/byte
+is not available to us."** ice4 buys 104 Elo for 26 B of mobility and we
+cannot, because mobility is not an accumulator feature: it cannot be
+maintained through `move()`, so it is a second eval term recomputed per node
+with no incremental structure — the exact cost profile the speed model
+punishes, and exactly what the directive's own O(1)-amortizable filter
+excludes. Say it plainly and do not queue it. Pawn-structure flags (passed / doubled / isolated) *are*
+maintainable on pawn moves and captures only (5.6% of generated moves) and are
+worth a slot, but they need new per-position data, hence a `CACHE_VERSION` bump
+and a re-parse of `pool10m`. Two prior results shrink the prize: the entry
+already ships `pend`'s `P_MID`/`P_END` tables, the cheap first-order
+approximation of a passed-pawn term, and **E3 — the passed-pawn term with a
+sound delta rule — was designed and priced OUT** at +200-300 code bytes plus
+an unmeasured nps tax concentrated in pawn endings, under a standing rule that
+any SCAN-class term passing fixed nodes must take a timed confirmation.
+Deferred to cohort 3, behind any conversion from cohorts 1-2.
+
+**6 — Material-gated mixture. COHORT 2, cheapest new mechanism in the
+portfolio.** The generalisation of `K_MID`/`K_END` to a soft gate. It does not
+need a second table: partition the N lanes into two groups and scale them by
+g and (1 − g) at read-out, where g is read from a **material lane carried in
+the accumulator itself** — fixed weights, updated by the same incremental delta
+as everything else, so the gate is free per move. Byte price is the r=4/N=32
+payload plus ~4 gate digits plus ~45 B of read-out code: **~3,750 B, 346
+spare** — the only arm in the portfolio with real headroom. It needs a
+`model.py` read-out change and is therefore cohort 2, not tonight.
+
+**8 — Quantization variants. The DIGIT-BASE sub-axis closes by existing
+measurement; the CONTAINER sub-axis stays open as a byte-only lever.** The
+container price list already answers it: base-3 spends 2.39 bits to carry
+1.585 (**+51%** over its own entropy), alphabet-27 +6.5%, alphabet-81 (four
+trits per digit, what ships) **+6.2%**, uniform base-90 +5.5%. The codec is
+within ~6% of optimal, so no change of digit base can buy width. The 46% lever
+is sparsity. **The quantization axis therefore converts into a sparsity target
+attached to every arm** — an explicit `l1`/`rate` setting with a stated zero
+fraction, priced before the arm is believed — and not a separate family. That
+much is an axis closed by arithmetic over measurements already in this ledger,
+which is the cheapest kind of closure available.
+
+What does NOT close is the **container**, and it must not be swept up in the
+same sentence: the staged **base-48 two-stream** encoding measured **0.746
+B/param against mixed-radix's 1.045** — a 29% byte win, worth ~+241
+int8-equivalent params — and the staged **−48 B repack** is real headroom.
+Both are entry-touching, both need Thomas's PR click, and both buy bytes
+without touching the model, so they belong to the byte lane rather than to any
+arm here. Recorded so that "quantization is closed" is never quoted against
+them.
+
+---
+
+### IV. THE GUARD THAT HAS TO MOVE, and why it is allowed to
+
+`train/model.py` refuses `kb > 1` on the ternary path:
+
+> `if cfg.ternary and (cfg.kb > 1 or cfg.nb or cfg.rff or cfg.phase or
+> cfg.segs != 1): raise ValueError("ternary is the packed replnet path: kb=1 ...")`
+
+That guard is the codification of a **byte** claim, stated at REPLNET v1
+pre-registration: "kb4/kb8 multiply the payload ×4/×8 against a 617 B budget —
+impossible". Both halves of the premise have since moved: the payload budget is
+878 B in context, not 617, and the factored carrier makes B=2 cost **+384
+digits, not ×2 of everything** — 961 digits against 577, which the price table
+puts at 4,003 B @40% zeros and 3,834 B @70%. The guard is therefore relaxed
+**only** for `arch=factor` with B ≤ 2, and **only** for the bucket knobs; the
+plain diagonal path keeps the refusal, because for the plain path the original
+arithmetic is still exactly right. A B=4 arm stays refused until a trained
+payload measures ≥ 75% U zeros through `pack.sh`.
+
+---
+
+### V. COHORT 1 — five trainings, three families, one shared tournament
+
+Queued tonight on the box runner. All five are `arch=factor`, mirrored, on
+`pool10m` / `fenkey` / `split_seed 20260813` / `val_mod 20`, seed 0, the lr the
+factored lane's own ladder selected (1.2e-2), 6 epochs — i.e. **one variable
+against run 360's recipe at a time**, which is the only reason the cells are
+comparable at all.
+
+| arm | family | B | r | N | l1 | predicted packed B | role |
+|---|---|---|---|---|---|---|---|
+| `f4n32` | 3 | 1 | 4 | 32 | 5e-4 | 3,701 (built 3,677) | **carrier control** — never trained; A and B differ from it in one bit |
+| `pb2f4n32` | 4 | 2 | 4 | 32 | 5e-4 | 4,003 | phase taper |
+| `kb2f4n32` | 1 | 2 | 4 | 32 | 5e-4 | 4,003 | king rank band |
+| `f4n64` | 3+8 | 1 | 4 | 64 | 2e-3 | 3,864 | width control, sparsity target |
+| `pb2f4n64` | 4+8 | 2 | 4 | 64 | 2e-3 | 4,166 @40% / 3,997 @70% | structure × width; **byte-conditional** |
+
+`pb2f4n64` is registered as **byte-conditional**: it trains regardless, but it
+may not be built into a checkout unless its trained payload prices under
+4,066 B (4,096 less the 30 B margin) through `pack.sh`. Registering the
+condition now is the point — the N=6 lane learned that a payload predicted 25 B
+over came back 63 B over, and the ~30 B "trained compressibility credit" it
+leaned on measured **zero**.
+
+**Bias-rail check, mandatory on every export in this portfolio.** The rail has
+five prior sightings and one measured wrong fix (ARM 1's naive ×8 widening made
+things worse). Every arm reports, beside its val: the count of lane gains
+pinned at digit 89, the count of bias digits pinned at −44 or +45, and the
+lane-cap sum against 65,534. A run whose bias digits clip is **reported, not
+silently rescaled** — `biasscale` exists but is TRAINER-ONLY and an S>1 net must
+never be spliced into an entry.
+
+**The screen.** One fixed-node round robin, per the shared-tournament
+methodology, `ab_roundrobin.sh`:
+
+| knob | value |
+|---|---|
+| field | `entryd0` (anchor) + `capn5` (drift contrast) + `f4n32` + `pb2f4n32` + `kb2f4n32` |
+| engines / pairings | 5 / 10 |
+| rounds | **27** — gcd(27, 10) = 1, the coprimality gate |
+| games | **540**, 54 per pairing |
+| each | `proto=uci nodes=20000 tc=6000+0` |
+| book | `openings_2k.epd`, `order=random`, fresh `-srand` |
+| cotenancy | concurrency 8, nice 5, ≥16 free cores at launch, COORDINATION.md entry with a parentage census and a YIELD-FIRST clause |
+| statistic | **score% vs `entryd0`**, in-tournament cells only |
+
+Arms are **checkouts, never packed artifacts** — a packed arm can play neither
+an EPD book nor a fixed-node cell, and that fact cost another lane 427 games.
+
+**Bars, stated before any number exists.**
+
+- **CONTINUE — 40.0% vs `entryd0` in-tournament.** The entry contrast is
+  **29.79% ± 3.0 (n=282)**; 40.0% is +78.6 Elo above it and is the smallest
+  move this instrument can distinguish from the family band at 54 games.
+- **WIN — ~59%.** That is where an arm's fixed-node margin covers its own
+  measured timed tax (−67.3 Elo at N=32) and it could actually beat the entry
+  on a clock. Nothing below 59% is a claim about strength; it is a claim about
+  the axis staying open.
+- **STOP — if all three structured arms land inside 22–36%**, the family band
+  the closed axis produced under nine mechanisms, then **input conditioning
+  closes for the packed family** on the same terms the objective axis closed,
+  and cohorts 2 and 3 are cancelled rather than re-specified.
+- No val number, no ordering statistic and no agreement statistic may promote
+  any arm. Five statistics have now failed to predict play; the promoter is
+  games.
+
+**Two build blockers, named rather than discovered later.** (i) `export.py`'s
+factored path writes no payload — "the packed emitter for `arch=factor` is
+stage 2" — and the emitter that does exist (`packed/make_factor_proto.py`,
+`build_factor_entry.py`, `factor_check.py`) lives only on the
+`factor/compression` branch and has no bucket support. (ii) The bucket
+machinery's byte price (+35 B at B=2 in the table above) is the one COMPOSED
+number that gates a build, and it must come from `pack.sh` on a built stub
+before any arm is called affordable. **The screen cannot launch until both are
+closed**; tonight arms the training, not the tournament.
+
+**Registered expectation, so a confirmation cannot be retold as a surprise.**
+The family band has absorbed nine mechanisms. I expect `f4n32` to land near
+`capn5`, and I expect the two bucketed arms to beat `f4n32` intra-family by a
+few points and still land under 40%. If that is what happens, the STOP fires.
+The reason to run it anyway is that every prior arm changed *how the same
+king-blind function was fitted*, and these two change *what function can be
+represented* — which is the one thing the closure explicitly said the family
+could not do.
