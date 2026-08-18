@@ -1041,6 +1041,60 @@ and inverts both halves of `dtm_optimal` (`matedAlt_inverts_preference`), while
 spending the sentinel margin down from the whole distance zone to one
 `EVAL_ROUGHNESS` (`matedAlt_margin_is_one_step`).
 
+### The reservation, at the recursion level
+
+The two exact clauses are worth nothing unless `-MATE_UPPER` really is a
+reserved token: `score > -MATE_UPPER` is the legality test one ply up, so a
+LEGAL line must never produce it.  Two of the three ways it could are closed
+locally — the depth-0 leaf (`qsLeaf_reserves_sentinel`: the stand-pat floor is
+already above `-MATE_LOWER`) and the finalizer (`terminalValue_reserves_
+sentinel`: the `1 - MATE_UPPER` floor is exactly one point of reservation).
+The third is arrival from below, which is a statement about the recursion and
+needs a dual induction:
+
+* **reserved below** — a node whose own king is on the board returns strictly
+  above `-MATE_UPPER` (`boundD2''_reserves_sentinel`);
+* **reserved above** — a node that cannot capture the enemy king returns
+  strictly below `MATE_UPPER` (`boundD2''_reserves_positive`).
+
+Neither arm is available alone.  The lower one needs a searched legal child to
+report below `MATE_UPPER`, so its negation lifts the accumulator off the
+sentinel; the upper one needs every searched child to report above
+`-MATE_UPPER`, so no negation reaches the positive token.  They are proven
+together (`boundD2''_reserves_pair`, induction on depth) and combine into the
+biconditional the code actually uses, `boundD2''_live_iff_legal`:
+
+```text
+-MATE_UPPER < bound(pos, gamma, depth)   ↔   pos still has its king
+```
+
+`boundKCX''_reserves_sentinel` carries both arms to the production consumer
+through `production''_eq_reference''`.
+
+**This is the theorem the stale `val_lower` blocked.**  The lower arm's live
+case has to produce a legal move that reaches the real accumulator, and under
+the pre-`c01915f` sloped admission a legal move could be missing from
+`searchedAt` outright — filtered at remaining depth 1 with nothing else to
+displace the accumulator, which is precisely `CexE`'s and `CexF`'s phantom.
+With the shipped admission modeled, `movesAbove_pos` admits every legal move
+at every positive depth, and the only remaining way to keep one out of the
+REAL accumulator is futility — which pays for itself, because a futile move's
+own stand-pat enters `futTerm` and a live child's stand-pat is below
+`MATE_LOWER` (`EvalQuiet`).
+
+Premises are fidelity only: a move-value floor inside the band (`ValFloor`,
+tables -192) and `EvalQuiet`, plus the docstring's own window condition.  No
+chess-side premise.
+
+| fact | theorem | axioms |
+|---|---|---|
+| the QS leaf never returns the sentinel | `qsLeaf_reserves_sentinel` | `propext, Quot.sound` |
+| the finalizer never returns it | `terminalValue_reserves_sentinel` | `propext, Quot.sound` |
+| the recursion never returns it on a legal line | `boundD2''_reserves_sentinel` | `+ Classical.choice` |
+| ... and never returns `MATE_UPPER` without a king capture | `boundD2''_reserves_positive` | `+ Classical.choice` |
+| the legality test, both directions | `boundD2''_live_iff_legal` | `+ Classical.choice` |
+| the production consumer inherits both | `boundKCX''_reserves_sentinel` | `+ Classical.choice` |
+
 ### The `bound()` docstring, clause by clause
 
 A docstring is a model claim, so it is audited like one: `model_audit.py`
@@ -1102,6 +1156,7 @@ King-capture substitution uses the position predicate directly, so its exact
 | sticky legality evidence and terminal override | terminal/finalizer results in `Stalemate.lean` |
 | king-capture evaluation margins and ordering | `EvalBounds.lean` |
 | `mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)` | `terminalValue`, `terminalValue_exact`, `terminalValue_reserves_sentinel` |
+| `score > -MATE_UPPER` as the legality test | `boundD2''_live_iff_legal`, `boundKCX''_reserves_sentinel` |
 | legal killer lifecycle and eviction | `Killer.lean` |
 | root versus interior null behavior | `CanNull.lean` |
 | transposition-table interval updates | `TableSwap.lean` and table results in `Stalemate.lean` |

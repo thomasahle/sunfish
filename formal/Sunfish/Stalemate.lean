@@ -2672,6 +2672,26 @@ theorem allIllegalB_false_of_legal {G : QSGame} {p m : G.Pos}
     rw [hleg] at this
     exact Bool.noConfusion this
 
+/-- The converse witness, constructively: a failed scan names a legal
+move.  (`allIllegalB_false_of_legal` goes the other way.) -/
+theorem exists_legal_of_allIllegalB_false {G : QSGame} {p : G.Pos}
+    (h : allIllegalB G p = false) :
+    ∃ m ∈ G.moves p, hasKingCapture G.toNullGame.toGame m = false := by
+  simp only [allIllegalB] at h
+  revert h
+  generalize G.moves p = l
+  induction l with
+  | nil => intro h; exact Bool.noConfusion h
+  | cons a l ih =>
+    intro h
+    rw [List.all_cons] at h
+    cases hc : hasKingCapture G.toNullGame.toGame a with
+    | false => exact ⟨a, List.mem_cons_self a l, hc⟩
+    | true =>
+      rw [hc, Bool.true_and] at h
+      obtain ⟨m, hm, hmc⟩ := ih h
+      exact ⟨m, List.mem_cons_of_mem a hm, hmc⟩
+
 /-- The engine's scan (lines 463-465) computes `allIllegalB`: under
 `legalityProbeCorrect`, probing every generated move at the dedicated
 window and testing for the exact sentinel is the same Boolean as "every
