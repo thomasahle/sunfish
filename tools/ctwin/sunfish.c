@@ -85,7 +85,6 @@ static int NULL_MARGIN = -200;   /* fuel-probe target margin */
 static int NULL_MIN_DEPTH = 2;   /* null move when depth > this */
 static int NULL_LIMIT = 750;     /* |score| bound for both null mechanisms */
 static int NULL_CUT_RED = 3;     /* shallow null-candidate reduction */
-static int NULL_RED = 7;         /* deep fuel-probe reduction */
 static int IID_MIN_DEPTH = 99;   /* tuned off; retained as a lab knob */
 static int IID_RED = 3;          /* IID depth reduction */
 static int FUT_MAX = 1;          /* futility pruning when depth <= this */
@@ -809,15 +808,15 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         if (done) goto after_moves;
     }
 
-    /* Fuel oracle -- its fixed target reduces the node.  Its static guard
-     * also limits intrinsic LMR to positions where passing is meaningful. */
+    /* A fixed-target QSearch of the null position reduces hot nodes.  Its
+     * static guard also limits LMR to positions where passing is meaningful. */
     int rd = depth;
     int guard = depth >= FUEL_MIN_DEPTH
         && iabs(pos->score) < NULL_LIMIT && has_big_piece(pos);
     if (guard && FUEL_NULL) {
         int target = pos->score + NULL_MARGIN;
         Pos rp = rotate(pos, 1);
-        if (-bound(&rp, 1 - target, depth - NULL_RED, 0, 0) >= target)
+        if (-bound(&rp, 1 - target, 0, 0, 0) >= target)
             rd = depth - FUEL_NULL;
     }
 
@@ -1250,7 +1249,6 @@ static struct knob KNOBS[] = {
     { "NULL_MIN_DEPTH", &NULL_MIN_DEPTH, NULL },
     { "NULL_LIMIT", &NULL_LIMIT, NULL },
     { "NULL_CUT_RED", &NULL_CUT_RED, NULL },
-    { "NULL_RED", &NULL_RED, NULL },
     { "IID_MIN_DEPTH", &IID_MIN_DEPTH, NULL },
     { "IID_RED", &IID_RED, NULL },
     { "FUT_MAX", &FUT_MAX, NULL },

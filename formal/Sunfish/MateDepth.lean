@@ -74,15 +74,19 @@ the end.
 MECHANISM MAP (pre-#216 line -> post-#218 line).
 
 * fuel probe / hot bit: `:406-411` -> `:380-387`.  MOVED ONLY, out of the
-  `moves()` generator into `bound()`'s own scope.  Body byte-identical then;
-  4673322 has since renamed the locals only (`target` -> `t`, `nullpos`
-  inlined at its single use, the bool subtraction spelled `int(...)`), so the
-  current text reads
+  `moves()` generator into `bound()`'s own scope; then rewritten in place
+  twice.  4673322 renamed the locals only (`target` -> `t`, `nullpos` inlined
+  at its single use, the bool subtraction spelled `int(...)`), and this change
+  fixes the probe's subject at QSearch.  The current text reads
   `guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board ...)`,
   `t = pos.score + NULL_MARGIN`,
-  `d -= int(-self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)`.
+  `d -= int(-self.bound(pos.rotate(nullmove=True), 1 - t, 0) >= t)`.
   Still ONE ply (`d -= <0 or 1>`), still ONE probe, still at the fixed target
-  `pos.score + NULL_MARGIN` and depth `depth - 7`.  `NULL_MARGIN = -200` and
+  `pos.score + NULL_MARGIN`.  The probe depth is now the constant `0` instead
+  of `depth - 7`; since `bound()` opens with `depth = max(depth, 0)` the two
+  spellings agree at every depth the guard admits up to 7, and above it the
+  subject is simply a different fixed selector -- which this file quantifies
+  over rather than fixes, so the bound is untouched.  `NULL_MARGIN = -200` and
   its tuner range `(-400, 800)` are untouched; the reworded comment's "burn
   two plies" is the TOTAL real-move reduction (base ply + hot bit), not a
   second probe ply.  `C = 3` is intact.

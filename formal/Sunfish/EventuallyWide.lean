@@ -16,7 +16,7 @@ CENTERPIECE -- NULL AS A FUEL ORACLE (Thomas's plan, superseding the
 horizon-credit design below as the primary target).  Below depth 6 the
 capped null stays a score candidate, verbatim.  From depth 6 on the
 pass is NEVER in the max: one probe at the fixed target
-`pos.score + NULL_MARGIN` -- a window keyed by `(pos, depth)` alone --
+`pos.score + NULL_MARGIN` against the null position's QSearch value
 decides whether the real moves recurse at `depth - 2` (hot) or
 `depth - 1`.  Admission (`val_lower`) and the tables stay keyed by
 NOMINAL depth; only the recursion is shortened.  So above the horizon
@@ -26,7 +26,7 @@ units of depth (C = 2 shipped).  Consequences proven here:
 
   * `WindowReport.side_exact` / `hot_bit_determined` / `hot_bit_stable`:
     a fail-soft report is side-exact at any fixed window, so the hot
-    bit is `(pos, depth)`-determined REGARDLESS of table state -- the
+    bit is position-determined REGARDLESS of table state -- the
     probe only ever selects between two structurally recursive folds.
   * `fuelValueD2`: the declared value, general in the edge-cost
     selector (`spend : Pos → Nat → Pos → Nat`, clamped so each edge costs

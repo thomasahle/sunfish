@@ -408,13 +408,13 @@ class Searcher:
         # Read it before null-move in case the recursive probe evicts it.
         killer = self.tp_move.get(pos)
 
-        # A fixed-target null probe reduces hot nodes. Its static guard also
-        # limits intrinsic LMR to positions where passing is meaningful.
+        # A fixed-target QSearch of the null position reduces hot nodes. Its
+        # static guard also limits LMR to positions where passing is meaningful.
         d = depth
         guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
         if guard:
             t = pos.score + NULL_MARGIN
-            d -= int(-self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)
+            d -= int(-self.bound(pos.rotate(nullmove=True), 1 - t, 0) >= t)
 
         # Moves whose fixed cap is below gamma share one maximum-cap report.
         base = QS if depth == 0 else -MATE_UPPER

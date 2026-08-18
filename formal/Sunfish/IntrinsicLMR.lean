@@ -1,14 +1,14 @@
 /-
 The local obligations introduced by intrinsic LMR.
 
-The null probe uses a fixed target, so valid fail-soft reports for the same
-child value determine the same hot bit under every caller window and table
-state. At an interior node, the `eligible` bit is the static null-move guard;
-the unstored driver root supplies `false`. A real edge
-spends one ply normally, one more at a hot node, and one more for an
-intrinsically low move at an eligible node. Thus child depth is a function of the
-position, nominal depth, and move alone, and every real edge spends between
-one and three plies.
+The null probe uses a fixed target and the null child's QSearch value, so valid
+fail-soft reports determine the same position-only hot bit under every caller
+window and table state. At an interior node, the `eligible` bit is the static
+null-move guard; the unstored driver root supplies `false`. A real edge spends
+one ply normally, one more at a hot node, and one more for an intrinsically low
+move at an eligible node. Thus child depth is a function of the position,
+nominal depth, and move alone, and every real edge spends between one and three
+plies.
 -/
 
 import Sunfish.EventuallyFinite

@@ -281,9 +281,10 @@ as directional.
 
 ### Joint search-parameter tuning (2026-08)
 
-The consolidated null/LMR candidate was selected by tuning eleven knobs
-together: `QS`, `QS_A`, `EVAL_ROUGHNESS`, `NULL_MARGIN`, `NULL_LIMIT`, `LMR`,
-`NULL_RED`, `NULL_MIN_DEPTH`, `FUEL_MIN_DEPTH`, `IID_MIN_DEPTH`, and `IID_RED`.
+The consolidated null/LMR candidate was originally selected by tuning eleven
+knobs together: `QS`, `QS_A`, `EVAL_ROUGHNESS`, `NULL_MARGIN`, `NULL_LIMIT`,
+`LMR`, `NULL_RED`, `NULL_MIN_DEPTH`, `FUEL_MIN_DEPTH`, `IID_MIN_DEPTH`, and
+`IID_RED`.
 The tuner used an additive logistic Gaussian process over paired game outcomes,
 an exact default-policy anchor, persistent random exploration, and occasional
 candidate-versus-candidate duels. One color-swapped opening pair was one
@@ -305,11 +306,15 @@ profile put `QS=40` only 2.0 ± 8.6 Elo behind, so the validated production
 setting remains `QS=40`. A final independent block confirmed that corrected
 bundle at `228/113/159`, **+48.25 ± 27.03 Elo**, LOS 99.98%, over 500 games.
 The other selected settings are `QS_A=140`, `EVAL_ROUGHNESS=15`,
-`NULL_MARGIN=-200`, `LMR=75`, reduction 7 for the deep fuel probe, shallow
+`NULL_MARGIN=-200`, `LMR=75`, a QSearch-only deep fuel probe, shallow
 capped null from depth 3 through 5, real-only fuel shaping from depth 6, and
-IID disabled. The study coupled the shallow and deep reductions at 7; the
-depth-six mate floor subsequently showed that this was invalid. Production
-retains the shallow candidate's three-ply reduction, the `abs(score) < 750`
+IID disabled. Two isolated screens favored replacing the depth-dependent deep
+probe with QSearch: `400/363/237`, **+12.86 ± 16.55 Elo**, over 1,000 games at
+the C-twin `3+0.1` surrogate, then `233/224/143`, **+5.21 ± 24.30 Elo**, over
+600 games at 60,000 nodes against post-#218 master. These are directional C
+measurements; the real Python `30+1` confirmation remains the merge gate.
+Production retains the shallow candidate's three-ply reduction, the
+`abs(score) < 750`
 guard for both null mechanisms, and exempts the unstored driver root from
 intrinsic LMR. The depth-eight mate floor invalidated removal of the score
 guard. A complete threshold sweep retained 12/14 mate-in-three positions

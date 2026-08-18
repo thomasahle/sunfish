@@ -206,7 +206,7 @@ class VariantSearcher(Searcher):
             d = depth
             if depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ"):
                 target = pos.score + S.NULL_MARGIN
-                if -self.bound(pos.rotate(nullmove=True), 1 - target, depth - 7) >= target:
+                if -self.bound(pos.rotate(nullmove=True), 1 - target, 0) >= target:
                     d = depth - 1
 
             if depth == 0:
