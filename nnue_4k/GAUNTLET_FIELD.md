@@ -316,3 +316,44 @@ M4sseur · STRO4K-1t · sungorus · bbc11 · stockfish15 · d-house
   which this field never uses.
 - **molly dies on `go movetime`, `go depth`, `go nodes` and `stop`.** Drive it
   with the clock form and nothing else.
+
+## 8. sha256 of every binary that plays — the provenance closes here
+
+Recorded 2026-08-19 from the bench box. A pin without a hash is a claim about a
+repository, not about the thing that played the games.
+
+| binary | sha256 |
+|---|---|
+| `c4k/bin/4ku` | `07cde8f18b1d821d083db58f55d34366aee079d615fc8ecdc1094f7b75dde1b4` |
+| `c4k/bin/ice4` | `cc04e6ca9470277de0b12197c075779c63266da0afc1728f28af753787050132` |
+| `c4k/bin/c4ke` | `1066c885fdb1ed3d8f42c69d5fae4174384569c98e06c451cb8840a87e8955dd` |
+| `c4k/bin/4kc` | `48491b063b17ed789153acba9c80b57eb92f1b6fec384b8613e0ecac2ba4e52e` |
+| `c4k/bin/M4sseur` | `8b2dc7c9667f454517f094bfcddf64a97dcbae11944f0c0cf5225453dbc814fb` |
+| `c4k/bin/STRO4K-1t` | `9275ce969eab1af208a83e1bfe9789d9b8266faeaa3fc086ae9f8156a59a5ca6` |
+| `c4k/bin/molly` | `0c4f835f8f52c57d8978177aa3f548b6015b2676b3bd0ed7c58a4a4f0b4b5816` |
+| `gauntlet-20260818/bin/bbc11` | `5ceedcfd59744a67533abc2f5abd0ad1ec63793a61dc31a6a3a2505b58de6fd5` |
+| `gauntlet-20260818/src/sungorus/sungorus` | `9a617b1272ea6abc0d24c3f6ffa4b2170f8bb56f9d2b4a53ec07fd49b8910715` |
+| `gauntlet-20260818/bin/stockfish15` | `8d98fae296d51ae94b66fef2ab96d2306a248b0dfd84073506fe3f202d56e344` |
+| `gauntlet-20260818/bin/entry.packed` | `21d55236280dd8d6c63dc790e7e7a9e7cac2a7ce0f5cc4802927dd7efba46e99` |
+| `gauntlet-20260818/bin/classic.packed` | `5b9baf2036f74afd71e3df14be92c1c84220871acaadfc62dd96bfb568f932de` |
+| `gauntlet-20260818/bin/pygone2-11b142` | `f44c111d821c5bffb9117154dcffbfb0e83ab41b35e174b084a9bb5000ee1768` |
+| `gauntlet-20260818/src/pygone/dist/pygone` | `62346a10e2b0e13b86a4f600ae985d7c28b74d9f0dfb1a66b168e0f57820e692` |
+
+## 9. Time-management check at the field's real TC
+
+An opponent that misjudges 30+1 forfeits and voids its own row — which is
+exactly how `pygone2-11b142` was caught. So every clocked entrant had its
+first-move spend measured at the real clock (`go wtime 30000 btime 30000 winc
+1000 binc 1000`), **twice in the same process**, because fastchess reuses the
+process across games and a `ucinewgame` that does not reset is its own defect.
+
+| engine | first move, game 1 | game 2 (same process) |
+|---|---|---|
+| pygone HEAD | 1.20 s | 1.26 s |
+| 4ku | 1.49 s | 1.49 s |
+| sungorus 1.4 | 1.71 s | 1.71 s |
+| bbc11 | 2.01 s | 2.01 s |
+| molly | 2.73 s | 2.99 s |
+
+All five budget 1.2–3.0 s out of 30 and reset cleanly. No forfeit risk in the
+round-robin from any of them.
