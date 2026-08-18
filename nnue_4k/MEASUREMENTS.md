@@ -19822,3 +19822,90 @@ standard for fixed-node runs from here: **concurrency 8 at nice 5, plus an
 in-window forfeit check on the owner's games** (246 verified with zero
 forfeits). Load-immunity is not a licence to crowd; it is a licence to run at
 all.
+
+---
+
+# THE EVAL AXIS CLOSES — nine mechanisms, zero conversions
+
+`AB_rr_loud.txt`, srand 20260825, 300 games, **all gates clean**: 300/300,
+`gcd(25,6)=1`, 0 forfeits, 0 illegal, 300 distinct openings, dormancy 1.215 s,
+concurrency 8 at nice 5 under the new cotenancy standard.
+
+| pairing | score% (engine A) |
+|---|---|
+| arm10 vs **arm10q** | 34.00 → **arm10q 66.00%** |
+| arm10q vs capn5 | 52.00% |
+| **arm10q vs entryd0** | **22.00%** |
+| arm10 vs entryd0 | **17.00%** |
+| capn5 vs entryd0 | **30.00%** |
+
+Pooled: entryd0 77.00%, capn5 50.00%, **arm10q 46.67%**, arm10 26.33%.
+
+## Reading 2: NULL. The axis closes on both readings.
+
+**`arm10q` vs the entry = 22.00%**, against a contrast of **29.79%** (capn5's
+six readings, 282 games: 36.00 / 28.12 / 24.00 / 28.00 / 32.00 / 30.00,
+reading-to-reading **sd 4.07**). It does not beat the contrast; it is below
+it. **The pre-registered expectation held on the second reading, so the axis
+closes doubly grounded: the objective failed, not the export.**
+
+## The mechanism was REAL — and it was not the gap
+
+This is the part worth keeping. The half-weight rescale **recovered the
+intra-family deficit exactly as the margin-tightness hypothesis predicted**:
+`arm10q` beats `arm10` **66.00%** head-to-head, and pooled it goes 26.33% →
+46.67%, level with `capn5`. **The scale story was right about
+arm10-vs-the-family and wrong about what separates the family from the
+entry.**
+
+So the **sign-contradiction anomaly is now resolved in part**: `arm10`'s
+intra-family weakness was **the export scale** — a real, physical,
+mechanically-explained defect — and its anchor cells were **noise**. One half
+of a contradiction can be a genuine effect while the other half is sampling.
+
+### A correction to how the two readings should be compared
+
+The tempting comparison — "22.00% now against arm10's 34.00% before" — is
+**across tournaments, and this table shows why that is invalid**: `arm10`
+itself scored **34.00% in `rr_rank` and 17.00% here**, against the same
+anchor, at the same budget. **A 17-point swing on one unchanged engine**,
+larger than `capn5`'s entire six-reading spread and the biggest drift the
+program has produced.
+
+Within this tournament — the only valid comparison — **`arm10q` (22.00%)
+beats `arm10` (17.00%) against the anchor by 5 points**, consistent in sign
+with the 66.00% head-to-head. The rescale did not hurt against the entry. It
+helped slightly, and neither comes near the contrast.
+
+## The finding of record: five statistics, and what each one bought
+
+| # | statistic | its verdict | what play said |
+|---|---|---|---|
+| 1 | sibling-ranking, 8σ | k160 clearly worst | 2nd of 5; calibration withdrawn |
+| 2 | move agreement, 20.5σ | arm9 markedly entry-like | exactly capn5's 24.00% |
+| 3 | val, largest gap ever measured here | arm2b outside the band by 2× its width | finished last, −6.66 |
+| 4 | ranking objective, 2× headroom on its own loss | arm10 should order best | 34.00%/17.00% — null |
+| 5 | **cp-magnitude measurement** | arm10 is 1.4× too loud | **partially VINDICATED** |
+
+**The coda matters and I will not flatten it.** The fifth statistic is the one
+that half-worked: it predicted a real, mechanical, reproducible effect
+(+16 points intra-family, 66.00% head-to-head) and still **failed to predict
+the entry gap**. That is the sharpest form of the program's finding — a
+statistic can be *correct about a mechanism* and *useless about strength*,
+because the mechanism it names is not the one that separates this family from
+the entry. Cheap statistics detect that something changed; they do not locate
+the thing that matters.
+
+## STANDING CONCLUSION
+
+Nine mechanisms tested — capacity, data scale, optimisation (lr), compression,
+cp→win scale, label source, bias format, nonlinearity, and ordering — and
+**zero conversions**. Under every objective tried, the linear-in-ps768 family
+lands at 22–36% against `pst_entry @ d0a6e60`, and the entry's hand-built
+machinery (K_MID/K_END, khold2, pend) **remains unexpressed by this family**.
+The eval program's questions are answered.
+
+**The 4k goal continues** — through search, speed, time management and the
+meter, which is where the entry's ~20-point margin was actually built, and
+where this ledger's own decomposition has said the larger half of +400 lives
+since 2026-08-13.
