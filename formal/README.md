@@ -446,10 +446,12 @@ virtual options, then the killer, then the pseudo-legal moves by decreasing
 intrinsic value - and every score is assigned at ONE site, in the consumer.
 There the cap is computed once per real move; when it is below `gamma` the
 consumer folds the cap in place of a child search - a virtual report, so the
-move leaves no legality witness either (`cappedMove_failLow`) - and moves on.
-No tail is materialized, no count is kept, and the producer never reads the
-window; it is the sorted move list, floored at depth zero by the same QS
-admission test the model's producer carries (`producerMoves_zero`).
+move leaves no legality witness either (`cappedMove_failLow`) - and STOPS:
+the stream is sorted and the cap monotone, so nothing after the first
+settled move can cap higher. No tail is materialized, no count is kept, and
+the producer never reads the window; it is the sorted move list, floored at
+depth zero by the same QS admission test the model's producer carries
+(`producerMoves_zero`).
 
 The model still describes that as a partition, because it is one. Solving
 `cap < gamma` for the intrinsic move value gives
@@ -469,11 +471,11 @@ entirely.)
 
 `lazyMoveTail_cap_lt_gamma` proves every tail cap is below the window, and
 `lazyMoveTail_report` proves the fold of those caps is a valid report for the
-capped tail. The consumer folds each of them where the counted form folded
-only their maximum; the two folds agree because `max` over the tail IS that
-maximum - the cap is monotone in the intrinsic value (`shallowMoveCap_max`,
-`foldMax_shallowMoveCap`, specialised as `lazyMoveTail_maxCap`), and
-`WindowReport.max` combines per-move reports at one window.
+capped tail. The stop delivers exactly that report: the cap is monotone in
+the intrinsic value (`shallowMoveCap_max`), so the first settled move of the
+decreasing sort carries the maximum cap of the whole tail
+(`foldMax_shallowMoveCap`, specialised as `lazyMoveTail_maxCap`), and
+`WindowReport.max` absorbs any earlier settled-killer report.
 `lazyMove_partition` proves that processing tail then prefix is exactly the
 original producer fold, and `lazyMove_partition_prefixFirst` proves the same
 for the order Python actually uses. `max` is commutative, so the order is
@@ -482,11 +484,15 @@ is settled. The partition depends on `gamma`; the declared capped value does
 not.
 
 The killer is yielded twice: once early, bare and ungated, and again inside
-the sorted stream (`gen_moves` rebuilds it as an equal move). Both
-occurrences meet the same rules at the same one site, so a settled killer
-folds a tail-member cap one extra time, which `max` absorbs; a searched
-killer that failed low is re-searched from the sorted stream against a table
-entry, as before. Above depth three the threshold equals `base`, the tail is
+the sorted stream. Its early cap says nothing about the sorted stream that
+follows, so the stop must not fire on it - and the consumer tells the two
+occurrences apart by object identity: the early candidate IS the `tp_move`
+object, while `gen_moves` rebuilds the sorted occurrence as an equal but
+distinct tuple, so `move is not killer` reads exactly "this settled move
+bounds the rest of the stream". A settled killer folds its tail-member cap
+(absorbed by `max`) and the fold continues; the stream re-supplies it in
+sorted position. A searched killer that failed low is re-searched from the
+sorted stream against a table entry, as before. Above depth three the threshold equals `base`, the tail is
 empty, and the cap disappears. For searched moves, `WindowReport.cap` still
 transports the child report through `min`.
 
@@ -1023,11 +1029,14 @@ fidelity premise, `EvalBand B` -- the two-sided form of the table bound
 The move fold maintains two independent facts:
 
 ```python
-best, live = -MATE_UPPER, False
+best, live, capped = -MATE_UPPER, False, False
 ```
 
 - `best` accumulates numeric reports from real and virtual candidates.
 - `live` records that a searched real move was legal.
+- `capped` marks a settled sorted move: the fold stops on it, storing
+  nothing - the substitution clears `move`, so the shared cutoff body sees
+  a virtual.
 
 Null moves, stand pat, and non-mating futility estimates are numeric evidence
 only. A searched move whose child report is above the illegal-move sentinel is
@@ -1198,7 +1207,7 @@ King-capture substitution uses the position predicate directly, so its exact
 | exact king-capture producer report | `producedScore_exact_capture` (and why the band restatement does not do, `BandContract.lean`) |
 | shallow move cap and lazy child evaluation | `shallowMoveCap_lowDepth`, `cappedMove_report` |
 | per-move lazy cap report | `cappedMove_failLow`, `shippedCap_iff_tail`, `lazyMoveTail_cap_lt_gamma`, `lazyMoveTail_report`, `lazyMove_partition` |
-| monotone cap: the per-move folds are the one-number report | `shallowMoveCap_max`, `foldMax_shallowMoveCap`, `lazyMoveTail_maxCap` |
+| monotone cap: the first settled report is the whole tail's | `shallowMoveCap_max`, `foldMax_shallowMoveCap`, `lazyMoveTail_maxCap` |
 | prefix-first order and the empty tail | `lazyMove_partition_prefixFirst`, `lazyMove_partition_emptyTail` |
 | cap mate-band properties | `shallowMoveCap_below_positiveMate`, `cappedMove_preserves_negativeMate` |
 | filtered move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |

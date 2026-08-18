@@ -461,7 +461,7 @@ class Searcher:
 
         # Run through the candidates, shortcutting when score >= gamma.
         # live is True if we saw a legal (not null, score > -MATE_UPPER) move
-        best, live = -MATE_UPPER, False
+        best, live, capped = -MATE_UPPER, False, False
         for move in moves():
             # The virtual options score statically: the stand-pat at depth 0,
             # else the pass, capped at static evaluation plus one score bucket -
@@ -480,18 +480,21 @@ class Searcher:
             elif (val := pos.value(move)) < base: continue
             # A shallow move is capped at a static estimate of what it wins;
             # only a king capture is uncappable. A cap below gamma answers for
-            # the move by itself: fold the cap - a virtual result, so no search
-            # and no legality witness either.
+            # the move by itself: fold the cap - a virtual result (None), so no
+            # search and no legality witness - and stop, since the sorted stream
+            # caps lower from here on. Only the out-of-order killer may not stop
+            # the fold, and it is the one candidate that IS the killer object;
+            # the sorted stream re-yields an equal move built fresh by gen_moves.
             elif (cap := MATE_UPPER if depth > 3 or val >= MATE_LOWER
                     else min(MATE_LOWER - 1, pos.score + val + margin)) < gamma:
-                best = max(best, cap); continue
+                move, score, capped = None, cap, move is not killer
             # An intrinsic mate-band value is a king capture: resolve it to the
             # exact MATE_UPPER token, never a search (the docstring's promise).
             else: score = MATE_UPPER if val >= MATE_LOWER else min(cap,
                 -self.bound(pos.move(move), 1 - gamma, d - 1 - (not root and guard and val < LMR)))
             best = max(best, score)
             live |= move is not None and score > -MATE_UPPER
-            if best >= gamma:
+            if best >= gamma or capped:
                 # Save the move for pv construction and killer heuristic
                 if move is not None and depth:
                     self.tp_move[pos] = move
