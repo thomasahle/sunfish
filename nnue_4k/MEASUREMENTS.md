@@ -19685,3 +19685,55 @@ contradicted or unsupported by play** (sibling-ranking 8σ, move agreement
 20.5σ, val at its largest-ever gap, and now a ranking objective that leads its
 own loss by 2×). The remaining value is in search and format work, where the
 entry's ~20-point margin was actually built.
+
+## Metric fix landed in the trainer: `rank_top1`'s tie inflation
+
+`model.rank_top1` used a plain `argmax`, which returns the FIRST maximal
+index — and the searched move sits at local index 0, so **every tie at the
+top scored as a hit**. It is now the expectation under random tie-breaking:
+a group counts `1/(number tied at the top)` when nothing beats the searched
+move, 0 otherwise.
+
+**This inflates every future rank arm's per-epoch print, not only ARM 10's**,
+which is why it is landed in the trainer rather than only corrected in the
+analysis. Measured impact: a material-only net, which evaluates most siblings
+identically, read **0.518 against a random baseline of 0.0625**; trained nets
+tie on 10–32% of groups and are biased the same way. ARM 10's own printed
+0.1889 becomes **0.1788**.
+
+The `-log softmax` never needed repair — equal logits give a uniform
+distribution and score exactly `log(k)` — and that is precisely how the
+inflation was caught: the floor's loss was honest (2.7696 vs log(16) =
+2.7726) while its top1 was not. **A do-nothing floor in a metric table is
+worth its cost; without one this would have shipped.**
+
+`nnue_4k/train/test_arm10_rank.py` lands with it and asserts all four
+properties: shift-invariance (global and per-group, to 1e-9), zero loss at
+perfect order, top1 = 0 at worst order, and a gradient that pushes the
+searched child's eval down in 100% of groups.
+
+**Scoping note.** Only the ranking loss pair and this test are committed. The
+box's `train/` also carries another lane's uncommitted work (`arch=factor`,
+`lr_vmax`, `lr_mirror`, the lane-sum fold in `export_shift`) and this lane's
+own knobs (`biasscale`, `mlshift`, `rank`, `group_k`); copying whole files
+would have committed another lane's changes under this one's name, so hunks
+were landed rather than files. The remaining knobs land with their own arms.
+
+## The final tournament is running
+
+Approved and launched exactly as registered: `entryd0` + `arm10` + `arm9`
+(nearest ranking neighbour, 24.00%) + `capn5` (drift anchor, 29.12% ± 3.7);
+300 games, `-rounds 25` (gcd(25,6)=1), 20,000 nodes; legality, dormancy,
+coprimality pre-flight and `opening_gate.py` all hard refusals; **score% only,
+`siblingrank` barred as a promoter**.
+
+**The bar is fixed and was written before the games:** ARM 10 must beat the
+**entry contrast** — the only difference in this field that has ever
+replicated. Anything inside `capn5`'s ±3.7 is null, and beating `arm9` or
+`capn5` by a few points is not a result, because intra-family orderings have
+now reversed between tournaments twice.
+
+**Pre-registered expectation: NULL.** If it holds, the axis closes on its own
+registration's wording with nine mechanisms tested and zero conversions, and
+the finding of record is the chain rather than any arm: **four statistics have
+predicted confidently and been contradicted or unsupported by play.**

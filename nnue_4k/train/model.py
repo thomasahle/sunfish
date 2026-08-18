@@ -376,6 +376,46 @@ def lambda_loss(pred, y, outcome, K, p, lam):
     return ((t - q).abs() ** p).mean()
 
 
+def listwise_rank_loss(pred, k, temp):
+    """-log softmax over each group of K siblings, best at local index 0.
+
+    The net evaluates the CHILD, whose mover is the opponent, so the parent's
+    preference for a move is -pred(child): ranking best-first means ranking
+    child evals ascending, and the logits are -pred/temp.
+
+    SHIFT-INVARIANT BY CONSTRUCTION -- softmax is unchanged by adding a
+    constant to every logit in a group, so this objective cannot be satisfied
+    by moving the eval's LEVEL, only its ORDER.  That is the whole point of
+    the ranking arm, and test_arm10_rank.py asserts it rather than trusting
+    it."""
+    z = (-pred).view(-1, k) / temp
+    return -torch.log_softmax(z, dim=1)[:, 0].mean()
+
+
+def rank_top1(pred, k):
+    """Expected fraction of groups whose searched move the net ranks first,
+    UNDER RANDOM TIE-BREAKING.
+
+    `argmax` returns the FIRST maximal index, and the searched move sits at
+    local index 0 -- so the plain form scores every tie at the top as a hit.
+    This is not a corner case: measured on a material-only net, which
+    evaluates most siblings identically because a quiet move changes no
+    material, it inflated top1 from 0.108 to 0.518 against a random baseline
+    of 1/k.  Trained nets tie less (10-32% of groups) but in the SAME
+    direction, so the plain form overstates every rank arm's per-epoch print
+    -- ARM 10's first run reported 0.1889 where the honest number is 0.1788.
+
+    A group therefore counts 1/(number tied at the top) when nothing beats
+    the searched move, and 0 otherwise.  The -log softmax needs no such
+    repair: equal logits give a uniform distribution and score exactly
+    log(k), which is how the inflation was spotted."""
+    z = (-pred).view(-1, k)
+    zb = z[:, :1]
+    better = (z > zb).sum(dim=1).float()
+    tied = (z == zb).sum(dim=1).float()      # includes the move itself
+    return ((better == 0).float() / tied).mean()
+
+
 def sigmoid_loss(pred, y, K, p):
     """|sigmoid(pred/K) - sigmoid(y/K)|^p, mean.  K=400 house scale;
     p=2.6 is the wide-net house value (nnue-pytorch's finding), the
