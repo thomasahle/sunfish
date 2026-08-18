@@ -18318,3 +18318,42 @@ compared to the free-table upper bound at the same width (`331`, 0.0150709)
 to answer the one question the whole lane exists for — how much of the width
 gain survives a rank-8 constraint — and that comparison is a screen that can
 only refuse work, never earn a game.
+
+---
+
+## 2026-08-18 — FIRST TRAINED FACTORED NET: rank 8 mirrored costs 1.41 % of the free table it approximates, not the 31 % its spectrum predicted
+
+Banked as the first rung lands; the lr4x and lr16x rungs are still running and
+the registered selection is not yet made.
+
+`350_factor_r8n32m_lr1x` — `arch: factor`, mirrored, r=8, N=32, lr 3e-3, 6
+epochs, seed 0, `pool10m`, `val-sha a0aa553db6908e91`:
+
+| | best val | vs N=5 anchor | vs the FREE N=32 table | learned signal × N=5 |
+|---|---|---|---|---|
+| N=5 anchor `221` | 0.0176273 | — | +17.0 % | 1.00 |
+| **factored r=8 N=32 mirrored** | **0.0152838** | **−13.29 %** | **+1.41 %** | **1.80** |
+| free N=32 (`331`, the upper bound) | 0.0150709 | −14.50 % | — | 1.88 |
+
+Trajectory `.01572 .01544 .01541 .01545 .01551 .01528`.
+
+**The rank-8 mirrored constraint costs 1.41 % of the free table's val.** It
+captures **96 % of the free table's learned-signal gain over N=5** — in a
+shape this lane measured at **4,018 B packed, artifact built and run**, where
+the free N=32 table it approximates would need ~6.2 kB of payload and cannot
+be built at all.
+
+**This was registered as the likely-pessimistic reading and the registration
+was right.** The trained N=64 table's SVD said mirrored rank 8 retains 0.693
+of its energy — a 31 % loss — and the entry that reported it said in advance:
+"*a trained rank-constrained net finds its own optimum rather than a
+truncation of an unconstrained one … no post-hoc val number is quoted here
+even though it was easy to produce.*" The gap between 31 % predicted and
+1.41 % measured is the whole reason that refusal was worth making, and it is
+a reusable lesson: **weight-matrix energy is a bad proxy for loss, and
+post-hoc SVD understates a trained factorisation by more than an order of
+magnitude here.**
+
+Not yet claimed: an lr choice (two rungs outstanding), a byte number for
+*this* checkpoint (the payload emitter refuses until the cap-sum bound is met
+— see below), and any Elo whatsoever.
