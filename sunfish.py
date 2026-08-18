@@ -173,6 +173,12 @@ EVAL_ROUGHNESS = 15
 # things (driver convergence vs reduction aggression).
 NULL_MARGIN = -200
 
+# Milliseconds between our bestmove and the clock actually stopping: network
+# lag plus the arbiter's own accounting. It is subtracted from every limit
+# rather than reserved in a pool, so the budget is what this move may spend
+# and not what the game has left. 200 is the measured lichess figure.
+DELAY = 200
+
 # Max entries kept in each transposition table, roughly 1GB per million.
 # Python dicts keep insertion order, so we cheaply evict the oldest entry
 # when full (see issue #95).
@@ -604,27 +610,21 @@ def main():
             times = dict(zip(args[1::2], map(int, args[2::2])))
             side = "wb"[len(hist) % 2 == 0]
             wtime, winc = times.get(side + "time", 60000), times.get(side + "inc", 0)
-            # A whole-game POOL, not a divisor, in milliseconds. Over an
-            # M = 40 move horizon the pool is what the clock still holds once
-            # all M+2 remaining moves have paid the ~200ms of lag between our
-            # bestmove and the clock stopping; `soft` is one move's share of
-            # it, and the wall is five shares or half of what this move can
-            # safely reach. Two limits, because one number cannot answer both
-            # "what is this move worth" and "how long may one iteration run".
-            # THE WALL CANNOT GO NEGATIVE, which a wtime/2 - 1s cap can:
+            # THREE NUMBERS, MILLISECONDS: what this move is worth, when to
+            # stop STARTING an iteration, and the wall one iteration may run
+            # to. `budget` is a fortieth of the clock plus the increment this
+            # move earns back, less the lag that move will cost; `soft` clamps
+            # it to a quarter clock and `think` to five budgets or half a
+            # clock, both minus that same lag. THE CLAMPS CANNOT GO NEGATIVE
+            # past their floors, which a wtime/2 - 1s cap can:
             # lichess.org/EAThUL0P was lost that way, ~16 moves at no search
-            # on an already-expired deadline. sunfish_ui/uci.py's pool_budget
-            # is this same arithmetic in seconds, asserted equal on a grid.
-            # THE ONE MEASURED HOLE, disclosed rather than fixed: with no
-            # increment the pool is empty below 42*200ms of clock, so `soft`
-            # falls to the floor and the quarter-clock clamp is unreachable -
-            # a sudden-death endgame one depth shallower than the old
-            # divisor's, and -209.91 +/- 60.11 at a 1s clock in the driver's
-            # own arm. It never flags. Scoping the pool to P > 0 would fix it
-            # and is a design change with its own screen; what ships is what
-            # was measured.
-            soft = max(0, min((wtime + 39 * winc - 42 * 200) / 40, (r := wtime - 400) / 4))
-            soft = min(max(soft / 1000, .05), think := max(times.get("movetime", min(5 * soft, r / 2)) / 1000, .05))
+            # on an already-expired deadline. think >= soft is STRUCTURAL, not
+            # asserted: min is monotone in both arguments, 5*budget >= budget
+            # wherever budget >= 0, and where it is not both sit on floors
+            # that are ordered 200 >= 100. So no clip line couples them.
+            budget = wtime / 40 + winc - DELAY
+            soft = max(min(budget, wtime / 4 - DELAY), 100) / 1000
+            think = max(min(5 * budget, wtime / 2 - DELAY), 200) / 1000
 
             start = time.time()
             searcher.deadline, searcher.soft = start + think, start + soft

@@ -33,6 +33,7 @@ not say when it is read is not a budget:
                           and elapsed > soft  (the pool manager)
 """
 import os
+import re
 import sys
 from collections import namedtuple
 
@@ -63,19 +64,24 @@ CANDIDATES = {"onemax"}
 PINNED = {
     # THE CLASSIC BUILTIN CLOCK, MILLISECONDS -- sunfish.py's `go` handler, the
     # packed classic artifact's whole time manager (a checkout reaches the
-    # driver instead).  It became the pool on 2026-08-17; before that it ran
-    # min40_4 (#196), whose pin is retired just below.
+    # driver instead).  It ran min40_4 (#196), then the pool (2026-08-17), and
+    # since 2026-08-18 this per-move budget; both predecessors' pins are
+    # retired below.
     #
-    # Only the SOFT line is pinned, and on purpose: it carries every constant
-    # (39*winc, 42*200, /40, the 400 and the /4), so drift in any of them shows
-    # up here.  The wall+clip statement that follows it (binding `think` via
-    # walrus) is asserted in tests/test_classic_time_budget.py, which lifts
-    # both statements and grid-checks the pair against uci.pool_budget -- the artifact and the
-    # driver being ONE arithmetic is the thing that makes the duplication safe,
-    # and it is checked numerically rather than by pinning text twice.
-    "pool_classic": (
+    # ALL THREE statements are pinned, unlike the pool's single soft line.  The
+    # pool could be pinned once because its second statement re-derived nothing
+    # (5*soft, and a clip that a grid-check against uci.pool_budget covered).
+    # Here the three carry different constants -- the fortieth and the unit
+    # increment, the quarter clamp and the 100 floor, the fivefold headroom off
+    # the UNCLAMPED budget, the half clamp and the 200 floor -- and no other
+    # site runs this arithmetic to cross-check it against, because the driver
+    # and the 4k entry still run the pool.  So the text is the reference, and
+    # verify() below grid-evaluates exactly these lines against the mirror.
+    "budget_classic": (
         "sunfish.py",
-        "soft = max(0, min((wtime + 39 * winc - 42 * 200) / 40, (r := wtime - 400) / 4))"),
+        "budget = wtime / 40 + winc - DELAY\n"
+        "soft = max(min(budget, wtime / 4 - DELAY), 100) / 1000\n"
+        "think = max(min(5 * budget, wtime / 2 - DELAY), 200) / 1000"),
     # sunfish_ui/uci.py:467 (master f95f49c) -- classic's incumbent, SECONDS.
     # Also uci.py:712 on branch tm-pool-manager, unchanged there.
     "legacy12": (
@@ -217,6 +223,49 @@ def min40_4(wtime, winc, movestogo=None, ply=0, **kw):
     think = min(wtime / 40 + 0.9 * winc, wtime / 4)
     think = max(think, TM_FLOOR)
     return Budget(0.8 * think, think, "yield_frac", 0.8)
+
+
+def budget(wtime, winc, movestogo=None, ply=0, delay=200, **kw):
+    """CANDIDATE (Thomas, 2026-08-18): the pool respelled as a per-move budget
+    with the lag subtracted instead of reserved.  MILLISECONDS internally --
+    the floors (100, 200) and `delay` are absolute, so this expression only
+    means what it means in its own unit.
+
+        budget = wtime / 40 + winc - DELAY
+        soft   = max(min(budget, wtime / 4 - DELAY), 100) / 1000
+        think  = max(min(5 * budget, wtime / 2 - DELAY), 200) / 1000
+
+    WHAT MOVED, against the pool it replaces, all four deliberate:
+
+      winc coefficient   1.0 exactly (the increment this move earns back),
+                         against the pool's 39/40 = 0.975.
+      the lag            subtracted ONCE from each limit, against the pool's
+                         (M+2)*O = 8400 ms taken out of the whole pool and
+                         then divided by M -- i.e. 210 ms/move at O = 200.
+      the clamps         wtime/4 - DELAY and wtime/2 - DELAY.  At DELAY = 100
+                         the quarter clamp is EXACTLY the pool's (wtime-400)/4;
+                         at DELAY = 200 the half clamp is exactly the pool's
+                         (wtime-400)/2.  Neither DELAY reproduces both.
+      the floors         100 and 200 ms, asymmetric, against the pool's flat
+                         50/50 -- so a flagging engine spends 2x to 4x faster
+                         here, which is what the forfeit cell prices.
+
+    think >= soft is STRUCTURAL and needs no clip line: min is monotone in
+    both arguments, 5*b >= b wherever b >= 0, the second arguments are ordered
+    for every clock, and where b < 0 both sit on floors that are ordered
+    200 >= 100.  Asserted on the grid in test_tm_surrogate.py rather than
+    argued here.
+
+    THE 5x HEADROOM IS TAKEN OFF THE UNCLAMPED BUDGET, which is the one
+    non-obvious difference from the pool: the pool's wall is 5x its CLAMPED
+    soft, so when the quarter clamp binds the pool's wall follows it down and
+    this one does not.
+    """
+    t, i = 1000 * wtime, 1000 * winc
+    b = t / 40 + i - delay
+    soft = max(min(b, t / 4 - delay), 100) / 1000
+    hard = max(min(5 * b, t / 2 - delay), 200) / 1000
+    return Budget(soft, hard, "mtd_converged", None)
 
 
 def simple(wtime, winc, movestogo=None, ply=0, **kw):
@@ -403,6 +452,11 @@ def cap_binds(manager, wtime, winc, ply=40, **knobs):
         return wtime / 2 - 1 < wtime / 12 + 0.9 * winc
     if manager in ("min40_4", "min40_4c", "simple"):
         return wtime / 4 < wtime / 40 + 0.9 * winc      # binds below T = 4*I
+    if manager == "budget":
+        # The quarter clamp binds when it is under the per-move share; both
+        # carry the same -delay, so it cancels and the knee is T = 40*I/9.
+        d = knobs.get("delay", 200)
+        return t / 4 - d < t / 40 + i - d
     if manager == "onemax":
         # No cap exists; the only shape change is the FLOOR, which the max()
         # applies at wtime == 10 - 40*winc seconds.
@@ -422,7 +476,7 @@ def cap_binds(manager, wtime, winc, ply=40, **knobs):
 MANAGERS = {"legacy12": legacy12, "oldtm": oldtm, "steptm": steptm,
             "smooth": smooth, "pool": pool, "min40_4": min40_4,
             "onemax": onemax, "poolyield": poolyield,
-            "min40_4c": min40_4c, "simple": simple}
+            "min40_4c": min40_4c, "simple": simple, "budget": budget}
 # Which DRIVER each manager was measured in.  It selects exactly one thing:
 # classic's opening ramp (`if len(hist) < 8: think = min(think, len(hist) +
 # random())`, uci.py:474), which the packed artifact does not have.
@@ -444,7 +498,7 @@ FAMILY = {"legacy12": "classic", "oldtm": "packed", "steptm": "packed",
           # Same classic-builtin driver as min40_4: max(think, .05) deadline,
           # `(best or cand) and elapsed > think * 0.8` at every yield, no ramp.
           "onemax": "packed", "poolyield": "packed",
-          "min40_4c": "packed", "simple": "packed"}
+          "min40_4c": "packed", "simple": "packed", "budget": "packed"}
 
 
 # ----------------------------------------------------------------- verify ---
@@ -545,16 +599,29 @@ def verify(roots=(), verbose=True):
     # 4k entry runs, so it is gridded against the pool mirror below rather than
     # a second time here.  What IS checked here is that the shipped soft line
     # reproduces that block's `soft` exactly, in the ms domain it is written in.
+    # THE ARTIFACT IS THE MIRROR, grid-checked rather than assumed.  This is
+    # the gate that caught a real mismatch on 2026-08-18: a packed arm whose
+    # soft limit lacked a floor the mirror had, 6 of 378 values apart, all
+    # below a 2 s clock -- 24 games into a match before it was noticed.  The
+    # shipped DELAY is read from the source too, so re-tuning it re-checks it.
+    _delay = float(re.search(r"^DELAY = (\d+)$",
+                             open(os.path.join(ROOT, "sunfish.py"),
+                                  encoding="utf-8").read(), re.M).group(1))
     for t in GRID_T:
         for i in GRID_I:
-            env = {"min": min, "max": max, "wtime": 1000 * t, "winc": 1000 * i}
-            exec(PINNED["pool_classic"][1], env)   # noqa: S102 - shipped text
-            ref = {"min": min, "max": max, "wtime": 1000 * t, "winc": 1000 * i}
-            exec(_POOL_MS_TEXT, ref)               # noqa: S102 - landed formula
-            assert abs(env["soft"] - ref["soft"]) < 1e-9, (
-                "classic's shipped soft line != the landed pool at T=%s I=%s: "
-                "%r vs %r" % (t, i, env["soft"], ref["soft"]))
-            checked += 1
+            env = {"min": min, "max": max, "wtime": 1000 * t, "winc": 1000 * i,
+                   "DELAY": _delay}
+            exec(PINNED["budget_classic"][1], env)  # noqa: S102 - shipped text
+            b = budget(t, i, delay=_delay)
+            assert abs(env["soft"] - b.soft) < 1e-12, (
+                "classic's shipped soft != the budget mirror at T=%s I=%s: "
+                "%r vs %r" % (t, i, env["soft"], b.soft))
+            assert abs(env["think"] - b.hard) < 1e-12, (
+                "classic's shipped think != the budget mirror at T=%s I=%s: "
+                "%r vs %r" % (t, i, env["think"], b.hard))
+            assert env["think"] >= env["soft"], (
+                "think < soft at T=%s I=%s -- the structural order broke" % (t, i))
+            checked += 3
     # one-max carries its own floor inside the pinned expression (the 50), so
     # nothing is re-applied after it.
     grid("onemax", onemax, PINNED["onemax"][1], 1000, lambda v: v / 1000)
@@ -613,9 +680,14 @@ def verify(roots=(), verbose=True):
                   "mirror kept, not source-checked")
     report.append("  smooth        RETIRED at 5f16bae (superseded by the pool); "
                   "mirror kept, not source-checked")
-    report.append("  min40_4       RETIRED 2026-08-17 (classic's builtin clock "
-                  "became the pool; see the pool_classic pin); mirror kept as "
-                  "the CONTROL arm, not source-checked")
+    report.append("  pool_classic  RETIRED 2026-08-18 (the classic builtin clock "
+                  "became the per-move budget; see the budget_classic pin). The "
+                  "pool itself is NOT retired -- uci.py and the 4k entry still "
+                  "run it, and pool_budget below still checks it")
+    report.append("  min40_4       RETIRED 2026-08-17 (the classic builtin clock "
+                  "became the pool, and the budget after it; see the "
+                  "budget_classic pin); mirror kept as the CONTROL arm, not "
+                  "source-checked")
     report.append("  simple        CANDIDATE (2026-08-18): not landed anywhere; "
                   "mirror grid-checked against min40_4's two terms in "
                   "test_tm_surrogate.py, no source to pin yet")

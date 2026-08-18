@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-18 | **PRE-REGISTERED: Thomas's BUDGET respelling replaces the pool in the classic builtin loop — `budget = wtime/40 + winc - DELAY`, `soft = max(min(budget, wtime/4 - DELAY), 100)/1000`, `think = max(min(5*budget, wtime/2 - DELAY), 200)/1000`, and `movetime` is REMOVED there (sunfish.py = the simplified clock-only UCI of the TCEC-4k rules; `sunfish_ui/uci.py` keeps full UCI)** | Four deliberate deltas vs the pool: winc coefficient **1.0** (not 39/40), lag **subtracted per limit** (not an (M+2)·O pool reserve), clamps **wtime/4 − DELAY** and **wtime/2 − DELAY**, floors **100/200 ms** (not 50/50). `think ≥ soft` is STRUCTURAL, so the clip line dies with movetime. DELAY ∈ {100, 200} decided by surrogate; 12 cells × 120 games vs `pool`, then a real-clock 60+0 N=200 forfeit cell for the winner. Artifact-vs-mirror grid identity **0/378 on BOTH arms** before game 1. Cost vs #217's head: **+1 clean line** (the named DELAY, priced at 1 line / 5 B), packed **3426 → 3402 = −24 B** |
 | 2026-08-18 | #217 rebased onto master `8c00405` (from base `4c8770e`, seven merges of search, audit and docs work behind it) | **Textual only** — the TM block is byte-identical across the rebase and `Searcher.bound` is master's verbatim. Re-measured on the new base: cleaned **140 → 140** (README's own claim, unchanged), packed **3389 → 3426 = +37 B**. Gates **451 passed / 2 skipped / 0 failed**, model audit GREEN, TM trio 141, tmlib 47,599 values no drift. Only `Searcher.search` is re-pinned — the branch's own change. No re-measurement: **+96.19 ± 33.81** stands as measured at its own base |
 | 2026-08-18 | **SIMPLE-FORM VERDICT: the pool's bookkeeping is NOT decoration — `soft = wtime/40 + 0.9*winc`, `hard = wtime/4` loses the pre-registered increment cells and PR #217 STANDS AS IT IS, its complexity now justified BY MEASUREMENT** | 12 cells x 120 games. `simple` vs `pool`: **30+1 −79.5 [−135.7, −27.2]**, **60+1 −58.5 [−112.7, −6.9]**, 60+0.1 +29.0 [−24.1, +83.5], 30+0 −49.6, 60+0 +11.6, **10+0 −61.4 [−126, −1]**; control `min40_4` vs `pool` replicates the published pass (−161.2 / −120.4 / −127.0). MECHANISM: a wall read off the RAW CLOCK inverts against a soft limit the increment holds up — at 30+1 `simple` parks near 3 s where `hard = T/4` falls BELOW `soft`, and **59% of its searches end at the wall** against the pool's 6%, so the bracket rule the 2x2 paid for stops firing. And no reserve means flags: 43/120 at 30+0, 68/120 at 10+0, pool 0. Real clock, N=200 at 60+0: **+20.87 ± 35.73**, 0 illegal, **3 time forfeits all `simple`** — and the surrogate had predicted +11.6 [−45, +69] for that cell, so this instrument's altitude bias is not a fixed multiplier. Price the simple form would have saved: 23 B |
 | 2026-08-18 | **PRE-REGISTERED: the SIMPLE form takes the pool's place in `sunfish.py` — `soft = wtime/40 + 0.9*winc`, `hard = wtime/4`, i.e. the SHIPPED min40_4 expression with its `min()` removed and its two operands promoted to the two limits — with #217's bracket-break stop rule held fixed** | Thomas rejected #217's budget as over-dressed ("Why do we need both a deadline and a soft?"); the 2×2 says the soft/hard PAIR is what pays (+41.9 / +64.4 / +223.3), so only the pool's BOOKKEEPING is on trial: no reserve, no increment banking, no overhead model, no sudden-death cliff. Stage 1 surrogate, 12 cells × 120 games, `pool` as baseline and `min40_4` as the re-anchoring control, 6 TCs incl. 3 sudden-death; branches written before cell 1. Stage 2 (only if simple wins): rebuild #217 and ONE fixed N=300 at 30+1. Stage 3 regardless: 60+0 N=200, the cliff-vs-no-cliff regime |
@@ -140,6 +141,126 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-18 — PRE-REGISTRATION: the BUDGET respelling, and movetime leaves the packed loop
+
+**Written before cell 1.** Thomas ratified a respelling of the classic builtin
+clock and a scope ruling that goes with it: `sunfish.py` is the SIMPLIFIED,
+clock-only UCI the TCEC-4k rules describe, so `go movetime` leaves that loop;
+`sunfish_ui/uci.py` stays the full interface and keeps it.
+
+**This lands on #217's own branch, not beside it.** The first plan stacked it
+as a successor; Thomas overruled that — he will not merge the pool spelling,
+so the pool spelling is replaced in place and #217 becomes this. The branch
+keeps its history (the pool commits, Thomas's walrus fold, the rebase onto
+`8c00405`) with the respelling on top, so the provenance reads in order. What
+that costs is stated where it matters: **the +96.19 ± 33.81 was measured on
+the POOL SPELLING** (`c3b33a8`, confirmed at `eca3919`), and no part of it is
+claimed for these constants. The surrogate table below is the bridge between
+the two spellings, and it is the only thing that carries.
+
+### The object
+
+```python
+DELAY = 200          # ms between our bestmove and the clock stopping
+
+budget = wtime / 40 + winc - DELAY
+soft = max(min(budget, wtime / 4 - DELAY), 100) / 1000
+think = max(min(5 * budget, wtime / 2 - DELAY), 200) / 1000
+```
+
+**Four deltas against the pool it replaces, each deliberate:**
+
+| | pool (#217) | this form |
+|---|---|---|
+| increment coefficient | 39/40 = 0.975, the horizon minus this move | **1.0**, what this move earns back |
+| the lag | `(M+2)·O` = 8400 ms out of the pool, then ÷M → 210 ms/move | **subtracted once from each limit** |
+| quarter clamp | `(wtime − 400)/4` | `wtime/4 − DELAY` (**identical at DELAY=100**) |
+| half clamp | `(wtime − 400)/2` | `wtime/2 − DELAY` (**identical at DELAY=200**) |
+| floors | 50 / 50 ms | **100 / 200 ms**, asymmetric |
+
+Neither DELAY reproduces both clamps, which is part of why both are ranked.
+
+**`think ≥ soft` is STRUCTURAL and no statement enforces it:** `min` is
+monotone in both arguments, `5·budget ≥ budget` wherever `budget ≥ 0`, the
+second arguments are ordered at every clock, and where `budget < 0` both sit
+on floors that are ordered 200 ≥ 100. That is why the pool's clip line
+(`soft = min(soft, think)`) dies together with `movetime` rather than being
+carried along — asserted on the grid, not argued.
+
+**One formal difference that is EMPTY in practice, said out loud so it is not
+claimed as an advantage:** the 5× is taken off the *unclamped* budget, where
+the pool took it off its clamped soft. The two clamps bind together for every
+clock above ~1.1 s, so above a second the wall is the half clamp either way
+and the headroom there is ~2×, not 5×. Where nothing clamps, both forms give
+exactly 5×, which is the ratio the 2×2 priced.
+
+### THE GATE THAT RUNS BEFORE THE GAMES
+
+The artifact's three statements, lifted from the file, evaluated against
+`tmlib.budget` on the 21×9 clock/increment grid: **0 mismatches out of 378 for
+BOTH candidate DELAYs**, plus `think ≥ soft` at every point. This gate exists
+because on 2026-08-18 it caught a packed arm that differed from its mirror in
+6 of 378 values — 24 games into a live match. It now also lives in
+`tmlib.verify()` (the shipped DELAY is read from the source, so retuning it
+re-checks it) and in `test_classic_time_budget.py`.
+
+### STAGE 1 — the surrogate, same instrument and protocol as the simple-form test
+
+`tools/ctwin` virtual clock, 50 ms/move charge, seed 2026,
+`--alpha --beta 1e-30` so no cell stops itself early, 120 games a cell.
+
+- **arms:** `budget:delay=100` and `budget:delay=200`, both against baseline
+  `pool`. Stop rule held FIXED at #217's bracket-converged break in all three.
+- **TCs (6):** 30+1, 60+1, 60+0.1, 30+0, 60+0, 10+0.
+- **reading:** trinomial Elo with a 95% interval, plus median/max spend, min
+  clock, blind%, floor substitutions, flags, and the stop-reason histogram.
+
+**Branches, written before cell 1:**
+
+- **ANY increment cell (30+1, 60+1, 60+0.1) entirely below zero for a DELAY
+  arm** → that arm declines itself. If both decline, **the form declines
+  itself and #217's spelling stays** — the respelling is an elegance move and
+  it does not get to cost measured Elo.
+- **Both DELAYs within noise** → **ship DELAY=200**, the measured lichess lag,
+  **unless 100 STRICTLY DOMINATES**, defined before the data as: DELAY=100's
+  point estimate is higher than DELAY=200's in **all six** cells.
+- **Mixed across DELAYs** (one declines, the other does not) → ship the
+  surviving one and say plainly that the pair was split.
+
+### STAGE 2 — the forfeit cell, on a real clock
+
+The winning DELAY vs `pool`, **fixed N=200 at 60+0**, box, conc 8, `nice 10`,
+adjudication none but a 400-move cap, illegal = STOP, **forfeits are DATA**:
+these floors are 2× and 4× the pool's, so a flagging engine spends its last
+seconds two to four times faster here. That is exactly what the cell prices,
+and it is registered as descriptive — it reports Elo with the flag counts
+beside it and gates nothing on Elo alone.
+
+### Cost, against #217's head (`5d16f5c`, itself on master `8c00405`)
+
+| artifact | master | #217 pool | this form |
+|---|---|---|---|
+| cleaned `sunfish.py` | 140 | 140 (+0) | **141 (+1)** |
+| packed classic | 3389 B | 3426 B (+37) | **3402 B (+13, and −24 vs the pool)** |
+
+**The +1 line is the named `DELAY` constant, and it is priced rather than
+hidden:** inlining the literal at its three sites gives 140 lines and 3397 B,
+so the name costs exactly one minified line and five bytes. It ships named
+because a lag constant that appears three times and will be retuned is worth
+a name — but the number is on the table.
+
+### Also registered: what did NOT get measured here
+
+`movetime` removal is a SCOPE ruling, not a measured change: no arm reads
+`movetime` in a clock game, so no cell can price it. What it is checked
+against instead is behaviour — the three packed-loop test sites move to
+`go wtime 4000 winc 0`, which lands on the floors (soft 100 ms, wall 200 ms)
+for **both** candidate DELAYs, so those tests stay as deterministic as
+`go movetime` made them and do not move when DELAY is retuned. The driver's
+own `movetime` tests are untouched, and a test asserts the split in both
+directions.
+
 
 ## 2026-08-18 — #217 rebased onto `8c00405`: textual, and the TM block is byte-identical across it
 
