@@ -58,7 +58,7 @@ table keys use.
   side implies the value stays inside the band"; now such a position
   carries a positive WITNESS (the repeating move) and a two-sided claim.
 * `all_replies_repeat_forces_draw` -- and when every legal move repeats,
-  the value is EXACTLY 0 above the fuel horizon: an outright proven
+  the value is EXACTLY 0 above the null horizon: an outright proven
   draw, not merely the absence of a mate.
 * `draw_arm_strengthened` -- the two facts stated against the
   trichotomy's own "neither" arm.
@@ -67,8 +67,8 @@ table keys use.
 for the real-only regime (`d ≥ 6`, `EventuallyWide.lean` Part I): below
 the horizon the capped pass sits in the fold's initial accumulator and
 can hold the value ABOVE 0, so only the `≥ 0` half survives there.  That
-is precisely the pruning debt the fuel oracle retires -- the repetition
-draw becomes exact exactly where the pass stops being a score candidate.
+is precisely the pruning debt retired when the pass stops being a score
+candidate.
 
 **What is NOT claimed here** (model-matches-code discipline).  The
 `ForcedMate` / `ForcedlyMated` specs of `Liveness.lean` describe the
@@ -265,7 +265,7 @@ theorem repetition_not_lost (G : QSGame) (hist guard : G.Pos → Bool)
         foldMax_le_of_mem _ _ _ _ hmem
       omega
 
-/-- **An outright proven draw**: above the fuel horizon, if every legal
+/-- **An outright proven draw**: above the null horizon, if every legal
 move repeats a game-history position then the value is EXACTLY 0.  The
 upper bound needs the regime (`5 ≤ d`), where the fold starts from
 `LOSS`: illegal members contribute the negated sentinel (`LOSS`), legal
@@ -273,8 +273,7 @@ ones the negated exact 0, so nothing can lift the fold above 0; the
 lower bound is `repetition_not_lost`'s witness.
 
 Below the horizon only the `≥ 0` half holds -- the capped pass sits in
-the initial accumulator and can hold the value above 0.  That gap is
-exactly the pruning debt the fuel oracle retires. -/
+the initial accumulator and can hold the value above 0. -/
 theorem all_replies_repeat_forces_draw (G : QSGame) (hist guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)
     (hF : ValFloor G 192)

@@ -1,86 +1,22 @@
 /-
 Finite pruning debt / eventual widening.
 
-THE CONTRACT (Thomas's design): a heuristic may postpone a real branch
-boundedly (reductions whose child depths tend to infinity: fine
-forever), or omit it for finitely many remaining depths; only exact
-bounds may suppress a branch forever.  "Eventual exhaustiveness" is the
-conjunction:
+A heuristic may postpone a real branch by a bounded edge cost, or omit it
+for finitely many remaining depths; only exact bounds may suppress a branch
+forever. Above depth 5 Sunfish's declared value contains real moves only.
+`fuelValueD2` models this with a generic edge selector clamped so every real
+move consumes between one and `C` depth units. Production intrinsic LMR has
+`C = 2`.
 
-  (i)   every real move is eventually admitted at every node;
-  (ii)  child depths tend to infinity;
-  (iii) every virtual candidate (the null option) is eventually LOSS
-        (the fold identity) or exactly dominated.
+The central result, `forcedMate_fuelValueD2`, proves eventual mate
+completeness from `ValFloor` alone. It needs no null-move or zugzwang premise:
+at sufficient nominal depth every proof-tree node stays in the real-only
+regime, every defender fold starts from `LOSS`, and terminal classification is
+exact at positive depth.
 
-CENTERPIECE -- NULL AS A FUEL ORACLE (Thomas's plan, superseding the
-horizon-credit design below as the primary target).  Below depth 6 the
-capped null stays a score candidate, verbatim.  From depth 6 on the
-pass is NEVER in the max: one probe at the fixed target
-`pos.score + NULL_MARGIN` -- a window keyed by `(pos, depth)` alone --
-decides whether the real moves recurse at `depth - 2` (hot) or
-`depth - 1`.  Admission (`val_lower`) and the tables stay keyed by
-NOMINAL depth; only the recursion is shortened.  So above the horizon
-the declared value is a fold over REAL MOVES ONLY, with the existing
-terminal finalizer, and every real edge consumes between 1 and C
-units of depth (C = 2 shipped).  Consequences proven here:
-
-  * `WindowReport.side_exact` / `hot_bit_determined` / `hot_bit_stable`:
-    a fail-soft report is side-exact at any fixed window, so the hot
-    bit is `(pos, depth)`-determined REGARDLESS of table state -- the
-    probe only ever selects between two structurally recursive folds.
-  * `fuelValueD2`: the declared value, general in the edge-cost
-    selector (`spend : Pos → Nat → Pos → Nat`, clamped so each edge costs
-    `1 .. C`) -- Thomas's statement is heuristic-independent, so the
-    theorem quantifies over ALL selectors and instantiates H = 6,
-    C = 2 (`hotSpend`, `hotSpend_child_depth` pins the code shape).
-  * `forcedMate_fuelValueD2`: mate-in-k completeness at `D ≥ C·k + 4`
-    (so `D ≥ 2k + 4` as shipped), from `ValFloor` -- fidelity, tables
-    -- and NOTHING else.  `NoZugzwang` and every mate-band-agreement
-    premise appear NOWHERE in this chain: every proof-tree node stays
-    in the real-only regime `d ≥ 6`, the terminal child is classified
-    exactly by the finalizer at positive depth, and defender folds
-    start from `LOSS` with no pass term to displace them.
-    `forcedlyMated_fuelValueD2` is the dual; the
-    `finite_mates_eventually_recognized` wrapper is the contract's
-    payoff sentence: every finite forced-mate proof is eventually
-    recognized, with no assumption on the edge-cost selector.
-  * Layer 1 is STATED (`FuelBracketSpec`), not yet proven: the bracket
-    of `bound()` against `fuelValueD2` needs the `boundD2` mirror.
-    The enabling step -- the probe's gamma-independence -- is
-    `hot_bit_stable` above; the rest is the mechanical re-run of
-    `Stalemate.lean`'s layer-1 against the shaped fold, recorded as
-    the follow-up, not silently assumed.
-
-END STATE (the goal, for the record): the fuel oracle retires the
-deep-null zugzwang debt (this file), and the FRONTIER TAIL
-(`Classification.lean` Part B, the fttail arm) retires
-`NoMaskedMobility` on the honesty side.  With BOTH landed, eventual
-classification carries fidelity premises (`ValFloor`, `EvalQuiet`,
-tables) only -- no chess assumption anywhere in the trichotomy.
-
-DEMOTED TO EXPERIMENTAL CONTROLS -- the horizon-credit design (the
-second half of this file): a null guard with a FINITE HORIZON `H`
-(`guard p d = false` for `d ≥ H`) also makes completeness
-unconditional, at `D ≥ k + H + O(1)`: the `ForcedMate` induction never
-leaves the depth window `[D - k, D]`, where the horizon makes every
-pass term the fold identity.  The credit variants stay expressible
-(`guard : Pos → Nat → Bool`), `nullValueD2G` generalizes `nullValueD2`
-conservatively (`nullValueD2G_depthBlind`), and `NoZugzwangG` restates
-the layer-2 premise over the depth-keyed guard with the accuracy
-transfer and `D ≥ k + 1` completeness mirrored.  The three demoted
-code arms:
-
-  * arm A (control)      `2 < depth < 48`            -- `fixedHorizonGuard`,   horizon 48;
-  * arm B (smooth)       `|score| + depth < 500`     -- `smoothCreditGuard`,   horizon 500;
-  * arm C (phase)        `2 < depth < 12 * pieces`   -- `phaseAdaptiveGuard`,  horizon 180
-                                                        (own non-pawn pieces ≤ 15).
-
-The position-dependent parts (`base`, `score`, `phase`, `hot`) stay
-abstract, exactly as the shipped model keeps `guard` abstract: only
-the depth-dependence is load-bearing.
-
-Zero sorries, no Mathlib, no audit-surface changes (the audited model
-files are untouched; this file only adds definitions and theorems).
+The second half develops the more general finite-horizon guard model. It is
+useful for proving that any depth-keyed virtual candidate which disappears
+above a fixed horizon also preserves eventual classification.
 -/
 
 import Sunfish.Stalemate
@@ -90,38 +26,7 @@ import Sunfish.Classification
 
 namespace Sunfish
 
-/-! # Part I: null as a fuel oracle
-
-## The probe is position-determined -/
-
-/-- **Side-exactness of fail-soft reports**: any report valid at window
-`gamma` sits on the same side of `gamma` as the value it brackets.  The
-whole reason a fixed-target probe may STEER (rather than score): two
-different valid reports -- say from different table states -- can
-disagree on magnitude but never on the side. -/
-theorem WindowReport.side_exact {gamma r v : Int}
-    (h : WindowReport gamma r v) : gamma ≤ r ↔ gamma ≤ v := by
-  rcases h with ⟨h1, h2⟩ | ⟨h1, h2⟩ <;> constructor <;> intro <;> omega
-
-/-- The hot bit through the zero-window convention: the probe runs at
-`1 - target` and is negated, exactly as `Searcher.bound` does with the
-pass; composing `WindowReport.negate` with side-exactness, the bit
-`target ≤ -report` equals `target ≤ -value` -- a `(pos, depth)`
-predicate. -/
-theorem hot_bit_determined {target rp vp : Int}
-    (h : WindowReport (1 - target) rp vp) :
-    (target ≤ -rp) ↔ (target ≤ -vp) :=
-  (WindowReport.negate h).side_exact
-
-/-- Two valid probe reports -- however the tables differ between them --
-always agree on the hot bit. -/
-theorem hot_bit_stable {target r1 r2 v : Int}
-    (h1 : WindowReport (1 - target) r1 v)
-    (h2 : WindowReport (1 - target) r2 v) :
-    (target ≤ -r1) ↔ (target ≤ -r2) :=
-  (hot_bit_determined h1).trans (hot_bit_determined h2).symm
-
-/-! ## The fuel-shaped declared value -/
+/-! # Part I: the bounded-edge declared value -/
 
 /-- **The fuel-shaped declared value.**  Below depth 6, verbatim
 `nullValueD2` (the capped pass as a score candidate, sub-band admitted
@@ -134,8 +39,7 @@ Admission stays keyed by NOMINAL depth (`val_lower (d+1)`), matching
 the decided code shape; only the recursion is shortened.  King-capture
 normalization, exact sentinel, and the verified terminal finalizer are
 unchanged at every depth.  `(pos, depth)`-determined and window-free
-(`hot_bit_determined` is what lets the code compute `spend` with a
-probe). -/
+and therefore independent of the caller's window. -/
 def fuelValueD2 (G : QSGame) (guard : G.Pos → Bool) (C : Nat)
     (spend : G.Pos → Nat → G.Pos → Nat) : Nat → G.Pos → Int
   | 0, p =>
@@ -396,50 +300,7 @@ theorem finite_mates_eventually_recognized (G : QSGame) (guard : G.Pos → Bool)
   fun k => ⟨C * k + 4, fun _ hFM D hD =>
     forcedMate_fuelValueD2 G guard C spend hC hF hFM D hD⟩
 
-/-! ## The shipped instantiation: H = 6, C = 2 -/
-
-/-- The code's selector: the probe's hot bit spends the one extra ply. -/
-def hotSpend (G : QSGame) (hot : G.Pos → Nat → Bool) : G.Pos → Nat → G.Pos → Nat :=
-  fun p d _ => if hot p d then 1 else 0
-
-/-- With `C = 2` the clamped edge cost is exactly the code's
-`depth - (2 if hot else 1)` recursion. -/
-theorem hotSpend_child_depth (G : QSGame) (hot : G.Pos → Nat → Bool)
-    (p m : G.Pos) (d : Nat) :
-    d - min (2 - 1) (hotSpend G hot p (d + 1) m)
-      = d - (if hot p (d + 1) then 1 else 0) := by
-  cases h : hot p (d + 1) <;> simp [hotSpend, h]
-
-/-- Completeness as shipped: `D ≥ 2k + 4`, `ValFloor` only. -/
-theorem forcedMate_fuelValueD2_code (G : QSGame) (guard : G.Pos → Bool)
-    (hot : G.Pos → Nat → Bool) (hF : ValFloor G 192)
-    {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
-    ∀ D : Nat, 2 * k + 4 ≤ D →
-      MATE_LOWER ≤ fuelValueD2 G guard 2 (hotSpend G hot) D p :=
-  fun D hD => forcedMate_fuelValueD2 G guard 2 (hotSpend G hot)
-    (by omega) hF hFM D (by omega)
-
-/-! ## Layer 1: stated
-
-The remaining obligation, as a named `Prop` so the statement is
-reviewable now: the search with the fuel probe brackets `fuelValueD2`
-at every depth and every driver-range window, with no chess premise --
-the probe only selects between two structurally recursive folds, and
-`hot_bit_stable` already shows the selection is independent of table
-state.  The proof is the `boundD2` mirror (searchMoves specs, killer
-verification, futility coverage, terminal correction) re-run against
-the shaped fold: mechanical, sizable, and NOT assumed anywhere in this
-file -- every theorem above is about the declared value itself. -/
-def FuelBracketSpec (G : QSGame) (guard : G.Pos → Bool)
-    (hot : G.Pos → Nat → Bool) (search : Nat → G.Pos → Int → Int) : Prop :=
-  ∀ (d : Nat) (p : G.Pos) (gamma : Int),
-    -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
-    (gamma ≤ search d p gamma →
-      search d p gamma ≤ fuelValueD2 G guard 2 (hotSpend G hot) d p) ∧
-    (search d p gamma < gamma →
-      fuelValueD2 G guard 2 (hotSpend G hot) d p ≤ search d p gamma)
-
-/-! # Part II: the horizon-credit design (demoted to controls) -/
+/-! # Part II: finite-horizon guards -/
 
 /-! ## The depth-keyed declared function -/
 
@@ -934,7 +795,7 @@ theorem forcedMate_complete_fixedHorizon (G : QSGame) (base : G.Pos → Bool)
   forcedMate_nullValueD2G_of_horizon G _ hF
     (fixedHorizonGuard_horizon G base H) hFM
 
-/-! # Part III: the composition -- fuel oracle + frontier tail, and the
+/-! # Part III: bounded edge costs + frontier tail, and the
 full W/D/L trichotomy
 
 Thomas: "We don't just want mate-in-k.  We want to say that given
@@ -944,9 +805,8 @@ This part composes the two devices, each of which retires one chess
 premise, into the value function the composed code arm computes
 (`fuelValueD2t`):
 
-* the FUEL ORACLE (Part I) retires `NoZugzwang` on the FINDING side --
-  above the horizon the pass steers instead of scoring, so no pass term
-  can displace a real fold;
+* the real-only regime (Part I) retires `NoZugzwang` on the finding side --
+  above the horizon no pass term can displace a real fold;
 * the FRONTIER TAIL (`Classification.lean` Part B) retires
   `NoMaskedMobility` on the HONESTY side -- where the QS filter admits
   no legal move, the fold runs over the full list instead.
@@ -1170,9 +1030,8 @@ theorem fuelValueD2t_checkmated (G : QSGame) (guard : G.Pos → Bool)
 /-- Any-branch defender bound, REGIME form: at a defender node in the
 real-only regime, whichever list the trigger selects its members are
 real moves, so a bound over `G.moves` at each move's selected child
-depth closes the fold.  The initial accumulator is `LOSS` outright --
-this is exactly what the fuel oracle bought: no pass term can hold the
-defender's value above the band. -/
+depth closes the fold. The initial accumulator is `LOSS` outright, so no
+pass term can hold the defender's value above the band. -/
 theorem fuelValueD2t_defender_le (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) {d : Nat} {m : G.Pos}
     (hkgm : ¬ (G.eval m ≤ -MATE_LOWER))
@@ -1592,8 +1451,8 @@ theorem forcedlyMated_of_fuelValueD2t (G : QSGame) (guard : G.Pos → Bool)
 
 /-- **Eventual classification for the composed search, per-arm form.**
 The premise ledger is the goal state: `ValFloor` + `EvalQuiet`
-(fidelity, table-checked) and root legality.  `NoZugzwang` is retired
-by the fuel oracle, `NoMaskedMobility` by the frontier tail -- NO chess
+(fidelity, table-checked) and root legality. `NoZugzwang` is retired
+by the real-only regime, `NoMaskedMobility` by the frontier tail -- NO chess
 premise appears in any arm. -/
 theorem eventual_classification_fuel_arms (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC : 2 ≤ C)

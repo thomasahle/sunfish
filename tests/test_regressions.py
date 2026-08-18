@@ -116,8 +116,7 @@ class TestCappedNullMove:
     first child report is sufficient and the result is the static cap.
 
     Probed at depth 5: the pass is a score candidate only on `2 < depth < 6`.
-    From depth 6 it is a fuel oracle that never contributes a score, so the
-    cap has nothing to cap there (see TestFuelOracle).
+    From depth 6 onward only real moves contribute to the score.
     """
 
     FEN = "8/6p1/6R1/k7/2K5/8/8/8 w - - 0 1"
@@ -147,49 +146,8 @@ class TestCappedNullMove:
         assert not any(gamma == 1 - sf.MATE_LOWER for gamma, _, _ in calls)
 
 
-class TestFuelOracle:
-    """From depth 6 the pass is a fuel oracle, not a score candidate.
-
-    The probe runs at ONE fixed target, `pos.score + NULL_MARGIN`, which
-    depends on `(pos, depth)` and not on the caller's `gamma`. That is what
-    makes the "hot" bit position-determined -- and so table-cacheable and
-    stable across the driver's windows -- and it is the premise the Lean
-    proof leans on (`hot_bit_determined`, `hot_bit_stable`). If the window
-    ever picks up a `gamma`, the bit stops being a function of the position
-    and the trichotomy loses its footing, so it is pinned here.
-    """
-
-    FEN = "3k4/8/3K4/8/8/8/8/7R w - - 0 1"
-
-    def probe_windows(self, gamma):
-        pos = hist_from_fen(self.FEN)[-1]
-        passed = pos.rotate(nullmove=True)
-        searcher = sf.Searcher()
-        searcher.root, searcher.history = pos, set()
-        seen, bound = [], searcher.bound
-
-        def observed(p, g, depth, root=False):
-            if p == passed:
-                seen.append((g, depth))
-            return bound(p, g, depth, root)
-
-        searcher.bound = observed
-        bound(pos, gamma, 8)
-        return seen
-
-    def test_probe_window_is_gamma_free(self):
-        pos = hist_from_fen(self.FEN)[-1]
-        target = pos.score + sf.NULL_MARGIN
-        windows = [self.probe_windows(g) for g in (0, 200, -200, sf.MATE_LOWER)]
-        for gamma, seen in zip((0, 200, -200, sf.MATE_LOWER), windows):
-            assert seen, f"gamma {gamma}: the fuel probe never ran"
-            assert all(g == 1 - target and d == 1 for g, d in seen), (
-                f"gamma {gamma}: probe windows {seen} - expected only "
-                f"({1 - target}, 1), the gamma-free fixed target"
-            )
-        assert len({tuple(w) for w in windows}) == 1, (
-            f"the probe window moved with gamma: {windows}"
-        )
+class TestNullHorizon:
+    """The capped pass is a shallow score candidate and disappears at depth 6."""
 
     def test_no_pass_score_candidate_above_the_horizon(self):
         # Below 6 the capped pass yields a score; from 6 it never does, so
@@ -225,7 +183,7 @@ class TestIntrinsicLMR:
 
     FEN = "4k3/8/8/3p4/4P3/8/8/N3K3 w - - 0 1"
 
-    def observed_depths(self, depth, pass_score, fen=FEN, root=False):
+    def observed_depths(self, depth, fen=FEN, root=False):
         pos = hist_from_fen(fen)[-1]
         passed = pos.rotate(nullmove=True)
         moves = list(pos.gen_moves())
@@ -238,7 +196,7 @@ class TestIntrinsicLMR:
 
         def observed(child, gamma, child_depth, root=False):
             if child == passed:
-                return -pass_score
+                return 0
             if child in children:
                 seen.append((children[child], child_depth))
             return 0
@@ -250,27 +208,23 @@ class TestIntrinsicLMR:
 
     def test_edge_cost_is_intrinsic_and_killer_independent(self):
         cases = (
-            (self.FEN, 5, 0),
-            (self.FEN, 6, 0),
-            (self.FEN, 6, sf.NULL_MARGIN),
-            ("4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1", 6, sf.NULL_MARGIN),
-            ("4k3/8/8/8/8/8/8/Q3K3 w - - 0 1", 6, sf.NULL_MARGIN),
+            (self.FEN, 5),
+            (self.FEN, 6),
+            ("4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1", 6),
+            ("4k3/8/8/8/8/8/8/Q3K3 w - - 0 1", 6),
         )
-        for fen, depth, offset in cases:
+        for fen, depth in cases:
             pos = hist_from_fen(fen)[-1]
-            pass_score = pos.score + offset
-            pos, moves, seen = self.observed_depths(depth, pass_score, fen)
-            guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
-            hot = guard and pass_score >= pos.score + sf.NULL_MARGIN
+            pos, moves, seen = self.observed_depths(depth, fen)
+            safe = abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
             for move in moves:
-                expected = depth - hot - 1 - (guard and pos.value(move) < sf.LMR)
+                expected = depth - 1 - (depth >= 6 and safe and pos.value(move) < sf.LMR)
                 assert {d for m, d in seen if m == move} == {expected}
 
     def test_root_moves_are_not_intrinsically_reduced(self):
-        pos = hist_from_fen(self.FEN)[-1]
-        _, moves, seen = self.observed_depths(6, pos.score + sf.NULL_MARGIN, root=True)
+        _, moves, seen = self.observed_depths(6, root=True)
         for move in moves:
-            assert {d for m, d in seen if m == move} == {4}
+            assert {d for m, d in seen if m == move} == {5}
 
 
 class TestShallowNullMateFloor:
@@ -540,18 +494,12 @@ class TestMateDistance:
         # Ra8# from a bare-rook mate: the score is the band floor plus the
         # depth the search still had in hand.
         #
-        # From depth 6 the deep-null fuel oracle is live, and in this
-        # position it is hot (White is a rook up), so every real edge costs
-        # TWO plies instead of one and the mate arrives with one ply less in
-        # hand. That is the whole trade -- a bounded, uniform cost per edge
-        # instead of a null cutoff -- and pinning it here is what stops the
-        # cost from silently growing: `fuel_edge_cost` proves it is in
-        # {1, 2}, and this is the {2} branch, measured.
+        # Root moves are unreduced, so a mate in one always arrives with
+        # exactly one ply spent regardless of the nominal search depth.
         hist = hist_from_fen("3k4/8/3K4/8/8/8/8/7R w - - 0 1")
         searcher = sf.Searcher()
         score = searcher.bound(hist[-1], sf.MATE_LOWER, depth, root=True)
-        fuel = 1 if depth >= 6 else 0
-        want = sf.MATE_LOWER + (depth - 1 - fuel) * sf.EVAL_ROUGHNESS
+        want = sf.MATE_LOWER + (depth - 1) * sf.EVAL_ROUGHNESS
         assert score == want, (
             f"depth {depth}: mate in 1 scored {score}, expected {want}"
         )

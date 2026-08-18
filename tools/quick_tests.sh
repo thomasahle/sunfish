@@ -7,13 +7,12 @@ echo "$TOOLS"
 T="python3 $TOOLS/tester.py"
 
 echo "Terminal and eventual-mate correctness..."
-# Every real edge costs at most C=3. A mate proof of k plies is therefore
-# armed at D >= C*k+4; mate-in-n has k=2*n-1. These curated witnesses keep
-# the theorem-derived depths affordable in Python CI.
+# Every real edge costs at most C=2. With the shallow cap, a mate proof of
+# k plies is armed at D >= max(4, 2*k+2); mate-in-n has k=2*n-1.
 $T "$1" ${2:-"--quiet"} draw $TESTF/stalemate0.fen --depth 1 --floor 4
-$T "$1" ${2:-"--quiet"} mate $TESTF/mate1.fen --depth 7 --floor 8
-$T "$1" ${2:-"--quiet"} mate $TESTF/mate2_eventual.fen --depth 13 --floor 5
-$T "$1" ${2:-"--quiet"} mate $TESTF/mate3_eventual.fen --depth 19 --floor 2
+$T "$1" ${2:-"--quiet"} mate $TESTF/mate1.fen --depth 4 --floor 8
+$T "$1" ${2:-"--quiet"} mate $TESTF/mate2_eventual.fen --depth 8 --floor 5
+$T "$1" ${2:-"--quiet"} mate $TESTF/mate3_eventual.fen --depth 12 --floor 2
 echo
 
 echo "Tactical strength regressions..."

@@ -45,9 +45,8 @@ import sunfish as S
 from sunfish import Entry, MATE_LOWER, MATE_UPPER, Searcher, Stop
 
 _PINNED = {
-    # fuel-oracle null (classic null bounded 2<depth<6,
-    # fuel probe from depth 6 at pos.score + NULL_MARGIN, real moves at d-1)
-    "bound": "f68416f19ca4effeb3108fa28158664ea92e6e4059ffc86d21ff81346a06146c",
+    # Shallow capped null below depth 6; intrinsic LMR above it.
+    "bound": "85c143eaa1346270187b1a661af5233e2b61fdd4c9739d4b96335d97c8fc2cba",
     "search": "ffae8dfd56348310dd38a86126a2291b7111870b8bc66bced4b2d724ed1ee721",
 }
 for _name, _want in _PINNED.items():
@@ -191,43 +190,38 @@ class VariantSearcher(Searcher):
             if entry.upper < gamma: return entry.upper
             if depth > 0 and pos in self.history: return 0
 
+        killers = self.tp_move.get_all(pos)
+        safe = not root and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
+        val_lower = S.QS if depth == 0 else -MATE_UPPER
+
         def moves():
-            killers = self.tp_move.get_all(pos)
-
-            if (not root and 2 < depth < 6 and abs(pos.score) < 750
-                    and any(c in pos.board for c in "RBNQ")):
-                score = min(pos.score + S.EVAL_ROUGHNESS,
+            if 2 < depth < 6 and safe:
+                score = cap if (cap := pos.score + S.EVAL_ROUGHNESS) < gamma else min(cap,
                     -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
-                proof = score >= gamma and (self.tp_move.get(pos) or pos.king_capture())
-                yield (proof, MATE_UPPER) if proof and pos.value(proof) >= MATE_LOWER else (None, score)
-
-            # Fuel oracle (master since #192): a fuel decision, never a
-            # score candidate; real moves below recurse to d - 1.
-            d = depth
-            if depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ"):
-                target = pos.score + S.NULL_MARGIN
-                if -self.bound(pos.rotate(nullmove=True), 1 - target, depth - 7) >= target:
-                    d = depth - 1
+                proof = score >= gamma and pos.king_capture()
+                yield (proof, MATE_UPPER) if proof else (None, score)
 
             if depth == 0:
                 yield None, pos.score
 
-            val_lower = S.QS - depth * S.QS_A
-
             for killer in killers:
-                if pos.value(killer) >= val_lower:
-                    yield killer, -self.bound(pos.move(killer), 1 - gamma, d - 1)
+                if (val := pos.value(killer)) >= val_lower:
+                    yield killer, MATE_UPPER if val >= MATE_LOWER else val
 
-            values = ((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= val_lower)
-            for val, move in sorted(values, reverse=True):
-                if depth <= 1 and pos.score + val < gamma:
-                    yield (move, MATE_UPPER) if val >= MATE_LOWER else (None, pos.score + val)
-                    break
-
-                yield move, -self.bound(pos.move(move), 1 - gamma, d - 1)
+            for val, move in sorted(((v, m) for m in pos.gen_moves()
+                    if (v := pos.value(m)) >= val_lower), reverse=True):
+                yield move, MATE_UPPER if val >= MATE_LOWER else val
 
         best, live = -MATE_UPPER, False
         for move, score in moves():
+            if move is not None and score < MATE_LOWER:
+                val = score
+                cap = (MATE_UPPER if depth > 3 else
+                    min(MATE_LOWER - 1, pos.score + val + max(depth - 1, 0) * S.QS_A))
+                if cap < gamma: move, score = None, cap
+                else:
+                    move_depth = depth - 1 - (depth >= 6 and safe and val < S.LMR)
+                    score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
             best = max(best, score)
             live |= move is not None and score > -MATE_UPPER
             if best >= gamma:

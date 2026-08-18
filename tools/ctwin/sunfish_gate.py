@@ -12,11 +12,11 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 INFO = re.compile(r"info depth (\d+) .* score (-?\d+)")
-# Every real edge costs at most three plies.  Mate-in-n has a proof of
-# 2*n-1 plies, hence the theorem-derived depths 3*(2*n-1)+4 below.
-SUITES = (("mate1.fen", 7, 8, 8),
-          ("mate2_eventual.fen", 13, 5, 5),
-          ("mate3_eventual.fen", 19, 2, 2))
+# Every real edge costs at most two plies. With the shallow cap, mate-in-n
+# has theorem depth max(4, 2*(2*n-1)+2).
+SUITES = (("mate1.fen", 4, 8, 8),
+          ("mate2_eventual.fen", 8, 5, 5),
+          ("mate3_eventual.fen", 12, 2, 2))
 
 
 def wait_for(process, prefix):

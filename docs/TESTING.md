@@ -281,9 +281,8 @@ as directional.
 
 ### Joint search-parameter tuning (2026-08)
 
-The consolidated null/LMR candidate was selected by tuning eleven knobs
-together: `QS`, `QS_A`, `EVAL_ROUGHNESS`, `NULL_MARGIN`, `NULL_LIMIT`, `LMR`,
-`NULL_RED`, `NULL_MIN_DEPTH`, `FUEL_MIN_DEPTH`, `IID_MIN_DEPTH`, and `IID_RED`.
+The joint null/LMR study tuned the live search and evaluation constants
+together, including the shallow-null horizon and intrinsic-LMR transition.
 The tuner used an additive logistic Gaussian process over paired game outcomes,
 an exact default-policy anchor, persistent random exploration, and occasional
 candidate-versus-candidate duels. One color-swapped opening pair was one
@@ -304,15 +303,15 @@ floor and the packed-engine tiny-clock test. Its one-dimensional posterior
 profile put `QS=40` only 2.0 ± 8.6 Elo behind, so the validated production
 setting remains `QS=40`. A final independent block confirmed that corrected
 bundle at `228/113/159`, **+48.25 ± 27.03 Elo**, LOS 99.98%, over 500 games.
-The other selected settings are `QS_A=140`, `EVAL_ROUGHNESS=15`,
-`NULL_MARGIN=-200`, `LMR=75`, reduction 7 for the deep fuel probe, shallow
-capped null from depth 3 through 5, real-only fuel shaping from depth 6, and
-IID disabled. The study coupled the shallow and deep reductions at 7; the
-depth-six mate floor subsequently showed that this was invalid. Production
-retains the shallow candidate's three-ply reduction, the `abs(score) < 750`
-guard for both null mechanisms, and exempts the unstored driver root from
-intrinsic LMR. The depth-eight mate floor invalidated removal of the score
-guard. A complete threshold sweep retained 12/14 mate-in-three positions
+The retained settings are `QS_A=140`, `EVAL_ROUGHNESS=15`, `LMR=75`, shallow
+capped null from depth 3 through 5, and intrinsic LMR from depth 6. There is
+no deep null probe: an exact 300-game fixed-node ablation put the version with
+that reduction at -13.90 ± 31.01 Elo, while removing it improved the depth-8
+WAC floor from 168/300 to 191/300 and reduced the clean engine by three lines.
+Production keeps the shallow candidate's three-ply reduction, the
+`abs(score) < 750` guard, and exempts the unstored driver root from intrinsic
+LMR. The depth-eight mate floor invalidated removal of the score guard. A
+complete threshold sweep retained 12/14 mate-in-three positions
 through 775, then fell to 11/14 at 800 and 10/14 at 850. At 20,000 fixed
 nodes, 750 scored +2.43 ± 4.35 Elo against 500 and -0.35 ± 3.79 Elo
 against unguarded master over 3,000 games per match. This last independent

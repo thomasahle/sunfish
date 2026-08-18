@@ -449,33 +449,15 @@ class MixedAcquisitionTest(unittest.TestCase):
             self.assertLess(mate_lower + drop, min(kings))
             self.assertGreaterEqual(promotion, 0)
 
-    def test_joint_space_tunes_the_fuel_amount(self):
+    def test_joint_space_tunes_the_null_lmr_transition(self):
         path = pathlib.Path(__file__).with_name("all_parameters.json")
         spec = json.loads(path.read_text())
-        fuel = next(parameter for parameter in spec["parameters"]
-                    if parameter["name"] == "FUEL_NULL")
-        self.assertEqual(fuel["values"], [0, 1, 2])
-        self.assertEqual(fuel["off_values"], [0])
-        disabled = next(condition for condition in spec["conditions"]
-                        if condition["when"] == {"FUEL_MIN_DEPTH": [99]})
-        self.assertIn("FUEL_NULL", disabled["reset"])
-        no_probe = next(condition for condition in spec["conditions"]
-                        if condition["when"] == {"FUEL_NULL": [0]})
-        self.assertEqual(no_probe["reset"], ["NULL_MARGIN", "NULL_RED"])
-        space = MixedSpace({
-            "parameters": [
-                {"name": "FUEL_NULL", "type": "discrete", "default": 1,
-                 "values": [0, 1, 2]},
-                {"name": "NULL_MARGIN", "type": "discrete", "default": -200,
-                 "values": [-200, 800]},
-                {"name": "NULL_RED", "type": "discrete", "default": 7,
-                 "values": [3, 7]},
-            ],
-            "conditions": [no_probe],
-        })
-        lmr_only = space.canonical({"FUEL_NULL": 0, "NULL_MARGIN": 800, "NULL_RED": 3})
-        self.assertEqual(space.knobs(lmr_only)["NULL_MARGIN"], -200)
-        self.assertEqual(space.knobs(lmr_only)["NULL_RED"], 7)
+        transition = next(parameter for parameter in spec["parameters"]
+                          if parameter["name"] == "LMR_MIN_DEPTH")
+        self.assertEqual(transition["default"], 6)
+        self.assertEqual((min(transition["values"]), max(transition["values"])), (4, 12))
+        self.assertFalse({"FUEL_NULL", "FUEL_MIN_DEPTH", "NULL_MARGIN", "NULL_RED"}
+                         & {parameter["name"] for parameter in spec["parameters"]})
         cap = next(parameter for parameter in spec["parameters"]
                    if parameter["name"] == "FUT_CAP")
         self.assertEqual(cap["values"], [0, 1, 2])
@@ -488,9 +470,9 @@ class MixedAcquisitionTest(unittest.TestCase):
     def test_mate_gate_rejects_flat_mate_policies_before_running_engine(self):
         gate = pathlib.Path(__file__).with_name("sunfish_gate.py")
         self.assertEqual(sunfish_gate.SUITES,
-            (("mate1.fen", 7, 8, 8),
-             ("mate2_eventual.fen", 13, 5, 5),
-             ("mate3_eventual.fen", 19, 2, 2)))
+            (("mate1.fen", 4, 8, 8),
+             ("mate2_eventual.fen", 8, 5, 5),
+             ("mate3_eventual.fen", 12, 2, 2)))
         for options in ({"MATE_DIST": 0}, {"EVAL_ROUGHNESS": 0}):
             request = json.dumps({
                 "engine": "/does/not/exist",
@@ -517,7 +499,7 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertIn(f"static int NULL_LIMIT = {limit};",
                       (root / "tools/ctwin/sunfish.c").read_text())
         self.assertEqual((root / "sunfish.py").read_text().count(
-            f"abs(pos.score) < {limit}"), 2)
+            f"abs(pos.score) < {limit}"), 1)
         self.assertIn(500, values("NULL_LIMIT"))
         self.assertEqual((min(values("QS")), max(values("QS"))), (0, 300))
         self.assertEqual((min(values("QS_A")), max(values("QS_A"))), (20, 300))
@@ -525,8 +507,7 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertGreater(min(values("EVAL_ROUGHNESS")), 0)
         self.assertLessEqual(min(value for value in values("LMR") if value > -1000), -200)
         self.assertEqual(max(values("LMR")), 200)
-        self.assertLessEqual(min(values("NULL_MARGIN")), -300)
-        self.assertGreaterEqual(max(values("NULL_MARGIN")), 800)
+        self.assertEqual(parameters["LMR_MIN_DEPTH"]["default"], 6)
         self.assertLessEqual(min(values("VALUE_R")), 400)
 
     def test_coordinate_search_matches_exhaustive_gp_ucb(self):

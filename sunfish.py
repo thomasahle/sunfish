@@ -146,11 +146,6 @@ QS = 40
 QS_A = 140
 LMR = 75
 EVAL_ROUGHNESS = 15
-# Target margin of the deep-null fuel probe (depth >= 6): the pass must
-# beat pos.score + NULL_MARGIN for real moves to burn two plies. Its own
-# parameter, not tied to EVAL_ROUGHNESS - the two knobs tune different
-# things (driver convergence vs reduction aggression).
-NULL_MARGIN = -200
 
 # Max entries kept in each transposition table, roughly 1GB per million.
 # Python dicts keep insertion order, so we cheaply evict the oldest entry
@@ -163,7 +158,6 @@ opt_ranges = dict(
     QS_A = (0, 300),
     LMR = (-200, 200),
     EVAL_ROUGHNESS = (0, 50),
-    NULL_MARGIN = (-400, 800),
     TABLE_SIZE = (10**4, 10**8),
 )
 # minifier-hide end
@@ -377,14 +371,8 @@ class Searcher:
         # Read it before null-move in case the recursive probe evicts it.
         killer = self.tp_move.get(pos)
 
-        # A fixed-target null probe reduces hot nodes. Its static guard also
-        # limits intrinsic LMR to positions where passing is meaningful.
-        d = depth
-        guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
-        if guard:
-            nullpos = pos.rotate(nullmove=True)
-            target = pos.score + NULL_MARGIN
-            d -= -self.bound(nullpos, 1 - target, depth - 7) >= target
+        # Restrict shallow null and intrinsic LMR to balanced positions with non-pawn material.
+        safe = not root and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
 
         # At positive depth all real moves belong to the fixed fold. At the
         # quiescence frontier, retain the tuned tactical threshold.
@@ -401,10 +389,9 @@ class Searcher:
             # (K+P endings). Capping the pass at static evaluation plus one
             # score bucket also keeps its value monotone and below the positive
             # mate band. A sub-window cap needs no child report; otherwise one
-            # is enough. No null at root, so we can always return a move. From
-            # depth 6 on the pass is never a score candidate (see below).
-            if (not root and 2 < depth < 6 and abs(pos.score) < 750
-                    and any(c in pos.board for c in "RBNQ")):
+            # is enough. No null at root, so we can always return a move; from
+            # depth 6 onward only real moves are scored.
+            if 2 < depth < 6 and safe:
                 score = cap if (cap := pos.score + EVAL_ROUGHNESS) < gamma else min(cap,
                     -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
                 # A king capture substitutes the exact MATE_UPPER for a virtual fail-high.
@@ -434,7 +421,7 @@ class Searcher:
                     min(MATE_LOWER - 1, pos.score + val + max(depth - 1, 0) * QS_A))
                 if cap < gamma: move, score = None, cap
                 else:
-                    move_depth = d - 1 - (not root and guard and val < LMR)
+                    move_depth = depth - 1 - (depth >= 6 and safe and val < LMR)
                     score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
             best = max(best, score)
             live |= move is not None and score > -MATE_UPPER

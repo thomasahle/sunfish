@@ -23,7 +23,7 @@ reformatting of surrounding code does not fire):
   - Position.gen_moves   (Game.moves, CaptureFirst's list)
   - Position.king_capture (the substitution/in-check scan, kp = 0 note)
   - constants            (MATE_LOWER, MATE_UPPER, QS, QS_A, LMR,
-                          EVAL_ROUGHNESS, NULL_MARGIN, TABLE_SIZE)
+                          EVAL_ROUGHNESS, TABLE_SIZE)
 
 Run from the repo root:  python formal/scripts/model_audit.py
 Refresh after a re-audit: python formal/scripts/model_audit.py --update
@@ -38,7 +38,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 SUNFISH = ROOT / "sunfish.py"
 
 CONSTANTS = ["MATE_LOWER", "MATE_UPPER", "QS", "QS_A", "LMR", "EVAL_ROUGHNESS",
-             "NULL_MARGIN", "TABLE_SIZE"]
+             "TABLE_SIZE"]
 
 EXPECTED = {
     "Position.gen_moves": "3453dbe008109d3d",
@@ -46,9 +46,9 @@ EXPECTED = {
     "Position.move": "69bb2460cd611c9e",
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "11d52eaa8a661352",
-    "Searcher.bound": "2b3c3adc21af59d7",
+    "Searcher.bound": "713c3525ce16620c",
     "Searcher.search": "f9aa8c81b84ff44b",
-    "constants": "62b96e206341a2fb",
+    "constants": "b5a8160608fcab1e",
 }
 
 
@@ -98,10 +98,8 @@ ANCHORS = [
     "def king_capture",
     "killer = self.tp_move.get(pos)",
     "val_lower = QS if depth == 0 else -MATE_UPPER",
-    "if (not root and 2 < depth < 6 and abs(pos.score) < 750",
-    "guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in \"RBNQ\")",
-    "target = pos.score + NULL_MARGIN",
-    "d -= -self.bound(nullpos, 1 - target, depth - 7) >= target",
+    "safe = not root and abs(pos.score) < 750 and any(c in pos.board for c in \"RBNQ\")",
+    "if 2 < depth < 6 and safe:",
     "yield None, pos.score",
     "score = cap if (cap := pos.score + EVAL_ROUGHNESS) < gamma else min(cap,",
     "-self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))",
@@ -113,7 +111,7 @@ ANCHORS = [
     "cap = (MATE_UPPER if depth > 3 else",
     "min(MATE_LOWER - 1, pos.score + val + max(depth - 1, 0) * QS_A))",
     "if cap < gamma: move, score = None, cap",
-    "move_depth = d - 1 - (not root and guard and val < LMR)",
+    "move_depth = depth - 1 - (depth >= 6 and safe and val < LMR)",
     "score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))",
     "best, live = -MATE_UPPER, False",
     "if depth and not live and all(",

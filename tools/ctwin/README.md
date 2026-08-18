@@ -20,18 +20,13 @@ approximate around it.
 
 **Reference:** `sunfish.py` at the repo root of the checkout the harness
 runs in — the twin's defaults reproduce that engine (capped null below
-depth 6, fuel-oracle null from depth 6, intrinsic LMR, mate-distance
-scoring, and no IID). The reference is imported
+depth 6, intrinsic LMR from depth 6, mate-distance scoring, and no IID).
+The reference is imported
 live by `pyref.py`, so drift in the Python file shows up as a harness
 failure, not silent staleness — re-pass the gate, re-tune the flavor
 knob defaults, and re-pin variants.py's drift hashes when the search
-changes (done for #192). Historical flavors stay reachable by knob:
-`set FUEL_NULL 0` for the pre-#192 deep-null cutoff, or `2` to spend two
-depth units on a hot node; `set IID_MIN_DEPTH
-2` + `set MATE_DIST 0` for pre-capped-null master — knob-off settings
-are no longer difftest-provable against the live reference; their
-identity was proven against the reference of their day and is archived
-in the git history of this file.
+changes. Lab-only search variants must remain differentially testable
+against the live reference.
 
 ### Where clones silently diverge (all handled, all tested)
 
@@ -150,13 +145,12 @@ make bench      # C-vs-PyPy wall-time ratio at identical nodes
 
 Tuning knobs (no recompile): UCI `setoption name NAME value VALUE`, lab
 `set NAME VALUE`, `SF_NAME=` env, or `NAME=VALUE` argv after the table path —
-`QS QS_A LMR EVAL_ROUGHNESS TABLE_SIZE NULL_CAP_MARGIN NULL_MARGIN
-NULL_MIN_DEPTH NULL_LIMIT NULL_CUT_RED NULL_RED IID_MIN_DEPTH IID_RED FUT_MAX FUT_CAP FUT_CAP_DEPTH
-MATE_DIST FUEL_NULL FUEL_MIN_DEPTH FEN_HIST` (`NULL_CAP_MARGIN=-1` follows
-`EVAL_ROUGHNESS`, `NULL_MARGIN` is the fuel-probe target margin, and the two
-`NULL_*_RED` knobs control the shallow and deep probes; `FUEL_NULL` controls
-the hot node's extra depth cost, while zero skips the probe but retains the
-static intrinsic-LMR guard). `FUT_CAP` selects no shallow cap, the current
+`QS QS_A LMR EVAL_ROUGHNESS TABLE_SIZE NULL_CAP_MARGIN NULL_MIN_DEPTH
+NULL_LIMIT NULL_CUT_RED LMR_MIN_DEPTH IID_MIN_DEPTH IID_RED FUT_MAX FUT_CAP
+FUT_CAP_DEPTH MATE_DIST FEN_HIST` (`NULL_CAP_MARGIN=-1` follows
+`EVAL_ROUGHNESS`; `NULL_CUT_RED` controls the shallow null probe;
+`LMR_MIN_DEPTH` is where shallow null ends and intrinsic LMR begins).
+`FUT_CAP` selects no shallow cap, the current
 ordinary-move cap, or the simpler negative-`value()` cap;
 `FUT_CAP_DEPTH` selects its horizon. `FEN_HIST=0` restores the pre-2026-08-16
 one-ply `position fen` history; `1` (default) is the driver's two-ply
@@ -173,8 +167,7 @@ in C). Unknown or out-of-range knobs are hard errors on every input path.
 For long joint studies, one color-swapped opening pair is one posterior
 update. Forty engine processes means twenty scheduler slots:
 
-`all_parameters.json` covers every live search/evaluation constant, including
-the null-oracle fuel amount. It excludes
+`all_parameters.json` covers every live search/evaluation constant. It excludes
 `TABLE_SIZE` (a memory budget) and
 the historical or PR-only flavor selectors above; those belong in separate
 ablation matches, not in the production-parameter posterior. Its default
