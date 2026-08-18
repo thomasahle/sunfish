@@ -999,6 +999,33 @@ and inverts both halves of `dtm_optimal` (`matedAlt_inverts_preference`), while
 spending the sentinel margin down from the whole distance zone to one
 `EVAL_ROUGHNESS` (`matedAlt_margin_is_one_step`).
 
+### The `bound()` docstring, clause by clause
+
+A docstring is a model claim, so it is audited like one: `model_audit.py`
+anchors the clauses below, and each has a theorem behind it. Statuses are
+MATCHES (proved as written), AHEAD-OF-MODEL (proved for the modelled search,
+with a named gap to the shipped one), and UNMODELED.
+
+| docstring clause | status | where |
+|---|---|---|
+| `if gamma > s*` / `if gamma <= s*` bracket | MATCHES | `Bound.bound_spec`; the docstring's `s*`-split form and the proved `r`-split form are interderivable (`boundSpec_iff_docstring`), as is `WindowReport` (`windowReport_iff_boundSpec`) |
+| `s*` is a function of `(pos, depth)` and fixed parameters alone | AHEAD-OF-MODEL | proved against the declared value `nullValueD2`, which is window-free by construction (`boundD2''_spec`). The FUEL-shaped value that models the shipped reduction is bracketed only by `FuelBracketSpec`, which is STATED and not proven (`EventuallyWide.lean`). The docstring is honest about what `s*` is; the open work is the mirror proof, not the wording |
+| `1 - MATE_UPPER < gamma <= MATE_UPPER` | MATCHES | hypothesis of every spec; the range is closed under the null-window flip with one point to spare (`window_flip_preserves_range`) |
+| the table may return a weaker but valid bound | MATCHES | the specs bracket, never equate; `TableSwap.lean`, `d2_no_crossing` |
+| kingless: `r = -MATE_UPPER` | MATCHES | `boundD2''_kingGone` |
+| depth >= 1, capturable: `r = MATE_UPPER` | MATCHES | `boundD2''_of_capture`; the depth-0 half is fail-high only, exactly as the `depth >= 1` gate says (`kingCaptureContract_stratified`) |
+| no searched move can reach `MATE_UPPER`, so an exact `MATE_UPPER` proves a king capture | MATCHES (new) | `searched_score_below_MU`, `MU_provenance` |
+| only a searched real move sets `live` | MATCHES | the three-species split (`searchedAt`, `futTerm`), `searched_yield_two_way`, and `termFix2`'s `S = LOSS` |
+| mate/stalemate returns the exact `max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)` / `0` | MATCHES | `boundD2''_terminal_exact`, `terminalValue_exact` |
+| the mate value carries the UNSPENT depth, so the winner takes the shortest line | MATCHES | `terminalValue_anti`, `leastMate_value_separation`, `dtm_optimal`; the formula-level direction and the cost of inverting it are `matedShipped_anti`, `matedAlt_inverts_preference` |
+| every move in `tp_move` is legal | MATCHES | `storedMoveLegal`, `storedMoveLegal_qs`, `KillerLegal` |
+| a nonterminal root fail-high leaves a real witness | MATCHES | `boundD2_failHigh_attained`, `storedMove_attains`, `substitution_attains` |
+
+Two things the docstring deliberately does NOT claim, because the model does
+not: that `s*` is the game-theoretic value (it is the value this search
+declares, pruning included), and that a depth-0 capturable node reports the
+sentinel (it only fails high).
+
 ## Move-table contract
 
 The current `tp_move` contract is deliberately narrow:

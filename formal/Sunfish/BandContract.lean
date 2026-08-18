@@ -132,6 +132,43 @@ theorem band_leaves_yield_above_identity :
   have hLOSS : LOSS = -MATE_UPPER := rfl
   exact ⟨60000, ⟨by omega, by omega⟩, by omega⟩
 
+/-! ### The docstring's own bracket, and the two forms the model uses -/
+
+/-- **The docstring and `BoundSpec` say the same thing.**  The docstring
+splits on where `s*` sits ("if gamma > s* ... if gamma <= s* ..."), the proved
+spec splits on where `r` sits; each derives the other, so the shipped wording
+is the theorem and not a paraphrase of it. -/
+theorem boundSpec_iff_docstring (gamma r s : Int) :
+    ((gamma ≤ r → r ≤ s) ∧ (r < gamma → s ≤ r)) ↔
+      ((s < gamma → s ≤ r ∧ r < gamma) ∧ (gamma ≤ s → gamma ≤ r ∧ r ≤ s)) := by
+  constructor
+  · rintro ⟨h1, h2⟩
+    refine ⟨fun hs => ?_, fun hs => ?_⟩ <;>
+      by_cases hr : gamma ≤ r
+    · have := h1 hr; omega
+    · have := h2 (by omega); omega
+    · have := h1 hr; omega
+    · have := h2 (by omega); omega
+  · rintro ⟨h1, h2⟩
+    refine ⟨fun hr => ?_, fun hr => ?_⟩ <;>
+      by_cases hs : gamma ≤ s
+    · have := h2 hs; omega
+    · have := h1 (by omega); omega
+    · have := h2 hs; omega
+    · have := h1 (by omega); omega
+
+/-- And `WindowReport`, the disjunctive form the capped-null transport
+lemmas are stated in, is the same predicate once more. -/
+theorem windowReport_iff_boundSpec (gamma r s : Int) :
+    WindowReport gamma r s ↔ ((gamma ≤ r → r ≤ s) ∧ (r < gamma → s ≤ r)) := by
+  unfold WindowReport
+  constructor
+  · rintro (⟨h1, h2⟩ | ⟨h1, h2⟩) <;> exact ⟨fun _ => by omega, fun _ => by omega⟩
+  · rintro ⟨h1, h2⟩
+    by_cases hr : gamma ≤ r
+    · exact Or.inr ⟨hr, h1 hr⟩
+    · exact Or.inl ⟨by omega, h2 (by omega)⟩
+
 /-! ### Consumer 1: the fail-soft bracket itself -/
 
 /-- At a king-capturable node the declared value is `MATE_UPPER`

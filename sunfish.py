@@ -327,10 +327,11 @@ class Searcher:
 
     def bound(self, pos, gamma, depth, root=False):
         """ Let s* be the score of the sub-tree from pos at this depth, as
-            a function of (pos, depth) alone. This includes null moves and
-            QS pruning, and global parameters like self.history that don't
-            change during search. (Things that change, like tp_move or gamma,
-            are not allowed to change the sub-tree and value of s*.)
+            a function of (pos, depth) alone. This includes null moves, QS,
+            futility and the reductions, and global parameters like
+            self.history that don't change during search. (Things that
+            change, like tp_move or gamma, are not allowed to change the
+            sub-tree and value of s*.)
 
             It is assumed 1 - MATE_UPPER < gamma <= MATE_UPPER.
 
@@ -342,11 +343,20 @@ class Searcher:
             in self.tp_score may be used to return a bound that is not the best
             possible, but it is guaranteed to be valid according to the rules above.
 
-            On top of the bound, three exact promises:
+            On top of the bound, four exact promises. The first two are
+            EXACT VALUES and not band membership: +-MATE_UPPER are reserved
+            tokens the fold compares for equality, never scores;
+            formal/Sunfish/BandContract.lean records what breaks if they
+            are weakened to |r| >= MATE_LOWER.
             - our own king already captured: r = -MATE_UPPER.
             - if depth >= 1:
                 - if the opponent king capturable: r = MATE_UPPER
-                  (note this is stronger than just gamma <= r <= s*.)
+                  (note this is stronger than just gamma <= r <= s*.) No
+                  searched move can reach MATE_UPPER, since its child is
+                  floored at 1 - MATE_UPPER, so an exact MATE_UPPER proves a
+                  king capture - which is what makes score > -MATE_UPPER a
+                  legality test one ply up. Only a searched real move sets
+                  live; null, stand pat and futility estimates never do.
                 - if mate/stalemate returns the exact
                   max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)
                   / 0. The mate value carries the unspent depth, so s* is
