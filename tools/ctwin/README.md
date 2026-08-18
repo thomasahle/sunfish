@@ -363,6 +363,86 @@ cells — partial**: `s=0.8` +35 [−33,+105], `s=1.2` −12 [−89,+64],
 the dynamic target had not finished. Stage-0 had already pruned `s=1.2` on
 shape (it is the only cell that introduces floor moves at 60+0).
 
+### The 2x2: budget x stop rule (2026-08-17)
+
+The ranking pass above left one question unanswered and the classic landing had
+to answer it: the pool is TWO changes, a budget and a stop rule, and classic
+pays for them separately — the budget is three statements and the bracket rule
+four more, which on a ~150-line engine is a real question and not a rhetorical
+one. (It was answered twice over: the arms below priced the Elo, and the
+landing put the soft check at `Searcher.search()`'s existing bracket boundary,
+making the whole port ZERO minified lines. The cheap half would therefore have
+saved nothing in the end either.) Two arms priced them.
+**Both DELEGATE their parent's numbers** rather than restating the arithmetic,
+so a cell meant to isolate one change cannot be measuring two
+(`test_tm_surrogate.py` asserts exactly that):
+
+```
+poolyield   the pool's (soft, hard), read by CLASSIC's break-at-any-yield rule
+            -- frac is soft/hard, because no fixed fraction of a 5x wall names
+            the soft limit
+min40_4c    min40_4's (soft, hard), read by the pool's bracket-converged rule
+```
+
+Virtual clock, 50 ms/move charge, α=β=1e-30 so no cell can stop itself early.
+Elo is A-minus-B; read points were fixed before harvest.
+
+| | classic's break-at-any-yield | the pool's bracket-converged break |
+|---|---|---|
+| **min40_4's numbers** | *shipped reference* | `min40_4c` **+64.4** [+8.1, +124.3] |
+| **the pool's numbers** | `poolyield` **+40.7** [−41.7, +128.0] | `pool` **+223.3** [+136.6, +345.5] |
+
+**IT IS THE PAIR THAT PAYS.** Each single change is modest — +40.7 and +64.4,
+summing to ~+105 — and the pair is +223.3. The interaction is about as large as
+both main effects together, and the reason is arithmetic rather than
+mysterious: the bracket rule's entire effect is to let an unsettled search run
+past the soft limit toward the wall, so `hard/soft` bounds what it can buy.
+That ratio is **1.25x for min40_4**, which derives its target as 0.8 of its own
+wall, against **5x for the pool**. A cheap classic port of the budget alone
+would have thrown the whole mechanism away for about half the bytes -- and the
+full port landed line-neutral on the minified engine anyway, so the cheap half
+would have bought nothing at all.
+
+Per-TC, budget alone against the shipped `min40_4` (`poolyield` minus
+`min40_4`, 120 games unless noted):
+
+| TC | games | Elo |
+|---|---|---|
+| 30+1 | 60 (read point) | +40.7 [−41.7, +128.0] |
+| 30+1 | 200 (ran on) | +41.9 [−0.4, +85.5] |
+| 60+1 | 120 | +37.8 [−15.5, +92.9] |
+| 60+0.1 | 120 | +31.9 [−22.6, +88.1] |
+| 60+0 | 120 | +52.5 [+0.3, +107.2] |
+
+The 60+0 cell carries the one safety reading in the set, and it is against the
+INCUMBENT: `min40_4` flagged **3 of 120** modelled games and reached a −0.08 s
+clock, where the pool budget flagged none and never went below 3.80 s. The
+surrogate does not certify flag safety and this does not either — but it is the
+recorded cost of parking lowest in the field showing up as flags.
+
+The bracket rule on top of the pool budget, as its own cell: **+76.5**
+[+22.0, +135.0] at 30+1 (120 g), and **+117.2** [+64.1, +176.2] at 60+1 (120 g).
+
+**Non-transitivity, stated rather than smoothed.** The same quantity read two
+ways disagrees: the direct cell says +223.3, while
+(`pool` − `poolyield`) + (`poolyield` − `min40_4`) = +76.5 + 40.7 = **+117.2**,
+and the ranking pass above read **+134** [+62, +218] on its own 60 games. A
+60-game cell at a 78% score rate has an unstable Elo scale, so the surrogate's
+estimate of this gap is best read as *somewhere in +117 to +223, direction
+certain*. That is the standing rule working, not failing: the surrogate ranks
+and one real-clock match validates. The real clock read **+96.19 ± 33.81** over a fixed 300 at 30+1 —
+direction and mechanism confirmed, altitude 1.2x to 2.3x lower than the
+screen's range. Logged as a calibration datum: this instrument's cells are
+RANKS, and quoting one as a magnitude overstates by that much.
+
+**Telemetry, which matters more than the Elo.** In the decision cell the two
+arms have the SAME median spend — 1.218 s pool against 1.236 s `min40_4` — so
+the pool is not simply spending more. Max spend is 7.414 s against 1.650 s, and
+**29% of `min40_4`'s moves end at the WALL** (934 `deadline` stops of 3180)
+against **10% of the pool's**, which ends 90% of its searches on the soft limit.
+`floorbk` is 0 on both arms, so this cell carries none of the structural-floor
+bias the +147 legacy cell had to disclose.
+
 **Cost note, honestly:** the surrogate's speedup comes from skipping
 *waiting*, not *searching*, so it shrinks as the TC grows. A 60+0 cell is
 minutes; a 300+3 cell is nearly an hour, because the node budget scales with

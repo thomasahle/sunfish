@@ -143,8 +143,13 @@ class UciEngine:
         self.expect("readyok")
         return self
 
-    def bestmove(self, movetime=50):
-        self.send(f"go movetime {movetime}")
+    def bestmove(self, movetime=50, go=None):
+        """`go` replaces the whole command, for the tests that drive the
+        PACKED loop: `sunfish.py`'s builtin `go` handler is deliberately
+        clock-only (TCEC-4k's simplified UCI) and does not read `movetime`.
+        `sunfish_ui/uci.py` is the full interface and still does, so the
+        default is unchanged and the two are told apart per call site."""
+        self.send(go or f"go movetime {movetime}")
         return self.expect("bestmove").split()[1]
 
     def close(self):
@@ -153,6 +158,13 @@ class UciEngine:
             self.proc.wait(timeout=10)
         except Exception:  # noqa: BLE001 - best-effort teardown
             self.proc.kill()
+
+
+# The packed loop is clock-only, so its tests hand it a clock.  4 s with no
+# increment lands BOTH candidate DELAYs (100 and 200 ms) on the floors --
+# soft 100 ms, wall 200 ms -- so these tests are as deterministic as
+# `go movetime` was and do not move when DELAY is retuned.
+TINY_GO = "go wtime 4000 winc 0"
 
 
 def make_engine_dir(tmp_path, *, tiny=False, uci_module=True, broken_import=False):
@@ -195,7 +207,7 @@ def play_game(engine, engine_color, plies, seed):
         if board.turn == engine_color:
             engine.send("position startpos"
                         + (" moves " + " ".join(played) if played else ""))
-            reply = engine.bestmove()
+            reply = engine.bestmove(go=TINY_GO)
             assert reply != "(none)", f"engine resigned {board.fen()}"
             move = chess.Move.from_uci(reply)
             assert move in board.legal_moves, (
@@ -271,7 +283,7 @@ def test_tiny_loop_returns_none_after_terminal_position(tmp_path, moves):
     engine = UciEngine(script, tmp_path).handshake()
     try:
         engine.send("position startpos moves " + moves)
-        reply = engine.bestmove(movetime=10)
+        reply = engine.bestmove(go=TINY_GO)
     finally:
         engine.close()
     assert reply == "(none)"
@@ -437,7 +449,7 @@ def test_packed_build_still_has_a_working_loop(tmp_path):
     assert "import sunfish_ui" not in script.read_text()
     result = run_to_completion(
         script, tmp_path,
-        commands="uci\nisready\nposition startpos moves e2e4\ngo movetime 100\nquit\n")
+        commands="uci\nisready\nposition startpos moves e2e4\n" + TINY_GO + "\nquit\n")
     assert result.returncode == 0, result.stderr
     assert "uciok" in result.stdout and "bestmove" in result.stdout, result.stdout
 

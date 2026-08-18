@@ -46,6 +46,12 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-18 | **PRE-REGISTERED: Thomas's BUDGET respelling replaces the pool in the classic builtin loop — `budget = wtime/40 + winc - DELAY`, `soft = max(min(budget, wtime/4 - DELAY), 100)/1000`, `think = max(min(5*budget, wtime/2 - DELAY), 200)/1000`, and `movetime` is REMOVED there (sunfish.py = the simplified clock-only UCI of the TCEC-4k rules; `sunfish_ui/uci.py` keeps full UCI)** | Four deliberate deltas vs the pool: winc coefficient **1.0** (not 39/40), lag **subtracted per limit** (not an (M+2)·O pool reserve), clamps **wtime/4 − DELAY** and **wtime/2 − DELAY**, floors **100/200 ms** (not 50/50). `think ≥ soft` is STRUCTURAL, so the clip line dies with movetime. DELAY ∈ {100, 200} decided by surrogate; 12 cells × 120 games vs `pool`, then a real-clock 60+0 N=200 forfeit cell for the winner. Artifact-vs-mirror grid identity **0/378 on BOTH arms** before game 1. Cost vs #217's head: **+1 clean line** (the named DELAY, priced at 1 line / 5 B), packed **3426 → 3402 = −24 B** |
+| 2026-08-18 | #217 rebased onto master `8c00405` (from base `4c8770e`, seven merges of search, audit and docs work behind it) | **Textual only** — the TM block is byte-identical across the rebase and `Searcher.bound` is master's verbatim. Re-measured on the new base: cleaned **140 → 140** (README's own claim, unchanged), packed **3389 → 3426 = +37 B**. Gates **451 passed / 2 skipped / 0 failed**, model audit GREEN, TM trio 141, tmlib 47,599 values no drift. Only `Searcher.search` is re-pinned — the branch's own change. No re-measurement: **+96.19 ± 33.81** stands as measured at its own base |
+| 2026-08-18 | **SIMPLE-FORM VERDICT: the pool's bookkeeping is NOT decoration — `soft = wtime/40 + 0.9*winc`, `hard = wtime/4` loses the pre-registered increment cells and PR #217 STANDS AS IT IS, its complexity now justified BY MEASUREMENT** | 12 cells x 120 games. `simple` vs `pool`: **30+1 −79.5 [−135.7, −27.2]**, **60+1 −58.5 [−112.7, −6.9]**, 60+0.1 +29.0 [−24.1, +83.5], 30+0 −49.6, 60+0 +11.6, **10+0 −61.4 [−126, −1]**; control `min40_4` vs `pool` replicates the published pass (−161.2 / −120.4 / −127.0). MECHANISM: a wall read off the RAW CLOCK inverts against a soft limit the increment holds up — at 30+1 `simple` parks near 3 s where `hard = T/4` falls BELOW `soft`, and **59% of its searches end at the wall** against the pool's 6%, so the bracket rule the 2x2 paid for stops firing. And no reserve means flags: 43/120 at 30+0, 68/120 at 10+0, pool 0. Real clock, N=200 at 60+0: **+20.87 ± 35.73**, 0 illegal, **3 time forfeits all `simple`** — and the surrogate had predicted +11.6 [−45, +69] for that cell, so this instrument's altitude bias is not a fixed multiplier. Price the simple form would have saved: 23 B |
+| 2026-08-18 | **PRE-REGISTERED: the SIMPLE form takes the pool's place in `sunfish.py` — `soft = wtime/40 + 0.9*winc`, `hard = wtime/4`, i.e. the SHIPPED min40_4 expression with its `min()` removed and its two operands promoted to the two limits — with #217's bracket-break stop rule held fixed** | Thomas rejected #217's budget as over-dressed ("Why do we need both a deadline and a soft?"); the 2×2 says the soft/hard PAIR is what pays (+41.9 / +64.4 / +223.3), so only the pool's BOOKKEEPING is on trial: no reserve, no increment banking, no overhead model, no sudden-death cliff. Stage 1 surrogate, 12 cells × 120 games, `pool` as baseline and `min40_4` as the re-anchoring control, 6 TCs incl. 3 sudden-death; branches written before cell 1. Stage 2 (only if simple wins): rebuild #217 and ONE fixed N=300 at 30+1. Stage 3 regardless: 60+0 N=200, the cliff-vs-no-cliff regime |
+| 2026-08-17 | **CLASSIC POOL VERDICT: the pool takes classic's builtin clock and its packed artifact at +96.19 ± 33.81 (95%, pentanomial) over a FIXED 300 at 30+1 — WINS CLEAR, the pre-written branch** | 150W/69L/81D = 63.50%, Ptnml [7,19,46,42,36] over 150 pairs, **0 illegal, 0 forfeits, 300/300 normal**. The surrogate ranked right and read HIGH (+117 to +223 vs +96.19) — a calibration datum. Mechanism predicted to 4%: identical median spend (1.277 s vs 1.258 s), max spend **7.729 s vs 1.944 s**, 14.2% of pool moves over 2 s against 0.0%. Elo lives in the PAIR: budget alone +41.9 [−0.4,+85.5], stop rule alone +64.4 [+8.1,+124.3], both +223.3 on the surrogate. Price **+36 B and ZERO minified lines** as landed (142 → 142): `Searcher.search()` reads the soft clock at the bracket boundary it already owns, so the UCI loop duplicates no search state. Raises the +400 goalpost by ~96 Elo; meter 3 is now historical |
+| 2026-08-17 | **PRE-REGISTERED: the POOL takes classic's builtin clock (and its packed artifact) — the record shows the pool WON this venue's Elo cells in 2026-08-15's ranking pass (`min40_4` vs `pool` −114/−134/−114) and lost it only on the one-line elegance tiebreak, so the merits were never settled** | Fixed **N=300 at 30+1**, real clock, box, no SPRT, adjudication NONE, srand 20260901; branches written before game 1 (wins-clear → land / null → do not land / loses → record a reversed surrogate rank). Surrogate replication of the decision cell: **−223.3 [−345.5, −136.6]** for `min40_4` vs `pool`, 60 games, zero floor substitutions. Port priced: budget alone **+37 B / +0 lines** and NOT the measured object; budget + MTD-bracket soft rule **+77 B / +4 lines**. Raises the +400 goalpost by design |
 | 2026-08-17 | Classic consumer-side scoring and exact captures | **+25.4 ± 19.0 Elo fixed-node**, −2.36% nodes, 149→142 lines; real-clock pending |
 | 2026-08-17 | Classic unified caps | **+14.3 ± 15.0 Elo timed**, 1,000 games; keep at 149 lines |
 | 2026-08-17 | Classic unified shallow/lazy caps | **+8.0 ± 12.1 Elo fixed-node**, −2.39% nodes, 150→149 lines; timed C confirmation running |
@@ -135,6 +141,720 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-18 — PRE-REGISTRATION: the BUDGET respelling, and movetime leaves the packed loop
+
+**Written before cell 1.** Thomas ratified a respelling of the classic builtin
+clock and a scope ruling that goes with it: `sunfish.py` is the SIMPLIFIED,
+clock-only UCI the TCEC-4k rules describe, so `go movetime` leaves that loop;
+`sunfish_ui/uci.py` stays the full interface and keeps it.
+
+**This lands on #217's own branch, not beside it.** The first plan stacked it
+as a successor; Thomas overruled that — he will not merge the pool spelling,
+so the pool spelling is replaced in place and #217 becomes this. The branch
+keeps its history (the pool commits, Thomas's walrus fold, the rebase onto
+`8c00405`) with the respelling on top, so the provenance reads in order. What
+that costs is stated where it matters: **the +96.19 ± 33.81 was measured on
+the POOL SPELLING** (`c3b33a8`, confirmed at `eca3919`), and no part of it is
+claimed for these constants. The surrogate table below is the bridge between
+the two spellings, and it is the only thing that carries.
+
+### The object
+
+```python
+DELAY = 200          # ms between our bestmove and the clock stopping
+
+budget = wtime / 40 + winc - DELAY
+soft = max(min(budget, wtime / 4 - DELAY), 100) / 1000
+think = max(min(5 * budget, wtime / 2 - DELAY), 200) / 1000
+```
+
+**Four deltas against the pool it replaces, each deliberate:**
+
+| | pool (#217) | this form |
+|---|---|---|
+| increment coefficient | 39/40 = 0.975, the horizon minus this move | **1.0**, what this move earns back |
+| the lag | `(M+2)·O` = 8400 ms out of the pool, then ÷M → 210 ms/move | **subtracted once from each limit** |
+| quarter clamp | `(wtime − 400)/4` | `wtime/4 − DELAY` (**identical at DELAY=100**) |
+| half clamp | `(wtime − 400)/2` | `wtime/2 − DELAY` (**identical at DELAY=200**) |
+| floors | 50 / 50 ms | **100 / 200 ms**, asymmetric |
+
+Neither DELAY reproduces both clamps, which is part of why both are ranked.
+
+**`think ≥ soft` is STRUCTURAL and no statement enforces it:** `min` is
+monotone in both arguments, `5·budget ≥ budget` wherever `budget ≥ 0`, the
+second arguments are ordered at every clock, and where `budget < 0` both sit
+on floors that are ordered 200 ≥ 100. That is why the pool's clip line
+(`soft = min(soft, think)`) dies together with `movetime` rather than being
+carried along — asserted on the grid, not argued.
+
+**One formal difference that is EMPTY in practice, said out loud so it is not
+claimed as an advantage:** the 5× is taken off the *unclamped* budget, where
+the pool took it off its clamped soft. The two clamps bind together for every
+clock above ~1.1 s, so above a second the wall is the half clamp either way
+and the headroom there is ~2×, not 5×. Where nothing clamps, both forms give
+exactly 5×, which is the ratio the 2×2 priced.
+
+### THE GATE THAT RUNS BEFORE THE GAMES
+
+The artifact's three statements, lifted from the file, evaluated against
+`tmlib.budget` on the 21×9 clock/increment grid: **0 mismatches out of 378 for
+BOTH candidate DELAYs**, plus `think ≥ soft` at every point. This gate exists
+because on 2026-08-18 it caught a packed arm that differed from its mirror in
+6 of 378 values — 24 games into a live match. It now also lives in
+`tmlib.verify()` (the shipped DELAY is read from the source, so retuning it
+re-checks it) and in `test_classic_time_budget.py`.
+
+### STAGE 1 — the surrogate, same instrument and protocol as the simple-form test
+
+`tools/ctwin` virtual clock, 50 ms/move charge, seed 2026,
+`--alpha --beta 1e-30` so no cell stops itself early, 120 games a cell.
+
+- **arms:** `budget:delay=100` and `budget:delay=200`, both against baseline
+  `pool`. Stop rule held FIXED at #217's bracket-converged break in all three.
+- **TCs (6):** 30+1, 60+1, 60+0.1, 30+0, 60+0, 10+0.
+- **reading:** trinomial Elo with a 95% interval, plus median/max spend, min
+  clock, blind%, floor substitutions, flags, and the stop-reason histogram.
+
+**Branches, written before cell 1:**
+
+- **ANY increment cell (30+1, 60+1, 60+0.1) entirely below zero for a DELAY
+  arm** → that arm declines itself. If both decline, **the form declines
+  itself and #217's spelling stays** — the respelling is an elegance move and
+  it does not get to cost measured Elo.
+- **Both DELAYs within noise** → **ship DELAY=200**, the measured lichess lag,
+  **unless 100 STRICTLY DOMINATES**, defined before the data as: DELAY=100's
+  point estimate is higher than DELAY=200's in **all six** cells.
+- **Mixed across DELAYs** (one declines, the other does not) → ship the
+  surviving one and say plainly that the pair was split.
+
+### STAGE 2 — the forfeit cell, on a real clock
+
+The winning DELAY vs `pool`, **fixed N=200 at 60+0**, box, conc 8, `nice 10`,
+adjudication none but a 400-move cap, illegal = STOP, **forfeits are DATA**:
+these floors are 2× and 4× the pool's, so a flagging engine spends its last
+seconds two to four times faster here. That is exactly what the cell prices,
+and it is registered as descriptive — it reports Elo with the flag counts
+beside it and gates nothing on Elo alone.
+
+### Cost, against #217's head (`5d16f5c`, itself on master `8c00405`)
+
+| artifact | master | #217 pool | this form |
+|---|---|---|---|
+| cleaned `sunfish.py` | 140 | 140 (+0) | **141 (+1)** |
+| packed classic | 3389 B | 3426 B (+37) | **3402 B (+13, and −24 vs the pool)** |
+
+**The +1 line is the named `DELAY` constant, and it is priced rather than
+hidden:** inlining the literal at its three sites gives 140 lines and 3397 B,
+so the name costs exactly one minified line and five bytes. It ships named
+because a lag constant that appears three times and will be retuned is worth
+a name — but the number is on the table.
+
+### Also registered: what did NOT get measured here
+
+`movetime` removal is a SCOPE ruling, not a measured change: no arm reads
+`movetime` in a clock game, so no cell can price it. What it is checked
+against instead is behaviour — the three packed-loop test sites move to
+`go wtime 4000 winc 0`, which lands on the floors (soft 100 ms, wall 200 ms)
+for **both** candidate DELAYs, so those tests stay as deterministic as
+`go movetime` made them and do not move when DELAY is retuned. The driver's
+own `movetime` tests are untouched, and a test asserts the split in both
+directions.
+
+
+## 2026-08-18 — #217 rebased onto `8c00405`: textual, and the TM block is byte-identical across it
+
+The branch had been sitting on `4c8770e` while master took #218's search
+refactor, #230's lazy-cap tail, #233, #234, #235 and #231, so it read
+CONFLICTING. Rebased — twice, because master landed #235 and #231 while the
+first rebase was being verified, and a rebase that is stale on arrival is
+not a rebase. **Nothing was re-measured and nothing needed to be:**
+the +96.19 ± 33.81 was a two-arm match whose arms shared their own base, and
+this rebase does not touch the object it measured.
+
+**What was verified rather than assumed:**
+
+- **The TM block is byte-identical across the rebase** — the pool comment,
+  both budget statements (`soft = max(0, min(...))` and the walrus clip), and
+  the `searcher.deadline, searcher.soft` arming line all diff clean against
+  the pre-rebase tip. So do the other two hunks (`self.soft` in `__init__`,
+  the soft read in `search()`).
+- **`Searcher.bound` is master's verbatim**, compared as extracted source
+  rather than by eyeball: the audited region this branch has no business
+  touching is untouched.
+- **One conflict was a silent revert and was caught**: the replay put this
+  branch's older two-line PV flip back over master's inlined spelling
+  (`4673322`). Restored to master's. Semantically identical, and the minified
+  count is invariant to it.
+
+**Re-measured on the new base**, because the old numbers were base-relative:
+
+| | at base `4c8770e` | at base `b0033f7` |
+|---|---|---|
+| cleaned `sunfish.py` | 142 → 142 | **140 → 140** |
+| packed classic | 3342 → 3378 (+36 B) | 3389 → **3426 (+37 B)** |
+
+The line claim in this PR's body (142) was the count at the old base; master
+now cleans to 140 and README.md already says 140, which the rebased branch
+still measures. Line-neutrality is the invariant, not the number.
+
+**Gates on the rebased tree: `451 passed, 2 skipped, 0 failed`**, model audit
+GREEN, TM guard trio 141 passed, `tmlib` 47,599 grid values with
+`pool_classic` found and no drift, and both the builtin loop and the packed
+artifact answer a `go`.
+
+**Confirmed against the first rebase, which is why it is written down.** On
+`b0033f7` this branch ended `450 / 2 / 1` with `test_model_audit` red, and
+pristine `b0033f7` failed the same test identically: two Lean-cited anchors
+from the pre-#230 null-move spelling. The lane also found that master's own
+`Searcher.bound` pin was STALE there (`d16001b6dbd8d2ad` recorded,
+**`663bfc29433b2bc5`** actual) — invisible because the anchor check returns
+before the hash comparison ever runs. #235 then landed and re-pinned it to
+exactly that value, so the branch keeping master's line verbatim rather than
+quietly fixing it is what let the second rebase resolve to one line: master's
+`bound`, this branch's `search`.
+
+
+## 2026-08-18 — SIMPLE-FORM VERDICT: the wall has to be read off the SOFT LIMIT, not off the clock
+
+**The registered branch that fires is POOL CLEARLY BETTER AT INCREMENTS**
+(entry below, written before cell 1): two of the three increment cells lie
+entirely below zero for `simple` and none lies above. **PR #217 stands
+exactly as it is.** The bookkeeping Thomas called over-dressed is paying for
+itself, and now it is priced instead of asserted.
+
+### The registered table — 120 games a cell, virtual clock, 50 ms/move charge
+
+Elo is A-minus-B, so a negative number means the pool won that cell.
+
+| TC | `simple` vs `pool` | `min40_4` vs `pool` (control) |
+|---|---|---|
+| **30+1** | **−79.5** [−135.7, −27.2] | −161.2 [−226.7, −105.0] |
+| **60+1** | **−58.5** [−112.7, −6.9] | −120.4 [−182, −66] |
+| 60+0.1 | +29.0 [−24.1, +83.5] | −127.0 [−189, −72] |
+| 30+0 | −49.6 [−112.1, +9.9] | −85.7 [−146, −30] |
+| 60+0 | +11.6 [−44.8, +68.6] | −98.1 [−160, −42] |
+| **10+0** | **−61.4** [−126, −1] | −31.9 [−95, +29] |
+
+**The control column is why the new column can be read at all.** `min40_4`
+vs `pool` was published on 2026-08-15 at −134 [−218, −62] (30+1), −114
+[−208, −34] (60+0.1) and, through the `smooth` identity, about −112 at
+60+0. This run, on its own 120 games a cell, reads −161.2, −127.0 and
+−98.1. The instrument is standing where the record says it stands.
+
+Read across the two columns: **the simple form buys back about half of the
+pool's margin over the shipped clock at 30+1** (−79.5 against −161.2) and
+about half at 60+1. Half is not none, and it is not enough.
+
+### THE MECHANISM: `hard = wtime/4` inverts against `soft` at the park
+
+The 2×2 said the bracket rule's whole value is bounded by `hard/soft`,
+because all it can do is let an unsettled search run past the soft target
+toward the wall. At the START of a 30+1 game the simple form looks healthy:
+`hard/soft` = 7.5 / 1.65 = **4.55×**, close to the pool's flat 5×.
+
+It does not stay there, and the reason is that the two terms scale
+differently. `hard = T/4` is proportional to the clock; `soft = T/40 +
+0.9·I` is held UP by an increment term that does not shrink with the clock.
+So as the clock drains to its park the ratio collapses — and at 30+1 the
+simple form parks near 3.2 s, where `hard` = 0.80 s has fallen BELOW `soft`
+= 0.98 s. The wall now binds first, every time:
+
+| 30+1 | median spend | max | min clock | stopped at the WALL |
+|---|---|---|---|---|
+| `simple` | 1.066 s | 7.500 s | 2.80 s | **3769 of 6347 = 59%** |
+| `pool` | 1.203 s | 7.575 s | 1.31 s | 355 of 6362 = **6%** |
+
+**The pool cannot invert, by construction:** its wall is `5·soft`, derived
+FROM the soft limit rather than from the raw clock, so the headroom the
+bracket rule spends is 5× at every clock the game reaches. That single
+derivation — the one that looks like bookkeeping — is what keeps the pair
+working after the opening. The same reading at 60+1: `simple` ends 2504 of
+7246 searches (35%) at the wall, `pool` 259 of 7259 (4%).
+
+And the pool is not winning by spending more. Median spend is 1.203 s
+against 1.066 s at 30+1 and 1.536 s against 1.531 s at 60+1 — the same
+move, differently allocated.
+
+### THE OTHER COST: no reserve means flags
+
+`simple` has nothing to hold back, and the surrogate flags it at every
+sudden-death TC while the pool never flags:
+
+| TC | `simple` flags / 120 | min clock | `pool` flags | min clock |
+|---|---|---|---|---|
+| 30+0 | **43** | −0.10 s | 0 | 6.62 s |
+| 60+0 | **12** | −0.09 s | 0 | 6.90 s |
+| 10+0 | **68** | −0.10 s | 0 | 5.02 s |
+| 60+0.1 | 0 | **0.10 s** | 0 | 4.83 s |
+
+The 60+0.1 row is the one to keep: no flag, but the clock got to a tenth of
+a second. That is the margin the reserve is for.
+
+### STAGE 3 — the real clock, run either way, and it agrees
+
+`simple` vs `pool`, **fixed N=200 at 60+0**, packed classic artifacts sharing
+one search core (base `4c8770e`), box, conc 8, `nice 10`, srand 20260819,
+adjudication none but a 400-move cap, book3k 3000-game PGN, order random:
+
+| | |
+|---|---|
+| Elo | **+20.87 ± 35.73** (nElo +28.29 ± 48.15) |
+| W / D / L | 85 / 42 / 73 = 53.00% |
+| pentanomial | [6, 19, 44, 19, 12] |
+| illegal moves | **0** |
+| time forfeits | **3, all `simple`** (games 25, 44, 165; overruns of 33 ms, 1 ms, 9 ms) |
+
+Registered as DESCRIPTIVE and it gates nothing, which is just as well
+because it says the two forms are level in this regime — and it charges the
+simple form a 1.5% flag rate for being level.
+
+**Two honest qualifications.** (1) The box carried heavy co-tenancy for the
+whole match (load 38–50 of 96: three owner tuner fleets and three other
+lanes' matches beside our 8), so millisecond-scale overruns are inflated
+relative to any deployment; the DIRECTION is mechanically expected — the
+pool's reserve absorbs harness jitter and the simple form spends toward
+zero — but the 3/200 rate is not a deployment number. (2) A first launch of
+this cell was VOIDED at 24 games and no Elo was read: the packed arm lacked
+the 0.05 s floor on `soft` that the registered mirror carries (6 of 378 grid
+values differed, all below a 2 s clock). The artifact was refloored,
+re-verified at 0/378, and relaunched on a fresh seed.
+
+### A CALIBRATION DATUM, unprompted: the altitude bias is not a multiplier
+
+The surrogate predicted **+11.6 [−44.8, +68.6]** for exactly this cell. The
+real clock read **+20.87 ± 35.73**. Same sign, same magnitude, intervals
+almost coincident — where the pool's own decision cell had the surrogate
+reading 1.2× to 2.3× HIGH. So the standing correction "divide the surrogate
+by something between 1.2 and 2.3" is wrong as a rule: the bias lives in
+particular cells (the ones whose score rate is extreme), not in the
+instrument as a gain.
+
+### What the simple form would have saved, for the record
+
+All against branch base `4c8770e`, the same base the +96.19 was measured on:
+
+| form | clean lines | packed | physical |
+|---|---|---|---|
+| base = shipped `min40_4` | 142 | 3342 | 604 |
+| **#217 `pool` (what ships)** | 142 (+0) | 3378 (**+36**) | 623 (+19) |
+| `simple` (declined) | 142 (+0) | 3355 (+13) | 611 (+7) |
+
+**23 bytes and one statement.** That was the whole prize, and the increment
+cells price it at −79.5 and −58.5 on an instrument whose control column is
+reading true. The `simple` mirror stays in `tmlib` with its tests: a
+measured arm that has been deleted cannot be re-run, and the next person to
+propose splitting `min40_4`'s `min()` should find this cell before spending
+games on it.
+
+### What did NOT happen, deliberately
+
+The stage-2 confirmation (fixed N=300 at 30+1, `simple` vs `min40_4`) was
+registered as conditional on the simple form winning stage 1. It did not, so
+those 300 games were not spent. The registration bought one real-clock arm
+and stage 3 spent it.
+
+
+## 2026-08-18 — PRE-REGISTRATION: the SIMPLE form against the pool's soft, with the stop rule held fixed
+
+**Written before cell 1 of the screen.** Thomas read PR #217 and rejected its
+budget as over-dressed: *"Why do we need both a deadline and a soft?"* The
+question has two halves and the record already answers one of them.
+
+### What is NOT on trial: the pair
+
+The 2×2 of 2026-08-17 priced the pool's two ingredients separately and found
+the interaction is the whole thing — budget alone **+40.7 / +41.9**, stop rule
+alone **+64.4**, the pair **+223.3**. The duality is measured load-bearing and
+it stays. What is on trial is the pool's BOOKKEEPING: the `(M+2)·O` reserve,
+the `(M-1)·I` increment banking, the 200 ms overhead model, and the
+sudden-death cliff those three produce.
+
+### The object
+
+Thomas's form is not a new formula. It is the SHIPPED `min40_4` expression
+with its `min()` removed and its two operands promoted to the two limits the
+loop already carries:
+
+| | soft (stop STARTING an iteration) | hard (the wall) |
+|---|---|---|
+| master `min40_4` | `0.8 · min(T/40 + 0.9I, T/4)` | `min(T/40 + 0.9I, T/4)` |
+| #217 `pool` | `min(max(0, T + 39I − 42·200)/40, max(0, T−400)/4)` | `min(5·soft, (T−400)/2)` |
+| **`simple`** | **`T/40 + 0.9I`** | **`T/4`** |
+
+Three consequences, all arithmetic and all checked in
+`tests/test_tm_surrogate.py` before any game:
+
+1. **No cliff.** The pool empties at `(M+2)·O` = 8.4 s with no increment, so
+   below that clock its soft limit IS the 0.05 s floor — the one hole #217
+   disclosed rather than fixed. `simple` has no reserve to empty: at a 5 s
+   sudden-death clock it plays **125 ms** where the pool plays 50 ms.
+2. **The headroom the stop rule needs survives.** `hard/soft` is
+   `1/(1/10 + 3.6·I/T)` — **10× at sudden death, 6.25× at 60+1, 4.55× at
+   30+1** — against the pool's flat 5× and `min40_4`'s 1.25×. The 2×2 says
+   that ratio is what the bracket rule can spend, so the cheap-port failure
+   mode (a 1.25× wall with nowhere to put an unsettled move) is not in play.
+3. **Unit-independent**, alone with `min40_4` among the managers: both terms
+   are degree-1 homogeneous, so there is no seconds/milliseconds version of
+   it to get wrong. Only the 0.05 s floor is absolute.
+
+Above the knee the two soft limits agree to within a fifth (asserted), so the
+screen is a test of the bookkeeping in the regimes where it differs, not of
+two unrelated formulas.
+
+### STAGE 1 — the surrogate, and its bars
+
+`tools/ctwin` virtual clock, twin binary as built 2026-08-17, 50 ms/move
+charge (the local-arena charge every prior TM cell in this ledger used),
+seed 2026, `--alpha --beta 1e-30` **so no cell can stop itself early** —
+`tmmatrix.py` did not pass those through and now does, because a matrix cell
+that accepts H0 at whatever game count it reached is not the same read as its
+neighbours and not the read a registered table promises.
+
+- **arms:** `simple` and `min40_4`, both against baseline `pool`. The stop
+  rule is held FIXED at the bracket-converged break for `simple` and `pool`;
+  `min40_4` runs its own shipped rule and is there as the RE-ANCHORING
+  CONTROL — its cells replicate the published −114 / −134 / −114 and say
+  whether this run reproduces the pass it is being compared to.
+- **TCs (6):** `30+1`, `60+1`, `60+0.1` (increments — where the pool's
+  banking must show its value if it has any) and `30+0`, `60+0`, `10+0`
+  (sudden death — where the cliff and the no-cliff behaviour differ most).
+- **N:** 120 games per cell (60 opening pairs, both colours), 12 cells,
+  1,440 games. Harvest at exactly 120; no continuation.
+- **secondary, telemetry only:** `60+0` and `10+0` re-run at a **200 ms**
+  charge (the lichess deployment) for flags/min-clock. Not Elo-decisive, and
+  labelled so.
+- **reading:** trinomial Elo with a 95% interval, plus the mechanism columns
+  that matter more than the Elo — median and max spend, min clock, blind%,
+  floor substitutions (`floorbk`), flags, and the stop-reason histogram.
+
+**Branches, written before cell 1:**
+
+- **WITHIN-NOISE** (every primary cell's 95% interval contains 0): the simple
+  form gives up nothing measurable and wins on the elegance bar → rebuild
+  #217 around it, then STAGE 2.
+- **A′, the one-sided refinement of the same branch** (some cell's interval
+  lies entirely ABOVE 0 for `simple` and none lies below): also proceed —
+  that is the simple form winning outright, not a mixed read — and say so
+  explicitly in the report rather than filing it as "within noise".
+- **POOL CLEARLY BETTER AT INCREMENTS** (any of `30+1`, `60+1`, `60+0.1` with
+  its whole interval below 0 for `simple`, and none above): report the
+  number; **#217 stands as-is**, its complexity now justified BY
+  MEASUREMENT; no rebuild.
+- **MIXED** (anything else — in particular a sudden-death cell clearly for
+  `simple` together with an increment cell clearly against it): report the
+  per-TC table and **stop for Thomas's read**. No rebuild on a split.
+
+**What the surrogate may not be asked.** It ranks; it does not size. Its own
+calibration record is that it read this very object 1.2×–2.3× HIGH (+117…+223
+against the real clock's +96.19), it cannot see lag variance, JIT warmup or
+cotenancy, and it does not certify flag safety. So a `simple` win here buys
+exactly one thing: the right to spend real games.
+
+### STAGE 2 — the real-clock confirmation, only if `simple` wins stage 1
+
+The budget function changes, so **this is not the measured mechanism and it
+does not inherit +96.19.** It gets its own fixed N.
+
+| | |
+|---|---|
+| arms | packed classic artifact: `simple` + bracket-break vs **shipped `min40_4`** (master's builtin clock), sha-verified after transfer |
+| form | **fixed N=300, 30+1, no SPRT, no stopping rule, adjudication NONE** |
+| venue | bench box, census by parentage, the owner's tuner fleet untouchable, yield-first |
+| book | `book3k.pgn`; opening diversity stated in the report |
+| srand | fresh, stated at launch |
+| reading | pentanomial Elo with a 95% interval, W/L/D, game count verified against the fixed 300 |
+| tripwires | **any illegal move = STOP. any time forfeit = INVESTIGATE before reading Elo.** Both counted from the PGN, per arm |
+| coprimality | N/A — two engines, no round-robin |
+
+- **WINS CLEAR** (whole interval above 0): #217 becomes the simple form, with
+  the new number and the new line/byte accounting in the PR body.
+- **NULL or LOSES**: report it; **#217 stays the pool form**, and the null is
+  the evidence that the bookkeeping pays for itself.
+
+### STAGE 3 — one sudden-death cell in real games, run either way
+
+`60+0`, **N=200**, same venue and tripwires. The two forms differ most in
+exactly this regime (cliff vs no cliff) and lichess plays `winc == 0` about
+one game in eight, so the regime question gets closed on real games rather
+than on the instrument that cannot certify flag safety. Registered as
+DESCRIPTIVE: it does not gate the landing either way, and its Elo is reported
+with the flag counts beside it.
+
+
+## 2026-08-17 — CLASSIC POOL VERDICT: +96.19 ± 33.81 at 30+1 over a fixed 300, and the Elo lives in the PAIR rather than either half
+
+**WINS CLEAR, the branch written before game 1.** The whole 95% interval sits
+above zero, so the pool lands in `sunfish.py`'s builtin clock and therefore in
+the packed classic artifact. The other two branches — null and loses — are
+spent unused and stay in the registration above exactly as written.
+
+### The confirmation
+
+| | |
+|---|---|
+| result | pool **150W / 69L / 81D = 63.50%**, **Elo +96.19 ± 33.81** (95%, pentanomial) = **[+62.38, +130.00]** |
+| pentanomial | `Ptnml(0-2) [7, 19, 46, 42, 36]` over 150 pairs, **0 unpaired**, WL/DD 3.60, median 132 plies |
+| form | fixed N=300 at 30+1, **no SPRT, no stopping rule**, adjudication NONE, `book3k.pgn` (3000 openings, covers 150 rounds), srand 20260901, concurrency 8 |
+| arms | `pool.packed` 3503 B `03f45a6b050ea34e…` vs `min40.packed` 3426 B `85837ed76709e480…`, sha-verified after transfer, both built at `5a7d744` |
+| tripwires | **0 illegal, 0 time forfeits, 300/300 `normal` terminations** — read from the PGN before any Elo was looked at |
+| venue | bench box, `nice 10`, free-core gate passed with **68 of 96** free; both of the owner's `adaptive_gp.py` tuner fleets ran throughout and were **not** reniced, paused or counted as mine; cotenancy recorded at launch (load 34.3) and finish (load 37.9) |
+| interpreter | pypy3 7.3.20 (3.11.13), asserted at launch — the packed head picks its interpreter with `command -v pypy3 \|\| echo python3`, and pypy3 is not on that box's default PATH, so an unwrapped run would have silently played CPython |
+
+**WHY THE FIXED N MATTERED, visible in this match's own interval sequence:**
++136.97 ± 52.23 at 152 games, +115.23 ± 43.72 at 200, +115.67 ± 38.29 at 246,
+**+96.19 ± 33.81 at 300**. Any stopping rule would have banked a number 20-40
+Elo high. The pool's entry-side confirmation measured its own SPRT bias at 22
+Elo; this is the same effect seen from the other side, and the registration is
+what stopped it being quoted.
+
+**Cross-checked against the instrument.** An independent pentanomial reader over
+the PGN reproduces the point estimate **exactly** (+96.19, 150/69/81, score
+0.6350). It does *not* reproduce fastchess's pair grouping — mine reads
+`[9, 18, 46, 37, 40]` from consecutive PGN games, because at concurrency 8 the
+file order is not the round order — so the same mean carries a slightly
+different spread and interval ([+61.77, +132.57] mine). **fastchess's
+pentanomial and its ±33.81 are the reading**; the agreement that matters is on
+the quantity, and the disagreement is recorded rather than averaged away.
+
+### THE SURROGATE RANKED RIGHT AND READ HIGH, which is worth as much as the Elo
+
+The screen put this gap at **+117 to +223** (two-step path +117.2, direct cell
++223.3, the 2026-08-15 pass +134). The real clock says **+96.19 ± 33.81**. So
+the instrument got the direction and the mechanism right and the **altitude
+1.2× to 2.3× high** — the same failure mode its own README documents for
+calibration gate (b), and the reason the standing rule is "the surrogate ranks,
+one real-clock match validates". Recorded here as a calibration datum for the
+next lane that reads a surrogate cell as a magnitude.
+
+**Where it was not high at all: the mechanism.** Final telemetry, 17,665 pool
+moves and 17,707 `min40_4` moves against the surrogate's prediction:
+
+| reading | surrogate | real clock |
+|---|---|---|
+| `pool` median spend | 1.218 s | **1.277 s** |
+| `min40_4` median spend | 1.236 s | **1.258 s** |
+| `pool` max spend | 7.414 s | **7.729 s** |
+| `min40_4` max spend | 1.650 s | **1.944 s** |
+| moves over 2 s, `pool` / `min40_4` | — | **14.2% / 0.0%** |
+
+**The two arms pace identically and differ entirely in the tail.** `min40_4`
+physically cannot spend more than ~1.94 s on a 30 s clock however much the
+position asks; the pool spends 7.7 s when the search is unsettled and pays for
+it out of the same median. That is the whole change, predicted to 4% and then
+measured.
+
+**A UCI-visible improvement nobody was looking for.** fastchess warns when an
+engine's `bestmove` is not the head of the PV it last printed. Over the same 300
+games it fired **1215 times for `min40_4` and 58 times for the pool — 21×
+fewer**. Same mechanism: breaking at any yield means printing a PV from an
+unconverged probe and then playing something else, while abandoning only at
+bracket closure means the last PV *is* the move.
+
+### The mechanism, attributed rather than asserted
+
+The surrogate's 2×2 of BUDGET × STOP RULE at 30+1 (α=β=1e-30 so no cell can
+stop itself; read points fixed before harvest):
+
+| | classic's break-at-any-yield | the pool's bracket-converged break |
+|---|---|---|
+| **min40_4's numbers** | *shipped reference* | `min40_4c` **+64.4** [+8.1, +124.3] |
+| **the pool's numbers** | `poolyield` **+40.7** [−41.7, +128.0] | `pool` **+223.3** [+136.6, +345.5] |
+
+Each single change is modest and they sum to ~+105; the pair is +223.3. The
+interaction is a ratio, not a mystery: the bracket rule's entire effect is
+letting an unsettled search run past the soft limit toward the wall, so
+`hard/soft` bounds what it can buy — **1.25× for min40_4**, which derives its
+target as 0.8 of its own wall, against **5× for the pool**. The
+bracket-rule-on-top-of-pool cell replicates at a second TC: +76.5 [+22.0,
++135.0] at 30+1 and +117.2 [+64.1, +176.2] at 60+1.
+
+**So the cheap port was declined on evidence.** Budget alone is **+37 B and
+zero clean lines** — strictly cheaper than what landed — and it reads
++41.9 [−0.4, +85.5] at 30+1 over 200 games. It was not shipped.
+
+### What it cost
+
+| base | packed before | packed after | delta | **clean lines** | source lines |
+|---|---|---|---|---|---|
+| `4c8770e` (as landed) | 3342 B | 3378 B | **+36 B** | **142 → 142** | 604 → 623 |
+| `52cb130` | 3389 B | 3457 B | +68 B | 149 → 153 | 620 → 648 |
+| `e499dae` | 3369 B | 3451 B | +82 B | 150 → 154 | 642 → 670 |
+| `5a7d744` (arms' base) | 3426 B | 3503 B | +77 B | 152 → 156 | — |
+
+**THE REGISTRATION PROMISED A WORSE PRICE THAN THE LANDING PAYS, and it is left as written.** Its wins-clear branch says "+77 B and +4 clean lines" with the README moving 152 → 156. That was true of the form the games were played with; the bracket-owner refactor came after, at Thomas's ask on #217, and the shipped form is cheaper on both axes with the same mechanism. The registration is append-only and is not edited — this entry is the correction, which is what that rule is for.
+
+**IT LANDS LINE-NEUTRAL ON THE MINIFIED ENGINE, at Thomas's ask on #217.** The
+measured port checked the soft clock after closing an MTD bracket. The shipped
+form puts that check at the canonical boundary: immediately after
+`Searcher.search()`'s own `while` loop. The UCI consumer therefore needs no
+duplicate `lo`/`up` state, no compound commit-and-break, and no compressed PV
+flip. The result costs **zero clean lines** without golfing unrelated code.
+
+The byte figure moves with the base because LZMA prices the surrounding stream,
+not merely the diff. On current master it is **+36 bytes**. The stable number,
+and the one the elegance bar should be read against, is **zero minified lines**
+for a manager that measured +96.19.
+
+**The stopping boundary is the measured mechanism, represented directly.**
+`+96.19 ± 33.81` was measured by reading the soft deadline once the MTD bracket
+closed. The generator now checks the deadline immediately after the very loop
+whose negated guard defines that closure. `Driver.lean` proves that the check
+cannot fire with an open bracket, and the interface test executes a two-report
+closing bracket and verifies that the next depth is not entered. The three
+budget statements remain byte-identical to the arm that played.
+
+**BASE DRIFT, stated plainly rather than left for a reader to notice.** The arms
+played were built at `5a7d744`, and master has since taken #213, #216, #218 and
+#219; today's classic is stronger overall (#218 measured positive on both
+instruments). What transfers is the **TM axis**: both arms shared one base and
+differed only in the budget and the stop rule, and none of those four PRs
+touches the `go` handler, so the quantity confirmed is the time-manager
+difference and nothing else. What does NOT transfer is the altitude against
+post-#218 classic — a faster search changes what a soft limit buys, in an
+unknown direction and probably a smaller one. **+96.19 is not claimed against
+today's engine**, and re-measuring it is not owed either: the landing rests on
+the TM-axis claim, which is the one that was tested. (Same reasoning the pool's
+entry-side confirmation recorded against #205.)
+
+### Scope, and the hole that stays open
+
+The claim is **increment TCs**. With no increment the pool empties below
+`(M+2)·O` = 8.4 s and `soft` collapses to the 0.05 s floor: at a 5 s
+sudden-death clock the classic pool reaches depth 3 where `min40_4` reaches
+depth 4, and the driver's arm measured **−209.91 ± 60.11** at a 1 s clock. It is
+disclosed in the code comment, it never flags, and **it is not fixed here** —
+scoping the pool to `P > 0` is a design change with its own screen.
+`tools/arena/STAGED_classic_pool_flag_hammer.sh` is that screen's flag half,
+GO-guarded and **not launched**: a second timed match cotenant with this one is
+exactly the contamination that voided two earlier runs. All three sites —
+driver, 4k entry, classic artifact — now run one arithmetic, cliff included, and
+`tmlib` grid-asserts they agree (47,599 values, plus a 20,800-point sweep at
+2.3e-15 worst relative error).
+
+One safety reading points the other way and belongs here: at 60+0 on the
+surrogate it was **`min40_4`** that flagged, 3 of 120 modelled games, reaching a
+−0.08 s clock where the pool budget flagged none and never went below 3.80 s.
+The surrogate does not certify flag safety and this does not either.
+
+### THE +400 GOALPOST MOVES BY ~96 ELO, as registered
+
+`classic.packed` is the entry's opponent in the progress meter (meter 3:
+**+200.24 ± 38.35** at 60+1). Classic's clock just got ~96 Elo stronger at
+30+1, so the bar the entry has to clear rises by roughly that much and meter 3's
+figure is now **historical, not current**. The next meter must re-arm against
+post-landing `classic.packed`. Thomas asked for this knowing it, and the
+registration said so before game 1.
+
+## 2026-08-17 — PRE-REGISTRATION: the POOL takes classic's builtin clock, and the record says why this was still open
+
+**Written before game 1 of the confirmation.** Thomas asked whether the new TM
+formula, measured at **+102.47 ± 32.43** on the 4k entry, should go into classic
+as well. The number does not transfer — it is an entry-vs-entry ablation
+(`pool` vs the entry's `smooth` budget, 30+1, fixed N=300) — but the question
+does, and the first job was to find out whether measurement had already
+answered it.
+
+### THE RECORD FIRST: the pool was in the candidate set at this venue, and it WON
+
+The 2026-08-15 ranking pass (`tools/ctwin/README.md`; verdict entry "min40-4
+takes the classic-builtin venue") put the pool against BOTH classic candidates
+on the surrogate. It is not a case of a rejected candidate being re-proposed:
+
+| arm | vs | 60+0.1 | 30+1 | 60+1 |
+|---|---|---|---|---|
+| `min40_4` (shipped) | `pool` | **−114** [−208,−34] | **−134** [−218,−62] | **−114** [−198,−41] |
+| `onemax` | `pool` | **−215** [−328,−132] | **−114** [−201,−39] | **−120** [−206,−47] |
+
+That entry's own words: *"the full pool manager beats min40-4 at every
+increment TC by +114 to +134. min40-4 wins the ONE-LINE venue, not the field.
+The pool costs +57 B and a manager; this costs −7 bytes."* **min40_4 took the
+venue on the pre-declared elegance tiebreak and the byte price, with the Elo
+cell reading against it.** So the question is open on the merits and always
+was; what is new is that the price is now measured rather than estimated.
+
+### THE OBJECT, and the port that does NOT work
+
+`sunfish.py`'s `go` handler — which is **only** reached by the packed classic
+artifact (`pack.sh` deletes the `minifier-hide` block and the
+`sunfish_ui.uci` import with it; a checkout or wheel reaches the driver, which
+has run the pool by default since #204). Two ports were built and priced
+against master `5a7d744` (`classic.packed` 3426 B, 152 clean lines):
+
+| port | what it is | packed | clean lines |
+|---|---|---|---|
+| budget only | pool `(soft, hard)`, soft read at any yield | 3463 B (**+37**) | 152 (**+0**) |
+| budget + bracket rule | …soft read only where the MTD bracket closed | 3503 B (**+77**) | 156 (**+4**) |
+
+**The cheap port is not the measured object, and the surrogate says it is not
+worth having.** New arm `poolyield` in `tmlib` (the pool's numbers, delegated
+so they cannot drift, under classic's own `yield_frac` stop rule), read at the
+counts fixed before harvest:
+
+| arm | vs | TC | games | Elo (95%) |
+|---|---|---|---|---|
+| `min40_4` | `pool` | 30+1 | 60 | **−223.3** [−345.5, −136.6] |
+| `pool` | `poolyield` | 30+1 | 120 | *in flight* |
+| `poolyield` | `min40_4` | 30+1 / 60+1 / 60+0.1 / 60+0 | 60/60/120/120 | *in flight* |
+
+The 30+1 replication of the published cell is **−223.3 [−345.5, −136.6]** with
+**zero floor substitutions** (`floorbk` 0), so unlike the +147 legacy cell this
+one carries no structural-floor bias in either direction. Consistent with the
+published −134 [−218,−62]; larger, and both intervals exclude zero.
+
+**The mechanism, from the same cell:** median spend is *identical* (1.218 s
+pool vs 1.236 s min40_4) — the pool is not simply spending more. What differs
+is the tail and the stop: max spend 7.414 s vs 1.650 s, and **29% of
+min40_4's moves end at the WALL** (934 of 3180 `deadline` stops) against
+**10% of the pool's**, which ends 90% of its searches on the soft limit. A
+budget whose wall sits 1.25× above its soft target has nowhere to put an
+unsettled move; the pool's sits 5× above. **That headroom is unreachable
+without the bracket rule** — a break at any yield stops at the soft limit and
+the wall is never approached — which is why the +37 B port is the wrong one
+even though it is cheaper.
+
+### THE BAR, fixed before game 1
+
+| | |
+|---|---|
+| arms | classic packed artifact, `pool` (budget + bracket rule) vs shipped `min40_4`, sha-verified after transfer |
+| form | **fixed N=300, 30+1, no SPRT, no stopping rule, adjudication NONE** |
+| venue | bench box, `nice 10`, concurrency 8, free-core gate (≥ 24 of 96) before launch; HOLD AND REPORT if it never clears |
+| book | `book3k.pgn` (PGN — the packed loop parses only `position startpos moves …`) |
+| srand | **20260901**, fresh |
+| reading | pentanomial Elo with a 95% interval, W/L/D, game count verified against the fixed 300 |
+| tripwires | **any illegal move = STOP. any time forfeit = VOID.** Both counted from the PGN, per arm |
+| cotenancy | recorded at launch and at finish; the owner's tuner fleet is untouchable — not reniced, not paused, not counted as mine |
+
+**Branches, pre-written — the result may not pick the rule:**
+
+- **WINS CLEAR** (whole 95% interval above 0): land the pool in
+  `sunfish.py`'s builtin loop, +77 B and +4 clean lines stated in the PR, the
+  README line-count claim moved 152 → 156, `tmlib` re-pinned to the new
+  literal so the drift tripwire keeps working.
+- **NULL** (interval contains 0): **do not land.** The surrogate ranked it
+  first and the real clock did not confirm; report the pair and leave
+  `min40_4` shipping. One real-clock arm was bought and it is spent.
+- **LOSES** (interval below 0): do not land, and record it as the second case
+  of a surrogate rank the real clock reversed — which is a finding about the
+  instrument, not just about the arm.
+
+**Scope, and the hole that is NOT being fixed here.** The claim is increment
+TCs. With no increment the pool is empty below `(M+2)·O` = 8.4 s of clock, so
+`soft` collapses to the 0.05 s floor and the quarter-clock clamp becomes
+unreachable: at a 5 s sudden-death clock the classic pool reaches depth 3 where
+min40_4 reaches depth 4, and the driver's own arm measured **−209.91 ± 60.11**
+at a 1 s clock. It is disclosed in the code comment, it never flags, and
+scoping the pool to `P > 0` is a **design change with its own screen to run**.
+What ships is what was measured — the same formula the driver and the entry
+already ship, cliff included, so all three sites stay one arithmetic.
+
+**THIS MEASUREMENT RAISES THE +400 GOALPOST, and that is chosen, not
+overlooked.** `classic.packed` is the entry's opponent in the progress meter
+(meter 3: **+200.24 ± 38.35** at 60+1). Strengthening classic's clock moves the
+bar the entry has to clear by roughly whatever this match reads. Thomas asked
+for it knowing that.
+
 
 ## 2026-08-17 — Classic: consumer-side scoring and exact captures
 

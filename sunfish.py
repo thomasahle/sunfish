@@ -173,6 +173,12 @@ EVAL_ROUGHNESS = 15
 # things (driver convergence vs reduction aggression).
 NULL_MARGIN = -200
 
+# Milliseconds between our bestmove and the clock actually stopping: network
+# lag plus the arbiter's own accounting. It is subtracted from every limit
+# rather than reserved in a pool, so the budget is what this move may spend
+# and not what the game has left. 200 is the measured lichess figure.
+DELAY = 200
+
 # Max entries kept in each transposition table, roughly 1GB per million.
 # Python dicts keep insertion order, so we cheaply evict the oldest entry
 # when full (see issue #95).
@@ -323,7 +329,7 @@ Entry = namedtuple("Entry", "lower upper")
 class Searcher:
     def __init__(self):
         self.tp_score, self.tp_move, self.history = {}, {}, set()
-        self.nodes, self.deadline = 0, 1 << 63
+        self.nodes, self.deadline, self.soft = 0, 1 << 63, 1 << 63
 
     def bound(self, pos, gamma, depth, root=False):
         """ Let s* be the score of the sub-tree from pos at this depth, as
@@ -547,6 +553,7 @@ class Searcher:
                 if score < gamma: upper = score
                 yield depth, gamma, score, self.tp_move.get(pos)
                 gamma = (lower + upper + 1) // 2
+            if time.time() > self.soft: return
 
 
 ###############################################################################
@@ -603,16 +610,29 @@ def main():
             times = dict(zip(args[1::2], map(int, args[2::2])))
             side = "wb"[len(hist) % 2 == 0]
             wtime, winc = times.get(side + "time", 60000), times.get(side + "inc", 0)
-            # Pool accounting over an M=40 move horizon, the increment spent
-            # once, clipped to a quarter clock: a reserve of four increments.
-            think = min(wtime / 40 + 0.9 * winc, wtime / 4)
-            think = times.get("movetime", think) / 1000
+            # THREE NUMBERS, MILLISECONDS: what this move is worth, when to
+            # stop STARTING an iteration, and the wall one iteration may run
+            # to. `budget` is a fortieth of the clock plus the increment this
+            # move earns back, less the lag that move will cost; `soft` clamps
+            # it to a quarter clock and `think` to five budgets or half a
+            # clock, both minus that same lag. THE CLAMPS CANNOT GO NEGATIVE
+            # past their floors, which a wtime/2 - 1s cap can:
+            # lichess.org/EAThUL0P was lost that way, ~16 moves at no search
+            # on an already-expired deadline. think >= soft is STRUCTURAL, not
+            # asserted: min is monotone in both arguments, 5*budget >= budget
+            # wherever budget >= 0, and where it is not both sit on floors
+            # that are ordered 200 >= 100. So no clip line couples them.
+            budget = wtime / 40 + winc - DELAY
+            soft = max(min(budget, wtime / 4 - DELAY), 100) / 1000
+            think = max(min(5 * budget, wtime / 2 - DELAY), 200) / 1000
 
             start = time.time()
-            searcher.deadline = start + max(think, .05)
+            searcher.deadline, searcher.soft = start + think, start + soft
             # A fail high gives the move that achieved it, but only a
             # COMPLETED depth's last fail-high is trustworthy - a stop
             # inside a depth can catch a probe at a nonsense window.
+            # Searcher owns the exact MTD bracket, so it reads the soft limit
+            # only after that bracket closes; an unsettled move may use the wall.
             best, cand, d0 = None, None, 1
             try:
                 for depth, gamma, score, move in searcher.search(hist):
@@ -624,12 +644,10 @@ def main():
                         if len(hist) % 2 == 0: i, j = 119 - i, 119 - j
                         cand = render(i) + render(j) + move.prom.lower()
                         print("info depth", depth, "score cp", score, "pv", cand)
-                    if (best or cand) and time.time() - start > think * 0.8:
-                        break
             except Stop:
-                pass
+                cand = best or cand
 
-            print("bestmove", best or cand or '(none)')
+            print("bestmove", cand or best or '(none)')
 
 
 if __name__ == "__main__":
