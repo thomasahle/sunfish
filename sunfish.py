@@ -623,9 +623,8 @@ def main():
             # own arm. It never flags. Scoping the pool to P > 0 would fix it
             # and is a design change with its own screen; what ships is what
             # was measured.
-            soft = min(max(0, wtime + 39 * winc - 42 * 200) / 40, max(0, wtime - 400) / 4)
-            think = max(times.get("movetime", min(5 * soft, (wtime - 400) / 2)) / 1000, .05)
-            soft = min(max(soft / 1000, .05), think)
+            soft = max(0, min((wtime + 39 * winc - 42 * 200) / 40, (r := wtime - 400) / 4))
+            soft = min(max(soft / 1000, .05), think := max(times.get("movetime", min(5 * soft, r / 2)) / 1000, .05))
 
             start = time.time()
             searcher.deadline, searcher.soft = start + think, start + soft

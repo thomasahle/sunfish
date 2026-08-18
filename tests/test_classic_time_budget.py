@@ -48,9 +48,9 @@ from sunfish_ui import uci                              # noqa: E402
 SRC = (ROOT / "sunfish.py").read_text()
 
 # ---- the shipped statements, lifted rather than copied ---------------------
-SOFT_LINE = re.search(r"^ +(soft = min\(.*\))$", SRC, re.M)
-THINK_LINE = re.search(r"^ +(think = max\(times\.get\(.*\))$", SRC, re.M)
-CLIP_LINE = re.search(r"^ +(soft = min\(max\(soft / 1000, \.05\), think\))$", SRC, re.M)
+SOFT_LINE = re.search(r"^ +(soft = max\(0, min\(.*\))$", SRC, re.M)
+WALL_CLIP_LINE = re.search(
+    r"^ +(soft = min\(max\(soft / 1000, \.05\), think := max\(times\.get\(.*\))$", SRC, re.M)
 
 # ---- the arms this one replaced, as literals, all MILLISECONDS ------------
 # The `go` handler works in ms (`wtime`/`winc` arrive as integer ms) and
@@ -77,8 +77,7 @@ def shipped(wtime_ms, winc_ms, movetime_ms=None):
     ns = {"wtime": wtime_ms, "winc": winc_ms, "times": times,
           "min": min, "max": max}
     exec(SOFT_LINE.group(1), ns)      # noqa: S102 - the shipped expression
-    exec(THINK_LINE.group(1), ns)     # noqa: S102
-    exec(CLIP_LINE.group(1), ns)      # noqa: S102
+    exec(WALL_CLIP_LINE.group(1), ns)  # noqa: S102 - binds `think` via walrus
     return ns["soft"], ns["think"]
 
 
@@ -94,10 +93,11 @@ def legacy(stmt, wtime_s, winc_s=0.0):
 # (1) the statements are present and are the pool
 # --------------------------------------------------------------------------
 
-def test_the_three_budget_statements_are_present():
-    for name, m in (("soft", SOFT_LINE), ("think", THINK_LINE),
-                    ("soft clip", CLIP_LINE)):
+def test_the_two_budget_statements_are_present():
+    for name, m in (("soft", SOFT_LINE), ("wall+clip", WALL_CLIP_LINE)):
         assert m, "the inline %s statement is missing or reshaped" % name
+    # `think` has no statement of its own; its binding must still ship.
+    assert "think := max(times.get(" in WALL_CLIP_LINE.group(1)
 
 
 def test_the_shipped_budget_is_not_one_of_the_retired_one_liners():

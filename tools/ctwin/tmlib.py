@@ -68,14 +68,14 @@ PINNED = {
     #
     # Only the SOFT line is pinned, and on purpose: it carries every constant
     # (39*winc, 42*200, /40, the 400 and the /4), so drift in any of them shows
-    # up here.  The wall and the soft clip that follow it are asserted in
-    # tests/test_classic_time_budget.py, which lifts all three statements and
-    # grid-checks the pair against uci.pool_budget -- the artifact and the
+    # up here.  The wall+clip statement that follows it (binding `think` via
+    # walrus) is asserted in tests/test_classic_time_budget.py, which lifts
+    # both statements and grid-checks the pair against uci.pool_budget -- the artifact and the
     # driver being ONE arithmetic is the thing that makes the duplication safe,
     # and it is checked numerically rather than by pinning text twice.
     "pool_classic": (
         "sunfish.py",
-        "soft = min(max(0, wtime + 39 * winc - 42 * 200) / 40, max(0, wtime - 400) / 4)"),
+        "soft = max(0, min((wtime + 39 * winc - 42 * 200) / 40, (r := wtime - 400) / 4))"),
     # sunfish_ui/uci.py:467 (master f95f49c) -- classic's incumbent, SECONDS.
     # Also uci.py:712 on branch tm-pool-manager, unchanged there.
     "legacy12": (
