@@ -18608,3 +18608,77 @@ to be worth running is **+67 Elo**, the speed tax above. Only a timed match
 against the entry can promote. The kptap precedent (+56 fixed / +16 / +0.58
 timed on a zero-cost mechanism) is why those two roles were separated before
 either instrument ran.
+
+---
+
+## 2026-08-18 — SCREEN VERDICT: CONTINUE FAILS. The factored arm scores 32.00 % — one point above the free-table N=5 arm — after moving val 13.9 %. The eval term is negative, and no timed match is bought
+
+| | |
+|---|---|
+| arms | `factor` (r=8 N=32 mirrored, 4,053 B) vs the pinned `entry` |
+| games | **50** (25 colour-swapped pairs), 20,000 nodes, `tc=6000+0`, srand 20260818 |
+| **score%** | **32.00 %** (W/L/D 14 / 32 / 4) |
+| Elo(factor) | **−130.94 ± 107.22**, 95 % CI **[−238.2, −23.7]** — excludes zero |
+| legality | 0 illegal, 0 no-move, both arms, gated **at the played budget** |
+| time forfeits | 0 |
+| dormancy gate | slowest move **1.210 s**, moves ≥15 s: **0** — PASS |
+| opening gate | **50 games, 50 distinct, 0 duplicate replays** — PASS |
+| SPRT | UNDECIDED-AT-CAP (reported as undecided, never as a point estimate) |
+
+**Against the bar registered before the arm existed:** the fixed-node screen
+decides CONTINUE, and CONTINUE required the eval term to be **positive** — with
++67 Elo needed merely to cover this shape's measured speed tax. It is negative
+with the interval clear of zero. **CONTINUE fails, and the timed match is not
+bought.**
+
+### The finding, and it is much larger than this lane
+
+Put the two arms side by side. Same corpus, same val set, same harness, same
+comparator, same node budget:
+
+| arm | val | vs N=5 | learned signal | **score% vs entry** |
+|---|---|---|---|---|
+| free table, N=5 (`capn5`) | 0.0176490 | — | 1.00× | **31.00 %** |
+| **factored r=8 N=32 mirrored** | **0.0151800** | **−13.9 %** | **1.84×** | **32.00 %** |
+
+**Val moved 13.9 % and 1.84× the learned signal. Play moved one point** — and
+one point at n=50 is nothing at all (both intervals are ±107). This is the
+cleanest instance this project has produced of its own standing finding, and
+the cleanest *because* the comparison is strictly WITHIN one family, where the
+truncation verdict says val is supposed to be trustworthy. It is trustworthy
+as a *ranking inside the family* — the factored arm did not lose to the N=5
+arm — and it is worth **nothing as a predictor of the gap to the entry**.
+
+**This reinstates the CAPACITY ARM VERDICT's conclusion while its diagnosis
+stays corrected.** Earlier today this lane showed the diagnosis was wrong twice
+over: capacity *is* a lever (21 % of val from width alone at N=64) and, per the
+LR reframe, optimisation was another. Both are real, both are measurable, and
+**neither converts.** So the honest generalisation is now narrower and much
+harder to escape: it is not capacity, not data, not optimisation, and not
+compression. **A linear-in-ps768 net with a clipped-relu lane sum cannot
+express what the entry's hand-built machinery expresses (`K_MID`/`K_END`,
+`khold2`, `pend`), and no amount of val inside that family measures the
+distance to it.**
+
+### What is NOT concluded
+
+- Not that the factored *parametrisation* failed. It did exactly what it was
+  built to do: it delivered a 32-unit net in **4,053 bytes** where the free
+  table it approximates needs ~6.2 kB, at **0.72 %** of that table's val and
+  **98 %** of its learned-signal gain. The compression works. **The thing it
+  compresses is not worth carrying.**
+- Not that the factored arm is worse than `capn5`. 32.00 % against 31.00 % at
+  n=50 with ±107 Elo intervals is a tie, and this lane will not read a rank
+  out of it — the sibling-gate withdrawal is three days old.
+- No Elo enters this ledger from a 50-game screen. The number above is a
+  **top-pick statistic**, exactly as the SELECTOR SPEC requires.
+
+### The registered next step, and it is a stop
+
+The two-part rule's part (i) fails, so part (ii) is moot and the timed match is
+not run. **The lane stops here rather than spending games on a negative eval
+term.** What survives is the instrument and the pricing: `arch: factor` in the
+trainer, `make_factor_proto.py` / `factor_check.py` / `build_factor_entry.py`
+in `packed/`, the container price list, the width curve, the corrected
+`nn_cp`-per-node figure, and the cap-sum bound — all of which are about the
+ENGINE and the CONTAINER, and all of which outlive this net.
