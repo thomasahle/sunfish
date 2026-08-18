@@ -21,12 +21,9 @@ def mate_depth(options, moves):
     """Uniform depth bound for this policy's mate-in-moves gate."""
     k = 2 * moves - 1
     null_limit = options.get("NULL_LIMIT", 750)
-    fuel = options.get("FUEL_NULL", 1) if null_limit else 0
-    if null_limit and not fuel:
-        raise ValueError("unbounded-classical-null")
 
-    # Each real edge spends its ply, the hot-node fuel, and possibly LMR.
-    cost = 1 + fuel + bool(null_limit and options.get("LMR", 75) != -70000)
+    # Each real edge spends its ply and possibly one intrinsic-LMR unit.
+    cost = 1 + bool(null_limit and options.get("LMR", 75) != -70000)
 
     # D >= C*(k-1)+A keeps the last attacker beyond the cap horizon;
     # D >= C*k+1 leaves its terminal child at positive depth.
@@ -37,13 +34,11 @@ def mate_depth(options, moves):
 
     # D >= C*(k-2)+B keeps the last defender beyond the null horizon.
     # If the shallow-null interval is empty, the ordinary positive-depth
-    # fold is already sufficient; otherwise it ends at FUEL_MIN_DEPTH.
+    # fold is already sufficient; otherwise it ends at LMR_MIN_DEPTH.
     if k > 1:
-        fuel_depth = options.get("FUEL_MIN_DEPTH", 6)
+        lmr_depth = options.get("LMR_MIN_DEPTH", 6)
         null_depth = options.get("NULL_MIN_DEPTH", 2)
-        defender = fuel_depth if null_limit and null_depth + 1 < fuel_depth else 1
-        if defender == 99:
-            raise ValueError("null-transition-disabled")
+        defender = lmr_depth if null_limit and null_depth + 1 < lmr_depth else 1
         depth = max(depth, cost * (k - 2) + defender)
     return depth
 

@@ -167,12 +167,6 @@ LMR = 75
 # and what one ply of mate distance is worth. Distances must be more than a
 # bracket apart or the driver's last window could not order two mates.
 EVAL_ROUGHNESS = 15
-# Target margin of the deep-null fuel probe (depth >= 6): the pass must
-# beat pos.score + NULL_MARGIN for real moves to burn two plies. Its own
-# parameter, not tied to EVAL_ROUGHNESS - the two knobs tune different
-# things (driver convergence vs reduction aggression).
-NULL_MARGIN = -200
-
 # Milliseconds between our bestmove and the clock actually stopping: network
 # lag plus the arbiter's own accounting. It is subtracted from every limit
 # rather than reserved in a pool, so the budget is what this move may spend
@@ -190,7 +184,6 @@ opt_ranges = dict(
     QS_A = (0, 300),
     LMR = (-200, 200),
     EVAL_ROUGHNESS = (0, 50),
-    NULL_MARGIN = (-400, 800),
     TABLE_SIZE = (10**4, 10**8),
 )
 # minifier-hide end
@@ -422,7 +415,7 @@ class Searcher:
             # of the position, but we have to be careful with zugzwang, where
             # passing is better than any move - the piece test in guard covers
             # that (K+P endings). No null at root, so we can always return a
-            # move. From depth 6 on the pass only fuels the probe below.
+            # move. From depth 6 on the search contains only real moves.
             if 2 < depth < 6 and guard:
                 yield None, None
 
@@ -443,14 +436,9 @@ class Searcher:
             # ahead of the sort, so the fold never walks sub-floor junk.
             yield from sorted(((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= QS or depth), reverse=True)
 
-        # One calmness test, two roles: guard (root excluded) gates the scoring
-        # null above and intrinsic LMR; calm alone gates the fuel probe, which
-        # runs at the root too.
-        calm = abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
-        guard = not root and calm
-        t = pos.score + NULL_MARGIN
-        nmr = (calm and depth >= 6 and
-               -self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)
+        # Restrict shallow null and intrinsic LMR to balanced positions with
+        # non-pawn material. Both are disabled at the unstored driver root.
+        guard = not root and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
 
         # Run through the moves, shortcutting when score >= gamma.
         # live is True if we saw a legal (not null, score > -MATE_UPPER) move
@@ -492,7 +480,7 @@ class Searcher:
                     # cutoff block, it stores nothing, exactly as the old
                     # suffix report did.
                     if cap < gamma: best = max(best, cap); break
-                    move_depth = depth - 1 - (guard and depth >= 6 and val < LMR) - int(nmr)
+                    move_depth = depth - 1 - (guard and depth >= 6 and val < LMR)
                     score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
                     live |= score > -MATE_UPPER
             best = max(best, score)

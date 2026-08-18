@@ -89,27 +89,14 @@ it, by countermodel.  The four design items:
    answers instead.  The induction is on the `EndsWithin` budget
    (remaining distance to terminal), not on depth.
 
-   WHY THE FUEL SHAPE IS WHAT MAKES THIS PROVABLE (the decomposition
-   that dissolves the reduced-depth trap).  A probe that runs at
-   reduced depth can bottom out at the frontier at a NON-terminal
-   position however large `D` is -- if its result were a score, that
-   would be a masking channel `hFiniteDiameter` cannot bound, because
-   the pass child is NOT a legal move: `EndsWithin` bounds no play
-   through it, and the budget never decreases across a pass.  The
-   fuel oracle removes exactly that channel.  Above the horizon the
-   pass never returns a score -- it only selects how much depth the
-   real moves spend -- and `fuelValueD2` models it as the abstract
-   selector `spend`, over which every theorem here quantifies
-   UNIVERSALLY.  Frontier masking inside the engine's probe subtree
-   can therefore only change WHICH selector the code computes, never
-   what any selector's fold is worth; it is absorbed by the
-   quantifier, and its worst case is already priced into the bound as
-   the `C` of `D0 = C*N + C + 6` (every edge at full spend).  The
-   sub-horizon pass (depths 3..5, probing at depth <= 2) IS a score
-   candidate, and sits strictly below the invariant's floor,
-   unreachable.  So the value-correctness argument needs
-   frontier-freedom only on the real-move tree, which is precisely
-   what the budget buys.
+   WHY THE BOUNDED-EDGE SHAPE IS PROVABLE. Above the horizon the pass
+   never returns a score: `fuelValueD2` contains only real moves and
+   models every fixed reduction through the abstract selector `spend`.
+   Its worst case is priced into `D0 = C*N + C + 6` (every edge at full
+   spend). The sub-horizon pass at depths 3..5 sits strictly below the
+   induction's invariant and is unreachable. Thus the correctness
+   argument needs frontier-freedom only on the real-move tree, exactly
+   what the finite budget supplies.
 
    Lemma ledger: no existing lemma gains the new hypothesis and no
    existing induction is restructured -- the layer-1 machinery is
@@ -126,12 +113,12 @@ it, by countermodel.  The four design items:
    bound is explicit -- `D0 = C*N + C + 6`, i.e. `2N + 8` as shipped
    -- so "eventually" names a depth computable from the adjudication
    bound, not a classical existence; the corridor costs `C + 6`
-   (`6` the fuel horizon, below which the capped pass is still a
+   (`6` the null horizon, below which the capped pass is still a
    score candidate; `C` the worst single-edge spend).  Unchanged:
    the game classified is the ruleless one (`ForcedMate` /
    `ForcedlyMated`; `Repetition.lean`'s scope note applies verbatim),
-   and layer 1 (`FuelBracketSpec`) stays the recorded open obligation
-   exactly as in `EventuallyWide.lean`.
+   while correspondence between the executable search and this declared
+   value remains a separate layer-1 obligation.
 
 Zero sorries, no Mathlib, no audit-surface changes (this file only
 adds definitions and theorems; `sunfish.py` is untouched).  Every

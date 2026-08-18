@@ -74,12 +74,11 @@ nonnegative-table invariants, and the gate rejects policies without a finite
 eventual-mate horizon before they consume games.
 
 The mate gate derives each suite depth from the candidate's maximum real-edge
-cost, move-cap horizon, and null-candidate horizon. `--horizon-only` cheaply
-rejects policies without a finite bound during a broad optimization; omit it
-to run the executable mate suites on finalists. Classical null
-(`FUEL_NULL=0`) is rejected because its null candidate has no finite defender
-horizon. The configured `FUEL_MIN_DEPTH=99` off sentinel is likewise rejected
-when it would leave shallow null active throughout the practical depth range.
+cost, move-cap horizon, and shallow-null horizon. `LMR_MIN_DEPTH` marks the
+fixed transition from capped null to real-move-only intrinsic LMR;
+`NULL_MIN_DEPTH=99` simply disables shallow null. `--horizon-only` computes
+the resulting proof depths without starting an engine; omit it to run the
+executable mate suites on finalists.
 
 Results append to a JSONL journal and periodically compact into the state file.
 Runs are restartable, preserve their exploration clock, and finish reserved
