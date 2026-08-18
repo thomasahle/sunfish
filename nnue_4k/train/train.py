@@ -153,7 +153,7 @@ def main():
         start_epoch, best = ck["epoch"] + 1, ck["best"]
         print("resumed at epoch %d (best val %.5f)" % (start_epoch, best), flush=True)
 
-    ext = features.extractor_for(cfg.model.kb)
+    ext = features.extractor_for(cfg.model.kb, cfg.model.pb)
     K, CLAMP = cfg.loss.sigK, float(cfg.model.clampcp)
     out_net = os.path.join(run_dir, "best.pickle")
 

@@ -57,6 +57,7 @@ class Dataset:
         self.lens = torch.diff(offs, append=torch.tensor([len(feats)]))
         self.mfeats = features.mirror_map()[feats]
         self._matc = None
+        self._phasec = None
 
     def __len__(self):
         return len(self.y)
@@ -70,6 +71,26 @@ class Dataset:
             self._matc = torch.nn.functional.embedding_bag(
                 self.feats, mv, self.offs, mode="sum").squeeze(1)
         return self._matc
+
+    @property
+    def phasec(self):
+        """Material phase 0..24, recomputed from the features, cached.
+
+        Same construction as `matc` (an embedding_bag over a per-feature
+        weight vector), so a phase bucket needs no new cached column and no
+        CACHE_VERSION bump -- which is the whole reason pb is cheap to try."""
+        if self._phasec is None:
+            pv = features.phase_vector().unsqueeze(1)
+            self._phasec = torch.nn.functional.embedding_bag(
+                self.feats, pv, self.offs, mode="sum").squeeze(1)
+        return self._phasec
+
+    def phase_bucket(self, pb):
+        """Phase -> bucket index, on features.PHASE_EDGES (fixed constants)."""
+        p, out = self.phasec, torch.zeros(len(self.y), dtype=torch.long)
+        for e in features.PHASE_EDGES[pb]:
+            out = out + (p > e).long()
+        return out
 
     def base(self, kind):
         return self.pstc if kind == "pst" else self.matc

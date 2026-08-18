@@ -1,0 +1,86 @@
+# COHORT 1 of the NNUE RELAUNCH PORTFOLIO.  Registered in
+# nnue_4k/MEASUREMENTS.md ("PORTFOLIO REGISTRATION", 2026-08-19, commit
+# db70dfb) BEFORE this file was written, with the byte price, the speed price
+# and the screen bars all committed first.
+#
+# EVERY arm in this cohort is one variable against run 360
+# (factor_r8n32m_final, val 0.0151800), whose recipe -- lr 1.2e-2, 6 epochs,
+# linear, seed 0, l1 5e-4, satpen 0.03, sigK 400, lam 1.0, mirror on -- is
+# reproduced here field for field.  That is the only reason the cells are
+# comparable at all.
+#
+# VAL PROMOTES NOTHING.  Five statistics have predicted play confidently in
+# this family and five have been contradicted.  Val here is used for exactly
+# two things: the do-nothing floor (an arm above the `mat` anchor is broken),
+# and the run report.  The promoter is the 540-game round robin registered in
+# the memo, and its bars (CONTINUE 40.0%, WIN ~59%, STOP inside 22-36%) were
+# fixed before any arm existed.
+#
+# BIAS-RAIL CHECK IS MANDATORY on every export in this portfolio: report the
+# count of lane gains pinned at digit 89, the count of bias digits pinned at
+# -44/+45, and sum_k G_k against 65,534.  A clipping run is REPORTED, never
+# silently rescaled -- `biasscale` is trainer-only and an S>1 net must never
+# be spliced into an entry.
+
+#
+# WHY THIS ARM
+#
+# FAMILY 4, and the best-priced arm in the portfolio.  The entry's K_MID/K_END is
+# a HAND taper switched at the root; this is the learned two-table version, which
+# is precisely the machinery the eval closure named as unexpressed by the family.
+# Balanced 50.4/49.6 on pool10m (the best-conditioned partition measured), and
+# refresh-free: only 0.07% of generated moves cross the phase cut, so the live
+# bucket costs -0.04 Elo.
+# DO NOT mis-cite the contrary prior: net128phase 0.00833 vs its net128phase1
+# single-global-scale control 0.00836 says a phase-bucketed SCALAR on the
+# residual buys nothing.  That is a scalar gate on one net.  This is two tables.
+# Different mechanisms; only the first was ever tested.
+#
+# PRICE, STATED BEFORE THE RUN (the artifact number is pack.sh's alone)
+#
+# digits = 768*1 + 4*32 + 65 = 961.  Predicted 4,003 B @40% U zeros (93 spare),
+# 3,834 @70% (262 spare).  Plus the bucket machinery, the one COMPOSED number in
+# the cohort (+~35 B at B=2), which pack.sh must measure on a built stub before
+# this arm is called affordable.
+name: rl_pb2f4n32
+data:
+  source: pool10m.npz
+  kind: lambda-npz
+  cpmax: 1000
+  split: fenkey
+  split_seed: 20260813
+  val_mod: 20
+  limit: 0
+  workers: 8
+model:
+  arch: factor
+  N: 32
+  base: mat
+  ternary: 0.85
+  factor: 0
+  gridste: 1
+  lr_rank: 4
+  lr_mirror: 1
+  lr_vmax: 44
+  kb: 1
+  pb: 2
+  clampcp: 600
+loss:
+  l1: 0.0005
+  lam: 1.0
+  losspow: 2.0
+  rate: 0.0
+  satpen: 0.03
+  satthresh: 480.0
+  sigK: 400.0
+opt:
+  epochs: 6
+  batch: 8192
+  lr: 0.012
+  sched: linear
+  seed: 0
+  threads: 8
+  wclip: 1.0
+  weight_decay: 1.0e-05
+out_dir: runs/rl_pb2f4n32
+notes: family 4 -- the learned K_MID/K_END: two phase-conditioned input tables on the factored carrier, one variable against 10_rl_f4n32

@@ -293,8 +293,8 @@ def _export_model(model, cfg, path):
                               (("t1w", model.t1.weight), ("t1b", model.t1.bias),
                                ("t2w", model.t2.weight), ("t2b", model.t2.bias))}
     segs = tuple(i / m.segs for i in range(m.segs))
-    if m.kb > 1 or m.nb or m.phase or m.rff:
-        kind = "float-kb" if m.kb > 1 else (
+    if (m.kb > 1 or m.pb > 1 or m.nb or m.phase or m.rff) and m.arch != "factor":
+        kind = "float-kb" if (m.kb > 1 or m.pb > 1) else (
             "float-bil" if m.nb else ("float-phase" if m.phase else "float-rff"))
         pnet.save(path, {"kind": kind, "B": m.kb, "N": m.N, "E": E.tolist(),
                          "bias": b, "v": v, "clampcp": m.clampcp, "segs": segs,

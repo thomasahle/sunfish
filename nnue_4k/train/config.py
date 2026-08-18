@@ -40,7 +40,15 @@ class DataCfg:
 class ModelCfg:
     arch: str = "residual"      # residual | ml2 | cb | lowrank (see model.py)
     N: int = 4                  # hidden units per perspective
-    kb: int = 1                 # own-king buckets (1/4/8/16)
+    kb: int = 1                 # own-king buckets (1/2/4/8/16); 2 = RANK BAND
+    #                             only (back two ranks vs advanced), the
+    #                             file-invariant code -- the only one coherent
+    #                             inside a file-mirrored table.
+    pb: int = 1                 # material-phase input buckets (1/2/4).  The
+    #                             LEARNED form of the entry's K_MID/K_END hand
+    #                             taper.  Composes with kb as a product space,
+    #                             B = kb*pb, and B is what multiplies the
+    #                             first-layer table.
     factor: int = 1             # virtual per-piece-type features (folded at export)
     base: str = "mat"           # fixed base under the residual: mat | pst
     ternary: float = 0.0        # replnet STE threshold tau (0 = off)

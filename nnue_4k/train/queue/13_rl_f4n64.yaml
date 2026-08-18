@@ -1,0 +1,85 @@
+# COHORT 1 of the NNUE RELAUNCH PORTFOLIO.  Registered in
+# nnue_4k/MEASUREMENTS.md ("PORTFOLIO REGISTRATION", 2026-08-19, commit
+# db70dfb) BEFORE this file was written, with the byte price, the speed price
+# and the screen bars all committed first.
+#
+# EVERY arm in this cohort is one variable against run 360
+# (factor_r8n32m_final, val 0.0151800), whose recipe -- lr 1.2e-2, 6 epochs,
+# linear, seed 0, l1 5e-4, satpen 0.03, sigK 400, lam 1.0, mirror on -- is
+# reproduced here field for field.  That is the only reason the cells are
+# comparable at all.
+#
+# VAL PROMOTES NOTHING.  Five statistics have predicted play confidently in
+# this family and five have been contradicted.  Val here is used for exactly
+# two things: the do-nothing floor (an arm above the `mat` anchor is broken),
+# and the run report.  The promoter is the 540-game round robin registered in
+# the memo, and its bars (CONTINUE 40.0%, WIN ~59%, STOP inside 22-36%) were
+# fixed before any arm existed.
+#
+# BIAS-RAIL CHECK IS MANDATORY on every export in this portfolio: report the
+# count of lane gains pinned at digit 89, the count of bias digits pinned at
+# -44/+45, and sum_k G_k against 65,534.  A clipping run is REPORTED, never
+# silently rescaled -- `biasscale` is trainer-only and an S>1 net must never
+# be spliced into an entry.
+
+#
+# WHY THIS ARM
+#
+# FAMILY 3 x 8: the WIDTH control, with the sparsity target that pays for it.
+# Free-table width upper bounds on this corpus: N=16 -8.69%, N=32 -14.50%,
+# N=64 -20.93% against N=5, all SOFT-converged and therefore pessimistic.  The
+# byte cost of N=64 is bought back by sparsity, which the container price list
+# says is the only large byte lever there is (0.850 -> 0.474 B/digit).
+# This arm and 14 share l1=2e-3, so they are one variable against EACH OTHER; the
+# comparison to the l1=5e-4 arms is confounded by design and is not claimed.
+#
+# PRICE, STATED BEFORE THE RUN (the artifact number is pack.sh's alone)
+#
+# digits = 384*1 + 4*64 + 129 = 769.  The factored lane BUILT mirrored r=4/N=64
+# at 3,803 B @43% zeros and 3,766 @70%, so this shape is known to fit and to run.
+# Speed: N=64 primitive 2,448 ns vs N=4's 442; modelled -78 Elo timed, COMPOSED.
+# RESOLUTION: at N=64 the exporter's lane-sum fold caps the MEAN gain at ~31 of
+# 89.  Width is byte-cheap and speed-cheap but it is NOT resolution-free, and
+# this arm is where that shows up.
+name: rl_f4n64
+data:
+  source: pool10m.npz
+  kind: lambda-npz
+  cpmax: 1000
+  split: fenkey
+  split_seed: 20260813
+  val_mod: 20
+  limit: 0
+  workers: 8
+model:
+  arch: factor
+  N: 64
+  base: mat
+  ternary: 0.85
+  factor: 0
+  gridste: 1
+  lr_rank: 4
+  lr_mirror: 1
+  lr_vmax: 44
+  kb: 1
+  pb: 1
+  clampcp: 600
+loss:
+  l1: 0.002
+  lam: 1.0
+  losspow: 2.0
+  rate: 0.0
+  satpen: 0.03
+  satthresh: 480.0
+  sigK: 400.0
+opt:
+  epochs: 6
+  batch: 8192
+  lr: 0.012
+  sched: linear
+  seed: 0
+  threads: 8
+  wclip: 1.0
+  weight_decay: 1.0e-05
+out_dir: runs/rl_f4n64
+notes: family 3+8 -- width control at N=64 with a sparsity target; the resolution cost of width is the thing to watch here

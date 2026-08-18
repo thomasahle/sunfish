@@ -51,11 +51,31 @@ class ResidualNet(nn.Module):
 
     def __init__(self, cfg):
         super().__init__()
-        if cfg.ternary and (cfg.kb > 1 or cfg.nb or cfg.rff or cfg.phase or cfg.segs != 1):
+        _bt = cfg.kb * cfg.pb
+        if cfg.ternary and cfg.arch == "factor" and _bt > 1:
+            # RELAXED, and only here.  The kb=1 rule codified a BYTE claim
+            # ("kb4/kb8 multiply the payload x4/x8 against a 617 B budget --
+            # impossible").  Both halves moved: the payload budget is 878 B in
+            # context, and the factored carrier makes B=2 cost +384 digits
+            # (961 vs 577) rather than x2 of everything -- 4,003 B at 40% U
+            # zeros, 3,834 at 70%.  B=4 is 1,729 digits and prices OVER at any
+            # sparsity a trained net has reached, so it stays refused until a
+            # trained payload measures >=75% U zeros through pack.sh.
+            # Registered in MEASUREMENTS.md before this line was written.
+            if _bt > 2:
+                raise ValueError(
+                    "arch=factor allows B = kb*pb <= 2 on the ternary path; "
+                    "got kb=%d pb=%d (B=%d).  B=4 is byte-blocked: 1,729 "
+                    "digits prices over 4096 at every sparsity measured so "
+                    "far.  Lift this only with a pack.sh number."
+                    % (cfg.kb, cfg.pb, _bt))
+            if cfg.nb or cfg.rff or cfg.phase or cfg.segs != 1:
+                raise ValueError("bucketed factor arms take no other extension")
+        elif cfg.ternary and (_bt > 1 or cfg.nb or cfg.rff or cfg.phase or cfg.segs != 1):
             raise ValueError("ternary is the packed replnet path: kb=1, plain crelu, "
                              "no extensions -- the payload codec carries none of that")
         self.cfg = cfg
-        N, B = cfg.N, cfg.kb
+        N, B = cfg.N, cfg.kb * cfg.pb
         self.segs = tuple(i / cfg.segs for i in range(cfg.segs))
         self.act = act_fn(self.segs)
         self.clampcp = float(cfg.clampcp)
@@ -98,7 +118,7 @@ class ResidualNet(nn.Module):
 
     @property
     def B(self):
-        return self.cfg.kb
+        return self.cfg.kb * self.cfg.pb
 
     def virt(self):
         v = 0
@@ -328,11 +348,11 @@ class StructuredNet(ResidualNet):
         import structures
         if cfg.arch == "cb":
             self.struct = structures.CodebookWeight(
-                768 * cfg.kb, cfg.N, cfg.cb_k, cfg.cb_block, cfg.ternary,
+                768 * cfg.kb * cfg.pb, cfg.N, cfg.cb_k, cfg.cb_block, cfg.ternary,
                 cfg.cb_temp, init_from=self.raw)
         else:
             self.struct = structures.LowRankResidual(
-                768 * cfg.kb, cfg.N, cfg.lr_rank, cfg.ternary, cfg.lr_wmax)
+                768 * cfg.kb * cfg.pb, cfg.N, cfg.lr_rank, cfg.ternary, cfg.lr_wmax)
 
     def weight(self):
         w = self.folded()

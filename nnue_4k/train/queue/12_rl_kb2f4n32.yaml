@@ -1,0 +1,87 @@
+# COHORT 1 of the NNUE RELAUNCH PORTFOLIO.  Registered in
+# nnue_4k/MEASUREMENTS.md ("PORTFOLIO REGISTRATION", 2026-08-19, commit
+# db70dfb) BEFORE this file was written, with the byte price, the speed price
+# and the screen bars all committed first.
+#
+# EVERY arm in this cohort is one variable against run 360
+# (factor_r8n32m_final, val 0.0151800), whose recipe -- lr 1.2e-2, 6 epochs,
+# linear, seed 0, l1 5e-4, satpen 0.03, sigK 400, lam 1.0, mirror on -- is
+# reproduced here field for field.  That is the only reason the cells are
+# comparable at all.
+#
+# VAL PROMOTES NOTHING.  Five statistics have predicted play confidently in
+# this family and five have been contradicted.  Val here is used for exactly
+# two things: the do-nothing floor (an arm above the `mat` anchor is broken),
+# and the run report.  The promoter is the 540-game round robin registered in
+# the memo, and its bars (CONTINUE 40.0%, WIN ~59%, STOP inside 22-36%) were
+# fixed before any arm existed.
+#
+# BIAS-RAIL CHECK IS MANDATORY on every export in this portfolio: report the
+# count of lane gains pinned at digit 89, the count of bias digits pinned at
+# -44/+45, and sum_k G_k against 65,534.  A clipping run is REPORTED, never
+# silently rescaled -- `biasscale` is trainer-only and an S>1 net must never
+# be spliced into an entry.
+
+#
+# WHY THIS ARM
+#
+# FAMILY 1, the standard real-NNUE move, at the smallest honest size.  kb2 is the
+# own-king RANK BAND alone (back two ranks vs advanced) -- the file-INVARIANT
+# king code, which is the only kind coherent inside a file-mirrored table, and
+# the one the data supports (the file split puts 63.4% of positions in a single
+# kb4 bucket).
+# The recorded negative is kb8fold: buckets carried real signal in training form
+# (0.01267) and the EXPORT threw it away by folding them onto shared ternary rows
+# (0.01428).  The factored carrier does not fold -- it stores B*384 distinct
+# rows -- so the mechanism that produced that negative is absent here.
+# Refresh measured tonight, filling a gap two earlier registrations promised and
+# never delivered: 2.16% of generated moves cross a rank band, so the live
+# bucket costs -1.2 Elo (ceiling -3.5).
+#
+# PRICE, STATED BEFORE THE RUN (the artifact number is pack.sh's alone)
+#
+# digits = 768*1 + 4*32 + 65 = 961.  Identical to 11_rl_pb2f4n32: predicted
+# 4,003 B @40% U zeros, 3,834 @70%, plus the same ~35 B of bucket machinery.
+# Speed differs only by the refresh term above.
+name: rl_kb2f4n32
+data:
+  source: pool10m.npz
+  kind: lambda-npz
+  cpmax: 1000
+  split: fenkey
+  split_seed: 20260813
+  val_mod: 20
+  limit: 0
+  workers: 8
+model:
+  arch: factor
+  N: 32
+  base: mat
+  ternary: 0.85
+  factor: 0
+  gridste: 1
+  lr_rank: 4
+  lr_mirror: 1
+  lr_vmax: 44
+  kb: 2
+  pb: 1
+  clampcp: 600
+loss:
+  l1: 0.0005
+  lam: 1.0
+  losspow: 2.0
+  rate: 0.0
+  satpen: 0.03
+  satthresh: 480.0
+  sigK: 400.0
+opt:
+  epochs: 6
+  batch: 8192
+  lr: 0.012
+  sched: linear
+  seed: 0
+  threads: 8
+  wclip: 1.0
+  weight_decay: 1.0e-05
+out_dir: runs/rl_kb2f4n32
+notes: family 1 -- own-king rank-band buckets on the factored carrier, one variable against 10_rl_f4n32 and byte-identical to the pb2 arm
