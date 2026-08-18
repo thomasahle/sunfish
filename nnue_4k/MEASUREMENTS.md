@@ -19288,3 +19288,107 @@ on the eval axis.** If it does not, ARM 10 is not alone.
 (19σ on refval, 1.4% val movement against 0.3%). ARM 10's lr-corrected recipe
 adopts **1.2e-2**, and that now rests on two independent ladders rather than
 one run.
+
+---
+
+# ARM 2b — THE SECOND LAYER FIRES, AND IT IS THE FIRST NET TO LEAVE THE FAMILY'S VAL BAND
+
+## (1) Liveness, verified first, because it is the whole point
+
+`3170_arm2b_ml2_s3`: **`u2_digits = [1, 0, 1, 0]` — LIVE.** Two of four
+read-out lanes non-zero, exact pre-image `[0.506, 0.494, 0.500, 0.492]`
+against a threshold of 0.5 — the forced shift moved the read-out from 0.487
+(all four rounding to zero) to straddling the threshold. Payload 786
+characters, **identical in size to ARM 2's**, so the byte number is unchanged
+at ~3,973 B and in budget by ~123 B. `shift 3`, gains `[32, 34, 34, 31]` —
+the halved layer-1 resolution, paid as priced.
+
+**This is the first two-layer net this campaign has ever produced.** Both
+prior attempts shipped a silent read-out.
+
+## (2) The isolated comparison — both arms at the same halved L1 resolution
+
+Same corpus, same split (`a0aa553db6908e91`), same anchors (zero 0.02637 /
+material 0.02054), same objective, same seed. **`3170 − 3171` is the second
+layer and nothing else.**
+
+| run | arch | shift | best val | **% of material gap closed** |
+|---|---|---|---|---|
+| `3171_arm2ctl_1layer_s3` | 1-layer N=4 | 3 | 0.017883 | 12.9% |
+| **`3170_arm2b_ml2_s3`** | **ml2 N=4, LIVE** | 3 | **0.016746** | **18.5%** |
+
+**Dividend: 0.001137 of val, +5.6 points of material gap closed — a 43%
+relative improvement over its own matched control.**
+
+## (3) It breaks the band that held every other net all night
+
+| net | best val |
+|---|---|
+| `3161_obj11_k400_lr4x` (previous best, 1-layer N=5) | 0.01742 |
+| `220_cap_n5b_s0` (1-layer N=5) | 0.01765 |
+| `313_arm2_ml2_n4` (ml2, DEAD read-out) | 0.01787 |
+| `3171_arm2ctl_1layer_s3` (1-layer N=4, shift 3) | 0.01788 |
+| **`3170_arm2b_ml2_s3` (ml2, LIVE read-out)** | **0.01675** |
+
+Everything else measured tonight — six axes, a dozen nets — lies inside
+`0.01742 … 0.01788`, a band of 0.00046. **The live second layer is 0.00067
+below the bottom of that band, and its dividend over its own control
+(0.00113) is more than twice the width of the entire band.**
+
+And the trajectories differ in kind. The control is the family's familiar
+flat line — 0.017954, 0.017924, 0.017921, 0.017912, 0.017883, 0.017886, i.e.
+0.4% of movement and rising at the end. The two-layer net is **still falling
+at epoch 5**: 0.020300, 0.017681, 0.017293, 0.017068, 0.016880, **0.016746** —
+17.5% of movement, and not converged. It also uses more of its weights
+(31.2% zeros against 43.0%).
+
+**This is the nonlinearity dividend the hypothesis predicted**, measured for
+the first time on a net that actually has the property, and it is the only
+result tonight that is large compared to the noise it must beat.
+
+## (4) Branch taken: LARGE dividend → CONTINUE screen
+
+Against my registered bar — a dividend must be large enough to clear a
+~−15 Elo nps tax against a 12-point empirical noise floor on a 50-game cell —
+this qualifies without argument: the effect is larger than the entire spread
+of every other arm, on the same corpus and split, with the confound (halved
+L1 resolution) controlled by construction.
+
+**Launched, and deliberately not a bare 50-game A/B**: `entryd0` (anchor),
+`arm2b`, `ctl1l`, `capn5` (drift anchor) — 300 games, 25 rounds (gcd(25,6)=1),
+20,000 nodes, mandatory coprimality pre-flight and `opening_gate.py`. Reasons:
+`arm2b` vs `entryd0` alone cannot separate the second layer from the halved
+L1 resolution, and after the `capn5` drift table (36.00 / 28.12 / 24.00) a
+lone 50-game cell is not a number I will act on. **The nps tax is being
+measured on this artifact rather than assumed at 0.90×.**
+
+**Two caveats carried into that screen, so they are not discovered afterwards:**
+
+- `arm2b` trains at `lr = 3e-3`, not the lr-corrected `1.2e-2`. Its dividend
+  is therefore measured *without* the optimisation fix, and an lr-corrected
+  two-layer net is an obvious follow-up rather than something this run
+  settles.
+- The splice must go through the **ml2** engine path (`make_ml2_proto.py`),
+  which has never been exercised against a live read-out. `verify_export`
+  bit-exactness on that path is doing real work here, not ceremony.
+
+## (5) Status of the eval axis
+
+**The nonlinearity hypothesis is NOT closed — it is the first one to survive
+its test.** The registered branch for "in-family with a live read-out" did not
+fire; the other one did.
+
+So it is **not** true that only ARM 10 remains on the eval axis. Two live
+hypotheses remain: **nonlinearity (ARM 2b, now with a measured val dividend
+and games in flight)** and **ordering (ARM 10, ~130 lines, still unbuilt)**.
+Of the two, nonlinearity is now the better-evidenced by a wide margin — it has
+a large effect on the one statistic that is directly comparable across the
+whole sweep, where ARM 10 has a mechanism argument and a low base rate.
+
+**Sequencing consequence, stated plainly:** if the screen converts, the next
+work is a two-layer net at the corrected learning rate and a re-examination of
+the ml2 seam's read-out resolution (the digits are straddling 0.5 at
+`[0.506, 0.494, 0.500, 0.492]` — half the read-out is *still* rounding away,
+so even this net is not getting the full second layer). If it does not
+convert, that is the third agreement-free statistic to move without moving
+Elo, and the eval axis closes with ARM 10 as the last item.
