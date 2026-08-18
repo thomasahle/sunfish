@@ -19909,3 +19909,83 @@ The eval program's questions are answered.
 meter, which is where the entry's ~20-point margin was actually built, and
 where this ledger's own decomposition has said the larger half of +400 lives
 since 2026-08-13.
+
+## AMENDMENT to the closure — three refinements. The axis stays CLOSED.
+
+### 1. The mechanism reading changes: HYPOTHESIS, not demonstration
+
+I wrote that the rescale "recovered the intra-family deficit **exactly as the
+margin-tightness hypothesis predicted**". **Too strong — withdrawn.**
+
+The shift step halved the **residual** exactly, but the **total** — the
+quantity the search's margins actually act on — barely moved. My own
+measurement, pool10m val, 60,000 positions:
+
+| net | TOTAL mean\|cp\| | vs capn5 | residual mean\|cp\| |
+|---|---|---|---|
+| arm10 | 155.51 | **1.122×** | 80.02 |
+| **arm10q** | **136.16** | **0.983×** | **40.01** (exactly half) |
+| capn5 | 138.57 | 1.000× | 56.96 |
+
+The residual halved to the digit (80.02 → 40.01). The total moved **12.4%**
+of capn5's scale. *(The worker measured 1.092× → 1.044×, a 4.4% move, on its
+400-FEN probe set; mine is the 60k standard distribution this ledger uses
+throughout. Both are reported; the discrepancy is the position sample, and
+neither changes the conclusion.)*
+
+**A 12.4% change in the quantity the margins see, buying +20 pooled points
+(+3.52 SE, the largest intra-family effect the program has produced, and
+66.00% head-to-head), is implausibly leveraged.** The likelier reading — and
+it is a reading, not a result — is the one the worker proposed: **arm10's
+learned residual was ACTIVELY HARMFUL**, and halving its weight against
+material recovered the damage. `arm10q` is then approximately "material plus
+a weak learned term", which is exactly where the family lives — and indeed it
+lands level with `capn5` (52.00% head-to-head, totals within 1.7%).
+
+**What the games establish narrowly and solidly, and this is the part to
+quote:**
+
+- full-weight arm10 ≪ family
+- half-weight arm10q = family level
+- **neither beats the entry contrast** — 22.00% against 29.79% ± 3.0 (n=282),
+  null in the *worse* direction
+
+### 2. The anomaly resolves AGAINST my earlier framing
+
+I recorded a "sign contradiction" — arm10 best against the anchor, weakest
+intra-family — and treated both halves as needing explanation. **The
+resolution is simpler and I had it backwards.**
+
+`arm10` vs the entry re-read **17.00%** here against **34.00%** in `rr_rank`:
+combined **25.5% ± 5.0 (n=100)**, a **1.70 SE swing on byte-identical
+engines**. Meanwhile its `capn5` cell **replicated cleanly** (30.00% → 28.00%).
+So the **34.00% was the outlier**, the intransitivity was **anchor-cell
+noise**, and **arm10 is simply the weakest net — exactly what its intra-family
+cells said all along.**
+
+The sign-contradiction note is **retired, not deleted**: it was a real reading
+of the evidence available at the time, and the correction is that the
+intra-family cells were the *reliable* half, not the suspect one. Worth
+remembering next time an anchor cell disagrees with three intra-family cells.
+
+### 3. Format footnote: the bias band clipped, in BOTH payloads
+
+**All five bias digits sit at the top rail (89) in `arm10` and `arm10q`
+alike** — arm10's learned bias was **clipped by the export format**.
+Pre-existing, shared by both arms, and therefore not a confound for this pair.
+But it is a **format-saturation datum future arms should check before
+training**: a bias band that clips is either a free thing to widen or a
+constraint to respect knowingly, and ARM 1' already measured that widening it
+naively (×8, trading range for resolution) makes things worse. This is now the
+**fifth** independent sighting of the rail.
+
+### Artifact and cotenancy record
+
+The two payloads differ in **exactly one character** — position 948, `)` vs
+`'`, the shift digit — with gains, bias digits and all 3,840 trits
+field-identical, `verify_export` bit-exact. That is as clean as a
+single-variable comparison gets in this campaign.
+
+Cotenancy was clean under the new standard: **68 meter4 games and a 500-game
+owner screen ran inside the window with zero forfeits on either**, at
+concurrency 8 / nice 5.
