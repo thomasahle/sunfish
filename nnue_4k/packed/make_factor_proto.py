@@ -87,8 +87,15 @@ def build(src, r, N, lane_bits, zeros, seed=20260817, mirror=False):
     nfeat = 12 * nsq
     ntrit = nfeat * r
     ndig = 1 + 2 * N + r * N + nfeat * ((r + 3) // 4)
-    # cap scale: caps are stored as digits 0..89, scaled to reach ~vmask
-    cap_scale = 1 << max(0, vbits - 7)
+    # Cap scale, and it MUST agree with the trainer.  The engine's cap is
+    # G_k = cap_scale * g_k and the trainer's gvb() stores g_k = round(|v_k| *
+    # 2^s / 32), i.e. it assumes G_k = 32 * g_k.  This was 1 << (vbits-7) =
+    # 256 at lane_bits=16, chosen to let the cap reach the wider dynamic range
+    # a factored table can produce -- which would have made every exported
+    # cap 8x too large the first time a trained net met this decoder.  32 is
+    # the shipped convention and costs nothing: a lane saturates at 32*g_k
+    # either way, and the trained net simply scales U@V to suit.
+    cap_scale = 32
 
     hunks = []
 
