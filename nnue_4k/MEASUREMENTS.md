@@ -19572,3 +19572,116 @@ After tonight — three statistics that predicted confidently and were
 contradicted, eight mechanisms closed — the honest prior on this arm is low.
 It is being built because it is the last untested mechanism, not because the
 evidence favours it.
+
+---
+
+# ARM 10 — RESULT, and a metric bug the do-nothing floor caught
+
+`3180_arm10_rank_k16` trained clean: **best val 2.65284** (-log softmax over
+K=16), final-epoch top1 0.1889 as printed by the trainer. Random is
+`log(16) = 2.77259` and `1/16 = 0.0625`.
+
+**NON-COMPARABILITY, as promised.** These numbers are a **-log softmax over
+16 siblings** and a **top1-of-16**. They are not on the same scale, in the
+same units, or against the same target as any pointwise `val` in this ledger.
+Nothing here may be compared to 0.01675, 0.01742 or 0.01765, and the only
+meaningful references are the random anchors above, the material floor below,
+and the other nets run through the identical metric.
+
+## A metric bug, found because the floor was included
+
+The first control table gave the **material-only floor top1 = 0.5180** against
+a random baseline of 0.0625. That is not a result, it is `argmax` — which
+returns the FIRST maximal index, and the searched move sits at local index 0.
+**Every tie at the top was silently scored as a hit.** The floor evaluates
+most siblings identically (a quiet move changes no material), so 92.6% of its
+groups are one big tie, and it collected a near-free 0.52.
+
+Any net with ties took the same free credit in the same direction — and
+**`model.rank_top1`, which the trainer prints every epoch, has the identical
+bug**, so ARM 10's reported 0.1889 is inflated; corrected it is **0.1788**.
+The training-time top1 is a diagnostic, not a measurement, and is now marked
+as such.
+
+`-log softmax` needed no repair: equal logits give a uniform distribution and
+score exactly `log(K)`, which is why the floor's 2.7696 was the honest half of
+the first table and the tell that the other half was wrong.
+
+Fixed: top1 is now the **expectation under random tie-breaking**, and
+`meanrank` is a tie-aware scale-free summary (0 = always first, 1 = always
+last).
+
+## THE FREE CONTROL — pointwise nets on ARM 10's objective, ARM 10's held-out groups
+
+3,081 groups of K=16, the `groupkey` split, temperature 160 for every row.
+
+| net | trained on | **-log softmax** | **top1/16** | **meanrank** | tied% |
+|---|---|---|---|---|---|
+| **`3180_arm10_rank_k16`** | **ranking** | **2.65284** | **0.1788** | 0.3145 | 32.4% |
+| `3162_arm9_entry250k` | entry-searched cp | 2.71318 | 0.1663 | **0.2957** | 10.8% |
+| `3161_obj11_k400_lr4x` | SF cp, 4× lr | 2.71974 | 0.1403 | 0.3526 | 23.8% |
+| `220_cap_n5b_s0` | SF cp | 2.72143 | 0.1384 | 0.3498 | 26.7% |
+| `319_arm9ctl_sf250k` | SF cp, 250k | 2.72867 | 0.1420 | 0.3479 | 12.1% |
+| **[material-only floor]** | nothing | 2.76963 | 0.1083 | 0.4661 | 92.6% |
+| random | — | 2.77259 | 0.0625 | 0.5000 | — |
+
+**The entry is deliberately absent**: its searched eval *produced the labels*,
+so scoring it here would be circular, and its static eval needs an extractor
+that does not exist. Stated rather than quietly omitted.
+
+**Note the floor first.** Material alone scores 0.1083 top1, not 0.0625 — so
+the honest baseline for "can it order moves" is **0.108**, and half of every
+net's apparent skill above random is just counting material.
+
+## The verdict is MIXED, and I am not going to round it
+
+- **ARM 10 leads its own loss decisively.** Headroom from random: it captures
+  **0.1197** where the best pointwise net captures **0.0594** — exactly twice.
+- **It leads top1**, but modestly: 0.1788 against arm9's 0.1663, +7.5%
+  relative, against a floor of 0.1083.
+- **It LOSES the scale-free full-list measure.** `meanrank` 0.3145 against
+  arm9's **0.2957**. A net trained pointwise on entry-searched cp orders the
+  whole sibling list *better* than the net trained directly to rank it.
+- Its **tie rate is 32.4%**, triple arm9's — the ranking loss, which is
+  indifferent to magnitudes by construction, produced a coarser eval.
+
+So: it wins the metric it was trained on (favourable by construction), wins
+top1 slightly, and loses the one summary that is scale-free and untrained-for.
+**"The pointwise nets already match it" is roughly true; "it meaningfully
+out-ranks them" is not.**
+
+## Verdict framing — the stop is an ELO condition, so it does not fire yet
+
+The pre-registered stop reads: *"if it reads Elo-null **against the entry
+contrast**, the objective axis closes as a whole."* That is conditioned on
+**games**, not on a control. And tonight's central finding cuts both ways: if
+statistics cannot promote an arm, they cannot silently block one either.
+Closing the axis on this table would be closing it on a statistic — the exact
+move this ledger spent all night learning not to make.
+
+**One consideration pulls hard the other way, and it belongs in the record:**
+ARM 10's nearest neighbour in ranking quality is `arm9`, which is within
+0.0125 top1 of it and *better* on meanrank — and `arm9` has already been to
+games, where it scored **24.00%** against the entry, identical to `capn5`. The
+prior that ARM 10 differs from that is low.
+
+**REGISTERED, NOT LAUNCHED** (protocol proposed for approval, per instruction):
+
+| | |
+|---|---|
+| field | `entryd0` (anchor), `arm10`, `arm9` (nearest ranking neighbour, known 24.00%), `capn5` (drift anchor, 4 readings, 29.12% ± 3.7) |
+| games | 300, `-rounds 25`, gcd(25,6)=1 |
+| budget | 20,000 nodes, pinned clock |
+| gates | legality all four, dormancy, **coprimality pre-flight + `opening_gate.py`**, both hard refusals |
+| statistic | score%; `siblingrank` **barred** as a promoter |
+| bar, stated before games | ARM 10 must beat the **entry contrast** — the field's only difference that replicates — not the flat intra-family band. Anything inside `capn5`'s ±3.7 is null. |
+| stop | a null closes the objective axis as a whole, per its own registration |
+| pre-registered expectation | **null.** ARM 10 lands with `arm9` and `capn5` near 24–29%. Recorded so a confirmation cannot be retold as a surprise. |
+
+**If that reads null, the eval axis closes with nine mechanisms tested and
+zero conversions** — and the campaign's finding is not any one arm but the
+chain itself: **four statistics have now predicted confidently and been
+contradicted or unsupported by play** (sibling-ranking 8σ, move agreement
+20.5σ, val at its largest-ever gap, and now a ranking objective that leads its
+own loss by 2×). The remaining value is in search and format work, where the
+entry's ~20-point margin was actually built.
