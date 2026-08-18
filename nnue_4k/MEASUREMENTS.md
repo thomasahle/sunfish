@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-18 | **PRE-REGISTRATION: the `tapp` SCREEN — the taper family's last unplayed arm, carried at last; plus a CORRECTION to the premise it was dispatched on** | Dispatched as *"do NOT rebuild, use the gated artifact, verify its sha against its build record."* **Neither object exists**: `e68f82e` changes exactly one file (`build_taper_arms.py`, +22 lines) and commits **no artifact**, the bench box holds none (`evalstruct-20260817/bin/` has base/kptap/ktap/tap/tapk and **no tapp**), and **no sha256 for `tapp` was ever recorded** anywhere — only a size. So it was **reproduced from its deterministic generator at its own pin and the generator proved by rebuilding the arms that DID play**: rebuilt `e_tap.py` **`b1c1c12e…`** and `e_tapk.py` **`4de9b628…`** are **bit-identical to the box files that played the 900-game screen**, so the `e_tapp.py` (**`56329a20…`**) emitted in the same run is the object `e68f82e` gated — and it packs to **3726 B `43a45b9c…`, reproducing the recorded 3726 exactly**. Base at this pin packs to **3410 B `bf30904d…` — the very artifact meter 4 measured**; box `e_kptap.py` verified at 3463 B `5d01f499…`. **GATES run fresh, because the recorded ones were partial** (`e68f82e` logged only the incremental invariant and the 100 ms conversion): byte ceiling **3726 B / 370 spare PASS**; mate-conversion **@500 ms 8/8 PASS**; **@100 ms 7/8, level with base on count** and reproducing the record exactly; mate1 @8 ms **7/8, level**; legality @20k nodes **130 positions, 0 no-move, 0 illegal**; first-yield **worst 582/2048**; packed standalone empty-dir **3/3, `bestmove d7d5`, zero files left**. **Battery PASSES — but two things are recorded against it**: at 100 ms the failure moves **in kind**, base failing the hard `kqk-approach` while `tapp` fails the *easier* **`kqk-mid`**; and `tapp` **converts slower even where it passes** (`krk-mid` **13 moves vs base's 8**). Instrument note: the eval-struct table's `tap` **6/8** at mate1 @8 ms re-runs here as **7/8** — an 8 ms budget does not travel between venues. **Form**: 3-arm RR `base`/`kptap`/`tapp` (one tournament with a baseline anchor), **fixed 20,000 nodes**, arms as **SOURCES** because a packed arm has no `nodes` token and silently ignores `go nodes`, **rounds 151 → 302 per pairing, 906 games**, **coprimality PASS** (gcd(151,3)=1, 151 distinct openings, 2.00× reuse) — note the lane's old `-rounds 150` **FAILS** at gcd 3 / 6× reuse, the exact defect `0e993b7` corrected, not repeated here; `book3k.pgn` order=random, srand **20260892**; adjudication draw+resign, symmetric because all three arms are sources emitting `score cp`; conc **8**, **nice 10** — one declared deviation from the dispatched nice 5, because this cell reads no clock so nice costs it nothing while the owner's timed tuners on this box are real, exactly the reasoning in the lane's proven `run_ktap_conf.sh`. **EXPECTATION, registered as NULL and derived not hoped**: `tapp` = `tap` (**−10.43 ± 37.23**) with `pend` (**+21.31 ± 15.73**) restored ⇒ **≈ +10.9 ± 40.4, an interval dominated by zero**, and it must beat `kptap`'s **+56.07 at 53 bytes** while costing **316**. Two reasons from this lane's own record: fitted eval has fitted better and played no better **five times** (this taper's selector read +48.96/+41.89 and its confirmation returned −10.43/+27.85 — screens here read HIGH), and the fixed-node→timed discipline has fired twice (**kptap +56.07 → +16.23 → +0.58**, #221 **+26.1 → +10.77**) — *mechanism real, clock indifferent* is the expected failure mode. **BRANCHES fixed before game 1**: ADVANCE (95% pentanomial **LB > 0 vs base** AND `tapp` ≥ `kptap`) buys **one** timed 30+1 confirmation and **nothing else — no landing on a screen**; anything else is **NULL and the direction CLOSES**, retiring the fitted second table set with a number. **Landing cost stated up front**: `tapp` is built on the 3410 B base but the entry has moved to **3440 B** (`1c4468c`), so shipping it would need re-derivation and re-gating at ~**3756 B (~340 spare)**. Tripwires: illegal = STOP, `(none)` = STOP, count gate refuses a short read |
 | 2026-08-18 | **AMENDMENT 2 to METER 4: the BRIDGE is SUPERSEDED mid-run by Thomas's twin directive — the PRIMARY stands as the meter, and the twin substitute turns out to be NOT CONSTRUCTIBLE** | Live directive from Thomas: *"You should always use the c-twins when tuning and testing. They can run at 3+0.1."* Bridge stopped at **14 of 300 games** (SIGTERM to its own fastchess PID 3022917, child of driver 2949039; driver exited clean; **0 illegal, 0 forfeits** at stop; kept as `SUPERSEDED_bridge_14games.*`; **not harvested — 14 games is not a measurement**). Owner tuner campaigns verified untouched by parentage before and after. **THE PRIMARY IS THE METER**: the goal is stated at **Python 30+1**, which is also the house standard, and the primary measured exactly that at the registered fixed N=600 with every gate passed → **METER 4 = +108.17 ± 24.64 → [+83.54, +132.81]**. **NUMBER CORRECTION, because the relay already drifted**: the meter-4 figure is **+108.17 ± 24.64 at N=600**, **not +110.32 ± 26.04**, which is fastchess's **N=550 interim** — the registered instrument was a *fixed* 600 and this file's rule is *quote the count at the point of quotation*; the interim reads 2.15 Elo high on an 8% smaller sample. **What is lost**: the bridge's only job was removing the TC from the meter-3 comparison, so **`primary − meter 3` = −92.07 ± 45.58 (z = 3.96) now carries the TC move as well as the arms moves**, and stays labelled so; no cell separates them and none will run. **The twin substitute is NOT CONSTRUCTIBLE as specified**: there is **no entry twin** — `tools/ctwin` twins *classic only* (`gen_tables.py`: "Dump the classic engine's evaluation tables") and the entry's search is structurally different (LMR/LMP/history/depth-free key are licensed for it and forbidden in classic); the nearest object is classic's search wearing entry tables, which is not the entry. **And `docs/TESTING.md` excludes it three ways at once** — rule 6 is "Use C 3+0.1 for node-identical classic search; **Python 30+1 otherwise**", and its "Do not use it for" list names **Python-throughput, shipping time-management, and NNUE-eval**, which is exactly this meter: the subject is the 4k entry, the goalpost move **was** a time manager (`eef299b` +96.19 ± 33.81 plus #217), and meter 1 measured this pair at **per-node parity (−1.74 ± 27.93, n=400)** — the entry's whole advantage is the speed and TM that C removes. **Lane's judgement, as Thomas delegated: the robustness check is NOT worth running, not even cheap** — it would swap a direct measurement for a proxy documented not to price the effect. The directive stands as the right default for classic search/tuning work; **the +400 meter is a documented exception, now written down rather than rediscovered next meter**. If a future lane wants the read, the honest form is the one stopped: Python, both packed arms, 60+1, N=300, `book3k.pgn`, ~2 h. **No branch fires. METER 4 complete at +108.17 ± 24.64** |
 | 2026-08-18 | **METER 4 PRIMARY VERDICT: the entry is +108.17 ± 24.64 over post-pool classic at 30+1 — the goalpost moved ~92 Elo, and the PRE-RESULT corrected expectation is CONFIRMED while the registered band is not** | Gates first and all passed before the Elo: **0 illegal, 0 forfeits, 600/600 `normal`**, count exact, coprimality gcd 1, both arms sha-verified box-side, boot **and** book-shaped smokes green, **71 free cores** at gate pass, driver PID 2949039 alive throughout. **Elo +108.17 ± 24.64 → [+83.54, +132.81]**, nElo **+130.37 ± 27.80**, **65.08%** (305 W / 124 L / 171 D), ptnml **[13, 38, 85, 83, 81]** over 300 pairs, PairsRatio 3.22, DrawRatio 28.33%, LOS 100%, 2 h 55 m at conc 10 cotenant. Arms entry **3410 B** `bf30904d…` (`d0a6e60`) vs **packed** classic **3361 B** `d177d79a…` (`ab3b490`). **Independent recompute mirrors fastchess to the digit, and the same script reproduces meter 3's +200.24 ± 38.35 and [1,11,33,41,64] from meter 3's PGN** — validated against a published number. Diversity: **600/600 distinct games, 0 replays, exactly 300 distinct 16-ply lines = 2.00× reuse**; clustered interval **±24.63 (inflation 1.02×)** agrees with the pentanomial **±24.64** to two decimals — **no inflation to price**. **Two harvest instruments found format-dependent and reported, not patched**: `opening_gate.py` VOIDs any PGN-book match because it keys on the absent `[FEN]` tag (**it VOIDs meter 3 too**), though its duplicate-game half passes; and `cluster_elo.py` never strips `{book}`, so it clusters on **8 plies, not 16** (errs safe, both readings given). Clocks recorded (dormancy N/A at a real clock): worst min-time-left **entry 1.389 s, classic 2.193 s**, thin but zero forfeits — and **`nodes=true` carries nothing, both arms report n=0**; the entry emits **no `info` lines at all**, so its `tl=0.000` is an artifact and its clock is reconstructed — which is also why **adjudication=none was right**, an adjudicator would have read `score cp` from classic only. **Against the registered band [+120, +200]: point estimate BELOW, interval overlaps on [+120, +132.81]. Against Correction 2's pre-result expectation +127.05 ± 52.38: −18.88 ± 57.89, z = 0.64 — CONSISTENT.** The band was centred on the wrong commit and the correction that fixed it was filed before the games finished; the band's lower edge landing inside the interval is **luck, as Correction 2 said in advance it would be called**. **Goalpost delta: −92.07 ± 45.58, z = 3.96 — real, not noise**, but it contains entry Design B (+23, projected), classic's pool (−96.19, measured at this TC), #217's level respelling, classic's unpriced search work **and** the TC move; the BRIDGE cell removes the TC term. **Progress toward +400: 27.0%** (upper bound 33.2%), down from 50% — **~292 Elo remain**, because classic got stronger, not because the entry got weaker. **Where the rest lives, honestly: mostly nowhere yet.** Entry side, measured and in budget, sums to ≈ 0 — #225 kptap's +56.07 was a fixed-node screen whose timed confirmations read **+16.23 (n=300)** then **+0.58 [−21.25, +22.41] (n=600, deciding)**; taper arms −10.43 ± 37.23 / +27.85 ± 34.32 neither clear zero and both delete a landed +21.31; **`tapp` is built, gated and never played** — the one untested upside; speed converts at **1.28 ± 0.63 Elo/%nps** but 292 needs **≈3.3×** and the cheap wins are spent. Closed with numbers: labels, distribution, capacity arm, mutable board, `er40` depth, the #205 port, the TT family. Classic keeps moving away: #232 **+21.6 ± 19.0** (screen only), #236/#241 **~+6**, plus unbounded tuner risk. **And screening Elo is not decision Elo — fixed-node has now read high twice (kptap +56→+0.58, #221 +26.1→+10.77).** **METER, NOT PROMOTION: no branch fires** |
 | 2026-08-18 | **AMENDMENT 2 to the BOOK LINE-FIT registration: Phase 2 moves to the C TWINS at 3+0.1 — the bar drops to +19.4 Elo, and the ENTRY TWIN DOES NOT EXIST** | Per Thomas's standing rule (*always use the c-twins when tuning and testing; they run at 3+0.1*), and **still legal: no Phase-2 game has been played**. Venue: `sunfish_c` @ current master (`169b991897eee39d…`) + `tables_classic.txt` (`d09fc445930a0e4b…`), **3+0.1**, **N=2000/cell** (was 600). **Amendment 1's dealt-openings design survives unchanged** — it never depended on the arm form, which is why swapping arms costs nothing — its packed arms are **superseded back to twins**, and its excluded-components list (**clock savings**, **in-book-reply dynamics**) **carries over verbatim**. **Bar re-derived BEFORE game 1**: SD(game) ≈ 0.45 → SE(A−B) = √2·0.45/√N, so 600 → ±35.4 Elo, 1500 → ±22.4, **2000 → ±19.4 (REGISTERED)**, 3000 → ±15.8. Design effect assumed 1 and **measured, not assumed away**: `book_v1` concentrates mass only at the ROOT, below which `book_wide`'s thousands of distinct 15-ply lines make whole-line repeats rare — root repetition is **the treatment, not a nuisance cluster** — and the bar is **restated at √D × 19.4 if D > 1**. Where the saving comes from, since the obvious answer is wrong: at a TIMED control wall time per game is set by the TC, not engine speed, so 6000 games at ~14 s is **≈2.9 h at conc 8** against ~11 h for 1800 at 30+1; what the twins buy is that they can **survive** 3+0.1 at all, where `tmbudget` measured **110 of 120 games flagged** for a pypy TM spelling. **THE ENTRY TWIN DOES NOT EXIST AND IS NOT A TABLE DUMP.** Every `tables_*.txt` on the box reduces to one non-empty sha. The entry's *eval* does fit the ctwin format (plain `pst` + `K_MID`/`K_END`), but the twin's **search is classic's** and the entry's is not — `bound()` 97 vs **76** code-lines, `search()` 64 vs **129**, `value()` 13 vs **17**, `NULL_MARGIN` −200 vs **absent**. So `sunfish_c` + entry tables is **classic's search wearing the entry's eval: a third engine nobody has measured**, and labelling it "entry" would be a number against an unvalidated arm presented as the deployed artifact. A real entry twin is a fresh C transcription plus a fresh node-identity difftest — ctwin's whole fidelity contract, a project, not a step. **Registered instead**: an all-C knob-diverse field (`weakT` at `SF_EVAL_ROUGHNESS=200`, already characterised **+70.44 ± 75.27**, plus one further knob arm named at launch). **Both cells face the same field so composition cancels in A−B to first order** — the field buys generalisation, not power on the contrast — therefore **the entry twin is an UPGRADE, not a precondition**, and saying so in advance is what stops adding it later from reading as a moved goalpost. **Three surrogate assumptions registered**: (a) the twins' TM ports lag master's budget form — symmetric across cells, so A−B/A−C are unaffected but **absolute cell scores may not be quoted as deployment strength**; (b) **the subject is a surrogate too, not just its clock** — the book is deployed in front of **pypy at 30+1** and this measures a **C twin at 3+0.1**, which searches far deeper, and book value can be depth-dependent, **the largest single caveat on Phase 2**; (c) Amendment 1's *zero forfeit = VOID* was written for 30+1 and is the **wrong rule** at 3+0.1 — replaced by per-cell/per-arm forfeit rates, **VOID above 2%**, and a **between-cell forfeit-rate difference reported as a CONFOUND** because sharper distributions buy flag exposure at a TC the deployment does not use. **Phase 2 remains NOT AUTHORISED TO RUN — the Phase-1 cell table decides first** |
@@ -338,6 +339,148 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-18 — PRE-REGISTRATION: the `tapp` SCREEN — the taper family's last unplayed arm, and a correction to the premise it was dispatched on
+
+Registered before game 1. `tapp` is the arm the meter-4 verdict named as *"the
+one entry-side item with plausible untested upside"*, and the eval-structure
+lane's own `e7e0e1e` called *"the first arm the next taper screen should
+carry"*. It is now carried.
+
+### CORRECTION TO THE DISPATCH'S PREMISE, first, because it changes what was done
+
+The task arrived as: *"do NOT rebuild, use the gated artifact; verify its sha
+against its build record."* **Neither object exists.**
+
+- **There is no `tapp` artifact.** `e68f82e` — the commit that created `tapp` —
+  changes exactly one file, `tools/build/build_taper_arms.py`, by 22 lines. No
+  `.py` arm and no `.packed` was ever committed, and a search of the bench box
+  finds none: `evalstruct-20260817/bin/` holds `e_base/e_kptap/e_ktap/e_tap/
+  e_tapk` and two packed files, **no `tapp`**.
+- **No sha was ever recorded for it.** `e68f82e` records a size (3726 B) and two
+  gates; the byte table in `e7e0e1e` records size and spare. There is no sha256
+  for `tapp` anywhere in this ledger or the eval-struct lane's.
+
+So `tapp` had to be **produced**, and the honest way to do that without
+inheriting "rebuilt into a different object" is the standard this lane already
+uses: **reproduce it from its deterministic generator at its own pin, and prove
+the generator by rebuilding the arms that actually played.**
+
+| check | result |
+|---|---|
+| generator | `build_taper_arms.py` @ **`e68f82e`**, `taper_fit.json` arm `constrained`, DSTEP 16 — all committed |
+| rebuilt `e_tap.py` | `b1c1c12e89b5a30b…` — **bit-identical to the box's `e_tap.py`, the file that played the 900-game screen** |
+| rebuilt `e_tapk.py` | `4de9b628db684a07…` — **bit-identical to the box's `e_tapk.py`** |
+| ⇒ generator | **deterministic and provenance-closed**, so the `e_tapp.py` it emits in the same run is the object `e68f82e` gated |
+| **`e_tapp.py`** | **`56329a205718e339…`** → packs to **3726 B**, `43a45b9c980cbee1…` |
+| size check | **3726 B — reproduces the recorded 3726 exactly** (as do `tap` 3722 and `tapk` 3711) |
+| base at this pin | packs to **3410 B `bf30904dfdf5674d…`** — **the very artifact meter 4 measured** |
+
+**The box's `e_base.py` and `e_kptap.py` are reused as-is** (not regenerated) and
+were verified to pack to **3410 B `bf30904d…`** and **3463 B `5d01f499…`**
+respectively, so the anchor arm in this screen is bit-identical to the meter-4
+entry.
+
+### GATES — run fresh on `tapp`, because the recorded ones were partial
+
+`e68f82e` recorded only the incremental invariant and mate-conversion @100 ms.
+The rest of the battery had never been run on this arm. All of it was run now,
+before any game:
+
+| gate | base | `tap` | **`tapp`** | verdict |
+|---|---|---|---|---|
+| byte ceiling | 3410 B | 3722 B | **3726 B, 370 spare** | **PASS**, under 4096 |
+| mate-conversion @ **500 ms** (the standard gate) | 8/8 | — | **8/8** | **PASS** |
+| mate-conversion @ **100 ms** (tight diagnostic) | 7/8, `kqk-approach` fails | 7/8, `kqk-mid` fails | **7/8, `kqk-mid` fails** | **level with base on count** — reproduces `e68f82e` exactly |
+| mate1 @ 8 ms | 7/8 | 7/8 | **7/8** | **PASS**, level |
+| legality @ 20,000 nodes | — | — | **130 positions, 0 no-move, 0 illegal** | **PASS** |
+| first-yield | — | — | **worst 582 / 2048, 0 over budget** | **PASS** |
+| packed standalone, empty dir, `SF_*` unset | — | — | **3/3 handshake, `bestmove d7d5`, zero files left** | **PASS** |
+
+**The battery passes and `tapp` is not disqualified** — but two things are
+recorded against it rather than smoothed over:
+
+1. **A regression in KIND at 100 ms.** The count ties base at 7/8, but the
+   *position* moves: base fails `kqk-approach` (18-move budget, the hard march)
+   while `tapp` fails **`kqk-mid`** (12-move budget, the easier one) and fixes
+   `kqk-approach`. Trading a hard failure for an easy one is not neutral.
+2. **`tapp` converts more slowly even where it passes.** At 500 ms: `krk-mid`
+   **13 moves vs base's 8**, `kqk-mid` **8 vs 6**, `krk-approach` 11 vs 10.
+
+**One instrument note:** the eval-struct table records `tap` at **6/8** on
+mate1 @ 8 ms; re-run here it is **7/8**, matching base. An 8 ms budget is
+machine- and load-dependent, so that row does not travel between venues. Recorded
+so the discrepancy is not read as a change in the arm.
+
+### Form
+
+| | |
+|---|---|
+| arms | **3-arm round robin**: `base` (3410 B), `kptap` (3463 B), **`tapp` (3726 B)** — one RR with a baseline anchor, per this lane's shared-tournament rule |
+| why `kptap` is in it | `e7e0e1e` registered it: `tapp` must be carried *"against `kptap`, not the old base"*, because `kptap` is the same ramp for **53 B** against `tapp`'s **316 B** |
+| instrument | **fixed 20,000 nodes** — all three arms are ours and search identically; the change is a table the root picks, so fixed nodes compares **evaluation only** and is load-immune |
+| arms run as | **SOURCES** under pypy3 with `PYTHONPATH` to the driver. **Mandatory**: a packed artifact contains no `nodes` token and silently ignores `go nodes` (AMENDMENT 1's sibling fact) — a fixed-node cell and a packed arm are mutually exclusive |
+| N | **rounds 151 → 302 games per pairing, 906 total** |
+| **coprimality** | **PASS**: 3 pairings, `gcd(151, 3) = 1`, **151 distinct openings per pairing, 2.00× reuse**. The lane's old default of `-rounds 150` **FAILS** this preflight at gcd 3 / 6× reuse — the exact defect `0e993b7` corrected. It is not repeated |
+| book | `book3k.pgn`, order=random, **srand 20260892** (fresh) |
+| adjudication | draw + resign, the lane's standard — legitimate here because **all three arms are sources on the same driver and all emit `score cp`**, so it is symmetric |
+| venue | conc **8**, **nice 10** |
+| tripwires | **any illegal move = STOP**; any `(none)` = STOP; **count gate** — the read is refused unless every pairing played its full 302 |
+
+**One declared deviation from the dispatch: `nice 10`, not `nice 5`.** This cell
+is fixed-node and reads no clock, so its own validity is load-immune and nice
+costs it nothing; the owner's tuner campaigns on this box *are* timed, and the
+lane's proven script (`run_ktap_conf.sh`) uses nice 10 for exactly this reason.
+The deviation strictly reduces risk to another lane's live matches at zero cost
+to this measurement. Concurrency 8 is as dispatched.
+
+### EXPECTATION — registered honestly, and it is NULL
+
+The dispatch asked for this to be pre-registered from the family's record, so
+here is the arithmetic rather than a hope. `tapp` is `tap` with `pend` kept:
+
+| term | value | basis |
+|---|---|---|
+| `tap` vs base | **−10.43 ± 37.23** | measured, n=300, fixed node |
+| `pend`, which `tap` deletes and `tapp` restores | **+21.31 ± 15.73** | measured, landed |
+| ⇒ **`tapp` vs base** | **≈ +10.9 ± 40.4** | an interval **dominated by zero** |
+
+And against the arm it must actually beat: **`kptap` was +56.07 fixed-node for
+53 bytes.** `tapp` would have to clear that at **six times the byte cost**.
+
+> **REGISTERED EXPECTATION: NULL.** `tapp` does not clear zero against base, and
+> loses to `kptap`.
+
+Two independent reasons this is the honest prior, both from this lane's own
+record:
+
+- **Fitted eval has now fitted better and played no better five times.** The
+  taper's own selector read `tap` **+48.96** and `tapk` **+41.89**; the
+  confirmation returned **−10.43** and **+27.85**. Screens in this family read
+  high.
+- **The fixed-node→timed discipline has fired twice.** `kptap` went
+  **+56.07 (fixed node) → +16.23 (n=300 timed) → +0.58 [−21.25, +22.41]
+  (n=600, deciding)**; #221 went **+26.1 → +10.77**. *Mechanism real, clock
+  indifferent* is the expected failure mode, and it applies here.
+
+### BRANCHES, fixed before game 1
+
+| branch | condition | action |
+|---|---|---|
+| **ADVANCE** | 95% pentanomial **LB > 0 vs base** **AND** `tapp` point estimate ≥ `kptap` | **one** timed confirmation, Python 30+1, fixed N, registered separately. **Nothing lands on the screen alone** |
+| **NULL** | anything else — LB ≤ 0, or `tapp` below `kptap` | **direction CLOSED.** The fitted second table set is retired with a number, and the taper family's last unplayed arm stops being an open question |
+
+**No promotion can fire here.** A fixed-node screen is a screen: it selects
+what earns a clock, and this lane's record is explicit that screening Elo is not
+decision Elo. Even ADVANCE buys only a match, never a landing.
+
+**And a landing cost to state now, so it cannot be discovered later as a
+surprise:** `tapp` is built on the **3410 B** base, but the entry has since moved
+to **3440 B** (`1c4468c`, `go nodes`). A landing would require re-deriving and
+re-gating `tapp` on the new base at roughly **3756 B (~340 spare)** — the screen
+measures the arm as gated, not the arm that would ship.
 
 ---
 
