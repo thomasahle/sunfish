@@ -19737,3 +19737,88 @@ now reversed between tournaments twice.
 registration's wording with nine mechanisms tested and zero conversions, and
 the finding of record is the chain rather than any arm: **four statistics have
 predicted confidently and been contradicted or unsupported by play.**
+
+---
+
+# ARM 10 — GAMES: NULL, as pre-registered. Closure HELD for one control.
+
+`AB_rr_rank.txt`, 300 games, **all gates passed** (300/300, gcd(25,6)=1,
+0 illegal, 0 forfeit, 0 replay, dormancy clean, 300 distinct openings).
+
+**`arm10` vs `entryd0` = 34.00%** (W15 / L31 / D4). Against the `capn5`
+contrast: **+0.20 SE** in the same tournament, **+0.55 SE** combined
+(29.74% ± 3.3, n=232). **Inside the ±3.7 null band. The pre-registered
+expectation held.**
+
+## The intra-family anomaly, with its sign contradiction stated
+
+`arm10` was simultaneously the **best** net against the anchor (34.00%) and
+the **weakest** intra-family (30% / 37% at −2.8 / −1.8 SE) — the largest
+intra-family gap the program has produced. **These two readings contradict
+each other in sign**, and the honest statement is that they cannot both be
+describing a real strength difference. This is the third time an intra-family
+ordering has disagreed with itself or reversed between tournaments, and it is
+recorded as *another instance of the intra-family band being unresolvable*,
+not as evidence that `arm10` is 15 points worse than anything. **Nobody
+should quote "15 points worse" from this table.**
+
+## The closure is HELD, and the control it is held for could not be run clean
+
+The ranking loss is invariant to shift **and scale**, so nothing in training
+ever pinned ARM 10's centipawn magnitude — and the engine's futility, QS and
+null margins are all cp-denominated. A too-loud eval searches with margins
+effectively tighter than they were tuned for: a concrete mechanism for "orders
+well at the root, searches badly in the tree".
+
+**Sizing it properly first — the effect is ~3× smaller than the residual
+figure implies.** On the pool10m val distribution (60k positions):
+
+| net | TOTAL mean\|cp\| | residual mean\|cp\| | residual share |
+|---|---|---|---|
+| material only | 126.88 | — | — |
+| **arm10** | **155.51** | **80.02** | 51% |
+| capn5 | 138.57 | 56.96 | 41% |
+| lr4x | 137.86 | 58.96 | 43% |
+| arm9 | 130.44 | 47.55 | 36% |
+
+The **residual** is 1.40× capn5 and 1.68× arm9 — but the engine's margins act
+on the **total score the search returns**, where the ratio is **1.12–1.19×**.
+The mechanism is real and about a third as large as the residual number
+suggests.
+
+**And the clean control does not exist.** Only the residual is scalable; the
+material base is the engine's own fixed term. Halving the residual therefore
+**doubles material's effective weight against the net** and changes real
+orderings. Measured, twice:
+
+| attempt | what changed | top-move flips |
+|---|---|---|
+| arbitrary gain rescale to a target magnitude | gains re-rounded | **3.20%** |
+| **one shift step** (v→v/2 ⇒ identical gains, identical bias digits, shift 4→5) | **only the shift digit** | **3.12%** |
+
+**My own guard refused both**, correctly: "not the same net at a different
+volume". The obvious explanation was checked and **refuted** — clamp
+saturation is **0.00%** for every net, so the flips are the material
+reweighting, not clipping.
+
+So the thing being run is **not "arm10, quieter"**. It is **"arm10 with the
+learned term at half weight against material"**, 96.9% of top moves
+unchanged, and it is labelled that way rather than sold as a pure volume
+control. It still tests the loudness hypothesis directly, which is why it is
+worth 300 games.
+
+**Registered:** `entryd0` + `arm10q` + `arm10` + `capn5` (sixth reading),
+300 games, rounds 25, 20k nodes, the four hard-refusal gates, score% only.
+Bar unchanged: **arm10q must beat the entry contrast**; intra-family cells
+are not a result. **Expectation: null again**, given 1.12–1.19×. If it
+converts, the loudness story was right and the first null was an export
+artifact.
+
+## Protocol adopted: cotenancy on a busy box
+
+Fixed nodes protect **our** numbers, not the neighbours' **clocks** — the
+owner's games run at 3+0.1 and are exactly what a greedy run would damage. The
+standard for fixed-node runs from here: **concurrency 8 at nice 5, plus an
+in-window forfeit check on the owner's games** (246 verified with zero
+forfeits). Load-immunity is not a licence to crowd; it is a licence to run at
+all.
