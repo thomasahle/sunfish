@@ -23427,3 +23427,152 @@ trainer, `make_factor_proto.py` / `factor_check.py` / `build_factor_entry.py`
 in `packed/`, the container price list, the width curve, the corrected
 `nn_cp`-per-node figure, and the cap-sum bound — all of which are about the
 ENGINE and the CONTAINER, and all of which outlive this net.
+
+## THE EMITTER LANDS, AND THE ONE COMPOSED NUMBER WAS WRONG BY 4-5× (2026-08-19)
+
+The portfolio registration named two build blockers and one composed number.
+This closes the first blocker, measures the composed number, and the
+measurement moves a bar rather than confirming one — which is the whole reason
+the registration insisted the number come from `pack.sh`.
+
+### 0. Provenance of the tooling, and which `pack.sh`
+
+`factor/compression` is **merged into `nnue-4k`**, discharging the open
+obligation the registration recorded: the container price list, the
+(rank × width) byte table, the width/nps trio and the `nn_cp`-per-node count
+now live on the branch that cites them. The merge also brings the
+**bytes-literal payload decode** (−22 packed B, code floor re-anchored at
+**3,170 B**) — the floor the registration's price model was already calibrated
+on but could not check.
+
+**Every byte below is `tools/build/pack.sh` at `nnue-4k`**, which carries both
+levers (`--no-hoist-literals` and the shebang strip, verified present before
+pricing). **Master's `pack.sh` has a regression that loses both and prices
+~45 B worse**; a fix is in flight. No number in this section is comparable to
+one taken with master's packer, and nothing here was.
+
+Toolchain validated before it was trusted: `make_factor_proto.py --r 4 --N 32
+--mirror --zeros 0.43` reproduces at **3,676 B** against the factored lane's
+own built **3,677 B**. One byte, different machine, different packer
+invocation. The instrument is sound.
+
+### 1. What was built
+
+`packed/make_factor_proto.py` gains `--buckets B --bucket-kind {pb,kb}`. The
+design decision that makes it cheap, and it is the one the registration
+registered as variant A1:
+
+> **The bucket is a ROOT decision.** `_HALVES` holds B half-tables; `_mkrows`
+> combines a chosen pair into `ROWS`; and the choice is made once per search,
+> in `search()`, **on the line that already rebuilds the position after the
+> `K_MID`/`K_END` swap**. So `Position.move`, the accumulator delta and
+> `nn_cp` are untouched — byte-identical — and the per-move cost of buckets is
+> exactly zero. It is the entry's own tapering mechanism, pointed at a learned
+> table instead of a hand one.
+
+Payload is bucket-major, `((b·12 + p)·nsq + rank·4 + file')`, which is
+`structures.Factored`'s fold index — so the trainer's U rows and the decoder's
+digits are in the same order **by construction, not by agreement**.
+
+**Verified, not assumed.** The `kb` selector demonstrably switches tables
+(own king on row 9 → bucket 0, row 6 → bucket 1) with the two perspectives
+resolving independently, and B=1 with the new scaffolding reproduces the old
+build's play exactly — same node count, same move — because bucket 0's rows
+are the same draw. Then the **artifact-alone battery**, on the PACKED builds
+at 70% zeros, from an empty cwd with `SF_NET`/`PYTHONPATH` unset:
+
+| build | packed | `uciok` | legal moves | `position` honoured |
+|---|---|---|---|---|
+| pb2 | 4,027 B | yes | **5/5** | **yes** |
+| kb2 | 3,997 B | yes | **5/5** | **yes** |
+
+The last column is the check COORDINATION.md says cost another lane 427 games:
+send `position startpos moves g1f3` and require a reply that is not `g1f3`.
+Both artifacts answered with a black move (`a7a5`, `b8a6`), across five lines
+up to five plies deep, every reply legal against an independent generator.
+
+### 2. THE MEASUREMENT: the bucket machinery is 150–185 B, not ~35 B
+
+The registration composed the bucket machinery at "+~35 B at B=2" and flagged
+it as the one number that gated a build. Built and packed:
+
+| build | 43% U zeros | 55% | 65% | 70% | 75% | 80% |
+|---|---|---|---|---|---|---|
+| B=1 factored r=4/N=32/mirror | 3,695 | 3,691 | 3,674 | 3,659 | 3,641 | 3,621 |
+| **pb2** (material phase) | **4,130** | 4,108 | 4,064 | **4,027** | 3,988 | 3,941 |
+| **kb2** (own-king rank band) | **4,095** | 4,070 | **4,033** | **3,997** | 3,954 | 3,911 |
+
+*(B=1 here is 3,695 rather than 3,676: the `_HALVES` scaffolding is emitted at
+every B, and it costs **+19 B** even when there is one bucket. Recorded rather
+than special-cased away.)*
+
+Decomposing at 43% zeros: the bucketed builds add 454 B (pb) and 419 B (kb)
+over the 3,676 B baseline. The 384 extra payload digits account for ~269 B by
+the measured digit curve, leaving **machinery ≈ 185 B (pb) and ≈ 150 B (kb)** —
+**4–5× the composed estimate.** That residual is still a difference of two
+measurements rather than an isolated build, and is labelled as such; the two
+*totals* are pack.sh's alone.
+
+**An inversion worth keeping.** Phase buckets are runtime-cheaper than king
+buckets (0.07% vs 2.16% refresh) and **byte-costlier** (185 vs 150 B): the two
+selectors are exactly the difference, 4,130 − 4,095 = **35 B**, because summing
+phase weights over the board costs more code than two `.index()` calls. The
+registration ranked phase first on price; on *bytes* that ranking is backwards,
+and it is only right on speed.
+
+### 3. Consequence: the byte-conditional bar becomes a MEASURED sparsity target
+
+Against the 4,066 B working limit (4,096 less the 30 B margin):
+
+- **`11_rl_pb2f4n32` and `12_rl_kb2f4n32` (l1 = 5e-4) CANNOT SHIP.** Trained
+  nets in this family land at 39–43% U zeros, where pb2 is 4,130 (64 over) and
+  kb2 is 4,095 (29 over). They remain queued as **val cells** — they measure
+  what the structure buys when bytes are ignored, and they are the paired
+  controls for the l1-high arms — but they are not screen candidates and must
+  not be described as such.
+- **The bar, measured: pb2 needs ≥ ~65% U zeros; kb2 needs ≥ ~62%.**
+- **`16_rl_kb2f4n32_l1hi` is ADDED** to the queue, so the cohort carries a
+  king-bucket arm that can actually be built. `15_rl_pb2f4n32_l1hi` already
+  covered the phase side.
+- If l1 = 2e-3 undershoots, the next lever is `rate_penalty` (`rate`/`rate_T`),
+  which targets a zero fraction directly instead of hoping l1 produces one.
+  Registered now so that reaching for it later is not a new degree of freedom.
+
+This is the second time in two days that a byte prediction came back
+optimistic (the N=6 lane: predicted 25 B over, built 63 B over, and the ~30 B
+"trained compressibility credit" it leaned on measured zero). **The pattern is
+that composed byte numbers in this container are optimistic by 100–150 B**, and
+the standing rule that follows is the one already in force: no arm is called
+affordable on a predicted number.
+
+### 4. The mandatory gate this design now owes
+
+Because the bucket is resolved at the ROOT and frozen for the search, while
+the trainer sees each position's TRUE bucket, every bucketed arm carries a
+**train/deploy mismatch** — the failure mode the `kbbil` collapse is the
+ledger's own example of ("a constraint the loss cannot see is free in val and
+ruinous in play"). The registration named the gate; it is now binding, and
+cheap:
+
+> **Root-freeze agreement gate.** On a held-out position set, evaluate the
+> trained net with (i) each position's true bucket and (ii) the bucket the
+> root would have frozen, and report the eval delta. Ungated, a bucketed arm
+> does not enter the screen. Measured support for it passing: only **2.16% of
+> generated moves** cross a king rank band and **0.07%** cross the phase cut,
+> so the frozen table is wrong on a small minority of lines — but "small" is
+> a prediction and this gate is what turns it into a number.
+
+### 5. Blocker status
+
+**Blocker (i) — the packed emitter — is CLOSED for pricing and OPEN for
+shipping.** `make_factor_proto.py` emits and packs bucketed, *running*
+artifacts, which is what the byte table above rests on. What it does not yet
+do is take a TRAINED payload: `export.py`'s `export_factor` still writes
+factors and no `.payload`, so the splice → `verify_export` bit-exact →
+legality-battery round trip cannot complete until an arm finishes training.
+That is now the single remaining step between the cohort and the screen, and
+it is a small one — the digit order is already fixed by construction and the
+decoder is already proven against the emitter's own factors.
+
+**Blocker (ii) — the composed bucket price — is CLOSED.** It is 150–185 B and
+it changed which arms can ship.
