@@ -18190,3 +18190,131 @@ times so far.
 
 `333_factor_ub_f32` (float, N=32) is still queued behind four other lanes'
 arms and will say whether ternary quantization costs anything at width.
+
+---
+
+## 2026-08-18 — STAGE 2 REGISTERED AND LAUNCHED: `arch: factor` is built, the shared trainer is proved untouched, and two defects fell out — my own units error and a documented-but-missing exporter invariant
+
+Pre-number on the factored arm: the lr probe is running as this is written.
+
+### (0) What `333_factor_ub_f32` says: ternary costs ≥3.1 % at width, and the quantized arms are OPTIMIZATION-limited
+
+The float arm finished. Same corpus, same split, `val-sha a0aa553db6908e91`.
+
+| N=32 arm | best val | trajectory | last2−prev2 |
+|---|---|---|---|
+| ternary (`331`) | 0.0150709 | .01525 .01513 .01513 .01511 .01513 .01507 | −2.4e-5 |
+| **float (`333`)** | **0.0146000** | .01620 .01555 .01514 .01486 .01469 .01460 | **−3.55e-4** |
+
+Float is **3.1 % better** — so ternary quantization costs at least that at
+N=32. But the number to notice is the second column: **the float arm was
+still descending at −3.55e-4 per two epochs, 16σ, fifteen times the ternary
+arm's rate**, so 3.1 % is a floor and its converged gap is larger. Two fields
+differ (`ternary` and `l1`, the latter forced because `l1_pressure` reads
+`model._u`), so this is not a clean isolation and is quoted as a bound.
+
+Read beside the LR REFRAME (`e8e5fb0`: lr=3e-3 was never tuned, 4× absorbs
+4–5× more), the pattern is consistent and it is about **optimisation, not
+capacity**: the arm with no quantization grid moves fifteen times faster on
+the identical data.
+
+### (1) `arch: factor` is built — and the shared trainer is proved unchanged
+
+`LowRankResidual` minus its two mistakes, as specified: **no residual** (U and
+V are the only stored state) and **no ternary clamp on the composite** (the
+integer product is the table, bounded by a certificate instead of clipped).
+Plus `lr_mirror`, a MODEL-side fold of file f onto 7−f so `U` stores 384 rows
+per bucket — features, `embedding_bag` and every downstream shape untouched.
+
+Five files patched, every hunk additive and asserted-unique, backups in
+`factor_smoke/pre_factor_backup/`. **The control matters more than the
+feature**: three lanes are queueing arms against this trainer right now, so
+`smoke_ctl_residual` (`arch: residual`, unchanged config) was run before and
+after and reproduces **bit-identically** — val 0.01366, gains
+`[67, 67, 60, 89, 70, 64, 70, 67, 62, 61, 62, 66, 73, 61, 70, 61]`, same zeros,
+same bias digits.
+
+New certificate `certify_factor`: the composite is unclipped, so what must
+hold is the **offset-binary lane** itself, `men·rank·vmax + 45 ≤ 2^14−1`. At
+r=8, vmax=44, N=32 that is **11,309 against 16,383 — certified, margin 5,074**.
+
+### (2) MY OWN DEFECT, caught by the smoke before it reached a real corpus
+
+The first build trained a net whose val was **0.0486 against a zero-anchor of
+0.0262** — worse than predicting nothing, with 7.9 % of positions clipped. The
+cause was a units error, and it is worth naming because it is the same class
+the ml2 verdict is about. The model's convention is that a **saturated lane is
+1.0** and the lane's cp scale lives in `v_k`, so the effective table is
+
+    E[f,k] = (U @ V_int)[f,k] / (32 · g_k)
+
+— the payload digit `V_int = round(Vn · g_k)` sits on a **per-lane** grid,
+exactly as `gvb()` already stores the bias as `bd = round(b·32·g)`. I had
+written V directly in engine units, making the table ~70× too large for an
+activation that clips at 1. Fixed by holding V normalized and snapping it
+against `lane_gains()` inside forward. Re-smoked: val 0.01426, `|W|max` 4–5,
+**decoder rebuilds the trained table EXACTLY (24,576 values)**, mirror active
+at 68.7 % U-zeros.
+
+The smoke also exposed the **dead zone** this arch has and the free-table arch
+does not: `Vn` must reach `0.5/g_k` before a digit moves at all, and three
+epochs on 19k positions reached only `|W|max 5` against the shipped nets' ~70.
+That is precisely why the lr probe below runs one rung higher than the reframe
+measured.
+
+### (3) A DOCUMENTED-BUT-MISSING INVARIANT in the shared exporter, and every wide net violates it
+
+`export.py`'s own header has said since it was written: "*G_k = C·|v_k| folded
+into the rows, **sum(G) ≤ 65534 asserted***". **The assert does not exist on
+the replnet path.** `nn_cp` sums lanes as `y % 2^half % 65535`, which is the
+true sum only while `Σ_k y_k ≤ 65534`, so the worst case `Σ_k G_k` must fit or
+a **saturating position wraps and the eval is garbage**. Measured on the
+exported checkpoints:
+
+| net | Σ G_k | limit | mean gain | ceiling at this N |
+|---|---|---|---|---|
+| `220_cap_n5b_s0` (N=5, shipped shape) | 11,424 | 65,534 | 71.4 | 409 — ok |
+| `331_factor_ub_n32` | **71,808** | 65,534 | 70.1 | **63 — OVER by 6,274** |
+| `329_factor_ub_n64` | **141,984** | 65,534 | 69.3 | **31 — OVER by 76,450** |
+
+Added as a **loud printed WARNING, deliberately not a refusal**: the violation
+does not touch any val number (the trainer's forward has no fold), and turning
+it into a hard failure inside a trainer three lanes are using would void
+running work. The refusal belongs at pack time, where an artifact is built.
+**This is also a real resolution cost of width** that none of this lane's
+earlier pricing had: one more unit of export shift fixes it and halves every
+gain, so the per-lane cp ceiling falls as ~1/N. Width is byte-cheap and
+speed-cheap; it is **not** resolution-free.
+
+### (4) THE ARM, and both instruments' roles fixed before either runs
+
+**Shape: mirrored, r=8, N=32** — chosen by this lane's own measured table
+(4,022 B at 70 % zeros with 74 spare) and the N=64 spectrum (mirrored r=8
+retains 0.693 of the free table's energy against unmirrored r=4's 0.626).
+
+**LR probe, selection registered before any number:** `350_factor_r8n32m_lr{1x,4x,16x}`
+at lr **3e-3 / 1.2e-2 / 4.8e-2**, full 6 epochs on `pool10m`, seed 0, otherwise
+identical. Best val at 6 epochs wins. **If the winner is the TOP rung the
+ladder does not bracket and one more rung is required before the arm is
+called.** Run sequentially, one concurrent trainer — the same footprint as one
+queue slot, and no other lane's place in the shared queue is taken.
+
+**The two instruments, per the kptap lesson (+56 fixed / +16 / +0.58 timed on
+a zero-cost mechanism):**
+
+- **The fixed-node screen decides CONTINUE, never PROMOTE.** 50 games vs
+  `pst_entry @ d0a6e60` under the hardened harness — pinned clock, dormancy
+  gate, count gates, fresh srand, zero-illegal voids, the mandatory coprimality
+  pre-flight and `opening_gate.py`, top-pick only. It answers one question:
+  is the eval term positive at all?
+- **Only the timed match decides PROMOTE**, and it must be run because this
+  family's whole deficit is an eval deficit paid against a ~50 % nps tax.
+- The comparator is the **ENTRY**, which is the only **resolved** difference
+  available (~19–24 points); per the sibling-gate withdrawal (`b8c20d1`),
+  intra-family ordering is descriptive and calibrates nothing.
+
+**Nothing is promoted on val in any branch.** The factored arm's val will be
+compared to the free-table upper bound at the same width (`331`, 0.0150709)
+to answer the one question the whole lane exists for — how much of the width
+gain survives a rank-8 constraint — and that comparison is a screen that can
+only refuse work, never earn a game.
