@@ -52,9 +52,9 @@ in the git history of this file.
 - **Generator laziness.** `bound()`'s move phases run in Python's exact
   order: the killer is read before null search, capture substitution scans
   the board directly, king captures resolve before recursion, the sorted
-  list is never built if the killer cuts, and the sub-window tail's single
-  maximum cap is emitted AFTER the sorted prefix, so a prefix cutoff skips
-  it on both sides.
+  list is never built if the killer cuts, and a sub-window cap answers for
+  its move (and, in the twin's counted form, for the whole sorted tail at
+  once) without a child search, so a prefix cutoff skips it on both sides.
 - **Node counting.** `nodes` increments at exactly one site: `bound()`
   entry, including driver probes and TT-hit returns.
 - **Module state.** `pst["K"]` swaps to the endgame table per search and
