@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-19 | **HCAL VERDICT (N=24/cell) + CORRECTION: the clock IS a dial, at ~190 Elo a halving** | 168/168, **zero illegal**, 24 forfeits **all `pyg4kviii`**. **Correction (form (a)) to this lane's own interim:** "a ~420-Elo collapse across two halvings, with nothing stable in between" is WRONG. The four points are a straight steep line — **207.1 Elo per halving** from 1/15→1/60 and **171.7** from 1/60→1/240, **189.4 overall** — in line with the 130-185/doubling the handicap research documents for the low-node regime. 4ku crosses classic at ~**1/170** of the anchor's clock (~5-10 ms a move). A second registered expectation also failed, in our favour: the short-clock rungs **forfeited nothing**, 0 in 24 games apiece. **The retire decision STANDS on a different, better reason**: a load-invariant instrument exists and this is not it (no evidence its Elo survives a venue change; a node budget needs no such validation); ~190 Elo a halving is coarser than the whole band, where SF node steps give 70-90; and nobody has published "4ku at 1/170 clock". Placements: `4ku_t2` **+668.84 ± 160.89**, `4ku_t05` **+254.73 ± 152.76**, `ice4_t05` **+231.91 ± 130.59**, `4ku_t0125` **−88.74 ± 93.40**, **molly +470.44 ± 247.05**, **pygone HEAD −104.37 ± 170.67** — so via meter 4 the entry sits ≈**212 above pygone HEAD** (the one in-band 4k opponent, and the only other Python 4k entrant ever) and ≈**362 below molly**. molly has NOT closed: −372.25 ± 90.90 (n=100, Aug 11) vs −470.44 ± 247.05 today, consistent within intervals despite classic's +96, and n=24 cannot resolve it. **GRR-1 live from 22:42Z**, all ten arms confirmed. |
 | 2026-08-19 | **SPEEDOMETER: the entry is 2.3–2.5× faster than classic — the speed hypothesis SURVIVES a number, its point prediction does not, and the +99/−108 anomaly stops being anomalous** | The measurement registered in `55f21e9`: no games, no Elo, no gate. Same box, same pypy3.11, ten positions, `go movetime 3000`, arms interleaved per position. **entry/classic nps: median 2.45, mean 2.30, range 1.57–3.49 (n=10)**. **Split verdict**: the hypothesis registered **2.5–3×** and the median lands **just below** it, so the harness's own binary label ("NOT CONSISTENT") is the wrong reading and is corrected here — an interval of 1.57–3.49 around 2.45 does not refute 2.5–3×, it **prices it slightly high**. The load-bearing claim — the entry is *roughly two and a half times faster* — **holds**. **The decomposition then closes**: at ~1.28 Elo/%nps, 2.45× is worth **+186** and 2.30× is worth **+166**; subtracting this lane's own **measured** −99.4 per-node deficit predicts a timed gap of **+86 to +67** against METER 4's **measured +108.17 ± 24.64**. Two independent measurements — a fixed-node tournament and a movetime speedometer — combined through a third lane's constant, landing same sign, same order. **The anomaly is no longer anomalous**: classic is stronger per node, the entry is much faster, and at a real clock speed wins by more than the per-node deficit loses. **Consequence for the programme, unchanged from the registration: the moat is SPEED, and any NNUE must add eval strength WITHOUT SPENDING IT** — a net buying +50 Elo of eval at half the nps is a **net loss of ~30–40 Elo**, the opposite of the eval axis's implicit assumption. **What it is NOT**: ten positions, one movetime, one box; the spread is wide enough that another position set moves the median several tenths, so it says "about 2.3–2.5×", not 2.45. Read off the **byte-verified checkouts**, not the packed artifacts (same search; labelled anyway), and the 1.28 Elo/%nps constant is **another lane's, carried unverified** — if it is wrong the closure is wrong with it. **Gates nothing, promotes nothing** |
 | 2026-08-19 | **PROPOSAL FOR SIGN-OFF: METER 5 as a gauntlet** | **The +400 goal stays defined against classic** — a gauntlet measures where the entry IS, it does not move where the entry is GOING, and re-referencing the fifth point of a four-point series (+244.47 → +200.24 → +108.17) would destroy the series and the goal with it. Proposed shape: a **FROZEN 8-engine field** (pygone HEAD, molly, 4ku, sungorus 1.4, bbc11, sf512/1024/2048) whose INTERNAL cross-table is measured **once** by GRR-1 and carried forward as prior games, so each meter cycle plays only the rows that moved — **entry×classic at N=300** (the goal axis, same instrument as meters 1-4) plus **entry×field and classic×field at N=40**, 940 games ≈ 3.5 h. **Four numbers, never averaged**: M5-GOAL (entry−classic, the headline of the goal), M5-FIELD (pooled vs the frozen field, quoted only with its composition), **M5-NODE** (entry ≈ SF15 at N nodes/move — recommended for long-run tracking, the only figure reproducible on other hardware because a node budget is not a wall clock), and M5-CCRL (BT re-anchored on the two CCRL engines, carrying the 30+1-vs-2′+1″ and pool-dependence caveats). Two uncomfortable expectations registered in advance: the field may place us **below sf512** (the Lichess bot reads blitz **1756**; sunfish's own TCEC 4k entries were rated **2193** and **1903**, last both times), and the **0-180** record against the ice4/4ku/c4ke class is a distance to report, not a gap to promise. **AWAITING THOMAS** on composition, shares, and which number is the field headline; until then meter 5 runs in the meter-4 shape. |
 | 2026-08-19 | **HCAL INTERIM + PRE-REGISTRATION: `GRR-1`, the calibration round-robin** | **The clock is not a dial** (n=14/cell): 4ku is **+572.55 ± 209.65** at 1/15 of the anchor's clock, **+368.33 ± 300.85** at 1/60, and **−49.98 ± 120.61** at 1/240 — a ~420-Elo collapse across two halvings with nothing stable between, the far side below Move Overhead and scheduler jitter. Clock-handicap arms **RETIRED, not calibrated**. `nodestime` tried on the researcher's recommendation and **measured unusable**: the harness still enforces the wall clock, so realised spend collapsed to **20 / 43 nodes** a move against a probe's 530 / 1323; fixed `go nodes` holds **512 / 2049 exactly** and is what the published anchors are measured on. **All 14 HCAL forfeits are `pyg4kviii` at the FULL clock** — the 4kVIII artifact cannot manage 30+1, its row is a TM failure not a strength, and it is dropped; the sub-second cells forfeited **zero**. **The reader gate was FAILING OPEN** — `[Termination]` is written after `[Result]`, so it reported `forfeits: none` over ten of them and would equally have hidden an illegal move; fixed and verified against the known answer. **pygone HEAD is the peer**: −120.41 ± 334.55 (n=12) below classic, nine months past the artifact we beat by ≈+576. `GRR-1` registered: **10 engines, 45 pairings, fixed N=20, 900 games**, three independent scales (TCEC via pygone@1thread, CCRL Blitz via sungorus 2241 + bbc11 2019 at full strength, fixed-node via SF15 at 512/1024/2048) reported **separately, never pooled**. Manifest lands as `nnue_4k/GAUNTLET_FIELD.md`; **molly ships with no LICENSE at all**. Gate sweep **15/15 PASS**. Not meter 5 — that is a proposal for sign-off. |
@@ -346,6 +347,106 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-19 — HCAL VERDICT at the registered N=24, and a CORRECTION: the clock IS a dial, at ~190 Elo a halving. The reason to retire it is different from the one I registered
+
+168 of 168 games. **Zero illegal moves.** 24 time forfeits, **all 24
+`pyg4kviii`**, none anywhere else. Anchor `classic` at 30+1.
+
+| cell | opponent clock | vs anchor | classic's score | **Elo (opponent vs classic)** |
+|---|---|---|---|---|
+| `4ku_t2` | 2+0.02 | 1/15 | 2.08% | **+668.84 ± 160.89** |
+| `4ku_t05` | 0.5+0.005 | 1/60 | 18.75% | **+254.73 ± 152.76** |
+| `ice4_t05` | 0.5+0.005 | 1/60 | 20.83% | **+231.91 ± 130.59** |
+| `4ku_t0125` | 0.125+0.00125 | 1/240 | 62.50% | **−88.74 ± 93.40** |
+| `molly` | 30+1 | — | 6.25% | **+470.44 ± 247.05** |
+| `pygone` HEAD | 30+1 | — | 64.58% | **−104.37 ± 170.67** |
+| `pyg4kviii` | 30+1 | — | 100.00% | **VOID** — 24/24 lost on time |
+
+Pooled, classic vs this field: **−75.62 ± 62.40** (84 pairs, 168 games).
+
+### CORRECTION (form (a)) to the interim entry dated 2026-08-19
+
+The interim reading, at **n=14 per cell**, said verbatim:
+
+> **THE CLOCK IS NOT A DIAL. Registered conclusion, met.** … That is a
+> **~420-Elo collapse across two halvings**, with nothing stable in between
+
+**That characterisation is wrong and the full N shows it.** The four points do
+not describe a collapse; they describe a **straight, steep line**:
+
+| interval | halvings of the clock | Δ Elo | **per halving** |
+|---|---|---|---|
+| 1/15 → 1/60 | 2 | 414.11 | **207.1** |
+| 1/60 → 1/240 | 2 | 343.47 | **171.7** |
+| 1/15 → 1/240 | 4 | 757.58 | **189.4** |
+
+~190 Elo per halving, consistent across the whole range — far steeper than the
+folklore 50–70, and squarely in line with the 130–185 per doubling the handicap
+research documents for the low-node regime. **There is no cliff and nothing
+"unstable in between".** Interpolating, 4ku crosses classic's level at about
+**1/170 of the anchor's clock** — roughly **0.18 s a game, 5–10 ms a move**.
+
+A second registered expectation also failed, and in our favour: the
+registration said *"forfeits are DATA here, because the short-clock rungs are
+being tested for exactly that."* **The short-clock rungs forfeited nothing** —
+zero in 24 games apiece, at budgets of a few milliseconds a move, on a box
+carrying ~37 of 96 cores of foreign load.
+
+### The decision stands. The reason is now a different, better one.
+
+**Retired anyway** — but not because the dial does not exist:
+
+1. **A load-invariant instrument exists and this one is not it.** The
+   band-reaching rung is at ~5–10 ms a move. Nothing forfeited *tonight, at
+   tonight's load*, and I have no evidence its Elo is load-invariant — a
+   quantity I would have to re-validate at every venue. Fixed `go nodes` needs
+   no such validation, because a node budget is not a wall clock.
+2. **The resolution is coarse.** At ~190 Elo a halving, one step of the only
+   available control moves the opponent by most of the band. The Stockfish
+   node ladder gives 70–90 Elo rungs at 1.25× node steps.
+3. **It is off the published scales.** Nobody has measured "4ku at 1/170
+   clock". Everyone has measured Stockfish at 512 / 1024 / 2048 nodes.
+
+So the ladder is Stockfish-at-fixed-nodes, as registered — and it now rests on
+a measurement of what the alternative actually does, rather than on a
+prediction that the alternative would fall apart.
+
+### The placements that matter, converted to the entry
+
+Using meter 4's **+108.17 ± 24.64** (entry over classic, N=600, same TC), and
+carrying HCAL's own n=24 intervals:
+
+| opponent | vs classic (n=24) | **implied vs entry** | in the ±300 band? |
+|---|---|---|---|
+| `molly` | +470.44 ± 247.05 | ≈ **+362** | just outside, top edge |
+| `pygone` HEAD | −104.37 ± 170.67 | ≈ **−212** | **yes** |
+| `4ku` (full strength) | not played here | CCRL ~3040 | no — ceiling anchor |
+
+**pygone HEAD is confirmed as the one in-band 4k opponent**, and it is the
+right one: the only other Python program ever entered in a TCEC 4k season. Its
+placement also dates our own record — we beat the 4kVIII artifact by ≈+576, and
+its successor is now ~212 below the entry rather than ~576.
+
+**molly has not come closer.** It was −372.25 ± 90.90 for classic on
+2026-08-11 (n=100) and is −470.44 ± 247.05 today (n=24), across a period in
+which classic gained ~+96 from the pool TM. The two readings are consistent
+within their intervals (difference 98, 95% ±263), so this is **not** evidence
+that molly improved — it is evidence that the gap did not shrink the way the
+classic gain would predict. The n=24 instrument cannot resolve it; GRR-1's
+n=20 will not either, and that is worth saying now rather than over-reading it
+later.
+
+### GRR-1 is live
+
+Started **22:42Z**, immediately on HCAL's completion, all ten arms confirmed
+running (`entry classic pygone molly 4ku sungorus bbc11 sf512 sf1024 sf2048`).
+Box at 37 of 96 cores. Fixed N=20 per pairing, 900 games, ETA ~3 h. It writes
+`GRR1_RESULT.txt` itself; the reader runs the illegal-move gate first and
+refuses to print a table if it trips. **No Elo from `grr1.pgn` is to be quoted
+before that file exists.**
 
 ---
 
