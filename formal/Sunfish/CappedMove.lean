@@ -20,15 +20,25 @@ need not be searched; otherwise `WindowReport.cap` transports its report.
 
 The positive-band ceiling prevents a selective cap from inventing mate. The
 cap disappears above depth three.  The implementation evaluates this fixed
-fold lazily: at a given window it searches only the moves whose cap can still
-reach it, and aggregates every move below that threshold into ONE maximum-cap
-report.  The cap is monotone in the intrinsic move value, so that one number
-is the cap of the largest move in the tail - which, in Python's decreasing
-sort, is simply the first entry past the partition.  The threshold changes
-with the window, but the value being reported does not; the last section
-proves the aggregate reports on the same capped fold for every threshold, and
-that either evaluation order (tail first, or prefix first with the report
-emitted last) is exactly the original producer fold.
+fold lazily, and it does so WITHOUT ever computing the threshold: the
+producer yields bare moves in decreasing intrinsic value (floored at depth
+zero, as `producerMoves` states), and the consumer caps each one at its
+single scoring site.  When the cap is below the window
+it folds the cap in place of the child search (`cappedMove_failLow`) and
+moves on.  `shippedCap_iff_tail` is what makes that faithful - the shipped
+test `cap < gamma` holds on exactly the moves the threshold would have cut,
+for every window below the mate band.  The per-move folds report the same
+number the counted form aggregated: the cap is monotone in the intrinsic
+value, so the maximum of the tail's caps is the cap of the largest move in
+the tail (`shallowMoveCap_max`, `foldMax_shallowMoveCap`, specialised as
+`lazyMoveTail_maxCap`), and folding every member reaches that maximum
+(`WindowReport.max`, `lazyMoveTail_report`).  The threshold changes with the
+window, but the value being reported does not; the last section proves the
+partition is an evaluation ORDER, never a change of value
+(`lazyMove_partition`, `lazyMove_partition_prefixFirst`,
+`lazyMove_partition_emptyTail`).  The killer is yielded bare too, early and
+ungated; the consumer meets it a second time inside the sorted stream, and
+`max` absorbs the duplicate report.
 -/
 
 import Sunfish.CappedNull
@@ -225,6 +235,31 @@ theorem lazyMoveTail_cap_lt_gamma (G : QSGame) (hF : ValFloor G 192)
       (Int.min_le_right (MATE_LOWER - 1)
         (static + G.val p m + ((depth - 1 : Nat) : Int) * QS_A))
   omega
+
+/-- The shipped consumer never computes the threshold: it caps each produced
+move and settles it in place when that cap is below the window.  Below the
+mate band the two descriptions are the same predicate, so the per-move reports
+the consumer folds are exactly the tail reports of `lazyMoveTail_report`.  The
+hypothesis `G.val p m < MATE_LOWER` is the Python dispatch `val >= MATE_LOWER`
+that keeps king captures out of the capped branch; `gamma <= MATE_LOWER - 1`
+is where the two clamps (`min MATE_LOWER` in the threshold, `min (MATE_LOWER
+- 1)` in the cap) agree.  In the mate band no ordinary move can reach the
+window at all, and the cap test is then the finer of the two. -/
+theorem shippedCap_iff_tail (G : QSGame) (hF : ValFloor G 192)
+    (static gamma : Int) (depth : Nat) (p m : G.Pos) (hdepth : depth ≤ 3)
+    (hm : m ∈ producerMoves G depth p) (hval : G.val p m < MATE_LOWER)
+    (hband : gamma ≤ MATE_LOWER - 1) :
+    shallowMoveCap static (G.val p m) depth < gamma ↔
+      m ∈ lazyMoveTail G static gamma depth p := by
+  constructor
+  · intro hcap
+    refine mem_lazyMoveTail.mpr ⟨hm, ?_⟩
+    have hcap' : min (MATE_LOWER - 1)
+        (static + G.val p m + ((depth - 1 : Nat) : Int) * QS_A) < gamma := hcap
+    simp only [lazyMoveThreshold, if_pos hdepth]
+    omega
+  · exact fun hm' =>
+      lazyMoveTail_cap_lt_gamma G hF static gamma depth p m hdepth hm'
 
 /-- `max` combines two reports at the same window into a report for the
 maximum of their fixed values. -/

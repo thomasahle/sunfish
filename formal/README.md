@@ -100,7 +100,8 @@ if guard:
     t = pos.score + NULL_MARGIN
     d -= int(-self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)
 
-move_depth = d - 1 - (not root and guard and val < LMR)
+score = ... min(cap, -self.bound(pos.move(move), 1 - gamma,
+                                 d - 1 - (not root and guard and val < LMR)))
 ```
 
 The target depends on `(pos, depth)` alone -- `gamma` does not enter. Table
@@ -321,7 +322,7 @@ branches under one cap,
 
 ```python
 if cap < gamma: move, score = None, cap
-else: score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
+else: score = min(cap, -self.bound(pos.move(move), 1 - gamma, reduced_depth))
 ```
 
 and the exemption lifts the clamp off the second while the first still claims
@@ -364,7 +365,7 @@ intrinsic-LMR bit out of the `moves()` generator, deleted the depth-one lazy
 tail and the `depth <= 1` futility break, made admission unconditional at
 positive depth, and widened the cap band to `depth <= 3`. The two mechanisms
 the bounds spend are byte-identical after the move -- the probe is still one
-ply at `depth - 7`, and `move_depth` is still
+ply at `depth - 7`, and the reduced move depth is still
 `d - 1 - (not root and guard and val < LMR)`, so `C = 3` holds -- and the
 admission change cannot reach the proofs, which never fold at nominal depth
 one. `MateDepth.lean`'s header carries the mechanism-by-mechanism audit. The
@@ -439,35 +440,54 @@ the cap exactly the existing stand-pat futility report; this is
 `shallowMoveCap_lowDepth` together with `futilityOK_discharged`. At depths two
 and three, the cap defines the selective move value.
 
-The implementation now evaluates that same fixed fold in two lazy pieces. It
-solves `cap < gamma` for the intrinsic move value, giving
+The implementation evaluates that same fixed fold lazily, and it never
+computes the threshold. The producer yields bare candidates - `None` for the
+virtual options, then the killer, then the pseudo-legal moves by decreasing
+intrinsic value - and every score is assigned at ONE site, in the consumer.
+There the cap is computed once per real move; when it is below `gamma` the
+consumer folds the cap in place of a child search - a virtual report, so the
+move leaves no legality witness either (`cappedMove_failLow`) - and moves on.
+No tail is materialized, no count is kept, and the producer never reads the
+window; it is the sorted move list, floored at depth zero by the same QS
+admission test the model's producer carries (`producerMoves_zero`).
+
+The model still describes that as a partition, because it is one. Solving
+`cap < gamma` for the intrinsic move value gives
 
 ```text
 threshold = max(base,
-    min(MATE_LOWER, gamma - pos.score - (depth - 1) * QS_A)).
+    min(MATE_LOWER, gamma - pos.score - (depth - 1) * QS_A)),
 ```
 
-Moves below the threshold need no child search. Python sorts the producer by
-decreasing intrinsic value, searches the prefix at or above the threshold, and
-reports the whole complementary tail with one number.
+and `shippedCap_iff_tail` proves the shipped predicate `cap < gamma` holds on
+exactly the moves below that threshold - for every window below the mate band,
+which is where the threshold's `min(MATE_LOWER, ...)` clamp and the cap's
+`min(MATE_LOWER - 1, ...)` clamp agree. (Inside the mate band no ordinary move
+can reach the window at all and the cap test is the finer of the two; the
+`val >= MATE_LOWER` arm keeps king captures out of the capped branch
+entirely.)
 
-That one number is available for free. The cap is monotone in the intrinsic
-value (`shallowMoveCap_max`), so the maximum of the tail's caps is the cap of
-the tail's maximum value (`foldMax_shallowMoveCap`, specialised to the tail as
-`lazyMoveTail_maxCap`) - and in the decreasing sort that value is simply the
-first entry past the partition. No second filter, no fold over the tail.
+`lazyMoveTail_cap_lt_gamma` proves every tail cap is below the window, and
+`lazyMoveTail_report` proves the fold of those caps is a valid report for the
+capped tail. The consumer folds each of them where the counted form folded
+only their maximum; the two folds agree because `max` over the tail IS that
+maximum - the cap is monotone in the intrinsic value (`shallowMoveCap_max`,
+`foldMax_shallowMoveCap`, specialised as `lazyMoveTail_maxCap`), and
+`WindowReport.max` combines per-move reports at one window.
+`lazyMove_partition` proves that processing tail then prefix is exactly the
+original producer fold, and `lazyMove_partition_prefixFirst` proves the same
+for the order Python actually uses. `max` is commutative, so the order is
+free, and `lazyMove_partition_emptyTail` covers the windows at which nothing
+is settled. The partition depends on `gamma`; the declared capped value does
+not.
 
-`lazyMoveTail_cap_lt_gamma` proves every tail cap is below the window and
-`lazyMoveTail_report` proves their maximum is a valid report for the capped
-tail. `lazyMove_partition` proves that processing tail then prefix is exactly
-the original producer fold, and `lazyMove_partition_prefixFirst` proves the
-same for the order Python actually uses - prefix first, the single tail report
-last. `max` is commutative, so the order is free; emitting the report last is
-what lets a prefix cutoff skip it altogether, and
-`lazyMove_partition_emptyTail` covers the windows at which Python emits no
-report at all. The partition depends on `gamma`; the declared capped value
-does not. Above depth three the threshold equals `base`, the tail is empty,
-and the cap disappears. For searched prefix moves, `WindowReport.cap` still
+The killer is yielded twice: once early, bare and ungated, and again inside
+the sorted stream (`gen_moves` rebuilds it as an equal move). Both
+occurrences meet the same rules at the same one site, so a settled killer
+folds a tail-member cap one extra time, which `max` absorbs; a searched
+killer that failed low is re-searched from the sorted stream against a table
+entry, as before. Above depth three the threshold equals `base`, the tail is
+empty, and the cap disappears. For searched moves, `WindowReport.cap` still
 transports the child report through `min`.
 
 Only king captures bypass the cap. The cap is explicitly below the positive
@@ -1177,8 +1197,8 @@ King-capture substitution uses the position predicate directly, so its exact
 | positive-depth complete producer | `producerMoves_positive` |
 | exact king-capture producer report | `producedScore_exact_capture` (and why the band restatement does not do, `BandContract.lean`) |
 | shallow move cap and lazy child evaluation | `shallowMoveCap_lowDepth`, `cappedMove_report` |
-| one-report lazy cap tail | `lazyMoveTail_cap_lt_gamma`, `lazyMoveTail_report`, `lazyMove_partition` |
-| monotone cap: one number for the tail | `shallowMoveCap_max`, `foldMax_shallowMoveCap`, `lazyMoveTail_maxCap` |
+| per-move lazy cap report | `cappedMove_failLow`, `shippedCap_iff_tail`, `lazyMoveTail_cap_lt_gamma`, `lazyMoveTail_report`, `lazyMove_partition` |
+| monotone cap: the per-move folds are the one-number report | `shallowMoveCap_max`, `foldMax_shallowMoveCap`, `lazyMoveTail_maxCap` |
 | prefix-first order and the empty tail | `lazyMove_partition_prefixFirst`, `lazyMove_partition_emptyTail` |
 | cap mate-band properties | `shallowMoveCap_below_positiveMate`, `cappedMove_preserves_negativeMate` |
 | filtered move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |

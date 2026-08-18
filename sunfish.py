@@ -422,12 +422,14 @@ class Searcher:
             t = pos.score + NULL_MARGIN
             d -= int(-self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)
 
-        # Moves whose fixed cap is below gamma share one maximum-cap report.
+        # The QS admission floor and the shallow cap's margin. Both depend on
+        # (pos, depth) alone - the window never selects which moves exist.
         base = QS if depth == 0 else -MATE_UPPER
         margin = max(depth - 1, 0) * QS_A
-        val_lower = max(base, min(MATE_LOWER, gamma - pos.score - margin)) if depth <= 3 else base
 
-        # Yield resolved virtual reports or unresolved real moves lazily.
+        # Yield candidates lazily: None for the virtual options (the null-move
+        # pass, the QS stand-pat), real moves bare and unscored. Every score,
+        # every cap and every search decision lives at one site, in the fold.
         def moves():
 
             # First try not moving at all, i.e. the null move.
@@ -435,46 +437,58 @@ class Searcher:
             # The idea is that "doing nothing" is a lower bound on the score
             # of the position, but we have to be careful with zugzwang, where
             # passing is better than any move - the piece test guards that
-            # (K+P endings). Capping the pass at static evaluation plus one
-            # score bucket also keeps its value monotone and below the positive
-            # mate band. A sub-window cap needs no child report; otherwise one
-            # is enough. No null at root, so we can always return a move. From
-            # depth 6 on the pass is never a score candidate (see below).
-            if (not root and 2 < depth < 6 and abs(pos.score) < 750
-                    and any(c in pos.board for c in "RBNQ")):
-                score = cap if (cap := pos.score + EVAL_ROUGHNESS) < gamma else min(cap,
-                    -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
-                # A king capture substitutes the exact MATE_UPPER for a virtual fail-high.
-                proof = score >= gamma and pos.king_capture()
-                yield (proof, MATE_UPPER) if proof else (None, score)
+            # (K+P endings). No null at root, so we can always return a move.
+            # From depth 6 on the pass is never a score candidate (see below).
+            if not root and 2 < depth < 6 and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ"):
+                yield None
 
             # For QSearch we have a different kind of null-move, namely we can just stop
             # and not capture anything else. (Note depth at root is always > 0.)
             if depth == 0:
-                yield None, pos.score
+                yield None
 
-            if killer and (val := pos.value(killer)) >= val_lower:
-                yield killer, MATE_UPPER if val >= MATE_LOWER else val
+            # The killer arrives out of sorted order; the stream below carries
+            # it again in order, so skipping it early never loses it.
+            if killer:
+                yield killer
 
-            # Search by decreasing intrinsic value. The cap is monotone in that
-            # value, so the sub-window tail is a suffix and the first move of it
-            # carries the maximum cap for all of it - one report, emitted last so
-            # a prefix cutoff skips it entirely.
-            values = sorted(((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= base), reverse=True)
-            n = sum(v >= val_lower for v, m in values)
-            yield from ((m, MATE_UPPER if v >= MATE_LOWER else v) for v, m in values[:n])
-            if n < len(values): yield None, min(MATE_LOWER - 1, pos.score + values[n][0] + margin)
+            # Then the pseudo-legal moves - above the admission floor at depth
+            # zero, all of them deeper - by decreasing intrinsic value; ties
+            # break by the move tuple, also decreasing, like the (value, move)
+            # pair sort of old.
+            yield from sorted((m for m in pos.gen_moves() if depth or pos.value(m) >= QS),
+                key=lambda m: (pos.value(m), m), reverse=True)
 
-        # Run through the moves, shortcutting when score >= gamma.
+        # Run through the candidates, shortcutting when score >= gamma.
         # live is True if we saw a legal (not null, score > -MATE_UPPER) move
         best, live = -MATE_UPPER, False
-        for move, score in moves():
-            if move is not None and score < MATE_LOWER:
-                val = score
-                cap = (MATE_UPPER if depth > 3 else
-                    min(MATE_LOWER - 1, pos.score + val + margin))
-                move_depth = d - 1 - (not root and guard and val < LMR)
-                score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
+        for move in moves():
+            # The virtual options score statically: the stand-pat at depth 0,
+            # else the pass, capped at static evaluation plus one score bucket -
+            # that keeps its value monotone and below the positive mate band. A
+            # sub-window cap needs no child probe; otherwise one is enough. A
+            # king capture substitutes the exact MATE_UPPER for a virtual
+            # fail-high - and hands the store below its witness.
+            if move is None:
+                score = pos.score if depth == 0 else cap if (cap := pos.score + EVAL_ROUGHNESS) < gamma else min(cap,
+                    -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
+                proof = depth and score >= gamma and pos.king_capture()
+                move, score = (proof, MATE_UPPER) if proof else (move, score)
+            # Below the QS admission floor a move is not part of the tree at
+            # all: no report, no legality witness. Only the killer can arrive
+            # here; the sorted stream is already floored.
+            elif (val := pos.value(move)) < base: continue
+            # A shallow move is capped at a static estimate of what it wins;
+            # only a king capture is uncappable. A cap below gamma answers for
+            # the move by itself: fold the cap - a virtual result, so no search
+            # and no legality witness either.
+            elif (cap := MATE_UPPER if depth > 3 or val >= MATE_LOWER
+                    else min(MATE_LOWER - 1, pos.score + val + margin)) < gamma:
+                best = max(best, cap); continue
+            # An intrinsic mate-band value is a king capture: resolve it to the
+            # exact MATE_UPPER token, never a search (the docstring's promise).
+            else: score = MATE_UPPER if val >= MATE_LOWER else min(cap,
+                -self.bound(pos.move(move), 1 - gamma, d - 1 - (not root and guard and val < LMR)))
             best = max(best, score)
             live |= move is not None and score > -MATE_UPPER
             if best >= gamma:
