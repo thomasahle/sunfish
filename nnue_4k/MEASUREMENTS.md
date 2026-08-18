@@ -18866,3 +18866,30 @@ that failed, not their arithmetic.
 A retroactive gcd audit of previously ledgered round-robins is being run
 separately. Any prior multi-engine RR with `gcd(rounds, pairings) > 1` is
 suspect by the same mechanism.
+
+### Same correction, second claim: the "INVERTED yardstick" finding also falls
+
+Commit `c1b55c4` reported, and my report repeated:
+
+> "**The statistic's ranking is the reverse of the playing-strength
+> ranking**, with its best net finishing last." … and across five nets,
+> "**They are very nearly inverted.**"
+
+That claim used the **same** Elo referent, so it fails the same way. With
+`rr_sigk`'s ordering shown to be unreplicated, "outval is inverted against
+Elo" is no better supported than "sibling-ranking agrees with Elo" — both
+were readings of one tournament's noise, and I drew opposite conclusions from
+the same unreliable source within an hour of each other. **Withdrawn.**
+
+What survives from it is weaker and worth keeping only in this form: the two
+statistics **disagree with each other**, strongly and reproducibly, on the
+same five nets. That is a fact about the statistics — no Elo required — and
+it says the loss landscape and the move-ordering landscape are genuinely
+different directions. It says nothing about which, if either, points at
+strength.
+
+**The one Elo statement that survives everything tonight** is the one built on
+the only resolved difference in the field: **`entryd0` beats every net in this
+family, by ~19–24 points of score%, in every tournament, valid or otherwise.**
+That is the contrast future gates must be calibrated against, and it is the
+gap the campaign still has to close.
