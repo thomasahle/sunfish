@@ -73,7 +73,37 @@ def emit_payload(r, N, cap_bits, zeros, seed=20260817, nfeat=768):
     return q
 
 
-def build(src, r, N, lane_bits, zeros, seed=20260817, mirror=False):
+PHW = {"P": 0, "N": 1, "B": 1, "R": 2, "Q": 4, "K": 0}
+# Phase-bucket edges: the measured pool10m medians (PORTFOLIO REGISTRATION,
+# 2026-08-19).  Constants, not fitted here -- the engine must compute the
+# bucket the trainer did.
+PH_EDGES = {2: (11,), 4: (4, 11, 20)}
+
+
+def _selector(buckets, bkind):
+    """Source for `_pick(board) -> (us_half, them_half)`, read at the root."""
+    if bkind == "pb":
+        # Material phase is position-global, so both perspectives take the
+        # SAME bucket: B half-tables, not B**2 pairings.
+        return ("_PH = %r\n"
+                "def _pick(_b):\n"
+                "    _v = sum(_PH[_c.upper()] for _c in _b if _c.isalpha())\n"
+                "    _k = %s\n"
+                "    return _HALVES[_k], _HALVES[_k]"
+                % (PHW, " + ".join("(_v > %d)" % e
+                                   for e in PH_EDGES[buckets])))
+    if bkind == "kb":
+        # Own-king RANK BAND, own frame, per side: the board at the root is
+        # already in the side-to-move's frame, so "K" is us and "k" is them.
+        assert buckets == 2, "kb selector is the rank band: 2 buckets"
+        return ("def _pick(_b):\n"
+                "    return (_HALVES[_b.index('K') // 10 <= 7],\n"
+                "            _HALVES[(119 - _b.index('k')) // 10 <= 7])")
+    raise ValueError("bkind must be pb or kb, got %r" % bkind)
+
+
+def build(src, r, N, lane_bits, zeros, seed=20260817, mirror=False,
+          buckets=1, bkind="pb"):
     half = lane_bits * N
     full = 2 * half
     lmask = (1 << lane_bits) - 1          # 2^lane_bits == 1 (mod lmask)
@@ -84,7 +114,16 @@ def build(src, r, N, lane_bits, zeros, seed=20260817, mirror=False):
     # rows instead of 64 and U halves.  Chess is very nearly file-symmetric
     # (castling is the exception), and width is what this family pays for.
     nsq = 32 if mirror else 64
-    nfeat = 12 * nsq
+    # BUCKETS multiply the stored rows and nothing else: the read-out, the
+    # accumulator and Position.move are untouched, because the bucket is
+    # resolved into ONE pair of half-tables at the search root -- the same
+    # mechanism the entry already uses to swap K_MID/K_END, and the reason
+    # this costs no per-move time.  The payload is bucket-major, matching
+    # structures.Factored's fold index ((b*12 + p)*nsq + rank*4 + file'),
+    # so the trainer's U rows and the decoder's digits are the same order by
+    # construction rather than by agreement.
+    nrow = 12 * nsq
+    nfeat = nrow * buckets
     ntrit = nfeat * r
     ndig = 1 + 2 * N + r * N + nfeat * ((r + 3) // 4)
     # Cap scale, and it MUST agree with the trainer.  The engine's cap is
@@ -130,18 +169,22 @@ for _k in range(%d):
     # feature.  Exact integer arithmetic; no numpy.
     nchunk = (r + 3) // 4                # base-90 digits per feature
     voff, foff = 1 + 2 * N, 1 + 2 * N + r * N
+    bexpr = ("(_b * 12 + _i)" if buckets > 1 else "_i")
     if nchunk == 1:
         # The whole affordable frontier lives here (r <= 4), so it gets the
         # short form: one digit per feature, one 81-entry lane-word table.
         body = """_V = _q[%d:%d]
 _T = [sum(sum((_d // 3 ** _j %% 3 - 1) * (_V[_j * %d + _k] - 44)
               for _j in range(%d)) << %d * _k for _k in range(%d)) for _d in range(81)]
-_half = {}
-for _i, _p in enumerate(_PIECES):
-    _half[_p] = _h = [0] * 120
-    for _f in range(64):
-        _h[21 + _f // 8 * 10 + _f %% 8] = _T[_q[%d + _i * %d + %s]]""" % (
-            voff, foff, N, r, lane_bits, N, foff, nsq,
+_HALVES = []
+for _b in range(%d):
+    _half = {}
+    for _i, _p in enumerate(_PIECES):
+        _half[_p] = _h = [0] * 120
+        for _f in range(64):
+            _h[21 + _f // 8 * 10 + _f %% 8] = _T[_q[%d + %s * %d + %s]]
+    _HALVES.append(_half)""" % (
+            voff, foff, N, r, lane_bits, N, buckets, foff, bexpr, nsq,
             "_f // 8 * 4 + min(_f % 8, 7 - _f % 8)" if mirror else "_f")
     else:
         body = """_V = _q[%d:%d]
@@ -149,14 +192,17 @@ _T = [[sum((_d // 3 ** _j %% 3 - 1) * (_V[(_c * 4 + _j) * %d + _k] - 44)
            for _j in range(min(4, %d - _c * 4))) << %d * _k for _k in range(%d)]
       for _c in range(%d) for _d in range(81)]
 _T = [sum(_t) for _t in _T]
-_half = {}
-for _i, _p in enumerate(_PIECES):
-    _half[_p] = _h = [0] * 120
-    for _f in range(64):
-        _h[21 + _f // 8 * 10 + _f %% 8] = sum(
-            _T[_c * 81 + _q[%d + (_i * %d + %s) * %d + _c]]
-            for _c in range(%d))""" % (
-            voff, foff, N, r, lane_bits, N, nchunk, foff, nsq,
+_HALVES = []
+for _b in range(%d):
+    _half = {}
+    for _i, _p in enumerate(_PIECES):
+        _half[_p] = _h = [0] * 120
+        for _f in range(64):
+            _h[21 + _f // 8 * 10 + _f %% 8] = sum(
+                _T[_c * 81 + _q[%d + (%s * %d + %s) * %d + _c]]
+                for _c in range(%d))
+    _HALVES.append(_half)""" % (
+            voff, foff, N, r, lane_bits, N, nchunk, buckets, foff, bexpr, nsq,
             "_f // 8 * 4 + min(_f % 8, 7 - _f % 8)" if mirror else "_f",
             nchunk, nchunk)
     sub("""_half = {}
@@ -167,8 +213,34 @@ for _i, _p in enumerate(_PIECES):
         _h[21 + _f // 8 * 10 + _f % 8] = sum(
             _g[_k] * (_d // 3 ** _k % 3 - 1) << 16 * _k for _k in range(4))""", body)
 
-    sub("(_half[_p.swapcase()][119 - _s] << 64)",
-        "(_half[_p.swapcase()][119 - _s] << %d)" % half)
+    if buckets > 1:
+        # ROWS is rebuilt from the selected halves at the search root, so it
+        # must be a LIST (assigned in place) rather than a tuple rebound
+        # through `global` -- the slice assignment is cheaper in packed bytes
+        # than the global statement it replaces.
+        sub("""_rows0 = {_p: [_half[_p][_s] + (_half[_p.swapcase()][119 - _s] << 64)
+               for _s in range(120)] for _p in _PIECES}
+_rows1 = {_p: [_rows0[_p.swapcase()][119 - _s] for _s in range(120)] for _p in _PIECES}
+ROWS = (_rows0, _rows1)""",
+            """def _mkrows(_hu, _ht):
+    _r0 = {_p: [_hu[_p][_s] + (_ht[_p.swapcase()][119 - _s] << %d)
+                for _s in range(120)] for _p in _PIECES}
+    return [_r0, {_p: [_r0[_p.swapcase()][119 - _s] for _s in range(120)]
+                  for _p in _PIECES}]
+%s
+ROWS = _mkrows(_HALVES[0], _HALVES[0])""" % (half, _selector(buckets, bkind)))
+        # the root already rebuilds the position after the K_MID/K_END swap;
+        # the bucket choice rides that existing rebuild for free.
+        sub("""        # The carried score was accumulated under the OTHER table.
+        pos = self.r = from_board(pos.board, pos.wc, pos.bc, pos.ep, pos.kp)""",
+            """        # Bucket choice is a ROOT decision, exactly like the table swap
+        # above, and it rides the rebuild that swap already pays for.
+        ROWS[:] = _mkrows(*_pick(pos.board))
+        # The carried score was accumulated under the OTHER table.
+        pos = self.r = from_board(pos.board, pos.wc, pos.bc, pos.ep, pos.kp)""")
+    else:
+        sub("(_half[_p.swapcase()][119 - _s] << 64)",
+            "(_half[_p.swapcase()][119 - _s] << %d)" % half)
 
     # --- nn_cp: the read-out masks and the lane sum --------------------
     sub("""    m = ((acc & MLO) >> 14) * 32767             # lane >= 0 ?
@@ -206,6 +278,12 @@ def main():
     ap.add_argument("--N", type=int, default=32)
     ap.add_argument("--lane-bits", type=int, default=16)
     ap.add_argument("--zeros", type=float, default=0.43)
+    ap.add_argument("--buckets", type=int, default=1,
+                    help="input buckets B: the first-layer table is B times "
+                         "taller and the bucket is chosen at the search root")
+    ap.add_argument("--bucket-kind", default="pb", choices=("pb", "kb"),
+                    help="pb = material phase (position-global); "
+                         "kb = own-king rank band (per side)")
     ap.add_argument("--mirror", action="store_true",
                     help="fold file f onto 7-f: 32 squares per piece, U halves")
     ap.add_argument("--seed", type=int, default=20260817)
@@ -213,12 +291,14 @@ def main():
     a = ap.parse_args()
     with open(a.entry) as f:
         src = f.read()
-    out, ndig, nh = build(src, a.r, a.N, a.lane_bits, a.zeros, a.seed, a.mirror)
+    out, ndig, nh = build(src, a.r, a.N, a.lane_bits, a.zeros, a.seed,
+                          a.mirror, a.buckets, a.bucket_kind)
     with open(a.out, "w") as f:
         f.write(out)
     os.chmod(a.out, 0o755)
-    print("r=%d N=%d lane_bits=%d: %d payload digits, %d hunks -> %s"
-          % (a.r, a.N, a.lane_bits, ndig, nh, a.out), file=sys.stderr)
+    print("r=%d N=%d lane_bits=%d B=%d(%s): %d payload digits, %d hunks -> %s"
+          % (a.r, a.N, a.lane_bits, a.buckets, a.bucket_kind, ndig, nh, a.out),
+          file=sys.stderr)
 
 
 if __name__ == "__main__":
