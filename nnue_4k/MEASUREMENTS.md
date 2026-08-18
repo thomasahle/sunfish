@@ -18893,3 +18893,66 @@ the only resolved difference in the field: **`entryd0` beats every net in this
 family, by ~19–24 points of score%, in every tournament, valid or otherwise.**
 That is the contrast future gates must be calibrated against, and it is the
 gap the campaign still has to close.
+
+## SEED CENSUS AT sigK=160 — the "15σ" was borrowed, and the honest number is ~5σ
+
+Registered before it ran, for exactly this reason: *"a '15σ' claim that
+borrows another arm's σ is not a measurement."* It borrowed, and it was.
+
+| census | seeds | outval Brier mean | **sd** | AUC mean | **sd** |
+|---|---|---|---|---|---|
+| sigK=400 (control) | 0,1,2 | 0.1277811 | **4.48e-05** | 0.846197 | **1.80e-04** |
+| sigK=160 | 0,1,2 | 0.1271863 | **1.94e-04** | 0.847847 | **5.72e-04** |
+
+**The seed spread at sigK=160 is 4.3× wider on Brier and 3.2× wider on AUC.**
+A sharper target does not merely move the solution, it makes the solution
+*less stable across seeds* — which is itself a finding about the objective,
+and is the thing that invalidates the original arithmetic.
+
+**CORRECTION, form (a).** I wrote, in commit `d290c75` and repeated it
+several times:
+
+> "outval Brier … 0.12709854 … **15.2σ BETTER — PASS**"
+
+That divided a difference of means by the *control's* σ. Done properly —
+difference of two 3-seed means, each with its own measured spread — the
+standard error is `sqrt(1.94e-4²/3 + 4.48e-5²/3) = 1.15e-04`, and the
+difference is 5.95e-04. **The honest figure is 5.2σ, not 15.2σ.**
+
+The direction and the significance survive; the magnitude I reported was
+inflated about threefold. Recorded because a number quoted five times in one
+night should be corrected as visibly as it was asserted — and because this is
+the second time tonight that a σ turned out to rest on a spread measured
+somewhere else (the first being the Elo referent, above). **The pattern is
+one error, not two: I twice treated a spread measured under one condition as
+if it applied under another.**
+
+Note what this does *not* change: nothing here is a claim about strength.
+Per the retirement, these are statistic-level facts only.
+
+## ARM 9's size-matched control, measured (baseline, not a verdict)
+
+`319_arm9ctl_sf250k` — the same 250,000 rows ARM 9 will train on, carrying
+their **original Stockfish labels**, at the same sigK=160:
+
+| net | corpus | refval | outval Brier | AUC |
+|---|---|---|---|---|
+| k160 census (10M rows) | 10,000,000 | 0.018240 (mean) | 0.1271863 (mean) | 0.847847 (mean) |
+| **`319` (250k rows, SF labels)** | **249,608** | **0.0180766** | **0.1266347** | **0.849583** |
+
+**The 250k control is better than the 10M runs on all three**, by ~2.8σ of
+the k160 seed spread on Brier. Consistent with the ledger's long-standing
+observation that this family saturates at a few hundred thousand positions
+(a 200k pre-flight reached val 0.01754 against 0.01750 at 10M) — and, at
+face value, 40× more data is not merely useless here but marginally
+negative. At 2.8σ against a single seed that is suggestive, not settled.
+
+This is now the correct comparison partner for ARM 9: **arm minus this
+control is the label source and nothing else** — same rows, same count, same
+sigK, same schedule. ARM 9 (`3162_arm9_entry250k`, 249,608 entry-searched
+labels at 20,000 nodes, corpus sha `25ea1f1a7fc1a1a9`, 0 clock-truncated
+searches, 2 unparseable positions dropped) is queued.
+
+**Its verdict will be reported as a statistic-level result only.** Given
+tonight's retirement, no val-gate reading from ARM 9 constitutes evidence
+about playing strength, and the arm cannot be promoted on one.
