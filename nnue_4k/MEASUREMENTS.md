@@ -18722,3 +18722,147 @@ discards more than a small fraction of existing rows.
 Cost: ~48 minutes of 14-worker labelling, redone. No corpus was corrupted and
 nothing downstream consumed the loss — the completeness gate did its job and
 the relaunch is running clean. ARM 9 slips ~50 minutes.
+
+---
+
+# CORRECTION, form (a) — I WITHDRAW THE SIBLING-GATE'S "VALIDATED" STATUS
+
+This correction is placed and sized deliberately: the claim it withdraws was
+the most confident thing I wrote all night, and it was used to fund work.
+
+**Verbatim, what I withdraw** (commit `405fddc`, and repeated in the report
+that followed):
+
+> **The read, and it is branch (a)** … "Sibling-ranking resolves the
+> difference that exists (k160 is worse, 8σ) and declines to invent one where
+> the Elo measurement has none." … "**ARM 10's premise is validated by
+> measurement, not by argument.**" … "**The sibling statistic becomes the
+> registered screen-gate for objective arms**, replacing `outval` in that
+> role."
+
+**The status "validated" is withdrawn. The gate is NOT registered.**
+
+## What broke, and it is not the statistic
+
+A second valid six-engine tournament (`AB_rr6b_sigk.txt`, srand 20260821, 480
+games, every gate green including the new opening gate) measured the five
+nets as:
+
+| engine | mean score% across its 5 pairings |
+|---|---|
+| entryd0 | **68.44%** |
+| k250 | 49.06% |
+| **k160** | **47.19%** |
+| l1zero | 45.94% |
+| k100 | 45.31% |
+| **capn5** | **44.06%** |
+
+**k160 — the net my calibration rested on being clearly worst — finished
+second of the five. `capn5`, the net the statistic named its most confident
+best, finished LAST.** The pre-registered prediction is not confirmed
+(Spearman −0.30), and it is not cleanly falsified either: the five nets span
+**5.0 points against a ~5.5-point standard error on differences**, and the
+pooled ordering contradicts itself (capn5 beats k250 head-to-head 54.69% while
+finishing last to k250's first).
+
+**The load-bearing number is the cross-tournament comparison.** Cells shared
+between my two VALID tournaments swing by 8–16 points:
+
+| shared cell | rr_sigk (300 g) | rr6b (480 g) | swing |
+|---|---|---|---|
+| k160 vs k250 | 36.00% | 51.56% | **+15.6** |
+| entryd0 vs k250 | 74.00% | 60.94% | **−13.1** |
+| entryd0 vs k160 | 59.00% | 65.62% | +6.6 |
+| capn5 vs entryd0 | 36.00% | 28.12% | −7.9 |
+
+and the three shared nets' ordering **completely reverses**: `k250 > capn5 >
+k160` becomes `k250 > k160 > capn5`.
+
+**So the "ground truth" my 8σ calibration was fitted against was one
+tournament's noise.** I calibrated a statistic against a 50-game-per-pairing
+ordering, treated the ordering as fact, and reported the agreement as
+validation. The statistic's internal precision (8σ paired, on 6,023
+positions) was real and was never the weak link — **the Elo side was**, and I
+did not check its replication before leaning on it. That check cost one
+tournament and I should have run it before the funding note, not after.
+
+## Why the gate cannot be rescued by more games HERE
+
+**The five nets have no resolvable Elo ordering at feasible n.** They span
+5.0 points with ~5.5 points of error on a difference; separating them would
+need on the order of thousands of games per pairing, for differences that may
+be zero. **They are Elo-equivalent within replication error, and you cannot
+calibrate a ranking statistic against a ranking that does not exist.**
+
+That is the precise reason the status is withdrawn — **not** that
+sibling-ranking was shown to be a bad statistic. It was shown to be
+*uncalibratable on this family*. The distinction matters for what happens
+next.
+
+## (b) The yardstick retirement STRENGTHENS, and generalises
+
+Tonight's arms moved held-out statistics by **8σ to 19σ** — outval 15σ, AUC
+11σ, sibling-ranking 8σ, refval 19σ for the lr4x net — while **every Elo
+comparison among these nets came back flat within replication error.**
+
+The general statement, which is stronger than the one I wrote earlier and
+replaces it:
+
+> **Nothing cheap tracks play among these nets, because there is no play
+> signal among these nets to track.** The whole family is Elo-equivalent; the
+> statistics are resolving differences that exist in the loss landscape and
+> not in the results table.
+
+**Consequence for every future gate:** a screen statistic can only be
+calibrated against a **RESOLVED** Elo difference. Exactly one is available in
+this field — **any net vs `entryd0`, which is ~19–24 points clear** — and a
+calibration built on that contrast (does a statistic rank the entry above all
+five nets?) is meaningful where an intra-family calibration is not. Any future
+calibration must state which resolved difference it is fitted against, and
+must show a replication before the result is used.
+
+## (c) ARM 10 — still funded, with the stamp removed
+
+Three statements, all of which hold simultaneously:
+
+1. **Still funded, at the re-priced ~130 lines and zero labelling.** The
+   re-pricing came from `siblingrank.harvest` existing, which is unaffected by
+   any of this.
+2. **It LOSES the "validated by measurement" stamp.** What survives is the
+   theory (an eval in a search is asked which sibling is better, not what a
+   position is worth) and the three measured **value-vs-mover splits** —
+   k160, lr4x, and the l1zero/k100 pair each improved a value statistic
+   without improving move ordering. Those splits are real observations about
+   the nets; what they are *not* is evidence that move ordering predicts Elo,
+   which is the claim now withdrawn.
+3. **Its promotion was ALREADY registered as games-only** (commit `6315ff2`,
+   because the gate and the training target would be the same construct). So
+   nothing about ARM 10's landing criterion changes — which is the one piece
+   of luck in this correction.
+
+## (d) Two gates become MANDATORY for every multi-engine round-robin
+
+The void tournament (`rr6_sigk`, 450 games) reported 450 games and contained
+**31 distinct ones**. fastchess deals openings by the flattened pair index, so
+each pairing sees `rounds / gcd(rounds, pairings)` distinct openings; at
+6 engines (15 pairings) with `-rounds 15`, gcd = 15 and every pairing replayed
+ONE opening fifteen times. With deterministic fixed-node engines that is the
+same GAME fifteen times. **Legality, count, forfeit and dormancy gates all
+passed** — none of them asks whether the games differ from each other. The
+tell was `± 0.00` error bars and a `1.67%` cell.
+
+Both are now hard refusals in `screens/ab_roundrobin.sh` and are **mandatory
+for every multi-engine round-robin from here**:
+
+- **coprimality pre-flight** — refuses to start unless `gcd(rounds, pairings) == 1` (exit 6), reasoning about the schedule *before* spending games;
+- **`opening_gate.py`** — reads the finished PGN and requires every ordered (White, Black) cell to show as many distinct openings as it played games, with no byte-repeated game (exit 9, VOID).
+
+The measured gate is the one that counts: the pre-flight reasons about a
+schedule, the gate reads the artifact. **My calibration PGN (`rr_sigk`) was
+re-checked against the new gate and PASSES**, so the 6,023-position harvest
+and the 8σ paired separations stand as computed — it is their Elo referent
+that failed, not their arithmetic.
+
+A retroactive gcd audit of previously ledgered round-robins is being run
+separately. Any prior multi-engine RR with `gcd(rounds, pairings) > 1` is
+suspect by the same mechanism.
