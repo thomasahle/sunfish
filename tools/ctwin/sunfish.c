@@ -75,6 +75,14 @@ static int tables_loaded = 0;
 static int QS = 40;
 static int QS_A = 140;
 static int LMR = 75;
+/* Lab knobs for the post-#236 gate ladders (defaults reproduce master).
+ * LMR_MODE: 0 = master (!root && guard && val < LMR); 1 = bare (val < LMR,
+ * REDUCES AT ROOT TOO); 2 = !root && val < LMR; 3 = !root && calm && val <
+ * LMR (calm = the statics without depth >= 6).
+ * KILLER_GATE: 0 = master; 1 = no deep exemption - the killer's ceiling
+ * (clamped threshold) gates at EVERY depth, not just depth <= 3. */
+static int LMR_MODE = 0;
+static int KILLER_GATE = 0;
 static int EVAL_ROUGHNESS = 15;
 static int NULL_CAP_MARGIN = -1; /* -1 follows EVAL_ROUGHNESS, as Python */
 static int VALUE_N = 280, VALUE_B = 320, VALUE_R = 479, VALUE_Q = 929;
@@ -719,7 +727,7 @@ static int has_big_piece(const Pos *p) {       /* any(c in board for "RBNQ") */
 static int bound(const Pos *pos, int gamma, int depth, int root, int qstail);
 
 static int score_move(const Pos *pos, Move move, int val, int gamma,
-        int depth, int rd, int root, int guard, int *real) {
+        int depth, int rd, int root, int guard, int calm, int *real) {
     *real = 1;
     if (val >= MATE_LOWER) return MATE_UPPER;
     int capped = depth <= FUT_MAX ? val < MATE_LOWER
@@ -730,7 +738,11 @@ static int score_move(const Pos *pos, Move move, int val, int gamma,
         if (cap >= MATE_LOWER) cap = MATE_LOWER - 1;
         if (cap < gamma) { *real = 0; return cap; }
     }
-    int move_depth = rd - 1 - (!root && guard && val < LMR);
+    int lmr = LMR_MODE == 0 ? (!root && guard && val < LMR)
+            : LMR_MODE == 1 ? (val < LMR)
+            : LMR_MODE == 2 ? (!root && val < LMR)
+            :                 (!root && calm && val < LMR);
+    int move_depth = rd - 1 - lmr;
     Pos child = domove(pos, move);
     int full = -bound(&child, 1 - gamma, move_depth, 0, 0);
     return cap < full ? cap : full;
@@ -812,8 +824,9 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
     /* Fuel oracle -- its fixed target reduces the node.  Its static guard
      * also limits intrinsic LMR to positions where passing is meaningful. */
     int rd = depth;
-    int guard = depth >= FUEL_MIN_DEPTH
+    int calm = (LMR_MODE == 3 || depth >= FUEL_MIN_DEPTH)
         && iabs(pos->score) < NULL_LIMIT && has_big_piece(pos);
+    int guard = depth >= FUEL_MIN_DEPTH && calm;
     if (guard && FUEL_NULL) {
         int target = pos->score + NULL_MARGIN;
         Pos rp = rotate(pos, 1);
@@ -838,9 +851,17 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
     if (!qstail)
     for (int kk = 0; kk < nkill; kk++) {
         int val = value(pos, killers[kk]);
-        if (val < val_lower) continue;
+        int klower = val_lower;
+        if (KILLER_GATE == 1 && depth > 3) {
+            /* B1: no deep exemption - the same clamped ceiling threshold
+             * the shallow band uses, with the margin grown by depth. */
+            int threshold = gamma - pos->score - margin;
+            if (threshold > MATE_LOWER) threshold = MATE_LOWER;
+            klower = threshold > base ? threshold : base;
+        }
+        if (val < klower) continue;
         int real;
-        int score = score_move(pos, killers[kk], val, gamma, depth, rd, root, guard, &real);
+        int score = score_move(pos, killers[kk], val, gamma, depth, rd, root, guard, calm, &real);
         PROCESS(real, killers[kk], score);
         if (done) goto after_moves;
     }
@@ -858,7 +879,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
             Move m = VM_MOVE(vbuf[k]);
             if (!qstail) {
                 int real;
-                int score = score_move(pos, m, val, gamma, depth, rd, root, guard, &real);
+                int score = score_move(pos, m, val, gamma, depth, rd, root, guard, calm, &real);
                 PROCESS(real, m, score);
             } else {
                 Pos np = domove(pos, m);
@@ -1258,6 +1279,8 @@ static struct knob KNOBS[] = {
     { "FUT_CAP_DEPTH", &FUT_CAP_DEPTH, NULL },
     { "MATE_DIST", &MATE_DIST, NULL },
     { "EVICT_POLICY", &EVICT_POLICY, NULL },
+    { "LMR_MODE", &LMR_MODE, NULL },
+    { "KILLER_GATE", &KILLER_GATE, NULL },
     { "EVICT_SCAN_K", &EVICT_SCAN_K, NULL },
     { "KILLER_COUNT", &KILLER_COUNT, NULL },
     { "USE_VARIANT", &USE_VARIANT, NULL },
