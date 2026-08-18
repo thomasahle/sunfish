@@ -55,11 +55,26 @@ def payload(ck):
     g = [min(89, max(1, int(round(abs(x) * (1 << s) / 32.0)))) for x in v]
     capsum = 32 * sum(g)
     if capsum > 65534:
+        # g_k = round(|v_k|*2^s/32) GROWS with s, so the fix is a SMALLER
+        # shift, which halves every gain and costs one bit of cp resolution.
+        # (An earlier version of this message said "raise", which is exactly
+        # backwards and would have sent the next reader the wrong way.)
+        fits = next((t for t in range(s, -1, -1)
+                     if 32 * sum(min(89, max(1, int(round(abs(x) * (1 << t) / 32.0))))
+                                 for x in v) <= 65534), 0)
         raise SystemExit(
             "REFUSED: sum_k G_k = %d exceeds nn_cp's lane-sum fold (65534) by "
-            "%d. A saturating position would wrap and the eval would be "
-            "garbage. Raise the export shift (halves every gain) and retrain "
-            "or re-derive -- do NOT pack this net." % (capsum, capsum - 65534))
+            "%d (%.1f%% over, N=%d, mean gain %.1f). A saturating position "
+            "would wrap the lane sum and the eval would be garbage.\n"
+            "  The shift must go DOWN, not up: shift %d fits (%d), costing "
+            "%d bit(s) of cp resolution.\n"
+            "  Do not re-derive a packed net at a shift it was not trained "
+            "at -- that is a train/ship divergence. Retrain with the "
+            "cap-sum-aware export_shift and rebuild."
+            % (capsum, capsum - 65534, 100.0 * (capsum - 65534) / 65534, N,
+               sum(g) / N, fits,
+               32 * sum(min(89, max(1, int(round(abs(x) * (1 << fits) / 32.0))))
+                        for x in v), s - fits))
     bd = [min(45, max(-44, int(round(b[k] * 32.0 * g[k])))) for k in range(N)]
     clipped = sum(1 for k in range(N)
                   if abs(round(b[k] * 32.0 * g[k])) > 45)
