@@ -409,10 +409,38 @@ This is a fixed function of the position, move, and depth. At depths zero and
 one, natural subtraction makes the margin zero. The score identity then makes
 the cap exactly the existing stand-pat futility report; this is
 `shallowMoveCap_lowDepth` together with `futilityOK_discharged`. At depths two
-and three, the cap defines the selective move value. If it is below `gamma`,
-`cappedMove_failLow` proves that the cap itself is a valid fail-low report and
-the child search is skipped. Otherwise `WindowReport.cap` transports the full
-child report through `min`.
+and three, the cap defines the selective move value.
+
+The implementation now evaluates that same fixed fold in two lazy pieces. It
+solves `cap < gamma` for the intrinsic move value, giving
+
+```text
+threshold = max(base,
+    min(MATE_LOWER, gamma - pos.score - (depth - 1) * QS_A)).
+```
+
+Moves below the threshold need no child search. Python sorts the producer by
+decreasing intrinsic value, searches the prefix at or above the threshold, and
+reports the whole complementary tail with one number.
+
+That one number is available for free. The cap is monotone in the intrinsic
+value (`shallowMoveCap_max`), so the maximum of the tail's caps is the cap of
+the tail's maximum value (`foldMax_shallowMoveCap`, specialised to the tail as
+`lazyMoveTail_maxCap`) - and in the decreasing sort that value is simply the
+first entry past the partition. No second filter, no fold over the tail.
+
+`lazyMoveTail_cap_lt_gamma` proves every tail cap is below the window and
+`lazyMoveTail_report` proves their maximum is a valid report for the capped
+tail. `lazyMove_partition` proves that processing tail then prefix is exactly
+the original producer fold, and `lazyMove_partition_prefixFirst` proves the
+same for the order Python actually uses - prefix first, the single tail report
+last. `max` is commutative, so the order is free; emitting the report last is
+what lets a prefix cutoff skip it altogether, and
+`lazyMove_partition_emptyTail` covers the windows at which Python emits no
+report at all. The partition depends on `gamma`; the declared capped value
+does not. Above depth three the threshold equals `base`, the tail is empty,
+and the cap disappears. For searched prefix moves, `WindowReport.cap` still
+transports the child report through `min`.
 
 Only king captures bypass the cap. The cap is explicitly below the positive
 mate band, so it cannot create a positive mate value;
@@ -1055,6 +1083,9 @@ King-capture substitution uses the position predicate directly, so its exact
 | positive-depth complete producer | `producerMoves_positive` |
 | exact king-capture producer report | `producedScore_exact_capture` (and why the band restatement does not do, `BandContract.lean`) |
 | shallow move cap and lazy child evaluation | `shallowMoveCap_lowDepth`, `cappedMove_report` |
+| one-report lazy cap tail | `lazyMoveTail_cap_lt_gamma`, `lazyMoveTail_report`, `lazyMove_partition` |
+| monotone cap: one number for the tail | `shallowMoveCap_max`, `foldMax_shallowMoveCap`, `lazyMoveTail_maxCap` |
+| prefix-first order and the empty tail | `lazyMove_partition_prefixFirst`, `lazyMove_partition_emptyTail` |
 | cap mate-band properties | `shallowMoveCap_below_positiveMate`, `cappedMove_preserves_negativeMate` |
 | filtered move fold and early cutoff | `Bound.searchMoves_spec` and the fold models in `Stalemate.lean` |
 | sticky legality evidence and terminal override | terminal/finalizer results in `Stalemate.lean` |
@@ -1074,7 +1105,7 @@ tests and chess corpora validate those executable primitives.
 - `GameTree.lean`: chess-free negamax game model.
 - `Bound.lean`: core fail-soft search proof.
 - `CappedNull.lean`: capped-null report transport and score-band facts.
-- `CappedMove.lean`: positive-depth move production and shallow move caps.
+- `CappedMove.lean`: positive-depth production, shallow caps, and their exact lazy partition.
 - `Stalemate.lean`: selective-search fold, legality, and terminal finalizer.
 - `EvalBounds.lean`: numeric bounds induced by the piece-square tables.
 - `BandContract.lean`: what the two exact king-capture clauses buy, the

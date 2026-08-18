@@ -114,8 +114,12 @@ MECHANISM MAP (pre-#216 line -> post-#218 line).
   `shallowMoveCap_below_positiveMate` still applies.
 
 * QS admission: `val_lower = QS - depth * QS_A` (`:421`) plus the depth-one
-  lazy tail (`:422-429`) -> `val_lower = QS if depth == 0 else -MATE_UPPER`
-  (`:391`).  The depth-one tail and the `depth <= 1` futility break
+  lazy tail (`:422-429`) -> a fixed producer floor of `QS` at depth zero and
+  `-MATE_UPPER` above it.  The current `val_lower` may rise with `gamma`, but
+  only as a lazy partition of that fixed producer: `lazyMoveTail_report` and
+  `lazyMove_partition` prove that the aggregated cap tail followed by the
+  searched prefix reports on the identical capped fold.  The depth-one tail
+  and the `depth <= 1` futility break
   (`:455-469`) are GONE, folded into the unified cap.  `val_lower 0 = QS` is
   unchanged, and under `ValFloor G 192` the model's `val_lower d <= -192`
   from `d = 2` on (`val_lower_le_neg_floor`), so `movesAbove G (val_lower d)`
@@ -615,12 +619,11 @@ theorem forcedMate_fuelValueD2_sharp_C1 (G : QSGame) (guard : G.Pos → Bool)
 Part I's sharpened `3k` -- does NOT model one mechanism the shipped search
 has: the shallow static cap
 
-    cap = (MATE_UPPER if depth > 3 else
-        min(MATE_LOWER - 1, pos.score + val + max(depth - 1, 0) * QS_A))
-    if cap < gamma: move, score = None, cap
-    else:
-        move_depth = d - 1 - (not root and guard and val < LMR)
-        score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
+    margin = max(depth - 1, 0) * QS_A
+    val_lower = max(base,
+        min(MATE_LOWER, gamma - pos.score - margin)) if depth <= 3 else base
+    yield None, max(cap(v) for base <= v < val_lower)
+    score = min(cap(val), -self.bound(pos.move(move), 1 - gamma, move_depth))
 
 At every nominal depth `≤ 3` EVERY move that is not a king capture reports
 at most `shallowMoveCap`, which `shallowMoveCap_below_positiveMate`

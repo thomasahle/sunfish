@@ -652,10 +652,17 @@ static void tpm_store(const Pos *p, Move m, int depth) {
 #define VM_VAL(k)  ((int)((uint32_t)((k) >> 32) ^ 0x80000000u))
 #define VM_MOVE(k) ((Move){ (int)((k) >> 16 & 0xff), (int)((k) >> 8 & 0xff), \
                             (char)((k) & 0xff) })
-struct collectctx { const Pos *p; int val_lower; uint64_t *v; int n; int tail; };
+struct collectctx {
+    const Pos *p;
+    int val_lower, base, tailmax;
+    uint64_t *v;
+    int n, tail;
+};
 static int collect_cb(Move m, void *vc) {
     struct collectctx *c = vc;
     int val = value(c->p, m);
+    if (!c->tail && val >= c->base && val < c->val_lower && val > c->tailmax)
+        c->tailmax = val;
     /* tail=0: admit >= threshold (classic); tail=1 (PR #171 qs_tail
      * probe): admit the complementary below-threshold tail. */
     if ((val >= c->val_lower) != c->tail) {
@@ -754,7 +761,14 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         if (depth > 0 && in_history(pos)) return 0;
     }
 
-    int val_lower = depth == 0 ? QS : -MATE_UPPER;
+    int base = depth == 0 ? QS : -MATE_UPPER;
+    int margin = (depth > 1 ? depth - 1 : 0) * QS_A;
+    int val_lower = base;
+    if (!qstail && depth <= 3) {
+        int threshold = gamma - pos->score - margin;
+        if (threshold > MATE_LOWER) threshold = MATE_LOWER;
+        if (threshold > val_lower) val_lower = threshold;
+    }
     int best = -MATE_UPPER, live = 0, done = 0;
     Move nomove = { 0, 0, 0 };
 
@@ -836,7 +850,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
      * moves) in GENERATOR order -- unsorted, no futility. */
     {
         uint64_t vbuf[MAXMOVES];             /* stack: longjmp-safe, no malloc */
-        struct collectctx c = { pos, val_lower, vbuf, 0, qstail };
+        struct collectctx c = { pos, val_lower, base, -MATE_UPPER, vbuf, 0, qstail };
         gen_moves(pos, collect_cb, &c);
         if (!qstail) vm_sort(vbuf, c.n);
         for (int k = 0; k < c.n; k++) {
@@ -851,6 +865,14 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
                 PROCESS(1, m, -bound(&np, 1 - gamma, rd - 1, 0, 0));
             }
             if (done) break;
+        }
+        /* The tail's single maximum cap is emitted LAST, exactly where the
+         * generator now yields it: a prefix cutoff skips it altogether.  Its
+         * cap is below gamma by construction, so the order is free. */
+        if (!qstail && !done && c.tailmax > -MATE_UPPER) {
+            int score = pos->score + c.tailmax + margin;
+            if (score >= MATE_LOWER) score = MATE_LOWER - 1;
+            PROCESS(0, nomove, score);
         }
     }
 
