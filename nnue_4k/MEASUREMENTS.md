@@ -194,6 +194,19 @@ not; every corner is now built and priced (#240 no-break 1.100x, #241
 identity 0.981x, old-V7 flag 0.929x, merged duplicated-gate 0.912x). B1
 is the reachable simplification: one disjunct off the duplicated gate.
 
+### Launch note, 2026-08-19
+
+The rule-14 gate on d77ee87 (defaults) vs merged master e670434: exit 0,
+0 mismatches on all seven lines (40-position sweep + walk at depth 6,
+depth 7, QS/ER sweep, QS=0/ER=40, LMR=50, TABLE_SIZE 500/50). Box build
+reproduces the build machine bit for bit (52444/6342 depth-7 smoke).
+Launched 2026-08-19 in twin-gates-20260819/ per the COORDINATION.md
+entry: census by parentage, owner-forfeit window CLEAN (24 recent owner
+games, 0 time terminations), owner's own 3+0.1 validation running at
+nice 0 outranks this lane's nice 5 throughout. A first launch attempt
+died before game 1 on a `set -u`/`local` expansion bug in the runner
+(fixed in place; no game was played or counted from it).
+
 ## 2026-08-17 — Two orderings screened, both flat: butterfly history and a countermove table
 
 Verdicts against the bars registered below, before game 1.
