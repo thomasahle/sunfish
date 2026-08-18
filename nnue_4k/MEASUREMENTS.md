@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-18 | **CORRECTION 1 to METER 4: the BRIDGE does not isolate #217 — the ENTRY moved too, and what moved is Design B** | **Recorded before any Elo existed** (primary at ~30/600, count gate still refusing harvest), so it is a self-caught registration error, not a result-driven reinterpretation. The registration (`01afb5e`) and Amendment 1 (`7e4db94`) both claim the bridge is "meter 3's protocol VERBATIM with only the classic arm changed" and conclude twice that **"BRIDGE − 200.24 is the pure #217 goalpost move"**. **False — both arms moved.** Entry went **3376 B `a997b137…` (`1b6b94d`) → 3410 B `bf30904d…` (`d0a6e60`)**, and `git log 1b6b94d..d0a6e60 -- nnue_4k/pst_entry.py` returns **exactly one commit**: **`1250251` "Cache the rotation instead of recomputing it"** — **Design B**, the +34 B rotation-caching speed landing that meter 3's verdict itself said *"rides the NEXT meter"*, priced there at **+23.0 ± 11.4**. This meter is that next meter. **Control making the delta exact**: repacking `1b6b94d`'s source with **this meter's packer** reproduces `a997b137…` **bit-for-bit**, and `pack.sh` is **unchanged** across the interval — so the packer is a constant and the entry difference is that one commit and nothing else (which also confirms meter 3's arm used the `nnue-4k` packer, as this registration chose for both arms). **Restated**: `bridge − 200.24` = **Δ(Design B) + Δ(#217)**, the NET arms move; `primary − bridge` is **unaffected and still a clean TC axis** (same two arms in both cells); `primary − 200.24` carries all four axes. The available decomposition **Δ(#217) ≈ (bridge − 200.24) − 23.0** leans on a **projection with zero games behind it** and will be reported as an attribution, never as the measurement — meter 3's "lean, labelled as a lean" is the precedent. **Nothing is re-run, relaunched or re-drawn**: the in-flight arms are the correct, sha-pinned, briefed arms. What changes is only what the numbers may be CALLED at harvest. Still a meter; no branch fires |
 | 2026-08-18 | **AMENDMENT 1 to METER 4: the registered EPD book is STRUCTURALLY UNPLAYABLE by a packed arm — cell VOID at 427 games, and the fix removes an axis** | The primary cell stopped itself: **427 of 427 games `illegal move`**, both arms playing **`g1f3`** (White's move from the *initial* position) into a book FEN. Cause is the packed build, not a bug: `sunfish.py`'s builtin loop has only `position startpos`, and the `position fen` branch lives in `sunfish_ui/uci.py` inside the `minifier-hide` block that `pack.sh` **deletes**. Probed both arms after the stop — `position fen …` → **`g1f3`** from each; `position startpos moves g1f3` → `b8c6` (classic) / `d7d5` (entry), correct. **The ENTRY ignores FEN too**, so this is not dodgeable by picking a different classic form: **no EPD book can ever be played against the 4k artifact**, and a book for this pair must be **PGN** (replayed as `position startpos moves …`). That is why meters 1–3 used `book3k.pgn`; the reason was never recorded, and now is. **Correction**: primary book → `book3k.pgn`, fresh srands 20260882/20260883 (20260880/1 burned), coprimality re-run and passing; everything else in `01afb5e` stands. **The fix improves the design** — it deletes the book axis, so **bridge − meter 3 = classic (#217) alone**, **primary − meter 3 = classic + TC**, and **primary − bridge = a clean TC slope**. Two structural gates added before relaunch: the runner now **refuses an EPD book** outright, and the boot smoke sends the **book's actual command form** (`position startpos moves g1f3`, reply must not be `g1f3`) — the check that would have caught this in under a second instead of 427 games. **Zero illegal = STOP worked exactly as registered.** No branch fires; still a meter, not a promotion |
 | 2026-08-18 | **PRE-REGISTRATION: METER 4, the post-#217 re-anchor — and the meter states WHICH CLASSIC it means: the PACKED builtin-budget loop** | The goalpost moved: master merged **#217** (builtin clock → per-move budget with a **five-fold wall**) plus #231/#235/#239 housekeeping, so meter 3's **+200.24 ± 38.35** now reads against a **pre-#217** classic (`f4f06d4`) that no longer exists. **Form decided and registered**: a checkout of `sunfish.py` delegates to `sunfish_ui/uci.py` (`TM_MANAGER=pool`), the PACKED artifact runs the builtin #217 loop — the meter means the **packed** classic, because the 4k-league framing demands an opponent of the same kind, because every prior timed meter used it, and because the two forms measure **level** head to head (`tmbudget` 60+0 N=200: **+3.47 ± 33.81**). Arms sha-pinned: entry **3410 B** `bf30904dfdf5…` (`d0a6e60`, the DEPLOYED artifact — **reused, not rebuilt**; provenance closed by a repack reproducing it bit-for-bit) vs classic **3361 B** `d177d79a66a1…` (`ab3b490`), **same packer both arms**; the same classic source under master's older packer is `d601382295…` = the box's already-played `budget.packed`, confirming `ab3b490` is the #217 engine. **TWO CELLS, because three axes move at once**: PRIMARY **N=600 at 30+1** on `openings_1991_valid.epd` (the house TC, the new anchor) and BRIDGE **N=300 at 60+1** on `book3k.pgn` — **meter 3's protocol verbatim with only the classic arm changed**, so that **BRIDGE − 200.24 is the pure #217 goalpost move** and the delta is not a three-axis mush. Gates all mandatory and read before any Elo: coprimality preflight (both cells gcd 1), arm-identity sha, boot smoke, ≥24 free cores (HOLD, never relocate), **zero illegal = STOP**, **zero forfeit = VOID**, count, `opening_gate.py`, `cluster_elo.py` inflation, PID liveness; dormancy **N/A** at a real clock, clocks recorded instead. Registered band for the primary **[+120, +200]**, central ≈ +165 — classic should be stronger, so the gap should narrow — and the band is a prediction under test, not a target. **METER, NOT PROMOTION: no branch fires on any number here** |
 | 2026-08-17 | **DISTRIBUTION CONFIRMATION: the NULL branch fires — distribution joins labels as a measured NON-LEVER, and the night's three headline gaps all dissolve into noise or venue** | N=300/side both-vs-entry on the box, hardened harness (fixed 20k nodes + pinned 150 s clock), **both gates PASS: 0 moves ≥15 s, 0.00% ≥1.45 s, max 1.231 s / 1.006 s, 0 illegal, 300/300 each**. **C self-play −93.70 ± 37.44** (63.17% to the entry), **B Lichess −134.95 ± 39.14** (31.50%). Registered gap **C−B = +41.25 ± 54.16, CI [−12.9, +95.4] — CONTAINS ZERO (0.76σ)** → **NULL as pre-written at `9abc2e1`**: no third pass at position/label sourcing at this capacity; the remaining lever is **capacity**, which needs the byte seam and Thomas's direction call. **No promotion** — both cells still lose to the entry. **Reconciliation**: every clean number sits inside the earlier intervals (matrix B −181.70 ± 87.88 vs clean −134.95; screen C −63.23 ± 93.36 vs clean −93.70), so **the matrix's +118 was n=50 noise** and **round-1's −240 was ~150 Elo of venue coupling**, not a correction. Both axes of the distribution×label matrix are now closed |
@@ -331,6 +332,87 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-18 — CORRECTION 1 to METER 4: the BRIDGE does not isolate #217 — the ENTRY moved too, and the thing that moved is Design B
+
+**Recorded before a single Elo was computed.** At the time of writing the
+primary has played ~30 of 600 games, the count gate has refused every harvest
+attempt, and no score for either cell exists. This correction is therefore not
+result-driven; it is a claim I made in the registration that turned out to be
+false on inspection.
+
+### The false claim
+
+The registration (`01afb5e`) and Amendment 1 (`7e4db94`) both say the BRIDGE is
+
+> "meter 3's protocol VERBATIM with only the classic arm changed"
+
+and draw the conclusion, twice, that **"BRIDGE − 200.24 is the pure #217
+goalpost move"**. Verbatim, so it cannot be lost. **Both arms moved.**
+
+| arm | meter 3 | **meter 4** | what separates them |
+|---|---|---|---|
+| entry | 3376 B `a997b137e1e4a655…` (nnue-4k `1b6b94d`) | **3410 B `bf30904dfdf5674d…`** (`d0a6e60`) | **exactly one commit** |
+| classic | 3392 B `6bbac98a…` (master `f4f06d4`) | **3361 B `d177d79a…`** (`ab3b490`) | #217 + housekeeping |
+
+`git log 1b6b94d..d0a6e60 -- nnue_4k/pst_entry.py` returns **one** commit:
+**`1250251` "Cache the rotation instead of recomputing it; close the mutable
+board for good"** — **Design B**, +34 B, the rotation-caching speed landing that
+meter 3's own verdict said in as many words *"landed AFTER these arms were
+pinned and rides the NEXT meter"*, re-priced there at **+23.0 ± 11.4**.
+
+This meter *is* that next meter. I read that sentence when I read meter 3 and
+still wrote "only the classic arm changed".
+
+### The control that makes the entry delta exact
+
+Not asserted from the log — reproduced:
+
+- Packing `1b6b94d`'s `pst_entry.py` with **the same packer this meter uses**
+  yields **3376 B, `a997b137e1e4a65550a0489e2acab172acbf846dd1fc93168721de3418fe10be`**
+  — **bit-identical to meter 3's entry arm**.
+- `tools/build/pack.sh` is **unchanged** between `1b6b94d` and `d0a6e60`.
+
+So the packer is a **constant** across the two meters, and the entry difference
+is exactly `1250251` and nothing else. (This also confirms, retroactively, that
+meter 3's arm was built with the `nnue-4k` packer — the same one the
+registration chose for both of this meter's arms.)
+
+### What the cells actually measure
+
+| quantity | what it is |
+|---|---|
+| **bridge − 200.24** | **Δ(Design B) + Δ(#217)** at fixed TC and book — the NET arms move, not #217 alone |
+| **primary − bridge** | **unaffected and still clean**: both cells run the *same two arms*, so this remains a pure 30+1 ↔ 60+1 axis |
+| **primary − 200.24** | Δ(Design B) + Δ(#217) + Δ(TC) + Δ(book) |
+
+The bridge is still worth its ~2 h: it removes TC and book from the comparison,
+which is two of the four axes, and it is the only cell that speaks to meter 3 on
+meter 3's own terms.
+
+### The decomposition that is available — and what it is worth
+
+Design B carries an **independent** prediction of **+23.0 ± 11.4**, from the
+calibrated nps→Elo axis. Given the bridge, that yields
+
+> **Δ(#217) ≈ (bridge − 200.24) − 23.0**, with the errors added in quadrature.
+
+**This is an attribution, not a measurement.** The +23.0 is a *projection* from
+nps with **zero games** behind it, and this ledger has been burned twice by
+treating a projected component as if it were measured — meter 3's own "lean,
+labelled as a lean" is the precedent. It will be reported as a decomposition
+with its inputs named, and the **measured** quantity will stay the net.
+
+### What does not change
+
+Nothing about the protocol, the arms, the gates, the band, or the games. No cell
+is re-run, no srand is re-drawn, nothing is relaunched — the arms in flight are
+the correct arms, they are the ones the brief named, and they are sha-pinned.
+What changes is **what the two numbers are allowed to be called** at harvest.
+
+**Still a meter, not a promotion. No branch fires.**
 
 ---
 
