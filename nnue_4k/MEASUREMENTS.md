@@ -319,12 +319,32 @@ for match use, only for its identity gate.
 either: 200 is the measured figure, and every cell above is consistent with it
 being right rather than merely safe.
 
-### Real-clock cell, running
+### Real-clock cell, COMPLETE: level, and it does not flag
 
 `budget` at DELAY=200 vs the pool spelling (`5d16f5c`), **fixed N=200 at
 60+0**, both artifacts on one search core (master `8c00405`), box, conc 8,
-`nice 10`, srand 20260820, forfeits registered as DATA. Launched with 88 free
-cores of 96.
+`nice 10`, srand 20260820, adjudication none but a 400-move cap, forfeits
+registered as DATA. Venue gate passed at 88 free cores of 96.
+
+| | |
+|---|---|
+| Elo | **+3.47 ± 33.81** (nElo +4.96 ± 48.15) |
+| W / D / L | 70 / 62 / 68 = 50.50% |
+| pentanomial | [9, 13, 53, 17, 8] |
+| illegal moves | **0** |
+| time forfeits | **0 — on BOTH arms** |
+| terminations | 200 of 200 normal |
+
+**The forfeit question the asymmetric floors raised is answered: they do not
+cost forfeits at 60+0.** The comparison that makes that mean something is the
+SIMPLE form, measured in the identical cell on the same day — same TC, same
+N, same book, same box — which took **3 forfeits, all its own**. This form's
+floors are twice and four times the pool's, and it still flags zero, because
+it keeps the reserve that the simple form dropped.
+
+So the respelling is level with the spelling that was measured, on a real
+clock, in the regime where the two differ most: **+3.47 ± 33.81 at 60+0**,
+against **+96.19 ± 33.81 at 30+1** for the structure they share.
 
 
 ## 2026-08-18 — PRE-REGISTRATION: the BUDGET respelling, and movetime leaves the packed loop
