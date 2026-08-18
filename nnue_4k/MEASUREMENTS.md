@@ -19070,3 +19070,126 @@ No claim is made from the statistics above about how it will read.
 **Fourth confirmation of the binding bias**, incidentally: ARM 9's digits are
 `[89, 89, 89, 89, 89]` — five of five on the `+45` rail, after the capacity
 arm's 5/5, ARM 2's 4/4 and ARM 1's 4/5-after-an-8×-widening.
+
+---
+
+# IDEA 9 — CLOSED. Representability confirmed, conversion refuted.
+
+`AB_rr_arm9.txt`, srand 20260822, 300 games, **VALID on all six gates**:
+legality on all four engines, 300/300 games, 0 forfeits, dormancy 1.113 s,
+coprimality pre-flight `gcd(25,6)=1`, **opening gate 300 distinct games / 0
+duplicate replays**. Box load 20.69 at launch.
+
+| engine | vs entryd0 | pooled mean score% |
+|---|---|---|
+| entryd0 (anchor) | — | **73.67%** |
+| sfctl (SF labels, 250k) | 31.00% | 46.00% |
+| capn5 (SF labels, 10M) | 24.00% | 41.00% |
+| **arm9 (entry-search labels, 250k)** | **24.00%** | **39.33%** |
+
+Head-to-head `arm9` vs `sfctl`: **53.00%** — nominally ahead, while finishing
+behind it on both the anchor cell and the pooled mean. **The pooled ordering
+contradicts the head-to-head cell again**, the same self-contradiction rr6b
+showed, and every gap here is inside noise: 0.42 SE head-to-head, 0.70 SE on
+the anchor cell, 1.16 SE pooled.
+
+## (a) Representability — CONFIRMED, and it stands as the sweep's cleanest result
+
+Unchanged by this tournament and not in question: the family closes **31.6%**
+of the material-anchor gap on entry-searched labels against **15.0%** on
+Stockfish depth-28 cp, with val moving 6.9% across six passes against 3.1%.
+**Given a target inside its reach, this family reaches it.** The capacity
+arm's failure against SF labels was a target-reachability problem, not only a
+capacity or data one.
+
+## (b) Conversion — REFUTED
+
+**`arm9` scored 24.00% against the anchor: exactly `capn5`'s number.** A net
+built to be entry-like, and measurably 20.5σ more entry-like on move
+agreement, plays the entry exactly as badly as the net that never saw an
+entry label. Entry-likeness on a static eval does not convert into strength.
+
+**This is the second consecutive move-agreement statistic whose confident
+prediction the games declined to honour** — the withdrawn sibling-gate
+calibration, and now ARM 9's 20.5σ. Two independent constructions, both
+large, both null in play. That is no longer a coincidence to be explained
+away; it is the pattern.
+
+## (c) PREMISE CORRECTION — the corpora were not identical
+
+I wrote "**the same rows**" and "arm minus control is the label source and
+nothing else". Overstated. `arm9`'s corpus is **249,608 rows against sfctl's
+250,000**: the labeller's `cpmax` filter dropped **390 rows (0.16%)**, of
+which 4 were mate-class, because the entry's search returns mate scores where
+Stockfish's stored eval did not. So `arm9` trained on a **strict subset** —
+and specifically a subset with the sharpest tactical positions removed.
+
+The fair-test claim survives (0.16%, one-directional, and a subset cannot
+manufacture the null), but "identical" was wrong and the asymmetry is exactly
+where a distillation arm would least want it. Consequently their **`val_sha`s
+differ** (`842500c105fe7669` vs `c416f5c3278c1732`), so the two runs' own val
+gates were never comparable — which is why the read went through each
+corpus's own material anchor, and that choice is now load-bearing rather than
+stylistic.
+
+## (d) The `capn5` drift table — three readings of one engine
+
+Byte-identical engine, same anchor, same node budget, three tournaments:
+
+| tournament | capn5 vs entryd0 |
+|---|---|
+| rr_sigk | 36.00% |
+| rr6b | 28.12% |
+| rr_arm9 | 24.00% |
+| **combined** | **29.55% ± 4.4** |
+
+**A 12-point spread from sampling alone.** This is the single most useful
+number the sweep produced for anyone reading it later: it is the empirical
+noise floor of a 50-game cell in this arena, measured rather than assumed,
+and it retroactively explains every "difference" this lane chased tonight.
+
+## (e) Naming drift, recorded
+
+ARM 9's config notes name its control `3163_arm9ctl_sf250k`; the run is
+`319_arm9ctl_sf250k`. I renamed the queue slot mid-flight and the note kept
+the stale name. Nothing depended on it, but a config that misnames its own
+comparison partner is how a later reader reconstructs the wrong experiment.
+
+## IMPLICATION FOR ARM 10 — LANE CALL: KEEP, conditioned
+
+**Its premise is different in kind, and precisely so:** every arm this sweep
+ran changed *what the net was asked to predict* within a regression framing —
+the scale (`sigK`), the labels (ARM 9), the sparsity (`l1`), the optimiser
+(`lr`). ARM 10 changes *what the net is asked to optimise*: a ranking loss
+does not ask it to match magnitudes at all, only ordering. **That is the exact
+constraint the representability result points at.** ARM 9 established the
+family cannot represent SF cp *magnitudes* (15.0%) but can represent an
+easier target (31.6%); a ranking objective removes the magnitude requirement
+rather than swapping one magnitude target for another. No arm has tested that,
+and it does not reduce to "a third agreement statistic" — ARM 9 trained on
+*values* and was *scored* on agreement; ARM 10 would train on ordering
+directly.
+
+**But the base rate is what it is, and I am not going to dress it up.** Six
+axes tested tonight — capacity, data, cp→win scale, second layer, bias
+format, label source — and every one is Elo-null against a family sitting ~20
+points below the entry. ARM 10's prior is low. It is funded on one specific
+mechanism argument, not on optimism.
+
+**Conditions, registered:**
+
+1. **It trains on the lr-corrected recipe.** The `lr4x` result (19σ on refval,
+   1.4% val movement against 0.3%) says `lr = 3e-3` was inherited and never
+   tuned. Running the last untested axis on a recipe known to be undertrained
+   would waste it. The lr sweep is ten minutes a point and comes first.
+2. **Promotion is games-only against the entry contrast** — already registered
+   in `6315ff2`, and after tonight it is doing all the work. No val reading,
+   no ordering statistic, and explicitly not `siblingrank`, may promote it.
+3. **PRE-REGISTERED STOP:** if ARM 10 reads Elo-null against the entry
+   contrast like the other six, **the objective axis closes as a whole** and
+   this lane stops proposing objective arms. The remaining value is in search
+   and format work, where the entry's own ~20-point margin was actually built.
+
+Recorded either way, as asked: the defensible alternative was to descope now
+on the two-caution argument, and I am choosing to spend ~130 lines and one
+tournament against a stated stop condition instead.
