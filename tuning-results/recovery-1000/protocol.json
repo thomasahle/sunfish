@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "purpose": "Compare optimizer recovery from three independently degraded search policies",
+  "engine_sha256": "c5039b4a0f88a2e11cf18ad13cd3f7d2c206b0a6901249d67d0b43ec02c95478",
+  "tables_sha256": "d09fc445930a0e4babbab1aa176847a77923d3bf00c0b6fb0c46b0a90d14bbf0",
+  "time_control": "3+0.1",
+  "starts": [5, 15, 23],
+  "seeds": {"5": 2031, "15": 2041, "23": 2049},
+  "methods": ["logistic-gp", "maximin", "ctt-mes", "clop", "spsa", "rbfopt"],
+  "training_games": 1000,
+  "checkpoints": [0, 100, 200, 400, 700, 1000],
+  "training_opening_start": 201,
+  "validation_opening_start": 1201,
+  "validation_pairs": 100,
+  "selection_rule": "Compare only independently held-out Elo recovery from each degraded start",
+  "primary_metric": "Mean held-out Elo recovery at 1000 training games across starts",
+  "secondary_metric": "Normalized trapezoidal area under the held-out recovery curve",
+  "decision_rule": "Call methods tied unless their paired 95% difference interval excludes zero",
+  "notes": [
+    "All methods receive the same centered parameter box, fixed master opponent, and openings.",
+    "The master policy is inside every box but is not identified to the optimizer.",
+    "SPSA is planned for the full horizon and cannot reuse the shorter pilot trajectory.",
+    "RBFOpt points are plotted at the actual number of games consumed.",
+    "Internal optimizer estimates are diagnostic and never enter the common learning curve."
+  ]
+}

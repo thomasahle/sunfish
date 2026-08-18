@@ -1,0 +1,55 @@
+{
+  "ctt-mes": {
+    "training": "candidate versus fixed master",
+    "rounds_per_point": 1,
+    "initial_points": 24,
+    "acquisition": "mes",
+    "acquisition_candidates": 1000,
+    "iterations": 500
+  },
+  "logistic-gp": {
+    "training": "candidate versus fixed master",
+    "pairs_per_point": 1,
+    "slots": 2,
+    "initial_design": 24,
+    "exploration_start": 0.5,
+    "exploration_floor": 0.2,
+    "exploration_half_life": 40,
+    "duel_fraction": 0,
+    "inducing_points": 128
+  },
+  "maximin": {
+    "training": "candidate versus fixed master",
+    "pairs_per_point": 1,
+    "slots": 2,
+    "initial_design": 1000,
+    "duel_fraction": 0,
+    "inducing_points": 128
+  },
+  "spsa": {
+    "training": "symmetric perturbation versus symmetric perturbation",
+    "pairs_per_step": 1,
+    "a_ratio": 0.1,
+    "alpha": 0.602,
+    "gamma": 0.101,
+    "c_ratio": 0.16666666666666666,
+    "draw_ratio": 0.2,
+    "precision": 0.5,
+    "iterations": 500
+  },
+  "rbfopt": {
+    "training": "candidate versus fixed master",
+    "algorithm": "MSRSM",
+    "global_search": "genetic",
+    "noisy_pairs": 1,
+    "accurate_pairs": 5,
+    "local_search": false
+  },
+  "clop": {
+    "training": "candidate versus fixed master",
+    "replications": 2,
+    "draw_elo": 65,
+    "h": 3,
+    "correlations": "all"
+  }
+}

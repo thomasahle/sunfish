@@ -1,0 +1,61 @@
+{
+  "engine_sha256": "c5039b4a0f88a2e11cf18ad13cd3f7d2c206b0a6901249d67d0b43ec02c95478",
+  "source_sha256": "9be277eceebba313ed6ca266ee8bb6e7e4771c5480a9db2933f93d4b6a79fcc6",
+  "tables_sha256": "d09fc445930a0e4babbab1aa176847a77923d3bf00c0b6fb0c46b0a90d14bbf0",
+  "openings_sha256": "2c17253fc1282d7f41410d64e0621d801bb992c3bfba6ecd2372b06e7c5eae5f",
+  "time_control": "3+0.1",
+  "opening_start": 501,
+  "pairs": 250,
+  "baseline_options": {"NULL_CAP_MARGIN": 15},
+  "experiments": {
+    "search": {
+      "options": {
+        "FUT_CAP_DEPTH": 4,
+        "NULL_CAP_MARGIN": 20,
+        "NULL_LIMIT": 1000,
+        "NULL_MARGIN": -210
+      },
+      "wins": 210,
+      "losses": 170,
+      "draws": 120,
+      "elo": 27.85,
+      "error95": 26.66,
+      "los": 98.03
+    },
+    "material": {
+      "options": {"VALUE_B": 310, "VALUE_R": 490, "VALUE_Q": 925},
+      "wins": 184,
+      "losses": 181,
+      "draws": 135,
+      "elo": 2.08,
+      "error95": 26.07,
+      "los": 56.24
+    },
+    "pst": {
+      "options": {
+        "PST_P": 120,
+        "PST_N": 110,
+        "PST_B": 110,
+        "PST_R": 90,
+        "PST_Q": 110,
+        "PST_K": 120,
+        "PST_KE": 110
+      },
+      "wins": 192,
+      "losses": 184,
+      "draws": 124,
+      "elo": 5.56,
+      "error95": 26.46,
+      "los": 66.01
+    },
+    "eval": {
+      "options": "material + pst",
+      "wins": 196,
+      "losses": 184,
+      "draws": 120,
+      "elo": 8.34,
+      "error95": 26.61,
+      "los": 73.10
+    }
+  }
+}

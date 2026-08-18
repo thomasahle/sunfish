@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "date": "2026-08-18",
+  "purpose": "Test a played-point trust region after the logistic-GP root-cause audit",
+  "parent_diagnostic_sha256": "2215233bbec1aedbc01b0da1a3e91c8730e9465ee462639ba080a6ba0586c6c1",
+  "engine_sha256": "c5039b4a0f88a2e11cf18ad13cd3f7d2c206b0a6901249d67d0b43ec02c95478",
+  "time_control": "3+0.1",
+  "start": 23,
+  "seed": 2049,
+  "opening_start": 201,
+  "training_games": 200,
+  "arm": {
+    "name": "gp-v4-local",
+    "initial_design": "one kernel-length in both directions on every axis",
+    "pair_weight": 1.0,
+    "length_scale": 1.7,
+    "interaction_fraction": 0,
+    "learned_mean": "frozen after the 25-pair initial design",
+    "ucb_exploration": 0.0,
+    "explicit_exploration": [0.35, 0.1, 40],
+    "exploitation": "one coordinate from a previously measured configuration",
+    "pending_duplicates": false,
+    "slots": 2
+  },
+  "selection_rule": "Recommend the posterior-mean best measured configuration",
+  "validation": {
+    "opening_start": 1201,
+    "pairs": 100,
+    "opponent": "fixed master"
+  },
+  "notes": [
+    "The local rule is used only for exploitation; explicit exploration remains global.",
+    "Training scores and posterior estimates are diagnostic, not Elo evidence.",
+    "The arm is compared on the same held-out openings as the earlier GP variants."
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "date": "2026-08-18",
+  "original_protocol_sha256": "7b68e2ee36115d9b5e09d7438ec70ab81849158ee2b0b4109654533c37a919a0",
+  "corrections": [
+    "CTT evaluates each degraded start before asking its optimizer for a point.",
+    "The first eight CTT games accidentally launched without that start are discarded.",
+    "Fixed-master observations apply to CTT, CLOP, RBFOpt, logistic GP, and maximin.",
+    "SPSA alone compares symmetric perturbations, as required by its gradient estimate."
+  ],
+  "unchanged": [
+    "No discarded games enter training, validation, or the game-budget axis.",
+    "All methods retain the original spaces, seeds, budgets, checkpoints, and held-out validation.",
+    "Only independently held-out validation Elo is compared across methods."
+  ]
+}
