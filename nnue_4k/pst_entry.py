@@ -313,10 +313,10 @@ EMPTY = (-MATE_UPPER, MATE_UPPER)
 class Searcher:
     def __init__(self):
         self.t, self.tp_move, self.h = {}, {}, set()
-        self.nodes, self.deadline = 0, 1 << 63
-        # minifier-hide start
-        self.node_cap = 1 << 62          # testing only; see bound()
-        # minifier-hide end
+        # node_cap is the `go nodes N` budget. 1<<62 means "no cap", which is
+        # every production go -- neither lichess nor TCEC sends nodes -- so the
+        # production path through bound() is the one it always was.
+        self.nodes, self.deadline, self.node_cap = 0, 1 << 63, 1 << 62
 
     def bound(self, pos, gamma, depth, root=False):
         """ Let s* be the score of the sub-tree from pos at this depth, as
@@ -345,20 +345,17 @@ class Searcher:
             """
 
         self.nodes += 1
-        # minifier-hide start
-        # Node budget enforced INSIDE the search, at the same granularity as
-        # the deadline. Checking a node cap only between completed depths
-        # rewards whichever engine prunes LESS: its last iteration is bigger,
-        # so it sails further past the cap. Measured at a 20000 cap, classic
-        # (no LMR) reached 34742 nodes -- 1.74x -- against 26336 for the same
-        # engine with LMR, a ~30% free advantage worth ~38 Elo. Testing-only:
-        # the 4k rules mandate no node command, so the artifact carries none
-        # of this.
-        if self.nodes % 2048 == 0 and self.nodes > self.node_cap: raise Stop
-        # minifier-hide end
-        # Enforce the time budget inside the search: iteration boundaries can
-        # be seconds apart on slow hardware, this is checked every ~2k nodes.
-        if self.nodes % 2048 == 0 and time.time() > self.deadline: raise Stop
+        # ONE poll, two budgets, every ~2k nodes. Iteration boundaries can be
+        # seconds apart on slow hardware, so both the wall-clock deadline and
+        # the `go nodes` cap are enforced INSIDE the search rather than between
+        # completed depths. Between depths is not good enough for the node cap:
+        # it rewards whichever engine prunes LESS, because its last iteration is
+        # bigger and sails further past the cap -- measured at a 20000 cap,
+        # classic (no LMR) reached 34742 nodes, 1.74x, against 26336 for the
+        # same engine with LMR: a ~30% free advantage worth ~38 Elo.
+        # node_cap is 1<<62 unless `go nodes` set it, so a production search
+        # short-circuits the first test and runs exactly the old deadline poll.
+        if self.nodes % 2048 == 0 and (self.nodes > self.node_cap or time.time() > self.deadline): raise Stop
 
         # Depth <= 0 is QSearch. Here any position is searched as deeply as is needed for
         # calmness, and from this point on there is no difference in behaviour depending on
@@ -833,22 +830,18 @@ def main():
             # fail-low dive probe at an absurd gamma and is only a
             # candidate (classic's Qxc6 giveaway class).
             best, cand, d0, lo, up = None, None, 1, -1e9, 1e9
-            # minifier-hide start
-            # "go nodes N": equal-effort matches. Testing-only -- the 4k
-            # rules mandate no such command, so the artifact does not carry
-            # it. Without this a fixed-node match silently becomes a
-            # movetime match and every game ends in a forfeit.
-            max_nodes = times.get("nodes", 0)
-            searcher.node_cap = max_nodes or 1 << 62
-            # minifier-hide end
+            # "go nodes N": fixed-node benchmarking, and the artifact carries
+            # it now. TCEC does not require the command and no production GUI
+            # sends one, but a fixed-node harness that meets an engine without
+            # it silently becomes a movetime match -- which is how a packed arm
+            # burned 150 s per move in the book lane's gauntlet, and why that
+            # lane had to measure byte-verified checkouts instead of the
+            # artifact. The thing we want to benchmark is the artifact.
+            searcher.node_cap = times.get("nodes", 0) or 1 << 62
             try:
                 for depth, gamma, score, move in searcher.search(hist):
                     if depth > d0:
                         best, d0, lo, up = cand or best, depth, -1e9, 1e9
-                    # minifier-hide start
-                    if max_nodes and searcher.nodes >= max_nodes and (best or cand):
-                        break
-                    # minifier-hide end
                     # `and move`: a root fail-high without a move is a
                     # verified terminal (bound()'s contract) -- rendering
                     # it would crash, and there is nothing to play anyway;
