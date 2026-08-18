@@ -464,14 +464,16 @@ class Searcher:
         best, live, capped = -MATE_UPPER, False, False
         for move in moves():
             # The virtual options score statically: the stand-pat at depth 0,
-            # else the pass, capped at static evaluation plus one score bucket -
-            # that keeps its value monotone and below the positive mate band. A
-            # sub-window cap needs no child probe; otherwise one is enough. A
-            # king capture substitutes the exact MATE_UPPER for a virtual
-            # fail-high - and hands the store below its witness.
+            # else the pass at its fixed cap, one score bucket above static
+            # evaluation. The probe target is the CAP, not the window: the pass
+            # reports cap when the child proves it (fail low at 1 - cap) and
+            # nothing (-MATE_UPPER) when the child fails high - an upper bound
+            # is useless to a max-fold. (pos, depth)-pure like the deep fuel
+            # probe; the price is every cutoff with gamma <= pass < cap. A king
+            # capture substitutes the exact MATE_UPPER for a virtual fail-high.
             if move is None:
-                score = pos.score if depth == 0 else cap if (cap := pos.score + EVAL_ROUGHNESS) < gamma else min(cap,
-                    -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
+                score = pos.score if depth == 0 else cap if (cap := pos.score + EVAL_ROUGHNESS) < gamma else (
+                    cap if -self.bound(pos.rotate(nullmove=True), 1 - cap, depth - 3) >= cap else -MATE_UPPER)
                 proof = depth and score >= gamma and pos.king_capture()
                 move, score = (proof, MATE_UPPER) if proof else (move, score)
             # Below the QS admission floor a move is not part of the tree at
