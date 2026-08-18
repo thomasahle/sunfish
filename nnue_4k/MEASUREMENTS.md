@@ -18432,3 +18432,10 @@ this lane's family looked good on a static number it lost by 140 Elo.
 That is precisely why the instruments were split in advance: the fixed-node
 screen answers "is the eval term positive at all", and **only the timed match
 can promote**.
+
+Load time of the same trained artifact, pypy 7.3.23, min of 7: **17.15 ms**
+against the shipped diagonal's 5.60 ms and a 60,000 ms startup budget. Three
+times the diagonal's decode — 384 folded rows gathered to 768, an
+81-entry lane-word table per trit chunk at N=32 — and still four thousand
+times inside the budget, so the pure-Python reconstruction remains the right
+call and numpy is still not needed.
