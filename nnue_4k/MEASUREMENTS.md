@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-18 | #217 rebased onto master `8c00405` (from base `4c8770e`, seven merges of search, audit and docs work behind it) | **Textual only** — the TM block is byte-identical across the rebase and `Searcher.bound` is master's verbatim. Re-measured on the new base: cleaned **140 → 140** (README's own claim, unchanged), packed **3389 → 3426 = +37 B**. Gates **451 passed / 2 skipped / 0 failed**, model audit GREEN, TM trio 141, tmlib 47,599 values no drift. Only `Searcher.search` is re-pinned — the branch's own change. No re-measurement: **+96.19 ± 33.81** stands as measured at its own base |
 | 2026-08-18 | **SIMPLE-FORM VERDICT: the pool's bookkeeping is NOT decoration — `soft = wtime/40 + 0.9*winc`, `hard = wtime/4` loses the pre-registered increment cells and PR #217 STANDS AS IT IS, its complexity now justified BY MEASUREMENT** | 12 cells x 120 games. `simple` vs `pool`: **30+1 −79.5 [−135.7, −27.2]**, **60+1 −58.5 [−112.7, −6.9]**, 60+0.1 +29.0 [−24.1, +83.5], 30+0 −49.6, 60+0 +11.6, **10+0 −61.4 [−126, −1]**; control `min40_4` vs `pool` replicates the published pass (−161.2 / −120.4 / −127.0). MECHANISM: a wall read off the RAW CLOCK inverts against a soft limit the increment holds up — at 30+1 `simple` parks near 3 s where `hard = T/4` falls BELOW `soft`, and **59% of its searches end at the wall** against the pool's 6%, so the bracket rule the 2x2 paid for stops firing. And no reserve means flags: 43/120 at 30+0, 68/120 at 10+0, pool 0. Real clock, N=200 at 60+0: **+20.87 ± 35.73**, 0 illegal, **3 time forfeits all `simple`** — and the surrogate had predicted +11.6 [−45, +69] for that cell, so this instrument's altitude bias is not a fixed multiplier. Price the simple form would have saved: 23 B |
 | 2026-08-18 | **PRE-REGISTERED: the SIMPLE form takes the pool's place in `sunfish.py` — `soft = wtime/40 + 0.9*winc`, `hard = wtime/4`, i.e. the SHIPPED min40_4 expression with its `min()` removed and its two operands promoted to the two limits — with #217's bracket-break stop rule held fixed** | Thomas rejected #217's budget as over-dressed ("Why do we need both a deadline and a soft?"); the 2×2 says the soft/hard PAIR is what pays (+41.9 / +64.4 / +223.3), so only the pool's BOOKKEEPING is on trial: no reserve, no increment banking, no overhead model, no sudden-death cliff. Stage 1 surrogate, 12 cells × 120 games, `pool` as baseline and `min40_4` as the re-anchoring control, 6 TCs incl. 3 sudden-death; branches written before cell 1. Stage 2 (only if simple wins): rebuild #217 and ONE fixed N=300 at 30+1. Stage 3 regardless: 60+0 N=200, the cliff-vs-no-cliff regime |
 | 2026-08-17 | **CLASSIC POOL VERDICT: the pool takes classic's builtin clock and its packed artifact at +96.19 ± 33.81 (95%, pentanomial) over a FIXED 300 at 30+1 — WINS CLEAR, the pre-written branch** | 150W/69L/81D = 63.50%, Ptnml [7,19,46,42,36] over 150 pairs, **0 illegal, 0 forfeits, 300/300 normal**. The surrogate ranked right and read HIGH (+117 to +223 vs +96.19) — a calibration datum. Mechanism predicted to 4%: identical median spend (1.277 s vs 1.258 s), max spend **7.729 s vs 1.944 s**, 14.2% of pool moves over 2 s against 0.0%. Elo lives in the PAIR: budget alone +41.9 [−0.4,+85.5], stop rule alone +64.4 [+8.1,+124.3], both +223.3 on the surrogate. Price **+36 B and ZERO minified lines** as landed (142 → 142): `Searcher.search()` reads the soft clock at the bracket boundary it already owns, so the UCI loop duplicates no search state. Raises the +400 goalpost by ~96 Elo; meter 3 is now historical |
@@ -139,6 +140,59 @@ how much effort it cost.
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
 
 ---
+
+## 2026-08-18 — #217 rebased onto `8c00405`: textual, and the TM block is byte-identical across it
+
+The branch had been sitting on `4c8770e` while master took #218's search
+refactor, #230's lazy-cap tail, #233, #234, #235 and #231, so it read
+CONFLICTING. Rebased — twice, because master landed #235 and #231 while the
+first rebase was being verified, and a rebase that is stale on arrival is
+not a rebase. **Nothing was re-measured and nothing needed to be:**
+the +96.19 ± 33.81 was a two-arm match whose arms shared their own base, and
+this rebase does not touch the object it measured.
+
+**What was verified rather than assumed:**
+
+- **The TM block is byte-identical across the rebase** — the pool comment,
+  both budget statements (`soft = max(0, min(...))` and the walrus clip), and
+  the `searcher.deadline, searcher.soft` arming line all diff clean against
+  the pre-rebase tip. So do the other two hunks (`self.soft` in `__init__`,
+  the soft read in `search()`).
+- **`Searcher.bound` is master's verbatim**, compared as extracted source
+  rather than by eyeball: the audited region this branch has no business
+  touching is untouched.
+- **One conflict was a silent revert and was caught**: the replay put this
+  branch's older two-line PV flip back over master's inlined spelling
+  (`4673322`). Restored to master's. Semantically identical, and the minified
+  count is invariant to it.
+
+**Re-measured on the new base**, because the old numbers were base-relative:
+
+| | at base `4c8770e` | at base `b0033f7` |
+|---|---|---|
+| cleaned `sunfish.py` | 142 → 142 | **140 → 140** |
+| packed classic | 3342 → 3378 (+36 B) | 3389 → **3426 (+37 B)** |
+
+The line claim in this PR's body (142) was the count at the old base; master
+now cleans to 140 and README.md already says 140, which the rebased branch
+still measures. Line-neutrality is the invariant, not the number.
+
+**Gates on the rebased tree: `451 passed, 2 skipped, 0 failed`**, model audit
+GREEN, TM guard trio 141 passed, `tmlib` 47,599 grid values with
+`pool_classic` found and no drift, and both the builtin loop and the packed
+artifact answer a `go`.
+
+**Confirmed against the first rebase, which is why it is written down.** On
+`b0033f7` this branch ended `450 / 2 / 1` with `test_model_audit` red, and
+pristine `b0033f7` failed the same test identically: two Lean-cited anchors
+from the pre-#230 null-move spelling. The lane also found that master's own
+`Searcher.bound` pin was STALE there (`d16001b6dbd8d2ad` recorded,
+**`663bfc29433b2bc5`** actual) — invisible because the anchor check returns
+before the hash comparison ever runs. #235 then landed and re-pinned it to
+exactly that value, so the branch keeping master's line verbatim rather than
+quietly fixing it is what let the second rebase resolve to one line: master's
+`bound`, this branch's `search`.
+
 
 ## 2026-08-18 — SIMPLE-FORM VERDICT: the wall has to be read off the SOFT LIMIT, not off the clock
 
