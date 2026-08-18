@@ -46,7 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
-| 2026-08-18 | **BUDGET-FORM VERDICT: the respelling holds the pool's Elo everywhere — every one of 12 cells contains zero — and the pre-registered rules SHIP DELAY = 200** | `budget:delay=200` vs the pool spelling: 30+1 −5.8 [−57,+45], 60+1 −52.5 [−109,+1], 60+0.1 +8.7, 30+0 −8.7, 60+0 −26.1, 10+0 +29.0. `delay=100`: +26.1 / −11.6 / −29.0 / +26.1 / +17.4 / +37.8. No increment cell declines either arm; 100 leads in 5 of 6 and the registered bar was **all six**, so the measured lichess lag stands. Contrast the SIMPLE form, which lost 30+1 by −79.5: the structure (5× wall off a share, reserve) is what carried the +96.19, not the pool's exact constants. **SCOPE, corrected mid-flight by Thomas: this ran under LOCAL lag and cannot decide the shipped constant** — re-registered as a VENUE question (DELAY=10 vs 200 head-to-head at 3+0.1 / 10+0.1 / 30+1 / 60+0), whose output is a required flag for future local matches, never a ship change |
+| 2026-08-18 | **BUDGET-FORM VERDICT: the respelling holds the pool's Elo everywhere — every one of 12 cells contains zero — and the pre-registered rules SHIP DELAY = 200** | `budget:delay=200` vs the pool spelling: 30+1 −5.8 [−57,+45], 60+1 −52.5 [−109,+1], 60+0.1 +8.7, 30+0 −8.7, 60+0 −26.1, 10+0 +29.0. `delay=100`: +26.1 / −11.6 / −29.0 / +26.1 / +17.4 / +37.8. No increment cell declines either arm; 100 leads in 5 of 6 and the registered bar was **all six**, so the measured lichess lag stands. Contrast the SIMPLE form, which lost 30+1 by −79.5: the structure (5× wall off a share, reserve) is what carried the +96.19, not the pool's exact constants. **SCOPE, corrected mid-flight by Thomas: this ran under LOCAL lag and cannot decide the shipped constant** — re-registered as a VENUE question (DELAY=10 vs 200 at 3+0.1 / 10+0.1 / 30+1 / 60+0, and the short pair again at a 5 ms charge). **ANSWER: local matches should NOT set a venue DELAY** — d10 flags 110/120 at 3+0.1 even at 5 ms, because the shipped 200 is what pins the engine to its 100/200 ms floors at a small clock; a registered prediction of mine was refuted and the refutation is the finding |
 | 2026-08-18 | **PRE-REGISTERED: Thomas's BUDGET respelling replaces the pool in the classic builtin loop — `budget = wtime/40 + winc - DELAY`, `soft = max(min(budget, wtime/4 - DELAY), 100)/1000`, `think = max(min(5*budget, wtime/2 - DELAY), 200)/1000`, and `movetime` is REMOVED there (sunfish.py = the simplified clock-only UCI of the TCEC-4k rules; `sunfish_ui/uci.py` keeps full UCI)** | Four deliberate deltas vs the pool: winc coefficient **1.0** (not 39/40), lag **subtracted per limit** (not an (M+2)·O pool reserve), clamps **wtime/4 − DELAY** and **wtime/2 − DELAY**, floors **100/200 ms** (not 50/50). `think ≥ soft` is STRUCTURAL, so the clip line dies with movetime. DELAY ∈ {100, 200} decided by surrogate; 12 cells × 120 games vs `pool`, then a real-clock 60+0 N=200 forfeit cell for the winner. Artifact-vs-mirror grid identity **0/378 on BOTH arms** before game 1. Cost vs #217's head: **+1 clean line** (the named DELAY, priced at 1 line / 5 B), packed **3426 → 3402 = −24 B** |
 | 2026-08-18 | #217 rebased onto master `8c00405` (from base `4c8770e`, seven merges of search, audit and docs work behind it) | **Textual only** — the TM block is byte-identical across the rebase and `Searcher.bound` is master's verbatim. Re-measured on the new base: cleaned **140 → 140** (README's own claim, unchanged), packed **3389 → 3426 = +37 B**. Gates **451 passed / 2 skipped / 0 failed**, model audit GREEN, TM trio 141, tmlib 47,599 values no drift. Only `Searcher.search` is re-pinned — the branch's own change. No re-measurement: **+96.19 ± 33.81** stands as measured at its own base |
 | 2026-08-18 | **SIMPLE-FORM VERDICT: the pool's bookkeeping is NOT decoration — `soft = wtime/40 + 0.9*winc`, `hard = wtime/4` loses the pre-registered increment cells and PR #217 STANDS AS IT IS, its complexity now justified BY MEASUREMENT** | 12 cells x 120 games. `simple` vs `pool`: **30+1 −79.5 [−135.7, −27.2]**, **60+1 −58.5 [−112.7, −6.9]**, 60+0.1 +29.0 [−24.1, +83.5], 30+0 −49.6, 60+0 +11.6, **10+0 −61.4 [−126, −1]**; control `min40_4` vs `pool` replicates the published pass (−161.2 / −120.4 / −127.0). MECHANISM: a wall read off the RAW CLOCK inverts against a soft limit the increment holds up — at 30+1 `simple` parks near 3 s where `hard = T/4` falls BELOW `soft`, and **59% of its searches end at the wall** against the pool's 6%, so the bracket rule the 2x2 paid for stops firing. And no reserve means flags: 43/120 at 30+0, 68/120 at 10+0, pool 0. Real clock, N=200 at 60+0: **+20.87 ± 35.73**, 0 illegal, **3 time forfeits all `simple`** — and the surrogate had predicted +11.6 [−45, +69] for that cell, so this instrument's altitude bias is not a fixed multiplier. Price the simple form would have saved: 23 B |
@@ -276,6 +276,48 @@ positive, which is the handicap number the local-match flag is worth.
 match harness must set a venue DELAY **no smaller than the arena's measured
 per-move charge**, and the shipped 200 is never lowered for a venue that
 cannot prove its charge.
+
+### VENUE ANSWER: my registered prediction was WRONG, and the refutation is the answer
+
+Written into the registration above: *"with a 5 ms charge `DELAY=10` should
+stop flagging and its larger soft limit should show up as a positive."* It
+did not stop flagging, and it is not positive.
+
+| TC | charge | `DELAY=10` vs `DELAY=200` | d10 flags | d200 flags |
+|---|---|---|---|---|
+| 3+0.1 | 50 ms | **−668.8** [−3600, −531] | 117/120 | 0 |
+| 3+0.1 | **5 ms** | **−483.2** [−679, −388] | **110/120** | 0 |
+| 10+0.1 | 50 ms | −447.1 [−632, −353] | 106/120 | 0 |
+| 10+0.1 | **5 ms** | **−295.7** [−395, −225] | **89/120** | 0 |
+| 30+1 | 50 ms | +17.4 [−35, +70] | 0 | 0 |
+| 60+0 | 50 ms | −14.5 [−73, +43] | 16 | 0 |
+
+Cutting the modelled lag tenfold removed a third of the flags and none of the
+loss. So the flags were never mainly about under-reserving against the
+charge, and the one-line mechanism I wrote down was wrong.
+
+**What is actually happening, and it is a better fact than the one I
+predicted.** At 3+0.1 the shipped `DELAY = 200` makes the budget *negative*
+(`75 + 100 − 200`), so both limits sit on their floors: **soft 100 ms, wall
+200 ms**. Spend then equals the increment and the clock holds — the floors are
+the sudden-death safety mechanism, and DELAY's real job at a small clock is to
+put the engine ON them. `DELAY = 10` lifts it off: soft 165 ms and a wall of
+**825 ms against a 3 s clock**, which the bracket rule is entitled to spend on
+an unsettled move. Two or three such moves and the game is gone. The same
+shape at 60+0, where d10 takes 16 flags to d200's zero for no Elo.
+
+**THE DECISION OUTPUT, and it is simpler than the flag this was scoped to
+produce: local matches should NOT set a venue DELAY.** Not at 3+0.1 or 10+0.1,
+where lowering it is catastrophic; and not at 30+1 or 60+0, where it buys
+nothing measurable (+17.4 and −14.5, both straddling zero) and still costs
+flags. The venue variant stays what it was labelled — a measurement artifact,
+never a ship candidate — and `tools/ctwin`'s twin does not need a DELAY option
+for match use, only for its identity gate.
+
+**What this does NOT say.** It does not measure lichess, where the charge is
+200 ms and the question never arose. And it does not license raising DELAY
+either: 200 is the measured figure, and every cell above is consistent with it
+being right rather than merely safe.
 
 ### Real-clock cell, running
 
