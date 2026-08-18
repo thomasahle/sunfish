@@ -420,13 +420,14 @@ class Searcher:
             if killer and (val := pos.value(killer)) >= val_lower:
                 yield killer, MATE_UPPER if val >= MATE_LOWER else val
 
-            # Aggregate the cap-pruned tail, then search the rest by intrinsic value.
-            values = [(pos.value(m), m) for m in pos.gen_moves()]
-            tail = (min(MATE_LOWER - 1, pos.score + v + margin)
-                for v, m in values if base <= v < val_lower)
-            yield None, max(tail, default=-MATE_UPPER)
-            for val, move in sorted((x for x in values if x[0] >= val_lower), reverse=True):
-                yield move, MATE_UPPER if val >= MATE_LOWER else val
+            # Search by decreasing intrinsic value. The cap is monotone in that
+            # value, so the sub-window tail is a suffix and the first move of it
+            # carries the maximum cap for all of it - one report, emitted last so
+            # a prefix cutoff skips it entirely.
+            values = sorted(((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= base), reverse=True)
+            n = sum(v >= val_lower for v, m in values)
+            yield from ((m, MATE_UPPER if v >= MATE_LOWER else v) for v, m in values[:n])
+            if n < len(values): yield None, min(MATE_LOWER - 1, pos.score + values[n][0] + margin)
 
         # Run through the moves, shortcutting when score >= gamma.
         # live is True if we saw a legal (not null, score > -MATE_UPPER) move

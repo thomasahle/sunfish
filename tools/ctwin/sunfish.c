@@ -852,14 +852,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         uint64_t vbuf[MAXMOVES];             /* stack: longjmp-safe, no malloc */
         struct collectctx c = { pos, val_lower, base, -MATE_UPPER, vbuf, 0, qstail };
         gen_moves(pos, collect_cb, &c);
-        if (!qstail) {
-            if (c.tailmax > -MATE_UPPER) {
-                int score = pos->score + c.tailmax + margin;
-                if (score >= MATE_LOWER) score = MATE_LOWER - 1;
-                PROCESS(0, nomove, score);
-            }
-            vm_sort(vbuf, c.n);
-        }
+        if (!qstail) vm_sort(vbuf, c.n);
         for (int k = 0; k < c.n; k++) {
             int val = VM_VAL(vbuf[k]);
             Move m = VM_MOVE(vbuf[k]);
@@ -872,6 +865,14 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
                 PROCESS(1, m, -bound(&np, 1 - gamma, rd - 1, 0, 0));
             }
             if (done) break;
+        }
+        /* The tail's single maximum cap is emitted LAST, exactly where the
+         * generator now yields it: a prefix cutoff skips it altogether.  Its
+         * cap is below gamma by construction, so the order is free. */
+        if (!qstail && !done && c.tailmax > -MATE_UPPER) {
+            int score = pos->score + c.tailmax + margin;
+            if (score >= MATE_LOWER) score = MATE_LOWER - 1;
+            PROCESS(0, nomove, score);
         }
     }
 

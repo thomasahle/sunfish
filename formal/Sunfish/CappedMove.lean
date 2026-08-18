@@ -20,11 +20,15 @@ need not be searched; otherwise `WindowReport.cap` transports its report.
 
 The positive-band ceiling prevents a selective cap from inventing mate. The
 cap disappears above depth three.  The implementation evaluates this fixed
-fold lazily: at a given window it aggregates every move whose cap is already
-below the window into one maximum-cap report, then searches only the remaining
-prefix.  The threshold changes with the window, but the value being reported
-does not; the last section proves the aggregate reports on the same capped
-fold for every threshold.
+fold lazily: at a given window it searches only the moves whose cap can still
+reach it, and aggregates every move below that threshold into ONE maximum-cap
+report.  The cap is monotone in the intrinsic move value, so that one number
+is the cap of the largest move in the tail - which, in Python's decreasing
+sort, is simply the first entry past the partition.  The threshold changes
+with the window, but the value being reported does not; the last section
+proves the aggregate reports on the same capped fold for every threshold, and
+that either evaluation order (tail first, or prefix first with the report
+emitted last) is exactly the original producer fold.
 -/
 
 import Sunfish.CappedNull
@@ -281,5 +285,79 @@ theorem lazyMove_partition (G : QSGame) (static gamma : Int) (depth : Nat)
     (Int.le_trans hinit htailFloor)
   simp only [lazyMovePrefix, lazyMoveTail, f] at *
   omega
+
+/-! ### One number for the tail, and either evaluation order -/
+
+/-- The shallow cap is monotone in the intrinsic move value, so `max` passes
+straight through it. -/
+theorem shallowMoveCap_max (static a b : Int) (depth : Nat) :
+    shallowMoveCap static (max a b) depth =
+      max (shallowMoveCap static a depth) (shallowMoveCap static b depth) := by
+  unfold shallowMoveCap
+  generalize (MATE_LOWER - 1 : Int) = ceiling
+  generalize ((depth - 1 : Nat) : Int) * QS_A = margin
+  omega
+
+/-- Hence the maximum of a list of caps is the cap of the maximum intrinsic
+value.  This is what lets Python report the tail with ONE number instead of
+folding the tail's caps: it caps the largest tail move and stops. -/
+theorem foldMax_shallowMoveCap {α : Type _} (static : Int) (depth : Nat)
+    (val : α → Int) : ∀ (l : List α) (init : Int),
+      foldMax (fun a => shallowMoveCap static (val a) depth) l
+          (shallowMoveCap static init depth)
+        = shallowMoveCap static (foldMax val l init) depth := by
+  intro l
+  induction l with
+  | nil => intro init; simp [foldMax]
+  | cons a l ih =>
+    intro init
+    simp only [foldMax]
+    rw [← shallowMoveCap_max]
+    exact ih (max init (val a))
+
+/-- The tail's aggregate cap, as Python computes it: the cap of the tail's
+single largest intrinsic value.  In the decreasing sort that value is the
+first entry past the partition, so the whole tail costs one lookup. -/
+theorem lazyMoveTail_maxCap (G : QSGame) (static gamma : Int) (depth : Nat)
+    (p : G.Pos) (init : Int) :
+    foldMax (fun m => shallowMoveCap static (G.val p m) depth)
+        (lazyMoveTail G static gamma depth p) (shallowMoveCap static init depth)
+      = shallowMoveCap static
+          (foldMax (G.val p) (lazyMoveTail G static gamma depth p) init) depth :=
+  foldMax_shallowMoveCap static depth (G.val p) _ init
+
+/-- Prefix first and tail second is also exactly the producer fold.  `max` is
+commutative, so the gamma-dependent partition is an evaluation ORDER in either
+direction and never a change of value.  Python emits the tail report last,
+which is why a prefix cutoff skips it entirely. -/
+theorem lazyMove_partition_prefixFirst (G : QSGame) (static gamma : Int)
+    (depth : Nat) (p : G.Pos) (value : G.Pos → Int) (init : Int)
+    (hinit : LOSS ≤ init) :
+    foldMax value (lazyMoveTail G static gamma depth p)
+        (foldMax value (lazyMovePrefix G static gamma depth p) init) =
+      foldMax value (producerMoves G depth p) init := by
+  let f := fun m => decide (lazyMoveThreshold static gamma depth ≤ G.val p m)
+  have hsplit := foldMax_filter_split value f (producerMoves G depth p) init
+  have hp := foldMax_init_split value ((producerMoves G depth p).filter f) init hinit
+  have ht := foldMax_init_split value
+    ((producerMoves G depth p).filter (fun m => !(f m))) init hinit
+  have hprefixFloor := foldMax_ge_init value ((producerMoves G depth p).filter f) init
+  have hseq := foldMax_init_split value
+    ((producerMoves G depth p).filter (fun m => !(f m)))
+    (foldMax value ((producerMoves G depth p).filter f) init)
+    (Int.le_trans hinit hprefixFloor)
+  simp only [lazyMovePrefix, lazyMoveTail, f] at *
+  omega
+
+/-- When the tail is empty the prefix alone is the producer fold: this is the
+window at which Python emits no tail report at all. -/
+theorem lazyMove_partition_emptyTail (G : QSGame) (static gamma : Int)
+    (depth : Nat) (p : G.Pos) (value : G.Pos → Int) (init : Int)
+    (hinit : LOSS ≤ init) (hempty : lazyMoveTail G static gamma depth p = []) :
+    foldMax value (lazyMovePrefix G static gamma depth p) init =
+      foldMax value (producerMoves G depth p) init := by
+  have h := lazyMove_partition_prefixFirst G static gamma depth p value init hinit
+  rw [hempty] at h
+  simpa [foldMax] using h
 
 end Sunfish
