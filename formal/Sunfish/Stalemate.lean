@@ -619,10 +619,14 @@ theorem:
   and the `depth > 2` arm is redundant -- a scan-skipping optimization,
   one ply more conservative than the tables require
   (`depth_arm_redundant`, `tables_kill_filter_at_depth2`).
-* Dropping the gate is not an option: `qsUngated_not_sound` exhibits a
-  machine-checked position where the filter skipped a legal quiet move,
-  every SEARCHED move lost the king, and an ungated correction
-  mislabels the non-stalemate as a draw.
+* Dropping the gate was not an option: `CexQ` was a machine-checked
+  position where the filter skipped a legal quiet move, every SEARCHED
+  move lost the king, and an ungated correction mislabelled the
+  non-stalemate as a draw.  `c01915f` retired that: the same node now
+  folds over both moves and the ungated, gated and declared values
+  agree (`cexQ_ungated_repaired`), and above the frontier the sentinel
+  certifies terminality with no gate at all
+  (`correction_trustworthy_ungated`).
 
 The value function the filtered search brackets is `negamaxQS`: the
 draw-aware value folded over `movesAbove` with the gated correction.  It
@@ -675,14 +679,32 @@ def QS : Int := 40
 /-- sunfish.py line 150: `QS_A = 140`. -/
 def QS_A : Int := 140
 
-/-- The QS move-value threshold, sunfish.py line 355:
-`val_lower = QS - depth * QS_A`.  (`depth` is already clamped to ≥ 0 at
-line 329, matching the `Nat` here.) -/
-def val_lower (d : Nat) : Int := QS - d * QS_A
+/-- The QS move-value threshold, `sunfish.py`:
+
+    val_lower = QS if depth == 0 else -MATE_UPPER
+
+A TWO-VALUED admission since `c01915f` (#218): the tuned tactical
+threshold at the quiescence frontier, and the reserved sentinel at
+every positive depth.  The sentinel is not a tuned number -- it is the
+bottom of the band, so the positive-depth arm admits the whole
+pseudo-legal list (`movesAbove_pos`) for any game whose move values
+respect any floor at all.  The pre-`c01915f` form was the depth-sloped
+`QS - depth * QS_A`; it survives as `val_lower_pre` below, used only to
+state what the change bought.  (`depth` is already clamped to ≥ 0
+before this line, matching the `Nat` here.) -/
+def val_lower (d : Nat) : Int := if d = 0 then QS else -MATE_UPPER
+
+@[simp] theorem val_lower_zero : val_lower 0 = QS := rfl
+
+/-- The positive-depth arm: the reserved sentinel, at every depth. -/
+@[simp] theorem val_lower_pos (d : Nat) (h : 0 < d) : val_lower d = -MATE_UPPER := by
+  unfold val_lower
+  rw [if_neg (by omega)]
 
 theorem val_lower_le_QS (d : Nat) : val_lower d ≤ QS := by
-  unfold val_lower QS QS_A
-  omega
+  have hMU : MATE_UPPER = 69290 := rfl
+  unfold val_lower QS
+  split <;> omega
 
 /-- The threshold never reaches the mate band: king captures
 (`val ≥ MATE_LOWER`) pass the filter at every depth. -/
@@ -692,11 +714,35 @@ theorem val_lower_lt_ML (d : Nat) : val_lower d < MATE_LOWER := by
   have hML : MATE_LOWER = 47923 := rfl
   omega
 
-/-- At depth ≥ 3 the threshold is at most -380 (the `depth > 2` arm's
-arithmetic; `val_lower 3 = 40 - 420`). -/
-theorem val_lower_deep (d : Nat) (h : 3 ≤ d) : val_lower d ≤ -380 := by
-  unfold val_lower QS QS_A
+/-- At every positive depth the threshold is at most -380 -- the number
+the pre-`c01915f` `depth > 2` arm had to reach by sloping, now reached
+at depth 1 and by a mile (`-MATE_UPPER = -69290`). -/
+theorem val_lower_deep (d : Nat) (h : 1 ≤ d) : val_lower d ≤ -380 := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  rw [val_lower_pos d (by omega)]
   omega
+
+/-- The pre-`c01915f` threshold, kept ONLY to state what the change
+bought: the depth-sloped form `QS - depth * QS_A`, which masked a
+legal move whenever its table value fell in `[-192, -100)` at remaining
+depth 1.  Nothing in the shipped model reads this. -/
+def val_lower_pre (d : Nat) : Int := QS - d * QS_A
+
+theorem val_lower_pre_one : val_lower_pre 1 = -100 := by decide
+
+set_option maxRecDepth 4096 in
+/-- **What `c01915f` bought, at the constants.**  The old threshold
+admitted a depth-1 move only from -100 up, leaving the whole band
+`[-192, -100)` -- non-empty for the shipped tables, whose move-value
+floor is -192 -- maskable at the frontier.  The new one admits from
+`-MATE_UPPER` up, and nothing in the band is below that. -/
+theorem admission_widened_at_frontier :
+    val_lower_pre 1 = -100 ∧ val_lower 1 = -MATE_UPPER ∧
+      val_lower 1 < -EvalBounds.quietDropMax ∧
+      (-EvalBounds.quietDropMax : Int) < val_lower_pre 1 := by
+  refine ⟨by decide, val_lower_pos 1 (by omega), ?_, by decide⟩
+  rw [val_lower_pos 1 (by omega)]
+  decide
 
 /-! ### The filtered move list -/
 
@@ -767,6 +813,20 @@ theorem allAboveB_of_floor (G : QSGame) {B : Int} (hF : ValFloor G B)
   have := hF p m hm
   omega
 
+/-- **The positive-depth admission is VACUOUS.**  Since `c01915f` the
+threshold above the frontier is the reserved sentinel `-MATE_UPPER`,
+which sits below the whole band; so under ANY move-value floor inside
+the band the filtered list IS the pseudo-legal list, at every positive
+depth and with no depth arm and no scan.  This is the lemma the
+sticky-legality and terminal machinery downstream actually wants: a
+fail-low fold at positive depth ranged over every legal move. -/
+theorem movesAbove_pos (G : QSGame) {B : Int} (hF : ValFloor G B)
+    (hB : B ≤ MATE_UPPER) (d : Nat) (hd : 0 < d) (p : G.Pos) :
+    movesAbove G (val_lower d) p = G.moves p := by
+  refine movesAbove_all G d p (allAboveB_of_floor G hF d p ?_)
+  rw [val_lower_pos d hd]
+  omega
+
 /-- **The `depth > 2` arm, justified**: whenever the gate is on -- by
 either arm -- the filter provably kept every legal move, provided the
 move values respect a floor of at least -380 (tables: -192).  This is
@@ -778,28 +838,30 @@ theorem gate_implies_no_filtering (G : QSGame) {B : Int} (hF : ValFloor G B)
   cases hg with
   | inl hd =>
     refine movesAbove_all G d p (allAboveB_of_floor G hF d p ?_)
-    have := val_lower_deep d hd
+    have := val_lower_deep d (by omega)
     omega
   | inr hall => exact movesAbove_all G d p hall
 
-/-- **Finding**: with the shipped tables' floor (-192 ≥ -240 =
-`val_lower 2`) the no-skip test is identically true at depth ≥ 2, so the
-`depth > 2` arm never decides anything -- it only skips the `all(...)`
-scan, and is one ply more conservative than the tables require. -/
+/-- **Finding, restated after `c01915f`**: the `depth > 2` arm is not
+merely one ply conservative, it is DEAD.  The no-skip test is now
+identically true from depth 1 on -- the frontier is the only depth at
+which the scan can report anything -- so the arm can never be the
+reason the gate is on at a node the arm applies to. -/
 theorem depth_arm_redundant (G : QSGame) {B : Int} (hF : ValFloor G B)
-    (hB : B ≤ 240) (d : Nat) (hd : 2 ≤ d) (p : G.Pos) :
+    (hB : B ≤ MATE_UPPER) (d : Nat) (hd : 1 ≤ d) (p : G.Pos) :
     allAboveB G d p = true := by
   refine allAboveB_of_floor G hF d p ?_
-  unfold val_lower QS QS_A
+  rw [val_lower_pos d (by omega)]
   omega
 
 set_option maxRecDepth 4096 in
-/-- The table-level arithmetic behind the previous two theorems:
-`val_lower 2 = -240` already clears the concrete -192 floor;
-`val_lower 3 = -380` is what the depth arm actually relies on. -/
+/-- The table-level arithmetic behind the previous two theorems.  Before
+`c01915f` this said `val_lower 2 = -240`, already below the concrete
+-192 floor, so the filter died at depth 2 and the depth arm was one ply
+of slack.  It now dies at depth 1, by 69,098 points rather than 48. -/
 theorem tables_kill_filter_at_depth2 :
-    val_lower 2 = -240 ∧ val_lower 2 ≤ -EvalBounds.quietDropMax ∧
-    val_lower 3 = -380 :=
+    val_lower 1 = -69290 ∧ val_lower 1 ≤ -EvalBounds.quietDropMax ∧
+    val_lower 2 = -69290 :=
   ⟨by decide, by decide, by decide⟩
 
 /-! ### The filtered draw-aware value -/
@@ -1421,6 +1483,57 @@ theorem correction_trustworthy (G : QSGame) (hB : Bounded G.toNullGame.toGame)
   have hband := negamaxQS_bounded G hB d m
   omega
 
+/-- **The gate is ON at every positive depth** (`c01915f`).  The
+`all(...)` scan cannot fail above the frontier: the threshold it scans
+against is the bottom of the band.  So the #136 gate -- both arms -- is
+a tautology everywhere the correction can run, and the `depth > 2` arm
+is not merely redundant but unreachable as a decision. -/
+theorem gate_always_on (G : QSGame) {B : Int} (hF : ValFloor G B)
+    (hB : B ≤ MATE_UPPER) (d : Nat) (hd : 0 < d) (p : G.Pos) :
+    qsGateB G d p = true := by
+  rw [qsGateB, depth_arm_redundant G hF hB d (by omega) p, Bool.or_true]
+
+/-- **Exhaustion, UNGATED** -- the theorem that replaces the refuted
+`qsUngated_not_sound`.  `correction_trustworthy` had to spend the gate
+as a hypothesis; the shipped admission discharges it, so above the
+frontier "the fold is the untouched sentinel" certifies that every
+legal move loses the king, on the strength of a fidelity floor alone.
+The floor may be anything inside the band -- the shipped tables' -192
+is nearly three orders of magnitude to spare. -/
+theorem correction_trustworthy_ungated (G : QSGame) (hB : Bounded G.toNullGame.toGame)
+    {B : Int} (hF : ValFloor G B) (hBMU : B ≤ MATE_UPPER) (d : Nat) (p : G.Pos)
+    (hL : foldMax (fun m => -(negamaxQS G d m))
+        (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS) :
+    ∀ m ∈ G.moves p, negamaxQS G d m = MATE_UPPER := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  intro m hm
+  rw [movesAbove_pos G hF hBMU (d + 1) (by omega) p] at hL
+  have hcontrib : -(negamaxQS G d m)
+      ≤ foldMax (fun x => -(negamaxQS G d x)) (G.moves p) LOSS :=
+    foldMax_le_of_mem (fun x => -(negamaxQS G d x)) (G.moves p) LOSS m hm
+  rw [hL] at hcontrib
+  have hband := negamaxQS_bounded G hB d m
+  omega
+
+/-- The search-level companion: `boundA1_exhaustion` with its `allAboveB`
+hypothesis discharged. -/
+theorem boundA1_exhaustion_ungated (G : QSGame) (probe : G.Pos → Bool)
+    (nully : Nat → G.Pos → Int → Int) (guard : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (hV : KingCaptureValHigh G)
+    (hM : MateValuesAreKingCapturesQS G)
+    (hP : CheckProbeOK G.toNullGame probe)
+    (hN : NullBetQS G nully guard)
+    {B : Int} (hF : ValFloor G B) (hBMU : B ≤ MATE_UPPER)
+    (d : Nat) (p : G.Pos) (gamma : Int)
+    (hg1 : -MATE_UPPER < gamma) (hg2 : gamma ≤ MATE_UPPER)
+    (hS : searchMoves gamma
+        (fun m => -(boundA1 G probe nully guard d m (1 - gamma)))
+        (movesAbove G (val_lower (d + 1)) p) LOSS = LOSS) :
+    ∀ m ∈ G.moves p, negamaxQS G d m = MATE_UPPER :=
+  boundA1_exhaustion G probe nully guard hB hV hM hP hN d p gamma hg1 hg2
+    (depth_arm_redundant G hF hBMU (d + 1) (by omega) p) hS
+
 /-! ### Counterexample: the low-depth correction NEEDS the `all(...)` guard
 
 A four-position game.  At the root `r` (depth 2, `gamma = -5`) the
@@ -1612,61 +1725,65 @@ theorem cexQ_mateValues : MateValuesAreKingCapturesQS CexQ := by
     | succ n =>
       cases n with
       | zero =>
-        rw [(by decide : negamaxQS CexQ 1 QPos.r = 0)] at hMU'
+        rw [(by decide : negamaxQS CexQ 1 QPos.r = 30)] at hMU'
         exact absurd hMU' (by decide)
       | succ n' =>
         cases n' with
         | zero =>
-          rw [(by decide : negamaxQS CexQ 2 QPos.r = LOSS)] at hMU'
+          rw [(by decide : negamaxQS CexQ 2 QPos.r = 0)] at hMU'
           exact absurd hMU' (by decide)
         | succ n'' =>
           rw [show n'' + 1 + 1 + 1 = n'' + 3 from rfl, cexQ_r_deep n''] at hMU'
           exact absurd hMU' (by decide)
 
-/-- The filter is depth-keyed, so the filtered draw value is
-depth-inconsistent even where the old gate was not involved: `r` is 0 at
-depth 1 (the capture line is invisible to the depth-0 child), `LOSS` at
-depth 2 (the refutation is seen, `q` is filtered), 0 at depth 3 (`q`
-enters).  The analogue of `negamaxDraw_depth_inconsistent`, now driven
-by `val_lower` instead of the `depth > 2` gate. -/
+/-- The filter is STILL depth-keyed, but only at the frontier, and the
+residual inconsistency has a different source: `r` reads 30 at depth 1
+(its children are depth-0 stand-pats, so the stalemate `q` contributes
+its raw -30) and the honest 0 from depth 2 on (`q`'s correction fires).
+Under the sloped threshold the same triple read `0 / LOSS / 0`, and the
+`LOSS` was the FILTER hiding `q` at depth 2 -- a masked legal move, not
+a shallow horizon.  That reading is gone; what survives is the ordinary
+quiescence artifact at the frontier. -/
 theorem negamaxQS_depth_inconsistent :
-    negamaxQS CexQ 1 QPos.r = 0 ∧ negamaxQS CexQ 2 QPos.r = LOSS ∧
+    negamaxQS CexQ 1 QPos.r = 30 ∧ negamaxQS CexQ 2 QPos.r = 0 ∧
     negamaxQS CexQ 3 QPos.r = 0 :=
   ⟨by decide, by decide, by decide⟩
 
-/-- **The unguarded low-depth correction is UNSOUND** -- the negative
-result that justifies the #136 gate.  With every `boundA1_spec`
-hypothesis satisfied, the ungated search still mislabels the
-filter-truncated `r` as a draw: it returns a fail-high `0` where the
-filtered draw-aware value is `LOSS`.  (The full-move value is no refuge
-either: the filter hid a merely bad move, not a losing one, so `0` is a
-fabricated draw claim in every reading.) -/
-theorem qsUngated_not_sound :
-    ¬ (∀ (G : QSGame) (probe : G.Pos → Bool),
-        Bounded G.toNullGame.toGame → KingCaptureValHigh G →
-        MateValuesAreKingCapturesQS G → CheckProbeOK G.toNullGame probe →
-        ∀ (d : Nat) (p : G.Pos) (gamma : Int),
-          -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
-          BoundSpecQS G d p gamma (boundQSUngated G probe d p gamma)) := by
-  have hMU : MATE_UPPER = 69290 := rfl
-  have hLOSS : LOSS = -MATE_UPPER := rfl
-  intro h
-  have hspec := h CexQ (fun p => inCheckB CexQ.toNullGame p) cexQ_bounded cexQ_valHigh
-    cexQ_mateValues cexQ_probeOK 2 QPos.r (-5) (by decide) (by decide)
-  have hsearch : boundQSUngated CexQ (fun p => inCheckB CexQ.toNullGame p)
-      2 QPos.r (-5) = 0 := by decide
-  have hvalue : negamaxQS CexQ 2 QPos.r = LOSS := by decide
-  have h1 := hspec.1
-  rw [hsearch, hvalue] at h1
-  have := h1 (by omega)
-  omega
+/-- **The countermodel to the unguarded correction is GONE, and the
+reason is `c01915f`.**  It used to run: at depth 2 the sloped threshold
+`val_lower_pre 2 = -240` kept only the king-losing `a` and hid the legal
+quiet `q` (value -300), so the filtered loop ended at the untouched
+sentinel at a node that is not terminal; an ungated correction probed
+`r`, found it out of check, and returned a fabricated draw `0` against a
+filtered value of `LOSS`.  That was the negative result justifying the
+#136 gate, and it depended entirely on a legal move being invisible to
+the loop at positive depth.
 
-/-- The GATED search on the same position reports `LOSS` -- a correct
-fail-low against `negamaxQS 2 r = LOSS` (and one that deeper search
-retracts, exactly as the code comment promises). -/
-theorem cexQ_gated_ok :
-    boundQS CexQ (fun p => inCheckB CexQ.toNullGame p) 2 QPos.r (-5) = LOSS := by
-  decide
+The shipped admission keeps `q` at every positive depth.  `r` now folds
+over both moves, and the declared value, the gated search and the
+UNGATED search all read the same honest 0: there is nothing left at this
+node for a gate to catch.  What replaces the countermodel is not a
+weaker gate but a stronger theorem --
+`correction_trustworthy_ungated` below: above the frontier the sentinel
+certifies terminality with no gate at all, for every game that respects
+a move-value floor inside the band.  The gate survives in the code as
+the ORACLE scan (`allIllegalB`, `termFix`), which is a different and
+still-necessary object (`reducedScan_needs_premise`). -/
+theorem cexQ_ungated_repaired :
+    movesAbove CexQ (val_lower 2) QPos.r = [QPos.a, QPos.q] ∧
+    negamaxQS CexQ 2 QPos.r = 0 ∧
+    boundQSUngated CexQ (fun p => inCheckB CexQ.toNullGame p) 2 QPos.r (-5) = 0 ∧
+    boundQS CexQ (fun p => inCheckB CexQ.toNullGame p) 2 QPos.r (-5) = 0 :=
+  ⟨rfl, by decide, by decide, by decide⟩
+
+/-- The old masking arithmetic, preserved as arithmetic: `q` is exactly
+the move the pre-`c01915f` threshold hid at depth 2 and admitted at
+depth 3, and the shipped threshold admits it at both. -/
+theorem cexQ_masking_was_arithmetic :
+    CexQ.val QPos.r QPos.q < val_lower_pre 2 ∧
+    val_lower_pre 3 ≤ CexQ.val QPos.r QPos.q ∧
+    val_lower 2 ≤ CexQ.val QPos.r QPos.q :=
+  ⟨by decide, by decide, by decide⟩
 
 /-! ### Counterexample: the null yield must not feed the sentinel test (A1)
 
@@ -2555,6 +2672,26 @@ theorem allIllegalB_false_of_legal {G : QSGame} {p m : G.Pos}
     rw [hleg] at this
     exact Bool.noConfusion this
 
+/-- The converse witness, constructively: a failed scan names a legal
+move.  (`allIllegalB_false_of_legal` goes the other way.) -/
+theorem exists_legal_of_allIllegalB_false {G : QSGame} {p : G.Pos}
+    (h : allIllegalB G p = false) :
+    ∃ m ∈ G.moves p, hasKingCapture G.toNullGame.toGame m = false := by
+  simp only [allIllegalB] at h
+  revert h
+  generalize G.moves p = l
+  induction l with
+  | nil => intro h; exact Bool.noConfusion h
+  | cons a l ih =>
+    intro h
+    rw [List.all_cons] at h
+    cases hc : hasKingCapture G.toNullGame.toGame a with
+    | false => exact ⟨a, List.mem_cons_self a l, hc⟩
+    | true =>
+      rw [hc, Bool.true_and] at h
+      obtain ⟨m, hm, hmc⟩ := ih h
+      exact ⟨m, List.mem_cons_of_mem a hm, hmc⟩
+
 /-- The engine's scan (lines 463-465) computes `allIllegalB`: under
 `legalityProbeCorrect`, probing every generated move at the dedicated
 window and testing for the exact sentinel is the same Boolean as "every
@@ -3178,8 +3315,10 @@ theorem negativeFailLowVerified (G : QSGame)
 /-- **NegativeFailLowVerified**, guard half: without the oracle's
 confirmation an uncertified fail-low is NOT converted to a terminal
 value -- the fold result passes through untouched.  (The pre-d2 design
-converted on a score-shaped sentinel instead; `qsUngated_not_sound` and
-`a1_unfixed_not_sound` above are what that cost.) -/
+converted on a score-shaped sentinel instead; `CexQ` and
+`a1_unfixed_not_sound` above are what that cost.  The oracle gate is
+the one that still decides anything: the VALUE gate of #136 became a
+tautology at `c01915f`, `gate_always_on`.) -/
 theorem termFix_unverified_passthrough (G : QSGame) (d : Nat)
     (gamma best S : Int) (p : G.Pos)
     (hai : allIllegalB G p = false) :
@@ -4442,6 +4581,23 @@ def NoMaskedMobility (G : QSGame) : Prop :=
   ∀ p, (∀ m ∈ movesAbove G (val_lower 1) p, hasKingCapture G.toNullGame.toGame m = true) →
     ∀ m ∈ G.moves p, hasKingCapture G.toNullGame.toGame m = true
 
+/-- **`c01915f` DISCHARGES the premise.**  `NoMaskedMobility` said "the
+depth-1 admitted moves already witness the whole move list"; the shipped
+depth-1 threshold IS the bottom of the band, so the admitted list is the
+whole move list and the hypothesis is literally the conclusion.  The one
+chess-side assumption of the reduced scan -- the model-side stand-in for
+the engine fix in #171, the premise `CexE` and `CexM` were built to show
+could not be assumed away -- is now a consequence of the fidelity floor
+alone, for any floor inside the band.
+
+This is the retirement `Eventual.lean` predicted and could not perform:
+"what retires `NoMaskedMobility` is the engine change and nothing else."
+The engine change landed; here is the retirement. -/
+theorem noMaskedMobility_of_valFloor (G : QSGame) {B : Int} (hF : ValFloor G B)
+    (hB : B ≤ MATE_UPPER) : NoMaskedMobility G := by
+  intro p hpre m hm
+  exact hpre m (by rw [movesAbove_pos G hF hB 1 (by omega) p]; exact hm)
+
 /-- **The production search**: NO eager king-capture branch -- the
 invariant is restored by the consumer.  A virtual fail-high either
 substitutes the real capture (`MATE_UPPER`), cuts validated, or is
@@ -5047,26 +5203,42 @@ def CexM : QSGame where
     | _, _ => 0
 
 /-- **The accepted disqualifier** (`8843bb0` reverted the reduced scan
-on this countermodel).  At `Q` the SEARCHED set is empty -- the QS
-threshold hides the legal move `F` and futility prunes the illegal `A`
--- so "every searched move is illegal" holds vacuously at a node that
-is not terminal at all (`allIllegalB Q = false`).  A scan that trusted
-the searched set would conclude terminality there; the shipped scan
-re-derives legality over EVERY generated move and does not.  Higher up,
-the rejected `scanNewB` passes at `P` where the oracle scan fails, and
-`NoMaskedMobility` -- the premise the reduced form would have needed --
-is false here.  Full coverage with the board predicate is what shipped. -/
+on this countermodel), and it SURVIVES `c01915f` -- with a different
+mechanism.  At `Q` the searched set is still empty, but no longer
+because the threshold hides `F`: after `c01915f` both moves are
+admitted at depth 1 and it is FUTILITY that prunes them (`searchedAt`
+filters the admitted list, and at depth ≤ 1 every sub-mate move whose
+child stand-pat meets the flipped window goes out as a synthetic
+estimate).  "Every searched move is illegal" therefore still holds
+vacuously at a node that is not terminal at all (`allIllegalB Q =
+false`), the rejected `scanNewB` still passes at `P` where the oracle
+scan fails, and full coverage with the board predicate is still what
+had to ship.
+
+What the change DID retire is the premise: `NoMaskedMobility CexM` used
+to be false here and is now a theorem (`noMaskedMobility_of_valFloor`
+applied to `cexM_floor`).  The val-filter is no longer a masking
+channel at any depth the correction runs at; futility is, and futility
+never feeds the real accumulator.  The two facts together are why the
+oracle scan -- not the premise -- is what the shipped code relies on. -/
 theorem reducedScan_needs_premise :
     allIllegalB CexM MPos.Q = false ∧
     (searchedAt CexM 1 5 MPos.Q).length = 0 ∧
+    movesAbove CexM (val_lower 1) MPos.Q = [MPos.A, MPos.F] ∧
     hasKingCapture CexM.toNullGame.toGame MPos.R = false ∧
     scanNewB CexM 3 MPos.P = true ∧
-    allIllegalB CexM MPos.P = false ∧
-    ¬ NoMaskedMobility CexM := by
-  refine ⟨by decide, by decide, by decide, by decide, by decide, fun h => ?_⟩
-  have := h MPos.Q (by decide) MPos.F
-    (show MPos.F ∈ [MPos.A, MPos.F] from List.mem_cons_of_mem _ (List.mem_cons_self _ _))
-  exact absurd this (by decide)
+    allIllegalB CexM MPos.P = false :=
+  ⟨by decide, by decide, rfl, by decide, by decide, by decide⟩
+
+/-- The countermodel respects the shipped floor, which is what makes the
+retirement of `NoMaskedMobility` here a fact about the fix and not about
+a badly-formed game. -/
+theorem cexM_floor : ValFloor CexM 192 := by
+  intro p m _
+  cases p <;> cases m <;> decide
+
+theorem cexM_unmasked : NoMaskedMobility CexM :=
+  noMaskedMobility_of_valFloor CexM cexM_floor (by decide)
 
 /-- **The killer fast path** (`king = self.tp_move.get(pos) or
 pos.king_capture(); if king and pos.value(king) >= MATE_LOWER`): with

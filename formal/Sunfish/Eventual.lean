@@ -11,37 +11,56 @@ weakening the conclusion from "at every depth" to "at every depth from
 some `D0` on" -- which is all the driver's `range(1, 1000)` deepening
 ever needs -- lets the last of those be dropped.
 
-**The hope, and why it was reasonable.**  Masking is a FRONTIER effect.
-The QS val-filter admits `val >= QS - depth * QS_A`, so at remaining
-depth 2 the threshold is already -240, below the shipped tables' move
-value floor of -192, and every legal move survives
-(`filter_identity_off_frontier`).  Masking therefore exists ONLY at
-remaining depth 1 -- roughly `D` plies from the root.  A phantom found
-there is `D` negations away from the root, so it looked like it should
-either be absorbed as `D` grows (`CexF`'s phantom is: it dissolves at
-depth 3) or arrive with nothing left to claim.
+**The answer, since `c01915f`: the question is closed, and not by the
+weakening.**  The premise is retired outright, by the code.
 
-**Why the hope fails, in one sentence.**  A masked node does not report
-a shallow mate; it reports the OFF-LADDER sentinel
+**The hope, and why it was reasonable.**  Masking was a FRONTIER
+effect.  The pre-`c01915f` val-filter admitted `val >= QS - depth *
+QS_A`, so at remaining depth 2 the threshold was already -240, below
+the shipped tables' move value floor of -192, and every legal move
+survived.  Masking therefore existed ONLY at remaining depth 1 --
+roughly `D` plies from the root.  A phantom found there is `D`
+negations away from the root, so it looked like it should either be
+absorbed as `D` grows (`CexF`'s phantom was: it dissolved at depth 3)
+or arrive with nothing left to claim.
+
+**Why the hope failed, in one sentence.**  A masked node does not
+report a shallow mate; it reports the OFF-LADDER sentinel
 (`maskedFrontier_value`: the filtered fold has no admitted legal move,
 so nothing displaces the initial `LOSS` accumulator and the parent
 negates it to `MATE_UPPER`).  The mate ladder decays one
 `EVAL_ROUGHNESS` rung per ply of unspent depth; `MATE_UPPER` decays not
-at all.  So a phantom's contribution survives an arbitrary number of
-negations undiminished, and the frontier RENEWS it at every horizon: at
-depth `D` the phantom sits at ply `D - 1`, at depth `D + 2` at ply
-`D + 1`.  Absorbing the old one buys nothing when a new one arrives.
+at all.  So a phantom's contribution survived an arbitrary number of
+negations undiminished, and the frontier RENEWED it at every horizon:
+at depth `D` the phantom sat at ply `D - 1`, at depth `D + 2` at ply
+`D + 1`.  Absorbing the old one bought nothing when a new one arrived.
 
-`CexE` (section 3) is that argument turned into a machine-checked
-countermodel, and it is not a near miss: the root is a draw whose
-declared value is `MATE_UPPER` at every even depth and `-MATE_UPPER` at
-every odd one.  The classification does not merely fail to settle -- it
-oscillates between the two false extremes forever.  Neither acyclicity
-(the model is a strictly increasing chain, no position ever repeats)
-nor a read-time clamp at `MATE_UPPER - 1` touches it.  The frontier-tail
-variant of `Classification.lean` Part B values the same root at an
-honest `0` at every depth, so what retires `NoMaskedMobility` is the
-engine change and nothing else.
+`CexE` (section 3) was that argument turned into a machine-checked
+countermodel, and it was not a near miss: the root was a draw whose
+declared value was `MATE_UPPER` at every even depth and `-MATE_UPPER`
+at every odd one -- not merely unsettled but WRONG in both directions,
+alternately, forever.  Neither acyclicity (the model is a strictly
+increasing chain, no position ever repeats) nor a read-time clamp at
+`MATE_UPPER - 1` touched it.  The conclusion drawn at the time was that
+what retires `NoMaskedMobility` is the engine change and nothing else.
+
+**The engine change landed.**  `c01915f` made the admission
+`val_lower = QS if depth == 0 else -MATE_UPPER`: above the frontier the
+threshold is the bottom of the band, so nothing an in-band move value
+can do gets it filtered.  `NoMaskedMobility` is now a THEOREM under the
+fidelity floor (`noMaskedMobility_of_valFloor`), the masking channel it
+described does not exist at any depth the recursion corrects at, and
+every theorem in this file and in `Classification.lean` and
+`Shortest.lean` that spent the premise can have it discharged
+(`eventual_classification_frontier_free`).
+
+`CexE` is kept, re-measured, as the positive test its own prose
+predicted: the chain that oscillated between the two false extremes now
+reports the honest `0` at EVERY depth (`cexE_honest`), which is exactly
+what the frontier-tail variant of `Classification.lean` Part B computes
+for it (`cexE_t_honest`) -- the shipped fold and the proposed one agree
+(`cexE_shipped_eq_t`).  What the game still records is the arithmetic
+of the hole that was closed (`cexE_masking_was_arithmetic`).
 
 **What the weakening does buy, and it is not nothing.**  Both
 COMPLETENESS arms -- a real forced mate reaches the band, a real forced
@@ -90,16 +109,31 @@ theorem eval_child_live (G : QSGame) {p m : G.Pos}
   rw [hcap] at hk
   exact Bool.noConfusion hk
 
-/-- **(a) Masking is confined to remaining depth 1.**  `val_lower 2 =
-40 - 2 * 140 = -240` is already below the tables' move-value floor of
--192, so from remaining depth 2 up the QS filter is the identity on the
-legal move list and no move can be masked.  A restatement of
-`movesAbove_all` at the constants, named because the whole question of
-this module is where masking can live. -/
+/-- **(a) Masking is confined to the frontier itself.**  It used to be
+confined to remaining depth 1 -- `val_lower_pre 2 = -240` was already
+below the tables' move-value floor of -192.  Since `c01915f` the
+threshold above the frontier is `-MATE_UPPER`, so the QS filter is the
+identity on the legal move list from remaining depth 1 up and no move
+can be masked at any depth the correction runs at.  The answer to
+"where can masking live" is now: nowhere. -/
 theorem filter_identity_off_frontier (G : QSGame) (hF : ValFloor G 192)
-    {d : Nat} (hd : 2 ≤ d) (p : G.Pos) :
+    {d : Nat} (hd : 1 ≤ d) (p : G.Pos) :
     movesAbove G (val_lower d) p = G.moves p :=
   movesAbove_all G d p (allAboveB_of_floor G hF d p (val_lower_le_neg_floor d hd))
+
+/-- **The masking hypothesis is UNSATISFIABLE.**  `maskedFrontier_value`
+below is still a true theorem, but under the fidelity floor its two
+hypotheses -- "some legal move exists" and "every depth-1-admitted move
+is illegal" -- cannot both hold: the admitted set is the whole move
+list.  So the phantom the rest of this module is about has no site. -/
+theorem maskedFrontier_unreachable (G : QSGame) (hF : ValFloor G 192) (p : G.Pos)
+    (hai : allIllegalB G p = false)
+    (hmask : ∀ m ∈ movesAbove G (val_lower 1) p,
+      hasKingCapture G.toNullGame.toGame m = true) : False := by
+  obtain ⟨m, hm, hleg⟩ := exists_legal_of_not_all (G := G) (G.moves p) hai
+  rw [hmask m (by
+    rw [filter_identity_off_frontier G hF (d := 1) (by omega) p]; exact hm)] at hleg
+  exact Bool.noConfusion hleg
 
 /-- **The phantom is the sentinel, exactly.**  At a node that HAS a
 legal move but whose every depth-1-admitted move is illegal, the fold
@@ -146,7 +180,9 @@ values to the side that finds it; it can invent a mate that is not
 there, never hide one that is.
 
 So the premise ledger is sharper than the trichotomy's statement
-suggests: `NoMaskedMobility` buys the honesty arm and nothing else. -/
+suggests: `NoMaskedMobility` bought the honesty arm and nothing else --
+and since `c01915f` it does not have to be bought at all
+(`eventual_classification_frontier_free`). -/
 theorem eventual_completeness_without_frontier (G : QSGame) (guard : G.Pos → Bool)
     (hF : ValFloor G 192) (hZ : NoZugzwang G guard) (p : G.Pos)
     (hcapf : hasKingCapture G.toNullGame.toGame p = false) :
@@ -372,58 +408,59 @@ theorem driver_stop_band_stable {B lower upper : Int}
   have hER : (0 : Int) ≤ EVAL_ROUGHNESS := by decide
   exact bandOf_eq_of_slack hgap hl hu (by omega) (by omega)
 
-/-! ## 3. `CexE`: the eventual weakening does not retire the frontier
+/-! ## 3. `CexE`: the countermodel, and the engine change that retired it
 
-The countermodel.  An infinite chain `C 0 -> C 1 -> C 2 -> ...` in
-which EVERY node is masked in the sense of `NoMaskedMobility`: each
-`C n` generates an illegal `X` (valued 0, so admitted at every depth)
-and the legal continuation `C (n+1)` (valued -150, so filtered at the
-depth-1 threshold `val_lower 1 = -100` and admitted from depth 2 on).
-`X` loses the king to `K`; nothing else happens anywhere.
+An infinite chain `C 0 -> C 1 -> C 2 -> ...` in which EVERY node was
+masked in the sense of `NoMaskedMobility`: each `C n` generates an
+illegal `X` (valued 0, admitted at every depth) and the legal
+continuation `C (n+1)` (valued -150, which the pre-`c01915f` threshold
+`val_lower_pre 1 = -100` filtered at remaining depth 1 and admitted
+from depth 2 on).  `X` loses the king to `K`; nothing else happens
+anywhere.
 
 The root is a DRAW in the strongest possible sense -- no forced mate at
 any budget, for either side (`cexE_no_forcedMate`,
 `cexE_no_forcedlyMated`), because the only legal move from any node is
 the next link in the chain and nobody is ever checkmated or stalemated.
 
-Its declared value, however:
+Its declared value under the OLD admission was
 
 ```text
 D:        0     1     2     3     4     5    ...
 value:    0   -MU    +MU   -MU   +MU   -MU   ...
 ```
 
-`cexE_ladder`.  Odd depths report `-MATE_UPPER` -- "I am mated"; even
-depths from 2 on report `MATE_UPPER` -- "I mate".  The value never
-enters the band at any depth past 0, so there is no `D0` beyond which
-the classification is right; it is not merely unsettled but WRONG in
-both directions, alternately, forever.
+-- odd depths "I am mated", even depths from 2 on "I mate", never in
+the band at any depth past 0.  No `D0` made the classification right;
+it was not merely unsettled but WRONG in both directions, alternately,
+forever.  Three things that settled which the `CexF` / `CexD`
+countermodels did not:
 
-Three things this settles that the `CexF` / `CexD` countermodels did
-not.
-
-* **Depth does not help, and this is the eventual statement, not the
-  fixed-depth one.**  `CexF`'s phantom dissolves at depth 3, which is
+* **Depth did not help, and this is the eventual statement, not the
+  fixed-depth one.**  `CexF`'s phantom dissolved at depth 3, which is
   exactly why the eventual weakening looked promising.  Here the
-  phantom is renewed: at horizon `D` it sits at `C (D-1)`, at horizon
+  phantom was renewed: at horizon `D` it sat at `C (D-1)`, at horizon
   `D+2` at `C (D+1)`.  The frontier travels with the search and there
-  is always a masked node on it.
-* **Acyclicity does not help.**  `cexE_acyclic`: the only legal move
+  was always a masked node on it.
+* **Acyclicity did not help.**  `cexE_acyclic`: the only legal move
   from `C n` is `C (n+1)`, so the chain index strictly increases and no
   position ever repeats.  No repetition rule, no well-founded descent,
-  no draw-by-cycle argument touches this.
-* **A read-time clamp does not help.**  `cexE_clamp_no_help`: the
-  reported value is exactly `MATE_UPPER`, so clamping the root read at
-  `MATE_UPPER - 1` still leaves 69,289 -- far inside the mate band.
-  Only refusing to trust the sentinel at all would work, and that is
-  the engine change.
+  no draw-by-cycle argument touched it.
+* **A read-time clamp did not help.**  The reported value was exactly
+  `MATE_UPPER`, so clamping the root read at `MATE_UPPER - 1` still
+  left 69,289 -- far inside the mate band.  Only refusing to trust the
+  sentinel at all would work, and that was the engine change.
 
-And one thing it settles in the other direction: the FRONTIER-TAIL
-variant of `Classification.lean` Part B values this root at an honest
-`0` at every depth (`cexE_t_honest`).  When every admitted move is
-illegal it unfilters and the legal continuation is seen.  So `CexE`,
-like `CexF`, becomes a positive test for the proposed engine change --
-which is now the only route to retiring `NoMaskedMobility`.
+**The engine change.**  `c01915f` admits from `-MATE_UPPER` up at every
+positive depth, so `C (n+1)` is admitted at remaining depth 1 as well.
+The chain is re-measured below and the whole ladder collapses to the
+truth: `cexE_ma` (one admission lemma now, uniform in depth, where
+there used to be a frontier case and a deep case), `cexE_C1` (the
+phantom's site, now the honest 0), `cexE_honest` (0 at every depth and
+every chain position), `cexE_unmasked` (`NoMaskedMobility CexE` is a
+theorem), `cexE_shipped_eq_t` (the shipped fold and the frontier-tail
+variant agree here).  `cexE_masking_was_arithmetic` keeps the two
+numbers that decided it.
 -/
 
 /-- `C n` is the chain; `X` is the illegal move admitted at the
@@ -437,9 +474,11 @@ inductive EPos where
 open EPos in
 /-- `C n -> {X, C (n+1)}` with `val (C n) X = 0` and
 `val (C n) (C (n+1)) = -150`: the legal continuation drops more than
-`QS_A - QS = 100` of table value, so it is masked at remaining depth 1
-and admitted from remaining depth 2 on -- the shape `NoMaskedMobility`
-forbids and `ValFloor 192` permits, repeated at every ply. -/
+`QS_A - QS = 100` of table value, so under the pre-`c01915f` threshold
+it was masked at remaining depth 1 and admitted from remaining depth 2
+on -- the shape `NoMaskedMobility` forbade and `ValFloor 192` permits,
+repeated at every ply.  Against the shipped threshold the same -150 is
+69,140 points clear of the admission edge. -/
 def CexE : QSGame where
   Pos := EPos
   moves := fun p => match p with
@@ -532,42 +571,54 @@ theorem cexE_term (d : Nat) (p : EPos) : nullTermD2 CexE (fun _ => false) d p = 
 theorem cexE_X (d : Nat) : nullValueD2 CexE (fun _ => false) d EPos.X = MATE_UPPER :=
   nullValueD2_of_capture CexE _ d EPos.X (by decide) (by decide)
 
-/-- At the frontier the filter keeps only the illegal move. -/
-theorem cexE_ma1 (n : Nat) : movesAbove CexE (val_lower 1) (EPos.C n) = [EPos.X] := by
-  unfold movesAbove
-  rw [cexE_moves_C]
-  rfl
+/-- **The admission, uniform in depth.**  There is no frontier case any
+more: at every positive remaining depth the filter keeps both moves.
+Where this file used to need `cexE_ma1` (the masked frontier) and
+`cexE_ma2` (everything deeper), one lemma now covers the chain. -/
+theorem cexE_ma (d n : Nat) :
+    movesAbove CexE (val_lower (d + 1)) (EPos.C n) = [EPos.X, EPos.C (n + 1)] := by
+  rw [movesAbove_pos CexE cexE_floor (by decide) (d + 1) (by omega) (EPos.C n),
+    cexE_moves_C]
 
-/-- One ply deeper it keeps everything (`filter_identity_off_frontier`
-at the concrete constants). -/
+theorem cexE_ma1 (n : Nat) :
+    movesAbove CexE (val_lower 1) (EPos.C n) = [EPos.X, EPos.C (n + 1)] :=
+  cexE_ma 0 n
+
 theorem cexE_ma2 (d n : Nat) :
-    movesAbove CexE (val_lower (d + 2)) (EPos.C n) = [EPos.X, EPos.C (n + 1)] := by
-  rw [movesAbove_all CexE (d + 2) (EPos.C n)
-    (allAboveB_of_floor CexE cexE_floor (d + 2) (EPos.C n)
-      (val_lower_le_neg_floor (d + 2) (by omega))), cexE_moves_C]
+    movesAbove CexE (val_lower (d + 2)) (EPos.C n) = [EPos.X, EPos.C (n + 1)] :=
+  cexE_ma (d + 1) n
 
-/-- ... and the premise that does fail is exactly `NoMaskedMobility`. -/
-theorem cexE_masked : ¬ NoMaskedMobility CexE := by
-  intro h
-  have hpre : ∀ m ∈ movesAbove CexE (val_lower 1) (EPos.C 0),
-      hasKingCapture CexE.toNullGame.toGame m = true := by
-    rw [cexE_ma1]
-    intro m hm
-    rcases List.mem_cons.mp hm with rfl | hm'
-    · exact cexE_cap_X
-    · cases hm'
-  have hleg := h (EPos.C 0) hpre (EPos.C 1) (by rw [cexE_moves_C]; simp)
-  rw [cexE_cap_C] at hleg
-  exact Bool.noConfusion hleg
+/-- The arithmetic that decided the countermodel, kept: -150 was below
+the old depth-1 threshold and is far above the shipped one. -/
+theorem cexE_masking_was_arithmetic :
+    CexE.val (EPos.C 0) (EPos.C 1) < val_lower_pre 1 ∧
+    val_lower 1 ≤ CexE.val (EPos.C 0) (EPos.C 1) ∧
+    val_lower 1 = -69290 :=
+  ⟨by decide, by decide, by decide⟩
 
-/-- **The phantom**, `maskedFrontier_value` at `C n`. -/
-theorem cexE_C1 (n : Nat) : nullValueD2 CexE (fun _ => false) 1 (EPos.C n) = -MATE_UPPER := by
-  show nullValueD2 CexE (fun _ => false) (0 + 1) (EPos.C n) = -MATE_UPPER
+/-- ... and the premise that used to fail here now HOLDS, for the same
+reason it holds everywhere: the depth-1 admitted set is the whole move
+list. -/
+theorem cexE_unmasked : NoMaskedMobility CexE :=
+  noMaskedMobility_of_valFloor CexE cexE_floor (by decide)
+
+/-- **The phantom's site, re-measured.**  `maskedFrontier_value`'s
+hypotheses are unsatisfiable here (`maskedFrontier_unreachable`); what
+the depth-1 fold actually computes is the honest draw, because the
+legal continuation is now in it and contributes 0. -/
+theorem cexE_C1 (n : Nat) : nullValueD2 CexE (fun _ => false) 1 (EPos.C n) = 0 := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  show nullValueD2 CexE (fun _ => false) (0 + 1) (EPos.C n) = 0
   rw [nullValueD2_of_fold CexE _ 0 (EPos.C n) (by rw [cexE_eval_C]; decide)
     (by rw [cexE_cap_C]; decide) (cexE_ai_C n), cexE_term, cexE_ma1]
-  show max LOSS (-(nullValueD2 CexE (fun _ => false) 0 EPos.X)) = -MATE_UPPER
-  rw [cexE_X]
-  decide
+  show max (max LOSS (-(nullValueD2 CexE (fun _ => false) 0 EPos.X)))
+      (-(nullValueD2 CexE (fun _ => false) 0 (EPos.C (n + 1)))) = 0
+  rw [cexE_X, show nullValueD2 CexE (fun _ => false) 0 (EPos.C (n + 1)) = 0 from by
+    simp only [nullValueD2]
+    rw [if_neg (by rw [cexE_eval_C]; decide), if_neg (by rw [cexE_cap_C]; decide),
+      cexE_eval_C]]
+  omega
 
 /-- Off the frontier the recursion is honest, and the illegal `X`
 contributes the sentinel from the other side. -/
@@ -586,35 +637,29 @@ theorem cexE_Cstep (d n : Nat) :
   rw [hLOSS]
   omega
 
-/-- **The oscillation.**  Uniform in the chain position, because every
-node of the chain has the same shape -- which is the whole point: the
-frontier always finds a fresh masked node however deep it goes. -/
-theorem cexE_ladder :
-    ∀ k n, nullValueD2 CexE (fun _ => false) (2 * k + 1) (EPos.C n) = -MATE_UPPER
-      ∧ nullValueD2 CexE (fun _ => false) (2 * k + 2) (EPos.C n) = MATE_UPPER := by
+/-- **The oscillation is gone.**  Uniform in the chain position, as
+before -- every node of the chain has the same shape -- but the shape
+is now honest: the drawn chain is valued `0` at every depth and every
+position, which is exactly the classification's "neither" arm.  Where
+this theorem used to read `-MATE_UPPER` on odd depths and `MATE_UPPER`
+on even ones, there is now nothing to alternate between. -/
+theorem cexE_honest : ∀ (d n : Nat),
+    nullValueD2 CexE (fun _ => false) d (EPos.C n) = 0 := by
   have hMU : MATE_UPPER = 69290 := rfl
-  intro k
-  induction k with
+  intro d
+  induction d with
   | zero =>
     intro n
-    refine ⟨cexE_C1 n, ?_⟩
-    show nullValueD2 CexE (fun _ => false) (0 + 2) (EPos.C n) = MATE_UPPER
-    rw [cexE_Cstep 0 n, cexE_C1 (n + 1)]
-    omega
-  | succ k ih =>
-    have hodd : ∀ n, nullValueD2 CexE (fun _ => false) (2 * (k + 1) + 1) (EPos.C n)
-        = -MATE_UPPER := by
-      intro n
-      have hidx : 2 * (k + 1) + 1 = (2 * k + 1) + 2 := by omega
-      rw [hidx, cexE_Cstep (2 * k + 1) n, show (2 * k + 1) + 1 = 2 * k + 2 from by omega,
-        (ih (n + 1)).2]
-      omega
+    simp only [nullValueD2]
+    rw [if_neg (by rw [cexE_eval_C]; decide), if_neg (by rw [cexE_cap_C]; decide),
+      cexE_eval_C]
+  | succ d ih =>
     intro n
-    refine ⟨hodd n, ?_⟩
-    have hidx : 2 * (k + 1) + 2 = (2 * k + 2) + 2 := by omega
-    rw [hidx, cexE_Cstep (2 * k + 2) n, show (2 * k + 2) + 1 = 2 * (k + 1) + 1 from by omega,
-      hodd (n + 1)]
-    omega
+    cases d with
+    | zero => exact cexE_C1 n
+    | succ d' =>
+      rw [show d' + 1 + 1 = d' + 2 from rfl, cexE_Cstep d' n, ih (n + 1)]
+      omega
 
 /-! ### ... and no forced mate, in either direction -/
 
@@ -653,62 +698,55 @@ theorem cexE_no_forcedlyMated : ∀ k n, ¬ ForcedlyMated CexE k (EPos.C n) := b
 
 /-! ### The readings, at arbitrarily large depth -/
 
-theorem cexE_mate_reading (D0 : Nat) :
-    ∃ D, D0 ≤ D ∧ nullValueD2 CexE (fun _ => false) D (EPos.C 0) = MATE_UPPER :=
-  ⟨2 * D0 + 2, by omega, (cexE_ladder D0 0).2⟩
+/-- **The classification is right at EVERY depth**, not merely from
+some `D0` on: the eventual weakening this module set out to evaluate is
+not needed for this root, because the fixed-depth statement holds.  The
+two readings that used to be extracted here -- a mate claim at every
+even depth and a mated claim at every odd one -- have no witnesses
+left. -/
+theorem cexE_in_band (D : Nat) :
+    -MATE_LOWER < nullValueD2 CexE (fun _ => false) D (EPos.C 0) ∧
+      nullValueD2 CexE (fun _ => false) D (EPos.C 0) < MATE_LOWER := by
+  have hML : MATE_LOWER = 47923 := rfl
+  rw [cexE_honest D 0]
+  omega
 
-theorem cexE_mated_reading (D0 : Nat) :
-    ∃ D, D0 ≤ D ∧ nullValueD2 CexE (fun _ => false) D (EPos.C 0) = -MATE_UPPER :=
-  ⟨2 * D0 + 1, by omega, (cexE_ladder D0 0).1⟩
-
-/-- **A read-time clamp does not help.**  The phantom arrives as the
-exact sentinel, so clamping the root read at `MATE_UPPER - 1` leaves
-69,289 -- still 21,366 points inside the mate band. -/
-theorem cexE_clamp_no_help (D0 : Nat) :
-    ∃ D, D0 ≤ D ∧
-      MATE_LOWER ≤ min (nullValueD2 CexE (fun _ => false) D (EPos.C 0)) (MATE_UPPER - 1) := by
-  obtain ⟨D, hD, hval⟩ := cexE_mate_reading D0
-  refine ⟨D, hD, ?_⟩
-  rw [hval]
-  decide
+/-- **A read-time clamp is not needed either.**  The reported value is
+`0`, so no clamp, tolerance or post-processing has anything to correct
+-- the objection that a `MATE_UPPER - 1` clamp left 69,289 points of
+false mate on the table is moot. -/
+theorem cexE_clamp_no_longer_needed (D : Nat) :
+    min (nullValueD2 CexE (fun _ => false) D (EPos.C 0)) (MATE_UPPER - 1) = 0 := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  rw [cexE_honest D 0]
+  omega
 
 /-! ### The frontier-tail variant values the same root honestly -/
 
-theorem cexE_admitted_masked (n : Nat) : allAdmittedIllegalB CexE 1 (EPos.C n) = true := by
-  refine allAdmittedIllegalB_true_iff.mpr ?_
-  rw [cexE_ma1]
-  intro m hm
-  rcases List.mem_cons.mp hm with rfl | hm'
-  · exact cexE_cap_X
-  · cases hm'
-
+/-- The unfilter trigger never fires: the legal continuation is
+admitted, so the admitted set is not all-illegal at ANY depth.  This
+used to be true only from remaining depth 2 on. -/
 theorem cexE_admitted_open (d n : Nat) :
-    allAdmittedIllegalB CexE (d + 2) (EPos.C n) = false :=
+    allAdmittedIllegalB CexE (d + 1) (EPos.C n) = false :=
   allAdmittedIllegalB_false_of_legal
-    (by rw [cexE_ma2 d n]; exact List.mem_cons_of_mem _ (List.mem_cons_self _ _))
+    (by rw [cexE_ma d n]; exact List.mem_cons_of_mem _ (List.mem_cons_self _ _))
     (cexE_cap_C (n + 1))
 
-/-- Both branches of the t-recursion fold the same list: at the
-frontier because the unfilter trigger fires, deeper because the filter
-was already the identity. -/
+/-- The t-recursion folds the chain's full move list, and does so
+through the ORDINARY filtered branch -- the tail it was built to search
+is already in the filter. -/
 theorem cexE_t_fold (d n : Nat) :
     nullValueD2t CexE (fun _ => false) (d + 1) (EPos.C n)
       = foldMax (fun m => -(nullValueD2t CexE (fun _ => false) d m))
           [EPos.X, EPos.C (n + 1)] LOSS := by
   have hterm : nullTermD2t CexE (fun _ => false) d (EPos.C n) = LOSS := by simp [nullTermD2t]
-  cases d with
-  | zero =>
-    rw [nullValueD2t_of_masked CexE _ 0 (EPos.C n) (by rw [cexE_eval_C]; decide)
-      (by rw [cexE_cap_C]; decide) (cexE_ai_C n) (cexE_admitted_masked n), hterm, cexE_moves_C]
-  | succ d' =>
-    rw [nullValueD2t_of_fold CexE _ (d' + 1) (EPos.C n) (by rw [cexE_eval_C]; decide)
-      (by rw [cexE_cap_C]; decide) (cexE_ai_C n) (cexE_admitted_open d' n), hterm]
-    show foldMax _ (movesAbove CexE (val_lower (d' + 2)) (EPos.C n)) LOSS = _
-    rw [cexE_ma2 d' n]
+  rw [nullValueD2t_of_fold CexE _ d (EPos.C n) (by rw [cexE_eval_C]; decide)
+    (by rw [cexE_cap_C]; decide) (cexE_ai_C n) (cexE_admitted_open d n), hterm, cexE_ma d n]
 
-/-- **`CexE` becomes a positive test for the frontier tail.**  The
-t-variant reports the honest `0` at every depth and every chain
-position: no phantom, no oscillation, correct classification. -/
+/-- **`CexE` is a positive test for the frontier tail, and the test now
+passes for the SHIPPED fold too.**  The t-variant reports the honest
+`0` at every depth and every chain position -- and so does
+`nullValueD2` (`cexE_honest`). -/
 theorem cexE_t_honest : ∀ (d n : Nat),
     nullValueD2t CexE (fun _ => false) d (EPos.C n) = 0 := by
   have hMU : MATE_UPPER = 69290 := rfl
@@ -733,53 +771,74 @@ theorem cexE_t_honest : ∀ (d n : Nat),
 section
 set_option maxRecDepth 4096
 
-/-- **(c) The eventual trichotomy is FALSE without `NoMaskedMobility`.**
+/-- **(c) The trichotomy needs NO frontier premise.**  This is the
+theorem `eventual_classification_needs_frontier` used to refute, with
+`NoMaskedMobility` deleted from the ledger rather than weakened: the
+shipped positive-depth admission discharges it under the same
+`ValFloor` the statement already carries.  All three arms, at EVERY
+depth -- so the eventual weakening this module set out to price is not
+needed for any of them.
 
-Stated against the strongest hypotheses available: every fidelity
-premise (`ValFloor`, `EvalQuiet`, and section 2's two-sided `EvalBand`
-with its gap condition), `NoZugzwang`, root legality, a live king, and
-no forced mate for either side at any budget -- and the conclusion
-weakened all the way to "from SOME depth on".  It still fails.
+The premise ledger of `Classification.lean` therefore reads: `ValFloor`
+and `EvalQuiet` (fidelity, tables) and `NoZugzwang` (chess, layer 2,
+about the PASS and not about the filter).  The one masking premise is
+gone. -/
+theorem eventual_classification_frontier_free (G : QSGame) (guard : G.Pos → Bool)
+    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hZ : NoZugzwang G guard) (p : G.Pos)
+    (hcapf : hasKingCapture G.toNullGame.toGame p = false)
+    (hkg : ¬ (G.eval p ≤ -MATE_LOWER)) :
+    (∀ k, ForcedMate G k p →
+      ∀ D, k + 1 ≤ D → MATE_LOWER ≤ nullValueD2 G guard D p) ∧
+    (∀ k, ForcedlyMated G k p →
+      ∀ D, k + 2 ≤ D → nullValueD2 G guard D p ≤ -MATE_LOWER) ∧
+    ((∀ k, ¬ ForcedMate G k p) → (∀ k, ¬ ForcedlyMated G k p) →
+      ∀ D, -MATE_LOWER < nullValueD2 G guard D p ∧
+        nullValueD2 G guard D p < MATE_LOWER) :=
+  eventual_classification G guard hF hQ
+    (noMaskedMobility_of_valFloor G hF (by decide)) hZ p hcapf hkg
 
-The shipped value function offers no route to the honesty arm.  What
-retires the premise is the engine change (`cexE_t_honest`). -/
-theorem eventual_classification_needs_frontier :
-    ¬ (∀ (G : QSGame) (guard : G.Pos → Bool) (B : Int), 0 ≤ B →
-        ValFloor G 192 → EvalQuiet G.toNullGame.toGame → EvalBand G.toNullGame.toGame B →
-        B + EVAL_ROUGHNESS < MATE_LOWER → NoZugzwang G guard →
-        ∀ p : G.Pos, hasKingCapture G.toNullGame.toGame p = false →
-          ¬ (G.eval p ≤ -MATE_LOWER) →
-          (∀ k, ¬ ForcedMate G k p) → (∀ k, ¬ ForcedlyMated G k p) →
-          ∃ D0 : Nat, ∀ D, D0 ≤ D →
-            -MATE_LOWER < nullValueD2 G guard D p ∧ nullValueD2 G guard D p < MATE_LOWER) := by
-  intro h
-  obtain ⟨D0, hD0⟩ := h CexE (fun _ => false) EvalBounds.evalBound (by decide)
-    cexE_floor cexE_quiet (cexE_evalBand (by decide)) shipped_band_gap cexE_nozug
-    (EPos.C 0) (cexE_cap_C 0) (by rw [cexE_eval_C]; decide)
-    (fun k => cexE_no_forcedMate k 0) (fun k => cexE_no_forcedlyMated k 0)
-  obtain ⟨D, hDge, hval⟩ := cexE_mate_reading D0
-  have hlt := (hD0 D hDge).2
-  rw [hval] at hlt
-  exact absurd hlt (by decide)
+/-- The honesty arm, isolated, as the thing that was actually bought:
+before `c01915f` this implication was FALSE (`CexE` was the witness),
+and it is what `NoMaskedMobility` used to be spent on.  Nothing but
+fidelity and the pass premise pays for it now. -/
+theorem eventual_honesty_frontier_free (G : QSGame) (guard : G.Pos → Bool)
+    (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame)
+    (hZ : NoZugzwang G guard) (p : G.Pos)
+    (hcapf : hasKingCapture G.toNullGame.toGame p = false)
+    (hkg : ¬ (G.eval p ≤ -MATE_LOWER))
+    (hnFM : ∀ k, ¬ ForcedMate G k p) (hnFMd : ∀ k, ¬ ForcedlyMated G k p) :
+    ∀ D, -MATE_LOWER < nullValueD2 G guard D p ∧
+      nullValueD2 G guard D p < MATE_LOWER :=
+  (eventual_classification_frontier_free G guard hF hQ hZ p hcapf hkg).2.2 hnFM hnFMd
 
-/-- The countermodel's whole content in one statement: a drawn root
-whose shipped-value classification is wrong in BOTH directions at
-arbitrarily large depth, and right at every depth under the
-frontier-tail variant. -/
+/-- The shipped fold and the frontier-tail variant agree on the chain:
+`Classification.lean` Part B's proposed change has nothing to add
+here. -/
+theorem cexE_shipped_eq_t (d n : Nat) :
+    nullValueD2 CexE (fun _ => false) d (EPos.C n)
+      = nullValueD2t CexE (fun _ => false) d (EPos.C n) := by
+  rw [cexE_honest d n, cexE_t_honest d n]
+
+/-- The countermodel's whole content in one statement, inverted.  A
+drawn root, no forced mate for either side at any budget, and a
+declared value that is the honest `0` at EVERY depth -- under the
+shipped fold and under the frontier-tail variant alike -- with
+`NoMaskedMobility` a theorem rather than a premise.
+
+Read against the old `eventual_classification_verdict` (a value wrong
+in both directions at arbitrarily large depth, right only under the
+t-variant), this is the ledger entry for `c01915f`. -/
 theorem eventual_classification_verdict :
     (∀ k, ¬ ForcedMate CexE k (EPos.C 0)) ∧
     (∀ k, ¬ ForcedlyMated CexE k (EPos.C 0)) ∧
-    (∀ D0, ∃ D, D0 ≤ D ∧ MATE_LOWER ≤ nullValueD2 CexE (fun _ => false) D (EPos.C 0)) ∧
-    (∀ D0, ∃ D, D0 ≤ D ∧ nullValueD2 CexE (fun _ => false) D (EPos.C 0) ≤ -MATE_LOWER) ∧
-    (∀ d n, nullValueD2t CexE (fun _ => false) d (EPos.C n) = 0) := by
-  refine ⟨fun k => cexE_no_forcedMate k 0, fun k => cexE_no_forcedlyMated k 0, ?_, ?_,
-    cexE_t_honest⟩
-  · intro D0
-    obtain ⟨D, hD, hval⟩ := cexE_mate_reading D0
-    exact ⟨D, hD, by rw [hval]; decide⟩
-  · intro D0
-    obtain ⟨D, hD, hval⟩ := cexE_mated_reading D0
-    exact ⟨D, hD, by rw [hval]; decide⟩
+    NoMaskedMobility CexE ∧
+    (∀ D, -MATE_LOWER < nullValueD2 CexE (fun _ => false) D (EPos.C 0) ∧
+      nullValueD2 CexE (fun _ => false) D (EPos.C 0) < MATE_LOWER) ∧
+    (∀ d n, nullValueD2 CexE (fun _ => false) d (EPos.C n) = 0) ∧
+    (∀ d n, nullValueD2t CexE (fun _ => false) d (EPos.C n) = 0) :=
+  ⟨fun k => cexE_no_forcedMate k 0, fun k => cexE_no_forcedlyMated k 0,
+   cexE_unmasked, cexE_in_band, cexE_honest, cexE_t_honest⟩
 
 end
 

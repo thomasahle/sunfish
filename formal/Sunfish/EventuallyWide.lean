@@ -563,32 +563,39 @@ theorem nullValueD2G_depthBlind (G : QSGame) (guard : G.Pos → Bool) :
 /-! ## The contract, formalized -/
 
 /-- **(i) Every real move is eventually admitted, unconditionally**: the
-QS threshold `val_lower d = QS - d * QS_A` is strictly decreasing in the
-remaining depth, so every move's value clears it from some depth on --
-the val-filter is a bounded postponement, never a permanent omission.
-(Under `ValFloor G 192` the bound is uniform: depth 2,
-`admitted_uniformly_of_floor` below.) -/
-theorem every_move_eventually_admitted (G : QSGame) (p m : G.Pos)
+val-filter is a bounded postponement, never a permanent omission.  This
+used to be a limit statement about the sloped threshold `QS - d * QS_A`
+decreasing without bound; since `c01915f` the postponement is at most
+ONE ply, and the bound needs no hypothesis about the move's value at
+all -- above the frontier the threshold is the bottom of the band.
+Kept in the limit form the contract states it in, with `N = 1`.
+
+The one thing the change COSTS: the old statement was unconditional --
+a sloped threshold eventually clears any value whatsoever -- and this
+one is not, because a flat threshold clears only what is above it.  The
+hypothesis it needs is `ValFloor`, i.e. that move values live inside
+the band at all, which every theorem in this file already assumes and
+which the shipped tables satisfy with -192 against -69290.  An
+unconditional reading would have to contemplate a move valued below the
+reserved sentinel, which is not a move value but a token collision. -/
+theorem every_move_eventually_admitted (G : QSGame) {B : Int}
+    (hF : ValFloor G B) (hB : B ≤ MATE_UPPER) (p m : G.Pos)
     (hm : m ∈ G.moves p) :
     ∃ N : Nat, ∀ d : Nat, N ≤ d → m ∈ movesAbove G (val_lower d) p := by
-  refine ⟨(QS - G.val p m).toNat, fun d hd => ?_⟩
+  refine ⟨1, fun d hd => ?_⟩
   rw [mem_movesAbove]
   refine ⟨hm, ?_⟩
-  have hQ : QS = 40 := rfl
-  have hA : QS_A = 140 := rfl
-  have hto : (QS - G.val p m : Int) ≤ ((QS - G.val p m).toNat : Int) :=
-    Int.self_le_toNat _
-  unfold val_lower
-  rw [hQ, hA]
-  rw [hQ] at hd hto
+  rw [val_lower_pos d (by omega)]
+  have := hF p m hm
   omega
 
-/-- The floor makes the admission bound uniform: from remaining depth 2
-on, NOTHING is filtered (the Liveness respend of
+/-- The floor makes the admission bound uniform, and after `c01915f` it
+is uniform at the FRONTIER'S SUCCESSOR: from remaining depth 1 on,
+nothing is filtered (the Liveness respend of
 `tables_kill_filter_at_depth2`, cited through
 `mem_movesAbove_of_floor`). -/
 theorem admitted_uniformly_of_floor (G : QSGame) (hF : ValFloor G 192) :
-    ∀ (d : Nat), 2 ≤ d → ∀ (p m : G.Pos), m ∈ G.moves p →
+    ∀ (d : Nat), 1 ≤ d → ∀ (p m : G.Pos), m ∈ G.moves p →
       m ∈ movesAbove G (val_lower d) p :=
   fun _ hd _ _ hm => mem_movesAbove_of_floor G hF hd hm
 
@@ -623,10 +630,12 @@ structure EventuallyExhaustive (G : QSGame) (guard : G.Pos → Nat → Bool) : P
   virtualsResolve : ∃ Hv : Nat, ∀ (d : Nat) (p : G.Pos),
     Hv ≤ d + 1 → nullTermD2G G guard d p = LOSS
 
-/-- Any finite-horizon guard satisfies the contract. -/
+/-- Any finite-horizon guard satisfies the contract, given the fidelity
+floor that arm (i) now needs. -/
 theorem eventuallyExhaustive_of_horizon (G : QSGame) (guard : G.Pos → Nat → Bool)
-    {H : Nat} (hH : Horizon G guard H) : EventuallyExhaustive G guard :=
-  ⟨every_move_eventually_admitted G,
+    {H : Nat} (hH : Horizon G guard H) (hF : ValFloor G 192) :
+    EventuallyExhaustive G guard :=
+  ⟨every_move_eventually_admitted G hF (by decide),
    fun N => ⟨N + 1, fun _ hd => by omega⟩,
    ⟨H, fun d p hd => nullTermD2G_eq_LOSS_of_horizon G guard hH d p hd⟩⟩
 

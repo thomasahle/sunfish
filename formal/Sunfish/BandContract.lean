@@ -404,6 +404,252 @@ theorem terminalValue_margin (G : QSGame) (d : Nat) (p : G.Pos)
   have h := (terminalValue_bounds G d p).1
   omega
 
+/-! ### The reservation at the RECURSION level
+
+The two endpoint lemmas close the two ways `-MATE_UPPER` could be
+MANUFACTURED at a node.  Neither says it cannot arrive from BELOW, and
+that is the load-bearing claim: `-MATE_UPPER` is what an illegal move's
+child reports, so `score > -MATE_UPPER` is a legality test one ply up
+only if no LEGAL line ever produces it.
+
+That is a statement about the recursion, and it comes in a dual pair,
+because the two directions feed each other:
+
+* **reserved below** -- a node whose own king is on the board returns
+  strictly above `-MATE_UPPER`;
+* **reserved above** -- a node that cannot capture the enemy king
+  returns strictly below `MATE_UPPER`.
+
+The lower arm needs a searched legal child to report below
+`MATE_UPPER`, so that its negation lifts the accumulator off the
+sentinel.  The upper arm needs every searched child to report above
+`-MATE_UPPER`, so that no negation reaches the positive token.  Each
+holds one ply down by the other, so they are proven together by
+induction on depth, with `qsLeaf_reserves_sentinel` and
+`terminalValue_reserves_sentinel` as the base and terminal cases.
+
+**The lower arm is what `c01915f` unblocked.**  Its live case has to
+produce a legal move that reaches the real accumulator, and under the
+pre-`c01915f` sloped admission a legal move could be missing from
+`searchedAt` outright -- filtered at remaining depth 1 with nothing
+else to displace the accumulator, which is exactly `CexE`'s and
+`CexF`'s phantom.  The model then could not prove the arm, and the
+audit recorded it as blocked.  Now `movesAbove_pos` puts every legal
+move in the admitted list at every positive depth, and the only thing
+that can still keep one out of the REAL accumulator is futility -- which
+pays for itself: a futile move's own stand-pat enters `futTerm`, and a
+live child's stand-pat is below `MATE_LOWER` under `EvalQuiet`, so the
+accumulator is lifted either way.
+
+Premises are fidelity only: a move-value floor inside the band
+(`ValFloor`, tables -192) and the quiet-eval bound (`EvalQuiet`).  No
+chess-side premise, no window premise beyond the docstring's own
+`1 - MATE_UPPER < gamma <= MATE_UPPER`. -/
+
+/-- **The dual reservation, reference consumer.**  Proven as a pair
+because neither arm is available without the other one ply down. -/
+theorem boundD2''_reserves_pair (G : QSGame) (guard : G.Pos → Bool)
+    {B : Int} (hF : ValFloor G B) (hBMU : B ≤ MATE_UPPER)
+    (hQ : EvalQuiet G.toNullGame.toGame) :
+    ∀ (d : Nat) (p : G.Pos) (gamma : Int), -MATE_UPPER < gamma → gamma ≤ MATE_UPPER →
+      ((¬ (G.eval p ≤ -MATE_LOWER)) → -MATE_UPPER < boundD2'' G guard d p gamma) ∧
+      (hasKingCapture G.toNullGame.toGame p = false →
+        boundD2'' G guard d p gamma < MATE_UPPER) := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  have hML : MATE_LOWER = 47923 := rfl
+  have hLOSS : LOSS = -MATE_UPPER := rfl
+  intro d
+  induction d with
+  | zero =>
+    intro p gamma hg1 hg2
+    refine ⟨fun hkg => qsLeaf_reserves_sentinel G guard p gamma hkg, fun hcap => ?_⟩
+    simp only [boundD2'']
+    by_cases hkg : G.eval p ≤ -MATE_LOWER
+    · rw [if_pos hkg]; omega
+    · rw [if_neg hkg, if_neg (by rw [hcap]; exact fun h => Bool.noConfusion h)]
+      have := hQ p hkg
+      omega
+  | succ d ih =>
+    intro p gamma hg1 hg2
+    -- the child window, and the child liveness both arms consume
+    have hw1 : -MATE_UPPER < 1 - gamma := by omega
+    have hw2 : 1 - gamma ≤ MATE_UPPER := by omega
+    have hchild : ∀ m, hasKingCapture G.toNullGame.toGame p = false → m ∈ G.moves p →
+        ¬ (G.eval m ≤ -MATE_LOWER) := by
+      intro m hcapf hm hev
+      have hk : hasKingCapture G.toNullGame.toGame p = true :=
+        (hasKingCapture_iff G.toNullGame.toGame p).mpr ⟨m, hm, hev⟩
+      rw [hcapf] at hk
+      exact Bool.noConfusion hk
+    have hSge := searchMoves_ge_init gamma
+      (fun m => -(boundD2'' G guard d m (1 - gamma))) (searchedAt G (d + 1) gamma p) LOSS
+    have hfutge := futTerm_ge_LOSS G (d + 1) gamma p
+    have hfutlt := futTerm_lt_gamma G (d + 1) gamma p hg1
+    rw [boundD2''_succ]
+    constructor
+    · -- **reserved below**
+      intro hkg
+      rw [if_neg hkg]
+      by_cases hcap : hasKingCapture G.toNullGame.toGame p = true
+      · rw [if_pos hcap]; omega
+      · rw [if_neg hcap]
+        have hcapf : hasKingCapture G.toNullGame.toGame p = false := by
+          cases h : hasKingCapture G.toNullGame.toGame p with
+          | false => rfl
+          | true => exact absurd h hcap
+        split
+        · -- the null cut: a cut is at least `gamma`, and a verified terminal
+          -- routes through the finalizer
+          next hcut =>
+            split
+            · exact terminalValue_reserves_sentinel G (d + 1) p
+            · have := hcut.2; omega
+        · -- the fold
+          next hcut =>
+            simp only [termFix2]
+            split
+            · exact terminalValue_reserves_sentinel G (d + 1) p
+            · next hfire =>
+              by_cases hai : allIllegalB G p = true
+              · -- the scan says terminal, so the override declined only because
+                -- a searched move already beat the sentinel
+                by_cases hSeq : searchMoves gamma
+                    (fun m => -(boundD2'' G guard d m (1 - gamma)))
+                    (searchedAt G (d + 1) gamma p) LOSS = LOSS
+                · exact absurd ⟨hSeq, hai⟩ hfire
+                · omega
+              · -- a legal move exists; it is ADMITTED (`movesAbove_pos`), and
+                -- either searched or futile -- both lift the accumulator
+                have hai' : allIllegalB G p = false := by
+                  cases h : allIllegalB G p with
+                  | false => rfl
+                  | true => exact absurd h hai
+                obtain ⟨m, hm, hleg⟩ := exists_legal_of_allIllegalB_false hai'
+                have hmlive := hchild m hcapf hm
+                have hmma : m ∈ movesAbove G (val_lower (d + 1)) p := by
+                  rw [movesAbove_pos G hF hBMU (d + 1) (by omega) p]; exact hm
+                by_cases hfut : futileAt G (d + 1) gamma p m = true
+                · have hmem : m ∈ (movesAbove G (val_lower (d + 1)) p).filter
+                      (fun x => futileAt G (d + 1) gamma p x) :=
+                    List.mem_filter.mpr ⟨hmma, hfut⟩
+                  have hle : -(G.eval m) ≤ futTerm G (d + 1) gamma p := by
+                    simp only [futTerm]
+                    exact foldMax_le_of_mem _ _ _ m hmem
+                  have := hQ m hmlive
+                  omega
+                · have hmem : m ∈ searchedAt G (d + 1) gamma p :=
+                    List.mem_filter.mpr ⟨hmma, by simp [hfut]⟩
+                  have hup := (ih m (1 - gamma) hw1 hw2).2 hleg
+                  have hlow := searchMoves_ge_min_of_mem gamma
+                    (fun x => -(boundD2'' G guard d x (1 - gamma)))
+                    (searchedAt G (d + 1) gamma p) LOSS m hmem
+                  simp only at hlow
+                  omega
+    · -- **reserved above**
+      intro hcap
+      have hall : ∀ m ∈ searchedAt G (d + 1) gamma p,
+          -(boundD2'' G guard d m (1 - gamma)) ≤ MATE_UPPER - 1 := by
+        intro m hm
+        have hmm : m ∈ G.moves p :=
+          movesAbove_subset G _ p m (searchedAt_subset G (d + 1) gamma p m hm)
+        have hlow := (ih m (1 - gamma) hw1 hw2).1 (hchild m hcap hmm)
+        omega
+      have hSle := searchMoves_le_max gamma
+        (fun m => -(boundD2'' G guard d m (1 - gamma))) (searchedAt G (d + 1) gamma p)
+        LOSS (MATE_UPPER - 1) hall (by omega)
+      by_cases hkg : G.eval p ≤ -MATE_LOWER
+      · rw [if_pos hkg]; omega
+      · rw [if_neg hkg, if_neg (by rw [hcap]; exact fun h => Bool.noConfusion h)]
+        split
+        · -- the cut path is capped by the mate-band decline the gate carries
+          next hcut =>
+            have hband : nullVerify'' G
+                (-(boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - gamma))) gamma
+                (boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) p
+                  < MATE_LOWER := by
+              have huse := hcut.1
+              simp only [useD2'', Bool.and_eq_true, decide_eq_true_eq] at huse
+              exact huse.2 hcut.2
+            split
+            · have := (terminalValue_bounds G (d + 1) p).2; omega
+            · omega
+        · next hcut =>
+            have hnull : nullPartD2'' G guard
+                (-(boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - gamma)))
+                (boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER))
+                (d + 1) p gamma ≤ MATE_UPPER - 1 := by
+              simp only [nullPartD2'']
+              split
+              · next huse =>
+                have hlt : ¬ (gamma ≤ nullVerify'' G
+                    (-(boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - gamma))) gamma
+                    (boundD2'' G guard (d + 1 - 3) (G.pass p) (1 - MATE_LOWER)) p) :=
+                  fun h => hcut ⟨huse, h⟩
+                omega
+              · omega
+            simp only [termFix2]
+            split
+            · have := (terminalValue_bounds G (d + 1) p).2; omega
+            · omega
+
+/-- **Leak candidate 3, closed: the recursion.**  A node whose own king
+is on the board never returns the reserved sentinel, at ANY depth.
+This is the fact `score > -MATE_UPPER` is a legality test BY, and the
+docstring's "Only a searched real move sets `live`" is its consumer. -/
+theorem boundD2''_reserves_sentinel (G : QSGame) (guard : G.Pos → Bool)
+    {B : Int} (hF : ValFloor G B) (hBMU : B ≤ MATE_UPPER)
+    (hQ : EvalQuiet G.toNullGame.toGame)
+    (d : Nat) (p : G.Pos) (gamma : Int)
+    (hg1 : -MATE_UPPER < gamma) (hg2 : gamma ≤ MATE_UPPER)
+    (hkg : ¬ (G.eval p ≤ -MATE_LOWER)) :
+    -MATE_UPPER < boundD2'' G guard d p gamma :=
+  (boundD2''_reserves_pair G guard hF hBMU hQ d p gamma hg1 hg2).1 hkg
+
+/-- The positive token is reserved the same way: only a node that can
+actually take the king reports `MATE_UPPER`, which is the docstring's
+"an exact `MATE_UPPER` proves a king capture" -- here as a property of
+the recursion rather than of one branch. -/
+theorem boundD2''_reserves_positive (G : QSGame) (guard : G.Pos → Bool)
+    {B : Int} (hF : ValFloor G B) (hBMU : B ≤ MATE_UPPER)
+    (hQ : EvalQuiet G.toNullGame.toGame)
+    (d : Nat) (p : G.Pos) (gamma : Int)
+    (hg1 : -MATE_UPPER < gamma) (hg2 : gamma ≤ MATE_UPPER)
+    (hcap : hasKingCapture G.toNullGame.toGame p = false) :
+    boundD2'' G guard d p gamma < MATE_UPPER :=
+  (boundD2''_reserves_pair G guard hF hBMU hQ d p gamma hg1 hg2).2 hcap
+
+/-- **The legality test, as the code uses it.**  `score > -MATE_UPPER`
+at a child report is EXACTLY "the move was legal": the sentinel is
+returned at a king-gone node and nowhere else.  One direction is
+`boundD2''_kingGone`, the other is the recursion-level reservation. -/
+theorem boundD2''_live_iff_legal (G : QSGame) (guard : G.Pos → Bool)
+    {B : Int} (hF : ValFloor G B) (hBMU : B ≤ MATE_UPPER)
+    (hQ : EvalQuiet G.toNullGame.toGame)
+    (d : Nat) (p : G.Pos) (gamma : Int)
+    (hg1 : -MATE_UPPER < gamma) (hg2 : gamma ≤ MATE_UPPER) :
+    (-MATE_UPPER < boundD2'' G guard d p gamma) ↔ ¬ (G.eval p ≤ -MATE_LOWER) := by
+  constructor
+  · intro h hev
+    rw [boundD2''_kingGone G guard d p gamma hev] at h
+    omega
+  · exact boundD2''_reserves_sentinel G guard hF hBMU hQ d p gamma hg1 hg2
+
+/-- **The production consumer inherits it.**  `boundKCX''` is the
+shipped shape; `production''_eq_reference''` transports both arms
+verbatim. -/
+theorem boundKCX''_reserves_sentinel (G : QSGame) (guard : G.Pos → Bool)
+    (hB : Bounded G.toNullGame.toGame) (hV : KingCaptureValHigh G)
+    (hCF : CaptureFirst G)
+    {B : Int} (hF : ValFloor G B) (hBMU : B ≤ MATE_UPPER)
+    (hQ : EvalQuiet G.toNullGame.toGame)
+    (d : Nat) (p : G.Pos) (gamma : Int)
+    (hg1 : -MATE_UPPER < gamma) (hg2 : gamma ≤ MATE_UPPER) :
+    ((¬ (G.eval p ≤ -MATE_LOWER)) → -MATE_UPPER < boundKCX'' G guard d p gamma) ∧
+    (hasKingCapture G.toNullGame.toGame p = false →
+      boundKCX'' G guard d p gamma < MATE_UPPER) := by
+  rw [production''_eq_reference'' G guard hB hV hCF d p gamma hg1 hg2]
+  exact boundD2''_reserves_pair G guard hF hBMU hQ d p gamma hg1 hg2
+
 /-! ### The direction of the mate value, and the alternative that inverts it
 
 `-MATE_LOWER - depth * EVAL_ROUGHNESS` with `depth` the UNSPENT depth makes the
