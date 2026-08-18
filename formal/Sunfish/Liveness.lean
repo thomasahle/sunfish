@@ -106,17 +106,21 @@ inductive ForcedMate (G : QSGame) : Nat → G.Pos → Prop where
 
 /-! ### The filter clears the floor -/
 
-/-- At remaining depth ≥ 2 the QS threshold sits at or below the
-shipped tables' move-value floor (`val_lower 2 = -240 ≤ -192`):
-the liveness respend of `tables_kill_filter_at_depth2`. -/
-theorem val_lower_le_neg_floor (d : Nat) (h : 2 ≤ d) : val_lower d ≤ -192 := by
-  unfold val_lower QS QS_A
+/-- At EVERY positive depth the QS threshold sits below the shipped
+tables' move-value floor: since `c01915f` it is the reserved sentinel
+`-MATE_UPPER = -69290`, not the sloped `val_lower_pre 2 = -240` that
+used to make this a depth-2 statement.  The liveness respend of
+`tables_kill_filter_at_depth2`. -/
+theorem val_lower_le_neg_floor (d : Nat) (h : 1 ≤ d) : val_lower d ≤ -192 := by
+  have hMU : MATE_UPPER = 69290 := rfl
+  rw [val_lower_pos d (by omega)]
   omega
 
 /-- Under the tables' floor, EVERY legal move survives the QS filter at
-remaining depth ≥ 2 -- in particular the mating move does. -/
+every positive remaining depth -- in particular the mating move does,
+and now at the frontier's own successor and not one ply later. -/
 theorem mem_movesAbove_of_floor (G : QSGame) (hF : ValFloor G 192)
-    {d : Nat} (hd : 2 ≤ d) {p m : G.Pos} (hm : m ∈ G.moves p) :
+    {d : Nat} (hd : 1 ≤ d) {p m : G.Pos} (hm : m ∈ G.moves p) :
     m ∈ movesAbove G (val_lower d) p := by
   rw [mem_movesAbove]
   have h1 := hF p m hm
@@ -937,13 +941,15 @@ defender remaining depth ≥ 2 the shipped tables' floor clears the
 threshold (`mem_movesAbove_of_floor`, `ValFloor G 192` vs `val_lower 2
 = -240`) and nothing is filtered; at defender remaining depth EXACTLY
 1 the threshold is `val_lower 1 = -100` and a legal reply valued in
-`[-192, -100)` is invisible to the fold.  That is not a proof gap but
-a FALSITY: `CexF` below is a machine-checked countermodel -- all
-fidelity premises hold, the depth-2 declared value is the full
+`[-192, -100)` was invisible to the fold.  That was not a proof gap but
+a FALSITY: `CexF` below was a machine-checked countermodel -- all
+fidelity premises hold, the depth-2 declared value was the full
 `MATE_UPPER`, and there is NO forced mate; the defender's one escape
-(a ≥100cp-dropping move to stalemate) is QS-filtered exactly at the
-frontier, and one more ply of depth dissolves the phantom
-(`cexF_false_mate_at_frontier`).
+(a ≥100cp-dropping move to stalemate) was QS-filtered exactly at the
+frontier, and one more ply of depth dissolved the phantom.  `c01915f`
+emptied that band: the positive-depth threshold is `-MATE_UPPER`, and
+the same game now reports the honest 0 at every depth
+(`cexF_no_false_mate`).
 
 The premise that closes the frontier is one this development already
 knows: `NoMaskedMobility` ("a position whose every depth-1-admitted
@@ -1658,19 +1664,32 @@ theorem forcedMate_play_mates (G : QSGame) (guard : G.Pos → Bool)
       exact ih n (by omega) m hn1 (by omega) (by simp only [EVAL_ROUGHNESS]; omega)
         hcapm (hall m hm hleg)
 
-/-! ### The countermodel: the frontier premise is genuinely needed
+/-! ### The countermodel that `c01915f` retired
 
-`CexF`: root `R` (attacker) -- `M` (defender) -- with `M`'s two
-replies an illegal `I` (admitted at depth 1) and a legal escape `E` to
-stalemate, valued at a 150cp drop: below the depth-1 threshold
-(`val_lower 1 = -100`), above the depth-2 one and the tables' -192
-floor.  At depth 2 the declared value of `R` is the full `MATE_UPPER`
--- the depth-1 defender fold sees only the refuted `I` -- yet NO forced
-mate exists at any `k`: `E` escapes.  One more ply and the phantom
-dissolves (depth 3 computes the honest 0 through the stalemate).  All
-the spine's fidelity premises hold; what fails is exactly
-`NoMaskedMobility` at `M`.  So the frontier premise is not an artifact
-of this proof: without it, the theorem is FALSE. -/
+`CexF`: root `R` (attacker) -- `M` (defender) -- with `M`'s two replies
+an illegal `I` and a legal escape `E` to stalemate, valued at a 150cp
+drop.  Under the PRE-`c01915f` admission that drop was decisive: -150
+sits below `val_lower_pre 1 = -100` and above `val_lower_pre 2 = -240`,
+so `M`'s depth-1 fold saw only the refuted `I`, printed the untouched
+sentinel, and `R`'s depth-2 declared value was the full `MATE_UPPER` --
+a mate claim with no forced mate behind it at any `k`, since `E`
+escapes.  The phantom dissolved one ply later (depth 3 computed the
+honest 0 through the stalemate), and `NoMaskedMobility` at `M` was
+exactly the premise that ruled it out.  Without that premise the
+no-false-mates theorem was FALSE, and this game was the proof.
+
+The shipped admission is `-MATE_UPPER` at every positive depth, so
+`E` is admitted at depth 1 too and the phantom never forms.  Every
+theorem below is the same game re-measured: `M` reads the honest 0 at
+depth 1 (`cexF_M_depth1`), `R` reads 0 at depths 2 and 3
+(`cexF_root_honest`, `cexF_deeper`) -- the values `Classification.lean`
+Part B's frontier-tail variant was built to produce
+(`cexF_t_positive`), now produced by the shipped fold itself -- and
+`NoMaskedMobility` holds here (`cexF_unmasked`), as it does everywhere,
+by `noMaskedMobility_of_valFloor`.
+
+What the game still records is the SIZE of the hole that was closed:
+`cexF_masking_was_arithmetic` pins the two thresholds that decided it. -/
 
 inductive FPos where
   | R | M | I | E | X
@@ -1721,30 +1740,45 @@ theorem cexF_valHigh : KingCaptureValHigh CexF := by
 theorem cexF_root_legal : hasKingCapture CexF.toNullGame.toGame FPos.R = false := by
   decide
 
-/-- The defender's depth-1 fold sees only the illegal `I`: the escape
-`E` is QS-filtered, so `M`'s depth-1 declared value is the untouched
-`LOSS` sentinel. -/
+/-- The exact arithmetic the phantom needed, and no longer gets: the
+escape's 150cp drop is below the OLD depth-1 threshold and above the
+old depth-2 one -- and above the shipped one at both. -/
+theorem cexF_masking_was_arithmetic :
+    CexF.val FPos.M FPos.E < val_lower_pre 1 ∧
+    val_lower_pre 2 ≤ CexF.val FPos.M FPos.E ∧
+    val_lower 1 ≤ CexF.val FPos.M FPos.E :=
+  ⟨by decide, by decide, by decide⟩
+
+/-- The defender's depth-1 fold now sees BOTH replies: the escape `E` is
+admitted at the shipped threshold, contributes its stalemate 0, and
+dominates the refuted `I`'s sentinel.  `M`'s depth-1 declared value is
+the honest draw -- where it used to be the untouched `LOSS`. -/
 theorem cexF_M_depth1 :
-    nullValueD2 CexF (fun _ => false) 1 FPos.M = -MATE_UPPER := by
+    nullValueD2 CexF (fun _ => false) 1 FPos.M = 0 := by
   rw [nullValueD2_of_fold CexF (fun _ => false) 0 FPos.M (by decide) (by decide)
     (by decide)]
-  have hma : movesAbove CexF (val_lower 1) FPos.M = [FPos.I] := by decide
+  have hma : movesAbove CexF (val_lower 1) FPos.M = [FPos.I, FPos.E] := by decide
   have hT : nullTermD2 CexF (fun _ => false) 0 FPos.M = LOSS := by
     simp only [nullTermD2]
     rw [if_neg (fun h => Bool.noConfusion h.1)]
   have hI : nullValueD2 CexF (fun _ => false) 0 FPos.I = MATE_UPPER :=
     nullValueD2_of_capture CexF (fun _ => false) 0 FPos.I (by decide) (by decide)
+  have hE : nullValueD2 CexF (fun _ => false) 0 FPos.E = 0 := by
+    simp only [nullValueD2]
+    rw [if_neg (by decide), if_neg (by decide)]
+    rfl
   rw [hma, hT]
   simp only [foldMax]
-  rw [hI]
+  rw [hI, hE]
   have hLOSS : LOSS = -MATE_UPPER := rfl
   have hMU : MATE_UPPER = 69290 := rfl
   omega
 
-/-- The phantom: at depth 2 the root's declared value is the full
-sentinel -- in the mate band. -/
-theorem cexF_bandValue :
-    MATE_LOWER ≤ nullValueD2 CexF (fun _ => false) 2 FPos.R := by
+/-- **No phantom.**  At depth 2 the root's declared value is 0, not the
+band-topping sentinel: the mate claim that the frontier premise existed
+to exclude is not made in the first place. -/
+theorem cexF_root_honest :
+    nullValueD2 CexF (fun _ => false) 2 FPos.R = 0 := by
   rw [nullValueD2_of_fold CexF (fun _ => false) 1 FPos.R (by decide) (by decide)
     (by decide)]
   have hma : movesAbove CexF (val_lower 2) FPos.R = [FPos.M] := by decide
@@ -1756,7 +1790,6 @@ theorem cexF_bandValue :
   rw [cexF_M_depth1]
   have hLOSS : LOSS = -MATE_UPPER := rfl
   have hMU : MATE_UPPER = 69290 := rfl
-  have hML : MATE_LOWER = 47923 := rfl
   omega
 
 /-- One ply deeper the filter admits `E`, and `M`'s value is the honest
@@ -1819,30 +1852,24 @@ theorem cexF_no_forcedMate : ∀ k, ¬ ForcedMate CexF k FPos.R := by
     | @mate _ _ m2 _ hm2 _ _ => exact absurd hm2 (List.not_mem_nil m2)
     | @step _ _ m2 _ hm2 _ _ _ => exact absurd hm2 (List.not_mem_nil m2)
 
-/-- ... and the premise that fails is exactly `NoMaskedMobility`, at
-`M`: every depth-1-admitted reply is illegal (only `I`), yet the legal
-`E` exists. -/
-theorem cexF_masked_mobility : ¬ NoMaskedMobility CexF := by
-  intro h
-  have hpre : ∀ m ∈ movesAbove CexF (val_lower 1) FPos.M,
-      hasKingCapture CexF.toNullGame.toGame m = true := by
-    have hma : movesAbove CexF (val_lower 1) FPos.M = [FPos.I] := by decide
-    rw [hma]
-    intro m hm
-    have hmI : m = FPos.I := List.mem_singleton.mp hm
-    subst hmI
-    decide
-  exact absurd (h FPos.M hpre FPos.E (by decide)) (by decide)
+/-- ... and the premise that used to fail here holds: `NoMaskedMobility`
+is a consequence of the tables' floor once the depth-1 threshold is the
+bottom of the band. -/
+theorem cexF_unmasked : NoMaskedMobility CexF :=
+  noMaskedMobility_of_valFloor CexF cexF_floor (by decide)
 
-/-- **The finding, bundled**: all fidelity premises hold and the root
-is legally reached, the depth-2 declared value is in the mate band, no
-forced mate exists, and one more ply computes the honest draw.  The
-frontier chess premise is therefore REQUIRED: no-false-mates is false
-without `NoMaskedMobility`. -/
-theorem cexF_false_mate_at_frontier :
-    MATE_LOWER ≤ nullValueD2 CexF (fun _ => false) 2 FPos.R ∧
-      (∀ k, ¬ ForcedMate CexF k FPos.R) ∧
-        nullValueD2 CexF (fun _ => false) 3 FPos.R = 0 :=
-  ⟨cexF_bandValue, cexF_no_forcedMate, cexF_deeper⟩
+/-- **The finding, bundled and inverted.**  The root is legally reached
+and has no forced mate at any `k` -- unchanged -- and its declared value
+is the honest 0 at the depth that used to print a mate claim, and at
+every depth after.  Together with `cexF_unmasked` this is the whole
+retirement: the game that made `NoMaskedMobility` REQUIRED now satisfies
+it, and no-false-mates needs no frontier premise at this node. -/
+theorem cexF_no_false_mate :
+    nullValueD2 CexF (fun _ => false) 1 FPos.M = 0 ∧
+      nullValueD2 CexF (fun _ => false) 2 FPos.R = 0 ∧
+        (∀ k, ¬ ForcedMate CexF k FPos.R) ∧
+          nullValueD2 CexF (fun _ => false) 3 FPos.R = 0 ∧
+            NoMaskedMobility CexF :=
+  ⟨cexF_M_depth1, cexF_root_honest, cexF_no_forcedMate, cexF_deeper, cexF_unmasked⟩
 
 end Sunfish

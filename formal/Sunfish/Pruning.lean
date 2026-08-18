@@ -690,8 +690,8 @@ theorem perpSol_satisfies (x : Int)
       rw [List.filter_cons]
       rw [if_pos (decide_eq_true (show val_lower (d + 1) ≤ CexPerp.val PPos.pa PPos.pb by
         show val_lower (d + 1) ≤ 0
-        unfold val_lower QS QS_A
-        omega))]
+        rw [val_lower_pos (d + 1) (by omega)]
+        decide))]
       rfl
     rw [hma]
     simp only [foldMax]
@@ -722,8 +722,8 @@ theorem perpSol_satisfies (x : Int)
       rw [List.filter_cons]
       rw [if_pos (decide_eq_true (show val_lower (d + 1) ≤ CexPerp.val PPos.pb PPos.pa by
         show val_lower (d + 1) ≤ 0
-        unfold val_lower QS QS_A
-        omega))]
+        rw [val_lower_pos (d + 1) (by omega)]
+        decide))]
       rfl
     rw [hma]
     simp only [foldMax]

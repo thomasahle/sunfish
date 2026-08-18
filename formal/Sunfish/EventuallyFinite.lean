@@ -532,27 +532,37 @@ theorem cexD_endsWithin : EndsWithin CexD 5 DPos.Q := by
   · exact hD
   · exact hB
 
-/-- **The fixed-depth lie survives the premise.**  At remaining depth
-1 the masked node `M` -- whose only legal move is the stalemate escape
-`S`, filtered at the depth-1 threshold while the illegal `X` is
-admitted -- is priced at the sentinel `-MATE_UPPER`, squarely in the
-mated band, for EVERY edge-cost selector.  (`guard` off, matching the
-stacks' countermodels; depth 1 is below the fuel horizon, so this is
-the shipped sub-horizon shape.)  Together with `cexD_endsWithin`:
-`hFiniteDiameter` holds and the depth-1 report is still dishonest, so
-the finiteness variant buys the EVENTUAL claim only, and fixed-depth
-honesty still needs `NoMaskedMobility` or the #171 tail. -/
+/-- **The fixed-depth lie does not survive `c01915f`.**  At remaining
+depth 1 the once-masked node `M` -- whose only legal move is the
+stalemate escape `S`, filtered at the PRE-`c01915f` depth-1 threshold
+while the illegal `X` was admitted -- is now priced at the honest `0`,
+strictly inside the band, for EVERY edge-cost selector.  (`guard` off,
+matching the stacks' countermodels; depth 1 is below the fuel horizon,
+so this is the shipped sub-horizon shape.)
+
+This theorem used to read `-MATE_UPPER` and carried the disposition
+"the finiteness variant buys the EVENTUAL claim only, and fixed-depth
+honesty still needs `NoMaskedMobility` or the #171 tail".  Both halves
+of that are retired: the admission change delivers fixed-depth honesty
+at this node, and `NoMaskedMobility` is a theorem
+(`noMaskedMobility_of_valFloor`).  What remains true, and is what the
+variant is actually for, is that FUEL EXHAUSTION -- not masking -- is
+the reason a fuel-bounded value can be sub-horizon inaccurate. -/
 theorem cexD_fuel_M1 (spend : CexD.Pos → Nat → CexD.Pos → Nat) :
-    fuelValueD2 CexD (fun _ => false) 2 spend 1 DPos.M = -MATE_UPPER := by
+    fuelValueD2 CexD (fun _ => false) 2 spend 1 DPos.M = 0 := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
   rw [fuelValueD2_of_fold_sub CexD (fun _ => false) 2 spend 0 DPos.M
     (by decide) (by decide) (by decide) (by omega)]
-  have hma : movesAbove CexD (val_lower 1) DPos.M = [DPos.X] := by decide
+  have hma : movesAbove CexD (val_lower 1) DPos.M = [DPos.X, DPos.S] := by decide
+  have hS : fuelValueD2 CexD (fun _ => false) 2 spend 0 DPos.S = 0 := by
+    simp only [fuelValueD2]
+    rw [if_neg (by decide), if_neg (by decide)]
+    rfl
   rw [hma, if_neg (by simp)]
   simp only [foldMax]
   rw [fuelValueD2_of_capture CexD (fun _ => false) 2 spend 0 DPos.X
-    (by decide) (by decide)]
+    (by decide) (by decide), hS]
   omega
 
 /-- No mate can be launched FROM the moveless stalemate `S`. -/
@@ -594,11 +604,12 @@ theorem cexD_M_not_mated (k : Nat) : ¬ ForcedlyMated CexD k DPos.M := by
   | inr h' => exact cexD_S_not_mating k (h'.2 DPos.S (by decide) (by decide))
 
 /-- The eventual side of the disposition, ON the countermodel: from
-the effective bound `D0 = C*N + C + 6 = 10` the masked node is
+the effective bound `D0 = C*N + C + 6 = 10` the once-masked node is
 classified correctly -- strictly inside the band, as befits a draw of
-the ruleless game -- for every edge-cost selector.  Fixed-depth lie at
-depth 1 (`cexD_fuel_M1`), eventual truth from depth 12: the variant's
-eventual-only scope, exhibited end to end on one game. -/
+the ruleless game -- for every edge-cost selector.  Since `c01915f`
+depth 1 agrees with it (`cexD_fuel_M1` is `0`), so this pair is no
+longer a lie/truth contrast but a consistency check: the eventual
+bound and the frontier now say the same thing about this node. -/
 theorem cexD_M_eventually_classified (spend : CexD.Pos → Nat → CexD.Pos → Nat)
     (D : Nat) (hD : 12 ≤ D) :
     -MATE_LOWER < fuelValueD2 CexD (fun _ => false) 2 spend D DPos.M ∧

@@ -27,7 +27,7 @@ layer 1, no chess premise) -- eventually classifies the position:
 | `ValFloor G 192` | fidelity (tables) | all three (spine + inversions) |
 | `NoZugzwang` | chess, layer 2 | win + loss (the transfer to the declared function; the finding side) |
 | `EvalQuiet` | fidelity (tables) | neither (depth-0 and frontier inversions) |
-| `NoMaskedMobility` | chess, layer 2 | neither (the honesty side; required per `CexF`) |
+| `NoMaskedMobility` | DISCHARGED (`noMaskedMobility_of_valFloor`) | neither (the honesty side; a premise only before `c01915f`) |
 | `Bounded`, `KillerLegal`, `KingCaptureValHigh`, `CaptureFirst` | fidelity / theorem | only the probe/driver corollaries, through layer 1 |
 
 The two recorded discharge options, NEITHER implemented in the engine:
@@ -37,15 +37,20 @@ The two recorded discharge options, NEITHER implemented in the engine:
   remaining depth and makes completeness unconditional at `D ≥ k + 52`;
   recorded in formal/README.md, deliberately not implemented (Thomas's
   decision: give the layer-2 assumption the exercise instead).
-* for `NoMaskedMobility` (honesty side): the FRONTIER TAIL SEARCH --
-  Part B of this file.  Verify-on-suspicion applied to the QS filter:
-  when a mate-band conclusion is forming at a depth where filtering was
-  active, unfilter.  For the t-variant defined below the honesty arm is
-  a THEOREM under fidelity premises alone -- `NoMaskedMobility` is not
-  assumed, its role is discharged by construction -- and `CexF` becomes
-  a positive test.  Proof-first: NO code change shipped; the t-model
-  sits alongside like `boundKCX''` did, so the decision can be made
-  with theorems (and later an Elo screen) in hand.
+* for `NoMaskedMobility` (honesty side): SHIPPED, and not as the
+  frontier tail.  `c01915f` (#218) made the positive-depth admission
+  `-MATE_UPPER`, so the depth-1 admitted set is the whole move list and
+  the premise follows from `ValFloor`
+  (`noMaskedMobility_of_valFloor`); the frontier-tail search of Part B
+  below -- verify-on-suspicion applied to the QS filter, unfiltering
+  when a mate-band conclusion forms at a filtering depth -- was the
+  proof-first alternative, and its trigger can no longer fire under a
+  move-value floor.  Part B is kept: it is the model in which the
+  honesty arm was FIRST shown to be fidelity-only
+  (`forcedMate_of_nullValueD2t`, `eventual_classification_t`), and
+  `cexF_t_positive` is now a test both variants pass.  The
+  premise-free form of the shipped statement is
+  `eventual_classification_frontier_free` in `Eventual.lean`.
 
 **What "draw" means here, honestly.**  The game being classified is the
 game sunfish plays: chess WITHOUT draw rules.  "Neither" =
@@ -360,11 +365,11 @@ interior depth.  Three reasons, all load-bearing:
   onto the real-move t-value.
 * `eventual_classification_t` -- the trichotomy again, with the
   honesty arm now paid for by fidelity alone.
-* `cexF_t_positive` -- **CexF is now a positive test**: on the very
-  countermodel where `nullValueD2` fabricates the depth-2
-  `MATE_UPPER` (`cexF_bandValue`) and `NoMaskedMobility` was proven
-  required, the t-variant computes the honest draw 0 at depth 2 (and
-  3).
+* `cexF_t_positive` -- **CexF is a positive test, and both variants
+  pass it**: on the countermodel where `nullValueD2` used to fabricate
+  a depth-2 `MATE_UPPER` and `NoMaskedMobility` was proven required,
+  the t-variant computes the honest draw 0 at depth 2 (and 3) -- and
+  since `c01915f` so does the shipped fold (`cexF_root_honest`).
 
 **What the code change would be** (for the decision, not shipped): in
 `bound`'s move loop the QS break stays; at the post-loop correction
@@ -989,10 +994,13 @@ theorem admitted_frontier_escape_t (G : QSGame) (guard : G.Pos → Bool)
 /-- **No false mates, t-variant -- unconditional over chess**: a
 mate-band declared t-value at a legally-reached root IS a forced mate
 within the probed depth, under FIDELITY premises alone
-(`ValFloor G 192` + `EvalQuiet`).  `NoMaskedMobility` -- required for
-the shipped `nullValueD2` (`cexF_masked_mobility`) -- is absent: where
-the shipped value's defender fold could silently drop the escape, the
-t-fold provably contains it. -/
+(`ValFloor G 192` + `EvalQuiet`).  `NoMaskedMobility` -- once required
+for the shipped `nullValueD2`, and the reason this variant was written
+-- is absent: where the shipped value's defender fold COULD silently
+drop the escape, the t-fold provably contains it.  Since `c01915f` the
+shipped fold contains it too (`filter_identity_off_frontier` at
+remaining depth 1), so the shipped statement is now premise-free as
+well (`eventual_classification_frontier_free`). -/
 theorem forcedMate_of_nullValueD2t (G : QSGame) (guard : G.Pos → Bool)
     (hF : ValFloor G 192) (hQ : EvalQuiet G.toNullGame.toGame) :
     ∀ (D : Nat) (p : G.Pos),
@@ -1239,16 +1247,17 @@ theorem eventual_classification_t (G : QSGame) (guard : G.Pos → Bool)
 
 /-! ### CexF becomes a positive test -/
 
-/-- The masked defender node of `CexF`, under the t-value: the trigger
-fires (the only admitted reply is the illegal `I`), the fold runs over
-BOTH replies, and the legal escape `E` lifts the depth-1 value to the
-honest 0 -- where `nullValueD2` returned the raw `-MATE_UPPER`
-(`cexF_M_depth1`). -/
+/-- The once-masked defender node of `CexF`, under the t-value.  The
+trigger no longer fires -- since `c01915f` the legal escape `E` is
+ADMITTED, so the admitted set already contains a legal move -- and the
+ordinary filtered fold runs over both replies, reaching the same honest
+0 the unfilter used to be needed for.  `nullValueD2` reaches it too
+(`cexF_M_depth1`); the t-variant has nothing left to add here. -/
 theorem cexF_t_M_depth1 :
     nullValueD2t CexF (fun _ => false) 1 FPos.M = 0 := by
-  rw [nullValueD2t_of_masked CexF (fun _ => false) 0 FPos.M (by decide)
+  rw [nullValueD2t_of_fold CexF (fun _ => false) 0 FPos.M (by decide)
     (by decide) (by decide) (by decide)]
-  have hmv : CexF.moves FPos.M = [FPos.I, FPos.E] := rfl
+  have hmv : movesAbove CexF (val_lower 1) FPos.M = [FPos.I, FPos.E] := by decide
   have hT : nullTermD2t CexF (fun _ => false) 0 FPos.M = LOSS := by
     simp only [nullTermD2t]
     rw [if_neg (fun h => Bool.noConfusion h.1)]
@@ -1265,11 +1274,13 @@ theorem cexF_t_M_depth1 :
   have hMU : MATE_UPPER = 69290 := rfl
   omega
 
-/-- **The positive test, bundled**: on the countermodel that proved
-`NoMaskedMobility` REQUIRED for the shipped value (`cexF_bandValue`:
-depth-2 declared value the full `MATE_UPPER`; `cexF_no_forcedMate`: no
-mate exists), the t-variant computes the honest draw 0 at depth 2
-already -- and stays there at depth 3. -/
+/-- **The positive test, bundled and CASHED**: on the countermodel that
+used to prove `NoMaskedMobility` REQUIRED for the shipped value (the
+depth-2 declared value was the full `MATE_UPPER` while
+`cexF_no_forcedMate` says no mate exists), the t-variant computes the
+honest draw 0 at depth 2 and stays there at depth 3 -- and so, since
+`c01915f`, does the shipped fold (`cexF_root_honest`, `cexF_deeper`).
+The proposed change and the shipped one now agree here. -/
 theorem cexF_t_positive :
     nullValueD2t CexF (fun _ => false) 2 FPos.R = 0 ∧
     nullValueD2t CexF (fun _ => false) 3 FPos.R = 0 := by
