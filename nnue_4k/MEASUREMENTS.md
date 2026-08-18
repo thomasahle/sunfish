@@ -46,6 +46,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-18 | Classic exact check-evasion LMR exemption | **−12.2 ± 19.4 Elo timed**, 600 games; zero lines, formally cleaner, but no strength case |
 | 2026-08-17 | Classic consumer-side scoring and exact captures | **+25.4 ± 19.0 Elo fixed-node**, −2.36% nodes, 149→142 lines; real-clock pending |
 | 2026-08-17 | Classic unified caps | **+14.3 ± 15.0 Elo timed**, 1,000 games; keep at 149 lines |
 | 2026-08-17 | Classic unified shallow/lazy caps | **+8.0 ± 12.1 Elo fixed-node**, −2.39% nodes, 150→149 lines; timed C confirmation running |
@@ -133,6 +134,37 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-18 — Classic: exact check-evasion LMR exemption
+
+The deep fixed-target null probe already constructs the rotated null position.
+Using its exact board predicate to disable intrinsic LMR while the side to move
+is in check costs zero cleaned Python lines and makes the policy strictly
+position-derived: a fail-soft null report is not reused as a check detector.
+The Lean model proves that the LMR fuel bit vanishes on every checked node; the
+maximum edge cost and eventual mate bound are unchanged.
+
+The clean C-twin screen compared candidate `907d6fa` against its frozen
+QSearch-null parent `74bda53` at `3+0.1`, using 300 color-swapped randomized
+openings from `openings_2k.epd` (seed 20260823):
+
+```text
+215 wins / 236 losses / 149 draws
+−12.17 ± 19.42 Elo, LOS 10.94%
+Ptnml: [28, 53, 151, 48, 20]
+```
+
+All 600 games completed with no crashes, disconnects, illegal moves, stalls,
+or time losses. Both engines reached median depth 13; 91% of recorded moves
+reached depth 10 or more, so the match exercised the depth-six policy rather
+than merely measuring shallow overhead.
+
+The interval includes zero, but the point estimate stayed near −10 Elo at
+every substantial checkpoint. **Declined as a strength candidate:** the exact
+evasion invariant is attractive and source-line-neutral, but this screen does
+not justify spending a Python `30+1` match or claiming an Elo improvement.
 
 ---
 
