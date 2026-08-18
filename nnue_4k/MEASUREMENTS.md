@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-18 | **AMENDMENT 2 to METER 4: the BRIDGE is SUPERSEDED mid-run by Thomas's twin directive — the PRIMARY stands as the meter, and the twin substitute turns out to be NOT CONSTRUCTIBLE** | Live directive from Thomas: *"You should always use the c-twins when tuning and testing. They can run at 3+0.1."* Bridge stopped at **14 of 300 games** (SIGTERM to its own fastchess PID 3022917, child of driver 2949039; driver exited clean; **0 illegal, 0 forfeits** at stop; kept as `SUPERSEDED_bridge_14games.*`; **not harvested — 14 games is not a measurement**). Owner tuner campaigns verified untouched by parentage before and after. **THE PRIMARY IS THE METER**: the goal is stated at **Python 30+1**, which is also the house standard, and the primary measured exactly that at the registered fixed N=600 with every gate passed → **METER 4 = +108.17 ± 24.64 → [+83.54, +132.81]**. **NUMBER CORRECTION, because the relay already drifted**: the meter-4 figure is **+108.17 ± 24.64 at N=600**, **not +110.32 ± 26.04**, which is fastchess's **N=550 interim** — the registered instrument was a *fixed* 600 and this file's rule is *quote the count at the point of quotation*; the interim reads 2.15 Elo high on an 8% smaller sample. **What is lost**: the bridge's only job was removing the TC from the meter-3 comparison, so **`primary − meter 3` = −92.07 ± 45.58 (z = 3.96) now carries the TC move as well as the arms moves**, and stays labelled so; no cell separates them and none will run. **The twin substitute is NOT CONSTRUCTIBLE as specified**: there is **no entry twin** — `tools/ctwin` twins *classic only* (`gen_tables.py`: "Dump the classic engine's evaluation tables") and the entry's search is structurally different (LMR/LMP/history/depth-free key are licensed for it and forbidden in classic); the nearest object is classic's search wearing entry tables, which is not the entry. **And `docs/TESTING.md` excludes it three ways at once** — rule 6 is "Use C 3+0.1 for node-identical classic search; **Python 30+1 otherwise**", and its "Do not use it for" list names **Python-throughput, shipping time-management, and NNUE-eval**, which is exactly this meter: the subject is the 4k entry, the goalpost move **was** a time manager (`eef299b` +96.19 ± 33.81 plus #217), and meter 1 measured this pair at **per-node parity (−1.74 ± 27.93, n=400)** — the entry's whole advantage is the speed and TM that C removes. **Lane's judgement, as Thomas delegated: the robustness check is NOT worth running, not even cheap** — it would swap a direct measurement for a proxy documented not to price the effect. The directive stands as the right default for classic search/tuning work; **the +400 meter is a documented exception, now written down rather than rediscovered next meter**. If a future lane wants the read, the honest form is the one stopped: Python, both packed arms, 60+1, N=300, `book3k.pgn`, ~2 h. **No branch fires. METER 4 complete at +108.17 ± 24.64** |
 | 2026-08-18 | **METER 4 PRIMARY VERDICT: the entry is +108.17 ± 24.64 over post-pool classic at 30+1 — the goalpost moved ~92 Elo, and the PRE-RESULT corrected expectation is CONFIRMED while the registered band is not** | Gates first and all passed before the Elo: **0 illegal, 0 forfeits, 600/600 `normal`**, count exact, coprimality gcd 1, both arms sha-verified box-side, boot **and** book-shaped smokes green, **71 free cores** at gate pass, driver PID 2949039 alive throughout. **Elo +108.17 ± 24.64 → [+83.54, +132.81]**, nElo **+130.37 ± 27.80**, **65.08%** (305 W / 124 L / 171 D), ptnml **[13, 38, 85, 83, 81]** over 300 pairs, PairsRatio 3.22, DrawRatio 28.33%, LOS 100%, 2 h 55 m at conc 10 cotenant. Arms entry **3410 B** `bf30904d…` (`d0a6e60`) vs **packed** classic **3361 B** `d177d79a…` (`ab3b490`). **Independent recompute mirrors fastchess to the digit, and the same script reproduces meter 3's +200.24 ± 38.35 and [1,11,33,41,64] from meter 3's PGN** — validated against a published number. Diversity: **600/600 distinct games, 0 replays, exactly 300 distinct 16-ply lines = 2.00× reuse**; clustered interval **±24.63 (inflation 1.02×)** agrees with the pentanomial **±24.64** to two decimals — **no inflation to price**. **Two harvest instruments found format-dependent and reported, not patched**: `opening_gate.py` VOIDs any PGN-book match because it keys on the absent `[FEN]` tag (**it VOIDs meter 3 too**), though its duplicate-game half passes; and `cluster_elo.py` never strips `{book}`, so it clusters on **8 plies, not 16** (errs safe, both readings given). Clocks recorded (dormancy N/A at a real clock): worst min-time-left **entry 1.389 s, classic 2.193 s**, thin but zero forfeits — and **`nodes=true` carries nothing, both arms report n=0**; the entry emits **no `info` lines at all**, so its `tl=0.000` is an artifact and its clock is reconstructed — which is also why **adjudication=none was right**, an adjudicator would have read `score cp` from classic only. **Against the registered band [+120, +200]: point estimate BELOW, interval overlaps on [+120, +132.81]. Against Correction 2's pre-result expectation +127.05 ± 52.38: −18.88 ± 57.89, z = 0.64 — CONSISTENT.** The band was centred on the wrong commit and the correction that fixed it was filed before the games finished; the band's lower edge landing inside the interval is **luck, as Correction 2 said in advance it would be called**. **Goalpost delta: −92.07 ± 45.58, z = 3.96 — real, not noise**, but it contains entry Design B (+23, projected), classic's pool (−96.19, measured at this TC), #217's level respelling, classic's unpriced search work **and** the TC move; the BRIDGE cell removes the TC term. **Progress toward +400: 27.0%** (upper bound 33.2%), down from 50% — **~292 Elo remain**, because classic got stronger, not because the entry got weaker. **Where the rest lives, honestly: mostly nowhere yet.** Entry side, measured and in budget, sums to ≈ 0 — #225 kptap's +56.07 was a fixed-node screen whose timed confirmations read **+16.23 (n=300)** then **+0.58 [−21.25, +22.41] (n=600, deciding)**; taper arms −10.43 ± 37.23 / +27.85 ± 34.32 neither clear zero and both delete a landed +21.31; **`tapp` is built, gated and never played** — the one untested upside; speed converts at **1.28 ± 0.63 Elo/%nps** but 292 needs **≈3.3×** and the cheap wins are spent. Closed with numbers: labels, distribution, capacity arm, mutable board, `er40` depth, the #205 port, the TT family. Classic keeps moving away: #232 **+21.6 ± 19.0** (screen only), #236/#241 **~+6**, plus unbounded tuner risk. **And screening Elo is not decision Elo — fixed-node has now read high twice (kptap +56→+0.58, #221 +26.1→+10.77).** **METER, NOT PROMOTION: no branch fires** |
 | 2026-08-18 | **AMENDMENT 1 to the BOOK LINE-FIT registration: Phase 2 becomes DEALT OPENINGS against the MIXED FIELD — and the design it replaces was information-free by this lane's own argument** | Per Thomas, and **legal for a specific reason: no Phase-2 game has been played** (Phase 1 untouched and still running). **Two things were wrong.** (1) The superseded Phase 2 was `book_v1` vs `book3k` with **the same engine both arms** — which is exactly the symmetry this very registration had already written down three paragraphs earlier about the mirror arm: *under paired colours the subject's expected score against its own binary is exactly 0.5 for every line*. Having knowingly spent a third of the Phase-1 budget on that symmetry, the lane then registered it as the **promotion** cell. The right question is Thomas's: does the reweighted distribution improve the subject's score against a **FIELD**. (2) **The book-adapter requirement is DROPPED** — fastchess already deals openings, so sample openings *from* the book distribution instead of putting a book behind each engine. That retires the adapter, its `get_book_move` validation, and — the part that matters — lets the arms be the **PACKED ARTIFACTS**, the deployed objects; Phase 1 was forced onto checkouts only because a packed arm cannot be node-limited, and a timed cell dealing PGN openings has no such problem. **New design**: openings sampled `weighted_random` to the 15-ply deployed horizon, **with repetition**, seeded, frozen and sha-recorded before game 1. **A** = sampled from `book_v1`, **B** = sampled from `book3k` uniform, both subject vs mixed field (packed entry + `weak`; **the mirror is gone**), 30+1, fixed N=600 each; **bar unchanged: LB > 0 at 95% on A − B**. **C** (sampled from `book_wide` uniform) is SECONDARY, because `book_v1` reweights `book_wide` and **not** `book3k`, so A − B carries **two axes** — A − C is the pure reweighting, C − B the pure width, the METER 4 PRIMARY/BRIDGE structure again. **Limitations registered, not discovered**: dealt openings put BOTH sides down one fixed line, so the cell **cannot see the in-book-reply dynamic** (lichess reality: the opponent leaves book by ply 2 while our book still guides our replies to ply 15) — that component stays validated by the **live lichess watch, not the box**; and it **cannot see the clock savings either**, which retires this lane's original reason for making the cell timed (measured live in `OmnzTMRj`: book moves 0.12–0.20 s against 4.76 s, clock GROWING 60.00 → 66.03 s). **So a null on A − B means "the line distribution does not pay", never "the book does not pay".** `opening_gate` reinterpreted a second time: duplicate openings are **the treatment**, so the per-cell distinct-opening test is dropped and the duplicate-GAME test kept — safe here and not at fixed nodes because `rr6_sigk`'s replays were fatal only since deterministic fixed-node engines replay the *identical game*; the analysis clusters on the OPENING. Power: SE(A − B) ≈ 2.6% score, so the bar needs ~**+36 Elo**, *harder* than the superseded design's ~+26, and Phase 1 predicts it will correctly fail. Cost ~11 h at conc 8; C best-effort. Two hard preconditions added: opening files frozen before game 1, and **the `weak` arm's time management is UNVALIDATED** (every number it has is fixed-node) so it must pass a forfeit-free 30+1 smoke or be dropped from the field. **Phase 2 remains NOT AUTHORISED TO RUN** |
 | 2026-08-18 | **PRE-REGISTRATION: the BOOK LINE-FIT gauntlet — an opening book measured at the only resolution 1680 games can pay for, plus a second structural fact about packed artifacts** | `book3k.bin` has been on both lichess bots since 2026-08-18 and **nothing has ever measured whether any line in it helps**. Instruments are PR #242 (`tools/book/attribute.py` + `rebuild.py`, 19 tests, tools-only; empty stats reproduce a book bit-for-bit, α = 2·N_min calibrated so N_min games of a 100/0 split buys exactly one doubling). Candidate **`book_wide.bin`, 32321 entries, `8c7377c4…`** = book3k ∪ gm2001 ∪ lichess `chess-openings` (CC0), uniform, capped at the **deployed 15-ply horizon**; licence-clean subset 25574 entries recorded per-entry because promoting gm2001-only lines would re-open the question PR #238 closed. **280 candidate lines** (`candidates.pgn`, `bf122449…`) = maximal in-book prefixes capped at 8 plies, globally de-duplicated, thin cells claiming first. **A finding before a game is played**: book3k gives each of its 12 first moves a uniform 8.33%, but behind `1.a3` there are six distinct 8-ply continuations in *any* source and behind `1.d3` four — uniform weights are a claim about variety the book's depth does not support. Form: **gauntlet** (not RR — the variants are OPENINGS, so every game must involve the subject), **fixed N=1680**, 20000 nodes, `tc=6000+0`, conc 8 nice 5, srand 20260891. **THE RESOLUTION GOVERNS EVERYTHING: 6 games per line, so a CELL IS A ROOT MOVE and no claim below cell resolution is admissible; `book_v1` moves the root node and nothing else.** Power computed, clustered on the line: ±10.2% score (±72 Elo) for the nine rich cells, ≥±20% for the thin ones — **powered to find JUNK, not to fine-tune**, and the tension is registered: the cells most likely to be junk are exactly the cells with the least power, so a null there means "not measured", never "measured level". Selector: **LCB = θ − 1.96·SE_cluster**, α=60 shared with `rebuild.py`, minimum-N gate n_lines ≥ 6 (admits 14 of 20 cells), design-effect deflation before the rebuild. **The `mirror` arm is registered as information-free on the primary**: under paired colours the subject's expected score against its own binary is exactly 0.5 for every line, so it is excluded from the primary and from the rebuild and measures line imbalance/decisiveness only — one third of the budget, priced up front. **SECOND STRUCTURAL FACT, new and beside AMENDMENT 1's:** the packed artifact contains **no `nodes` token at all**, so it ignores `go nodes` and spends the pinned clock — observed live as eight pypy3 processes at 98% CPU with zero games finished in ten minutes, killed and unharvested. *A packed artifact cannot read a FEN and cannot be node-limited*; both live in the `minifier-hide` block `pack.sh` deletes. **A fixed-node cell and a packed arm are mutually exclusive**, so the arms are byte-verified checkouts (`sunfish.py` @ `ab3b490`, `pst_entry.py` @ `d0a6e60`, each under its own branch's `sunfish_ui`) — which costs nothing, because at a fixed node budget the two forms search the same tree. Registered prediction under test: **no cell separates at 95%** and Phase 2 returns null. **NO PROMOTION FIRES HERE**; Phase 2 (book_v1 vs book3k, 30+1, N=600, bar LB > 0) is registered in the same entry and is **NOT authorised to run** |
@@ -336,6 +337,103 @@ how much effort it cost.
 | 2026-08-09 | Multiply-and-split | DECLINED on price before loss was reached |
 | 2026-08-09 | Width sweep + k=3 activation | Width 128 chosen; 3-segment activation declined (16% node time for 0.5% loss) |
 | 2026-08-09 | Packed convolution | CLOSED — layer-2 cascade costs 2-40 nodes per node |
+
+---
+
+## 2026-08-18 — AMENDMENT 2 to METER 4: the BRIDGE is SUPERSEDED mid-run by Thomas's twin directive — the PRIMARY stands as the meter, and the twin substitute is NOT CONSTRUCTIBLE
+
+Live directive from Thomas, relayed mid-run: *"You should always use the c-twins
+when tuning and testing. They can run at 3+0.1."* The registered BRIDGE cell
+(60+1 Python, N=300) is superseded. The registration and Corrections 1–2 below
+are left intact, per this file's correction rule (a).
+
+### What was stopped, and what it cost
+
+| | |
+|---|---|
+| stopped at | **14 of 300 games**, 21:29:40Z |
+| gates at stop | **0 illegal, 0 forfeits** |
+| method | `SIGTERM` to the cell's own fastchess (**PID 3022917**, child of driver **2949039**); driver exited cleanly |
+| evidence kept | `SUPERSEDED_bridge_14games.{pgn,log}` |
+| harvested? | **NO. 14 games is not a measurement and no Elo was computed from it.** |
+
+Nothing else on the box was signalled. The owner's tuner campaigns were verified
+by parentage immediately before and after the stop and are untouched.
+
+### The PRIMARY stands, and it is the meter
+
+**The goal is stated at Python 30+1**, which is also the house standard
+(`AGENTS.md`; `docs/TESTING.md` rule 6). The primary measured exactly that
+condition, at the registered fixed N=600, and passed every gate:
+
+> **METER 4 = +108.17 ± 24.64 → [+83.54, +132.81].**
+
+**A number correction, because the relay already drifted.** The meter-4 figure is
+**+108.17 ± 24.64 at N=600**, *not* the **+110.32 ± 26.04** that appears in
+fastchess's rolling report — that line is the **N=550 interim**. This file's
+standing rule is *quote the count at the point of quotation*; the registered
+instrument was a **fixed** 600 and the fixed-600 reading is the only admissible
+one. The interim is 2.15 Elo higher on a 8% smaller sample, which is exactly the
+kind of drift the rule exists to stop.
+
+### What is lost, stated plainly
+
+The bridge's one job was to remove the **time control** from the comparison with
+meter 3. Without it:
+
+> **`primary − meter 3` = −92.07 ± 45.58 (z = 3.96) carries the TC move
+> (60+1 → 30+1) as well as the arms moves**, and it stays labelled that way. No
+> cell in this meter separates TC from arms, and none will be run.
+
+Correction 1's decomposition arithmetic is unaffected — it just loses the cell
+that would have tested it.
+
+### The twin substitute: NOT CONSTRUCTIBLE as specified, and declined
+
+The directive's proposed replacement is a twin-vs-twin cell, *"classic twin @
+master tables vs entry twin"*, at 3+0.1. **There is no entry twin.**
+`tools/ctwin` twins **classic only** — `gen_tables.py`'s own docstring is *"Dump
+the classic engine's evaluation tables"* — and the 4k entry has a **different
+search** (LMR, LMP, history and a depth-free table key are licensed for the entry
+and structurally forbidden in classic). The nearest constructible object is
+*classic's search carrying the entry's PST tables*, which is **not the entry**.
+
+Even if it existed, `docs/TESTING.md` rules it out for this question three times
+over. Its rule 6 is *"Use C 3+0.1 for node-identical classic search; **Python
+30+1 otherwise**"*, and its explicit exclusion list is:
+
+> **"Do not use it for: Python-throughput, shipping time-management, interface,
+> or NNUE-eval questions. Those effects are absent or differently priced in C."**
+
+This meter is **all three of the named exclusions at once**:
+
+1. **NNUE-eval** — the subject is the 4k entry, which the twin does not model.
+2. **Shipping time-management** — the goalpost move this round *was* a time
+   manager (the classic pool, `eef299b`, +96.19 ± 33.81, and #217's respelling).
+   `docs/TESTING.md`: *"Search-only changes use C 3+0.1; that compares search
+   quality under a scaled clock, **not time managers**."*
+3. **Python-throughput** — meter 1 measured this pair at **per-node parity**
+   (**−1.74 ± 27.93**, n=400, fixed nodes). **The entry's entire advantage is
+   speed and time management**, which is precisely what C removes.
+
+> **Judgement, which Thomas left to this lane: the robustness check is NOT worth
+> running, not even the cheap version.** A surrogate that cannot represent the
+> subject, is excluded by the house doc for all three effects under measurement,
+> and whose TM ports lag master's budget form, would not check the primary — it
+> would replace a direct measurement with a proxy for the very thing the proxy is
+> documented not to price. **The primary alone suffices for meter 4.**
+
+The directive is right as a general rule and this lane does not dispute it: C
+twins at 3+0.1 are the correct default for classic search and tuning work, which
+is what the tuner campaigns on this box are doing. **The +400 meter is one of the
+documented exceptions**, and that is now written down here rather than
+rediscovered next meter.
+
+**If a future lane still wants a TC-robustness read**, the honest form is the one
+that was stopped: **Python, both packed arms, 60+1, N=300, `book3k.pgn`** —
+~2 h on this box. It is registered as available and deliberately not run.
+
+**No branch fires. METER 4 is complete at +108.17 ± 24.64.**
 
 ---
 
