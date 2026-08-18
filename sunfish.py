@@ -457,13 +457,10 @@ class Searcher:
                 yield killer, MATE_UPPER if val >= MATE_LOWER else val
 
             # Search by decreasing intrinsic value. The cap is monotone in that
-            # value, so the sub-window tail is a suffix and the first move of it
-            # carries the maximum cap for all of it - one report, emitted last so
-            # a prefix cutoff skips it entirely.
+            # value, so the sub-window tail is a suffix; the consumer meets its
+            # first member and reports the whole of it with that one cap.
             values = sorted(((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= base), reverse=True)
-            n = sum(v >= val_lower for v, m in values)
-            yield from ((m, MATE_UPPER if v >= MATE_LOWER else v) for v, m in values[:n])
-            if n < len(values): yield None, min(MATE_LOWER - 1, pos.score + values[n][0] + margin)
+            yield from ((m, MATE_UPPER if v >= MATE_LOWER else v) for v, m in values)
 
         # Run through the moves, shortcutting when score >= gamma.
         # live is True if we saw a legal (not null, score > -MATE_UPPER) move
@@ -471,8 +468,12 @@ class Searcher:
         for move, score in moves():
             if move is not None and score < MATE_LOWER:
                 val = score
-                cap = (MATE_UPPER if depth > 3 else
-                    min(MATE_LOWER - 1, pos.score + val + margin))
+                cap = MATE_UPPER if depth > 3 else min(MATE_LOWER - 1, pos.score + val + margin)
+                # The tail's one report, arriving on its first member. max, not
+                # assignment: an earlier report may already be tighter. Before
+                # `live`, because this move is still a virtual - it was never
+                # searched and witnesses no legality.
+                if val < val_lower: best = max(best, cap); break
                 move_depth = d - 1 - (not root and guard and val < LMR)
                 score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
             best = max(best, score)

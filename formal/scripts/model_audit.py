@@ -46,7 +46,7 @@ EXPECTED = {
     "Position.move": "69bb2460cd611c9e",
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "11d52eaa8a661352",
-    "Searcher.bound": "663bfc29433b2bc5",
+    "Searcher.bound": "6e70c93c5a703f76",
     "Searcher.search": "089a324cf1028953",
     "constants": "62b96e206341a2fb",
 }
@@ -111,12 +111,10 @@ ANCHORS = [
     "if killer and (val := pos.value(killer)) >= val_lower:",
     "yield killer, MATE_UPPER if val >= MATE_LOWER else val",
     "values = sorted(((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= base), reverse=True)",
-    "n = sum(v >= val_lower for v, m in values)",
-    "yield from ((m, MATE_UPPER if v >= MATE_LOWER else v) for v, m in values[:n])",
-    "if n < len(values): yield None, min(MATE_LOWER - 1, pos.score + values[n][0] + margin)",
+    "yield from ((m, MATE_UPPER if v >= MATE_LOWER else v) for v, m in values)",
     "if move is not None and score < MATE_LOWER:",
-    "cap = (MATE_UPPER if depth > 3 else",
-    "min(MATE_LOWER - 1, pos.score + val + margin))",
+    "cap = MATE_UPPER if depth > 3 else min(MATE_LOWER - 1, pos.score + val + margin)",
+    "if val < val_lower: best = max(best, cap); break",
     "move_depth = d - 1 - (not root and guard and val < LMR)",
     "score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))",
     "best, live = -MATE_UPPER, False",
@@ -144,7 +142,7 @@ ANCHORS = [
 
 # Raw "line N" citations in the Lean sources are fragile: they rot silently.
 # We ratchet rather than ban outright -- the count may fall, never rise.
-LINE_CITATION_BUDGET = 146
+LINE_CITATION_BUDGET = 144
 
 
 def check_anchors(src):
