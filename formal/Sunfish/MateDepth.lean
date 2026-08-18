@@ -649,7 +649,31 @@ plus the clamp):
 i.e. `D ≥ max 4 (C*(k-1) + 4) (C*(k-2) + 6)`, which at the shipped `C = 3`
 is `D ≥ 3k + 1` for `k ≥ 3` and `D ≥ 4` for `k ≤ 2` -- three plies below
 the shipped `3k + 4`, one above Part I's cap-free `3k`.  The one-ply corner
-is exactly what the suite shows: mate-in-1 needs `D = 4`, not 2. -/
+is exactly what the suite shows: mate-in-1 needs `D = 4`, not 2.
+
+MEASUREMENT CORRECTION (2026-08-17).  The cheap way to buy Part I's
+cap-free `3k` in the shipped engine -- keep the clamp, but exempt a child
+report that came back at or above `MATE_LOWER`, about ten bytes -- is
+REFUTED, on correctness rather than on strength.  `capClamp_le` below is
+true and stays true: the exemption only RAISES the declared value, and
+`forcedMate_fuelValueD2_sharp` really does bound that value by `3k`.  The
+declared value is not what breaks.  The exemption drops the clamp on the
+SEARCHED branch while the cap's fail-low branch
+(`if cap < gamma: move, score = None, cap`) still claims the static
+estimate for the SAME `(pos, depth)` key, so `bound()` becomes
+gamma-dependent and the table stores a contradiction: measured,
+`Entry(lower = 47938, upper = 1204)` on one key at depth 2, with twelve
+terminal-bench positions and a tt-consistency fortress failing on "ladder
+crossing".  (The mates do arrive -- `mate1.fen` 0/8 to 6/8 at depths 2 and
+3, node battery byte-identical -- so the price is exactly the invariant.)
+Generally: a cap may be dropped on a searched report only if it is also
+dropped on the unsearched one, and no static rule can know that an
+unsearched child mates; under a `(pos, depth)`-keyed table shallow
+futility and shallow mate detection are mutually exclusive.  The sound
+instances are deleting the cap on BOTH branches -- Part I's `3k`, priced
+at -60.41 ± 26.61 Elo, so Elo-inadmissible -- or a
+`(pos, depth, bound-type)`-aware table, which is unpriced.  Ledger:
+`measure/search-features-ledger` at 0af3507, arm `exp/mate-band-exempt`. -/
 
 /-- The shipped clamp, as a fold weight transformer.  The band is the
 consumer's own `depth > 3` test, so it covers depths 0 through 3. -/
@@ -658,7 +682,11 @@ def capClamp (G : QSGame) (p : G.Pos) (d : Nat) (m : G.Pos) (x : Int) : Int :=
     min (shallowMoveCap (G.eval p) (G.val p m) d) x
   else x
 
-/-- The cap only lowers: the defender side never pays for it. -/
+/-- The cap only lowers: the defender side never pays for it.  Monotonicity
+of the transformer is NOT a licence to drop the clamp in the code on the
+searched branch alone -- see the measurement correction in Part III's
+header: that keeps this theorem true and still breaks the `(pos, depth)`
+table. -/
 theorem capClamp_le (G : QSGame) (p : G.Pos) (d : Nat) (m : G.Pos) (x : Int) :
     capClamp G p d m x ≤ x := by
   unfold capClamp
