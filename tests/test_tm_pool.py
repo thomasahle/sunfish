@@ -723,13 +723,20 @@ def drive(monkeypatch, commands, step=0.04):
     return seen
 
 
-def game_script(lag_s, moves, clock=60.0, inc=1.0, spend=0.32):
+def game_script(lag_s, moves, clock=60.0, inc=1.0, spend=0.32, ponder=False):
     """The commands lichess-bot sends for `moves` of OUR moves, at a known lag.
 
     Shaped after the real stream at pin bedd1d9e: `go movetime 10000` for the
     first move of the game, clock gos after it, a fresh `position startpos
     moves ...` before each, and our clock falling by what the search spent
     (`spend` is the tape's length) plus the lag the server charged on top.
+
+    With ponder=True each clock go is followed by the cycle python-chess runs
+    when its guess is wrong: the position with a predicted reply, a `go ponder`
+    carrying a clock python-chess PREDICTED (ours, plus the increment, minus
+    the wall time the last search took -- never the server's number), and the
+    `stop` that ends it. That is one ponder go per real go, which is what
+    production sends: 3226 of them against 2041 real gos in a day.
     """
     ucis = ["e2e4 e7e5", "g1f3 b8c6", "f1b5 g8f6", "e1g1 f6e4", "d2d4 e4d6",
             "b5c6 d7c6", "d4e5 d6f5", "d1d8 e8d8", "b1c3 c8e6", "f1d1 d8c8",
@@ -743,8 +750,17 @@ def game_script(lag_s, moves, clock=60.0, inc=1.0, spend=0.32):
         else:
             out.append(f"go wtime {round(wtime * 1000)} btime {round(clock * 1000)} "
                        f"winc {round(inc * 1000)} binc {round(inc * 1000)}")
+            predicted = wtime + inc - spend
             wtime = wtime + inc - (spend + lag_s)
         played.extend(ucis[n].split())
+        if ponder and n:
+            # The ponder line is the same length as the real one -- only the
+            # ply count and the clock reach the estimator -- and it is stopped
+            # rather than hit, which is the case that produces the next real go.
+            out.append("position startpos moves " + " ".join(played))
+            out.append(f"go ponder wtime {round(predicted * 1000)} btime {round(clock * 1000)} "
+                       f"winc {round(inc * 1000)} binc {round(inc * 1000)}")
+            out.append("stop")
     return out + ["quit"]
 
 
@@ -762,23 +778,29 @@ def test_an_unmeasured_game_budgets_exactly_what_the_constant_did(monkeypatch):
                     assert (pool(w, i, movestogo=mtg, ply=ply, overhead=None)
                             == pool(w, i, movestogo=mtg, ply=ply))
     assert drive(monkeypatch, game_script(0.3, 3))[0] is None, "the opening move was adaptive"
-    # A PONDERED game never gets a pair either, and that is deliberate:
-    # python-chess predicts the clock it puts in a ponder go and sends none at
-    # all on a ponderhit, so a ponder go may pair with neither its predecessor
-    # nor its successor. Measured against those, the estimate would converge
-    # on python-chess's arithmetic instead of the venue's lag.
+    # A game whose every guess is RIGHT is the one that still measures
+    # nothing, and it is the case the ply gate exists for. The only real clock
+    # is the first go; every later search is a ponder search converted by
+    # `ponderhit`, and a move played that way is one no `go` ever announced.
+    # So nothing pairs -- not the ponder gos, whose clock python-chess
+    # predicted, and not the real go that eventually follows two of them, FOUR
+    # plies from its predecessor rather than two.
     assert drive(monkeypatch, [
-        "ucinewgame", "position startpos moves e2e4 e7e5",
+        "ucinewgame",
+        "position startpos moves e2e4 e7e5",
         "go wtime 60000 btime 60000 winc 1000 binc 1000",
         "position startpos moves e2e4 e7e5 g1f3 b8c6",
-        "go ponder wtime 59000 btime 60000 winc 1000 binc 1000", "stop",
-        "position startpos moves e2e4 e7e5 g1f3 b8c6",
-        "go wtime 58000 btime 60000 winc 1000 binc 1000", "quit",
-    ]) == [None, None, None], "a predicted clock was measured"
+        "go ponder wtime 59000 btime 60000 winc 1000 binc 1000", "ponderhit",
+        "position startpos moves e2e4 e7e5 g1f3 b8c6 f1b5 g8f6",
+        "go ponder wtime 58000 btime 60000 winc 1000 binc 1000", "ponderhit",
+        "position startpos moves e2e4 e7e5 g1f3 b8c6 f1b5 g8f6 e1g1 f6e4",
+        "go wtime 57000 btime 60000 winc 1000 binc 1000", "quit",
+    ]) == [None] * 4, "a pair spanned a move no go announced"
 
 
+@pytest.mark.parametrize("ponder", (False, True), ids=("plain", "pondered"))
 @pytest.mark.parametrize("lag", (0.05, 0.3, 0.9))
-def test_the_driver_converges_on_the_lag_the_venue_charges(monkeypatch, lag):
+def test_the_driver_converges_on_the_lag_the_venue_charges(monkeypatch, lag, ponder):
     """Through the real parser, the real ply counter and the real bestmove
     path: the k-th measured go budgets with max(O, lag + 0.7^k (0.2 - lag)),
     the closed form of the EMA against its 200ms prior -- floored, because the
@@ -791,9 +813,17 @@ def test_the_driver_converges_on_the_lag_the_venue_charges(monkeypatch, lag):
     bestmove leaves rather than a callback later, and that a venue faster than
     the constant (0.05) changes nothing at all.
     """
-    seen = drive(monkeypatch, game_script(lag, 12))
-    assert len(seen) == 11 and seen[0] is None, seen
-    for k, got in enumerate(seen[1:], start=1):
+    seen = drive(monkeypatch, game_script(lag, 12, ponder=ponder))
+    real, pondered = (seen[::2], seen[1::2]) if ponder else (seen, [])
+    assert len(real) == 11 and real[0] is None, seen
+    for k, got in enumerate(real[1:], start=1):
         assert got == pytest.approx(max(O, lag + 0.7 ** k * (O - lag)), abs=1e-9), (k, got)
     if lag < O:
-        assert set(seen[1:]) == {O}, "a venue faster than the constant moved the reserve"
+        assert set(real[1:]) == {O}, "a venue faster than the constant moved the reserve"
+    # WHAT WENT WRONG IN PRODUCTION, as an assertion. A ponder go must be
+    # SKIPPED, not treated as a break in the sequence: python-chess sends one
+    # before every real go, so clearing the pending pair at one left the whole
+    # estimator dead on the venue it was written for -- 0 samples in 2041 real
+    # gos in a day. Skipping is sound because the ply gate, not the ordering,
+    # is what makes a pair OUR two consecutive moves.
+    assert pondered == real[:len(pondered)], "a ponder go moved (or reset) the estimate"
