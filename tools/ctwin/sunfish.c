@@ -794,8 +794,8 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         if (done) goto after_moves;
     }
 
-    /* A fixed-target QSearch of the null position reduces hot nodes.  Its
-     * static guard also limits LMR to positions where passing is meaningful. */
+    /* A fixed-target QSearch of the null position reduces hot nodes.  The
+     * same position exempts check evasions from LMR. */
     int rd = depth;
     int guard = depth >= FUEL_MIN_DEPTH
         && iabs(pos->score) < NULL_LIMIT && has_big_piece(pos);
@@ -804,6 +804,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
         Pos rp = rotate(pos, 1);
         if (-bound(&rp, 1 - target, 0, 0, 0) >= target)
             rd = depth - FUEL_NULL;
+        guard = !king_capture(&rp, NULL);
     }
 
     /* QSearch stand pat. */

@@ -53,7 +53,7 @@ hold, and `11 = 3*3 + 2` pins the dual.  The certificates use the
 maximal edge spend (`spend ≡ 2`, i.e. `min (C-1) 2 = 2`, the hot bit plus
 the intrinsic-LMR bit) at every regime node: exactly the schedule the
 shipped code realizes when the fuel probe fails high and the mating move
-is a quiet one (`val < LMR`).
+is a quiet one outside check (`val < LMR`).
 
 Zero sorries, no Mathlib, no audit-surface change.
 
@@ -76,16 +76,19 @@ MECHANISM MAP (pre-#216 line -> post-#218 line).
 * fuel probe / hot bit: the static guard is
   `guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board ...)`,
   `target = pos.score + NULL_MARGIN`,
-  `d -= -self.bound(pos.rotate(nullmove=True), 1 - target, 0) >= target`.
+  `d -= -self.bound(nullpos := pos.rotate(nullmove=True), 1 - target, 0) >= target`.
   The position-only QSearch classifier subtracts at most one ply. Together
   with intrinsic LMR, `C = 3` is intact.
 
-* intrinsic-LMR bit: `:439` -> `:437`.  MOVED ONLY, out of the deleted
-  `score_move` helper into the consumer loop.  Expression byte-identical,
+* intrinsic-LMR bit: the exact predicate
+  `guard &= not nullpos.king_capture()` exempts check evasions before the
+  consumer loop. The model's `evasionEligible` is that position-derived
+  conjunction. The recursive expression remains
   `move_depth = d - 1 - (not root and guard and val < LMR)`, and `val` is
   still `pos.value(move)` (the consumer only enters that branch when the
   produced score is below `MATE_LOWER`, where it equals the intrinsic value).
-  `intrinsicSpend`, `intrinsic_child_depth` and `spend <= 2` unchanged.
+  The exemption only lowers spend, so `intrinsicSpend`,
+  `intrinsic_child_depth` and `spend <= 2` remain unchanged.
 
 * sub-horizon pass: `:395-402` -> `:406-412`.  Guard identical
   (`not root and 2 < depth < 6 and ...`), pass child still at `depth - 3`.

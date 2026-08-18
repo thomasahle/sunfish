@@ -220,10 +220,12 @@ class TestIntrinsicLMR:
 
     The edge cost depends only on position, nominal depth, and move value.
     A cached killer must therefore receive exactly the same depth as that
-    move receives later in the intrinsic ordering.
+    move receives later in the intrinsic ordering. In-check nodes exempt
+    every evasion from the move-specific reduction.
     """
 
     FEN = "4k3/8/8/3p4/4P3/8/8/N3K3 w - - 0 1"
+    CHECK_FEN = "4kb1r/1p3pp1/p1r1p3/2pp4/3P2p1/2N1P3/PPPB1P2/R2QRK1q w k - 4 17"
 
     def observed_depths(self, depth, pass_score, fen=FEN, root=False):
         pos = hist_from_fen(fen)[-1]
@@ -262,9 +264,18 @@ class TestIntrinsicLMR:
             pos, moves, seen = self.observed_depths(depth, pass_score, fen)
             guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
             hot = guard and pass_score >= pos.score + sf.NULL_MARGIN
+            eligible = guard and not pos.rotate(nullmove=True).king_capture()
             for move in moves:
-                expected = depth - hot - 1 - (guard and pos.value(move) < sf.LMR)
+                expected = depth - hot - 1 - (eligible and pos.value(move) < sf.LMR)
                 assert {d for m, d in seen if m == move} == {expected}
+
+    def test_check_evasions_are_not_intrinsically_reduced(self):
+        pos = hist_from_fen(self.CHECK_FEN)[-1]
+        assert pos.rotate(nullmove=True).king_capture()
+        pass_score = pos.score + sf.NULL_MARGIN
+        _, moves, seen = self.observed_depths(6, pass_score, self.CHECK_FEN)
+        for move in moves:
+            assert {d for m, d in seen if m == move} == {4}
 
     def test_root_moves_are_not_intrinsically_reduced(self):
         pos = hist_from_fen(self.FEN)[-1]

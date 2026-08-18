@@ -4,8 +4,8 @@ The local obligations introduced by intrinsic LMR.
 The null probe uses a fixed target and the null child's QSearch value, so valid
 fail-soft reports determine the same position-only hot bit under every caller
 window and table state. At an interior node, the `eligible` bit is the static
-null-move guard;
-the unstored driver root supplies `false`. A real edge
+null-move guard conjoined with `not inCheckB`; the unstored driver root supplies
+`false`. A real edge
 spends one ply normally, one more at a hot node, and one more for an
 intrinsically low move at an eligible node. Thus child depth is a function of the
 position, nominal depth, and move alone, and every real edge spends between
@@ -22,6 +22,22 @@ def fuelBit (b : Bool) : Nat := if b then 1 else 0
 move-specific low-value bit, enabled only by the static eligibility guard. -/
 def intrinsicSpend (hot eligible low : Bool) : Nat :=
   fuelBit hot + fuelBit (eligible && low)
+
+/-- Production's exact check-evasion exemption. Both inputs are position- and
+depth-derived, so their conjunction remains a fixed property of the TT key. -/
+def evasionEligible (G : QSGame) (static : G.Pos → Nat → Bool) : G.Pos → Nat → Bool :=
+  fun p d => static p d && !inCheckB G.toNullGame p
+
+theorem evasionEligible_of_check (G : QSGame) (static : G.Pos → Nat → Bool)
+    (p : G.Pos) (d : Nat) (h : inCheckB G.toNullGame p = true) :
+    evasionEligible G static p d = false := by
+  simp [evasionEligible, h]
+
+/-- In check, the move-specific LMR bit contributes no fuel debt. -/
+theorem intrinsicSpend_evasion_of_check (G : QSGame) (static : G.Pos → Nat → Bool)
+    (p : G.Pos) (d : Nat) (hot low : Bool) (h : inCheckB G.toNullGame p = true) :
+    intrinsicSpend hot (evasionEligible G static p d) low = fuelBit hot := by
+  simp [intrinsicSpend, evasionEligible, fuelBit, h]
 
 theorem intrinsicSpend_le_two (hot eligible low : Bool) :
     intrinsicSpend hot eligible low ≤ 2 := by
@@ -44,8 +60,8 @@ theorem intrinsic_edge_cost (depth : Nat) (hdepth : 3 ≤ depth)
   cases hot <;> cases eligible <;> cases low <;> simp [fuelBit] <;> omega
 
 /-- The production policy as an edge selector. `hot` is a fixed-target
-property of the node, `eligible` is its static guard, and `low` is an intrinsic
-property of the move. Neither the caller's window nor killer ordering enters. -/
+property of the node, `eligible` is its static, check-exempt guard, and `low` is
+an intrinsic property of the move. Neither caller window nor killer ordering enters. -/
 def intrinsicEdgeSpend (G : QSGame) (hot eligible : G.Pos → Nat → Bool)
     (low : G.Pos → Nat → G.Pos → Bool) : G.Pos → Nat → G.Pos → Nat :=
   fun p d m => intrinsicSpend (hot p d) (eligible p d) (low p d m)

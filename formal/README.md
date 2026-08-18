@@ -111,7 +111,8 @@ QSearch value.
 Given valid reports, side-exactness makes the hot classification stable under
 different caller windows and table states (`hot_bit_stable`). A fixed target
 alone would not repair an invalid or cross-semantics TT entry. Move reduction
-uses only the static null-eligibility guard, so it needs no report theorem.
+uses the static null-eligibility guard and the exact not-in-check predicate on
+the same null position, so it needs no additional report theorem.
 
 `EventuallyWide.lean` quantifies over an arbitrary fixed `hot` selector, so
 using the depth-zero value changes no eventual-completeness obligation. The
@@ -126,7 +127,8 @@ its edge cost, and no MTD window changes the declared tree.
 The driver root is deliberately exempt from intrinsic LMR. Root probes are
 not stored in `tp_score`, so this does not create a second value for any TT
 key; the model's `eligible` bit is false there. Interior nodes retain the
-fixed edge-cost recurrence proved by `IntrinsicLMR.lean`.
+fixed edge-cost recurrence proved by `IntrinsicLMR.lean`; in-check nodes set
+that bit false through `evasionEligible`.
 
 That is what buys the premise: a null cutoff gives every real move unbounded
 pruning debt, and discharging it is exactly what `NoZugzwang` was for. A
@@ -134,8 +136,8 @@ bounded edge cost discharges it instead. `EventuallyWide.lean` now quantifies
 over an arbitrary move-dependent selector `spend(position, depth, child)`;
 the previous null-only policy is the special case that ignores `child`.
 `IntrinsicLMR.lean` instantiates this theorem with the fixed-target hot bit,
-static eligibility guard, and intrinsic low-value bit. Thus the global theorem
-applies directly with maximum edge cost three:
+static check-exempt eligibility guard, and intrinsic low-value bit. Thus the
+global theorem applies directly with maximum edge cost three:
 
 ```text
 eventual_classification_fuel :
@@ -263,8 +265,8 @@ declared value, as the theorems they replace were.
 (`sharp_valFloor : ValFloor MDG 192`) with a forced mate in 3 plies at `A1` and
 in 5 at `A2`, and an edge spend of 2 (the hot bit plus the intrinsic-LMR bit,
 `min (C-1) 2 = 2`) at every regime node -- a schedule the shipped code
-realizes whenever the fuel probe fails high on a quiet move. One defender node
-lands at nominal depth 5, inside the sub-horizon window, where the pass is
+realizes whenever the fuel probe fails high on a quiet move outside check. One
+defender node lands at nominal depth 5, inside the sub-horizon window, where the pass is
 worth 0 and the mate is masked:
 
 | certificate | statement |
@@ -924,7 +926,7 @@ King-capture substitution uses the position predicate directly, so its exact
 | null child report negation | `WindowReport.negate` |
 | lazy `min(pos.score + EVAL_ROUGHNESS, pass_report)` (depth < 6) | `cap_failLow`, `cappedNull_report` |
 | fixed-target null QSearch | `hot_bit_determined`, `hot_bit_stable`, `fuel_edge_cost` |
-| static LMR eligibility and intrinsic move reduction | `intrinsic_edge_cost` |
+| check-exempt intrinsic LMR | `evasionEligible_of_check`, `intrinsic_edge_cost` |
 | real-move recursion at the reduced `d - 1` | `fuelValueD2t`, `eventual_classification_fuel` |
 | static cap below positive mate | `staticCap_in_scoreBand`, `staticCappedNull_below_positiveMate` |
 | positive-depth complete producer | `producerMoves_positive` |
@@ -969,8 +971,8 @@ tests and chess corpora validate those executable primitives.
   techniques.
 - `EventuallyWide.lean`: the fuel oracle -- bounded real-edge cost and the
   W/D/L trichotomy with no chess premise.
-- `IntrinsicLMR.lean`: static LMR eligibility and the bounded, move-dependent
-  edge cost used by intrinsic LMR.
+- `IntrinsicLMR.lean`: static, check-exempt LMR eligibility and the bounded,
+  move-dependent edge cost used by intrinsic LMR.
 - `MateDepth.lean`: the sharp mate-depth accounting -- which mechanism costs
   which ply, the shipped shallow cap folded in, and the countermodel that
   pins the constants and the slope.
