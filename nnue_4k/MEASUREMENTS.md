@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-18 | **METER 4 PRIMARY VERDICT: the entry is +108.17 ± 24.64 over post-pool classic at 30+1 — the goalpost moved ~92 Elo, and the PRE-RESULT corrected expectation is CONFIRMED while the registered band is not** | Gates first and all passed before the Elo: **0 illegal, 0 forfeits, 600/600 `normal`**, count exact, coprimality gcd 1, both arms sha-verified box-side, boot **and** book-shaped smokes green, **71 free cores** at gate pass, driver PID 2949039 alive throughout. **Elo +108.17 ± 24.64 → [+83.54, +132.81]**, nElo **+130.37 ± 27.80**, **65.08%** (305 W / 124 L / 171 D), ptnml **[13, 38, 85, 83, 81]** over 300 pairs, PairsRatio 3.22, DrawRatio 28.33%, LOS 100%, 2 h 55 m at conc 10 cotenant. Arms entry **3410 B** `bf30904d…` (`d0a6e60`) vs **packed** classic **3361 B** `d177d79a…` (`ab3b490`). **Independent recompute mirrors fastchess to the digit, and the same script reproduces meter 3's +200.24 ± 38.35 and [1,11,33,41,64] from meter 3's PGN** — validated against a published number. Diversity: **600/600 distinct games, 0 replays, exactly 300 distinct 16-ply lines = 2.00× reuse**; clustered interval **±24.63 (inflation 1.02×)** agrees with the pentanomial **±24.64** to two decimals — **no inflation to price**. **Two harvest instruments found format-dependent and reported, not patched**: `opening_gate.py` VOIDs any PGN-book match because it keys on the absent `[FEN]` tag (**it VOIDs meter 3 too**), though its duplicate-game half passes; and `cluster_elo.py` never strips `{book}`, so it clusters on **8 plies, not 16** (errs safe, both readings given). Clocks recorded (dormancy N/A at a real clock): worst min-time-left **entry 1.389 s, classic 2.193 s**, thin but zero forfeits — and **`nodes=true` carries nothing, both arms report n=0**; the entry emits **no `info` lines at all**, so its `tl=0.000` is an artifact and its clock is reconstructed — which is also why **adjudication=none was right**, an adjudicator would have read `score cp` from classic only. **Against the registered band [+120, +200]: point estimate BELOW, interval overlaps on [+120, +132.81]. Against Correction 2's pre-result expectation +127.05 ± 52.38: −18.88 ± 57.89, z = 0.64 — CONSISTENT.** The band was centred on the wrong commit and the correction that fixed it was filed before the games finished; the band's lower edge landing inside the interval is **luck, as Correction 2 said in advance it would be called**. **Goalpost delta: −92.07 ± 45.58, z = 3.96 — real, not noise**, but it contains entry Design B (+23, projected), classic's pool (−96.19, measured at this TC), #217's level respelling, classic's unpriced search work **and** the TC move; the BRIDGE cell removes the TC term. **Progress toward +400: 27.0%** (upper bound 33.2%), down from 50% — **~292 Elo remain**, because classic got stronger, not because the entry got weaker. **Where the rest lives, honestly: mostly nowhere yet.** Entry side, measured and in budget, sums to ≈ 0 — #225 kptap's +56.07 was a fixed-node screen whose timed confirmations read **+16.23 (n=300)** then **+0.58 [−21.25, +22.41] (n=600, deciding)**; taper arms −10.43 ± 37.23 / +27.85 ± 34.32 neither clear zero and both delete a landed +21.31; **`tapp` is built, gated and never played** — the one untested upside; speed converts at **1.28 ± 0.63 Elo/%nps** but 292 needs **≈3.3×** and the cheap wins are spent. Closed with numbers: labels, distribution, capacity arm, mutable board, `er40` depth, the #205 port, the TT family. Classic keeps moving away: #232 **+21.6 ± 19.0** (screen only), #236/#241 **~+6**, plus unbounded tuner risk. **And screening Elo is not decision Elo — fixed-node has now read high twice (kptap +56→+0.58, #221 +26.1→+10.77).** **METER, NOT PROMOTION: no branch fires** |
 | 2026-08-18 | **AMENDMENT 1 to the BOOK LINE-FIT registration: Phase 2 becomes DEALT OPENINGS against the MIXED FIELD — and the design it replaces was information-free by this lane's own argument** | Per Thomas, and **legal for a specific reason: no Phase-2 game has been played** (Phase 1 untouched and still running). **Two things were wrong.** (1) The superseded Phase 2 was `book_v1` vs `book3k` with **the same engine both arms** — which is exactly the symmetry this very registration had already written down three paragraphs earlier about the mirror arm: *under paired colours the subject's expected score against its own binary is exactly 0.5 for every line*. Having knowingly spent a third of the Phase-1 budget on that symmetry, the lane then registered it as the **promotion** cell. The right question is Thomas's: does the reweighted distribution improve the subject's score against a **FIELD**. (2) **The book-adapter requirement is DROPPED** — fastchess already deals openings, so sample openings *from* the book distribution instead of putting a book behind each engine. That retires the adapter, its `get_book_move` validation, and — the part that matters — lets the arms be the **PACKED ARTIFACTS**, the deployed objects; Phase 1 was forced onto checkouts only because a packed arm cannot be node-limited, and a timed cell dealing PGN openings has no such problem. **New design**: openings sampled `weighted_random` to the 15-ply deployed horizon, **with repetition**, seeded, frozen and sha-recorded before game 1. **A** = sampled from `book_v1`, **B** = sampled from `book3k` uniform, both subject vs mixed field (packed entry + `weak`; **the mirror is gone**), 30+1, fixed N=600 each; **bar unchanged: LB > 0 at 95% on A − B**. **C** (sampled from `book_wide` uniform) is SECONDARY, because `book_v1` reweights `book_wide` and **not** `book3k`, so A − B carries **two axes** — A − C is the pure reweighting, C − B the pure width, the METER 4 PRIMARY/BRIDGE structure again. **Limitations registered, not discovered**: dealt openings put BOTH sides down one fixed line, so the cell **cannot see the in-book-reply dynamic** (lichess reality: the opponent leaves book by ply 2 while our book still guides our replies to ply 15) — that component stays validated by the **live lichess watch, not the box**; and it **cannot see the clock savings either**, which retires this lane's original reason for making the cell timed (measured live in `OmnzTMRj`: book moves 0.12–0.20 s against 4.76 s, clock GROWING 60.00 → 66.03 s). **So a null on A − B means "the line distribution does not pay", never "the book does not pay".** `opening_gate` reinterpreted a second time: duplicate openings are **the treatment**, so the per-cell distinct-opening test is dropped and the duplicate-GAME test kept — safe here and not at fixed nodes because `rr6_sigk`'s replays were fatal only since deterministic fixed-node engines replay the *identical game*; the analysis clusters on the OPENING. Power: SE(A − B) ≈ 2.6% score, so the bar needs ~**+36 Elo**, *harder* than the superseded design's ~+26, and Phase 1 predicts it will correctly fail. Cost ~11 h at conc 8; C best-effort. Two hard preconditions added: opening files frozen before game 1, and **the `weak` arm's time management is UNVALIDATED** (every number it has is fixed-node) so it must pass a forfeit-free 30+1 smoke or be dropped from the field. **Phase 2 remains NOT AUTHORISED TO RUN** |
 | 2026-08-18 | **PRE-REGISTRATION: the BOOK LINE-FIT gauntlet — an opening book measured at the only resolution 1680 games can pay for, plus a second structural fact about packed artifacts** | `book3k.bin` has been on both lichess bots since 2026-08-18 and **nothing has ever measured whether any line in it helps**. Instruments are PR #242 (`tools/book/attribute.py` + `rebuild.py`, 19 tests, tools-only; empty stats reproduce a book bit-for-bit, α = 2·N_min calibrated so N_min games of a 100/0 split buys exactly one doubling). Candidate **`book_wide.bin`, 32321 entries, `8c7377c4…`** = book3k ∪ gm2001 ∪ lichess `chess-openings` (CC0), uniform, capped at the **deployed 15-ply horizon**; licence-clean subset 25574 entries recorded per-entry because promoting gm2001-only lines would re-open the question PR #238 closed. **280 candidate lines** (`candidates.pgn`, `bf122449…`) = maximal in-book prefixes capped at 8 plies, globally de-duplicated, thin cells claiming first. **A finding before a game is played**: book3k gives each of its 12 first moves a uniform 8.33%, but behind `1.a3` there are six distinct 8-ply continuations in *any* source and behind `1.d3` four — uniform weights are a claim about variety the book's depth does not support. Form: **gauntlet** (not RR — the variants are OPENINGS, so every game must involve the subject), **fixed N=1680**, 20000 nodes, `tc=6000+0`, conc 8 nice 5, srand 20260891. **THE RESOLUTION GOVERNS EVERYTHING: 6 games per line, so a CELL IS A ROOT MOVE and no claim below cell resolution is admissible; `book_v1` moves the root node and nothing else.** Power computed, clustered on the line: ±10.2% score (±72 Elo) for the nine rich cells, ≥±20% for the thin ones — **powered to find JUNK, not to fine-tune**, and the tension is registered: the cells most likely to be junk are exactly the cells with the least power, so a null there means "not measured", never "measured level". Selector: **LCB = θ − 1.96·SE_cluster**, α=60 shared with `rebuild.py`, minimum-N gate n_lines ≥ 6 (admits 14 of 20 cells), design-effect deflation before the rebuild. **The `mirror` arm is registered as information-free on the primary**: under paired colours the subject's expected score against its own binary is exactly 0.5 for every line, so it is excluded from the primary and from the rebuild and measures line imbalance/decisiveness only — one third of the budget, priced up front. **SECOND STRUCTURAL FACT, new and beside AMENDMENT 1's:** the packed artifact contains **no `nodes` token at all**, so it ignores `go nodes` and spends the pinned clock — observed live as eight pypy3 processes at 98% CPU with zero games finished in ten minutes, killed and unharvested. *A packed artifact cannot read a FEN and cannot be node-limited*; both live in the `minifier-hide` block `pack.sh` deletes. **A fixed-node cell and a packed arm are mutually exclusive**, so the arms are byte-verified checkouts (`sunfish.py` @ `ab3b490`, `pst_entry.py` @ `d0a6e60`, each under its own branch's `sunfish_ui`) — which costs nothing, because at a fixed node budget the two forms search the same tree. Registered prediction under test: **no cell separates at 95%** and Phase 2 returns null. **NO PROMOTION FIRES HERE**; Phase 2 (book_v1 vs book3k, 30+1, N=600, bar LB > 0) is registered in the same entry and is **NOT authorised to run** |
 | 2026-08-18 | **CORRECTION 2 to METER 4: #217 is NOT the goalpost move — the classic POOL is, and it was measured at +96.19 ± 33.81 at this meter's own TC** | **Recorded before any Elo exists** (primary ~40/600, count gate still refusing). The registration frames the meter around #217 as the classic's "biggest strength-relevant change since the last meter"; **wrong commit**. `git log f4f06d4..ab3b490 -- sunfish.py` has sixteen commits, and the mover is **`eef299b`, the classic builtin clock becoming the POOL** — **+96.19 ± 33.81, fixed N=300 at 30+1, no stopping rule**. **#217 (`6087cfa`) merely RESPELLS that pool as a per-move budget and measured LEVEL against it (+3.47 ± 33.81, N=200, 60+0)** — the registration's use of that same +3.47 to justify the packed classic *form* stands and is unaffected; what was wrong is crediting #217 with the goalpost move. Also in the arm and unpriced here: the shallow-cap/lazy-tail search work (`8ea6d5d`, `42c0816`, `c01915f`, `faf3e06`, `edc1a87`). **The classic lane already said this in `82f0fa1`, verbatim: "The goalpost moved by ~96 Elo … meter 3's +200.24 ± 38.35 is now historical"** — written three commits before this lane registered, and not read. The +96.19 is unusually well matched to this meter: fixed N, no stopping rule, **at 30+1, the primary's exact TC** (its SPRT decider read +124.50 ± 38.79 at 288 and the fixed 300 read +102.47 ± 32.43, so the stopped figure is 20-40 high). **Premise-corrected expectation: 200.24 − 96.19 + 23.0 ≈ +127** (±~53; the +23.0 Design B term is a **projection with zero games**). **THE REGISTERED BAND [+120, +200] IS NOT MOVED** — harvest reports against it verbatim AND against ≈ +127 separately, both fixed here before any number exists. The band's lower edge sits near the corrected value, so an in-band landing would be **luck, and will be reported as luck**. Nothing re-run: `ab3b490` is the right arm. With Correction 1, the meter has **four** moving parts — entry Design B, classic pool, #217's respelling, classic search — two measured, one projected, one unpriced. Still a meter; no branch fires |
@@ -338,6 +339,194 @@ how much effort it cost.
 
 ---
 
+## 2026-08-18 — METER 4 PRIMARY VERDICT: the entry is **+108.17 ± 24.64** over post-pool classic at 30+1 — the goalpost moved ~92 Elo and the pre-result corrected expectation is CONFIRMED
+
+The +400 needle, re-anchored against the classic that actually exists. Gates
+first, in the registered order.
+
+### The gates, read before the Elo
+
+| gate | result |
+|---|---|
+| **illegal moves** (STOP) | **0** |
+| **time forfeits** (VOID) | **0** |
+| terminations | **600 / 600 `normal`** |
+| count | **600 of a FIXED 600** |
+| coprimality preflight | **PASS** — 300 rounds, 1 pairing, gcd 1 |
+| arm identity | **sha256 verified box-side**, both arms |
+| boot smoke + **book-shaped smoke** (A1) | **PASS** — entry `d7d5`, classic `g8f6` |
+| book-format gate (A1) | **PASS** — PGN required, EPD refused |
+| venue | **71 free cores** of 96 at gate pass |
+| liveness | driver PID **2949039**, alive start to finish |
+
+**Only then** was the Elo computed.
+
+### The result
+
+| | |
+|---|---|
+| **Elo** | **+108.17 ± 24.64** (95%, pentanomial) → **[+83.54, +132.81]** |
+| nElo | **+130.37 ± 27.80** |
+| score | **65.08%** — 305 W / 124 L / 171 D |
+| pentanomial | **[13, 38, 85, 83, 81]** over **300 pairs** |
+| PairsRatio | 3.22; DrawRatio 28.33%; LOS 100.00% |
+| arms | entry **3410 B** `bf30904d…` (`d0a6e60`) vs classic **3361 B** `d177d79a…` (master `ab3b490`) |
+| form | **packed classic**, builtin budget loop — as registered |
+| venue | box, conc 10 declared, nice 10, srand 20260882, **2 h 55 m**, cotenant with the owner's tuners |
+
+**Independent recompute mirrors fastchess to the digit** — Elo, nElo,
+pentanomial vector, PairsRatio, DrawRatio and LOS all agree exactly. The same
+harvest script reproduces meter 3's `+200.24 ± 38.35` and `[1, 11, 33, 41, 64]`
+from meter 3's PGN, so the instrument is validated against a published number
+and not only against itself.
+
+### Diversity and clustering
+
+| check | result |
+|---|---|
+| distinct games | **600 of 600**, **0 duplicate replays** |
+| distinct 16-ply book lines | **300 over 600 games = exactly 2.00× reuse** — the colour swap and nothing more; each ordered cell 300 games / 300 distinct lines |
+| `cluster_elo.py`, comment-stripped | 300 openings, **inflation 1.02×** → **±24.63, [+83.55, +132.80]** |
+| `cluster_elo.py`, raw as registered | 266 openings, inflation 1.05× → ±25.40 |
+
+> **The clustered interval and the pentanomial interval agree to two decimals
+> (±24.63 vs ±24.64).** There is no interval inflation to price here.
+
+**Two harvest instruments were found to be format-dependent, and both are
+reported rather than quietly patched.**
+
+- **`opening_gate.py` prints VOID on this PGN, and the VOID is the instrument's,
+  not the tournament's.** It keys the opening on the `[FEN]` tag, which fastchess
+  writes only for an **EPD** book. A PGN book carries no `[FEN]`, so it reads
+  `None` for every game and sees "1 distinct opening" per cell. Run on **meter
+  3's** PGN — a run this ledger accepted as clean — **it VOIDs that too.** Its
+  format-independent half, the duplicate-movetext check, **PASSES here: 600
+  distinct games, 0 replays.** The diversity question it exists to ask is
+  answered above, keyed on the book line.
+- **`cluster_elo.py` does not strip `{…}`**, and fastchess writes `{book}` on
+  every book move, so its "first 16 tokens" cover **8 plies, not 16**. That
+  over-merges clusters and *widens* the SE, so it errs safe — but it is not
+  measuring its docstring. Both readings are given above.
+
+### Clocks — recorded, since dormancy is N/A at a real clock
+
+| arm | worst min-time-left | p5 | median |
+|---|---|---|---|
+| entry | **1.389 s** | 1.482 s | 1.717 s |
+| classic | **2.193 s** | 2.422 s | 2.926 s |
+
+Both arms run down to a thin but non-flagging margin, and **zero forfeits in 600
+games** confirms #217's `wtime/2 − DELAY` clamp scales the wall down with the
+clock. The entry sits consistently closer to the flag than classic.
+
+**`nodes=true` was registered and carries nothing**: both packed arms report
+`n=0` because neither emits `info … nodes`. Recorded so the next registration
+does not ask for it again. Relatedly, **the entry emits no `info` lines at all**,
+so fastchess prints `tl=0.000s` for it — a reporting artifact, not an empty
+clock; the entry's clock above is reconstructed from its recorded move times.
+This is also an independent reason **adjudication=none was the right call**: a
+draw/resign adjudicator reads `score cp`, which only classic emits, so
+adjudication on this pair would have been **asymmetric**.
+
+### Against the registered band — reported as registered
+
+| | |
+|---|---|
+| registered band | **[+120, +200]**, central ≈ +165 |
+| measured | **+108.17**, interval **[+83.54, +132.81]** |
+| verdict | **point estimate BELOW the band**; the interval **overlaps** it on **[+120, +132.81]** |
+
+### Against the PREMISE-CORRECTED expectation — and this is the one that counts
+
+Correction 2 (`0d43a0f`) was written **before any number existed** and fixed the
+registration's false premise, publishing this arithmetic in advance:
+
+| component | value | basis |
+|---|---|---|
+| meter 3 | +200.24 ± 38.35 | measured, n=300, 60+1 |
+| classic gains the **pool** (`eef299b`) | **−96.19 ± 33.81** | measured, n=300, **30+1** |
+| entry gains **Design B** (`1250251`) | +23.0 ± 11.4 | **projected from nps, ZERO games** |
+| **expectation** | **+127.05 ± 52.38** | |
+
+| | |
+|---|---|
+| observed − expected | **−18.88 ± 57.89** |
+| significance | **z = 0.64 — CONSISTENT** |
+
+> **The corrected expectation is confirmed and the registered band is not.**
+> The band was centred on the wrong commit; the correction that fixed it was
+> filed before game 600, and the measurement landed on it. The band's lower edge
+> +120 does sit inside the measured interval — **that is luck, and Correction 2
+> said in advance it would be reported as luck.**
+
+### The goalpost delta
+
+| | |
+|---|---|
+| meter 3 (60+1, pre-pool classic, pre-Design-B entry) | **+200.24 ± 38.35** |
+| meter 4 primary (30+1, post-pool classic, post-Design-B entry) | **+108.17 ± 24.64** |
+| **change** | **−92.07 ± 45.58** → [−137.65, −46.49], **z = 3.96 — real, not noise** |
+
+**What that −92 contains, honestly:** entry Design B (+23, projected), classic's
+pool clock (−96.19, measured at this TC), #217's respelling (level, +3.47 ±
+33.81), classic's unpriced shallow-cap/lazy-tail search work, **and** the time
+control moving 60+1 → 30+1. The **BRIDGE cell (60+1, N=300, book3k, same arms)
+is running now** and removes the TC term; `primary − bridge` will be a clean TC
+slope for this pair. Until it lands, **−92.07 is the change in the meter, not an
+attribution to any one cause.**
+
+### Progress toward +400
+
+> **+108.17 of 400 = 27.0%.** Upper bound +132.81 = **33.2%**.
+> **Roughly 292 Elo remain** to the point estimate, and **at least 267** at the
+> most favourable end of the interval.
+
+The needle went **down from 50% to 27%** and the entry did not get worse — it
+got faster and gained Design B. **Classic got substantially stronger**, exactly
+as its own lane registered in `82f0fa1`: *"the goalpost moved by ~96 Elo."*
+
+### Where the remaining ~292 plausibly lives — and mostly it does not
+
+**Entry side, measured and in budget: approximately zero.** 686 B spare at
+3410 B, and only **one** open PR touches the entry:
+
+- **#225 `kptap`** — the headline **+56.07 ± 29.97** is a **fixed-node screen**,
+  and its two pre-registered **timed** confirmations both returned null:
+  **+16.23 [−14.00, +46.45]** at n=300 and, in the deciding block,
+  **+0.58 [−21.25, +22.41] at n=600**. Timed value ≈ **0**, at +53 B.
+- Taper arms, measured at n=300 each: `tap` **−10.43 ± 37.23**, `tapk` **+27.85
+  ± 34.32** — neither clears zero, and both **delete `pend`**, a landed +21.31.
+- **`tapp`** (taper preserving `pend`, 3726 B) is **built, gated and NEVER
+  PLAYED** — the one entry-side item with plausible untested upside.
+- **Speed** is real and converts at a measured **1.28 ± 0.63 Elo per 1% nps**
+  (n=1068), but covering 292 needs **+228% nps ≈ 3.3×**, and the campaign's own
+  verdict is that *"the cheap wins are spent"*.
+
+**Closed with numbers, so distance cannot be claimed from them:** label source
+(0.28σ), position distribution (0.76σ), the capacity arm (31.00%, fails its bar),
+the mutable board (+0.3), depth via `er40` (−21.22 ± 18.60), the #205 search port
+(+5.91 ± 17.25 for +71 B), and the whole TT/table-speedup family (3% of wall).
+
+**Classic side keeps moving the goalpost away:** #232 at **+21.6 ± 19.0** is a
+fixed-node screen with its decision-grade match still pending, #236/#241 are
+speed-class at **~+6** between them, and the two tuner campaigns running on this
+very box are an **unbounded, unquantified** risk whose only precedent is negative
+(−22.62 ± 26.30).
+
+**A standing caution the record now supports twice:** fixed-node screens have
+read high against their own timed confirmations — kptap **+56 → +0.58** (n=600)
+and #221 **+26.1 → +10.77** (n=1000). Screening Elo is not decision Elo.
+
+> **The honest shape: ~292 Elo remain; the identified, measured, in-budget
+> entry-side inventory sums to about zero; and the classic side is currently
+> moving faster than the entry.** The gap is not closing right now, and no
+> single known item is worth three digits.
+
+### No branch fires
+
+**This is a meter, not a promotion.** Nothing lands, nothing is retired, no
+direction opens or closes on `+108.17`. The bridge cell is in flight and gets its
+own entry.
 ## 2026-08-18 — AMENDMENT 1 to the BOOK LINE-FIT registration: Phase 2 becomes DEALT OPENINGS against the MIXED FIELD — and the design it replaces was information-free by my own argument
 
 Per Thomas. **Legal, and legal for a specific reason: no Phase-2 game has been
