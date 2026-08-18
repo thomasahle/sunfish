@@ -18517,3 +18517,28 @@ bit-identically for the third time: val 0.01366, gains
 anything the other lanes run, so it is a *stronger* inertness test than an N=5
 control would have been. `360_factor_r8n32m_final` is now training at lr 1.2e-2
 against the shift it can actually ship at.
+
+### FACTOR LANE — screen pre-flight: the factored format clears the legality gate at the played budget
+
+Run before the final arm finished, on the `lr4x` what-if build, because
+legality is a property of the FORMAT and not of which trained weights it
+carries — so it could be de-risked early and a wasted screen avoided.
+
+`legality_gate.py bin/e_factor_preflight.py 300 --nodes=20000` on the box's
+own pypy 7.3.20:
+
+    FORCED    n= 40  no-move=0  illegal=0
+    IN CHECK  n= 30  no-move=0  illegal=0
+    quiet     n= 30  no-move=0  illegal=0
+    GATE PASSED: every position produced a legal move
+
+100 positions at **the budget the screen actually plays at** (20,000 nodes),
+which is the form of this gate that matters — the ledger records a mirrored
+build whose gate only ever sent `go movetime`, so the fixed-node path it was
+guarding was never exercised.
+
+`w_factor.sh` is staged in `screens/` alongside it. The pre-flight engine is
+named `e_factor_preflight.py` rather than `e_factor.py` **on purpose**: it is
+a train/ship divergence (shift forced to 3 on a net trained at 4) and must
+never be the thing a screen plays. It is deleted the moment the real entry
+lands.
