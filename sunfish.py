@@ -413,9 +413,8 @@ class Searcher:
         d = depth
         guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
         if guard:
-            nullpos = pos.rotate(nullmove=True)
-            target = pos.score + NULL_MARGIN
-            d -= -self.bound(nullpos, 1 - target, depth - 7) >= target
+            t = pos.score + NULL_MARGIN
+            d -= int(-self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)
 
         # Moves whose fixed cap is below gamma share one maximum-cap report.
         base = QS if depth == 0 else -MATE_UPPER
@@ -622,8 +621,7 @@ def main():
                     if score >= gamma:
                         if move is None: print("info depth", depth, "score cp", score); break
                         i, j = move.i, move.j
-                        if len(hist) % 2 == 0:
-                            i, j = 119 - i, 119 - j
+                        if len(hist) % 2 == 0: i, j = 119 - i, 119 - j
                         cand = render(i) + render(j) + move.prom.lower()
                         print("info depth", depth, "score cp", score, "pv", cand)
                     if (best or cand) and time.time() - start > think * 0.8:
