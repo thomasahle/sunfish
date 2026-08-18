@@ -54,7 +54,10 @@ jobs:
         sed '/# minifier-hide start/,/# minifier-hide end/d' sunfish.py > tiny_sunfish.py
         printf 'uci\nisready\nposition startpos moves e2e4\ngo wtime 60000 btime 60000\nquit\n' \
           | timeout 60 python tiny_sunfish.py | tee /dev/stderr | grep -q bestmove
-        printf 'uci\nposition startpos\ngo movetime 500\nquit\n' \
+        # Clock-only: this loop is the simplified TCEC-4k UCI and does not
+        # read movetime.  4s/no-increment lands on its floors (soft 100ms,
+        # wall 200ms), so this is a fixed, fast smoke.
+        printf 'uci\nposition startpos\ngo wtime 4000 winc 0\nquit\n' \
           | timeout 60 python tiny_sunfish.py | tee /dev/stderr | grep -q bestmove
         rm tiny_sunfish.py
     - name: Pack test (tools/build/pack.sh end-to-end)
@@ -63,7 +66,7 @@ jobs:
       run: |
         pip install python-minifier
         bash tools/build/pack.sh sunfish.py sunfish.packed
-        { printf 'uci\nisready\nposition startpos\ngo movetime 300\n'; sleep 3; printf 'quit\n'; } \
+        { printf 'uci\nisready\nposition startpos\ngo wtime 4000 winc 0\n'; sleep 3; printf 'quit\n'; } \
           | timeout 60 ./sunfish.packed | tee /dev/stderr | grep -q bestmove
         rm sunfish.packed
     - name: 4k entry is fresh and under budget
@@ -81,7 +84,7 @@ jobs:
       # number matches reality - numbers in prose rot, asserts don't.
       run: |
         bash tools/build/clean.sh sunfish.py > clean_sunfish.py
-        { printf 'uci\nisready\nposition startpos\ngo movetime 300\n'; sleep 3; printf 'quit\n'; } \
+        { printf 'uci\nisready\nposition startpos\ngo wtime 4000 winc 0\n'; sleep 3; printf 'quit\n'; } \
           | timeout 60 python clean_sunfish.py | tee /dev/stderr | grep -q bestmove
         n=$(wc -l < clean_sunfish.py | tr -d ' ')
         grep -qF "just $n lines of code" README.md \
