@@ -39,10 +39,21 @@ def enc(d):
 
 
 def shift_for(v):
-    """export.py's own rule, so the artifact and the trainer pick one shift."""
+    """model.export_shift()'s rule, VERBATIM, so the artifact and the trainer
+    pick the same shift.
+
+    Both bounds, in the trainer's order: the largest shift whose gains still
+    fit 89, AND whose worst-case cap sum fits nn_cp's lane-sum fold.  Missing
+    the second clause here while the trainer enforces it would make this
+    builder refuse a net that trained perfectly correctly -- the same
+    train/ship divergence in the other direction.
+    """
     vmax = max(abs(x) for x in v) or 1.0
     for s in range(8, -1, -1):
-        if vmax * (1 << s) / 32.0 <= 89.49:
+        if vmax * (1 << s) / 32.0 > 89.49:
+            continue
+        g = [min(89, max(0, int(round(abs(x) * (1 << s) / 32.0)))) for x in v]
+        if 32 * sum(g) <= 65534:
             return s
     return 0
 
