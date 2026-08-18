@@ -18956,3 +18956,117 @@ searches, 2 unparseable positions dropped) is queued.
 **Its verdict will be reported as a statistic-level result only.** Given
 tonight's retirement, no val-gate reading from ARM 9 constitutes evidence
 about playing strength, and the arm cannot be promoted on one.
+
+---
+
+# ARM 9 — SEARCH-CONSISTENCY DISTILLATION: the premise splits cleanly in two
+
+`3162_arm9_entry250k` (249,608 pool10m rows re-labelled by `pst_entry @
+d0a6e60`'s own search at `go nodes 20000`, corpus sha `25ea1f1a7fc1a1a9`)
+against `319_arm9ctl_sf250k` (**the same rows**, original Stockfish labels),
+both at sigK=160, both 6 passes, both seed 0. **Arm minus control is the
+label source and nothing else.**
+
+Reported as **statistic-level only**. Per tonight's reconciled doctrine there
+is no resolvable intra-family Elo ordering, so nothing below is a gate
+reading or a strength claim.
+
+## (1) REPRESENTABILITY — confirmed, and it is the largest such gap measured
+
+`val` is not comparable across the two runs (different targets), so both are
+read against **their own corpus's material anchor**, which the trainer prints:
+
+| run | zero anchor | material anchor | best val | **% of the material gap closed** |
+|---|---|---|---|---|
+| `319` SF labels | 0.07216 | 0.05973 | 0.05075 | **15.0%** |
+| **`3162` entry labels** | 0.05172 | 0.02487 | 0.01700 | **31.6%** |
+| `310` SF labels, 10M rows | 0.07156 | 0.05898 | 0.05056 | 14.3% |
+
+**The family explains more than twice as much of the entry's searched value as
+it does of Stockfish depth-28 cp.** ARM 9's val also *moves* — 0.01826 →
+0.01700, 6.9% across six passes — against the SF control's 3.1%, which
+plateaus and then worsens after epoch 2. This is the sharpest confirmation
+the campaign has that **the linear-in-ps768 family's problem with SF labels
+is representational, not optimisational**: given a target inside its reach,
+it reaches for it.
+
+**The honest discount:** entry-searched values are *intrinsically* more
+material-like. Material alone already covers 52% of the zero-anchor loss on
+entry labels (0.05172 → 0.02487) against 17% on SF labels (0.07216 →
+0.05973). So part of "more learnable" is simply "closer to what the base
+already computes". The relative-gap column controls for this only partly.
+
+## (2) IS IT A BETTER EVALUATOR? No — slightly worse on every neutral read
+
+| statistic | `319` control | **`3162` ARM 9** | Δ |
+|---|---|---|---|
+| outval Brier | 0.126635 | 0.127144 | **1.9σ worse** |
+| outval AUC | 0.849583 | 0.848073 | **1.9σ worse** |
+| refval (vs SF cp) | 0.0180766 | 0.0184148 | worse |
+| val-MAE | 174.5 cp | 176.6 cp | worse |
+
+(σ from the ledgered sigK=160 seed census; both are single seeds, so the
+paired se is ~√2× that spread.) **refval is biased against this arm by
+construction** — it scores against the very SF labels ARM 9 declined to learn
+— and is reported for completeness, not as evidence. The outcome statistics
+are not biased that way, and they say the distilled net is marginally worse
+at predicting how our games finished.
+
+**So the target is more learnable and less informative.** Fitting the
+search's own output better did not produce a better evaluator by any measure
+available.
+
+## (3) SIBLING RANKING — 20.5σ, the largest effect of the sweep, and CIRCULAR
+
+| net | top1 | top3 | nrank |
+|---|---|---|---|
+| **`3162` ARM 9** | **0.1818** | **0.3683** | **0.2799** |
+| `319` control | 0.1589 | 0.3264 | 0.3258 |
+| `capn5` | 0.1574 | 0.3213 | 0.3312 |
+
+Paired: **ARM 9 vs its own size-matched control, 20.5σ**; vs `capn5`, 22.8σ.
+For scale, the largest separation anywhere else tonight was 8.1σ. `top1`
+rises 14.4% relative and `nrank` falls from 0.326 to 0.280.
+
+**And most of that is circular, which must be said before anything else.**
+The statistic's reference is *the move the entry played*; ARM 9 was trained on
+*the entry's searched evaluations*. It is being scored on agreement with the
+teacher it distilled. Not identical — it learned values, the statistic reads
+choices — but close enough that a large number here was nearly guaranteed and
+is **not** independent evidence of quality.
+
+What it does establish, narrowly and worth keeping: **the distillation
+worked.** The entry-likeness ARM 9 was built to acquire, it acquired, in
+quantity, and the sibling statistic is sensitive enough to see it at 20σ.
+
+## (4) WHAT THIS CHANGES ABOUT IDEA 9's PREMISE
+
+The premise was: *an eval that predicts THIS search's conclusions beats one
+that predicts deep cp, for THIS search.* It has two halves and they now have
+different answers:
+
+- **"The family can represent the entry's searched value better than SF's
+  deep cp" — CONFIRMED**, 31.6% vs 15.0% of the material gap, the cleanest
+  evidence yet that the capacity arm's failure against SF labels was a
+  target-reachability problem.
+- **"…and that makes it a better eval" — NOT SUPPORTED.** Every unbiased
+  statistic available is flat-to-worse. The only statistic that improves is
+  the one measuring similarity to the teacher.
+
+**The unresolved half is the only one that matters, and only games can answer
+it.** There is exactly one resolved Elo difference in this field — **every net
+loses to `entryd0` by ~19–24 points** — and ARM 9 is, by construction, the
+first net to move toward the entry on a measure of entry-likeness. Whether
+that converts is precisely the open question, and it is answerable against the
+one contrast that replicates.
+
+**Launched:** `arm9_entry250k` vs `entryd0`, fixed-node 20,000, the hardened
+harness with the coprimality pre-flight and `opening_gate.py` mandatory,
+against the ~19–24 point resolved gap. **Registered in advance:** the
+comparison partner is the `319` control run under the identical spec, because
+"ARM 9 vs entry" alone cannot separate the label source from the 250k corpus.
+No claim is made from the statistics above about how it will read.
+
+**Fourth confirmation of the binding bias**, incidentally: ARM 9's digits are
+`[89, 89, 89, 89, 89]` — five of five on the `+45` rail, after the capacity
+arm's 5/5, ARM 2's 4/4 and ARM 1's 4/5-after-an-8×-widening.
