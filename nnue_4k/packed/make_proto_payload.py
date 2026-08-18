@@ -7,16 +7,22 @@ staged retrain's job), but the encoding is the real one a generator would
 emit, and the sparsity is a knob the retrain recipe explicitly regularises
 for, so lzma sees the true byte cost:
 
-  * base-90 characters through the entry's own codec
-    (d = ord(c)-35; v = v*90 + d - (d>4) - (d>56)),
+  * base-90 BYTES through the entry's own codec
+    (d = c - 35 - (c > 92)): a bytes literal forbids only the quote (34) and
+    the backslash (92), so [35,125] minus {92} is exactly 90 live codes and
+    the decode pays ONE gap test instead of two,
   * one char per 4 trits (values 0..80 < 88): trit groups stay CHAR-ALIGNED,
     which is what lets lzma exploit zero-heavy weights (the ledger's
     "base-3 and lzma COMPOSE" measurement, commit 4850894),
-  * extraction order, LSB first: shift, N gains, N biases, 768*N trits.
+  * extraction order, LSB first: shift, N gains, N biases, 768*N trits --
+    and the string is EMITTED in that order too. The entry used to build a
+    big integer and peel digits back off it, which is the identity on the
+    digit sequence read backwards; dropping the big integer drops the
+    reversal with it.
 
 --feats > 768 sizes the payload for a LARGER capacity (Thomas's 1024-B
-payload directive, 2026-08-14): the extra feature chars sit at the MSB end
-(the FRONT of the string), which the entry's decode never peels -- the
+payload directive, 2026-08-14): the extra feature chars sit at the END of
+the string now that it is emitted LSB-first, which the entry's decode never reads -- the
 artifact stays runnable while lzma prices the full-capacity stream. The
 real larger-net decode seam (n8 / kb deltas) is agreed with TRAINQUEUE
 before any training run uses it.
@@ -26,10 +32,8 @@ import random
 
 
 def enc(e):
-    """Inverse of the entry codec's digit map (skips '\\' and ')')."""
-    d = e + (e >= 5)
-    d += d >= 57
-    return chr(35 + d)
+    """Inverse of the entry codec's digit map (one gap, over the backslash)."""
+    return chr(35 + e + (35 + e >= 92))
 
 
 p = argparse.ArgumentParser()
@@ -56,6 +60,6 @@ trits = [0 if rng.random() < args.zeros else rng.choice((-1, 1))
 for i in range(0, len(trits), 4):
     digits.append(sum((trits[i + j] + 1) * 3 ** j for j in range(4)))
 
-s = "".join(enc(d) for d in reversed(digits))         # first char = MSB
+s = "".join(enc(d) for d in digits)                   # first char = LSB
 assert "\\" not in s and '"' not in s
 print(s)
