@@ -25135,3 +25135,102 @@ book while a known-good one sat beside it. That is the lesson worth keeping:
 *a finding that produces an artifact but not a gate will be re-discovered by
 whoever is unlucky enough to draw the bad line.* The gate now lives in the
 launcher, so the propagation cannot fail again the same way.
+
+## VERDICT — rr_confirm11b: the program's first CONTINUE is **REFUTED** on clean instruments (2026-08-19)
+
+1,212/1,212 games, **zero illegal moves**, book gate PASS on the cleaned book,
+01:01:13. The instrument that voided last time ran clean this time. (Game
+1210's "PV continues after fifty-move rule" lines are cosmetic fastchess notes
+on a legal draw — not an incident, recorded so nobody re-opens them.)
+
+Cells computed from `rr_confirm11b.pgn`, n=202 per pairing, **not** from the
+pooled table:
+
+| arm | vs `entryd0` | W–L–D | 95% CI | Elo |
+|---|---|---|---|---|
+| capn5 (drift anchor) | 35.89% | 61–118–23 | [29.28, 42.51] | −100.8 |
+| arm15 (pb2, l1 2e-3) | 32.43% | 53–124–25 | [25.97, 38.88] | −127.6 |
+| **arm11 (pb2, l1 5e-4)** | **25.74%** | **42–140–20** | **[19.71, 31.77]** | **−184.0** |
+
+### Bar by bar, exactly as registered at `3f875f5`
+
+| # | bar, as written | measured | verdict |
+|---|---|---|---|
+| 1 | PRIMARY: arm11 95% CI **lower bound > 36.0%** | CI = **[19.71, 31.77]** — the whole interval sits below the bar | **FAIL** |
+| 2 | DRIFT-ANCHORED: (arm11 − capn5) **≥ +10.0 pts** | **−10.15 pts** [−19.10, −1.20] | **FAIL** |
+| 3 | COHERENCE (gating) | precondition did not arise — arm11 did not tie the entry. Substantively the pattern **replicated**: arm11 is last of four, below capn5 (48.6% vs 39.4% pooled), losing to arm15 (47.77%) and capn5 (44.55%) | **anchor cell REFUTED** |
+| 4 | NULL if drift-anchored **≤ 0** | −10.15 ≤ 0 | **NULL FIRES** |
+
+**All four read the same way. The screen's 50.00% was anchor noise.**
+
+### The screen-to-confirmation delta is the largest this program has recorded
+
+| | screen (n=54) | confirmation (n=202) | delta |
+|---|---|---|---|
+| arm11 vs `entryd0` | **50.00%** | **25.74%** | **−24.26 points** |
+
+Byte-identical engines. The prior record was ARM 10's 34.00% → 17.00%
+(−17 points), and the ledger's note on it — *"worth remembering next time an
+anchor cell disagrees with three intra-family cells"* — was quoted in the
+screen writeup **before** this tournament ran. It has now been paid out at
+half again the size. **The intra-family cells were the reliable half, exactly
+as predicted, and the anchor cell was the outlier, exactly as predicted.**
+
+The drift anchor did its job in both directions: capn5 read 38.89% in the
+screen and 35.89% here, against a 29.79% history — so both tournaments ran
+loose, and correcting for it never rescued arm11 (drift-corrected 40.9% then,
+19.6% now).
+
+### What this establishes, stated narrowly
+
+- **Phase buckets do not convert.** Two sparsities, both in or below the
+  22–36% band that nine prior mechanisms produced: arm15 32.43%, arm11 25.74%.
+  arm11 is the *worst* of the two despite the better val (0.01557 vs 0.01563),
+  which is the **sixth** statistic in this program to order arms the opposite
+  way from play.
+- **The representation genuinely changed and it still did not matter.** This
+  is not a case of a mechanism that never fired: the root-freeze gate measured
+  the two bucket tables at **79–165 cp apart**, agreeing exactly on 1% of
+  positions, and val improved −2.4% relative. The family learned something the
+  king-blind control could not express, and play was unmoved.
+- **No byte, speed or gate problem is implicated.** All arms fit (3,663–4,057 B),
+  the buckets are free at runtime (0.949–0.984× the B=1 carrier), export is
+  bit-exact 200/200, and every legality gate passed.
+
+## PROPOSAL for cohort 2 — one cell, then close the axis (nothing launched)
+
+**I am withdrawing my own registered follow-up.** The kb2 live-bucket arm was
+funded on the reasoning that root-freezing costs ~99 cp conditionally and the
+live variant recovers it for ≈1.2 Elo. That was worth doing against a
+plausible ~0 Elo gap. Against the gap actually measured — **kb2 at 29.63%,
+about −150 Elo** — recovering 1.2 Elo is not a candidate for anything, and
+building it would be engine work spent to move a number by under 1% of its
+distance to the bar. **Do not build it.**
+
+What is genuinely unfinished is smaller and cheaper: **kb2 has only ever been
+measured at n=54.** pb2 got a 202/pair confirmation and failed it; king
+buckets deserve the same instrument before the axis closes on them, or the
+closure rests on the same 54-game cell size that just produced a 24-point
+error.
+
+> **Proposed registration — `rr_kb_close`:** `entryd0` + `capn5` + `arm12`
+> (kb2, l1 5e-4) + `arm16` (kb2, l1 2e-3), 4 engines, 101 rounds, **1,212
+> games, 202/pair**, fixed nodes, clean book. Bars identical to
+> `rr_confirm11b` — CI-LB > 36.0%, drift-anchored ≥ +10.0. **Explicitly a
+> closing instrument, not a hopeful one:** the registered expectation is that
+> both land in the band, and if they do, **INPUT CONDITIONING CLOSES for the
+> packed family** on the same terms the objective axis closed — eleven
+> mechanisms, zero conversions.
+
+Not launched: the box is carrying the tuner fleets and this is a decision for
+the coordinator, not a slot to grab. If the answer is instead "close it now on
+the evidence in hand", that is defensible too — pb2 failed a properly powered
+test and kb2's 54-game cell was already inside the band — and it costs one
+tournament less.
+
+**The honest headline for the +400 accounting: the eval axis produced no
+conversion again, and the entry's hand-built machinery still stands
+unbeaten.** What this cohort added is not Elo; it is that the packed family
+can now *express* king- and phase-conditioned evaluation — buckets ship, cost
+nothing at runtime, and are bit-exact — and that expressing it was not the
+missing ingredient.
