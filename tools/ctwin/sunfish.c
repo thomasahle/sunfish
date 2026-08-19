@@ -83,7 +83,7 @@ static int PST_Q = 100, PST_K = 100, PST_KE = 100;
 static long TABLE_SIZE = 1000000;
 static int NULL_MIN_DEPTH = 2;   /* null move when depth > this */
 static int NULL_LIMIT = 750;     /* |score| bound for shallow null and LMR */
-static int NULL_CUT_RED = 3;     /* shallow null-candidate reduction */
+static int NULL_CUT_RED = 4;     /* shallow null-candidate reduction */
 static int IID_MIN_DEPTH = 99;   /* tuned off; retained as a lab knob */
 static int IID_RED = 3;          /* IID depth reduction */
 static int FUT_MAX = 1;          /* futility pruning when depth <= this */
@@ -788,6 +788,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
             Pos rp = rotate(pos, 1);
             int s = -bound(&rp, 1 - gamma, depth - NULL_CUT_RED, 0, 0);
             if (s < score) score = s;
+            if (score < 1 - MATE_LOWER) score = 1 - MATE_LOWER;
         }
         Move proof = nomove;
         int have_proof = score >= gamma && king_capture(pos, &proof);

@@ -453,7 +453,7 @@ class Searcher:
                 # A king capture substitutes the exact MATE_UPPER for a virtual
                 # fail-high - and hands the store below its witness.
                 if (cap := pos.score + EVAL_ROUGHNESS) >= gamma:
-                    score = min(cap, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
+                    score = max(1 - MATE_LOWER, min(cap, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 4)))
                     if score >= gamma and (proof := pos.king_capture()):
                         move, score, live = proof, MATE_UPPER, True
                 else:

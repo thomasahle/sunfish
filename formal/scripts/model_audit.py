@@ -46,7 +46,7 @@ EXPECTED = {
     "Position.move": "69bb2460cd611c9e",
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "11d52eaa8a661352",
-    "Searcher.bound": "97721dd0033b5cb9",
+    "Searcher.bound": "049709f223bca420",
     "Searcher.search": "089a324cf1028953",
     "constants": "b5a8160608fcab1e",
 }
@@ -100,7 +100,7 @@ ANCHORS = [
     "guard = not root and abs(pos.score) < 750 and any(c in pos.board for c in \"RBNQ\")",
     "if 2 < depth < 6 and guard:",
     "if (cap := pos.score + EVAL_ROUGHNESS) >= gamma:",
-    "score = min(cap, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))",
+    "score = max(1 - MATE_LOWER, min(cap, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 4)))",
     "if score >= gamma and (proof := pos.king_capture()):",
     "move, score, live = proof, MATE_UPPER, True",
     "if killer and ((val := pos.value(killer)) >= QS or depth) and (val >= MATE_LOWER or depth > 3",

@@ -81,16 +81,14 @@ as a mate in `n + 1`, and `n + 1` is EVEN because `n` is odd -- so
 `forcedMate_odd_le` hands the ply straight back, exactly as it does on
 the attacker side.
 
-**The `3` in the null reduction is load-bearing here.**  Parity is
-preserved along every path because both of the search's depth steps are
-odd: a real move spends one ply of depth per negation, and the null
-option spends three (`nullValueD2`'s `d + 1 - 3`) per negation.  An even
-null reduction would let a single line reach a mate value of the wrong
-rung parity and the separation argument would collapse to a gap of
-`EVAL_ROUGHNESS`, exactly the width the driver cannot resolve.  Nothing
-in this file mentions the null term -- the parity lives in `ForcedMate`,
-whose `step` constructor is two plies -- but a change to that constant
-is a change to this theorem.
+**Null edges do not carry production mate rungs.**  The theorem below is
+stated for `nullValueD2`, whose recursive presentation uses an odd null
+step.  The shipped fuel recurrence instead probes at `depth - 4`, but its
+`nullClamp` lies strictly between both mate bands
+(`nullClamp_in_scoreBand`).  Consequently a mate-band witness in that
+recurrence comes from a real move or an exact king capture, never from an
+even null edge.  Transporting this file's distance conclusion to the
+executable therefore uses mate-band exclusion, not parity of the null probe.
 -/
 
 import Sunfish.Liveness

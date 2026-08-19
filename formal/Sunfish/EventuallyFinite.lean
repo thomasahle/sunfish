@@ -93,8 +93,8 @@ it, by countermodel.  The four design items:
    never returns a score: `fuelValueD2` contains only real moves and
    models every fixed reduction through the abstract selector `spend`.
    Its worst case is priced into `D0 = C*N + C + 6` (every edge at full
-   spend). The sub-horizon pass at depths 3..5 sits strictly below the
-   induction's invariant and is unreachable. Thus the correctness
+   spend). The sub-horizon pass at depths 3..5, probed at depth at most
+   one, sits strictly below the induction's invariant and is unreachable. Thus the correctness
    argument needs frontier-freedom only on the real-move tree, exactly
    what the finite budget supplies.
 

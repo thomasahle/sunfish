@@ -111,9 +111,9 @@ class TestCappedNullMove:
     """The old mate-band null semantics needed a second boundary probe.
 
     This position exercises the rare case where that probe vetoed the pass.
-    The monotone replacement declares the null option to be the smaller of
-    the pass value and static evaluation plus one MTD score bucket, so the
-    first child report is sufficient and the result is the static cap.
+    The monotone replacement clamps the pass between the negative mate edge
+    and static evaluation plus one MTD score bucket, so one child report is
+    sufficient and no virtual null result can enter either mate band.
 
     Probed at depth 5: the pass is a score candidate only on `2 < depth < 6`.
     From depth 6 onward only real moves contribute to the score.
@@ -135,7 +135,7 @@ class TestCappedNullMove:
 
         def observed(pos, gamma, depth, root=False):
             calls.append((gamma, depth, root))
-            if pos == nullpos and gamma == 1 and depth == 2:
+            if pos == nullpos and gamma == 1 and depth == 1:
                 return -sf.MATE_LOWER
             return bound(pos, gamma, depth, root)
 
@@ -143,7 +143,22 @@ class TestCappedNullMove:
         score = bound(pos, 0, 5)
 
         assert score == pos.score + sf.EVAL_ROUGHNESS == 409
+        assert (1, 1, False) in calls
         assert not any(gamma == 1 - sf.MATE_LOWER for gamma, _, _ in calls)
+
+    def test_negative_mate_pass_is_floored_outside_the_band(self):
+        pos = hist_from_fen(self.FEN)[-1]
+        searcher = sf.Searcher()
+        searcher.root, searcher.history = pos, set()
+        bound, nullpos = searcher.bound, pos.rotate(nullmove=True)
+
+        def observed(p, gamma, depth, root=False):
+            if p == nullpos and gamma == sf.MATE_LOWER and depth == 1:
+                return sf.MATE_UPPER
+            return bound(p, gamma, depth, root)
+
+        searcher.bound = observed
+        assert bound(pos, 1 - sf.MATE_LOWER, 5) == 1 - sf.MATE_LOWER
 
 
 class TestNullHorizon:

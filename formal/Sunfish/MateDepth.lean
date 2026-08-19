@@ -73,9 +73,8 @@ theorem forcedMate_leaf_fuelValueD2 (G : QSGame) (guard : G.Pos → Bool)
             ≤ foldMax (fun x => -(fuelValueD2 G guard C spend d x))
                 (movesAbove G (val_lower (d + 1)) p)
                 (if guard p = true ∧ 2 < d + 1 then
-                  (if -(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
-                    max LOSS (-(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)))
-                  else LOSS)
+                  nullClamp (G.eval p)
+                    (-(fuelValueD2 G guard C spend (d + 1 - 4) (G.pass p)))
                 else LOSS) :=
           foldMax_le_of_mem _ _ _ _ hmem
         omega
@@ -402,9 +401,8 @@ theorem forcedMate_fuelValueD2_noSubPass (G : QSGame) (guard : G.Pos → Bool)
                 ≤ foldMax (fun x => -(fuelValueD2 G guard C spend d x))
                     (movesAbove G (val_lower (d + 1)) p)
                     (if guard p = true ∧ 2 < d + 1 then
-                      (if -(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
-                        max LOSS (-(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)))
-                      else LOSS)
+                      nullClamp (G.eval p)
+                        (-(fuelValueD2 G guard C spend (d + 1 - 4) (G.pass p)))
                     else LOSS) :=
               foldMax_le_of_mem _ _ _ _ hmem
             omega
@@ -586,9 +584,8 @@ def fuelValueD2C (G : QSGame) (guard : G.Pos → Bool) (C : Nat)
       foldMax (fun m => capClamp G p (d + 1) m (-(fuelValueD2C G guard C spend d m)))
         (movesAbove G (val_lower (d + 1)) p)
         (if guard p = true ∧ 2 < d + 1 then
-          (if -(fuelValueD2C G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
-            max LOSS (-(fuelValueD2C G guard C spend (d + 1 - 3) (G.pass p)))
-          else LOSS)
+          nullClamp (G.eval p)
+            (-(fuelValueD2C G guard C spend (d + 1 - 4) (G.pass p)))
         else LOSS)
     else
       foldMax (fun m => capClamp G p (d + 1) m (-(fuelValueD2C G guard C spend
@@ -649,9 +646,8 @@ theorem fuelValueD2C_of_fold_sub (G : QSGame) (guard : G.Pos → Bool)
       = foldMax (fun m => capClamp G p (d + 1) m (-(fuelValueD2C G guard C spend d m)))
           (movesAbove G (val_lower (d + 1)) p)
           (if guard p = true ∧ 2 < d + 1 then
-            (if -(fuelValueD2C G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
-              max LOSS (-(fuelValueD2C G guard C spend (d + 1 - 3) (G.pass p)))
-            else LOSS)
+            nullClamp (G.eval p)
+              (-(fuelValueD2C G guard C spend (d + 1 - 4) (G.pass p)))
           else LOSS) := by
   simp only [fuelValueD2C]
   rw [if_neg hkg, if_neg hcap, if_neg (by simp [hai]), if_pos (by omega)]
@@ -715,9 +711,8 @@ theorem forcedMate_leaf_fuelValueD2C (G : QSGame) (guard : G.Pos → Bool)
             ≤ foldMax (fun x => capClamp G p (d + 1) x (-(fuelValueD2C G guard C spend d x)))
                 (movesAbove G (val_lower (d + 1)) p)
                 (if guard p = true ∧ 2 < d + 1 then
-                  (if -(fuelValueD2C G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
-                    max LOSS (-(fuelValueD2C G guard C spend (d + 1 - 3) (G.pass p)))
-                  else LOSS)
+                  nullClamp (G.eval p)
+                    (-(fuelValueD2C G guard C spend (d + 1 - 4) (G.pass p)))
                 else LOSS) :=
           foldMax_le_of_mem _ _ _ _ hmem
         rw [hcl] at hfold
@@ -986,19 +981,15 @@ defender's fold seeded at 0 instead of `LOSS`.  This is the masking
 channel, in one equation. -/
 theorem sub_seed_of_pass_zero (G : QSGame) (guard : G.Pos → Bool) (C : Nat)
     (spend : G.Pos → Nat → G.Pos → Nat) (d : Nat) (p : G.Pos)
-    (hg : guard p = true) (h2 : 2 < d + 1)
-    (hpass : fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p) = 0) :
+    (hg : guard p = true) (h2 : 2 < d + 1) (hnonneg : 0 ≤ G.eval p + EVAL_ROUGHNESS)
+    (hpass : fuelValueD2 G guard C spend (d + 1 - 4) (G.pass p) = 0) :
     (if guard p = true ∧ 2 < d + 1 then
-      (if -(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
-        max LOSS (-(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)))
-      else LOSS)
+      nullClamp (G.eval p) (-(fuelValueD2 G guard C spend (d + 1 - 4) (G.pass p)))
     else LOSS) = 0 := by
-  have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
-  have hLOSS : LOSS = -MATE_UPPER := rfl
   rw [if_pos (And.intro hg h2), hpass]
-  rw [if_pos (show -(0 : Int) < MATE_LOWER by omega)]
-  omega
+  simp only [nullClamp, Int.max_def, Int.min_def]
+  split <;> split <;> split <;> omega
 
 /-- The pass target is worth 0 at every positive depth: moveless, hence
 `allIllegalB`, and not in check, hence the terminal correction's draw. -/
@@ -1022,14 +1013,15 @@ theorem sharp_D1_5 : fuelValueD2 MDG mdGuard 3 mdSpend 5 MDPos.D1 = 0 := by
   have hML : MATE_LOWER = 47923 := rfl
   have hma : movesAbove MDG (val_lower 5) MDPos.D1 = [MDPos.A0] :=
     movesAbove_all MDG 5 MDPos.D1 (by decide)
-  have hpassZ : fuelValueD2 MDG mdGuard 3 mdSpend (4 + 1 - 3) (MDG.pass MDPos.D1) = 0 :=
-    sharp_ZP 1
+  have hpassZ : fuelValueD2 MDG mdGuard 3 mdSpend (4 + 1 - 4) (MDG.pass MDPos.D1) = 0 :=
+    sharp_ZP 0
   have hA0 := sharp_A0_4
   rw [show (5 : Nat) = 4 + 1 from rfl,
     fuelValueD2_of_fold_sub MDG mdGuard 3 mdSpend 4 MDPos.D1
       (by decide) (by decide) (by decide) (by omega),
     hma,
-    sub_seed_of_pass_zero MDG mdGuard 3 mdSpend 4 MDPos.D1 (by decide) (by omega) hpassZ]
+    sub_seed_of_pass_zero MDG mdGuard 3 mdSpend 4 MDPos.D1
+      (by decide) (by omega) (by decide) hpassZ]
   simp only [foldMax]
   omega
 
@@ -1132,17 +1124,21 @@ theorem sharp_cap_ZP0 (g : MDPos → Bool) : fuelValueD2C MDG g 3 mdSpend 0 MDPo
 one ply below is clamped to the static cap. -/
 theorem sharp_cap_A0_3 (g : MDPos → Bool) : fuelValueD2C MDG g 3 mdSpend 3 MDPos.A0 ≤ 280 := by
   have hMU : MATE_UPPER = 69290 := rfl
-  have hML : MATE_LOWER = 47923 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
   have hma : movesAbove MDG (val_lower 3) MDPos.A0 = [MDPos.LF] :=
     movesAbove_all MDG 3 MDPos.A0 (by decide)
-  have hZ : fuelValueD2C MDG g 3 mdSpend (2 + 1 - 3) (MDG.pass MDPos.A0) = 0 :=
+  have hZ : fuelValueD2C MDG g 3 mdSpend (2 + 1 - 4) (MDG.pass MDPos.A0) = 0 :=
     sharp_cap_ZP0 g
   rw [show (3 : Nat) = 2 + 1 from rfl,
     fuelValueD2C_of_fold_sub MDG g 3 mdSpend 2 MDPos.A0
       (by decide) (by decide) (by decide) (by omega),
     hma, hZ]
-  refine foldMax_le _ _ _ (fun m hm => ?_) (by split <;> (try split) <;> omega)
+  have hnull : nullClamp (MDG.eval MDPos.A0) 0 = 0 := by native_decide
+  refine foldMax_le _ _ _ (fun m hm => ?_) (by
+    split
+    · have h : nullClamp (MDG.eval MDPos.A0) 0 ≤ 280 := by rw [hnull]; omega
+      simpa using h
+    · omega)
   have hm' : m = MDPos.LF := by simpa using hm
   subst hm'
   have hcap : capClamp MDG MDPos.A0 (2 + 1) MDPos.LF

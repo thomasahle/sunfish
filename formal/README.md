@@ -36,19 +36,20 @@ passing and let
 
 ```text
 C(pos) = pos.score + EVAL_ROUGHNESS
-N(pos) = min(C(pos), P)
+N(pos) = max(1 - MATE_LOWER, min(C(pos), P))
 ```
 
 If `C(pos) < gamma`, the Python search reports the cap without probing the
 child. Otherwise it obtains a one-sided report `r` for `P` at the
-complementary zero window and reports `min(C(pos), r)`.
+complementary zero window and reports `max(1 - MATE_LOWER, min(C(pos), r))`.
 
 `Sunfish/CappedNull.lean` proves the local report algebra:
 
 - `WindowReport.negate` transfers the child report to the parent window.
-- `WindowReport.cap_failLow` justifies the lazy sub-window cap.
-- `WindowReport.cap` transports a report through `min(C, ·)`.
-- `cappedNull_report` composes those facts for the Python expression.
+- `WindowReport.cap` and `WindowReport.floor` transport reports through the
+  fixed `min` and `max` operations.
+- `clampedNull_report` composes those facts for the searched Python branch.
+- `clampedNull_cap_failLow` justifies returning the static cap lazily.
 
 The production guard is equivalent to:
 
@@ -60,10 +61,13 @@ if 2 < depth < 6 and safe:
 
 Thus a pass is a score candidate only at depths three through five. From depth
 six onward the declared value contains only real moves. With
-`EVAL_ROUGHNESS = 15`, `EvalBounds.lean` proves the null cap remains below
-the positive mate band. The remaining chess-strength premise is that the
-capped pass does not exceed the best legal real move; it is separate from the
-fail-soft report proof.
+`EVAL_ROUGHNESS = 15`, `EvalBounds.lean` proves the static cap is inside the
+mate bands. The lower clamp then makes every virtual null contribution an
+ordinary score, independently of the reduced pass result. The pass child is
+searched at `depth - 4`; its parity is irrelevant to mate scores because a
+virtual null cannot contribute either mate band. The remaining chess-strength
+premise is that the clamped pass does not exceed the best legal real move; it
+is separate from the fail-soft report proof.
 
 ## Intrinsic LMR and bounded edge cost
 
@@ -439,15 +443,11 @@ true, and it is true only because achievable distances have a fixed parity.
 At one point per ply the gap is 2 against a tolerance of 15 and the shipped
 driver can take the slower mate.
 
-**An odd null reduction is load-bearing for this.**  Parity survives along
-every path because both depth steps are odd: a real move spends one ply per
-negation, and the current null probe spends seven. The generic model uses
-three as the smallest nontrivial representative. An even reduction would let
-one line reach a mate value of the
-wrong rung parity, collapsing the separation gap to `EVAL_ROUGHNESS` -- exactly
-the width the driver cannot resolve.  No proof here mentions the null term (the
-parity lives in `ForcedMate`, whose `step` is two plies), but a change to that
-constant is a change to this theorem.
+The production null probe may spend an even four plies without entering this
+parity argument. `nullClamp_in_scoreBand` proves that its virtual contribution
+is strictly outside both mate bands, so a mate rung is carried only by real
+moves or an exact king capture. Therefore the shipped fuel recurrence needs
+parity only along real-move edges.
 
 | fact | theorem | axioms |
 |---|---|---|
