@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "date": "2026-08-18",
+  "original_protocol_sha256": "7b68e2ee36115d9b5e09d7438ec70ab81849158ee2b0b4109654533c37a919a0",
+  "change": {
+    "method": "spsa-r02",
+    "old_r_end": 0.0006848726892807821,
+    "new_r_end": 0.02,
+    "pairs_per_step": 1
+  },
+  "reason": [
+    "The automatic Fishtest-derived schedule barely moved any degraded start and did not recover Elo.",
+    "The replacement schedule was selected from update-size diagnostics, not from held-out match results.",
+    "All three replacement trajectories restarted from their declared degraded points."
+  ],
+  "hygiene": [
+    "An accidental duplicate launch contaminated the first replacement attempt.",
+    "Those games and states were archived and excluded before clean trajectories restarted.",
+    "The clean runs retain the original engine, spaces, seeds, openings, time control, and game budget.",
+    "Results are reported as a follow-up method, not as the preregistered SPSA arm."
+  ]
+}

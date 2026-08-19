@@ -9,8 +9,9 @@ single practical question:
 
 > Starting from deliberately damaged search parameters, how much playing strength can a method recover per game?
 
-This is a first report. The 200-game pilot is complete; the preregistered 1,000-game, three-start experiment and the
-logistic-GP follow-up are still running or awaiting held-out validation. Results below are dated 2026-08-18.
+This is a first report. The 200-game pilot and the full three-start Chess Tuning Tools trajectory are complete. A
+corrected SPSA trajectory has independent results through 400 training games; its 700- and 1,000-game checkpoints
+are still running. Results below are dated 2026-08-19.
 
 ## The experiment
 
@@ -168,34 +169,74 @@ the live 50-pair candidate set, with correlation 0.99984. Sparse approximation w
 
 ## Logistic-GP follow-up
 
-Three 200-game training trajectories have completed and await common held-out validation:
+The four 200-game follow-ups have now been measured on the common held-out block. Recovery is relative to start 23,
+which measured `-98.07 +/- 45.41` Elo:
 
-| Arm | Initial design | Kernel / likelihood | Acquisition change |
-| --- | --- | --- | --- |
-| Axis | Local axis stencil | Original | Otherwise unchanged |
-| V2 | Local axis stencil | Additive, 1.7x length, pair weight 1 | Less explicit exploration |
-| V3 | V2 | V2 | Learn a fixed-opponent intercept after the stencil |
+| Arm | Held-out Elo | Recovered | Result |
+| --- | ---: | ---: | --- |
+| Original model with axis design | `-161.92 +/- 48.96` | `-63.85` | Worse |
+| Additive V2 model | `-115.23 +/- 44.47` | `-17.16` | No recovery |
+| V3 with a frozen learned intercept | `-68.63 +/- 42.32` | `+29.44` | Some recovery |
+| V3 with played-point local acquisition | `-81.37 +/- 45.40` | `+16.70` | Some recovery |
 
-A fourth arm measures the played-point trust region described above. Its synthetic result is already negative, but
-the live trajectory remains useful for checking whether the simplified model reproduces actual optimizer behavior.
-Until validation is complete, training scores and posterior estimates are debugging signals only—not Elo results.
+Learning a fixed intercept repaired the most damaging prior error. Constraining acquisition to played one-coordinate
+steps did not improve it further. None of the GP arms matched the recovery later obtained by SPSA, so the remaining
+problem is not sparse inference or the exact acquisition optimizer. It is how evidence is allocated under extreme
+game noise.
 
 ## Larger recovery study
 
-The preregistered study uses three independently degraded starts and 1,000 training games per method and start.
-Checkpoint incumbents are extracted at 0, 100, 200, 400, 700, and 1,000 games and validated on a common unseen
-opening block.
+The study uses three independently degraded starts and extracts recommendations at 0, 100, 200, 400, 700, and
+1,000 training games. Every point below is then measured on the same 100 unseen color-swapped opening pairs.
 
-As of this draft:
+![Held-out optimizer recovery across three degraded starts][recovery-curve]
 
-- Chess Tuning Tools had consumed 856, 864, and 598 games across the three starts;
-- SPSA had consumed 772, 790, and 802 games;
-- the three logistic-GP diagnostic arms had each completed 200 games on start 23; and
-- common held-out validation and the remaining long optimizer trajectories were pending.
+[recovery-curve]: ../../tuning-results/recovery-1000/optimizer-recovery-partial.svg
 
-The frozen protocol is in [`protocol.json`](../../tuning-results/recovery-1000/protocol.json), with corrections in
-[`protocol-amendment-1.json`](../../tuning-results/recovery-1000/protocol-amendment-1.json). The primary result will
-be mean held-out recovery at 1,000 games across starts; normalized area under the recovery curve is secondary.
+Faint lines are individual starts; heavy lines are the three-start means. The SPSA 100-, 700-, and 1,000-game points
+are absent because those validations are not complete yet.
+
+| Training games | CTT mean recovery | SPSA mean recovery |
+| ---: | ---: | ---: |
+| 100 | `+15.68 +/- 48.47` | pending |
+| 200 | `+41.99 +/- 59.14` | `+69.75 +/- 65.07` |
+| 400 | `+8.24 +/- 75.82` | `+105.86 +/- 38.34` |
+| 700 | `+61.57 +/- 73.28` | pending |
+| 1,000 | `+69.96 +/- 80.86` | pending |
+
+At 400 games, comparing the two methods on the shared held-out openings gives SPSA minus CTT of
+`+97.62 +/- 59.85` Elo. That paired 95% interval excludes zero and passes the study's method-difference rule.
+
+### CTT's confidence problem
+
+CTT evaluated 500 distinct configurations per start and repeated none: one color-swapped pair per configuration.
+Its internal recommendation estimates became much narrower than the recommendations' held-out behavior:
+
+![CTT internal recommendation estimates against held-out Elo][ctt-calibration]
+
+[ctt-calibration]: ../../tuning-results/recovery-1000/ctt-calibration.svg
+
+Across the 15 checkpoints, held-out Elo minus the internal point estimate averaged `-41.98` Elo, with `58.46` Elo
+RMS residual. A confidence penalty did not help because posterior uncertainty was almost flat near each optimum.
+Restricting the final recommendation to the highest-posterior configuration that had actually been played also
+failed its first diagnostic: on start 15 it scored `-52.51 +/- 42.53`, versus `-12.17 +/- 43.72` for CTT's ordinary
+synthetic optimum.
+
+The better hypothesis is allocation. The optimizer needs to reserve games to race a few finalists instead of
+expecting a smooth posterior over hundreds of one-pair points to validate its own maximizer. A CTT arm with two pairs
+per point is running on the difficult start 23; an adaptive finalist race is the more promising follow-up.
+
+### The SPSA correction
+
+The automatically derived SPSA schedule used `r_end = 0.0006849` and barely moved the degraded parameters. The
+clean follow-up uses one pair per update and `r_end = 0.02`. This value was chosen from update-size diagnostics, not
+held-out match results. It is therefore reported as `spsa-r02`, not silently substituted for the original arm.
+
+The frozen protocol is in [`protocol.json`](../../tuning-results/recovery-1000/protocol.json). Corrections and the
+SPSA follow-up are recorded in
+[`protocol-amendment-1.json`](../../tuning-results/recovery-1000/protocol-amendment-1.json) and
+[`protocol-amendment-2.json`](../../tuning-results/recovery-1000/protocol-amendment-2.json). The primary full-horizon
+result remains mean held-out recovery at 1,000 games; normalized area under the recovery curve is secondary.
 
 ## A separate parameter screen
 
@@ -243,13 +284,15 @@ may be created as root-owned mode-600 files and become unreadable to the host-si
 
 The defensible conclusions are deliberately modest:
 
-1. Held-out paired games are essential; internal optimizer scores are not a common metric.
-2. The pilot is underpowered, but CTT and SPSA earned continued testing.
-3. Our first logistic GP spent too many games covering distant configurations and had an optimistic unknown-region
-   prior.
-4. Kernel calibration and local acquisition are insufficient by themselves. The remaining problem is allocation:
-   the tuner needs to revisit uncertain incumbents or compare nearby configurations directly before composing them.
-5. No method has yet won the preregistered comparison.
+1. Held-out paired games are essential. CTT's narrow internal confidence did not predict recommendation accuracy.
+2. The original logistic GP spent too many games covering distant configurations and had an optimistic
+   unknown-region prior. Fixing those defects helped, but did not make it competitive.
+3. On this local 12-parameter recovery problem, corrected one-pair SPSA is the current winner. It recovered about
+   106 Elo by 400 games and beat CTT's recommendation by about 98 Elo at the same budget.
+4. CTT still recovered about 70 Elo by 1,000 games, but its curve was unstable and start-dependent. A finalist race
+   is a better next experiment than another confidence multiplier.
+5. The SPSA 700- and 1,000-game results, repeated-point CTT arm, and fresh confirmation remain pending. The current
+   result supports a production tuning trial; it is not yet the final optimizer comparison.
 
-The final article will replace the progress section with three-start held-out learning curves and will compare
-recovery per game, wall time, parallel efficiency, and implementation complexity.
+The final article will replace the partial curve and add recovery per game, wall time, parallel efficiency, and
+implementation complexity.

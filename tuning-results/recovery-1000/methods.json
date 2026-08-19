@@ -37,6 +37,17 @@
     "precision": 0.5,
     "iterations": 500
   },
+  "spsa-r02": {
+    "training": "symmetric perturbation versus symmetric perturbation",
+    "pairs_per_step": 1,
+    "a_ratio": 0.1,
+    "alpha": 0.602,
+    "gamma": 0.101,
+    "c_ratio": 0.16666666666666666,
+    "r_end": 0.02,
+    "iterations": 500,
+    "status": "follow-up after the automatic schedule moved too little"
+  },
   "rbfopt": {
     "training": "candidate versus fixed master",
     "algorithm": "MSRSM",
