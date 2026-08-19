@@ -24955,3 +24955,95 @@ is ≈ **58% vs `entryd0`** — and that is exactly where the registered WIN bar
 net that has *caught the entry's evaluation* and still loses a timed game by
 about 59 Elo. That is a real result about eval and it is not yet a shippable
 engine, and the two must not be reported as one thing.
+
+## VOID — rr_confirm11, 1,212 games unharvested. VERDICT: HARNESS (the BOOK), not the artifact (2026-08-19)
+
+The registered zero-tolerance condition fired: 1,212/1,212 games played, 0 time
+forfeits, all four legality gates PASS, and **one illegal move**. The
+tournament is void. **The registration survives; the games do not.** The gate
+working is the good news here.
+
+### The event
+
+`[Round "211"] [White "capn5"] [Black "entryd0"]`, from book position
+`r1bq1rk1/ppp1bppp/3p1n2/4p3/4P3/1BNP4/PPP1QPPP/R1B2RK1 w Qq - 0 10`, move 24:
+**`Black makes an illegal move: e8d7`** — a king move from a square that is
+empty.
+
+### The cause, found in the FEN itself
+
+Read the book position: `r1bq1rk1` puts the black king on **g8** (castled
+short, e8 empty) and `R1B2RK1` puts the white king on **g1** — while the
+castling field says **`Qq`**, i.e. *both sides retain queenside castling
+rights*. **Both kings have castled short and both queenside rights are still
+set. The position is impossible.**
+
+Move 20 in that game is the tell: `20. Ra4  O-O-O` — **Black castled
+queenside with its king already on g8.**
+
+### The mechanism, reproduced on the entry both ways
+
+Same position, same 21-ply prefix, one character changed:
+
+| starting FEN castling field | entry's reply |
+|---|---|
+| `Qq` (the book's, impossible) | **`g8e8`** — the phantom castle |
+| `-` (the same board, honest rights) | **`f7f8`** — a normal legal move |
+
+The chain: the engine trusts the castling flags (**every engine in this field
+does**) and emits its queenside castle as the two-square king move `g8e8`;
+**fastchess reads a two-square king move as castling** and places the king on
+c8; the engine's own board has it on e8. The boards diverge at move 20. Four
+moves later the engine moves a king from e8, and the zero-tolerance check
+fires — **on a correct engine that was handed an impossible position.** The
+log corroborates the desync from both sides: `Illegal PV move e8d7`/`e7d8`
+from entryd0 and `f8g8` from capn5, all referencing an uncastled king in a
+game where the king had castled.
+
+### The book is contaminated, and it is not one bad line
+
+`book_gate.py` scans castling rights against king/rook placement:
+**9 of 2,000 positions (0.45%) are impossible** — and **two of them
+(lines 290, 878) are CHESS960 START POSITIONS** (`nnbbrkrq/…  w KQkq`) sitting
+in a standard-chess book, which is the provenance clue for the rest.
+
+### Why rr_cohort1 survived it, and this is NOT a difference in kind
+
+`order=random` samples the whole 2,000-line book, so "27 consumed" and "101
+consumed" are draws, not prefixes. At a 0.45% corruption rate:
+P(no corrupt opening) ≈ **88%** at 27 draws and ≈ **64%** at 101.
+**`rr_cohort1` was lucky; `rr_confirm11` was not.** The screen result is not
+"clean" in any structural sense — it drew 27 times from a poisoned book and
+missed. Any past tournament on this book had a ~12% chance per 27 openings of
+the same void, which is worth knowing about the whole `screens/` series.
+
+### VERDICT, stated plainly because the same artifact plays live
+
+**HARNESS. The artifact is exonerated, and the reproduction is the reason —
+given the corrected rights it plays a normal legal move.** No entry-side
+defect is implicated, and no byte of the artifact is changed.
+
+Scope for the live bot: the corrupt FENs exist only in this local EPD file.
+Lichess transmits real, self-consistent game state — a position with both
+kings castled and both queenside rights set cannot arise there — so this
+mechanism cannot reach the live bot. **That is a mechanism argument, not a
+measurement**, and the live journal should still be re-read for the same
+window by whoever owns that bot; I have not touched or inspected it from here.
+
+### Fix, and it is a gate rather than a resolution
+
+1. `tools/build/book_gate.py` — refuses any book with impossible castling
+   rights, and `--write` emits the cleaned file. `openings_2k_clean.epd` is
+   `openings_2k.epd` minus the 9 (1,991 positions), and it passes.
+2. `ab_roundrobin.sh` now runs the book gate **before anything else** and
+   refuses to start, in the same spirit as the coprimality gate that already
+   sits there. Cheap to check; it cost 1,212 games to learn.
+3. The arena's default `BOOK` points at the clean file, so **every lane**
+   using this script gets the fix, not just this one.
+
+### Re-run
+
+`rr_confirm11b`, **same registration, same bars, unchanged** — the void was
+the gate working, not a reason to move a goalpost. Field `entryd0` + `capn5` +
+`arm11` + `arm15`, 101 rounds, 1,212 games, 202 per pairing, fresh `-srand`,
+clean book.
