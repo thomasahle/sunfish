@@ -81,16 +81,20 @@ as a mate in `n + 1`, and `n + 1` is EVEN because `n` is odd -- so
 `forcedMate_odd_le` hands the ply straight back, exactly as it does on
 the attacker side.
 
-**The `3` in the null reduction is load-bearing here.**  Parity is
-preserved along every path because both of the search's depth steps are
-odd: a real move spends one ply of depth per negation, and the null
-option spends three (`nullValueD2`'s `d + 1 - 3`) per negation.  An even
-null reduction would let a single line reach a mate value of the wrong
-rung parity and the separation argument would collapse to a gap of
-`EVAL_ROUGHNESS`, exactly the width the driver cannot resolve.  Nothing
-in this file mentions the null term -- the parity lives in `ForcedMate`,
-whose `step` constructor is two plies -- but a change to that constant
-is a change to this theorem.
+**The `3` in the null reduction is NOT load-bearing here — that is now
+a theorem, not a hedge (`NullRed.lean`).**  This header once claimed an
+even reduction would let a line reach a mate value of the wrong rung
+parity and collapse the separation gap.  The mechanized proofs never
+consumed that: the parity lives entirely in `ForcedMate` (whose `mate`
+costs one ply and `step` two — game structure, null-free), the
+suppression keeps every pass term sub-band at every reduction, and
+under `NoZugzwang` the pass term never decides a value at all.
+`NullRed.lean` states the whole chain — completeness, the
+distance-carrying converse, block exactness, separation, and
+`dtm_optimalR` — for EVERY reduction `R`, with `R = 3` recovered as the
+shipped instance (`nullValueDR_three`) and the even cases witnessed
+(`dtm_optimal_R4`).  The one genuinely `R`-dependent object is the
+premise `NoZugzwangR R`, whose pass horizon moves with `R`.
 -/
 
 import Sunfish.Liveness
