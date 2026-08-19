@@ -25933,3 +25933,110 @@ draw the bad line*:
   (B=8) still verifies at 450 positions, worst 5,300 against its 15,480 bound.
   **The battery now gates both carriers with one invocation**, which is what
   makes the port a shelved deliverable rather than a claim.
+
+## REGISTRATION — `shrink`: the SHIFT+k shrinkage ladder, bars and the RUNG VALUES on record before game 1 (2026-08-19)
+
+Authorized by the coordinator under the memo above **as written** — parity bar,
+drift anchor, monotonicity void, and the registered expectation that all rungs
+fail. This entry exists so the ordering the void clause tests is on record
+**before** any game is played.
+
+### The ladder, measured on the arms that will play
+
+`SHIFT` is the **first base-90 digit of the packed payload literal**
+(`SHIFT = _q[0]`, read exactly once), so a rung is a **one-byte edit at offset
+5372** of `bin/e_arm12.py`: identical file length, identical search, identical
+move generator, identical every other payload digit. Built by
+`screens/bin/mkrungs.py`, which asserts the length is unchanged and that
+**exactly one byte differs**.
+
+| rung | engine | SHIFT | α = 2^−k | mean \|residual\| | p50 | p90 | p99 | max | `pack.sh` |
+|---|---|---|---|---|---|---|---|---|---|
+| base | `arm12` (kb2, l1 5e-4) | **3** | 1 | **72.60 cp** | 55 | 161 | 304 | 561 | **3,972 B** |
+| k=1 | `shift1` | **4** | ½ | **36.06 cp** | 27 | 80 | 152 | 280 | **3,972 B** |
+| k=2 | `shift2` | **5** | ¼ | **17.79 cp** | 13 | 40 | 76 | 140 | **3,971 B** |
+| k=3 | `shift3` | **6** | ⅛ | **8.66 cp** | 6 | 20 | 38 | 70 | **3,971 B** |
+| limit | `entryd0` | — | 0 | **0** (no net) | 0 | 0 | 0 | 0 | 3,440 B |
+
+n = 11,669 positions from 300 random walks, seed 20260819, identical positions
+for every rung. **`moves` generated is 359,736 for all four net rungs** — bit-identical
+move generation, which is the check that the edit touched evaluation and nothing
+else. The halvings are 2.01 / 2.03 / 2.05 rather than exactly 2 because the
+read-out truncates toward zero at each level, which is correct and is why the
+ladder is measured rather than assumed.
+
+**The memo's "0 bytes" claim is confirmed and slightly beaten: the ladder costs
+0 B at k=1 and −1 B at k=2 and k=3.** Every rung is under the 4,066 working
+limit with 94 B to spare.
+
+Independent corroboration from the search's own diagnostics on a shared
+position: the MTD-GUARD bracket upper bound reads **−18 / −9 / −4 / −2** for
+arm12 / shift1 / shift2 / shift3 — the residual halving visible in the
+bisection, not just in the read-out.
+
+### Field, and one declared deviation from the memo
+
+| knob | value |
+|---|---|
+| field | `entryd0` (anchor), `capn5` (**mandatory drift anchor**), **`arm12` (base rung)**, `shift1`, `shift2`, `shift3` |
+| engines / pairings | **6 / 15** |
+| rounds | **101** — gcd(101, 15) = 1, so each pairing sees 101 distinct openings |
+| games | **3,030**, **202 per pairing** |
+| each | `proto=uci nodes=20000 tc=6000+0`, gated clean book (`openings_2k_clean.epd`, 1,991 positions) |
+| srand | **20260901** — fresh; 20260819–20260826 and 999001 are all spent in this arena |
+| venue | conc 8, nice 5 |
+
+**DEVIATION, declared rather than discovered: the memo registered five engines
+and this is six.** `arm12` — the base rung, and the arm whose −110.2 Elo the
+whole memo argues from — is added. The reason is this ledger's own **ANCHOR
+SWING** finding: `capn5` vs `entryd0` moved **6.68 points between two n=202
+tournaments**, so a raw cell from `rr_kb_close` cannot be compared to a raw cell
+from this tournament. Without `arm12` in the field, "the rungs beat the base"
+would be exactly the cross-tournament comparison the ledger forbids. **No bar is
+changed, no bar is added, and the deviation only widens the instrument** —
+it costs 1,010 games and buys the in-tournament base cell that every rung claim
+needs. The screen registered in the memo is **dropped**: at 202/pair every cell
+here is powered, so a ranking pass would only add an unpowered cell for the
+program to be tempted by.
+
+### Bars, reused exactly from the memo
+
+1. **PRIMARY.** 95% CI **lower bound > 50.0%** vs `entryd0`, per rung. Parity,
+   not 36.0%: at 0 B and 0 nps a shrinkage rung has **no tax to pay back**, and
+   parity is precisely the statement "the residual is worth having".
+2. **DRIFT-ANCHORED.** (rung − `capn5`) vs `entryd0`, same tournament,
+   **≥ +20.0 points**. Quoted first, because it survives a loose anchor and all
+   three prior tournaments in this arena ran loose.
+3. **COHERENCE (gating).** A rung that ties or beats `entryd0` while finishing
+   below `capn5` in the overall standings is recorded as **INTRANSITIVE and the
+   anchor cell REFUTED**, not celebrated.
+4. **NULL / VOID.** NULL if the drift-anchored margin ≤ 0. **VOID — not a weak
+   result — if the monotone rung ordering is violated**, i.e. if the four net
+   cells against `entryd0` are not ordered
+   `arm12 ≤ shift1 ≤ shift2 ≤ shift3` within their intervals. The ladder is a
+   continuous path from the measured −110 arm to the entry's own evaluation; if
+   play does not order along it, the instrument is reading noise and no cell of
+   this tournament may be quoted.
+
+Harness gates are the launcher's and are not negotiable: gcd pre-flight, book
+gate, per-engine legality gate at the played node budget, exact-count check
+(3,030 or VOID), **zero-tolerance illegal**, dormancy gate, and the measured
+opening-diversity gate.
+
+### Registered expectation
+
+**All three rungs land strictly between `entryd0` and `arm12`, monotone in k,
+with none clearing parity.** If that is the result, the shrinkage axis closes
+and it closes the eval axis with an argument that needs no mechanism: the
+residual is **not worth having at any scale**. If a rung clears both bars, that
+is a genuine surprise and gets reported as loudly as this registration predicts
+the opposite — and it would be the program's first conversion in twelve
+mechanisms.
+
+**Cotenancy, censused by PARENTAGE before launch:** load1 **19.28 of 96**
+(~77 free; the launcher's gate needs ≥16). The owner's tuner fleet is live under
+`tuner-methods-20260818/recovery-1000-20260818` — one driver at 651% CPU with
+many `fastchess` children at concurrency 1 each, all descending from a PID that
+is not mine. **Nothing of any other lane has been signalled, reniced, paused or
+modified by this lane, and nothing will be.** The carrier port stays **SHELVED**
+per the coordinator's scope note: it is not in this field and is not built.
