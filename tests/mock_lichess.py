@@ -92,8 +92,20 @@ class Game:
     def __init__(self, server: "MockLichess", game_id: str, bot_color: chess.Color,
                  clock_limit: int, clock_increment: int,
                  opponent_delay, move_cap: int, rated: bool, seed=None,
-                 refuse_abort: bool = False):
+                 refuse_abort: bool = False, stream_drops=(), reconnect_502s: int = 0):
         self.server = server
+        # Fault injection for the game stream.  `stream_drops` scripts the
+        # connections to /api/bot/game/stream/{id}, one entry per connection:
+        # entry N is how many game states connection N delivers before the
+        # socket is dropped with no terminating chunk -- which is what a proxy
+        # dying mid-response looks like on the wire, and what the client
+        # reports as "Response ended prematurely".  A connection past the end
+        # of the list is served normally.  0 drops before even the gameFull
+        # line, i.e. a reconnect that fails outright.  `reconnect_502s` answers
+        # that many *re*-connections (never the first) with a 502, the way
+        # lichess did during the 2026-08-19 outage.
+        self.stream_drops = list(stream_drops)
+        self.reconnect_502s = reconnect_502s
         # lila refuses an abort for any game past its abortable window, and the window closes for
         # reasons the client cannot see (moves made by another client on the same account, an
         # import, a game already ended). This forces the 400 without needing moves on the board.
@@ -418,6 +430,9 @@ class MockLichess:
         # game id -> number of /api/bot/game/stream/{id} connections. One live handler opens
         # exactly one, so a count above one means the game is being served twice.
         self.game_stream_connections: dict[str, int] = {}
+        # Number of game-stream requests this server answered 502, so a test can
+        # assert the outage it asked for actually happened.
+        self.game_stream_502s = 0
         self._game_counter = 0
         self._closing = threading.Event()
 
@@ -451,7 +466,8 @@ class MockLichess:
 
     def send_challenge(self, bot_plays_white: bool = True, clock_limit: int = 60,
                        clock_increment: int = 0, opponent_delay=0.0,
-                       move_cap: int = 200, rated: bool = False, seed=None) -> str:
+                       move_cap: int = 200, rated: bool = False, seed=None,
+                       stream_drops=(), reconnect_502s: int = 0) -> str:
         """Emit a challenge event on the event stream; returns the challenge id.
 
         When lichess-bot accepts it (POST /api/challenge/{id}/accept), the
@@ -490,7 +506,8 @@ class MockLichess:
                        "clock_limit": clock_limit,
                        "clock_increment": clock_increment,
                        "opponent_delay": opponent_delay,
-                       "move_cap": move_cap, "rated": rated, "seed": seed},
+                       "move_cap": move_cap, "rated": rated, "seed": seed,
+                       "stream_drops": stream_drops, "reconnect_502s": reconnect_502s},
         }
         self.push_event({"type": "challenge", "challenge": challenge_json,
                          "compat": {"bot": True, "board": False}})
@@ -550,7 +567,9 @@ class MockLichess:
                     opponent_delay=params["opponent_delay"],
                     move_cap=params["move_cap"],
                     rated=params["rated"],
-                    seed=params["seed"])
+                    seed=params["seed"],
+                    stream_drops=params.get("stream_drops", ()),
+                    reconnect_502s=params.get("reconnect_502s", 0))
         self.games[challenge_id] = game
         game.start()
         self.push_event({"type": "gameStart", "game": game.event_info_json()})
@@ -672,14 +691,21 @@ def _make_handler(server: MockLichess):
                 self.close_connection = True
 
         def _serve_game_stream(self, game: Game) -> None:
-            server.game_stream_connections[game.id] = \
-                server.game_stream_connections.get(game.id, 0) + 1
+            connection = server.game_stream_connections.get(game.id, 0) + 1
+            server.game_stream_connections[game.id] = connection
+            drop_after = game.stream_drops[connection - 1] \
+                if connection <= len(game.stream_drops) else None
             q = game.subscribe()
             self._start_ndjson()
             try:
+                if drop_after == 0:
+                    logger.info("game %s: dropping stream connection %d before "
+                                "the full state (fault injection)", game.id, connection)
+                    return
                 with game.lock:
                     full = game.full_json()
                 self._write_line(full)
+                states_sent = 0
                 while not server._closing.is_set():
                     try:
                         item = q.get(timeout=KEEPALIVE_SECONDS)
@@ -688,6 +714,16 @@ def _make_handler(server: MockLichess):
                     if item is _CLOSE:
                         break
                     self._write_line(item)
+                    if item is None:
+                        continue
+                    states_sent += 1
+                    if drop_after is not None and states_sent >= drop_after:
+                        # No _end_stream(): the chunked body just stops, so the
+                        # client raises rather than seeing a clean end of stream.
+                        logger.info("game %s: dropping stream connection %d after %d "
+                                    "game states (fault injection)", game.id,
+                                    connection, states_sent)
+                        return
                 self._end_stream()
             except OSError:
                 pass  # client went away
@@ -721,6 +757,11 @@ def _make_handler(server: MockLichess):
                 game = server.games.get(parts[4])
                 if game is None:
                     self._json(404, {"error": "No such game"})
+                elif (game.reconnect_502s > 0
+                        and server.game_stream_connections.get(game.id, 0) > 0):
+                    game.reconnect_502s -= 1
+                    server.game_stream_502s += 1
+                    self._json(502, {"error": "Bad Gateway"})
                 else:
                     self._serve_game_stream(game)
             elif url.path == "/api/account":

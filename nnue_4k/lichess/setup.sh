@@ -75,8 +75,9 @@ SF_NET=/opt/sunfish/nnue_4k/net.sfnn \
 # The bridge, pinned to the commit the integration test runs against, plus
 # the production patch (lichess-bot.patch) the same test applies: overflow
 # games are aborted instead of silently starved, a dead event stream
-# restarts the bot instead of leaving it deaf, and a failed chat message can
-# no longer cancel the engine's move.  Pin + patch = the tested tree.
+# restarts the bot instead of leaving it deaf, a game stream that dies
+# mid-game is re-opened instead of ending the game, and a failed chat message
+# can no longer cancel the engine's move.  Pin + patch = the tested tree.
 LICHESS_BOT_COMMIT=bedd1d9e86a8c4c96319490533e4e20fe63d1ac8
 [ -d /opt/lichess-bot ] || git clone https://github.com/lichess-bot-devs/lichess-bot /opt/lichess-bot
 git -C /opt/lichess-bot fetch -q origin "$LICHESS_BOT_COMMIT"

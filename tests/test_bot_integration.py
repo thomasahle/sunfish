@@ -11,8 +11,8 @@ lib/lichess.py, the ndjson streams, and config parsing.
 The checkout is pinned and then patched with the bundle's lichess-bot.patch --
 the exact tree production runs (both bundles ship the identical patch;
 see tools/lichess/setup.sh and nnue_4k/lichess/setup.sh).  The patch
-exists because of three production incidents, and each has a regression test
-here:
+exists because of a series of production incidents, and each has a regression
+test here:
 
 * ``test_bot_plays_three_games``: three bullet games against a random mover
   (instant, jittered, and slow replies) -- move timing, pondering races and
@@ -36,6 +36,13 @@ here:
   post-restart deafness).
 * ``test_restart_resumes_live_game``: killing the bot mid-game and starting
   it again must resume and finish the game (the mid-game-deploy case).
+* ``test_dead_game_stream_is_reopened``: a game stream that dies mid-game must
+  be re-opened and the game resumed, not read as the game having ended.  A
+  lichess outage ended every stream on both boxes inside the same 11 ms and
+  each bot logged ``Game over`` for a game it still had 33 s (f0eSrj3p) and
+  10 s (k2YJptXg) to play, then sat idle to the flag (production 2026-08-19,
+  both rated).  Nothing else recovers this: lichess replays ``gameStart`` only when
+  the *event* stream reconnects, and that stream had not broken.
 
 Setup choice: lichess-bot is not pip-installable, so a pinned checkout is
 cached under ~/.cache/sunfish-bot-ci (override with LICHESS_BOT_CACHE), with a
@@ -625,3 +632,89 @@ def test_restart_resumes_live_game(lichess_bot, tmp_path):
         if settled:
             assert max(settled) < RESTART_MAX_MOVE_SECONDS, \
                 f"post-restart engine moves too slow: {max(settled):.1f}s"
+
+
+# The stream is re-opened within a few seconds; a minute is long enough that a
+# timeout here means the bot is not trying at all, not that it was unlucky.
+REOPEN_WINDOW = 60.0
+
+
+@pytest.mark.parametrize("stream_drops,reconnect_502s", [
+    ((6,), 6),
+    ((6, 0, 0), 0),
+], ids=["outage", "failing reconnects"])
+def test_dead_game_stream_is_reopened(lichess_bot, tmp_path, stream_drops, reconnect_502s):
+    """A game stream that dies mid-game must be re-opened, not treated as the game ending.
+
+    Reproduces the 2026-08-19 production loss (games f0eSrj3p and k2YJptXg, one
+    on each bot, 06:18:25Z): a lichess outage ended every stream on both boxes
+    within the same 11 ms, our move had already been accepted, and the
+    opponent's reply was broadcast into a socket that no longer existed.  The
+    bot logged ``Game over`` for a game with half its clock left and never
+    searched again; both games were lost on time, rated.
+
+    The mechanism is that ending the stream also exhausts the iterator, so the
+    ``stay_in_game`` branch upstream takes after a stream error reads the dead
+    generator, gets ``StopIteration``, and reads that as the game having ended
+    normally.  Nothing re-opens a game stream: lichess only replays
+    ``gameStart`` when the *event* stream reconnects, and here it never broke.
+
+    Both parameter sets drop the live connection after six game states, leaving
+    the bot waiting for a reply it can never receive.  ``outage`` then answers
+    the reconnections 502 as lichess did; ``failing reconnects`` lets two
+    reconnections die on connect, so the bounded retry loop is exercised too.
+    """
+    mock = MockLichess()
+    mock.start()
+    with _running_bot(lichess_bot, tmp_path, mock) as (holder, log_path):
+        proc = holder[0]
+        challenge_id = mock.send_challenge(bot_plays_white=True, clock_limit=120,
+                                           clock_increment=0,
+                                           opponent_delay=(0.05, 0.15),
+                                           move_cap=30, seed=11,
+                                           stream_drops=stream_drops,
+                                           reconnect_502s=reconnect_502s)
+        _wait_for(lambda: challenge_id in mock.games, ACCEPT_TIMEOUT,
+                  f"challenge {challenge_id} was not accepted", proc)
+        game = mock.games[challenge_id]
+
+        # The drop is scripted, so waiting for a second connection is waiting
+        # for the bot to notice and re-open. Unpatched it never comes: the bot
+        # has already declared the game over and freed the engine.
+        _wait_for(lambda: mock.game_stream_connections.get(challenge_id, 0) >= 2,
+                  REOPEN_WINDOW,
+                  "the bot never re-opened the game stream after it died: it has "
+                  "abandoned a live game and will lose it on time", proc)
+        moves_before_resume = len(game.bot_move_latencies)
+
+        _wait_for(game.finished.is_set, GAME_TIMEOUT,
+                  "the resumed game did not finish", proc)
+
+    bot_color = "white" if game.bot_color == chess.WHITE else "black"
+    assert game.status in {"mate", "stalemate", "draw", "outoftime"}, \
+        f"game ended {game.status} (winner={game.winner})"
+    if game.status == "outoftime":
+        assert game.winner == bot_color, \
+            f"the bot lost on time after its stream died (winner={game.winner})"
+    assert len(game.bot_move_latencies) > moves_before_resume + 1, \
+        "the bot stopped moving after re-opening the stream: it reconnected " \
+        "but did not resume play"
+    if reconnect_502s:
+        assert mock.game_stream_502s > 0, \
+            "the scripted 502s never happened, so the outage was not reproduced"
+
+    # Loud throughout: the break, the re-open, and which attempt succeeded.
+    log_flat = _log_text(log_path)
+    assert "but the game is not over. Re-opening the stream" in log_flat, \
+        "the stream break was not reported"
+    assert "Re-opened the game stream" in log_flat, \
+        "the successful re-open was not reported"
+    if 0 in stream_drops:
+        assert "to re-open the game stream" in log_flat, \
+            "the failed re-open attempts were not reported"
+
+    print(f"reopened after {stream_drops} drops / {reconnect_502s} 502s: "
+          f"{mock.game_stream_connections[challenge_id]} stream connections, "
+          f"{game.status} winner={game.winner}, "
+          f"{len(game.bot_move_latencies)} bot moves "
+          f"({moves_before_resume} before the resume)")

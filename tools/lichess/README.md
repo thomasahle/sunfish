@@ -64,7 +64,11 @@ Notes:
   POST can no longer cancel the engine's move — plus the 2026-08-12 fix:
   a replayed `gameStart` for a game already being served is ignored, and
   an overflow game the bot cannot abort is named in an ERROR and left
-  alone, never resigned — a game we are not playing is not ours to end).
+  alone, never resigned — a game we are not playing is not ours to end;
+  plus the 2026-08-19 fix: a game stream that dies mid-game is re-opened
+  and the game resumed from the full state lichess sends on connect,
+  instead of being read as the game having ended — a lichess outage broke
+  every stream on both boxes at once and cost two rated games on time).
   `watchdog.sh` +
   `sunfish-watchdog.timer` restart the service if lichess says a move is
   pending for us while the journal sits silent for 90 s.
