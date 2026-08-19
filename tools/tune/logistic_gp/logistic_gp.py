@@ -587,6 +587,7 @@ class LogisticGP:
         """Fit binomial observations whose logits are rows of design @ f(x)."""
         observations = np.asarray(x, dtype=float)
         self.x = observations if self.inducing is None else np.asarray(self.inducing, dtype=float)
+        self._residual_cache = {}
         success = np.asarray(success, dtype=float)
         trials = np.asarray(trials, dtype=float)
         covariance = self.kernel(self.x, self.x) + np.eye(len(self.x)) * 1e-6
@@ -621,14 +622,30 @@ class LogisticGP:
         x = np.asarray(x, dtype=float)
         cross = self.kernel(self.x, x)
         mean = self.mean_function(x) + cross.T @ self.alpha
-        if self.kernel_diagonal:
-            prior_variance = self.kernel_diagonal(x)
-        else:
-            prior_variance = np.fromiter(
-                (self.kernel([point], [point])[0, 0] for point in x), float, len(x))
+        prior_variance = self.prior_variance(x)
         variance = prior_variance - np.sum(
             cross * (self.variance_precision @ cross), axis=0)
         return mean, np.maximum(variance, 1e-9)
+
+    def prior_variance(self, x):
+        x = np.asarray(x, dtype=float)
+        if self.kernel_diagonal:
+            return self.kernel_diagonal(x)
+        return np.fromiter(
+            (self.kernel([point], [point])[0, 0] for point in x), float, len(x))
+
+    def residual_variance(self, x):
+        """Prior uncertainty that the finite inducing basis cannot learn."""
+        points = [tuple(point) for point in x]
+        missing = list(dict.fromkeys(
+            point for point in points if point not in self._residual_cache))
+        if missing:
+            values = np.asarray(missing, dtype=float)
+            cross = self.kernel(self.x, values)
+            variance = self.prior_variance(values) - np.sum(
+                cross * (self.precision @ cross), axis=0)
+            self._residual_cache.update(zip(missing, np.maximum(variance, 0)))
+        return np.asarray([self._residual_cache[point] for point in points])
 
     def predict_covariance(self, x):
         """Return latent means and their joint posterior covariance."""

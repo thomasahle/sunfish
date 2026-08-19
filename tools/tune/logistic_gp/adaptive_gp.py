@@ -585,15 +585,27 @@ def fantasy_variance(model, space, pending, points, variance, effective_trials):
     return np.maximum(variance - np.sum(comparison_cross * projection, axis=0), 1e-9)
 
 
+def predict(model, points, cache=None):
+    """Reuse marginal predictions while retaining fresh cross-covariances."""
+    if cache is None:
+        return model.predict(points)
+    missing = list(dict.fromkeys(point for point in points if point not in cache))
+    if missing:
+        means, variances = model.predict(missing)
+        cache.update(zip(missing, zip(means, variances)))
+    return tuple(np.asarray(values) for values in zip(*(cache[point] for point in points)))
+
+
 def choose(state, mean_function, candidates, pending, args, space, model=None,
-           forbidden=(), validated=(), observation_counts=None, validated_only=False):
+           forbidden=(), validated=(), observation_counts=None, validated_only=False,
+           prediction_cache=None):
     if model is None:
         model = posterior(
             state, mean_function, args.pair_weight, space, getattr(args, "inducing", 0))
 
     def statistics(points):
         if model:
-            return model.predict(points)
+            return predict(model, points, prediction_cache)
         mean = mean_function(np.asarray(points))
         variance = np.diag(space.kernel(points, points))
         return mean, variance
@@ -685,12 +697,22 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
     state.setdefault("allocations", {}).setdefault(mode, 0)
     state["allocations"][mode] += 1
     if mode != "design" and isinstance(space, logistic_gp.MixedSpace):
+        def exploration_variance(points, variance):
+            trials = 2 * args.pair_weight * args.pairs
+            variance = fantasy_variance(
+                model, space, pending, points, np.asarray(variance, dtype=float), trials)
+            if model is not None and hasattr(model, "residual_variance"):
+                residual = np.minimum(model.residual_variance(points), variance)
+                counts = np.asarray([observation_counts[point] for point in points])
+                # Logistic Fisher information is at most trials / 4.
+                learned = 4 * residual / (trials * counts * residual + 4)
+                variance += learned - residual
+            return variance
+
         def score(points):
             point_mean, point_variance = statistics(points)
             if mode == "explore":
-                point_variance = fantasy_variance(
-                    model, space, pending, points, point_variance,
-                    2 * args.pair_weight * args.pairs)
+                point_variance = exploration_variance(points, point_variance)
                 return (point_mean + args.explore_optimism * np.sqrt(point_variance)
                         if args.explore_optimism else point_variance)
             if getattr(args, "acquisition", "ucb") != "ucb":
@@ -700,11 +722,11 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
                 2 * args.pair_weight * args.pairs)
             return exploitation(point_mean, point_variance, args)
 
-        # Fantasized variance decides whether another pending copy is useful;
-        # do not impose a fixed one-copy-per-configuration rule on top of it.
+        # Pending and completed games both reduce useful exploration uncertainty.
         if mode == "explore":
             pool = exploration_pool
             pool_mean, pool_variance = statistics(pool)
+            pool_variance = exploration_variance(pool, pool_variance)
             confidence = getattr(args, "explore_confidence", 1.96)
             supported = max(0, max(pool_mean - confidence * np.sqrt(pool_variance)))
             plausible = {
@@ -773,7 +795,7 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
 
 
 def choose_opponent(state, mean_function, challenger, args, space, model=None,
-                    anchored=None):
+                    anchored=None, prediction_cache=None):
     """Choose an anchored, informative rival for a parameter duel."""
     if anchored is None:
         anchored = {
@@ -796,11 +818,12 @@ def choose_opponent(state, mean_function, challenger, args, space, model=None,
             state, mean_function, args.pair_weight, space, getattr(args, "inducing", 0))
     rivals = sorted(anchored)
     points = [challenger, *rivals]
-    mean, covariance = model.predict_covariance(points)
+    mean, variance = predict(model, points, prediction_cache)
+    cross = model.predict_cross_covariance([challenger], rivals)[0]
     difference = mean[0] - mean[1:]
-    variance = covariance[0, 0] + np.diag(covariance)[1:] - 2 * covariance[0, 1:]
+    difference_variance = variance[0] + variance[1:] - 2 * cross
     probability = 1 / (1 + np.exp(-difference))
-    information = probability * (1 - probability) * np.maximum(variance, 0)
+    information = probability * (1 - probability) * np.maximum(difference_variance, 0)
     return rivals[int(np.argmax(information))]
 
 def engine_config(command, name, arguments, options):
@@ -955,6 +978,7 @@ async def optimize_locked(args):
     running = {}
     completed = 0
     allocation_model = None
+    prediction_cache = {}
     modeled_batches = 0
     observation_counts = Counter(
         space.canonical(batch["knobs"]) for batch in state["batches"])
@@ -977,12 +1001,14 @@ async def optimize_locked(args):
             allocation_model = posterior(
                 state, mean_function, args.pair_weight, space, args.inducing)
             modeled_batches = len(state["batches"])
+            prediction_cache.clear()
         elif len(state["batches"]) - modeled_batches >= args.update_batches:
             allocation_model = (update_posterior(
                 allocation_model, state["batches"][modeled_batches:],
                 args.pair_weight, space) if args.inducing else posterior(
                 state, mean_function, args.pair_weight, space))
             modeled_batches = len(state["batches"])
+            prediction_cache.clear()
 
     def pending_comparisons():
         pending = [
@@ -1013,7 +1039,8 @@ async def optimize_locked(args):
 
     def schedule_experiment(vector, diagnostics):
         opponent = choose_opponent(
-            state, mean_function, vector, args, space, allocation_model, anchored)
+            state, mean_function, vector, args, space, allocation_model, anchored,
+            prediction_cache)
         number = state.get("next_experiment", 0)
         state["next_experiment"] = number + 1
         sequence = state["next_opening"]
@@ -1059,7 +1086,7 @@ async def optimize_locked(args):
                 vector, diagnostics = await asyncio.to_thread(
                     choose, trial, mean_function, candidates, pending, args, space,
                     allocation_model, forbidden | {item[0] for item in proposals},
-                    validated_configurations(), counts)
+                    validated_configurations(), counts, False, prediction_cache)
                 commit_selection(proposal_state, trial)
                 proposals.append([vector, diagnostics, reservation, 0, reservation_pending])
                 pending.append((vector, None))
@@ -1091,7 +1118,7 @@ async def optimize_locked(args):
                     item[0], replacement = await asyncio.to_thread(
                         choose, trial, mean_function, candidates, item[4], args, space,
                         allocation_model, forbidden | others, validated_configurations(),
-                        counts, args.gate_design)
+                        counts, args.gate_design, prediction_cache)
                     if replacement["mode"] != item[1]["mode"]:
                         raise AssertionError("gate replacement changed allocation mode")
                     item[1] = replacement

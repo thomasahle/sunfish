@@ -389,6 +389,33 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(diagnostics["mode"], "explore")
         self.assertEqual(vector, plausible)
 
+    def test_exploration_shrinks_repeated_sparse_residual(self):
+        repeated, informative = self.space.candidates[:2]
+
+        class Model:
+            @staticmethod
+            def predict(points):
+                variance = np.array([10 if point == repeated else 1 for point in points])
+                return np.zeros(len(points)), variance
+
+            @staticmethod
+            def residual_variance(points):
+                return Model.predict(points)[1]
+
+        state = {"batches": [], "selections": 1}
+        args = SimpleNamespace(
+            pair_weight=.5, inducing=0, initial_design=1,
+            explore_start=1, explore_floor=1, explore_half_life=1,
+            exploration=1, explore_optimism=0, explore_confidence=1.96, pairs=1,
+            gate_all=False, acquisition_restarts=4,
+        )
+        vector, diagnostics = choose(
+            state, self.space.prior_mean, [repeated, informative], [], args,
+            self.space, Model(), validated={repeated, informative},
+            observation_counts=Counter({repeated: 100, informative: 1}))
+        self.assertEqual(diagnostics["mode"], "explore")
+        self.assertEqual(vector, informative)
+
     def test_acquisition_uses_incremental_observation_counts(self):
         class Model:
             @staticmethod
@@ -979,6 +1006,17 @@ class MixedAcquisitionTest(unittest.TestCase):
         online_mean, _ = online.predict(self.space.candidates)
         np.testing.assert_allclose(online_mean, full_mean, atol=2e-3)
 
+    def test_sparse_model_exposes_uncorrected_residual_variance(self):
+        point = self.space.default
+        arguments = self.space.prior_mean, self.space.kernel, self.space.kernel_diagonal
+        model = LogisticGP(*arguments, [point]).fit_comparisons(
+            [point], (np.array([0]), np.array([-1])), [0.5], [1])
+        residual = model.residual_variance([point, self.space.candidates[-1]])
+        self.assertLess(residual[0], 1e-5)
+        self.assertGreater(residual[1], 0)
+        np.testing.assert_array_equal(
+            residual, model.residual_variance([point, self.space.candidates[-1]]))
+
     def test_aggregate_rejects_observations_outside_new_domain(self):
         valid = {"knobs": {"X": 50, "Y": 10}, "wins": 1, "draws": 1, "losses": 0}
         invalid = valid | {"knobs": {"X": -10, "Y": 10}}
@@ -1246,6 +1284,59 @@ class MixedAcquisitionTest(unittest.TestCase):
         ]
         self.assertEqual(opponents.count(anchored), 3)
         self.assertEqual(opponents.count(None), 7)
+
+    def test_opponent_information_needs_only_a_covariance_row(self):
+        challenger = self.space.canonical({"X": 100, "Y": 10})
+        anchored = {
+            self.space.canonical({"X": 0, "Y": 10}),
+            self.space.canonical({"X": 50, "Y": 0}),
+        }
+
+        class Model:
+            @staticmethod
+            def predict(points):
+                return np.arange(len(points)), np.ones(len(points))
+
+            @staticmethod
+            def predict_cross_covariance(_left, _right):
+                return np.asarray([[.9, 0]])
+
+            @staticmethod
+            def predict_covariance(_points):
+                raise AssertionError("full covariance should not be constructed")
+
+        args = SimpleNamespace(duel_fraction=1, pair_weight=.5, inducing=0)
+        found = choose_opponent(
+            {}, self.space.prior_mean, challenger, args, self.space, Model(), anchored)
+        self.assertEqual(found, sorted(anchored)[1])
+
+    def test_opponent_predictions_are_reused_without_caching_covariance(self):
+        challengers = [
+            self.space.canonical({"X": value, "Y": 10}) for value in (50, 100)]
+        anchored = {
+            self.space.canonical({"X": 0, "Y": 10}),
+            self.space.canonical({"X": 50, "Y": 0}),
+        }
+
+        class Model:
+            predictions = []
+
+            @classmethod
+            def predict(cls, points):
+                cls.predictions.append(points)
+                return np.arange(len(points)), np.ones(len(points))
+
+            @staticmethod
+            def predict_cross_covariance(_left, right):
+                return np.zeros((1, len(right)))
+
+        args = SimpleNamespace(duel_fraction=1, pair_weight=.5, inducing=0)
+        cache = {}
+        for challenger in challengers:
+            choose_opponent({}, self.space.prior_mean, challenger, args, self.space,
+                            Model(), anchored, cache)
+        self.assertEqual(Model.predictions, [
+            [challengers[0], *sorted(anchored)], [challengers[1]]])
 
     def test_explicit_default_opponents_are_anchored(self):
         anchored = self.space.canonical({"X": 0, "Y": 10})
