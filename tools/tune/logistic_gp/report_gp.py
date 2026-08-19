@@ -23,6 +23,14 @@ def report_domain(space, observed, gate_all, rejected=()):
     return sorted(points), sorted(tested)
 
 
+def report_prior(state, space):
+    allocation = state["study"]["allocation"]
+    if allocation.get("learn_mean"):
+        return adaptive_gp.empirical_mean(
+            space.prior_mean, state["batches"], allocation["initial_design"], space)
+    return space.prior_mean
+
+
 def describe(label, point, model, space, counts):
     predicted, variance = model.predict([point])
     elo = predicted[0] * logistic_gp.ELO_PER_LOGIT
@@ -57,7 +65,7 @@ def main():
     if gate_all:
         space.candidates = [point for point in space.candidates if point in accepted]
     model = adaptive_gp.posterior(
-        state, space.prior_mean, args.pair_weight, space, args.inducing)
+        state, report_prior(state, space), args.pair_weight, space, args.inducing)
     observed = []
     for batch in state["batches"]:
         observed.append(space.canonical(batch["knobs"]))
