@@ -46,7 +46,7 @@ from adaptive_gp import (
     validate_opening_budget,
 )
 from logistic_gp import ELO_PER_LOGIT, LogisticGP, MixedSpace
-from report_gp import report_domain
+from report_gp import report_domain, report_prior
 
 
 class MixedAcquisitionTest(unittest.TestCase):
@@ -490,6 +490,19 @@ class MixedAcquisitionTest(unittest.TestCase):
             self.space, [rejected, self.space.candidates[0]], False, {rejected})
         self.assertNotIn(rejected, points)
         self.assertNotIn(rejected, tested)
+
+    def test_report_uses_learned_mean(self):
+        batch = {
+            "allocation": "design", "knobs": self.space.knobs(self.space.default),
+            "opponent_knobs": None, "wins": 2, "draws": 0, "losses": 0,
+        }
+        state = {
+            "batches": [batch],
+            "study": {"allocation": {"learn_mean": True, "initial_design": 1}},
+        }
+        learned = report_prior(state, self.space)
+        self.assertGreater(
+            learned([self.space.default])[0], self.space.prior_mean([self.space.default])[0])
 
     def test_halton_design_handles_full_tuning_space(self):
         parameters = [
