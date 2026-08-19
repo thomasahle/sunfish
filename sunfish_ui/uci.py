@@ -520,7 +520,14 @@ def go_loop(searcher, hist, stop_event, max_movetime=0, max_depth=0, debug=False
         print("bestmove", played or (my_pv[0] if my_pv else "(none)"))
     # Here, not in a done-callback: a Future wakes its waiters BEFORE it
     # invokes callbacks, so the main thread can read the next go first.
-    SENT[0] = time.perf_counter()
+    #
+    # Not for an open-ended search. A stopped ponder search prints a bestmove
+    # the GUI throws away, and stamping it would put the opponent's whole turn
+    # inside the next sample's spend -- which reads as negative lag, clamps to
+    # zero, and pins the estimate to its floor. A ponderhit search does print
+    # the real move, but no `go` announced it, so no pair can span it either.
+    if not open_ended:
+        SENT[0] = time.perf_counter()
 
 
 def mate_loop(
@@ -770,8 +777,19 @@ def run(sunfish_module, startpos):
                             # across gos exactly two plies apart, which is
                             # what makes them OUR consecutive moves in ONE
                             # game -- a new game, a takeback, a re-sent
-                            # position and lichess-bot's `go movetime` opener
-                            # all fail that. The sample clamp bounds a clock
+                            # position, a pondered move and lichess-bot's
+                            # `go movetime` opener all fail that.
+                            #
+                            # An OPEN-ENDED go is SKIPPED, never a reset --
+                            # the same rule go_loop applies to the stamp. Its
+                            # clock is one python-chess PREDICTED, so it
+                            # cannot end a pair; but python-chess sends a
+                            # ponder go before every real one, and clearing
+                            # the pending pair there left this measuring
+                            # nothing at all on the venue it was written for
+                            # (0 samples in 2041 real gos in a day). The gate,
+                            # not the ordering, is what keeps a pair honest
+                            # across one. The sample clamp bounds a clock
                             # that moved for some other reason (berserk, an
                             # arbiter's gift, the 1ms wtime floor). lag stays
                             # None until something is measured, and None is
@@ -785,12 +803,7 @@ def run(sunfish_module, startpos):
                             # contain zero at 40x less lag), while lifting an
                             # engine off its reserve at a small clock is how
                             # the venue arm lost 110 of 120 games at 3+0.1.
-                            if "ponder" in opts:
-                                # python-chess PREDICTS the clock for a ponder
-                                # go and sends none at all on a ponderhit, so
-                                # nothing can be measured against one.
-                                prev = None
-                            else:
+                            if not ("ponder" in opts or "infinite" in opts):
                                 if prev and prev[0] + 2 == len(hist):
                                     sample = min(2.0, max(0.0, prev[1] - wtime - (SENT[0] - prev[2])))
                                     lag = max(MOVE_OVERHEAD, 0.7 * (lag or MOVE_OVERHEAD) + 0.3 * sample)
