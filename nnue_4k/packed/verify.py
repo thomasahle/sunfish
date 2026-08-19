@@ -68,7 +68,9 @@ def main():
             # of the rotated position, not just for rotate()'s negation --
             # the search reaches positions by both routes and the
             # transposition table assumes they agree.
-            r = pos.rotate(nullmove=True)
+            # positional, not `nullmove=`: the entry-carrier family spells the
+            # parameter `n` (4k budget), and this battery must gate both carriers.
+            r = pos.rotate(True)
             assert r.score == -pos.score
             fresh_r = net.from_board(r.board, r.pf)
             assert fresh_r == r.acc
@@ -79,7 +81,9 @@ def main():
             if not moves:
                 break
             mv = random.choice(moves)
-            if pos.board[mv.j] == "k":
+            # mv[1], not mv.j: the entry-carrier family yields plain tuples
+            # (a measured optimisation), so index rather than attribute.
+            if pos.board[mv[1]] == "k":
                 break                    # king captured: restart
             pos = pos.move(mv)
     print("verified %d positions from %d random games" % (n, ngames))

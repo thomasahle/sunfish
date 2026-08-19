@@ -25870,3 +25870,66 @@ only arm this memo funds is the one whose null is guaranteed to cost nothing.**
   are measured; that shrinking them helps is exactly the hypothesis the
   registration in §9 exists to falsify, and its registered expectation is that
   it will fail.
+
+### CORRECTION to the memo above, within the hour and against my own numbers — the port is **+64 B**, not +60, the instruments are now COMMITTED, and the per-node absolutes are less stable than I quoted
+
+Form (a), because the numbers corrected here are design inputs (they decide
+which cohort-1 arms still fit). The original text is left intact above; it said,
+verbatim:
+
+> ⇒ **the carrier port costs +60 B**, holding the evaluation and the net format
+> identical.
+
+**Measured on the canonical artifact instead of the scratch one: 3,977 B
+through `pack.sh`, i.e. +64 B** over `sunfish_nnue.py`'s 3,913. The +60 was a
+scratch arm that predated the two lines needed to make the shared battery run
+against it (`nn_cp`'s ignored `bd` argument). The lane's own rule applies to my
+own memo: **no arm ships on a number measured on something other than the arm.**
+
+Fit consequences, restated precisely at +64 B against the **4,066 working
+limit**: arms up to **4,002 B** still fit, so `arm12` (3,972 → **4,036**) and
+`arm16` fit; the pb2 arm at 4,008 (→ 4,072) and `14_pb2f4n64` at 4,057
+(→ 4,121) **do not**. My §5 sentence naming 4,032 as the top of the fitting
+range is superseded by 4,002.
+
+**Retention, re-measured on the canonical artifact:** 80.7% and 84.5% over two
+replicates, against `arm_full`'s 57.8% and 60.4% in the same runs — **carrier
+ratio 1.40 both times**, exactly as before. So the ported figure is properly
+quoted as **80.7–84.5%** (≈**75–79%** discounted by this instrument's 6 pp
+calibration), the timed tax as **−26.9 … −32.0 Elo** COMPOSED, and the required
+eval swing as **+137 … +142**. The single-point 83.8% in §4 and §7 sits inside
+that range; **no verdict in the memo moves.**
+
+**Per-node absolutes are less stable than the ranges in §1 suggest.** Re-running
+the committed profiler put the ported arm anywhere in **1.24–1.66 µs/node**
+across runs, and — decisively — a variant with the ignored default argument
+*removed* measured **slower** than the variant with it (1.50–1.66 vs
+1.32–1.34 in the same runs), which is causally impossible and therefore proves
+the ±0.2 µs band is JIT/trace noise, not signal. The **deltas** that carry §1's
+argument are unmoved and remain large against that band: the entry sits at
+**0.27–0.33 µs**, the shipped carrier at **2.99–3.16**, and the non-incremental
+control at **3.16–3.19**. The claims "incrementality is already banked" and "the
+carrier is the largest term" rest on gaps of 1.4–1.9 µs, i.e. 7–10× the noise.
+A lane wanting a tighter absolute should re-run on a quiet box.
+
+**The instruments are committed rather than described**, because this ledger's
+own lesson from the corrupt-book incident is that *a finding that produces an
+artifact but not a gate will be re-discovered by whoever is unlucky enough to
+draw the bad line*:
+
+- **`packed/carrier_port.py`** — generates the ported carrier **from**
+  `pst_entry.py` (nine asserted edits, so it fails loudly rather than drifting
+  if the entry moves) and gates it **against** `sunfish_nnue.py`:
+  `carrier_port.py OUT.py --gate NET` prints `GATE PASS: 3600 nodes`.
+- **`packed/pernode.py`** — the tree-independent per-node profiler, with the
+  "absolutes are box-specific, deltas decide" rule in its docstring.
+- **`packed/verify.py` is now carrier-agnostic** — two call sites, quoted
+  because they are edits to a shared instrument: `pos.rotate(nullmove=True)` →
+  `pos.rotate(True)` (the entry family spells the parameter `n`), and
+  `pos.board[mv.j]` → `pos.board[mv[1]]` (the entry family yields plain tuples,
+  a measured optimisation). Both spellings are valid for `sunfish_nnue.py`, and
+  the regression is recorded: the shipped carrier reads **2,378 positions, worst
+  |lane − BIAS| 3,131** before and after, and the trained `net128kb8.sfnn`
+  (B=8) still verifies at 450 positions, worst 5,300 against its 15,480 bound.
+  **The battery now gates both carriers with one invocation**, which is what
+  makes the port a shelved deliverable rather than a claim.
