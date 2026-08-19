@@ -1203,6 +1203,31 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(opponents.count(anchored), 3)
         self.assertEqual(opponents.count(None), 7)
 
+    def test_opponent_information_needs_only_a_covariance_row(self):
+        challenger = self.space.canonical({"X": 100, "Y": 10})
+        anchored = {
+            self.space.canonical({"X": 0, "Y": 10}),
+            self.space.canonical({"X": 50, "Y": 0}),
+        }
+
+        class Model:
+            @staticmethod
+            def predict(points):
+                return np.arange(len(points)), np.ones(len(points))
+
+            @staticmethod
+            def predict_cross_covariance(_left, _right):
+                return np.asarray([[.9, 0]])
+
+            @staticmethod
+            def predict_covariance(_points):
+                raise AssertionError("full covariance should not be constructed")
+
+        args = SimpleNamespace(duel_fraction=1, pair_weight=.5, inducing=0)
+        found = choose_opponent(
+            {}, self.space.prior_mean, challenger, args, self.space, Model(), anchored)
+        self.assertEqual(found, sorted(anchored)[1])
+
     def test_explicit_default_opponents_are_anchored(self):
         anchored = self.space.canonical({"X": 0, "Y": 10})
         challenger = self.space.canonical({"X": 100, "Y": 10})

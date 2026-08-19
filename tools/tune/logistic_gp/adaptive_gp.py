@@ -796,11 +796,12 @@ def choose_opponent(state, mean_function, challenger, args, space, model=None,
             state, mean_function, args.pair_weight, space, getattr(args, "inducing", 0))
     rivals = sorted(anchored)
     points = [challenger, *rivals]
-    mean, covariance = model.predict_covariance(points)
+    mean, variance = model.predict(points)
+    cross = model.predict_cross_covariance([challenger], rivals)[0]
     difference = mean[0] - mean[1:]
-    variance = covariance[0, 0] + np.diag(covariance)[1:] - 2 * covariance[0, 1:]
+    difference_variance = variance[0] + variance[1:] - 2 * cross
     probability = 1 / (1 + np.exp(-difference))
-    information = probability * (1 - probability) * np.maximum(variance, 0)
+    information = probability * (1 - probability) * np.maximum(difference_variance, 0)
     return rivals[int(np.argmax(information))]
 
 def engine_config(command, name, arguments, options):
