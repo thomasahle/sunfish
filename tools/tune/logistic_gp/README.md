@@ -75,6 +75,13 @@ can be imported with `--seed-state`; both sides of every duel then count as
 observed axis coverage, while games against the fixed default supply the new
 study's absolute Elo anchor.
 
+A finite inducing basis leaves residual variance that its GP features cannot
+learn, even after replaying one configuration many times. The exploration arm
+conditions that residual on the exact number of completed pairs, using the
+binomial logit's Fisher-information bound. This prevents sparse approximation
+error from masquerading as permanently useful uncertainty; GP-UCB itself still
+uses the unmodified posterior.
+
 `--baseline-options default` pins the configured default point to zero. The
 Sunfish space covers every live search/evaluation constant except memory and
 historical flavor switches. Its domains preserve the mate-band, promotion, and

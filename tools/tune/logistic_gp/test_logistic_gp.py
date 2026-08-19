@@ -358,6 +358,33 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(diagnostics["mode"], "explore")
         self.assertEqual(vector, plausible)
 
+    def test_exploration_shrinks_repeated_sparse_residual(self):
+        repeated, informative = self.space.candidates[:2]
+
+        class Model:
+            @staticmethod
+            def predict(points):
+                variance = np.array([10 if point == repeated else 1 for point in points])
+                return np.zeros(len(points)), variance
+
+            @staticmethod
+            def residual_variance(points):
+                return Model.predict(points)[1]
+
+        state = {"batches": [], "selections": 1}
+        args = SimpleNamespace(
+            pair_weight=.5, inducing=0, initial_design=1,
+            explore_start=1, explore_floor=1, explore_half_life=1,
+            exploration=1, explore_optimism=0, explore_confidence=1.96, pairs=1,
+            gate_all=False, acquisition_restarts=4,
+        )
+        vector, diagnostics = choose(
+            state, self.space.prior_mean, [repeated, informative], [], args,
+            self.space, Model(), validated={repeated, informative},
+            observation_counts=Counter({repeated: 100, informative: 1}))
+        self.assertEqual(diagnostics["mode"], "explore")
+        self.assertEqual(vector, informative)
+
     def test_acquisition_uses_incremental_observation_counts(self):
         class Model:
             @staticmethod
@@ -934,6 +961,17 @@ class MixedAcquisitionTest(unittest.TestCase):
         full_mean, _ = full.predict(self.space.candidates)
         online_mean, _ = online.predict(self.space.candidates)
         np.testing.assert_allclose(online_mean, full_mean, atol=2e-3)
+
+    def test_sparse_model_exposes_uncorrected_residual_variance(self):
+        point = self.space.default
+        arguments = self.space.prior_mean, self.space.kernel, self.space.kernel_diagonal
+        model = LogisticGP(*arguments, [point]).fit_comparisons(
+            [point], (np.array([0]), np.array([-1])), [0.5], [1])
+        residual = model.residual_variance([point, self.space.candidates[-1]])
+        self.assertLess(residual[0], 1e-5)
+        self.assertGreater(residual[1], 0)
+        np.testing.assert_array_equal(
+            residual, model.residual_variance([point, self.space.candidates[-1]]))
 
     def test_aggregate_rejects_observations_outside_new_domain(self):
         valid = {"knobs": {"X": 50, "Y": 10}, "wins": 1, "draws": 1, "losses": 0}
