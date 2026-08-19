@@ -25234,3 +25234,45 @@ unbeaten.** What this cohort added is not Elo; it is that the packed family
 can now *express* king- and phase-conditioned evaluation — buckets ship, cost
 nothing at runtime, and are bit-exact — and that expressing it was not the
 missing ingredient.
+
+## REGISTRATION — `rr_kb_close`: one powered read on king buckets, then the book shuts either way (2026-08-19)
+
+Authorized by the coordinator as a **CLOSING instrument, not a hopeful one**,
+and the rationale belongs in the ledger because it is the general rule:
+**kb2's only measurement is an n=54 cell, and tonight established that this
+cell size errs by up to 24 points.** A family does not get closed *or* kept
+alive on the instrument size that just failed. One powered read decides it.
+
+| knob | value |
+|---|---|
+| field | `entryd0` (anchor), `capn5` (**mandatory drift anchor**), `arm12` (kb2, l1 5e-4), `arm16` (kb2, l1 2e-3) |
+| engines / pairings | 4 / 6 |
+| rounds | **101** — gcd(101, 6) = 1 |
+| games | **1,212**, **202 per pairing** |
+| each | `proto=uci nodes=20000 tc=6000+0`, checkouts, book gate PASS on the cleaned book |
+| srand | **20260826** — fresh; 20260819–20260825 and 999001 are spent in this arena |
+| cotenancy | conc 8, nice 5, load 16.06/96 at launch (~80 free), owner tuner fleets censused by parentage and untouched |
+
+**Bars, identical to `3f875f5` — not restated loosely, reused exactly:**
+
+1. **PRIMARY.** 95% CI **lower bound > 36.0%** vs `entryd0`, per arm.
+2. **DRIFT-ANCHORED.** (arm − capn5) vs `entryd0`, same tournament,
+   **≥ +10.0 points**. Quoted first, because it survives a loose anchor and
+   both prior tournaments ran loose (+9.10 and +6.10 against capn5's history).
+3. **COHERENCE (gating).** An arm that ties or beats `entryd0` while finishing
+   below capn5 in the overall standings is recorded as **INTRANSITIVE and the
+   anchor cell REFUTED**, not celebrated.
+4. **NULL** if the drift-anchored margin ≤ 0.
+
+**Registered expectation, and the closing clause.** I expect both arms to land
+in the **22–36%** band. **If they do, INPUT CONDITIONING CLOSES for the packed
+family** — eleven mechanisms, zero conversions — on the same terms the
+objective axis closed, and cohorts 2 and 3 are cancelled rather than
+re-specified. If either arm clears both bars, the axis stays open and the
+result is a genuine surprise that gets reported as loudly as this registration
+predicts the opposite.
+
+**Cotenancy closure on the previous run, as promised:**
+`gauntlet-20260818/grr1.pgn` read **7 forfeits before `rr_confirm11b` and 7
+after** — **zero delta, no cotenancy harm** from 1,212 games of mine inside
+their window.
