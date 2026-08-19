@@ -68,6 +68,7 @@ how much effort it cost.
 
 | Date | Experiment | Verdict |
 |---|---|---|
+| 2026-08-19 | **THE EVALUATION TAX, DECOMPOSED: incrementality is already banked, the tax is the CARRIER, and the registered reopen condition is met by a 60-byte port that reopens NOTHING** | Memo, no games. **Form (a) correction to the closure's reopen clause: it named the wrong term.** Tree-independent per-node profile on the shipping interpreter (4,096 fixed (pos, move) pairs, min-of-40, ×3): the entry's `move()` is **0.245–0.325 µs**; + the incremental packed accumulator **0.50–0.61**; + the full N=32 readout **1.24–1.32**; the same net on the **shipped** carrier **2.86–3.00**; and the NON-incremental control **3.16–3.19**. So **incrementality already removes 1.89 µs/node (65% of the evaluator's added cost)** — the `move()`/`rotate()` design the brief asked for is what ships, and `rotate()` is zero-cost by construction. **The largest term is the CARRIER**: `board[::-1].swapcase()` alone measures **≈917 ns**, more than the entire N=32 readout (**568 ns**; ≈130–150 ns fixed + 14–17 ns/unit, which is why the ledger read width as nearly free). Porting the net onto `pst_entry.py`'s carrier — **bit-exact**: 3,600 nodes score/ps/acc/readout/rebuild/rotate identical to `sunfish_nnue.py`, plus `packed/verify.py` PASS on 2,378 positions — takes retention from **60.0% → 83.8%** of the entry (this laptop; ≈**78%** after the +6 pp calibration against `SPEED-MOAT MEASUREMENT`'s 54.2%) for **+60 B** through `pack.sh` (3,913 → 3,973; entry 3,440). **Denominator reconciliation:** 54.2% of the entry is **1.33× classic** and the port is **1.91×** (`SPEEDOMETER` median 2.45, n=10, range 1.57–3.49). **ERA CHECK, and the recollection fails:** all **16** historical blobs of the pre-2026 `sunfish_nnue.py` use a **numpy** accumulator (no big-int anywhere in history), copy both arrays per `put`, and run at **3.4% (pypy) / 8.1% (CPython)** of the classic at their own commit; era models are 1,207–1,707 B, not ~100 KB. **PST THEOREM** (a proof): an exactly-linear function of the 768 features IS a piece-square table, so any strictly-more-expressive evaluator must pay a per-node nonlinearity — the irreducible floor. Ten designs priced; **nine killed** (bucket root-swap CLOSED on play, `ml2`, N=128 on bytes, readout caching by the code's own note, lazy readout because every node reads `pos.score`, delta-readout by construction, small-int bilinear on quality not speed). **ARITHMETIC: the port buys +30.4 Elo of bar relief — 18% of the gap — and required eval swing is still +138.4 [+124.5, +152.2] against eleven mechanisms at zero.** **ONE ARM FUNDED, `shrink`: `SHIFT+k` shrinkage of the existing residual — 0 bytes (one header int), 0 nps, bit-exact, and its null converges to `entryd0` exactly**, motivated by a measured residual of mean **102.7 cp** (p90 247, n=15,575) added at full scale to a good prior; bars registered at CI-LB **> 50.0%**, drift-anchored **≥ +20.0**, VOID on a non-monotone rung ordering. Registered expectation: **all three rungs fail**, which would close the eval axis mechanism-free. **DO NOT FUND** bilinear, N=128, `ml2` repair, kb2-live, any new feature class, or the port as an arm |
 | 2026-08-19 | **HCAL VERDICT (N=24/cell) + CORRECTION: the clock IS a dial, at ~190 Elo a halving** | 168/168, **zero illegal**, 24 forfeits **all `pyg4kviii`**. **Correction (form (a)) to this lane's own interim:** "a ~420-Elo collapse across two halvings, with nothing stable in between" is WRONG. The four points are a straight steep line — **207.1 Elo per halving** from 1/15→1/60 and **171.7** from 1/60→1/240, **189.4 overall** — in line with the 130-185/doubling the handicap research documents for the low-node regime. 4ku crosses classic at ~**1/170** of the anchor's clock (~5-10 ms a move). A second registered expectation also failed, in our favour: the short-clock rungs **forfeited nothing**, 0 in 24 games apiece. **The retire decision STANDS on a different, better reason**: a load-invariant instrument exists and this is not it (no evidence its Elo survives a venue change; a node budget needs no such validation); ~190 Elo a halving is coarser than the whole band, where SF node steps give 70-90; and nobody has published "4ku at 1/170 clock". Placements: `4ku_t2` **+668.84 ± 160.89**, `4ku_t05` **+254.73 ± 152.76**, `ice4_t05` **+231.91 ± 130.59**, `4ku_t0125` **−88.74 ± 93.40**, **molly +470.44 ± 247.05**, **pygone HEAD −104.37 ± 170.67** — so via meter 4 the entry sits ≈**212 above pygone HEAD** (the one in-band 4k opponent, and the only other Python 4k entrant ever) and ≈**362 below molly**. molly has NOT closed: −372.25 ± 90.90 (n=100, Aug 11) vs −470.44 ± 247.05 today, consistent within intervals despite classic's +96, and n=24 cannot resolve it. **GRR-1 live from 22:42Z**, all ten arms confirmed. |
 | 2026-08-19 | **STAGE B VERDICT: `1.g3` DOES NOT REPLICATE (−1.36 pp, CI [−7.03, +4.32]) — the multiplicity correction called it before the games did, and there is no root-move lever at this budget** | 916/916, **0 illegal, 0 forfeits**, opening gate PASS (916 distinct, 0 replays), neighbours 0 forfeits. **PRIMARY, one pre-specified contrast on fresh disjoint lines**: g3 **63.23%** (103 lines) vs control **64.58%** (126 lines) = **−1.36 pp, SE 2.89, 95% CI [−7.03, +4.32]** → **NOT CONFIRMED**, and the point estimate is *negative*. This is not "underpowered and inconclusive": the cell was powered to 6.5 pp against a 9.4 pp effect and **Stage A's +9.4 lies OUTSIDE the upper bound of +4.32**. **The Stage-B registration predicted exactly this before a game was played** — 14 eligible cells at α=.05 expects 0.7 false positives, exactly 1 was seen, and Bonferroni already contained the mean. `1.g3` was the one separation fourteen tests were expected to manufacture. **Winner's curse measured: 72.9% → 63.23%, a 9.7 pp regression** onto the reference. **The instrument is stable, so the failure is the FINDING's, not the venue's**: across two independent tournaments (different lines, seeds, concurrency, pairing count) classic-vs-entry reproduced +99.41 → **+102.23** (Δ2.82), classic-vs-weak +96.06 → **+97.29** (Δ1.23), reference 63.5% → **64.58%** (Δ1.1 pp). **The descent finds nothing either**: d5 71.0, g6 63.4, e5 61.0, c5 59.8, Nf6 59.5 — **every interval contains the control 64.58%**, corrected and uncorrected; no Stage C is proposed. **WHAT THIS CLOSES: at this data budget there is no replicable root-move effect and therefore NO `book_v2`.** Stage A's 15.1-point apparent spread does not survive replication of its largest component; root choice is either flat for this engine against this field or smaller than the ~7 pp that 916 paired games resolve. **Phase 2 stays HELD on stronger grounds than when parked** — Stage B was its stated route to a less-timid candidate and produced none. The next lever is **not another cell**: more cells at this n keep manufacturing one chance separation per fourteen tests. **Two harness failures, self-caught, no data affected**: (1) the runner writes `$TAG.pgn` and I gave it a book of the same name, so fastchess appended games to its own opening book — caught at ~20 games, the relaunch then indexed the polluted file and was **also voided**, both quarantined, nothing harvested, and the runner now **REFUSES when pgnout equals the book** (self-tested before the valid launch); (2) **`pkill -f` silently failed**, leaving a fastchess appending for ~4 min and ~12 undeclared processes beside a 0.5+0.005 calibration — found with `lsof`, killed by PID, and this lane now kills by PID not pattern; `hcal` ran 120/16 → 168/24 with **no step at either launch**, so no harm, but the exposure was real and is now in COORDINATION. **One gate came close**: dormancy passed at **14.221 s** against a 15 s void threshold — 0.78 s of margin, which a future fixed-node cell at this concurrency should not assume |
 | 2026-08-19 | **SPEEDOMETER: the entry is 2.3–2.5× faster than classic — the speed hypothesis SURVIVES a number, its point prediction does not, and the +99/−108 anomaly stops being anomalous** | The measurement registered in `55f21e9`: no games, no Elo, no gate. Same box, same pypy3.11, ten positions, `go movetime 3000`, arms interleaved per position. **entry/classic nps: median 2.45, mean 2.30, range 1.57–3.49 (n=10)**. **Split verdict**: the hypothesis registered **2.5–3×** and the median lands **just below** it, so the harness's own binary label ("NOT CONSISTENT") is the wrong reading and is corrected here — an interval of 1.57–3.49 around 2.45 does not refute 2.5–3×, it **prices it slightly high**. The load-bearing claim — the entry is *roughly two and a half times faster* — **holds**. **The decomposition then closes**: at ~1.28 Elo/%nps, 2.45× is worth **+186** and 2.30× is worth **+166**; subtracting this lane's own **measured** −99.4 per-node deficit predicts a timed gap of **+86 to +67** against METER 4's **measured +108.17 ± 24.64**. Two independent measurements — a fixed-node tournament and a movetime speedometer — combined through a third lane's constant, landing same sign, same order. **The anomaly is no longer anomalous**: classic is stronger per node, the entry is much faster, and at a real clock speed wins by more than the per-node deficit loses. **Consequence for the programme, unchanged from the registration: the moat is SPEED, and any NNUE must add eval strength WITHOUT SPENDING IT** — a net buying +50 Elo of eval at half the nps is a **net loss of ~30–40 Elo**, the opposite of the eval axis's implicit assumption. **What it is NOT**: ten positions, one movetime, one box; the spread is wide enough that another position set moves the median several tenths, so it says "about 2.3–2.5×", not 2.45. Read off the **byte-verified checkouts**, not the packed artifacts (same search; labelled anyway), and the 1.28 Elo/%nps constant is **another lane's, carried unverified** — if it is wrong the closure is wrong with it. **Gates nothing, promotes nothing** |
@@ -25391,3 +25392,481 @@ ledger's own decomposition has said the larger half of +400 lives there since
 class but a change in the *trade*: an evaluator that does not cost ~46% of nps,
 because that tax, not expressiveness, is what every net in this program has
 actually died of. **Nothing launched; this is a proposal.**
+
+## THE EVALUATION TAX, DECOMPOSED — incrementality is already banked, the tax is the CARRIER, and the registered reopen condition is met by a 60-byte port that reopens nothing (2026-08-19)
+
+**Form (a) correction entry.** The closure's reopen clause (`PORTFOLIO — where
+the next registration goes`) carried a decision — it is the condition under
+which the eval axis is allowed back — so it is left intact above and corrected
+here rather than edited. It reads, verbatim:
+
+> The one condition that should reopen eval is not a new feature class but a
+> change in the *trade*: an evaluator that does not cost ~46% of nps, because
+> that tax, not expressiveness, is what every net in this program has actually
+> died of.
+
+**That condition is met.** Not by a new evaluator: by moving the *existing*
+evaluator, bit-for-bit, onto the entry's own carrier. The same net that reads
+54.2% of `entryd0`'s nps in `SPEED-MOAT MEASUREMENT` reads **83.8%** there
+(≈78% after this instrument's own calibration), for **+60 bytes** and one
+bit-exact gate. The clause named the wrong quantity, and this memo's job is to
+say so and then say what the right one is.
+
+**No games, no training, no deployment. Nothing is promoted, nothing is
+launched.** Every number below is a byte count, a primitive timing, an
+nps ratio or an arithmetic consequence of another lane's calibrated slope.
+
+### 0. Provenance and instruments
+
+Venue for every timing: **a development laptop, not the bench box** — 12 cores,
+load 2.0–2.6, `nice 5`, `pypy3 7.3.23 (Python 3.11.15)`, the interpreter
+production runs. **Absolutes are box-specific and are not comparable to any
+bench-box figure in this ledger; only the within-run ratios are read.** Where a
+ratio has a bench-box counterpart it is calibrated against it explicitly
+(§4). Elo conversions use another lane's constant, **1.28 ± 0.63 Elo per 1%
+nps** (`THE SPEED AXIS IS CALIBRATED`, 1,068 games, zero excluded, modelled
+1.46 inside), and are labelled COMPOSED wherever they appear.
+
+Six instruments, all written for this memo:
+
+- **`pernode`** — a tree-independent per-node profile. 4,096 fixed
+  `(position, move)` pairs, the *identical* deterministic walk for every arm,
+  timing `pos.move(mv)` and nothing else, min-of-40 reps, three replicate
+  runs. No arm can change the work by changing the tree, which is the defect
+  in every whole-search comparison between arms whose evaluations differ.
+- **`probe`** — in-process search throughput, 4 positions × 30,000-node cap,
+  arms interleaved per round (so drift hits every arm equally), 7–9 rounds.
+  The positions and node budget are `packed/nps_probe_arms.py`'s, so the
+  reading lines up with `SPEED-MOAT MEASUREMENT`; the difference is
+  in-process rather than subprocess, i.e. **startup and net load are
+  excluded**.
+- **`prims`** — primitive costs, min-of-25, every result consumed by a sink
+  (the first version of this script measured `put` and `nn_cp` at 0.6 ns/op —
+  pypy had deleted both loops as dead code. Recorded because it is the
+  standing hazard of microbenchmarking this interpreter).
+- **`packed/verify.py`** — the lane's own shared battery, unmodified.
+- **`tools/build/pack.sh`** — byte prices, on this checkout.
+- **an era probe** — the pre-2026 NNUE against the classic of its own commit.
+
+Arms (all in a scratch tree; nothing in the repo is modified by this memo):
+
+| arm | what it is | eval |
+|---|---|---|
+| `arm_pst` | `nnue_4k/pst_entry.py` **verbatim** — the shipping 3,440 B entry | PST |
+| `arm_pstacc` | the entry carrier + the incremental packed accumulator, readout stubbed to 0 | **identical to `arm_pst`** |
+| `arm_pstnet` | the entry carrier + the incremental packed accumulator + the full `nn_cp` readout | **bit-identical to `arm_full`** |
+| `arm_refresh` | `arm_pstnet` with the accumulator rebuilt from the board every node | the NON-incremental control |
+| `arm_full` | `nnue_4k/sunfish_nnue.py` **verbatim** — the shipped carrier | PST + net |
+| `arm_noread` / `arm_noacc` | the shipped carrier with the readout, and the readout *and* update, stubbed | PST |
+
+Nets: random-weight `N=4 / 32 / 128`, B=1, from `packed/make_random_net.py`.
+Random weights are this lane's own nps artifact and are used for **speed
+only**; every Elo figure quoted for quality comes from a played tournament.
+
+### 1. THE PREMISE OF THE BRIEF IS ALREADY TRUE — the accumulator is incremental, and `rotate()` is already free
+
+The question this memo was commissioned to answer was whether there is a
+net-class evaluator that is *efficiently updatable* inside this engine's
+`move()`/`rotate()` structure. Reading the shipping code answers it before any
+measurement: **there is, it is what ships, and it has shipped since the packed
+family existed.**
+
+`sunfish_nnue.Position.move` maintains the accumulator with
+
+    acc = self.acc + row[p][j] - row[p][i]        # plus one term on a capture
+
+— one big-integer add per board mutation, all 2N lanes in a single Python-level
+operation because the lanes are packed into one int. And `rotate()` is
+**zero-cost by construction**: the accumulator is not touched, only `pf` flips,
+because the two perspectives are two lane blocks of the same integer and `pf`
+selects which one is the mover's. The docstring says it in one line — *"The
+accumulator is unchanged; only which block is 'ours' flips"*.
+
+So the rotation problem the brief flagged as a design risk does not exist, and
+there is **no unexplored design on the update side**. Measured, and this is the
+first number that matters:
+
+| | µs per `move()` | Δ vs the entry |
+|---|---|---|
+| `arm_pst` — the entry, PST only | **0.245 – 0.325** | — |
+| `arm_pstacc` — + incremental accumulator | **0.498 – 0.613** | +0.21 … +0.37 |
+| `arm_pstnet` — + full `nn_cp` readout, N=32 | **1.235 – 1.323** | +0.99 … +1.01 |
+| `arm_refresh` — accumulator rebuilt every node | **3.163 – 3.190** | +2.84 … +2.92 |
+| `arm_full` — the shipped carrier, same net, **bit-identical eval** | **2.860 – 2.997** | +2.57 … +2.69 |
+
+(ranges over three replicate runs of min-of-40; `arm_pst`'s absolute is the
+noisiest because it is the smallest.)
+
+**Incrementality is worth 1.89 µs/node** — `arm_refresh` 3.17 against
+`arm_pstnet` 1.28, same carrier, same net, same eval, the only difference being
+whether the accumulator is carried or reassembled. That is **60% of the
+non-incremental carrier's whole per-move cost** and **65% of the evaluator's
+added cost**, and the packed family already has all of it. **Feature assembly
+is not a cost this program pays** — which is the direct answer to "how much of
+the tax does incrementality remove": all of the assembly term, already, since
+the family's first artifact.
+
+### 2. THE ERA REFERENCE — the historical NNUE was 12–29× slower than its own baseline, and it was never a big-int engine
+
+Registered as a check on a recollection, and it does not survive.
+
+Every one of the **16** historical blobs of the pre-2026 top-level
+`sunfish_nnue.py` in this repository's history uses a **numpy float
+accumulator** (`wf`/`bf`, dimension `L0=13`), incrementally updated, with a
+26→21→14→1 `relu6` head evaluated per node. **None uses a big integer** — the
+big-int lane packing is the 2026 packed family's own invention. The historical
+`move()` also does `pos.wf.copy(), pos.bf.copy()` inside `put`, i.e. **two
+array copies per board mutation**, which is precisely the per-move blowup the
+brief's budget forbids.
+
+Nor is there a ~100 KB model in the era tree: **every model at commit
+`b3e5302` is 1,207–1,707 B**, the largest being `model_99.pickle` at 1,707 B.
+(Later `nnue/models/` entries are packed-era artifacts and are not the era
+engine's.)
+
+Measured — blob `c15ff7d2` (commit `b3e5302` "cleaned up") with
+`models/model_99.pickle`, against `sunfish.py` **at the same commit**, fixed
+depth 5, arms interleaved ×4:
+
+| interpreter | era classic | era NNUE | NNUE as % of its own classic |
+|---|---|---|---|
+| pypy3 7.3.23 | 64,077 nps | 2,209 nps | **3.4%** |
+| CPython 3.14.5 | 93,657 nps | 7,596 nps | **8.1%** |
+
+One compatibility shim, no arithmetic change: `int(arr)` → `int(arr.item())`,
+required by numpy 2. Caveats stated plainly: numpy under pypy goes through the
+C-API emulation layer and is expected to be poor at per-node calls on 13-to-26
+element vectors, which is why the CPython row is given as the fairer historical
+instrument — and **it is still a 12× slowdown**. So "the original NNUE did not
+lose nps against its baseline" **does not reproduce on either interpreter**.
+The packed family's ~1.7× is, against that history, an enormous improvement,
+and the eleven mechanisms did not die of the thing the era engine died of.
+
+### 3. THE DENOMINATOR — 54.2% of the entry is 1.33× CLASSIC, and that is the whole reconciliation
+
+`SPEEDOMETER` puts entry/classic at a **median 2.45** (n=10, range 1.57–3.49;
+mean 2.30). Compose it:
+
+| carrier | % of `entryd0` nps | × classic |
+|---|---|---|
+| shipped carrier, N=32 (`SPEED-MOAT MEASUREMENT`) | 54.2% | **1.33×** |
+| **ported carrier, N=32 (this memo, discounted)** | **≈78%** | **1.91×** |
+| the entry | 100% | 2.45× |
+
+**Nothing in the packed family is slow in absolute terms.** The "46% tax" is
+entirely a statement about the denominator: the entry spends **0.245–0.325 µs**
+inside `move()`, and a per-node evaluator of any kind is a large fraction of
+that. This is the correct framing and it is the one the closure's reopen clause
+lacked.
+
+### 4. THE DECOMPOSITION — and the largest term is not the evaluator
+
+Primitive costs, ns/op, sinks in place:
+
+| primitive | N=4 | N=32 | N=128 |
+|---|---|---|---|
+| `board[::-1].swapcase()` (120 chars) | **1,216** | 1,216 | 1,216 |
+| `board[::-1]` alone | 299 | 299 | 299 |
+| ⇒ **`.swapcase()` alone** | **≈917** | ≈917 | ≈917 |
+| big-int add, 2N lanes | — | 16.0 | — |
+| `ROWS` dict→list lookup | 16.9 | 24.9 | 60.5 |
+| accumulator delta (2 lookups + 2 adds) | 34.5 | **46.4** | 133.7 |
+| **`nn_cp` readout** | **184** | **568** | **2,158** |
+
+The readout fits **≈130–150 ns fixed + 14–17 ns per hidden unit** across those
+three points. The `pernode` arms put the same readout at **+0.62 … +0.83 µs**,
+so Δnode ≈ 1.1–1.5 × Δprimitive here — as expected for an instrument that times
+`move()` directly rather than a whole search, and a coherence check on the
+ledger's own 2.7× node/primitive conversion, which was fitted end-to-end. Two consequences:
+
+1. **The ledger's "width is nearly free" finding is explained, not
+   contradicted.** `SPEED-MOAT MEASUREMENT` read −46.8% at N=4 against −45.8%
+   at N=32 and concluded "*having a net at all* is the cost". Correct — because
+   the extra 384 ns of readout between N=4 and N=32 is ~4% of a ~10 µs node,
+   while the *carrier* is costing 1.65 µs.
+2. **`board[::-1].swapcase()` is the single largest per-node primitive in the
+   shipped carrier** — larger than the entire N=32 readout. `pst_entry.py`
+   already knows this; its docstring records that
+   `board[::-1].swapcase()` "*measured 92% of make-move*", which is why the
+   entry carries `r` and pays two extra slice-concats instead. The net family
+   never inherited the fix.
+
+End-to-end retention, `probe`, entry = 100%:
+
+| net | `arm_pstacc` | **`arm_pstnet` (ported)** | `arm_full` (shipped) | carrier ratio |
+|---|---|---|---|---|
+| N=4 | 94.1% | **89.4%** | 60.3% | **1.48×** |
+| N=32 | 96.5% | **83.8%** | 60.0% | **1.40×** |
+| N=128 | 92.8% | **66.7%** | 49.5% | **1.35×** |
+
+**Instrument calibration, stated before any figure is used.** At N=32 this
+laptop reads the shipped carrier at 60.0% against `SPEED-MOAT MEASUREMENT`'s
+**54.2%**, and at N=4 at 60.3% against that entry's N=4 replnet cell of
+**53.2%** — **≈6 pp lighter in both cells**, consistently, as expected from an
+in-process probe that excludes startup and net load. Every ported figure is
+therefore quoted twice: **measured**, and **discounted by 6 pp**:
+
+| net | ported, measured | **ported, discounted** | timed tax at 1.28 ± 0.63 |
+|---|---|---|---|
+| N=4 | 89.4% | **≈83%** | **−21.8** [−11.1, −32.5] COMPOSED |
+| N=32 | 83.8% | **≈78%** | **−28.2** [−14.3, −42.0] COMPOSED |
+| N=128 | 66.7% | **≈61%** | **−49.9** [−25.4, −74.5] COMPOSED |
+| shipped, N=32 (ledger) | — | 54.2% | −58.6 |
+
+`arm_pstacc` vs `arm_pst` is the one whole-search pair with **byte-identical
+evaluation**, so it is the one whole-search ratio with no tree confound:
+carrying and updating the accumulator costs **3.5–7.2 pp of nps** and nothing
+else. `arm_pstnet` vs `arm_full` is the other clean pair (bit-identical eval,
+therefore identical trees at fixed nodes), and it is the carrier column.
+
+### 5. THE PORT — bit-exact, +60 bytes, and it is eval-neutral by construction
+
+`arm_pstnet` is the entry's carrier with the packed accumulator and readout
+grafted on: `Position` gains `acc`, `pf` and `ps`; `move()` gains the four
+delta lines; `rotate()` passes `acc` through and flips `pf`; `from_board`
+gains the 120-square build. Both gates run:
+
+- **Cross-carrier gate.** 60 random games × 60 plies = **3,600 nodes**;
+  `score`, `ps`, `acc`, `nn_cp`, the from-scratch accumulator rebuild, and
+  `rotate(null)` are **IDENTICAL** between `arm_pstnet` and `arm_full` at
+  every node. (It failed first time: a sign error, `-ps - nn_cp` where the
+  shipped carrier has `-ps + nn_cp` — the readout is already mover-signed by
+  the new `pf`. Recorded because the gate is the only reason it was caught.)
+- **The lane's own shared battery**, `packed/verify.py`, unmodified:
+  **2,378 positions from 60 random games** — lane integrity, incremental ==
+  from-scratch, packed == float, and exact antisymmetry all PASS; worst
+  |lane − BIAS| **3,131** against the 16,384 guard and the 12,435 rigorous
+  bound. Two test-only shims were needed and are named so nobody mistakes them
+  for design: `nn_cp` takes an ignored third `bd` argument, and `rotate`
+  accepts the `nullmove=` keyword (the entry's parameter is `n`).
+
+**Because the eval is bit-identical, the port cannot change a fixed-node
+result.** It changes nps and nothing else. That is what makes it priceable
+without a tournament — and also what makes it worthless on its own.
+
+Bytes, `tools/build/pack.sh`, this checkout:
+
+| source | packed |
+|---|---|
+| `nnue_4k/pst_entry.py` | **3,440** |
+| `nnue_4k/sunfish_nnue.py` | 3,913 |
+| the ported carrier | **3,973** |
+
+⇒ **the carrier port costs +60 B**, holding the evaluation and the net format
+identical. On the ledger's bytes-literal decoder floor (**3,170 B**, `b605999`)
+a ported artifact floors at ≈**3,230 B**, leaving **866 B** of payload against
+today's 926. Through the factored digit formula and the measured container
+price list (**0.694 B/digit** at 40% zeros; **trained payloads compress ~122 B
+better than random**), r=8/N=32/B=1 mirrored is 1,089 digits ≈ 756 B ⇒
+≈**3,986 B, fits with ~110 B spare**. Precisely: **every cohort-1 arm from
+3,663 B to 4,032 B still fits after the port; `14_pb2f4n64` at 4,057 B does
+not** (4,117).
+
+### 6. THE PST THEOREM — why a per-node nonlinearity is the irreducible floor
+
+This is a proof, not a timing, and it kills a whole quadrant of the design
+space the brief asked me to price.
+
+> An evaluator that is an exactly linear function of the 768 (piece, square)
+> indicator features **is a piece-square table**: its value is Σ w[p][s] over
+> the occupied squares, which `move()` maintains as one machine integer at
+> exactly the cost of the `value(move)` delta the entry already pays. Its
+> per-node readout cost is **zero** and its expressiveness gain over the entry
+> is **zero** — it *is* the entry with different numbers.
+
+Therefore **every net-class evaluator strictly more expressive than a PST must
+evaluate a nonlinearity per node**, and that nonlinearity is the floor of the
+entire family. Measured floor for the packed SWAR readout: **≈130–150 ns fixed
++ 14–17 ns per unit** — so ≈2% of the entry's node for *anything at all*, and
+8.7% at N=32. Clipping is not an optional cost that a cleverer design can
+defer to the leaves: it is the only thing separating a net from a PST.
+
+The brief's option (1) — "pre-clip linear accumulator, clipped-relu applied
+only at readout" — is exactly this, and it is exactly what ships. There is no
+cheaper place to put the clip, because the accumulator changes at every node.
+
+### 7. THE PRICE TABLE
+
+Per-node op counts are Python-level operations; bytes compose onto the 3,170 B
+decoder floor; "required" is the fixed-node Elo the design must earn to break
+even on a clock **on the ported carrier**, at 1.28 ± 0.63 Elo/%nps.
+
+| # | design | bytes | per-move | per-node | ported nps | required fixed-node Elo | verdict |
+|---|---|---|---|---|---|---|---|
+| 1 | **pre-clip accumulator, clip at readout, N=32** — *what ships* | 0 (built) | 1 big-int add + 2–3 lookups (**46 ns**) | SWAR clamp + 2 modular sums (**568 ns**) | 83.8% / ≈78% | **+28.2** [14.3, 42.0] | measured **−110.2**; **KILL** |
+| 1b | same, N=4 | −120 … −195 B payload (r=4 … r=8) | **34 ns** | **184 ns** | 89.4% / ≈83% | **+21.8** [11.1, 32.5] | the free-table N=5 arm screened at ≈31% and the factored arm at 32.00% — inside the band; **KILL** |
+| 1c | same, N=128 | **does not fit 4,096** | 134 ns | 2,158 ns | 66.7% / ≈61% | **+49.9** [25.4, 74.5] | **KILL on bytes and on speed** |
+| 2 | king/phase buckets on the root-swap, riding (1) | +150–185 B | **0** (measured 0.949–0.984× the B=1 carrier) | **0** | unchanged | unchanged | mechanism provably fires, play unmoved — `rr_kb_close` 34.65% [28.09, 41.22] and 33.17% [26.68, 39.66]; `rr_confirm11b` 25.74% [19.71, 31.77]. **CLOSED; do not re-fund** |
+| 3 | second layer at readout, tiny N (`ml2`) | +98 B | 0 | **adds to the only term that is already the problem** | worse than 83.8% | > +28 | screened **−6.66** pooled, 45.00% head-to-head, +8.2% nps; two live defects (`certify_ml2` ignores N and `bm`; `export_ml2` corrupt at N ≥ 5). **KILL** |
+| 3b | small-int bilinear: 2 groups × 2 perspectives in ONE machine word | ≈+40 B code | **1 machine-int add (16 ns)** | 8 shifts/masks + 2 mults ≈ **250–400 ns** | ≈88–91% / ≈82–85% | ≈**+19 … +23** [10, 34] | **cheapest net-class readout that exists here** — and its expressiveness is PST + 2 rank-1 quadratics, i.e. **strictly below** the N=32 relu net that measures −110. **KILL on quality, not on speed** |
+| 4a | cache the readout on the accumulator | 0 | 0 | a dict probe keyed on a 1,024-bit int | **negative** | — | the shipped code's own note: hashing the accumulator *"would otherwise cost more than the evaluation it feeds"*; the measured 1,216 ns for one pass over 120 characters says the same for any 128-byte key. **KILL** |
+| 4b | lazy readout — compute `score` on first read | ≈+25 B | 0 | a property call per read | ≈0 | — | `pos.score` is read by the mate test, stand-pat, the futility test and LMR. **There is no node that does not read the score. KILL** |
+| 4c | delta-readout — correct `nn_cp` incrementally | — | — | detecting whether the clip/cap pattern moved **costs the clip** | ≈0 | — | **KILL by construction** |
+| 5 | **the carrier port** (not an evaluator) | **+60 B** | 2 slice-concats instead of one `swapcase` | **0** | **+23.8 pp** (60.0 → 83.8) | **0 — eval-neutral by bit-exactness** | the only priced item that **delivers**, and it delivers ≈**+30 Elo of nps** to a family that is **−110** |
+| 6 | **`SHIFT+k` shrinkage** of the existing residual | **0 B** (one header integer) | **0** | **0** | unchanged | must beat **0** at fixed nodes | **the one arm worth funding** — §9 |
+
+### 8. THE ARITHMETIC, and it is not close
+
+| term | value |
+|---|---|
+| best packed net at **fixed nodes** (`rr_kb_close` arm12, n=202) | **34.65%**, 95% CI **[28.09, 41.22]**, **−110.2 Elo** |
+| timed tax, **shipped** carrier (ledger) | −58.6 |
+| timed tax, **ported** carrier at N=32 (this memo, discounted) | **−28.2** [−14.3, −42.0] COMPOSED |
+| required eval swing to ship positive, shipped carrier | **+168.8** |
+| **required eval swing to ship positive, ported carrier** | **+138.4** [+124.5, +152.2] |
+| delivered by eleven mechanisms | **0** |
+
+**The port buys +30.4 Elo of bar relief — 18% of the gap — and the remaining
+82% is a quality deficit no mechanism has moved.** Two of the eleven moved it
+while *provably* expressing new structure: the root-freeze gate measured the
+kb2 tables **79–165 cp apart**, agreeing exactly on 1% of positions, val
+improved **−2.4% relative**, export was **bit-exact 200/200**, and play did not
+move. That is the strongest available evidence that the deficit is not a
+missing feature class — and this memo adds that it is not a missing *speed*
+term either, because the speed term is now priced at 60 bytes.
+
+**So the reopen condition was the wrong condition.** The binding constraint is
+and always was the fixed-node deficit. Written as a rule for the next lane:
+*a reopen condition must name the term that no mechanism has moved, not the
+term that is merely large.*
+
+### 9. THE ONE DESIGN WORTH AN ARM — `shrink`: zero bytes, zero nps, and a null that cannot hurt
+
+Not a new evaluator. A **shrinkage coefficient on the existing one**, and the
+reason it is the only fundable item is that it is the only member of this
+design space whose worst case is **0 Elo instead of −110**.
+
+**The residual is not a small correction — measured.** 15,575 positions from
+400 random walks with the shipped `net128kb8.sfnn` (N=128, B=8, CLAMP=600):
+
+| statistic | value |
+|---|---|
+| mean \|residual\| | **102.7 cp** |
+| p50 / p75 / p90 / p95 / p99 | **68 / 135 / 247 / 326 / 495** cp |
+
+(A random-walk sample over-weights strange positions; the **magnitude**, not
+the shape, is what carries. It is about a pawn on average.)
+
+Eleven mechanisms have added a residual of that size, at full scale, on top of
+a prior — the entry's PST — that is itself the strongest 4k Python evaluator
+this program has. All eleven landed in the **22–36%** band. A noisy estimator
+added at full scale to a good prior is the textbook case for **shrinkage**, and
+nobody has tried it.
+
+**It costs nothing, and that is verified rather than argued.** The readout ends
+`v >> SHIFT`, and `SHIFT` is a single integer in the net header, read by the
+engine **and** by `pnet` — so `SHIFT+k` is an exact α = 2^−k shrinkage that is
+**0 bytes, 0 nps, and bit-exact by the same mechanism that makes the shipped
+export bit-exact**. Verified on the shipped net:
+
+| dial | mean \|residual\| | p50 | p90 |
+|---|---|---|---|
+| `SHIFT+0` (today) | 102.7 | 68 | 247 |
+| `SHIFT+1` (α = ½) | **51.2** | 34 | 123 |
+| `SHIFT+2` (α = ¼) | **25.3** | 17 | 61 |
+| `SHIFT+3` (α = ⅛) | **12.4** | 8 | 30 |
+
+**As k grows the artifact converges to `entryd0`'s evaluation exactly.** The
+family is a monotone one-parameter path from *the entry* to *today's −110*, and
+no mechanism in this program has had that property. It also makes a
+**falsifiable ordering prediction**, which is what turns it from a hope into an
+instrument.
+
+#### Registered-style bars, if the coordinator funds it. NOTHING LAUNCHED.
+
+**Field.** `entryd0` (anchor), `capn5` (**mandatory drift anchor** — the
+anchor swing is 9.68 points full range and 6.68 between two n=202 tournaments,
+so nothing is compared across tournaments), and three rungs off **one
+already-certified artifact**, `arm12` (kb2, l1 5e-4; the best measured arm at
+−110.2): **`SHIFT+1`, `SHIFT+2`, `SHIFT+3`**. Five engines, ten pairings, all
+five byte-priced through `pack.sh` before game 1, all five through
+`packed/verify.py` and the legality gate, book gate PASS on the **cleaned**
+book.
+
+**SCREEN — ranks, promotes nothing.** A 54-game cell is refused: this program
+has now paid **−17.00, −24.26 and +5.02** points of screen-to-confirmation
+error on byte-identical engines. The screen is a **ranking pass at n=100 per
+pairing** whose only job is to pick the rung, and it is registered here that
+**no cell of it is admissible as a finding**, in either direction.
+
+**CONFIRMATION — powered, promotes.** The winning rung plus its runner-up only:
+4 engines, **101 rounds, 1,212 games, 202 per pairing**, fixed nodes, fresh
+`srand`, bars reused **exactly** from `3f875f5` / `5ec178c` in form and
+tightened only where the tax changed:
+
+1. **PRIMARY.** 95% CI **lower bound > 50.0%** vs `entryd0`, per arm.
+   *Not 36.0%.* At 0 bytes and 0 nps a shrinkage arm has **no tax to pay
+   back**, so the bar is parity — and parity is precisely the statement "the
+   residual is worth having".
+2. **DRIFT-ANCHORED.** (arm − `capn5`) vs `entryd0`, same tournament,
+   **≥ +20.0 points**. Quoted first, because it survives a loose anchor and
+   all three prior tournaments in this arena ran loose.
+3. **COHERENCE (gating).** An arm that ties or beats `entryd0` while finishing
+   below `capn5` in the overall standings is recorded as **INTRANSITIVE and
+   the anchor cell REFUTED**, not celebrated.
+4. **NULL** if the drift-anchored margin ≤ 0, **or if the monotone rung
+   ordering is violated** — if `SHIFT+3` (nearly the entry) does not sit
+   between `SHIFT+2` and `entryd0`, the instrument is reading noise and the
+   whole tournament is **VOID**, not interpreted. This second clause is the
+   arm's own falsification test and it is registered before any games exist.
+
+**TIMED bar — fires only after a fixed-node pass, and it is the port's
+trigger.** A shrunk arm still carries the net's nps tax: **+58.6 Elo** required
+on the shipped carrier, **+28.2** [+14.3, +42.0] on the ported one. So the
+carrier port of §5 is registered as a **conditional precondition, not a
+deliverable**: +60 B, one bit-exact gate, on the shelf, **built only if a
+fixed-node pass exists to spend it on.**
+
+**Registered expectation, written so it cannot be reconstructed afterwards: I
+expect all three rungs to land strictly between `entryd0` and the −110 arm,
+monotone in k, with none clearing parity.** If that is what happens, the
+shrinkage axis closes — and it closes the whole eval axis with an argument that
+needs no mechanism at all: the residual is not merely misweighted, **it is not
+worth having at any scale.** That is a stronger closure than eleven
+mechanisms, and it costs one tournament.
+
+### 10. DO NOT FUND
+
+- **Bilinear m=4 + narrow tail.** Already do-not-fund in the portfolio memo.
+  This memo adds the reason that memo could not: its speed advantage is
+  **real** (design 3b, ≈+19 Elo bar instead of +28) and its expressiveness is
+  **strictly below** the N=32 relu net that measures −110. Cheaper and weaker
+  is the wrong direction when the binding constraint is quality.
+- **Anything at N=128.** Does not fit 4,096 and costs 39 pp of nps.
+- **`ml2` defect repair.** Fixing two real defects to revive a family whose
+  only measured member failed.
+- **The kb2 live-bucket arm.** Withdrawn in the ledger; nothing here revives it.
+- **A new feature class of any kind.** Eleven mechanisms, zero conversions,
+  the last two provably expressing new structure.
+- **The carrier port as an arm.** It is a precondition, priced and shelved. It
+  is worth +30 Elo to a family that is −110, and building it now would be
+  engine work spent to make a losing artifact lose by less.
+
+**One sentence for the coordinator: the eval axis's registered reopen condition
+was met this afternoon by a 60-byte, bit-exact carrier port, and the axis still
+should not reopen — the condition named the wrong term. The binding constraint
+is a −110 Elo fixed-node deficit that eleven mechanisms have not moved, and the
+only arm this memo funds is the one whose null is guaranteed to cost nothing.**
+
+### What this memo does NOT establish
+
+- **No games. No Elo was measured here.** Every Elo figure is either quoted
+  from a played tournament in this ledger with its `n` and interval, or is a
+  COMPOSED conversion through another lane's **1.28 ± 0.63** slope. If that
+  slope is wrong, §7 and §8 are wrong with it.
+- **The retention figures are a development laptop's**, in-process, on
+  **random-weight** nets, and this instrument reads the shipped carrier ≈6 pp
+  lighter than the bench box in both cells where a comparison exists. The
+  ported figures are quoted measured *and* discounted for exactly that reason;
+  none of them is a bench-box number and none should be re-quoted as one.
+- **`arm_pstnet` is a scratch artifact, not a candidate.** It has not been
+  minified into the bytes-literal form, has not been priced with an embedded
+  payload, carries two test-only shims, and its +60 B is a delta measured on
+  the `.sfnn`-loader form of both carriers. A real port re-prices from zero.
+- **The era comparison is one position, one depth, one laptop, two
+  interpreters.** It is sufficient to refute "no nps loss" and insufficient
+  for anything else.
+- **The shrinkage argument is a prior, not a result.** The residual magnitudes
+  are measured; that shrinking them helps is exactly the hypothesis the
+  registration in §9 exists to falsify, and its registered expectation is that
+  it will fail.
