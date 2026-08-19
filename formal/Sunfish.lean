@@ -19,3 +19,4 @@ import Sunfish.Repetition
 import Sunfish.EventuallyFinite
 import Sunfish.MateDepth
 import Sunfish.BandContract
+import Sunfish.NullRed

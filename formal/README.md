@@ -690,15 +690,22 @@ true, and it is true only because achievable distances have a fixed parity.
 At one point per ply the gap is 2 against a tolerance of 15 and the shipped
 driver can take the slower mate.
 
-**An odd null reduction is load-bearing for this.**  Parity survives along
-every path because both depth steps are odd: a real move spends one ply per
-negation, and the current null probe spends seven. The generic model uses
-three as the smallest nontrivial representative. An even reduction would let
-one line reach a mate value of the
-wrong rung parity, collapsing the separation gap to `EVAL_ROUGHNESS` -- exactly
-the width the driver cannot resolve.  No proof here mentions the null term (the
-parity lives in `ForcedMate`, whose `step` is two plies), but a change to that
-constant is a change to this theorem.
+**The null reduction is a FREE parameter — `NullRed.lean` retired the
+"odd is load-bearing" claim that used to stand here.**  The parity in these
+theorems lives entirely in `ForcedMate` (`mate` one ply, `step` two — game
+structure, not search structure).  The null term never generates a rung: the
+suppression keeps the pass term strictly sub-band at every reduction
+(`nullTermDR_lt_ML`), the max-fold makes sub-band pass terms inert, and under
+`NoZugzwang` the declared value equals the real-move value outright
+(`nullValueR_eq_realValue_of_noZugzwangR`).  So `dtm_optimalR` holds for EVERY
+reduction `R` — the whole `NULL_RED ∈ [3..10]` tuning range, odd and even
+alike — with the shipped `3` recovered as an instance (`nullValueDR_three`,
+`noZugzwangR_three`) and the even case witnessed (`dtm_optimal_R4`).  What
+changes with `R` is exactly one thing: `NoZugzwangR R` evaluates the pass at
+depth `d - (R - 1)`, so each reduction buys the same-shaped zugzwang premise
+at its own pass horizon.  No engine change is needed at any `R`: the
+`min(pos.score + EVAL_ROUGHNESS, ·)` cap already bars the positive mate band
+(`EvalBounds`), and negative-band pass values cannot raise a max-fold.
 
 | fact | theorem | axioms |
 |---|---|---|
@@ -719,6 +726,25 @@ constant is a change to this theorem.
 | the defence lasts the whole distance | `defence_resists` | `+ Classical.choice` |
 | the engine attains the optimal distance on the losing side | `leastMated_defence_resists` | `+ Classical.choice` |
 | both directions at once | `dtm_optimal` | `+ Classical.choice` |
+
+`NullRed.lean` extends the chain to an ARBITRARY reduction — the rows the
+retired paragraph said could not exist:
+
+| fact | theorem | axioms |
+|---|---|---|
+| the shipped model is the `R = 3` instance | `nullValueDR_three` | `propext, Quot.sound` |
+| the shipped premise is the `R = 3` premise | `noZugzwangR_three` | `propext, Quot.sound` |
+| accuracy at every reduction | `nullValueR_eq_realValue_of_noZugzwangR` | `propext, Quot.sound` |
+| the suppression at every reduction | `nullTermDR_lt_ML` | `propext, Quot.sound` |
+| `NoZugzwang` is vacuous at guard-off | `noZugzwang_guardOff` | `propext, Quot.sound` |
+| completeness at every reduction | `forcedMate_completeR` | `propext, Quot.sound` |
+| no false mates at every reduction | `forcedMate_of_value_distR` | `+ Classical.choice` |
+| block exactness at every reduction | `leastMate_value_blockR` | `+ Classical.choice` |
+| separation at every reduction | `leastMate_value_separationR` | `+ Classical.choice` |
+| shortest play at every reduction | `leastMate_play_shortestR` | `+ Classical.choice` |
+| maximal resistance at every reduction | `defence_resistsR` | `+ Classical.choice` |
+| both directions, every reduction | `dtm_optimalR` | `+ Classical.choice` |
+| the even-reduction witness | `dtm_optimal_R4` | `+ Classical.choice` |
 
 The parity spine is choice-free, like the distance spine it extends -- and so
 is the new play predicate's monotonicity; the `Classical.choice` in the value
@@ -939,8 +965,9 @@ the shipped driver could take the slower mate (`Shortest.lean`, where
 parity does the refunding).  At BAND level the same constant is
 irrelevant by three orders of magnitude, which is what lets
 `NearMaximalChoice` be dropped from classification results entirely.
-A change to the tempo would have to be re-argued in both places; an even null
-reduction would have to be re-argued in the first.
+A change to the tempo would have to be re-argued in both places; the null
+reduction needs no re-arguing at all (`NullRed.lean`: `dtm_optimalR` holds at
+every reduction).
 
 **The frontier premise survived the weakening, and was retired by the
 code instead.**  Masking was genuinely local -- `val_lower_pre 2 =
