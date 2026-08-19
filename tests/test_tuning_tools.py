@@ -11,6 +11,12 @@ import types
 import unittest
 from unittest import mock
 
+import pytest
+
+# tools/tune modules import numpy at module level; the PyPy CI env has no numpy,
+# and an ImportError here aborts collection of the ENTIRE suite. Skip loudly instead.
+pytest.importorskip("numpy")
+
 
 ROOT = pathlib.Path(__file__).parents[1]
 
