@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from types import SimpleNamespace
 
 import numpy as np
@@ -48,6 +49,9 @@ from adaptive_gp import (
 from logistic_gp import ELO_PER_LOGIT, LogisticGP, MixedSpace
 from report_gp import report_domain
 
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+from recommend import gp_recommend  # noqa: E402
+
 
 class MixedAcquisitionTest(unittest.TestCase):
     def setUp(self):
@@ -75,6 +79,33 @@ class MixedAcquisitionTest(unittest.TestCase):
             coordinate_maximum(self.space, self.space.candidates, score, set(), None),
             target,
         )
+
+    def test_gated_recommendation_stays_in_accepted_design(self):
+        target = (37, 13)
+
+        class Model:
+            @staticmethod
+            def predict(points):
+                values = np.asarray(points)
+                mean = -np.sum((values - target) ** 2, axis=1)
+                return mean, np.ones(len(points))
+
+        accepted = self.space.candidates[:4]
+        state = {
+            "batches": [{
+                "knobs": self.space.knobs(self.space.default),
+                "wins": 1, "draws": 0, "losses": 1,
+            }],
+            "gates": {
+                str(i): {"knobs": self.space.knobs(point), "accepted": True}
+                for i, point in enumerate(accepted)
+            },
+            "study": {"allocation": {"gate_all": True}},
+        }
+        with mock.patch("adaptive_gp.posterior", return_value=Model()):
+            result = self.space.canonical(gp_recommend(state, self.space, state["batches"], .5, 0))
+        self.assertIn(result, {*accepted, self.space.default})
+        self.assertNotEqual(result, target)
 
     def test_axis_design_moves_one_kernel_length_at_a_time(self):
         self.assertEqual(self.space.axis_design(), [
