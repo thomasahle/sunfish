@@ -94,6 +94,14 @@ def gp_recommend(state, space, batches, pair_weight, inducing):
         space.canonical(record["knobs"])
         for record in state.get("gates", {}).values() if not record["accepted"]
     }
+    if allocation.get("gate_all"):
+        accepted = {
+            space.canonical(record["knobs"])
+            for record in state.get("gates", {}).values() if record["accepted"]
+        }
+        points = sorted((set(space.candidates) & accepted) | {space.default})
+        means, _ = model.predict(points)
+        return space.knobs(points[int(np.argmax(means))])
     if allocation.get("local_acquisition"):
         points = sorted(set(observed) - rejected)
         means, _ = model.predict(points)
