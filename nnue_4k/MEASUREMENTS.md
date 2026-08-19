@@ -141,6 +141,45 @@ how much effort it cost.
 
 ---
 
+## 2026-08-19 — VERDICTS: the LMR gate needs all of it; the killer's deep exemption is the open cell
+
+Overnight run of the registered arms (entry below), tc=3+0.1 on the C twin,
+SPRT elo0=-10 elo1=0. Integrity gates clean on every arm: zero illegal moves,
+zero time losses, zero disconnects; the owner's own nice-0 validation ran
+alongside untouched throughout.
+
+| arm | gate under test | games | score | Elo | SPRT |
+|---|---|---:|---|---|---|
+| A1 `val < LMR` bare | drop root+calm+depth | 323 | 82-178-63 [0.351] | **-106.48 +/- 35.34** | **H0 accepted - REJECTED** |
+| A2 `not root and val < LMR` | drop calm+depth | 326 | 78-172-76 [0.356] | **-103.10 +/- 34.15** | **H0 accepted - REJECTED** |
+| A3 `not root and calm and val < LMR` | drop depth >= 6 only | 277 | 65-161-51 [0.327] | **-125.61 +/- 39.01** | **H0 accepted - REJECTED** |
+| B1 `KILLER_GATE=1` | drop the killer's `depth > 3` exemption | 800 | 306-301-193 [0.503] | **+2.17 +/- 21.00** | **undecided at cap - does not ship** |
+
+**The LMR finding, sharper than the question.** "I don't think it needs all
+that" is answered: it needs all that, and the three arms say WHICH part
+carries it. A3 dropped ONLY `depth >= 6` and lost as much as dropping
+everything (-125 vs -106/-103; the three arms are statistically
+indistinguishable from each other) - so the depth band IS the gate: intrinsic
+LMR is only sound where the fuel probe's regime applies, and reducing at
+depths 1-5 guts the search regardless of the calm/root dressing. The root
+exclusion and calm terms are unmeasurable at this N (A1 vs A2 differ only at
+the root: -106 vs -103), kept on principle (three tokens, and the root's
+reduced move is the move the game plays). The merged #236 spelling stands as
+the measured form; no follow-up diff is proposed for the LMR gate.
+
+**The killer finding: neutral but undecidable at this venue.** B1 hit the
+800-game cap with the SPRT at llr +0.50 of +/-2.94 (16.9%) and a dead-neutral
+point estimate (+2.17 +/- 21.00, LOS 58%). The cost of skipping deep low-sum
+killers is indistinguishable from zero, but the registered bar is
+non-inferiority at -10 and the interval does not exclude it; at the observed
+drift the SPRT would need roughly 4-5k games at 3+0.1 to decide. Per the
+registered ship rule (accept-H1 only), B1 does NOT ship: the `depth > 3`
+disjunct stays. If the one-disjunct shrink is still wanted, the decision
+costs a bulk venue - a large fixed-node screen or a registered multi-day
+3+0.1 continuation - registered here as a candidate, not launched.
+
+The registered ship rule binds: the simplest arm that holds ships; every
+A-arm failed, so nothing ships from experiment A.
 ## 2026-08-19 — REGISTERED before game 1: the post-#236 gate ladders, timed on the C twin
 
 Thomas's critique of the merged #236 names three uglies; two are semantic
