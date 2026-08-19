@@ -15,7 +15,12 @@ than assumed at every step:
     q[N+1 .. 2N]             bias digits + 44
     q[2N+1 .. 2N+r*N]        V + 44, row-major j*N + k
     q[2N+r*N+1 ...]          ceil(r/4) trit digits per feature row,
-                             feature-major (32 rows/piece when mirrored)
+                             feature-major (32 rows/piece when mirrored),
+                             BUCKET-MAJOR: row = (b*12 + piece)*nsq + rk*4 + fl'
+
+    B (= kb*pb) is read from the checkpoint -- len(U)/768 -- and the bucket
+    KIND from its own config, so a kb net cannot be built with a phase
+    selector by a mistyped flag.
 
     build_factor_entry.py CKPT.pickle [--out entry.py] [--packed entry.packed]
 """
@@ -58,9 +63,23 @@ def shift_for(v):
     return 0
 
 
+def shape_of(ck):
+    """(B, bucket-kind) from the checkpoint alone -- never from a flag."""
+    B = len(ck["U"]) // 768
+    assert B * 768 == len(ck["U"]), ("U has %d rows, not a multiple of 768"
+                                     % len(ck["U"]))
+    cfg = (ck.get("meta") or {}).get("config", {}).get("model", {})
+    kb, pb = int(cfg.get("kb", 1)), int(cfg.get("pb", 1))
+    if B > 1 and kb * pb != B:
+        raise SystemExit("checkpoint disagrees with itself: U implies B=%d, "
+                         "config says kb=%d pb=%d" % (B, kb, pb))
+    return B, ("kb" if kb > 1 else "pb")
+
+
 def payload(ck, force_shift=None):
     """Trained state -> the decoder's digit stream, with every field checked."""
     r, N, mirror = ck["rank"], ck["N"], ck["mirror"]
+    B, _ = shape_of(ck)
     U, V, b, v = ck["U"], ck["V"], ck["bias"], ck["v"]
     s = shift_for(v) if force_shift is None else int(force_shift)
     g = [min(89, max(1, int(round(abs(x) * (1 << s) / 32.0)))) for x in v]
@@ -93,8 +112,10 @@ def payload(ck, force_shift=None):
     # is any full-board row that maps to it, and file fl < 4 maps to itself.
     nsq = 32 if mirror else 64
     rows = []
-    for i in range(12 * nsq):
-        f = (i // nsq) * 64 + (i % nsq) // 4 * 8 + (i % 4) if mirror else i
+    for i in range(12 * nsq * B):
+        b, rem = divmod(i, 12 * nsq)
+        pc, sq = divmod(rem, nsq)
+        f = b * 768 + pc * 64 + (sq // 4 * 8 + sq % 4 if mirror else sq)
         rows.append(U[f])
     q = [s] + g + [d + 44 for d in bd]
     for j in range(r):
@@ -109,7 +130,7 @@ def payload(ck, force_shift=None):
             grp = row[c:c + 4]
             assert all(t in (-1, 0, 1) for t in grp), grp
             q.append(sum((t + 1) * 3 ** j for j, t in enumerate(grp)))
-    assert len(q) == 1 + 2 * N + r * N + 12 * nsq * ((r + 3) // 4), len(q)
+    assert len(q) == 1 + 2 * N + r * N + 12 * nsq * B * ((r + 3) // 4), len(q)
     return q, s, g, bd, clipped, rows
 
 
@@ -135,8 +156,10 @@ def main():
               "TRAIN/SHIP DIVERGENCE and prices bytes ONLY. Do not screen it."
               % a.force_shift)
 
+    B, bkind = shape_of(ck)
     src = open(os.path.join(REPO, "nnue_4k", "replnet_proto.py")).read()
-    eng, ndig, _ = M.build(src, r, N, 16, 0.43, mirror=mirror)
+    eng, ndig, _ = M.build(src, r, N, 16, 0.43, mirror=mirror,
+                           buckets=B, bkind=bkind)
     assert ndig == len(q), ("the engine expects %d digits, the payload is %d"
                             % (ndig, len(q)))
     body = "".join(enc(d) for d in q)
@@ -157,13 +180,18 @@ def main():
     assert Vd == ck["V"], "V did not survive the payload"
     nsq = 32 if mirror else 64
     sqs = [21 + f // 8 * 10 + f % 8 for f in range(64)]
-    for i, p in enumerate(e._PIECES):
-        for f in range(64):
-            fl = f % 8
-            row = rows[i * nsq + (f // 8 * 4 + min(fl, 7 - fl) if mirror else f)]
-            want = sum(sum(row[j] * Vd[j][k] for j in range(r)) << 16 * k
-                       for k in range(N))
-            assert e._half[p][sqs[f]] == want, ("row mismatch", p, f)
+    halves = e._HALVES if B > 1 else [e._half]
+    assert len(halves) == B, ("engine built %d half-tables, checkpoint has %d"
+                              % (len(halves), B))
+    for b in range(B):
+        for i, p in enumerate(e._PIECES):
+            for f in range(64):
+                fl = f % 8
+                j = (b * 12 + i) * nsq + (f // 8 * 4 + min(fl, 7 - fl)
+                                          if mirror else f)
+                want = sum(sum(rows[j][t] * Vd[t][k] for t in range(r)) << 16 * k
+                           for k in range(N))
+                assert halves[b][p][sqs[f]] == want, ("row mismatch", b, p, f)
 
     sz = subprocess.run(["bash", os.path.join(REPO, "tools/build/pack.sh"),
                          a.out, a.packed], capture_output=True, text=True)
@@ -175,12 +203,13 @@ def main():
         1, sum(len(row) for row in rows))
 
     print("FACTORED ENTRY BUILT AND CERTIFIED")
-    print("  shape          r=%d N=%d mirror=%s   %d stored rows, U zeros %.1f%%"
-          % (r, N, mirror, len(rows), zeros))
+    print("  shape          r=%d N=%d mirror=%s B=%d(%s)   %d stored rows, "
+          "U zeros %.1f%%" % (r, N, mirror, B, bkind, len(rows), zeros))
     print("  payload        %d base-90 digits" % len(q))
     print("  shift %d  caps sum %d/65534  bias digits clipped %d/%d"
           % (s, 32 * sum(g), clipped, N))
-    print("  decode         literal round-trips; V exact; all 768 rows == U@V")
+    print("  decode         literal round-trips; V exact; all %d rows == U@V "
+          "in every bucket" % (768 * B))
     print("  PACKED         %d B   (%d spare against 4096)" % (n, 4096 - n))
     print("  runs           %s" % (bm[0] if bm else "NO BESTMOVE -- BROKEN"))
     if n > 4096:

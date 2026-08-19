@@ -24630,3 +24630,166 @@ sparsity that nothing yet says 4× l1 will deliver. If they undershoot, the
 registered fallback (`rate_penalty`, which targets a zero fraction directly)
 is what runs next — named before the number, so it is not a new degree of
 freedom when it is needed.
+
+## COHORT 1 HARVEST + SCREEN REGISTRATION — seven arms, six shippable artifacts, and a byte prediction that was wrong in the GENEROUS direction (2026-08-19)
+
+### 1. The seven arms
+
+All `arch=factor`, mirrored, r=4, `pool10m`/`fenkey`, seed 0, 6 epochs, one
+variable each against run 360's recipe. Anchors on this split: zero 0.02637,
+`mat` 0.02054.
+
+| arm | structure | l1 | val | U zeros | \|W\|max | **PACKED** | spare/4096 |
+|---|---|---|---|---|---|---|---|
+| 10 `f4n32` | B=1 carrier control | 5e-4 | 0.01596 | 36.4% | 136 | **3,663** | 433 |
+| 11 `pb2f4n32` | pb=2 phase | 5e-4 | **0.01557** | 41.0% | 176 | **4,008** | 88 |
+| 12 `kb2f4n32` | kb=2 king band | 5e-4 | 0.01569 | 40.4% | 160 | **3,972** | 124 |
+| 13 `f4n64` | B=1, N=64 | 2e-3 | 0.01623 | 57.7% | 176 | — | — |
+| 14 `pb2f4n64` | pb=2, N=64 | 2e-3 | 0.01558 | 60.0% | 123 | **4,057** | 39 |
+| 15 `pb2f4n32_l1hi` | pb=2 | 2e-3 | 0.01563 | 61.6% | 156 | **3,944** | 152 |
+| 16 `kb2f4n32_l1hi` | kb=2 | 2e-3 | 0.01590 | 62.7% | 157 | **3,904** | 192 |
+
+Every bucketed arm beats the B=1 control it differs from in one bit. **Val
+promotes nothing** — five statistics have predicted play in this family and
+five were contradicted — so this is stated as what it is: the structures
+train, and they learn something the king-blind control does not.
+
+Width does not convert here: `13_f4n64` is the **worst** arm on val (0.01623)
+despite four times the lanes, which is consistent with the resolution ceiling
+recorded earlier (mean gain ≤31 at N=64) and inconsistent with the free-table
+width sweep that predicted −20.9%. Another statistic that did not survive
+contact.
+
+### 2. THE BYTE PREDICTION WAS WRONG BY ~120 B, in the generous direction
+
+I registered that arms 11 and 12 "CANNOT SHIP" — predicted 4,130 B and
+4,095 B against a 4,066 working limit, from random-weight builds at matched
+sparsity. The **trained** payloads pack at **4,008** and **3,972**.
+
+| shape | random-weight prediction | trained, measured | credit |
+|---|---|---|---|
+| pb2 @ ~41% zeros | 4,130 | **4,008** | **−122 B** |
+| kb2 @ ~40% zeros | 4,095 | **3,972** | **−123 B** |
+
+**A trained ternary payload compresses ~122 B better than a random one of the
+same shape and sparsity.** I had generalised the N=6 lane's finding — that its
+~30 B "trained compressibility credit" measured zero — into this container,
+where it is worth four times what that lane hoped for. The N=6 result was
+about a different container and a different shape and it did not transfer.
+
+Consequence: **the demotion of arms 11 and 12 to "val cells" is WITHDRAWN.**
+All six spliced arms fit 4096, and all six fit the 4,066 working limit —
+including `14_pb2f4n64` at 4,057, by 9 B. The registered byte-condition was
+always "prices under 4,066 through `pack.sh`", and the zero fractions were
+only my prediction of what that would take; the prediction was wrong and the
+condition is what governs. **The `rate_penalty` trigger therefore does NOT
+fire** — its premise was an arm that does not fit, and no such arm exists.
+
+### 3. The stage-2 splice is built, and every gate is run
+
+`packed/build_factor_entry.py` gains bucket support (B and the bucket kind are
+read from the checkpoint, never from a flag, so a kb net cannot be built with a
+phase selector by a typo). Blocker (i) is now **CLOSED for shipping**, not just
+for pricing.
+
+**(a) Decode certification**, per arm, inside the builder: the base-90 literal
+round-trips digit for digit; V survives exactly; and all 768·B rows equal U@V
+in every bucket.
+
+**(b) verify_export, BIT-EXACT.** An independent integer reference — plain
+python, no big-int tricks, built from the checkpoint's U, V, bias digits,
+gains and shift — against the spliced engine's `nn_cp` on 200 corpus
+positions:
+
+| arm | integer ref == engine | float model vs engine (quantization) |
+|---|---|---|
+| 16 kb2 | **200/200 BIT-EXACT** | mean 0.443 cp, max 1.39 cp |
+| 11 pb2 | **200/200 BIT-EXACT** | mean 0.384 cp, max 1.08 cp |
+
+The second column is reported as a magnitude and never as a pass: it is the
+bias band, the gain grid and the truncating shift rounding, and it is the
+distance between the net that was trained and the net that will play.
+
+**(c) Bias-rail check** (mandatory in this portfolio, five prior sightings):
+**0 of 32 bias digits clipped** on every arm, and cap sums 34,528–35,680 of
+65,534 — comfortably inside the lane-sum fold at N=32, and at N=64 too.
+
+**(d) Artifact-alone legality battery**, packed, empty cwd, `SF_NET` and
+`PYTHONPATH` unset: all five arms `uciok`, **6/6 legal moves** over six lines
+to six plies, `position startpos moves` honoured.
+
+### 4. THE ROOT-FREEZE GATE — it passes on expectation and it found something
+
+Registered binding, and it was right to be. Measured |cp(true bucket) −
+cp(frozen wrong bucket)| over 400 positions, against the measured crossing
+rates:
+
+| arm | mean \|Δ\| | median | p90 | max | crossing rate | **expected error** |
+|---|---|---|---|---|---|---|
+| 16 kb2 | 98.9 cp | 73 | 218 | 437 | 2.16% | **2.14 cp** |
+| 12 kb2 | 101.2 cp | 75 | 234 | 426 | 2.16% | **2.19 cp** |
+| 11 pb2 | 164.8 cp | 149 | 320 | 451 | 0.07% | **0.12 cp** |
+| 15 pb2 | 78.9 cp | 64 | 163 | 479 | 0.07% | **0.06 cp** |
+
+Two readings, and the second is the one that matters.
+
+**The buckets carry real signal.** Swapping the bucket moves the eval by
+79–165 cp on average and the two tables agree exactly on 1% of positions.
+Whatever these arms learned, it is not a decoration on a shared table — which
+is the first direct evidence in this campaign that the bucketed family
+expresses something the king-blind one cannot.
+
+**But the kb freeze error is SELECTED, not random.** 2.16% × 99 cp = 2.14 cp
+in expectation is small; the conditional error is ~99 cp, p90 218 cp, and it
+lands exactly on **king moves** — the move class the bucket exists to
+evaluate, in the endgames and king attacks the loss taxonomy named as the
+entry's two largest deficits. An expectation computed over all moves
+understates a harm concentrated on the moves that decide those positions.
+
+**Pre-registration defect, owned:** I made this gate binding without a numeric
+bar, the same class of defect the H3 rules recorded (no minimum SM size). I
+will not invent a threshold now that the numbers exist. Instead:
+
+- **pb2 PASSES on any reading** — 0.06–0.12 cp expected, and a phase change is
+  a capture, already the most examined move class in the tree.
+- **kb2 is REFERRED TO THE SCREEN rather than gated out**, on the ground that
+  the screen plays the *deployed* artifact — root-freeze included — so the
+  freeze is inside the measurement rather than hidden from it. What the gate
+  bought is that a kb2 underperformance now has a named, quantified candidate
+  cause instead of being read as "king buckets do not work".
+- **Registered follow-up:** the live-bucket kb variant was priced at ≈1.2 Elo
+  timed (2.16% × a 3,586 ns refresh). Against a ~99 cp conditional error, 1.2
+  Elo looks cheap, and if kb2 trails pb2 in the screen that is the first arm
+  of cohort 2.
+
+### 5. SCREEN REGISTRATION — the field is the one registered before any of these numbers existed
+
+The pre-registered cohort field was `entryd0` + `capn5` + `f4n32` +
+`pb2f4n32` + `kb2f4n32`. All three candidates build, fit and pass every gate,
+so **it runs exactly as registered** — arms 15 and 16 are NOT swapped in on
+the strength of their val or their spare bytes, because val promotes nothing
+and swapping the field after seeing the numbers is the whole thing this
+discipline exists to prevent. They are cohort 2.
+
+| knob | value |
+|---|---|
+| field | `entryd0` (anchor), `capn5` (drift contrast), `f4n32` (10), `pb2f4n32` (11), `kb2f4n32` (12) |
+| engines / pairings | 5 / 10 |
+| rounds | **27** (gcd(27,10)=1, the coprimality gate) |
+| games | **540**, 54 per pairing |
+| each | `proto=uci nodes=20000 tc=6000+0` |
+| arms | CHECKOUTS (`bin/e_*.py`), never packed artifacts |
+| cotenancy | conc 8, nice 5, ≥16 free cores, COORDINATION entry, yield-first |
+
+**Bars, unchanged from the registration and restated before game 1:**
+**CONTINUE at 40.0%** vs `entryd0` (the entry contrast is 29.79% ± 3.0,
+n=282; 40.0% is +78.6 Elo above it). **WIN at ~59%**, where a fixed-node
+margin covers the measured −67.3 Elo timed tax at N=32. **STOP if all three
+land inside 22–36%**, the band nine mechanisms produced, in which case input
+conditioning closes for the packed family.
+
+**Registered expectation, again, so a null cannot be retold as a surprise:** I
+expect the two bucketed arms to beat `f4n32` intra-family and still land under
+40%. The reason to run it is that these two change what the family can
+represent, and the root-freeze gate has now shown — before any game — that the
+representation really did change.
