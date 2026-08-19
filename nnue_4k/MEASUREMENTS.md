@@ -24918,3 +24918,40 @@ tournament: the speed-moat law. pb2's bucket is chosen once at the search root,
 so the predicted per-move cost is **zero**, and that prediction is measured
 with `nps_probe` on the built artifacts in the same report — a prediction of
 "free" that goes unmeasured is exactly the kind this ledger keeps catching.
+
+### SPEED-MOAT MEASUREMENT — the "buckets are free" prediction, measured (2026-08-19)
+
+Registered prediction: a pb2/kb2 bucket is chosen once at the search ROOT, so
+`Position.move`, the accumulator delta and `nn_cp` are byte-identical to B=1
+and the per-move cost of buckets is **zero**. arm10 (B=1) vs arm11 (pb2) is
+that prediction's clean A/B — same r, same N, same code, one bit different.
+
+Interleaved round-robin over engines (so a drifting box load hits every arm
+equally), 4 positions × 30,000 nodes × 5 rounds, `nice 19`, box load 18.4/96.
+Absolutes are load-confounded; only the ratios are quoted.
+
+| engine | s/round | × arm10 | nps index |
+|---|---|---|---|
+| arm10 (B=1, N=32) | 2.86 | 1.000 | 100.0% |
+| **arm11 (pb2, B=2)** | 2.71 | **0.949** | **105.4%** |
+| **arm15 (pb2, B=2)** | 2.81 | **0.984** | **101.7%** |
+| `entryd0` | 1.55 | 0.542 | 184.6% |
+
+**The prediction holds.** Both bucketed arms land within ±5% of the B=1
+carrier, and arm11 is nominally *faster* — which is noise, and is the point:
+the bucket is not detectable in the per-move cost. A second input table costs
+**nothing** at runtime in this engine, exactly as the root-selection design
+said it would, and the ~185 B it costs in the artifact is its whole price.
+
+The net itself is the moat: these arms run at **54.2% of `entryd0`'s speed**,
+i.e. **−45.8% nps → ≈ −58.6 Elo timed** at the ledger's 1.28 slope. That is
+the same tax the N=4 replnet paid (−46.8%, −59.9 Elo), which independently
+re-confirms that width is cheap and *having a net at all* is the cost.
+
+**Consequence for the confirmation, stated before its result exists:** an arm
+must be ≈ **+59 Elo up at fixed nodes** merely to break even on a clock, which
+is ≈ **58% vs `entryd0`** — and that is exactly where the registered WIN bar
+(~59%) was independently placed. A confirmation landing near 50% would mean a
+net that has *caught the entry's evaluation* and still loses a timed game by
+about 59 Elo. That is a real result about eval and it is not yet a shippable
+engine, and the two must not be reported as one thing.
