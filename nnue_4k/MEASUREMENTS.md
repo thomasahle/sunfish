@@ -25276,3 +25276,118 @@ predicts the opposite.
 `gauntlet-20260818/grr1.pgn` read **7 forfeits before `rr_confirm11b` and 7
 after** — **zero delta, no cotenancy harm** from 1,212 games of mine inside
 their window.
+
+## CLOSURE — `rr_kb_close`: king buckets land in the band. **INPUT CONDITIONING CLOSES for the packed family.** (2026-08-19)
+
+1,212/1,212 games, **zero illegal moves**, book gate PASS, 00:58:53. Cells from
+`rr_kb_close.pgn`, n=202 per pairing.
+
+| arm | vs `entryd0` | W–L–D | 95% CI | Elo | 22–36% band |
+|---|---|---|---|---|---|
+| **arm12** (kb2, l1 5e-4) | **34.65%** | 57–119–26 | [28.09, 41.22] | −110.2 | **IN** |
+| **arm16** (kb2, l1 2e-3) | **33.17%** | 56–124–22 | [26.68, 39.66] | −121.7 | **IN** |
+| capn5 (drift anchor) | 29.21% | 44–128–30 | [22.94, 35.48] | −153.8 | IN |
+
+### Bar by bar, exactly as registered at `5ec178c`
+
+| # | bar | arm12 | arm16 | verdict |
+|---|---|---|---|---|
+| 1 | PRIMARY: 95% CI **LB > 36.0%** | LB **28.09%** | LB **26.68%** | **FAIL / FAIL** |
+| 2 | DRIFT-ANCHORED **≥ +10.0 pts** | **+5.44** [−3.63, +14.52] | **+3.96** [−5.07, +12.99] | **FAIL / FAIL** |
+| 3 | COHERENCE (gating) | precondition did not arise — neither arm tied or beat `entryd0` | | n/a |
+| 4 | NULL if drift-anchored ≤ 0 | +5.44 | +3.96 | **does not fire** |
+
+Bar 4 deserves its own sentence, because it is the one honest positive: **both
+kb2 arms are modestly ABOVE the drift anchor** (+5.4, +4.0 points), so this is
+not a null — king buckets measurably beat `capn5` in their own tournament.
+They are simply nowhere near +10, and **both sit inside the 22–36% band that
+nine prior mechanisms produced.**
+
+### THE CLOSING STATEMENT
+
+**Both arms landed in the band, so the registered clause fires: INPUT
+CONDITIONING CLOSES for the packed big-int family. Eleven mechanisms, zero
+conversions.** Cohorts 2 and 3 are cancelled rather than re-specified, per the
+registration. The nine of the closed eval axis — capacity, data scale,
+optimisation, compression, cp→win scale, label source, bias format,
+nonlinearity, ordering — are now joined by **king-square conditioning** and
+**material-phase conditioning**.
+
+What makes this closure different from the first nine, and worth stating
+because it is the strongest form of the program's finding: **these two
+mechanisms demonstrably worked.** The root-freeze gate measured the two bucket
+tables **79–165 cp apart**, agreeing exactly on 1% of positions; val improved
+**−2.4% relative**; the artifacts fit (3,904–4,057 B), the buckets cost
+**nothing** at runtime (0.949–0.984× the B=1 carrier), and export is
+**bit-exact 200/200**. The family was given the ability to express exactly the
+king/phase-conditioned structure the closure said it lacked, it did express it,
+and play did not move. **Expressiveness was not the missing ingredient.**
+
+### A correction to my own ranking
+
+My portfolio memo ranked **phase first** on price and expected it to lead.
+Drift-anchored within each tournament, the order is the reverse:
+
+| arm | structure | drift-anchored |
+|---|---|---|
+| arm12 | **kb2** (king band) | **+5.44** |
+| arm16 | **kb2** | **+3.96** |
+| arm15 | pb2 (phase) | −3.46 |
+| arm11 | pb2 (phase) | −10.15 |
+
+**King buckets beat phase buckets on both sparsities.** The memo's ranking was
+built on byte and refresh price, which were correct and irrelevant.
+
+### THE ANCHOR SWING — and it bounds what any cross-tournament claim can say
+
+`capn5` vs `entryd0`, byte-identical engines, four measurements:
+
+| tournament | n | score% |
+|---|---|---|
+| historical | 282 | 29.79% |
+| rr_cohort1 | 54 | **38.89%** |
+| rr_confirm11b | 202 | 35.89% |
+| rr_kb_close | 202 | **29.21%** |
+
+**Full range 9.68 points. Between the two n=202 tournaments alone: 6.68 points**
+— 1.4 SE apart on 202 games each. So **a raw cell from one tournament cannot be
+compared to a raw cell from another**, even at n=202, and the pooled Elo columns
+are worse still. Every comparison above is therefore drift-anchored *within* its
+own tournament. This is the third time the anchor has earned its slot, and it is
+the reason `capn5` is mandatory in every field.
+
+### Screen-cell error — the third data point
+
+| arm | n=54 | n=202 | delta |
+|---|---|---|---|
+| ARM 10 (historical) | 34.00% | 17.00% | **−17.00** |
+| arm11 (pb2) | 50.00% | 25.74% | **−24.26** |
+| arm12 (kb2) | 29.63% | 34.65% | **+5.02** |
+
+Three swings of −17, −24 and +5 points on byte-identical engines. **A 54-game
+cell is not a measurement of a within-family difference, in either direction**,
+and the coordinator's rule — *a family does not get closed or kept alive on the
+instrument size that just failed* — is now backed by three payouts rather than
+one.
+
+## PORTFOLIO — where the next registration goes: **eval parks, the +400 path is nps × TM × search**
+
+**Recommendation: do not fund bilinear m=4 + narrow tail, and park the eval
+axis entirely.** The arithmetic is not close. The best packed net this cohort
+produced is **−110 Elo** against the entry at fixed nodes, and the same net
+carries a measured **−45.8% nps ⇒ ≈ −58.6 Elo** timed tax *before it evaluates
+anything*, so a shippable net needs roughly **+170 Elo of eval** over today's
+best. Eleven mechanisms have now produced zero, and the last two produced zero
+while provably expressing new structure — which is evidence that the deficit is
+not a missing feature class. Bilinear's price makes it worse, not better: its
+`ml2` sibling was already built, screened and closed (**−6.66** pooled, 45.00%
+head-to-head, +8.2% nps tax), it is *blocked* behind two real defects
+(`certify_ml2` ignores N and `bm`; `export_ml2` is silently corrupt at N ≥ 5),
+and fixing both buys a family whose only measured member failed. Against that,
+**every Elo this program has actually banked came from the other axis** —
+meter-4's **+108.17 ± 24.64**, the TM work, the search constants — and this
+ledger's own decomposition has said the larger half of +400 lives there since
+2026-08-13. The one condition that should reopen eval is not a new feature
+class but a change in the *trade*: an evaluator that does not cost ~46% of nps,
+because that tax, not expressiveness, is what every net in this program has
+actually died of. **Nothing launched; this is a proposal.**
