@@ -18,17 +18,27 @@ Pipeline:
    interface. The bridge is an unconditional import, not a fallback: the
    packed build is the only configuration that runs the tiny loop, and
    it gets there by deleting the import rather than by failing it.
-2. **Minify** with [`pyminify`](https://pypi.org/project/python-minifier/)
-   (`--rename-globals --remove-literal-statements`).
-3. **Compress** with `xz`.
-4. **Prepend a self-extracting header**: a `/bin/sh` stub that copies its
-   own tail (`tail -c +N "$0"`) through `xz -d` into a temp file and
-   execs it with `pypy3` when available, else `python3` (mirroring the
-   polyglot shebang's interpreter preference). The header's byte length appears inside the
-   header itself (the `tail -c +N` offset), so it is computed by a small
-   fixed-point loop: re-render the header until its length stops
-   changing. The `(sleep 9; rm $T)&` arranges for the extracted temp
-   file to clean itself up after the engine has started.
+2. **Drop the polyglot `#!/bin/sh` line** (line 1 only, and only if it is a
+   shebang). It is dead weight *inside the artifact*: the header in step 5
+   execs a named interpreter, so nothing ever reads the payload's shebang.
+   The source file keeps its header — only the copy in the payload goes.
+3. **Minify** with [`pyminify`](https://pypi.org/project/python-minifier/)
+   (`--rename-globals --remove-literal-statements --no-hoist-literals`).
+   Hoisting is off *on purpose*: it shrinks the text and grows the artifact,
+   because rewriting each repeated literal to a fresh one-character name
+   destroys exactly the repetition lzma compresses for free. Steps 2 and 3
+   together are −22 to −52 bytes depending on the engine; measured per family
+   in the header comment of `pack.sh`, and neither pays without the other.
+4. **Compress** with `xz` (`--format=lzma`, `pb=0`).
+5. **Prepend a self-extracting header**: a `bash` stub that feeds its own
+   tail (`tail -c +N "$0"`) through `xz -d` and hands the result to `pypy3`
+   when available, else `python3` (mirroring the polyglot shebang's
+   interpreter preference) as a **process substitution** — a `/dev/fd` path,
+   so there is no temp file to create, chmod, or clean up. Naming the
+   interpreter explicitly is also what makes step 2 safe. The header's byte
+   length appears inside the header itself (the `tail -c +N` offset), so it
+   is computed by a small fixed-point loop: re-render the header until its
+   length stops changing.
 
 The result is a single executable file: `./sunfish.packed` speaks UCI.
 
@@ -51,4 +61,6 @@ executable end-to-end (uciok/readyok/bestmove) — the packed artifact is
 a release deliverable, and the pipeline has broken silently before (a
 `pyminify` update started stripping the shebang, so the header's
 `exec $T` fed Python source to /bin/sh; fixed by exec'ing the
-interpreter explicitly).
+interpreter explicitly). That fix is what turned the payload's shebang
+into dead bytes, which is why step 2 can now delete it on purpose — but
+the smoke test is the thing that keeps it true, so do not drop it.
