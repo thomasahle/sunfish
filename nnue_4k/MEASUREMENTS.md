@@ -25047,3 +25047,91 @@ window by whoever owns that bot; I have not touched or inspected it from here.
 the gate working, not a reason to move a goalpost. Field `entryd0` + `capn5` +
 `arm11` + `arm15`, 101 rounds, 1,212 games, 202 per pairing, fresh `-srand`,
 clean book.
+
+## RETROACTIVE AUDIT — every harvested number against the 9 corrupt book entries. NOTHING MOVES. (2026-08-19)
+
+Drawn-FEN intersection over **every PGN on the box**, not priors:
+`tools/build/audit_books.py` extracts the `[FEN]` actually drawn per game,
+intersects with the 9 impossible-castling entries, and for each hit decides
+**per game** whether the phantom right was ever *exercised* — because a corrupt
+FEN merely drawn is harmless; the rights bit is only live if an engine castles
+on it.
+
+### Global result
+
+| | |
+|---|---|
+| PGNs scanned | **254** |
+| games scanned | **120,324** |
+| arenas that drew ≥1 corrupt FEN | **32** |
+| corrupt-FEN game-instances drawn | **144** |
+| **games where the phantom right was EXERCISED** | **1** |
+
+**That one game is `rr_confirm11` R211 — the game already voided.**
+`[O-O-O by black at ply 22]`. Across the entire recorded history of this box,
+exactly one game ran on divergent boards, and the zero-tolerance gate caught it
+the first time it happened.
+
+### The named arenas
+
+| arena | book | games | corrupt drawn | affected | verdict | number delta |
+|---|---|---|---|---|---|---|
+| **meter4-20260818/primary** (the **+108.17 ± 24.64** headline) | `openings_1991_valid.epd` | 600 | **0** | 0 | **CLEAN** | **none** |
+| meter4 VOID_epd_book (already void) | — | 600 | 0 | 0 | CLEAN | n/a |
+| **screens/rr_cohort1** (the 50.00% screen) | `openings_2k.epd` | 540 | **0** | 0 | **CLEAN — verified by scan, not by P≈88%** | **none** |
+| screens/rr_rank | `openings_2k.epd` | 300 | 0 | 0 | CLEAN | none |
+| screens/rr_loud | `openings_2k.epd` | 300 | 0 | 0 | CLEAN | none |
+| **screens/rr_confirm11** | `openings_2k.epd` | 1,212 | 12 | **1** | **VOID** (already) | unharvested |
+| screens/rr_confirm11b (re-run) | clean book | in flight | 0 | 0 | CLEAN so far | — |
+| gauntlet-20260818/grr1 | — | 900 | 0 | 0 | CLEAN | none |
+| gauntlet-20260818/hcal | — | 168 | 0 | 0 | CLEAN | none |
+| bookfit-20260818 (6 pgns) | — | 4,561 | 0 | 0 | CLEAN | none |
+| **eval-c1-20260813** (the axis-closure corpora: b1/c1/c2/d1screen, aactl2) | `openings_2k.epd` | 1,861 | 10 | **0** | **CLEAN — drawn, never exercised** | **none** |
+
+**The headline numbers are untouched. Meter-4 does not move. The axis closure
+does not move. The +400 accounting does not move.** `rr_cohort1`'s "it was
+lucky" is now a measurement rather than a probability: it drew **zero** corrupt
+openings in 540 games.
+
+The per-game determination earned its place in the same tournament that failed:
+`rr_confirm11` R110 drew **the same** corrupt FEN as R211, in both colours,
+**and never castled on the phantom right** — those two games are fine. Drawing
+a poisoned opening is not the same event as being poisoned by it, and an audit
+that stopped at "drawn" would have voided them wrongly.
+
+The 22 other arenas that drew a corrupt FEN — `audit-pr207` (10 instances over
+3,000 games), `corrhist/order` (12), `entry-n205`, `screens/lmron`, `kdg`,
+`goal60`, `packed-match/kcx_screen` and the rest — are all **CLEAN, none
+exercised**, and each affected game is listed individually in the run output
+rather than summarised away.
+
+### PROVENANCE — the class, named
+
+Every one of the 2,000 lines is stamped `0 10`: the book is a **move-10
+extraction from a game corpus**. The 9 defects are all one bug:
+
+- **7 are STALE CASTLING FIELDS** — the extractor copied the game's *original*
+  castling rights instead of recomputing them for the extracted position, so
+  any game where a side castled before move 10 kept a phantom right
+  (`2kr1bnr … w Kk`: black king already on c8; `r1bq1rk1 … w Qq`: both kings
+  already castled short).
+- **2 are CHESS960 STARTING ARRAYS** (`nnbbrkrq/pppppppp/…/NNBBRKRQ`) stamped
+  as move 10 with every pawn still home — impossible in a standard game, so
+  the source corpus **was not filtered to standard chess**.
+
+So the class is: *an unvalidated move-10 EPD extraction from a mixed-variant
+corpus, with castling rights copied rather than recomputed.*
+
+**And it had already been caught once.** `openings_1991_valid.epd` (created
+**2026-08-13 12:42**, three days after `openings_2k.epd`) is **byte-identical
+to the book my gate produced today** — someone found the same 9, removed them,
+and named the result "valid". `meter4` used it, which is exactly why the
+headline number is clean.
+
+**The failure was propagation, not detection.** The fix existed for six days
+and never reached `screens/ab_roundrobin.sh`, which kept pointing at the raw
+file — so every screen in this series, including my own, ran on the known-bad
+book while a known-good one sat beside it. That is the lesson worth keeping:
+*a finding that produces an artifact but not a gate will be re-discovered by
+whoever is unlucky enough to draw the bad line.* The gate now lives in the
+launcher, so the propagation cannot fail again the same way.
