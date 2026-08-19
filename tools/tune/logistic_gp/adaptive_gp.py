@@ -697,12 +697,22 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
     state.setdefault("allocations", {}).setdefault(mode, 0)
     state["allocations"][mode] += 1
     if mode != "design" and isinstance(space, logistic_gp.MixedSpace):
+        def exploration_variance(points, variance):
+            trials = 2 * args.pair_weight * args.pairs
+            variance = fantasy_variance(
+                model, space, pending, points, np.asarray(variance, dtype=float), trials)
+            if model is not None and hasattr(model, "residual_variance"):
+                residual = np.minimum(model.residual_variance(points), variance)
+                counts = np.asarray([observation_counts[point] for point in points])
+                # Logistic Fisher information is at most trials / 4.
+                learned = 4 * residual / (trials * counts * residual + 4)
+                variance += learned - residual
+            return variance
+
         def score(points):
             point_mean, point_variance = statistics(points)
             if mode == "explore":
-                point_variance = fantasy_variance(
-                    model, space, pending, points, point_variance,
-                    2 * args.pair_weight * args.pairs)
+                point_variance = exploration_variance(points, point_variance)
                 return (point_mean + args.explore_optimism * np.sqrt(point_variance)
                         if args.explore_optimism else point_variance)
             if getattr(args, "acquisition", "ucb") != "ucb":
@@ -712,11 +722,11 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
                 2 * args.pair_weight * args.pairs)
             return exploitation(point_mean, point_variance, args)
 
-        # Fantasized variance decides whether another pending copy is useful;
-        # do not impose a fixed one-copy-per-configuration rule on top of it.
+        # Pending and completed games both reduce useful exploration uncertainty.
         if mode == "explore":
             pool = exploration_pool
             pool_mean, pool_variance = statistics(pool)
+            pool_variance = exploration_variance(pool, pool_variance)
             confidence = getattr(args, "explore_confidence", 1.96)
             supported = max(0, max(pool_mean - confidence * np.sqrt(pool_variance)))
             plausible = {
