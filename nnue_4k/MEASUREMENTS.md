@@ -24793,3 +24793,128 @@ expect the two bucketed arms to beat `f4n32` intra-family and still land under
 40%. The reason to run it is that these two change what the family can
 represent, and the root-freeze gate has now shown — before any game — that the
 representation really did change.
+
+## COHORT 1 SCREEN — THE CONTINUE BAR FIRES, and the same tournament argues with itself (2026-08-19)
+
+540/540 games, `rr_cohort1`, fixed nodes 20,000, tc pinned 6000+0, conc 8
+nice 5, srand 20260819, `openings_2k.epd`. All five legality gates PASS
+(0 no-move, 0 illegal), 0 time forfeits, opening gate PASS. Registered at
+`4987b9d` before game 1.
+
+### The pairwise matrix, computed from the PGN rather than taken from a summary
+
+score% (row vs column), n=54 every cell:
+
+| | arm10 | arm11 | arm12 | capn5 | entryd0 |
+|---|---|---|---|---|---|
+| **arm10** | — | 59.26 | 52.78 | 35.19 | **18.52** |
+| **arm11** | 40.74 | — | 42.59 | 50.00 | **50.00** |
+| **arm12** | 47.22 | 57.41 | — | 55.56 | **29.63** |
+| **capn5** | 64.81 | 50.00 | 44.44 | — | **38.89** |
+| entryd0 | 81.48 | 50.00 | 70.37 | 61.11 | — |
+
+**The registered selector — score% vs `entryd0`:**
+
+| arm | score% | Elo | 95% CI |
+|---|---|---|---|
+| **arm11 (pb2, phase buckets)** | **50.00%** | **0.0** | [36.7, 63.3] |
+| capn5 (drift contrast) | 38.89% | −78.5 | [25.9, 51.9] |
+| arm12 (kb2, king band) | 29.63% | −150.3 | [17.5, 41.8] |
+| arm10 (B=1 carrier control) | 18.52% | −257.4 | [8.2, 28.9] |
+
+**The CONTINUE bar (40.0%) FIRES for arm11**, and on the face of it this is the
+first entry-level cell the eval program has produced: every prior family
+landed 22–36%.
+
+### Three things that must be said in the same breath, and the last is the serious one
+
+**1. The anchor DRIFTED, and the drift anchor is in the field to measure it.**
+`capn5` scored **38.89%** here against its historical **29.79% ± 3.0 (n=282)** —
+**+9.10 points, +70.4 Elo**. This tournament's `entryd0` cells run high.
+Drift-corrected, **arm11 is 40.90%**, which clears the 40.0% bar by 0.9 points
+rather than by 10. The bar is *literally* met either way; the margin is not.
+
+**2. arm10, the carrier control, scored 18.52% — BELOW the 22–36% band** that
+nine mechanisms produced. A control landing outside the band it was chosen to
+sit in is itself a warning that this tournament's cells are not on the
+historical scale.
+
+**3. THE INTRANSITIVITY, and this program has already resolved this exact
+pattern once — against the anchor cell.**
+
+arm11's three intra-family cells say it is mid-to-weak:
+
+| arm11 vs | score% |
+|---|---|
+| arm10 (the carrier the entry beats 81.5–18.5) | **40.74** |
+| arm12 | 42.59 |
+| capn5 | 50.00 |
+| **entryd0 (the single anchor cell)** | **50.00** |
+
+**arm11 loses to arm10, and arm10 is crushed by `entryd0` 81.48–18.52 — yet
+arm11 ties `entryd0`.** In the overall standings arm11 finishes **fourth of
+five** (45.8%), below capn5 (49.5%) and arm12 (47.5%), while tying the engine
+that wins the tournament at 65.7%.
+
+The ledger wrote the reading for this in advance, on ARM 10, and it is quoted
+here against my own favourable result:
+
+> "`arm10` vs the entry re-read **17.00%** here against **34.00%** in
+> `rr_rank`… So the **34.00% was the outlier**, the intransitivity was
+> **anchor-cell noise**, and arm10 is simply the weakest net — exactly what
+> its intra-family cells said all along. Worth remembering next time an anchor
+> cell disagrees with three intra-family cells."
+
+**This is that next time.** One 54-game anchor cell at ±13.3 points disagrees
+with three intra-family cells and with the overall standings. The program's own
+precedent says the intra-family half is the reliable one.
+
+### The decision, and why it is not "declare victory"
+
+The registered branch is taken as written: **the bar fired, so CONTINUE** — and
+CONTINUE means *the confirmation*, which was always the instrument. It does not
+mean the 50% is a strength reading. **Nothing is claimed for pb2 on this cell.**
+What is established is narrower and still real: a pb2 arm produced the highest
+anchor cell this family has ever produced, in a tournament whose anchor is
+measurably +9.1 points loose, while finishing fourth overall — and that
+combination is precisely what a properly powered confirmation exists to resolve.
+
+## REGISTRATION — the arm11 CONFIRMATION, `rr_confirm11` (bars before games)
+
+| knob | value |
+|---|---|
+| field | `entryd0` (anchor), `capn5` (**drift anchor, mandatory**), `arm11` (pb2 l1=5e-4), `arm15` (pb2 l1=2e-3) |
+| engines / pairings | 4 / 6 |
+| rounds | **101** — gcd(101, 6) = 1 |
+| games | **1,212**, **202 per pairing** (SE ≈ 3.5% at 50%, vs 6.8% in the screen) |
+| each | `proto=uci nodes=20000 tc=6000+0`, checkouts, fresh `-srand` |
+
+`arm15` is named **at registration time**, as the rules allow and as its
+exclusion from the screen required: it is the same pb2 structure at 61.6% U
+zeros instead of 41.0%, so **agreement between arm11 and arm15 is replication
+of the structure**, and disagreement is evidence the screen cell was about a
+particular net rather than about phase buckets. `arm12`/kb2's live-bucket
+follow-up stays in cohort 2 and is deliberately NOT mixed in here.
+
+**Bars, fixed now:**
+
+1. **PRIMARY.** `arm11` vs `entryd0` 95% CI **lower bound > 36.0%** — the top of
+   the family band. Point estimate ≈ 43% at n=202. Anything less does not
+   establish that this arm left the band.
+2. **DRIFT-ANCHORED (the bar that survives a loose anchor).**
+   (arm11 − capn5) vs `entryd0`, same tournament, **≥ +10.0 points**. The screen
+   gave +11.1. This is immune to the tournament-level shift that makes the raw
+   cell ambiguous, and it is the number I will quote first.
+3. **COHERENCE — GATING, not diagnostic.** If arm11 again ties or beats
+   `entryd0` while finishing **below capn5 in the overall standings**, the
+   result is recorded as **INTRANSITIVE and the anchor cell is REFUTED**, not
+   celebrated. I am fixing this before the games precisely because the
+   favourable reading is the one I would otherwise be tempted to keep.
+4. **NULL / STOP.** Drift-anchored margin ≤ 0 ⇒ the screen's 50.00% was anchor
+   noise, and the phase-bucket family returns to the band.
+
+**If the confirmation holds**, the next gate is deployment, not another
+tournament: the speed-moat law. pb2's bucket is chosen once at the search root,
+so the predicted per-move cost is **zero**, and that prediction is measured
+with `nps_probe` on the built artifacts in the same report — a prediction of
+"free" that goes unmeasured is exactly the kind this ledger keeps catching.
