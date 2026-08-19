@@ -30,14 +30,18 @@ import random
 import re
 import shlex
 import shutil
-import signal
 import subprocess
+import sys
 import threading
 import time
 from collections import Counter, deque
 
 import numpy as np
+from scipy.special import ndtr
 
+sys.path.insert(0, str(pathlib.Path(__file__).parents[1]))
+import gating  # noqa: E402
+import locking  # noqa: E402
 import logistic_gp
 
 
@@ -207,6 +211,7 @@ def study_identity(args):
         "openings": file_identity(args.openings),
         "opening_schedule": {
             "cycle": args.cycle_openings,
+            "order": args.opening_order,
             "seed": args.opening_seed,
         },
         "gate": command_identity(args.gate),
@@ -221,7 +226,9 @@ def study_identity(args):
                          "explore_confidence",
                          "duel_fraction", "inducing", "seed_selections",
                          "acquisition_restarts", "update_batches", "gate_workers",
-                         "gate_all", "gate_design")
+                         "gate_all", "gate_design", "axis_design", "learn_mean",
+                         "full_axis_design",
+                         "local_acquisition", "local_support", "acquisition")
         },
     }
 
@@ -288,7 +295,7 @@ def aggregate(batches, pair_weight, space, sparse=False):
 
 def compatible_seed_batches(seed, space):
     """Keep observations that match the new engine on every removed knob."""
-    baseline = seed["study"]["baseline"]["options"]
+    baseline = seed.get("study", {}).get("baseline", {}).get("options", {})
     removed = {name: value for name, value in baseline.items() if name not in space.names}
 
     def compatible(knobs):
@@ -303,7 +310,8 @@ def compatible_seed_batches(seed, space):
 
 def import_seed_batches(seed, space):
     """Filter old observations and give newly split axes their old semantics."""
-    baseline = seed["study"]["baseline"]["options"]
+    baseline = seed.get("study", {}).get("baseline", {}).get(
+        "options", space.defaults)
 
     def migrate(knobs):
         knobs = dict(knobs)
@@ -337,6 +345,28 @@ def source_prior(logs, battery, transfer, space):
         simple = space.prior_mean(x)
         screened, _ = model.predict(x)
         return simple + transfer * (screened - simple)
+
+    return mean
+
+
+def empirical_mean(prior, batches, minimum, space):
+    """Learn one intercept from the completed, fixed-opponent design."""
+    anchored = [
+        batch for batch in batches
+        if batch.get("opponent_knobs") is None
+        and batch.get("allocation", "design") == "design"
+    ]
+    if len(anchored) < minimum:
+        return prior
+    anchored = anchored[:minimum]
+    score = sum(batch["wins"] + batch["draws"] / 2 for batch in anchored)
+    games = sum(batch["wins"] + batch["draws"] + batch["losses"] for batch in anchored)
+    probability = min(max(score / games, 1e-3), 1 - 1e-3)
+    points = [space.canonical(batch["knobs"]) for batch in anchored]
+    correction = math.log(probability / (1 - probability)) - np.mean(prior(points))
+
+    def mean(x):
+        return prior(x) + correction
 
     return mean
 
@@ -400,6 +430,17 @@ def exploration_probability(selections, start, floor, half_life):
     return floor + (start - floor) / math.sqrt(1 + selections / half_life)
 
 
+def exploitation(mean, variance, args):
+    """Score a latent value relative to the fixed zero-Elo baseline."""
+    deviation = np.sqrt(variance)
+    if getattr(args, "acquisition", "ucb") == "ucb":
+        return mean + args.exploration * deviation
+    z = mean / deviation
+    if args.acquisition == "pi":
+        return ndtr(z)
+    return mean * ndtr(z) + deviation * np.exp(-z * z / 2) / math.sqrt(2 * math.pi)
+
+
 def pending_configurations(slots, pairs):
     """Smallest number of parameter choices that can keep every lane busy."""
     return math.ceil(slots / pairs)
@@ -408,12 +449,13 @@ def pending_configurations(slots, pairs):
 class OpeningSchedule:
     """Map an unbounded sequence onto independently shuffled book epochs."""
 
-    def __init__(self, path, seed=0, cycle=False):
+    def __init__(self, path, seed=0, cycle=False, order="random"):
         self.count = sum(bool(line.strip()) for line in pathlib.Path(path).read_text().splitlines())
         if not self.count:
             raise ValueError("opening book is empty")
         self.seed = seed
         self.cycle = cycle
+        self.random = order == "random"
         self.epochs = {}
 
     def opening(self, sequence):
@@ -422,54 +464,23 @@ class OpeningSchedule:
         epoch, offset = divmod(sequence - 1, self.count)
         if epoch not in self.epochs:
             order = list(range(1, self.count + 1))
-            random.Random(self.seed + epoch).shuffle(order)
+            if self.random:
+                random.Random(self.seed + epoch).shuffle(order)
             self.epochs[epoch] = order
         return self.epochs[epoch][offset]
 
 
 def gate_policy(args, state, space, vector):
     """Run and cache a deterministic policy gate; exit 1 means infeasible."""
-    if not args.gate:
-        return True
     knobs = space.knobs(vector)
-    key = json.dumps(knobs, sort_keys=True, separators=(",", ":"))
-    with STATE_LOCK:
-        cache = state.setdefault("gates", {})
-        if key in cache:
-            return cache[key]["accepted"]
     payload = {
         "engine": args.engine,
         "engine_args": args.engine_args,
         "options": knobs,
     }
-    started = time.perf_counter()
-    process = subprocess.Popen(
-        shlex.split(args.gate), text=True, stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        start_new_session=os.name != "nt")
-    try:
-        output = process.communicate(json.dumps(payload), timeout=args.gate_timeout)[0]
-    except subprocess.TimeoutExpired:
-        if os.name == "nt":
-            process.kill()
-        else:
-            os.killpg(process.pid, signal.SIGKILL)
-        output = process.communicate()[0] + f"\ntimeout after {args.gate_timeout:g}s"
-        process.returncode = 1
-    if process.returncode not in (0, 1):
-        raise RuntimeError(
-            f"policy gate failed with status {process.returncode}:\n{output}")
-    accepted = process.returncode == 0
-    with STATE_LOCK:
-        cache[key] = {
-            "accepted": accepted,
-            "knobs": knobs,
-            "output": output[-2000:],
-            "seconds": time.perf_counter() - started,
-        }
-    print(f"[gate] {'accept' if accepted else 'reject'} "
-          f"{cache[key]['seconds']:.2f}s {key}", flush=True)
-    return accepted
+    return gating.policy(
+        args.gate, args.gate_timeout, payload,
+        state.setdefault("gates", {}), STATE_LOCK)
 
 
 def selection_state(state):
@@ -497,7 +508,8 @@ def exploration_stratum(state, mode, space):
     return structural
 
 
-def coordinate_maximum(space, seeds, score, active, structural, restarts=4, steps=None):
+def coordinate_maximum(
+        space, seeds, score, active, structural, restarts=4, steps=None, local=False):
     """Deterministically climb a mixed discrete acquisition from diverse seeds."""
     cache = {}
     normalize = getattr(space, "normalize", lambda point: point)
@@ -514,8 +526,7 @@ def coordinate_maximum(space, seeds, score, active, structural, restarts=4, step
             structural is None or space.is_structural(point) == structural)
 
     seeds = sorted(set(
-        normalize(point) for point in seeds
-        if space.contains(normalize(point)) and allowed(normalize(point))
+        normalize(point) for point in seeds if space.contains(normalize(point))
     ))
     if not seeds:
         raise RuntimeError("no available acquisition point")
@@ -524,11 +535,13 @@ def coordinate_maximum(space, seeds, score, active, structural, restarts=4, step
     optima = []
     for index in order[:restarts]:
         point = seeds[index]
-        value = seed_scores[index]
+        value = seed_scores[index] if allowed(point) else -np.inf
         climbed = 0
         while steps is None or climbed < steps:
             neighbors = []
-            for axis, choices in enumerate(space.coordinate_values):
+            choices_by_axis = (space.local_coordinate_values(point)
+                if local else space.coordinate_values)
+            for axis, choices in enumerate(choices_by_axis):
                 for choice in choices:
                     neighbor = normalize(point[:axis] + (choice,) + point[axis + 1:])
                     if allowed(neighbor):
@@ -540,7 +553,10 @@ def coordinate_maximum(space, seeds, score, active, structural, restarts=4, step
                 break
             point, value = neighbors[best], values[best]
             climbed += 1
-        optima.append((value, point))
+        if allowed(point):
+            optima.append((value, point))
+    if not optima:
+        raise RuntimeError("no available acquisition point")
     return min(optima, key=lambda item: (-item[0], item[1]))[1]
 
 
@@ -582,14 +598,29 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
         variance = np.diag(space.kernel(points, points))
         return mean, variance
 
+    def improvement_statistics(points):
+        """Posterior difference from the parameter-space starting policy."""
+        mean, variance = statistics(points)
+        target_mean, target_variance = statistics([space.default])
+        if model:
+            cross = model.predict_cross_covariance([space.default], points)[0]
+        else:
+            cross = space.kernel([space.default], points)[0]
+        difference_variance = variance + target_variance[0] - 2 * cross
+        return mean - target_mean[0], np.maximum(difference_variance, 1e-9)
+
     mean, variance = statistics(candidates)
 
     if observation_counts is None:
         observation_counts = Counter(
             space.canonical(batch["knobs"]) for batch in state["batches"])
     observed = {point for point in observation_counts if space.contains(point)}
+    opponents = {
+        space.canonical(batch["opponent_knobs"])
+        for batch in state.get("batches") or () if batch.get("opponent_knobs") is not None
+    }
     active = [left for left, _ in pending]
-    sites = observed | set(active)
+    sites = observed | opponents | set(active)
     selections = state.get("selections")
     if selections is None:
         selections = sum(observation_counts.values())
@@ -608,16 +639,25 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
             fresh.update(candidate for candidate in options
                          if candidate[axis] not in seen
                          and sum(a != b for a, b in zip(candidate, space.default)) == distance)
-    fresh_design = bool(fresh)
+    full_axes = (((set(space.full_axis_design()) | set(space.required))
+                  & set(candidates)) - sites - set(forbidden)
+                 if getattr(args, "full_axis_design", False) else set())
+    fresh_design = bool(fresh or full_axes)
     if fresh_design:
         mode = "design"
         acquisition = variance.copy()
+        targets = fresh or full_axes
         for index, candidate in enumerate(candidates):
-            if candidate not in fresh:
+            if candidate not in targets:
                 acquisition[index] = -np.inf
     elif len(sites) < min(args.initial_design, len(candidates)):
         mode = "design"
         acquisition = design_variance(list(sites), candidates, space)
+        if getattr(args, "axis_design", False):
+            local = set(space.axis_design()) - sites
+            if local & set(candidates):
+                acquisition = np.where(
+                    [candidate in local for candidate in candidates], acquisition, -np.inf)
         if not sites and space.default in candidates:
             acquisition[candidates.index(space.default)] = np.inf
     else:
@@ -628,7 +668,10 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
             credit -= 1
         else:
             mode = "ucb"
-            acquisition = mean + args.exploration * np.sqrt(variance)
+            values = mean, variance
+            if getattr(args, "acquisition", "ucb") != "ucb":
+                values = improvement_statistics(candidates)
+            acquisition = exploitation(*values, args)
         state["exploration_credit"] = credit
     exploration_pool = []
     if mode == "explore":
@@ -644,13 +687,18 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
     if mode != "design" and isinstance(space, logistic_gp.MixedSpace):
         def score(points):
             point_mean, point_variance = statistics(points)
+            if mode == "explore":
+                point_variance = fantasy_variance(
+                    model, space, pending, points, point_variance,
+                    2 * args.pair_weight * args.pairs)
+                return (point_mean + args.explore_optimism * np.sqrt(point_variance)
+                        if args.explore_optimism else point_variance)
+            if getattr(args, "acquisition", "ucb") != "ucb":
+                return exploitation(*improvement_statistics(points), args)
             point_variance = fantasy_variance(
                 model, space, pending, points, point_variance,
                 2 * args.pair_weight * args.pairs)
-            if mode == "explore":
-                return (point_mean + args.explore_optimism * np.sqrt(point_variance)
-                        if args.explore_optimism else point_variance)
-            return point_mean + args.exploration * np.sqrt(point_variance)
+            return exploitation(point_mean, point_variance, args)
 
         # Fantasized variance decides whether another pending copy is useful;
         # do not impose a fixed one-copy-per-configuration rule on top of it.
@@ -684,9 +732,23 @@ def choose(state, mean_function, candidates, pending, args, space, model=None,
             vector = min(zip(values, pool), key=lambda item: (-item[0], item[1]))[1]
         else:
             gated = getattr(args, "gate_design", False)
+            local = getattr(args, "local_acquisition", False)
+            supported = [
+                point for point in observed
+                if observation_counts[point] >= getattr(args, "local_support", 1)
+            ]
+            seeds = sorted(set([space.default, *supported])) if local else [
+                *candidates, *(validated if gated else observed)]
+            optimizer_score = score
+            if local and active:
+                active_set = set(active)
+
+                def optimizer_score(points):
+                    return np.where(
+                        [point in active_set for point in points], -np.inf, score(points))
             vector = coordinate_maximum(
-                space, [*candidates, *(validated if gated else observed)], score,
-                set(forbidden), stratum, args.acquisition_restarts, 1 if gated else None)
+                space, seeds, optimizer_score, set(forbidden), stratum,
+                args.acquisition_restarts, 1 if gated or local else None, local=local)
     else:
         for index, candidate in enumerate(candidates):
             if candidate in forbidden or candidate in active or (
@@ -806,18 +868,32 @@ async def run_pair(args, slot, experiment, vector, opponent, opening, space):
 
 
 async def optimize(args):
+    with locking.exclusive(args.state):
+        await optimize_locked(args)
+
+
+async def optimize_locked(args):
     pathlib.Path(args.logs).mkdir(parents=True, exist_ok=True)
     state = load_state(args.state, args.start)
     seed = load_state(args.seed_state, args.start) if args.seed_state and not state["batches"] else None
-    openings = OpeningSchedule(args.openings, args.opening_seed, args.cycle_openings)
+    openings = OpeningSchedule(
+        args.openings, args.opening_seed, args.cycle_openings, args.opening_order)
     if not args.cycle_openings:
         validate_opening_budget(args.openings, state["next_opening"], args.batches, args.pairs)
     space = logistic_gp.MixedSpace.load(args.space) if args.space else logistic_gp.LegacySpace()
+    if args.axis_design:
+        if not isinstance(space, logistic_gp.MixedSpace):
+            raise ValueError("--axis-design requires a JSON parameter space")
+        space.candidates = sorted(set(space.candidates + space.axis_design()))
+    if args.full_axis_design:
+        if not isinstance(space, logistic_gp.MixedSpace):
+            raise ValueError("--full-axis-design requires a JSON parameter space")
+        space.candidates = sorted(set(space.candidates + space.full_axis_design()))
     if args.baseline_options == "default":
         args.baseline_options = space.knobs(space.default)
     bind_study(state, study_identity(args))
     if seed is not None:
-        old_baseline = seed["study"]["baseline"]["options"]
+        old_baseline = seed.get("study", {}).get("baseline", {}).get("options", {})
         old_names = set(old_baseline)
         for batch in seed["batches"]:
             old_names.update(batch["knobs"])
@@ -841,7 +917,10 @@ async def optimize(args):
     fixed = fixed_baseline_point(args, space)
     if fixed is not None:
         space.condition(fixed)
-    mean_function = source_prior(args.source_logs, args.battery, args.transfer, space)
+    base_mean = source_prior(args.source_logs, args.battery, args.transfer, space)
+    mean_function = empirical_mean(
+        base_mean, state["batches"], args.initial_design, space) if args.learn_mean else base_mean
+    mean_learned = mean_function is not base_mean
     candidates = [candidate for candidate in space.candidates if candidate != fixed]
     if not candidates:
         raise ValueError("parameter space contains no challenger to the fixed baseline")
@@ -887,7 +966,13 @@ async def optimize(args):
     }
 
     def refresh_model():
-        nonlocal allocation_model, modeled_batches
+        nonlocal allocation_model, mean_function, mean_learned, modeled_batches
+        if args.learn_mean and not mean_learned:
+            learned = empirical_mean(
+                base_mean, state["batches"], args.initial_design, space)
+            if learned is not base_mean:
+                mean_function, mean_learned = learned, True
+                allocation_model = None
         if allocation_model is None:
             allocation_model = posterior(
                 state, mean_function, args.pair_weight, space, args.inducing)
@@ -896,7 +981,7 @@ async def optimize(args):
             allocation_model = (update_posterior(
                 allocation_model, state["batches"][modeled_batches:],
                 args.pair_weight, space) if args.inducing else posterior(
-                    state, mean_function, args.pair_weight, space))
+                state, mean_function, args.pair_weight, space))
             modeled_batches = len(state["batches"])
 
     def pending_comparisons():
@@ -1108,6 +1193,7 @@ def main():
     parser.add_argument("--cycle-openings", action="store_true",
         help="reuse the book in independently shuffled epochs")
     parser.add_argument("--opening-seed", type=int, default=2026)
+    parser.add_argument("--opening-order", choices=("random", "sequential"), default="random")
     parser.add_argument("--state", default="adaptive-gp.json")
     parser.add_argument("--logs", default="adaptive-gp-logs")
     parser.add_argument("--battery")
@@ -1126,7 +1212,18 @@ def main():
         help="stop allocating after this duration, e.g. 12h or 3d")
     parser.add_argument("--start", type=int, default=1)
     parser.add_argument("--exploration", type=float, default=1.0)
+    parser.add_argument("--acquisition", choices=("ucb", "ei", "pi"), default="ucb")
     parser.add_argument("--initial-design", type=int, default=12)
+    parser.add_argument("--axis-design", action="store_true",
+        help="start with one-kernel-length probes along each parameter axis")
+    parser.add_argument("--full-axis-design", action="store_true",
+        help="probe every value of every parameter before model allocation")
+    parser.add_argument("--learn-mean", action="store_true",
+        help="learn the fixed-opponent GP intercept after the initial design")
+    parser.add_argument("--local-acquisition", action="store_true",
+        help="validate one-coordinate steps from observed configurations")
+    parser.add_argument("--local-support", type=int, default=1,
+        help="pairs required before a played point can seed another local step")
     parser.add_argument("--explore-start", type=float, default=0.50)
     parser.add_argument("--explore-floor", type=float, default=0.20)
     parser.add_argument("--explore-half-life", type=float, default=40)
@@ -1179,7 +1276,8 @@ def main():
     if args.initial_design < 1 or args.explore_half_life <= 0:
         parser.error("--initial-design and --explore-half-life must be positive")
     if args.inducing < 0 or min(
-            args.acquisition_restarts, args.update_batches, args.checkpoint_batches) < 1:
+            args.acquisition_restarts, args.update_batches, args.checkpoint_batches,
+            args.local_support) < 1:
         parser.error("inducing must be nonnegative; acquisition and update counts must be positive")
     if args.explore_confidence <= 0:
         parser.error("--explore-confidence must be positive")

@@ -107,6 +107,7 @@ class MixedSpace:
         if unknown:
             raise ValueError(f"unknown conditional parameters: {sorted(unknown)}")
         self.variance = spec.get("kernel_variance", KERNEL_VARIANCE)
+        self.length_scale = spec.get("length_scale", 1.0)
         self.hamming = spec.get("hamming", 0.7)
         self.interaction_fraction = spec.get("interaction_fraction", 1.0)
         if not 0 <= self.interaction_fraction <= 1:
@@ -119,6 +120,7 @@ class MixedSpace:
         # whose categorical arms add code can opt into a simplicity prior.
         self.clause_prior = spec.get("clause_logit_prior", 0.0)
         self.structural_fraction = spec.get("structural_fraction")
+        self.required = [self.canonical(values) for values in spec.get("required", [])]
         self._inducing = {}
         choices = [parameter["values"] for parameter in self.parameters]
         self.default = self.canonical(self.defaults)
@@ -139,7 +141,7 @@ class MixedSpace:
                 self.canonical(defaults | {parameter["name"]: value})
                 for parameter in self.parameters for value in parameter["values"]
             ]
-            explicit = [self.canonical(values) for values in spec.get("required", [])]
+            explicit = self.required
             invalid = [point for point in explicit if not self.contains(point)]
             if invalid:
                 raise ValueError(f"required candidates are outside the parameter domain: {invalid}")
@@ -151,16 +153,36 @@ class MixedSpace:
             ]
             required += explicit
             if local_count := spec.get("local_interactions"):
-                mutations = [
-                    (parameter["name"], value)
+                axes = [
+                    (parameter["name"], [
+                        value for value in parameter["values"]
+                        if value != parameter["default"]])
                     for parameter in self.parameters
-                    for value in parameter["values"]
-                    if value != parameter["default"]
                 ]
-                local = [self.canonical(defaults | dict(pair))
-                         for pair in itertools.combinations(mutations, 2)
-                         if pair[0][0] != pair[1][0]]
-                required = self.maximin(sorted(set(local + required)), required, local_count)
+                blocks = [
+                    (left, lvalues, right, rvalues)
+                    for (left, lvalues), (right, rvalues) in itertools.combinations(axes, 2)
+                    if lvalues and rvalues
+                ]
+                sizes = np.array([len(left) * len(right)
+                                  for _, left, _, right in blocks])
+                total = int(np.sum(sizes))
+                sample_count = min(
+                    total, local_count * spec.get("design_oversample", 8))
+                indices = np.arange(total) if sample_count == total else np.sort(
+                    np.random.default_rng(spec.get("design_seed", 0)).choice(
+                        total, sample_count, replace=False))
+                ends = np.cumsum(sizes)
+                local = []
+                for index in indices:
+                    block = int(np.searchsorted(ends, index, side="right"))
+                    offset = int(index - (ends[block - 1] if block else 0))
+                    left, lvalues, right, rvalues = blocks[block]
+                    lindex, rindex = divmod(offset, len(rvalues))
+                    local.append(self.canonical(
+                        defaults | {left: lvalues[lindex], right: rvalues[rindex]}))
+                pool = sorted(set(local + required))
+                required = self.maximin(pool, required, min(local_count, len(pool)))
             candidates = sorted(set(candidates + required))
             fraction = self.structural_fraction
             if fraction is None:
@@ -275,6 +297,48 @@ class MixedSpace:
         categorical = [tuple(range(len(parameter["values"]))) for parameter in self.categorical]
         return tuple(numeric + categorical)
 
+    def local_coordinate_values(self, point):
+        """Values no farther than one kernel radius from a played point."""
+        result = []
+        for value, parameter in zip(point, self.numeric):
+            values = np.asarray(parameter["values"], dtype=float)
+            coordinates = np.log(values) if parameter.get("transform") == "log" else values
+            center = coordinates[parameter["values"].index(value)]
+            radius = self.length_scale * self.numeric_scale(parameter)
+            result.append(tuple(
+                choice for choice, coordinate in zip(parameter["values"], coordinates)
+                if abs(coordinate - center) <= radius + 1e-12))
+        result += [tuple(range(len(parameter["values"]))) for parameter in self.categorical]
+        return tuple(result)
+
+    def axis_design(self):
+        """Probe one kernel length either side of the starting point."""
+        design = [self.default]
+        for axis, parameter in enumerate(self.numeric):
+            values = np.asarray(parameter["values"], dtype=float)
+            coordinates = np.log(values) if parameter.get("transform") == "log" else values
+            center = coordinates[parameter["values"].index(parameter["default"])]
+            radius = self.length_scale * self.numeric_scale(parameter)
+            for target in center - radius, center + radius:
+                point = list(self.default)
+                point[axis] = parameter["values"][int(np.argmin(abs(coordinates - target)))]
+                design.append(self.normalize(tuple(point)))
+        offset = len(self.numeric)
+        for axis, parameter in enumerate(self.categorical, offset):
+            for value in range(len(parameter["values"])):
+                point = list(self.default)
+                point[axis] = value
+                design.append(self.normalize(tuple(point)))
+        return list(dict.fromkeys(design))
+
+    def full_axis_design(self):
+        """Probe every value of every parameter against the starting point."""
+        defaults = self.knobs(self.default)
+        return list(dict.fromkeys(
+            self.canonical(defaults | {parameter["name"]: value})
+            for parameter in self.parameters for value in parameter["values"]
+        ))
+
     def is_structural(self, vector):
         values = self.knobs(vector)
         return any(
@@ -293,7 +357,8 @@ class MixedSpace:
         if numeric_count:
             left = self.numeric_coordinates(a[:, :numeric_count])
             right = self.numeric_coordinates(b[:, :numeric_count])
-            scales = np.array([self.numeric_scale(parameter) for parameter in self.numeric])
+            scales = self.length_scale * np.array([
+                self.numeric_scale(parameter) for parameter in self.numeric])
             delta = (left[:, None, :] - right[None, :, :]) / scales
             similarities.extend(np.exp(-0.5 * delta[..., axis] ** 2)
                                 for axis in range(numeric_count))
