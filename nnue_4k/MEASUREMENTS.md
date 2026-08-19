@@ -26040,3 +26040,271 @@ many `fastchess` children at concurrency 1 each, all descending from a PID that
 is not mine. **Nothing of any other lane has been signalled, reniced, paused or
 modified by this lane, and nothing will be.** The carrier port stays **SHELVED**
 per the coordinator's scope note: it is not in this field and is not built.
+
+## CLOSURE — `shrink`: all four rungs FAIL both bars, my own void clause's PREMISE is refuted, and **the eval axis CLOSES** (2026-08-19)
+
+3,030/3,030 games, **zero illegal**, **zero time forfeits**, 02:41:38, COMPLETE
+11:08:35Z. Every harness gate PASS: gcd pre-flight; book gate (1,991 positions,
+0 with impossible castling rights); legality at the played 20,000-node budget
+for **all six** engines (n=40 forced, no-move=0, illegal=0); exact count;
+dormancy (slowest move **1.184 s** against the 15 s bar, 0 moves over);
+opening diversity (**3,030 games, 3,030 distinct, 0 duplicate replays** — every
+pairing saw its full 101 openings).
+
+### Cells, recomputed from `shrink.pgn` — not from a summary table
+
+Pentanomial 95% intervals by `pair_elo.py`'s own method (colour-swapped pairs,
+population variance), so these are comparable to every prior entry here. My
+recomputation reproduces `pair_elo.py` and the harness pooled table to the digit.
+
+| arm | α | vs `entryd0` | W–L–D | 95% CI | Elo | ptnml(0–2) |
+|---|---|---|---|---|---|---|
+| `arm12` | 1 | **31.44%** | 53–128–21 | [25.24, 37.64] | −135.5 | [42, 13, 32, 6, 8] |
+| `shift1` | ½ | **33.42%** | 53–120–29 | [27.38, 39.45] | −119.8 | [35, 20, 31, 7, 8] |
+| `shift2` | ¼ | **32.92%** | 52–121–29 | [26.75, 39.09] | −123.6 | [39, 15, 30, 10, 7] |
+| `shift3` | ⅛ | **25.74%** | 40–138–24 | [20.23, 31.25] | −184.0 | [46, 19, 27, 5, 4] |
+| `capn5` | — | 37.62% | 63–113–26 | [30.67, 44.57] | −87.8 | [38, 13, 24, 13, 13] |
+
+Pooled (1,010 games each, context only — the registered selector is the cell):
+`entryd0` 67.77% · `shift1` 50.40% · `capn5` 49.06% · `shift2` 48.47% ·
+`arm12` 43.76% · `shift3` 40.54%.
+
+### CLAUSE 4 FIRST, exactly as registered — and it does NOT fire
+
+Registered wording, quoted rather than paraphrased: *"VOID — not a weak result —
+if the four net cells against `entryd0` are not ordered `arm12 ≤ shift1 ≤
+shift2 ≤ shift3` **within their intervals**."*
+
+| adjacent pair | Δ (pts) | 95% CI | ordering satisfiable within intervals? |
+|---|---|---|---|
+| `arm12` → `shift1` | **+1.98** | [−6.67, +10.63] | yes (correct direction) |
+| `shift1` → `shift2` | **−0.50** | [−9.12, +8.13] | **yes** — wrong direction, CI contains 0 |
+| `shift2` → `shift3` | **−7.18** | [−15.45, +1.09] | **yes** — wrong direction, CI contains 0 |
+
+**VOID DOES NOT FIRE.** Two readings of my own clause exist and I am naming both
+rather than picking quietly:
+
+- **(a) point estimates.** The ladder is peaked at α=½, so the ordering is
+  violated and the tournament is void.
+- **(b) interval satisfiability.** No adjacent pair is separated in the wrong
+  direction by more than noise, so monotone truth is consistent with the data
+  and the clause does not fire.
+
+**(b) governs**, for two reasons that are about the registered text and not
+about which answer I prefer. First, "within their intervals" must do work; under
+(a) the phrase is surplusage. Second, the clause's own stated rationale is
+*"the instrument is reading noise"* — and a deviation that is itself noise-sized
+is not evidence that the instrument is reading noise; under (a) the clause would
+fire on almost any n=202 ladder and would be a coin-flip, not a test.
+
+**And it does not matter.** I wrote this clause, and reading (b) preserves a
+result that (a) would discard, so the honest thing is to state that **the
+verdict is identical under either reading**: under (a) the tournament is VOID
+and the eval axis stays closed on the evidence that closed it; under (b) the
+bars below fire and the eval axis closes. Same destination, and no conclusion in
+this entry depends on my interpretation of my own words.
+
+**A drafting defect for the next lane to not repeat:** a void clause must name
+its test statistic. Mine did not, and the ambiguity was discovered by the data
+rather than by review.
+
+### THE PREMISE IS REFUTED — and this, not the ordering, is the finding
+
+The clause's premise, in my own registration, was that the ladder is *"a
+continuous path from the measured −110 arm to the entry's own evaluation"*. **It
+is not.** Tested directly with a post-hoc control — one more one-byte edit,
+`SHIFT = 20` (α = 2⁻²⁰), so the residual is identically zero:
+
+| control | residual non-zero | static evaluation identical to `entryd0` | where they differ |
+|---|---|---|---|
+| `shiftbig`, α = 2⁻²⁰ | **0 of 15,575 (0.00%)** | **60 of 15,575 (0.39%)** | mean **57.71 cp**, p50 48, p90 117, max 346 |
+
+With the net's contribution driven to exactly zero, the arm still disagrees with
+the entry by **57.71 cp per position on average**. The reason is in the base
+tables, and it is categorical:
+
+| base table | `arm12` (packed) | `entryd0` (classic) |
+|---|---|---|
+| P | mean 100.00, min 100, max 100 | mean 111.22, min 63, max 202 |
+| N | 280.00 / 280 / 280 | 280.03 / 205 / 380 |
+| B | 320.00 / 320 / 320 | 320.03 / 213 / 372 |
+| R | 479.00 / 479 / 479 | 479.02 / 426 / 546 |
+| Q | 929.00 / 929 / 929 | 930.58 / 825 / 1017 |
+| K | 60000.00 / 60000 / 60000 | 59989.38 / 59901 / 60083 |
+
+**The packed artifact's base is FLAT — bare material, no positional term at
+all.** The entry's is classic's hand-tuned piece-square tables. So `SHIFT+k`
+never shrank "a noisy residual toward a good prior": it shrank **the net's
+entire positional evaluation** toward **bare material**, and `entryd0` is not
+the endpoint of that path — it is not on the path at all.
+
+### The mechanism, and it explains the peak exactly
+
+Distance of each rung's **total** static evaluation from `entryd0`'s, same
+15,575 positions:
+
+| rung | α | mean \|Δ eval\| vs `entryd0` |
+|---|---|---|
+| `arm12` | 1 | 57.41 cp |
+| **`shift1`** | **½** | **44.34 cp** ← minimum |
+| `shift2` | ¼ | 47.95 cp |
+| `shift3` | ⅛ | 52.24 cp |
+| `shiftbig` | ≈0 | 57.49 cp |
+
+**The distance-to-the-entry curve is U-shaped with its minimum at α = ½ — the
+exact rung where play peaks.** The ladder interpolates between two evaluators,
+bare material and the trained net; classic's PST sits off that line, nearest at
+α = ½. The trained net at full weight *overshoots* classic's positional
+judgement by as much as bare material *undershoots* it, and the best the family
+can do is pass closest to the tables on the way through.
+
+### Bars 1–3, and the NULL
+
+| bar | `arm12` | `shift1` | `shift2` | `shift3` | verdict |
+|---|---|---|---|---|---|
+| 1 PRIMARY: CI-LB > 50.0% | 25.24 | 27.38 | 26.75 | 20.23 | **FAIL ×4** |
+| 2 DRIFT-ANCHORED ≥ +20.0 | **−6.19** [−15.50, +3.13] | **−4.21** [−13.41, +4.99] | **−4.70** [−14.00, +4.59] | **−11.88** [−20.75, −3.01] | **FAIL ×4** |
+| 3 COHERENCE (gating) | precondition did not arise — no rung tied or beat `entryd0` | | | | n/a |
+| 4 NULL if drift-anchored ≤ 0 | −6.19 | −4.21 | −4.70 | −11.88 | **NULL FIRES ×4** |
+
+**Outcome (b), as pre-shaped: all rungs fail both bars.** Not one interval comes
+within 22 points of parity. This tournament also ran **loose** on the anchor —
+`capn5` reads 37.62% here against 29.21 / 35.89 / 38.89 / 29.79% in the four
+prior readings — which is why every margin above is drift-anchored within this
+tournament and none is compared across tournaments.
+
+### The `shift1` observation, with exactly the standing my clauses give it
+
+`shift1` finishes **above the in-tournament drift anchor** pooled (50.40% vs
+`capn5` 49.06%, n=1,010 each) and beats the full-weight net where it counts
+intra-family:
+
+| contrast | score% | 95% CI |
+|---|---|---|
+| **`shift1` vs `arm12`** | **59.16%** | **[52.55, 65.76]** — excludes 50 |
+| `shift1` vs `shift3` | 57.43% | [51.12, 63.73] — excludes 50 |
+| `shift1` vs `capn5` | 52.23% | [45.61, 58.85] |
+| `shift2` vs `arm12` | 50.50% | [43.88, 57.11] |
+| `arm12` vs `shift3` | 50.00% | [43.56, 56.44] |
+
+**This is the `arm10q` halving, replicated at 19× the sample.** The 2026-08-17
+entry recorded half-weighting at **+20 pooled points** and **66.00%
+head-to-head** on an n≈50 cell, and read it — correctly, and this entry endorses
+that reading over my own memo's — as *"arm10's learned residual was ACTIVELY
+HARMFUL, and halving its weight against material recovered the damage"*, with
+`arm10q` being *"approximately material plus a weak learned term"*. Powered, the
+effect **replicates in sign and shrinks in size**: **+6.64 pooled points** and
+**59.16%** head-to-head. That is the fourth screen-to-powered contraction this
+program has paid out.
+
+**Standing: OBSERVATION, no more.** `shift1`'s own registered cell is
+**33.42% [27.38, 39.45]** against a 50.0% bar and its drift-anchored margin is
+**−4.21**, so bar 4 fires on it like the rest. A rung that halves the damage of
+a losing evaluator is still a losing evaluator.
+
+### THE CLOSING STATEMENT
+
+**Twelve mechanisms, zero conversions. The eval axis is CLOSED.**
+
+The pre-written closure was that the residual "is not worth having at any
+scale". The measured one is sharper and it is not the same sentence:
+
+> **The packed family's evaluation is not a residual on top of good positional
+> judgement — it IS the family's entire positional judgement, learned from
+> scratch on a bare-material base. Optimally scaled, it lands 44.34 cp from
+> classic's hand-tuned tables and loses to them 33.42% [27.38, 39.45]. The
+> closer the dial tunes it toward those tables, the better it plays. That is the
+> most direct statement this program can make that the tables are the better
+> object, and it is made without appealing to any mechanism, any feature class,
+> or any speed term.**
+
+Combined with the memo above — where the ~46% nps tax turned out to be the
+carrier, purchasable for 64 bytes, and the eval deficit survived it untouched —
+the axis is closed on both of its terms: **speed was never the binding
+constraint, and quality was never one mechanism away.**
+
+### CORRECTION (form (a)) to my own memo, dated the same day
+
+The memo motivated `shrink` with: *"the trained residual is mean 102.7 cp, p90
+247 (n=15,575) added at full scale on top of a good prior"*, and called
+shrinkage *"the textbook case"* for a noisy estimator added to a good prior.
+**The prior clause is wrong for the artifact that plays.** I measured the
+residual on the development net `net128kb8.sfnn`, whose base tables I had
+verified equal to classic's — and then reasoned about `arm12`, whose base is
+**bare material**. Same family, different base, and the conclusion I drew
+depended on the difference. The ledger already contained the correct reading
+(2026-08-17, "halving its weight against material"); my memo drifted from its
+own ledger. **The measurement stands, the artifact it describes was the wrong
+one, and the arm it motivated still returned the right answer for a reason I did
+not anticipate.** Recorded as (a) because the erroneous text carried a
+registration.
+
+The memo's *speed* findings are unaffected: the carrier decomposition, the
+bit-exact port and the +64 B price were all measured on `pst_entry.py` and
+`sunfish_nnue.py` directly and involve no claim about which base a net carries.
+
+### Cotenancy
+
+**Zero measurable harm, with one limitation stated rather than hidden.**
+`gauntlet-20260818/grr1.pgn` reads **7 forfeits over 900 games**, unchanged from
+the count recorded at `rr_kb_close`; it was last written at 01:55Z, i.e. it had
+already finished before my window opened at 08:22Z. **No owner PGN anywhere on
+the box was modified during my window** (`find -newermt 08:00` returns only my
+own `shrink.pgn`). The owner's tuner fleet is still live (12 processes) and load
+is back to **21.64** against the 19.28 it read at launch. **The limitation: the
+tuner campaign writes no persistent PGN, so there is no forfeit census for it to
+compare before and after** — "no harm" here rests on the comparator arena being
+unchanged, no owner artifact being touched, and the fleet surviving, not on a
+forfeit count for the fleet itself. My own run took 0 forfeits in 3,030 games.
+
+### A launcher defect found while harvesting, and fixed
+
+`AB_shrink.txt`'s "POOLED STANDINGS" section reported a **10-game table**.
+`sed -n '/^Rank *Name/,/^-\{10,\}/p'` returns the **first** rank table in the
+log, and fastchess prints one at every rating interval — so every round-robin
+this launcher has ever run has written an early progress snapshot into its
+result file under a heading that says "pooled standings". The final table was
+only ever in the `.log`. Fixed in `screens/ab_roundrobin.sh` by taking the last
+table (`tac | awk '/^Rank +Name/{print; exit} {print}' | tac`), with the reason
+in a comment; `sh -n` clean, backup taken. **No harvested number in this ledger
+is affected** — every one was computed by `pair_elo.py` or from the PGN — but a
+reader trusting that heading would have been misled, and this lane was.
+
+### WHERE NEXT — one paragraph
+
+The eval axis is closed and should stay closed: twelve mechanisms, zero
+conversions, and this instrument closed it from the one direction that was left
+by showing the family's evaluation is a from-scratch replacement for classic's
+tables rather than an improvement on them. **What survives from tonight is not
+an eval lead but two shelved assets and one live question.** The assets: the
+**carrier port** (+64 B, bit-exact, 80.7–84.5% retention, generator and gate
+committed) which makes any *future* per-node evaluator affordable and should be
+spent only against a fixed-node pass that does not exist; and the **`SHIFT`
+dial** itself, now understood as a zero-byte interpolation knob between material
+and a learned table, which is the cheapest calibration instrument this program
+has and cost one byte to build. The live question is the one the ledger's own
+decomposition has pointed at since 2026-08-13 and which tonight strengthens by
+elimination: **the +400 path is nps × TM × search**, where meter-4's
+**+108.17 ± 24.64** was actually banked, and where the carrier finding says
+there may be more structural nps on the table than anyone has priced — the
+entry's `move()` is 0.27 µs and the same engine's other carrier spends 1.65 µs
+more for no evaluation at all. **Nothing launched; the eval program's last
+registered instrument has reported and is closed.**
+
+### What this does NOT establish
+
+- **Nothing here says a 4k NNUE is impossible.** It says *this* family, whose
+  base is bare material and whose net must therefore learn all positional
+  evaluation inside ~800 payload bytes, loses to classic's tables at every scale
+  of its own dial. A net built as a *correction to* classic's PSTs — which is
+  what `net128kb8.sfnn` actually is, and what no shipped 4k artifact has been —
+  is untested at the artifact level and is **not** closed by this result. It is
+  also not recommended: it would still owe the +137…+142 the memo priced.
+- **The U-shaped distance curve is a static-evaluation measurement on 15,575
+  random-walk positions**, not a proof of causation for the play ladder. The
+  correspondence between its minimum and the play peak is exact and was
+  predicted before it was measured, which is the strongest form available here,
+  but it is one position sample.
+- **The `shift1` cell is not a promotion candidate** under any reading of any
+  registered bar, and its pooled 50.40% is a pooled figure against a field that
+  contains three of its own siblings.
