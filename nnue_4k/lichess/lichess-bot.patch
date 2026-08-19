@@ -40,7 +40,7 @@ index 891a771..bcf5c2f 100644
      def abort(self, game_id: str) -> None:
          """Aborts a game."""
 diff --git a/lib/lichess_bot.py b/lib/lichess_bot.py
-index 63ab211..4e8ed4c 100644
+index 63ab211..1868fcf 100644
 --- a/lib/lichess_bot.py
 +++ b/lib/lichess_bot.py
 @@ -344,6 +344,7 @@ def lichess_bot_main(li: lichess.Lichess,
@@ -219,7 +219,89 @@ index 63ab211..4e8ed4c 100644
  
  
  def enough_time_to_queue(event: EventType, config: Configuration) -> bool:
-@@ -724,6 +815,14 @@ def play_game(li: lichess.Lichess,
+@@ -655,6 +746,69 @@ def handle_challenge(event: EventType, li: lichess.Lichess, challenge_queue: MUL
+         li.decline_challenge(chlng.id, reason=decline_reason)
+ 
+ 
++# How many times the stream of one game is re-opened after a single break before the game is given
++# up on. The wait doubles from a second between attempts, so the attempts span about fifteen seconds
++# on top of whatever `api_get` itself spends retrying (it rides out 5xx for up to a minute).
++GAME_STREAM_RECONNECT_TRIES = 5
++
++
++def reopen_game_stream(li: lichess.Lichess, game: model.Game, game_streams: contextlib.ExitStack,
++                       ended_by: BaseException) -> Iterator[bytes] | None:
++    """
++    Re-open the stream of a game that is not over yet, or return None if it cannot be resumed.
++
++    A game stream can end at any moment -- lichess restarts, a proxy drops the connection, a network
++    blip -- and the end of the stream is not the end of the game. The game keeps running on lichess
++    and its clocks keep ticking, so the stream has to be re-opened or the game is lost on time.
++
++    lichess sends the full game as the first event of a game stream, so re-opening resynchronises the
++    position, both clocks and whose turn it is. Its `state` is handed back as the next `gameState`
++    update, which is exactly what `play_game` does with the state it opens a game with, so the caller
++    needs no special case: it moves if it is on move, reports the result if the game finished while we
++    were away, and plays on otherwise.
++
++    :param ended_by: The failure that ended the previous stream. Always logged, never swallowed.
++    :return: The updates of the new stream, or None if this game is over for us.
++    """
++    logger.warning(f"The game stream of {game.url()} ended with {type(ended_by).__name__}: {ended_by}, but the "
++                   "game is not over. Re-opening the stream to resume play.")
++    wait = seconds(1)
++    for attempt in range(1, GAME_STREAM_RECONNECT_TRIES + 1):
++        if stop.terminated or stop.force_quit:
++            logger.warning(f"Giving up on the game stream of {game.url()}: lichess-bot is shutting down.")
++            return None
++        # Closing the streams opened for this game so far releases the sockets of the broken one and
++        # of any attempt that connected but then failed. The stack is reused for the new stream.
++        game_streams.close()
++        try:
++            response = game_streams.enter_context(li.get_game_stream(game.id))
++            lines = response.iter_lines()
++            state = cast(GameEventType, json.loads(next(lines).decode("utf-8")))["state"]
++            logger.warning(f"Re-opened the game stream of {game.url()} on attempt {attempt} of "
++                           f"{GAME_STREAM_RECONNECT_TRIES}. Resynchronised state: {state}")
++            return itertools.chain([json.dumps(state).encode("utf-8")], lines)
++        except (HTTPError, ReadTimeout, RemoteDisconnected, ChunkedEncodingError, RequestsConnectionError,
++                StopIteration, lichess.RateLimitedError) as e:
++            status = e.response.status_code if isinstance(e, HTTPError) and e.response is not None else None
++            if status is not None and status < 500 and status != 429:
++                # lichess answered, and the answer is no: the game is gone (404 once lichess forgets
++                # it) or this token may not read it. No number of retries changes that.
++                logger.error(f"Cannot re-open the game stream of {game.url()}: lichess refuses the request with "
++                             f"HTTP {status} ({e}). This game is over for us.")
++                return None
++            retry_in = e.timeout if isinstance(e, lichess.RateLimitedError) else wait
++            last = attempt == GAME_STREAM_RECONNECT_TRIES
++            logger.warning(f"Attempt {attempt} of {GAME_STREAM_RECONNECT_TRIES} to re-open the game stream of "
++                           f"{game.url()} failed with {type(e).__name__}: {e}. "
++                           + ("That was the last attempt." if last else f"Retrying in {to_seconds(retry_in):.1f} seconds."))
++            if not last:
++                time.sleep(to_seconds(retry_in))
++            wait *= 2
++    logger.error(f"Gave up re-opening the game stream of {game.url()} after {GAME_STREAM_RECONNECT_TRIES} attempts. "
++                 "The game is left unplayed and will be lost on time unless lichess starts it again.")
++    return None
++
++
+ @backoff.on_exception(backoff.expo, BaseException, max_time=600, giveup=lichess.is_final,  # type: ignore[arg-type]
+                       on_backoff=lichess.backoff_handler)
+ def play_game(li: lichess.Lichess,
+@@ -682,7 +836,10 @@ def play_game(li: lichess.Lichess,
+     thread_logging_configurer(logging_queue)
+     logger = logging.getLogger(__name__)
+ 
+-    with li.get_game_stream(game_id) as response:
++    # A stack rather than a single `with`: a game stream that breaks mid-game is re-opened (see
++    # `reopen_game_stream`), and every stream opened for this game is closed when the game ends.
++    with contextlib.ExitStack() as game_streams:
++        response = game_streams.enter_context(li.get_game_stream(game_id))
+         lines = response.iter_lines()
+ 
+         # Initial response of stream will be the full game info. Store it.
+@@ -724,10 +881,36 @@ def play_game(li: lichess.Lichess,
              game_stream = itertools.chain([json.dumps(game.state).encode("utf-8")], lines)
              quit_after_all_games_finish = config.quit_after_all_games_finish
              stay_in_game = True
@@ -234,7 +316,30 @@ index 63ab211..4e8ed4c 100644
              while stay_in_game and (not stop.terminated or quit_after_all_games_finish) and not stop.force_quit:
                  move_attempted = False
                  try:
-@@ -737,6 +836,7 @@ def play_game(li: lichess.Lichess,
+-                    upd = next_update(game_stream)
++                    try:
++                        upd = next_update(game_stream)
++                    except (HTTPError, ReadTimeout, RemoteDisconnected, ChunkedEncodingError,
++                            RequestsConnectionError, StopIteration) as e:
++                        # The stream is gone, and so is the generator: every later read of it raises
++                        # StopIteration whatever went wrong first. Upstream leaves the game here, which
++                        # is right only when the game really is over -- and lichess does end a game
++                        # stream after sending the final state, so `is_game_over` is the test. When it
++                        # is not over, leaving abandons a live game: the engine never searches again and
++                        # the clock runs to zero, unwatched, because nothing will reopen the game
++                        # (lichess only replays `gameStart` when the *event* stream reconnects). That
++                        # cost two rated games on 2026-08-19, f0eSrj3p and k2YJptXg, one on each bot,
++                        # when a lichess outage broke every stream at once: both bots logged
++                        # "Game over" for a game they still had 33 s and 10 s to play, and sat idle.
++                        resumed = None if is_game_over(game) else reopen_game_stream(li, game, game_streams, e)
++                        stay_in_game = resumed is not None
++                        if resumed is not None:
++                            game_stream = resumed
++                        continue
+                     u_type = upd["type"] if upd else "ping"
+                     if u_type == "chatLine":
+                         conversation.react(ChatLine(upd))
+@@ -737,6 +920,7 @@ def play_game(li: lichess.Lichess,
                          takeback_field = game.state.get("btakeback") if game.is_white else game.state.get("wtakeback")
  
                          if not is_game_over(game) and is_engine_move(game, prior_game, board):
@@ -242,7 +347,7 @@ index 63ab211..4e8ed4c 100644
                              disconnect_time = correspondence_disconnect_time
                              say_hello(conversation, hello, hello_spectators, board)
                              setup_timer = Timer()
-@@ -752,6 +852,8 @@ def play_game(li: lichess.Lichess,
+@@ -752,6 +936,8 @@ def play_game(li: lichess.Lichess,
                                               correspondence_move_time,
                                               engine_cfg,
                                               fake_think_time(config, board, game))
@@ -251,7 +356,7 @@ index 63ab211..4e8ed4c 100644
                              time.sleep(to_seconds(delay))
                          elif is_game_over(game):
                              tell_user_game_result(game, board)
-@@ -770,8 +872,29 @@ def play_game(li: lichess.Lichess,
+@@ -770,8 +956,29 @@ def play_game(li: lichess.Lichess,
                          terminate_time = msec(wbtime) + msec(wbinc) + seconds(60)
                          game.ping(abort_time, terminate_time, disconnect_time)
                          prior_game = copy.deepcopy(game)
