@@ -26,10 +26,14 @@ Box etiquette (labeller-class, the recorded rules):
     file named FORFEITS_EXPECTED (one line saying why) is excluded from the
     count, and so is everything beneath it.  It exists because the guard's
     all-pgn glob counts forfeits from arenas where a forfeit is the
-    INSTRUMENT, not the harm -- gauntlet-20260818's hcal cells run at
-    tc=0.5+0.005, where flagging is close to inherent, and
-    tmsimple-20260818/sd60.pgn registered its forfeits as data before game 1
+    INSTRUMENT, not the harm -- gauntlet-20260818 registered "forfeits are
+    DATA here" before game 1, and tmsimple-20260818/sd60.pgn did the same
     ("3 time forfeits, all on `simple`, as registered: data, not a void").
+    (CORRECTION, 2026-08-19: this comment first blamed gauntlet's
+    tc=0.5+0.005 cells.  Wrong -- measured by forfeit_losers() below, all 24
+    of that arena's forfeits are `pyg4kviii` at the FULL 30+1 clock and the
+    sub-second cells produced ZERO.  A mechanism inferred from a filename,
+    which is the exact reason the attribution code below now exists.)
     With any such arena live the always-training rule could not hold: on
     2026-08-19 the trainer paused on two hcal forfeits with six arms queued.
     THE DEFAULT STAYS PARANOID -- an unmarked arena counts, exactly as
@@ -100,19 +104,71 @@ def exempt_arenas():
     return out
 
 
-def forfeit_count(globs):
-    """"loses on time" across the globs, skipping opted-out arenas."""
-    n, cache = 0, {}
+def forfeit_detail(globs):
+    """{pgn path: count} across the globs, skipping opted-out arenas.
+
+    Per FILE, not one total, because a bare total cannot be attributed and an
+    unattributable pause gets hand-cleared until someone stops reading it.
+    The gauntlet-field lane put it exactly right after the second such pause:
+    "a tripwire that fires on a forfeit count without naming the loser will
+    keep doing this."
+    """
+    out, cache = {}, {}
     for g in globs:
         for path in glob.glob(g):
             if _exempt_dir(os.path.dirname(path), cache):
                 continue
             try:
                 with open(path, "rb") as f:
-                    n += f.read().count(b"loses on time")
+                    n = f.read().count(b"loses on time")
             except OSError:
-                pass
-    return n
+                n = 0
+            if n:
+                out[path] = n
+    return out
+
+
+def forfeit_count(globs):
+    return sum(forfeit_detail(globs).values())
+
+
+def forfeit_losers(path):
+    """Engine names that ran out of clock in `path`, most frequent first.
+
+    Best-effort and never fatal: an unparseable pgn costs the report its
+    attribution line, never the pause.
+    """
+    try:
+        with open(path, "rb") as f:
+            txt = f.read().decode("utf-8", "replace")
+    except OSError:
+        return []
+    seen, cur = {}, {}
+    for line in txt.splitlines():
+        if line.startswith('[White "'):
+            cur["white"] = line[8:].rstrip('"]')
+        elif line.startswith('[Black "'):
+            cur["black"] = line[8:].rstrip('"]')
+        elif "loses on time" in line:
+            low = line.lower()
+            side = "white" if "white" in low else ("black" if "black" in low else None)
+            who = cur.get(side, "?") if side else "?"
+            seen[who] = seen.get(who, 0) + 1
+    return sorted(seen.items(), key=lambda kv: -kv[1])
+
+
+def attribution(base, now):
+    """Human-readable diff of two forfeit_detail() maps."""
+    lines = []
+    for path in sorted(set(now) | set(base)):
+        d = now.get(path, 0) - base.get(path, 0)
+        if d <= 0:
+            continue
+        who = ", ".join("%s x%d" % (n, c) for n, c in forfeit_losers(path)[:4])
+        lines.append("  +%d in %s%s"
+                     % (d, os.path.relpath(path, BENCH_ROOT),
+                        ("  [losers: %s]" % who) if who else ""))
+    return "\n".join(lines) or "  (no per-file rise -- a pgn was rotated or removed)"
 
 
 def acquire_lock(qdir):
@@ -159,7 +215,8 @@ def run_one(cfg_path, qdir, globs):
     name = os.path.basename(cfg_path)
     run_dir = os.path.join(_here, "runs", name.rsplit(".", 1)[0])
     os.makedirs(run_dir, exist_ok=True)
-    base = forfeit_count(globs)
+    base_detail = forfeit_detail(globs)
+    base = sum(base_detail.values())
     ex = exempt_arenas()
     print("[queue] starting %s (forfeit baseline %d%s)"
           % (name, base,
@@ -176,7 +233,8 @@ def run_one(cfg_path, qdir, globs):
         rc = proc.poll()
         if rc is not None:
             return rc
-        now = forfeit_count(globs)
+        now_detail = forfeit_detail(globs)
+        now = sum(now_detail.values())
         if now > base and not paused:
             os.kill(proc.pid, signal.SIGSTOP)
             paused = True
@@ -184,13 +242,15 @@ def run_one(cfg_path, qdir, globs):
                 f.write("TRIPWIRE: time forfeits rose %d -> %d while %s trained.\n"
                         "Training is SIGSTOPped (pid %d).  Investigate the live\n"
                         "match; delete this file to SIGCONT and continue.\n"
+                        "\nWHERE, and WHO ran out of clock:\n%s\n"
                         "\nCounted arenas exclude any directory holding a\n"
                         "FORFEITS_EXPECTED marker; %d are exempt right now%s.\n"
                         "If the arena that just flagged is one where forfeits\n"
                         "are the instrument rather than the harm, the fix is\n"
                         "for ITS owner to drop that marker, not to delete this\n"
                         "file on every run.\n"
-                        % (base, now, name, proc.pid, len(ex),
+                        % (base, now, name, proc.pid,
+                           attribution(base_detail, now_detail), len(ex),
                            "".join("\n  - %s: %s" % (os.path.basename(d), w or "no reason given")
                                    for d, w in ex)))
             print("[queue] TRIPWIRE: forfeits %d -> %d; %s PAUSED (see %s)"
@@ -198,7 +258,8 @@ def run_one(cfg_path, qdir, globs):
         if paused and not os.path.exists(paused_report):
             os.kill(proc.pid, signal.SIGCONT)
             paused = False
-            base = forfeit_count(globs)   # re-baseline after the operator's call
+            base_detail = forfeit_detail(globs)   # re-baseline after the call
+            base = sum(base_detail.values())
             print("[queue] resumed %s (new baseline %d)" % (name, base), flush=True)
         time.sleep(120 if not paused else 30)
 

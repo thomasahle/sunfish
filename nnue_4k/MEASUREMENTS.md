@@ -24447,3 +24447,72 @@ indistinguishable without reading `LOG.md` line by line.
 explicit that this was a clerical failure with no bearing on any registered
 bar: no arm produced a number, no bar moved, and the byte prices in the
 sections above were measured from built artifacts and not from these runs.
+
+### CORRECTION — I misattributed the forfeits that paused this queue, and the arena's own lane had already counted them (2026-08-19)
+
+Written into two files and pushed before it was checked. The claim:
+
+> "gauntlet-20260818's hcal cells run at `tc=0.5+0.005`, where flagging is
+> close to inherent"
+
+**Wrong.** The gauntlet-field lane counted first and I did not read it:
+
+| arena | forfeits | who actually lost on time |
+|---|---|---|
+| `gauntlet-20260818/hcal.pgn` | 24 | **24/24 `pyg4kviii`, at the FULL 30+1 clock** |
+| the sub-second handicap cells (4ku t05/t0125, ice4 t05) | **0** | — |
+| `gauntlet-20260818/grr1.pgn` (the two that paused me twice) | 2 | **2/2 `bbc11`**, a full-strength CCRL opponent at 30+1 |
+
+The handicapped rows were the **best-behaved** in the run. The forfeits come
+from one 2023-era artifact that cannot manage a normal clock — which is a
+finding about that engine, and the field lane reports it as one.
+
+**What I actually did:** got the FILE right by measurement and the MECHANISM
+wrong by inference, then hedged it as "that lane very likely counts them as
+its instrument" instead of reading the entry where they had already said so
+verbatim. A `tc=` grep of a shell script is not an attribution, and the
+hedge is the tell — I knew I had not checked.
+
+**The fix is a tool, not a resolution to be careful.** The tripwire now counts
+per file and names the losing engine, which is what the field lane asked for
+twice ("attribute the forfeit to the losing engine before firing"; "a tripwire
+that fires on a forfeit count without naming the loser will keep doing this").
+Its first dry run against the live box is the evidence in the table above, and
+it also shows `guide-lmr x32`, `v8f100p x20`, `simple x3` — every one an
+engine on its own clock, not one a cotenancy signal. A bare count could not
+have distinguished any of them, which is why the guard kept firing on
+neighbours who were not being harmed.
+
+`FORFEITS_EXPECTED` is now placed in `gauntlet-20260818/` **on that lane's
+written authority** ("forfeits are DATA here"; "do not hold training on my
+account"), quoting them rather than my reasoning, and reversible by one `rm`.
+Counted forfeits 95 → 69, the 26 excluded being exactly hcal's 24 and grr1's 2.
+
+### FIRST COHORT NUMBERS — reported as val, which promotes nothing
+
+Arms 10 and 11 finished rc=0. Same recipe, one variable:
+
+| arm | structure | best val | U zeros | 
+|---|---|---|---|
+| `10_rl_f4n32` | B=1 carrier control | 0.01596 | 36.4% |
+| `11_rl_pb2f4n32` | **pb=2 phase buckets** | **0.01557** | 41.0% |
+
+Anchors on this split: zero 0.02637, `mat` 0.02054. The phase-bucketed arm is
+**−2.4% relative** on val against the control it differs from in one bit.
+
+**This is not a result and it does not move a bar.** Five statistics have
+predicted play confidently in this family and five have been contradicted; the
+registered promoter is the 540-game round robin. What it does establish is
+narrower and still worth having: **the pb path trains, and it learns something
+the king-blind control does not**, which is the minimum precondition for the
+family being worth screening at all.
+
+**The byte side is the live risk, and this sharpens it.** Both arms landed at
+**36–41% U zeros** — the control's fraction FELL with training (37.0 → 36.4).
+The measured bar for a bucketed arm to fit is ≥65% (pb2) / ≥62% (kb2). So the
+l1=5e-4 arms are confirmed unshippable by measurement rather than by the
+historical range I quoted, and arms 15/16 at l1=2e-3 have to buy ~25 points of
+sparsity that nothing yet says 4× l1 will deliver. If they undershoot, the
+registered fallback (`rate_penalty`, which targets a zero fraction directly)
+is what runs next — named before the number, so it is not a new degree of
+freedom when it is needed.
