@@ -9,9 +9,8 @@ single practical question:
 
 > Starting from deliberately damaged search parameters, how much playing strength can a method recover per game?
 
-This is a first report. The 200-game pilot and the full three-start Chess Tuning Tools trajectory are complete. A
-corrected SPSA trajectory has independent results through 400 training games; its 700- and 1,000-game checkpoints
-are still running. Results below are dated 2026-08-19.
+This is a first report. The 200-game pilot and the full three-start Chess Tuning Tools and corrected SPSA
+trajectories are complete. Results below are dated 2026-08-19; RBFOpt and allocation follow-ups are still running.
 
 ## The experiment
 
@@ -191,21 +190,26 @@ The study uses three independently degraded starts and extracts recommendations 
 
 ![Held-out optimizer recovery across three degraded starts][recovery-curve]
 
-[recovery-curve]: ../../tuning-results/recovery-1000/optimizer-recovery-partial.svg
+[recovery-curve]: ../../tuning-results/recovery-1000/optimizer-recovery-final.svg
 
-Faint lines are individual starts; heavy lines are the three-start means. The SPSA 100-, 700-, and 1,000-game points
-are absent because those validations are not complete yet.
+Faint lines are individual starts; heavy lines are the three-start means.
 
 | Training games | CTT mean recovery | SPSA mean recovery |
 | ---: | ---: | ---: |
-| 100 | `+15.68 +/- 48.47` | pending |
+| 100 | `+15.68 +/- 48.47` | `+43.89 +/- 76.81` |
 | 200 | `+41.99 +/- 59.14` | `+69.75 +/- 65.07` |
 | 400 | `+8.24 +/- 75.82` | `+105.86 +/- 38.34` |
-| 700 | `+61.57 +/- 73.28` | pending |
-| 1,000 | `+69.96 +/- 80.86` | pending |
+| 700 | `+61.57 +/- 73.28` | `+101.01 +/- 43.94` |
+| 1,000 | `+69.96 +/- 80.86` | `+101.69 +/- 34.39` |
 
 At 400 games, comparing the two methods on the shared held-out openings gives SPSA minus CTT of
 `+97.62 +/- 59.85` Elo. That paired 95% interval excludes zero and passes the study's method-difference rule.
+At 1,000 games, the corresponding difference is only `+31.91 +/- 82.76` Elo and is inconclusive. The efficiency
+curves are less ambiguous: normalized area under the recovery curve is `86.87` Elo for SPSA and `38.89` for CTT.
+
+The final SPSA recommendations measured `-7.56 +/- 35.26` Elo against master. All three starts independently came
+back near master: `+1.74 +/- 43.43`, `-33.11 +/- 42.18`, and `+8.69 +/- 41.77` Elo. Most of that recovery was already
+present at 400 games; another 600 games narrowed uncertainty but did not improve the mean.
 
 ### CTT's confidence problem
 
@@ -288,11 +292,11 @@ The defensible conclusions are deliberately modest:
 2. The original logistic GP spent too many games covering distant configurations and had an optimistic
    unknown-region prior. Fixing those defects helped, but did not make it competitive.
 3. On this local 12-parameter recovery problem, corrected one-pair SPSA is the current winner. It recovered about
-   106 Elo by 400 games and beat CTT's recommendation by about 98 Elo at the same budget.
+   106 Elo by 400 games, finished at about 102 Elo recovered, and beat CTT by about 98 Elo at the 400-game budget.
 4. CTT still recovered about 70 Elo by 1,000 games, but its curve was unstable and start-dependent. A finalist race
    is a better next experiment than another confidence multiplier.
-5. The SPSA 700- and 1,000-game results, repeated-point CTT arm, and fresh confirmation remain pending. The current
-   result supports a production tuning trial; it is not yet the final optimizer comparison.
+5. SPSA's plateau says that 400 well-allocated games were more useful than 1,000 broadly scattered CTT games. The
+   result supports a production tuning trial, while RBFOpt and finalist-allocation experiments continue.
 
-The final article will replace the partial curve and add recovery per game, wall time, parallel efficiency, and
-implementation complexity.
+The final article will add wall time, parallel efficiency, and implementation complexity after the remaining
+trajectories finish.
