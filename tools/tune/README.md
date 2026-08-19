@@ -10,7 +10,8 @@ single practical question:
 > Starting from deliberately damaged search parameters, how much playing strength can a method recover per game?
 
 This is a first report. The 200-game pilot and the full three-start Chess Tuning Tools and corrected SPSA
-trajectories are complete. Results below are dated 2026-08-19; RBFOpt and allocation follow-ups are still running.
+trajectories are complete. Results below are dated 2026-08-19; feasibility-gated RBFOpt and production tuning are
+still running.
 
 ## The experiment
 
@@ -230,6 +231,27 @@ The better hypothesis is allocation. The optimizer needs to reserve games to rac
 expecting a smooth posterior over hundreds of one-pair points to validate its own maximizer. A CTT arm with two pairs
 per point is running on the difficult start 23; an adaptive finalist race is the more promising follow-up.
 
+### Root-cause follow-ups
+
+Two direct tests did not rescue the GP family:
+
+| Follow-up | Training games | Held-out Elo | Recovery from start 23 |
+| --- | ---: | ---: | ---: |
+| Logistic GP trained by direct candidate-versus-candidate duels | 200 | `-103.73 +/- 45.42` | `-5.66` |
+| CTT with two opening pairs per sampled point | 400 | `-113.29 +/- 43.58` | `-15.22` |
+
+The duel model removes the fixed-reference prior problem, and repeated CTT points reduce the noise of each
+observation. Neither recovered strength. This makes the allocation diagnosis sharper: spending a fixed two pairs
+everywhere is still too diffuse, while noisy duels do not tell a twelve-dimensional model which absolute region is
+good. A useful Bayesian design likely needs an explicit finalist race or a much tighter trust region.
+
+The first ungated RBFOpt recommendation that was cheap enough to validate ended at `-81.37 +/- 46.27` Elo after
+100 training games from start 05, a recovery of `+26.17` Elo from its `-107.54` baseline. Other ungated RBFOpt
+incumbents expanded the depth-eight tree by roughly four to eight times and were rejected before full validation.
+Those runs test optimizer failure as much as chess strength: an engine configuration that cannot finish useful
+search depths is not a viable recommendation. Fresh RBFOpt trajectories now apply a deterministic finite-mate and
+two-times-node feasibility gate before spending games; their results will be reported separately.
+
 ### The SPSA correction
 
 The automatically derived SPSA schedule used `r_end = 0.0006849` and barely moved the degraded parameters. The
@@ -294,9 +316,10 @@ The defensible conclusions are deliberately modest:
 3. On this local 12-parameter recovery problem, corrected one-pair SPSA is the current winner. It recovered about
    106 Elo by 400 games, finished at about 102 Elo recovered, and beat CTT by about 98 Elo at the 400-game budget.
 4. CTT still recovered about 70 Elo by 1,000 games, but its curve was unstable and start-dependent. A finalist race
-   is a better next experiment than another confidence multiplier.
+   is a better next experiment than another confidence multiplier or uniformly repeating every sampled point.
 5. SPSA's plateau says that 400 well-allocated games were more useful than 1,000 broadly scattered CTT games. The
-   result supports a production tuning trial, while RBFOpt and finalist-allocation experiments continue.
+   result supports a production tuning trial, while feasibility-gated RBFOpt and finalist-allocation experiments
+   continue.
 
 The final article will add wall time, parallel efficiency, and implementation complexity after the remaining
 trajectories finish.
