@@ -1228,6 +1228,34 @@ class MixedAcquisitionTest(unittest.TestCase):
             {}, self.space.prior_mean, challenger, args, self.space, Model(), anchored)
         self.assertEqual(found, sorted(anchored)[1])
 
+    def test_opponent_predictions_are_reused_without_caching_covariance(self):
+        challengers = [
+            self.space.canonical({"X": value, "Y": 10}) for value in (50, 100)]
+        anchored = {
+            self.space.canonical({"X": 0, "Y": 10}),
+            self.space.canonical({"X": 50, "Y": 0}),
+        }
+
+        class Model:
+            predictions = []
+
+            @classmethod
+            def predict(cls, points):
+                cls.predictions.append(points)
+                return np.arange(len(points)), np.ones(len(points))
+
+            @staticmethod
+            def predict_cross_covariance(_left, right):
+                return np.zeros((1, len(right)))
+
+        args = SimpleNamespace(duel_fraction=1, pair_weight=.5, inducing=0)
+        cache = {}
+        for challenger in challengers:
+            choose_opponent({}, self.space.prior_mean, challenger, args, self.space,
+                            Model(), anchored, cache)
+        self.assertEqual(Model.predictions, [
+            [challengers[0], *sorted(anchored)], [challengers[1]]])
+
     def test_explicit_default_opponents_are_anchored(self):
         anchored = self.space.canonical({"X": 0, "Y": 10})
         challenger = self.space.canonical({"X": 100, "Y": 10})
