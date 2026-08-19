@@ -27,8 +27,10 @@ from adaptive_gp import (
     coordinate_maximum,
     design_variance,
     duration,
+    empirical_mean,
     engine_identity,
     exploration_probability,
+    exploitation,
     fantasy_variance,
     fixed_baseline_point,
     gate_policy,
@@ -74,6 +76,77 @@ class MixedAcquisitionTest(unittest.TestCase):
             target,
         )
 
+    def test_axis_design_moves_one_kernel_length_at_a_time(self):
+        self.assertEqual(self.space.axis_design(), [
+            (50, 10), (30, 10), (70, 10), (50, 5), (50, 15),
+        ])
+
+    def test_length_scale_widens_axis_design(self):
+        self.space.length_scale = 2
+        self.assertEqual(self.space.axis_design(), [
+            (50, 10), (10, 10), (90, 10), (50, 0), (50, 20),
+        ])
+
+    def test_axis_initial_design_changes_only_one_coordinate(self):
+        state = {"batches": [{
+            "knobs": self.space.knobs(self.space.default),
+            "wins": 0, "draws": 2, "losses": 0,
+        }]}
+        args = SimpleNamespace(
+            pair_weight=1, inducing=0, initial_design=5, axis_design=True,
+            explore_start=0, explore_floor=0, explore_half_life=1,
+            exploration=0, explore_optimism=0, pairs=1,
+            gate_all=False, acquisition_restarts=4,
+        )
+        candidates = sorted(set(self.space.candidates + self.space.axis_design()))
+        vector, diagnostics = choose(
+            state, self.space.prior_mean, candidates, [], args, self.space)
+        self.assertEqual(diagnostics["mode"], "design")
+        self.assertEqual(sum(a != b for a, b in zip(vector, self.space.default)), 1)
+
+    def test_local_acquisition_changes_one_coordinate_from_observed(self):
+        observed = (30, 5)
+        state = {"batches": [{
+            "knobs": self.space.knobs(observed),
+            "wins": 2, "draws": 0, "losses": 0,
+        }], "selections": 5}
+        args = SimpleNamespace(
+            pair_weight=1, inducing=0, initial_design=1, axis_design=False,
+            local_acquisition=True, explore_start=0, explore_floor=0,
+            explore_half_life=1, exploration=0, explore_optimism=0,
+            pairs=1, gate_all=False, gate_design=False,
+            acquisition_restarts=4,
+        )
+        vector, diagnostics = choose(
+            state, self.space.prior_mean, self.space.candidates, [], args, self.space)
+        self.assertEqual(diagnostics["mode"], "ucb")
+        self.assertLessEqual(sum(a != b for a, b in zip(vector, observed)), 1)
+
+        other, _ = choose(
+            state, self.space.prior_mean, self.space.candidates,
+            [(vector, None)], args, self.space)
+        self.assertNotEqual(other, vector)
+
+    def test_local_acquisition_expands_only_from_supported_points(self):
+        unsupported = (30, 5)
+        state = {"batches": [
+            {"knobs": self.space.knobs(self.space.default),
+             "wins": 0, "draws": 2, "losses": 0},
+            {"knobs": self.space.knobs(unsupported),
+             "wins": 2, "draws": 0, "losses": 0},
+        ], "selections": 5}
+        args = SimpleNamespace(
+            pair_weight=1, inducing=0, initial_design=1, axis_design=False,
+            local_acquisition=True, local_support=2,
+            explore_start=0, explore_floor=0, explore_half_life=1,
+            exploration=0, explore_optimism=0, pairs=1,
+            gate_all=False, gate_design=False, acquisition_restarts=4,
+        )
+        vector, _ = choose(
+            state, self.space.prior_mean, self.space.candidates, [], args, self.space)
+        self.assertLessEqual(
+            sum(a != b for a, b in zip(vector, self.space.default)), 1)
+
     def test_bounded_coordinate_ascent_stays_one_step_from_a_seed(self):
         target = (37, 13)
 
@@ -85,6 +158,19 @@ class MixedAcquisitionTest(unittest.TestCase):
             self.space, [self.space.default], score, set(), None, steps=1)
         self.assertNotEqual(point, target)
         self.assertEqual(sum(a != b for a, b in zip(point, self.space.default)), 1)
+
+    def test_local_coordinate_ascent_stays_inside_one_kernel_radius(self):
+        target = (100, 20)
+
+        def score(points):
+            values = np.asarray(points)
+            return -np.sum((values - target) ** 2, axis=1)
+
+        point = coordinate_maximum(
+            self.space, [self.space.default], score, set(), None, steps=1, local=True)
+        self.assertEqual(sum(a != b for a, b in zip(point, self.space.default)), 1)
+        self.assertLessEqual(abs(point[0] - self.space.default[0]), 20)
+        self.assertLessEqual(abs(point[1] - self.space.default[1]), 5)
 
     def test_gate_all_keeps_acquisition_in_the_validated_design(self):
         target = np.array((37, 13))
@@ -322,6 +408,34 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(vector[0], self.space.default[0])
         self.assertNotEqual(vector[1], self.space.default[1])
 
+    def test_full_axis_design_covers_values_seen_only_as_neither_endpoint(self):
+        space = MixedSpace({"parameters": [{
+            "name": "X", "type": "discrete", "values": [0, 1, 2], "default": 1,
+        }]})
+
+        class Model:
+            @staticmethod
+            def predict(points):
+                return np.zeros(len(points)), np.ones(len(points))
+
+        state = {
+            "batches": [{
+                "knobs": {"X": 1}, "opponent_knobs": {"X": 0},
+                "wins": 1, "draws": 0, "losses": 1,
+            }],
+            "selections": 1000,
+        }
+        args = SimpleNamespace(
+            pair_weight=.5, inducing=0, initial_design=1,
+            explore_start=0, explore_floor=0, explore_half_life=1,
+            exploration=1, explore_optimism=0, pairs=1,
+            gate_all=True, acquisition_restarts=4, full_axis_design=True,
+        )
+        candidates = [point for point in space.candidates if point != space.default]
+        vector, diagnostics = choose(
+            state, space.prior_mean, candidates, [], args, space, Model())
+        self.assertEqual((vector, diagnostics["mode"]), ((2,), "design"))
+
     def test_new_axis_design_uses_its_closest_feasible_frontier(self):
         frontier = self.space.canonical({"X": 0, "Y": 0})
         distractor = self.space.canonical({"X": 0, "Y": 10})
@@ -401,6 +515,22 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(distances.count(1), 6)
         self.assertEqual(distances.count(2), 3)
         self.assertNotIn(3, distances)
+
+    def test_local_design_samples_wide_integer_domains_deterministically(self):
+        parameters = [
+            {"name": name, "type": "integer", "min": 0, "max": 10000,
+             "default": 5000, "scale": 1000}
+            for name in "XYZ"
+        ]
+        spec = {
+            "parameters": parameters,
+            "max_candidates": 32,
+            "local_interactions": 16,
+            "design_oversample": 2,
+        }
+        first, second = MixedSpace(spec), MixedSpace(spec)
+        self.assertEqual(len(first.candidates), 32)
+        self.assertEqual(first.candidates, second.candidates)
 
     def test_joint_eval_domain_preserves_mate_band_invariants(self):
         path = pathlib.Path(__file__).with_name("all_parameters.json")
@@ -517,7 +647,7 @@ class MixedAcquisitionTest(unittest.TestCase):
         }), (7, 16, 24))
         with self.assertRaisesRegex(ValueError, "unbounded-classical-null"):
             sunfish_gate.mate_depth({"FUEL_NULL": 0}, 3)
-        with self.assertRaisesRegex(ValueError, "null-transition-disabled"):
+        with self.assertRaisesRegex(ValueError, "unbounded-classical-null"):
             sunfish_gate.mate_depth({"FUEL_MIN_DEPTH": 99}, 2)
 
     def test_horizon_gate_does_not_run_the_engine(self):
@@ -547,8 +677,8 @@ class MixedAcquisitionTest(unittest.TestCase):
         root = path.parents[3]
         self.assertIn(f"static int NULL_LIMIT = {limit};",
                       (root / "tools/ctwin/sunfish.c").read_text())
-        self.assertEqual((root / "sunfish.py").read_text().count(
-            f"abs(pos.score) < {limit}"), 2)
+        self.assertIn(f"calm = abs(pos.score) < {limit}",
+                      (root / "sunfish.py").read_text())
         self.assertIn(500, values("NULL_LIMIT"))
         self.assertEqual((min(values("QS")), max(values("QS"))), (0, 300))
         self.assertEqual((min(values("QS_A")), max(values("QS_A"))), (20, 300))
@@ -637,6 +767,24 @@ class MixedAcquisitionTest(unittest.TestCase):
         off = space.canonical({"MARGIN": 2, "MODE": 99})
         self.assertEqual(space.knobs(off), {"MARGIN": 0, "MODE": 99})
 
+    def test_full_axis_design_contains_every_single_parameter_value(self):
+        design = set(self.space.full_axis_design())
+        defaults = self.space.knobs(self.space.default)
+        expected = {
+            self.space.canonical(defaults | {parameter["name"]: value})
+            for parameter in self.space.parameters for value in parameter["values"]
+        }
+        self.assertEqual(design, expected)
+
+    def test_explicit_required_points_remain_named(self):
+        space = MixedSpace({
+            "parameters": [{
+                "name": "X", "type": "discrete", "values": [0, 1], "default": 0,
+            }],
+            "required": [{"X": 1}],
+        })
+        self.assertEqual(space.required, [(1,)])
+
     def test_seed_drops_observations_from_removed_nondefault_knobs(self):
         seed = {
             "study": {"baseline": {"options": {"X": 50, "Y": 10, "OLD": 0}}},
@@ -671,6 +819,16 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(imported[0]["opponent_knobs"], {"X": 10, "Y": 10})
         self.assertEqual(imported[1]["knobs"], {"X": 15, "Y": 15})
         self.assertEqual(imported[1]["opponent_knobs"], {"X": 20, "Y": 20})
+
+    def test_pairwise_only_seed_needs_no_fixed_baseline_identity(self):
+        seed = {
+            "study": {"allocation": {}},
+            "batches": [{
+                "knobs": {"X": 0, "Y": 10},
+                "opponent_knobs": {"X": 50, "Y": 20},
+            }],
+        }
+        self.assertEqual(import_seed_batches(seed, self.space), seed["batches"])
 
     def test_seed_drops_values_outside_a_narrowed_axis(self):
         seed = {
@@ -712,6 +870,39 @@ class MixedAcquisitionTest(unittest.TestCase):
         np.testing.assert_array_equal(design, [[1]])
         self.assertEqual(success, [1])
         self.assertEqual(trials, [1])
+
+    def test_empirical_mean_waits_for_the_initial_design(self):
+        batch = {
+            "knobs": self.space.knobs(self.space.default),
+            "wins": 0, "draws": 0, "losses": 2,
+        }
+        prior = self.space.prior_mean
+        self.assertIs(empirical_mean(prior, [batch], 2, self.space), prior)
+        mean = empirical_mean(prior, [batch, batch], 2, self.space)
+        self.assertLess(mean([self.space.default])[0], -6)
+
+    def test_empirical_mean_ignores_unanchored_duels(self):
+        batch = {
+            "knobs": self.space.knobs(self.space.default),
+            "opponent_knobs": self.space.knobs(self.space.candidates[-1]),
+            "wins": 0, "draws": 0, "losses": 2,
+        }
+        prior = self.space.prior_mean
+        self.assertIs(empirical_mean(prior, [batch], 1, self.space), prior)
+
+    def test_empirical_mean_is_frozen_after_the_design(self):
+        design = {
+            "knobs": self.space.knobs(self.space.default),
+            "wins": 0, "draws": 0, "losses": 2, "allocation": "design",
+        }
+        adaptive = design | {
+            "wins": 2, "losses": 0, "allocation": "ucb",
+        }
+        prior = self.space.prior_mean
+        first = empirical_mean(prior, [design], 1, self.space)
+        later = empirical_mean(prior, [design, adaptive], 1, self.space)
+        self.assertAlmostEqual(first([self.space.default])[0],
+                               later([self.space.default])[0])
 
     def test_sparse_comparisons_match_the_dense_posterior(self):
         batches = [
@@ -801,6 +992,13 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertEqual(probabilities[0], 0.5)
         self.assertTrue(all(probability > 0.2 for probability in probabilities))
         self.assertLess(probabilities[-1], 0.22)
+
+    def test_expected_improvement_values_uncertainty_below_baseline(self):
+        mean = np.array([-1.0, -1.0])
+        variance = np.array([0.1, 1.0])
+        score = exploitation(mean, variance, SimpleNamespace(acquisition="ei"))
+        self.assertTrue(np.all(score > 0))
+        self.assertGreater(score[1], score[0])
 
     def test_design_variance_needs_only_the_kernel_diagonal(self):
         candidates = self.space.candidates
@@ -1030,6 +1228,9 @@ class MixedAcquisitionTest(unittest.TestCase):
             self.assertEqual(sequence, [second.opening(index) for index in range(1, 7)])
             self.assertEqual(sorted(sequence[:3]), [1, 2, 3])
             self.assertEqual(sorted(sequence[3:]), [1, 2, 3])
+            sequential = OpeningSchedule(book, cycle=True, order="sequential")
+            self.assertEqual([sequential.opening(index) for index in range(1, 7)],
+                             [1, 2, 3, 1, 2, 3])
             with self.assertRaises(ValueError):
                 OpeningSchedule(book).opening(4)
 

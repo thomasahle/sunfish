@@ -40,6 +40,9 @@ different points.
 Large Cartesian products are represented by a deterministic space-filling
 design plus required default, one-axis, and local-interaction points. Coordinate
 refinement lets acquisition search between those initial design points.
+`--full-axis-design` makes coverage literal: before model allocation, every
+value of every parameter is played with every other parameter at its default,
+along with explicitly required structural combinations.
 
 ## Sunfish example
 
@@ -53,9 +56,10 @@ python3 tools/tune/logistic_gp/adaptive_gp.py \
   --baseline-options default \
   --space tools/tune/logistic_gp/all_parameters.json \
   --openings /path/to/openings.epd --cycle-openings \
-  --gate "python3 tools/tune/logistic_gp/sunfish_gate.py --horizon-only" \
-  --gate-design --gate-workers 20 \
-  --slots 20 --queue-batches 60 --refill-batches 20 \
+  --gate "python3 tools/tune/logistic_gp/sunfish_gate.py --horizon-only \
+    --node-factor 2 --node-book /path/to/openings.epd" \
+  --gate-design --gate-workers 20 --full-axis-design \
+  --slots 10 --queue-batches 30 --refill-batches 10 \
   --pairs 1 --initial-design 256 --inducing 128 --update-batches 8 \
   --explore-start .5 --explore-floor .2 --duel-fraction .3 \
   --wall-time 3d --batches 1000000
@@ -66,6 +70,10 @@ not from hiding noisy results inside large batches. The larger pending FIFO
 only keeps game lanes occupied while acquisition runs; fantasy variance keeps
 its look-ahead choices diverse. Opening reuse is balanced by a deterministic
 shuffle per epoch; final confirmation still needs an independent book.
+Ten slots run twenty engine processes. A pairwise-only state pooled from SPSA
+can be imported with `--seed-state`; both sides of every duel then count as
+observed axis coverage, while games against the fixed default supply the new
+study's absolute Elo anchor.
 
 `--baseline-options default` pins the configured default point to zero. The
 Sunfish space covers every live search/evaluation constant except memory and
@@ -80,6 +88,11 @@ to run the executable mate suites on finalists. Classical null
 (`FUEL_NULL=0`) is rejected because its null candidate has no finite defender
 horizon. The configured `FUEL_MIN_DEPTH=99` off sentinel is likewise rejected
 when it would leave shallow null active throughout the practical depth range.
+The optional node ceiling rejects policies whose fixed-depth tree exceeds a
+generous multiple of the default engine on a small deterministic sample. It is
+a feasibility constraint, not a surrogate objective: accepted policies are
+still ranked only by games. The same cached gate protocol is supported by the
+RBFOpt adapter.
 
 Results append to a JSONL journal and periodically compact into the state file.
 Runs are restartable, preserve their exploration clock, and finish reserved
