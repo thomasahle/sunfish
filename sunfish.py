@@ -432,16 +432,14 @@ class Searcher:
                 yield None, None
 
             # Every out-of-order real move yielded can reach gamma: the killer
-            # is admitted by its own ceiling, so the consumer's break - only
-            # sound on the sorted stream - can never fire on it. (The ceiling
-            # is the old threshold with its min unfolded into an or.)
-            if killer and ((val := pos.value(killer)) >= QS or depth) and (val >= MATE_LOWER or depth > 3
-                    or pos.score + val + max(depth - 1, 0) * QS_A >= gamma):
+            # is admitted by the same floor the settle-break tests, so the
+            # break - only sound on the sorted stream - can never fire on it.
+            if killer and (val := pos.value(killer)) >= floor:
                 yield val, killer
 
             # Then the real moves, best value first. The QS floor lives here,
             # ahead of the sort, so the fold never walks sub-floor junk.
-            yield from sorted(((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= QS or depth), reverse=True)
+            yield from sorted(((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= lo), reverse=True)
 
         # One calmness test, two roles: guard (root excluded) gates the scoring
         # null above and intrinsic LMR; calm alone gates the fuel probe, which
@@ -451,6 +449,16 @@ class Searcher:
         t = pos.score + NULL_MARGIN
         nmr = (calm and depth >= 6 and
                -self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)
+
+        # The futility rule, stated once: a shallow move is worth at most
+        # base + val - its static gain plus one score bucket per remaining
+        # ply - so floor is the least value that can still reach gamma.
+        # Deep moves have no floor, king captures outrank any floor (the
+        # min), and at depth 0 the floor also carries the QS admission (lo),
+        # mirroring the stream filter.
+        base = pos.score + max(depth - 1, 0) * QS_A
+        lo = QS if depth == 0 else -MATE_UPPER
+        floor = max(lo, min(MATE_LOWER, gamma - base)) if depth <= 3 else lo
 
         # Run through the moves, shortcutting when score >= gamma.
         # live is True if we saw a legal (not null, score > -MATE_UPPER) move
@@ -483,15 +491,15 @@ class Searcher:
                     # so the sum tops out a third of the way to MATE_LOWER
                     # (CapInBand in CappedMove.lean, and its caveat if
                     # piece["Q"] ever grows past ~2400).
-                    cap = MATE_UPPER if depth > 3 else pos.score + val + max(depth - 1, 0) * QS_A
-                    # A cap below gamma answers for this move and, the stream
-                    # being sorted, for everything after it: fold the cap and
-                    # break. max, not assignment - an earlier report may be
-                    # tighter. Before live, because a settled move was never
-                    # searched and witnesses no legality; and skipping the
-                    # cutoff block, it stores nothing, exactly as the old
-                    # suffix report did.
-                    if cap < gamma: best = max(best, cap); break
+                    cap = MATE_UPPER if depth > 3 else base + val
+                    # A sub-floor move answers with its cap for itself and,
+                    # the stream being sorted, for everything after it: fold
+                    # the cap and break. max, not assignment - an earlier
+                    # report may be tighter. Before live, because a settled
+                    # move was never searched and witnesses no legality; and
+                    # skipping the cutoff block, it stores nothing, exactly
+                    # as the old suffix report did.
+                    if val < floor: best = max(best, cap); break
                     move_depth = depth - 1 - (guard and depth >= 6 and val < LMR) - int(nmr)
                     score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
                     live |= score > -MATE_UPPER
