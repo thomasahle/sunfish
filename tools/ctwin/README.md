@@ -116,9 +116,10 @@ in the git history of this file.
   CPython (3.9.19) as its own oracle and had never been checked against
   this harness's choice of interpreter. Ran the full 7-line gate twice
   on the same rebased `master` commit, same positions/config both times,
-  swapping only the reference interpreter (a one-line, env-gated,
-  **uncommitted** change to `difftest.py`'s `Engine(["pypy3", ...])`
-  call): every one of the 7 lines produced byte-identical coverage
+  swapping only the reference interpreter (`SF_PYREF`, the env knob in
+  `difftest.py`; it was an uncommitted patch when this was first run and
+  is now in the tree, so the check REPRODUCES from a clean checkout):
+  every one of the 7 lines produced byte-identical coverage
   (positions x depth, probe counts, movegen-list counts) and 0
   mismatches under CPython 3.9.19, matching the pypy3 baseline exactly.
   The square's edge is settled: this harness's node-identity claim does
@@ -135,7 +136,9 @@ in the git history of this file.
   runs — so the two effects compound in opposite directions specifically
   where pruning is weakest. `pypy3` remains the shipped default
   reference interpreter; this entry is the record that the choice was
-  checked, not assumed.
+  checked, not assumed — and every `difftest.py` coverage line now names
+  the interpreter that produced it, so a passing log records WHAT it
+  verified instead of leaving it to memory.
 
 ## Use
 
@@ -147,6 +150,9 @@ make gate       # the FULL fidelity gate: wide sweep + walk, depth 7,
                 # knob sweeps, eviction sweeps.  Required after ANY
                 # change to sunfish.c or sunfish.py (TESTING.md rule 14).
 make bench      # C-vs-PyPy wall-time ratio at identical nodes
+
+SF_PYREF=python3.9 make gate   # the same gate under the pinned CPython
+                               # (slow -- see the cross-check above)
 ```
 
 Tuning knobs (no recompile): UCI `setoption name NAME value VALUE`, lab
