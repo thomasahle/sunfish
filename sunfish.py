@@ -420,32 +420,40 @@ class Searcher:
             # See https://chessprogramming.org/Null_Move for details.
             # The idea is that "doing nothing" is a lower bound on the score
             # of the position, but we have to be careful with zugzwang, where
-            # passing is better than any move - the piece test in guard covers
-            # that (K+P endings). No null at root, so we can always return a
-            # move. From depth 6 on the pass only fuels the probe below.
+            # passing is better than any move - the piece test guards that
+            # (K+P endings). Capping the pass at static evaluation plus one
+            # score bucket also keeps its value monotone and below the positive
+            # mate band. A sub-window cap needs no child report; otherwise one
+            # is enough. No null at root, so we can always return a move. From
+            # depth 6 on the pass is never a score candidate (see below).
             if 2 < depth < 6 and guard:
                 yield None, None
 
-            # Stand pat: for QSearch the null move is simpler, we just stop
-            # and don't capture anything else. (Depth at root is always > 0.)
+            # Stand pat
+            # For QSearch we have a different kind of null-move, namely we can just stop
+            # and not capture anything else. (Note depth at root is always > 0.)
             if depth == 0:
                 yield None, None
 
-            # Every out-of-order real move yielded can reach gamma: the killer
-            # is admitted by its own ceiling, so the consumer's break - only
-            # sound on the sorted stream - can never fire on it. (The ceiling
-            # is the old threshold with its min unfolded into an or.)
+            # The killer is yielded out of sorted order, so the consumer must
+            # never stop on it: admit it only if its own ceiling still reaches
+            # gamma - the same number the consumer caps it at below.
             if killer and ((val := pos.value(killer)) >= QS or depth) and (val >= MATE_LOWER or depth > 3
                     or pos.score + val + max(depth - 1, 0) * QS_A >= gamma):
                 yield val, killer
 
-            # Then the real moves, best value first. The QS floor lives here,
-            # ahead of the sort, so the fold never walks sub-floor junk.
+            # Quiescent search: If the move's intrinsic value is too low, (e.g. not
+            # a capture) and we are at depth == 0, we skip the move. This is how we
+            # ensure that bound() eventually terminates.
+            # Search by decreasing intrinsic value. The cap below is monotone in
+            # that value, so the first move it settles already carries the
+            # maximum report for the whole rest of the stream.
             yield from sorted(((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= QS or depth), reverse=True)
 
-        # One calmness test, two roles: guard (root excluded) gates the scoring
-        # null above and intrinsic LMR; calm alone gates the fuel probe, which
-        # runs at the root too.
+        # A fixed-target null probe reduces hot nodes. Its static calmness
+        # test also limits the scoring null and intrinsic LMR - through guard,
+        # the same test with the root excluded - to positions where passing
+        # is meaningful. The probe itself runs at the root too.
         calm = abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
         guard = not root and calm
         t = pos.score + NULL_MARGIN
@@ -459,39 +467,34 @@ class Searcher:
             if move is None and depth == 0:
                 score = pos.score
             elif move is None:
-                # Cap the pass at static evaluation plus one score bucket: that
-                # keeps its value monotone and below the positive mate band. A
-                # sub-window cap needs no child report; otherwise one is enough.
-                # A king capture substitutes the exact MATE_UPPER for a virtual
-                # fail-high - and hands the store below its witness.
+                # The cap trick applies to the null too: a sub-window cap can
+                # never cut, so we skip the probe entirely.
                 if (cap := pos.score + EVAL_ROUGHNESS) >= gamma:
                     score = min(cap, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
+                    # If we fail high on a null move, we have to check if the position
+                    # allows a king capture, since bound's invariant requires us to
+                    # always return MATE_UPPER if that's the case.
                     if score >= gamma and (proof := pos.king_capture()):
                         move, score, live = proof, MATE_UPPER, True
                 else:
                     score = cap
             else:
                 if val >= MATE_LOWER:
-                    # An intrinsic mate-band value is a king capture: the exact
-                    # MATE_UPPER token, never a search.
                     score = MATE_UPPER
                     live = True
                 else:
-                    # We lock in a futility bet: a shallow move is worth at most
-                    # a static estimate of what it wins. No mate-band clamp is
-                    # needed - both kings stand on the board at every call site,
-                    # so the sum tops out a third of the way to MATE_LOWER
-                    # (CapInBand in CappedMove.lean, and its caveat if
-                    # piece["Q"] ever grows past ~2400).
+                    # Futility pruning: If depth <= 3 we make the bet that a move cannot be
+                    # better than its intrinsic value plus a small margin. We lock in this
+                    # bet by capping the move's score at that value = min(cap, searched val).
+                    # If cap < gamma we can skip the move since `move_value <= cap < gamma`
+                    # is a valid return value for bound. If cap >= gamma we search the move,
+                    # but we have to cap the result as we promised.
+                    # But we don't apply caps to king captures, since that would hide illegal
+                    # moves from the parent search.
                     cap = MATE_UPPER if depth > 3 else pos.score + val + max(depth - 1, 0) * QS_A
-                    # A cap below gamma answers for this move and, the stream
-                    # being sorted, for everything after it: fold the cap and
-                    # break. max, not assignment - an earlier report may be
-                    # tighter. Before live, because a settled move was never
-                    # searched and witnesses no legality; and skipping the
-                    # cutoff block, it stores nothing, exactly as the old
-                    # suffix report did.
                     if cap < gamma: best = max(best, cap); break
+                    # We reduce the depth of low value moves, and of all moves if the
+                    # fixed-target null probe proved the position is pretty safe.
                     move_depth = depth - 1 - (guard and depth >= 6 and val < LMR) - int(nmr)
                     score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
                     live |= score > -MATE_UPPER
