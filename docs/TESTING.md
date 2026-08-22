@@ -348,7 +348,10 @@ operations preserve the exact rule state that Stockfish analysed. The EPD also
 records the game URL, played move, score loss, oracle name, node budgets, and
 boundary guard, plus fingerprints of the PGN input and Stockfish binary.
 User-archive fetches default to rated standard-chess games;
-`--include-casual` includes casual games alongside rated ones.
+`--include-casual` includes casual games alongside rated ones. Archive records
+are rechecked locally, then `--games` is applied to the accepted records so an
+API response that exceeds its requested maximum cannot enlarge the corpus.
+Single-game exports with a non-`Standard` variant are rejected explicitly.
 
 For a larger redistributable corpus, pin the archive to the end of an already
 published CC0 month instead of sampling the mutable latest games:

@@ -36,6 +36,7 @@ import chess.pgn
 
 MATE_CP = 100_000
 USER_AGENT = "sunfish-blunder-corpus/1 (+https://github.com/thomasahle/sunfish)"
+STANDARD_PERFS = {"bullet", "blitz", "rapid", "classical", "correspondence"}
 
 
 @dataclasses.dataclass(frozen=True)
@@ -71,14 +72,47 @@ class Blunder:
         return self.best_cp - self.played_cp
 
 
-def parse_games(text):
-    """Parse every game in a PGN stream, preserving file order."""
+def parse_games(text, accept=None, limit=None):
+    """Parse accepted games in file order, stopping at ``limit`` when set."""
     games, stream = [], io.StringIO(text)
     while (game := chess.pgn.read_game(stream)) is not None:
         if game.errors:
             raise ValueError(f"malformed PGN game: {game.errors}")
-        games.append(game)
+        if accept is None or accept(game):
+            games.append(game)
+            if limit is not None and len(games) >= limit:
+                break
     return games
+
+
+def is_archive_game(game, include_casual=False):
+    """Apply the rated, speed, and Standard-variant archive filters locally."""
+    headers = game.headers
+    if headers.get("Variant", "Standard").lower() != "standard":
+        return False
+    event = headers.get("Event", "").lower().split()
+    if len(event) != 3 or event[2] != "game" or event[1] not in STANDARD_PERFS:
+        return False
+    return event[0] == "rated" or (include_casual and event[0] == "casual")
+
+
+def source_games(text, games, include_casual=False, requested_game_id=None):
+    """Validate a single export or locally filter and cap a user archive."""
+    if requested_game_id:
+        selected = parse_games(text, limit=2)
+        if len(selected) != 1:
+            raise ValueError(
+                f"--game-id expected one PGN game, found {len(selected)}")
+        variant = selected[0].headers.get("Variant", "Standard")
+        if variant.lower() != "standard":
+            raise ValueError(
+                f"--game-id only supports Standard chess, found {variant!r}")
+        return selected
+    return parse_games(
+        text,
+        accept=lambda game: is_archive_game(game, include_casual),
+        limit=games or None,
+    )
 
 
 def game_id(game):
@@ -360,7 +394,7 @@ def make_parser():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("user", help="Lichess username of our bot")
     parser.add_argument("--games", type=int, default=100,
-                        help="games to fetch; 0 means the full archive")
+                        help="accepted games to use; 0 means the full archive")
     parser.add_argument("--game-id",
                         help="fetch one immutable game instead of a user slice")
     parser.add_argument("--pgn-cache", type=pathlib.Path,
@@ -393,6 +427,8 @@ def main(argv=None):
     if not args.engine:
         sys.exit("no Stockfish on PATH (brew install stockfish)")
     engine_path = shutil.which(args.engine) or args.engine
+    if args.games < 0:
+        sys.exit("--games must not be negative")
     if args.scan_nodes <= 0 or args.confirm_nodes < 2 * args.scan_nodes:
         sys.exit("confirmation nodes must be at least twice the positive scan nodes")
     if args.multipv < 2:
@@ -410,7 +446,11 @@ def main(argv=None):
         args.until,
     )
     source_sha = hashlib.sha256(text.encode()).hexdigest()[:16]
-    games = parse_games(text)
+    try:
+        games = source_games(
+            text, args.games, args.include_casual, args.game_id)
+    except ValueError as error:
+        sys.exit(str(error))
     engine = chess.engine.SimpleEngine.popen_uci([engine_path])
     try:
         configure_engine(engine)

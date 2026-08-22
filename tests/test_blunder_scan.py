@@ -6,6 +6,7 @@ import urllib.parse
 
 import chess
 import chess.engine
+import pytest
 
 
 ROOT = Path(__file__).parents[1]
@@ -24,6 +25,22 @@ PGN = """[Event "Regression fixture"]
 [TimeControl "180+1"]
 
 1. e4 e5 2. Nf3 Nc6 3. Bb5 a6 *
+"""
+
+
+def source_pgn(game_id, event="rated blitz game", variant="Standard"):
+    return f"""[Event "{event}"]
+[Site "https://lichess.org/{game_id}"]
+[Date "2026.08.22"]
+[Round "-"]
+[White "Sunfish-Engine"]
+[Black "Opponent"]
+[Result "*"]
+[Variant "{variant}"]
+[TimeControl "180+1"]
+
+1. e4 e5 *
+
 """
 
 
@@ -68,6 +85,31 @@ def test_parse_games_and_extract_bot_positions():
     assert positions[1].played == chess.Move.from_uci("g1f3")
     assert positions[1].game_id == "abc12345"
     assert positions[1].opponent == "Opponent"
+
+
+def test_source_games_filters_before_applying_the_requested_cap():
+    text = "".join([
+        source_pgn("variant1", variant="Chess960"),
+        source_pgn("casual1", event="casual blitz game"),
+        source_pgn("accepted1"),
+        source_pgn("ultra001", event="rated ultraBullet game"),
+        source_pgn("accepted2", event="rated rapid game"),
+        source_pgn("surplus1", event="rated classical game"),
+    ])
+    rated = blunder_scan.source_games(text, games=2)
+    assert [blunder_scan.game_id(game) for game in rated] == ["accepted1", "accepted2"]
+    with_casual = blunder_scan.source_games(text, games=2, include_casual=True)
+    assert [blunder_scan.game_id(game) for game in with_casual] == [
+        "casual1", "accepted1"]
+
+
+def test_single_game_source_rejects_nonstandard_chess():
+    text = source_pgn("variant1", variant="Chess960")
+    with pytest.raises(ValueError, match="only supports Standard chess"):
+        blunder_scan.source_games(text, games=100, requested_game_id="variant1")
+    selected = blunder_scan.source_games(
+        source_pgn("standard"), games=100, requested_game_id="standard")
+    assert [blunder_scan.game_id(game) for game in selected] == ["standard"]
 
 
 def test_score_cp_preserves_point_of_view_and_separates_mates():
