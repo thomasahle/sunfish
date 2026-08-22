@@ -1,30 +1,21 @@
 #!/usr/bin/env python3
-# compressed.py generator, matching numbfish's compressed.py exactly:
-# ONLY the engine core -- the class definitions and the Entry
-# namedtuple -- with comments, docstrings and blank lines removed and
-# the original names and indentation kept. The imports, data tables,
-# constants, helpers and UCI loop are hidden, so the file is a reading
-# artifact, not a runnable script. Stdlib only, deterministic.
+# compressed.py generator: the "Chess logic" + "Search logic" sections of
+# the engine (Move/Position/.../Searcher -- the numbfish compressed.py
+# style), as readable Python: original names and indentation, with
+# comments, docstrings and blank lines removed. Everything before the
+# "# Chess logic" section header and from the "# UCI User interface"
+# header on is hidden (tables, constants, UCI loop). A reading artifact,
+# not a runnable script. Stdlib only, deterministic.
 import ast, io, sys, tokenize
 
-src_lines = open(sys.argv[1]).read().splitlines(keepends=True)
-kept, hide = [], False
-for ln in src_lines:
-    if '# minifier-hide start' in ln: hide = True; continue
-    if '# minifier-hide end' in ln: hide = False; continue
-    if not hide: kept.append(ln)
-src = ''.join(kept)
-tree = ast.parse(src)
+raw = open(sys.argv[1]).read().splitlines(keepends=True)
+start = next(i for i, ln in enumerate(raw) if ln.strip() == "# Chess logic") - 1
+stop  = next(i for i, ln in enumerate(raw) if ln.strip() == "# UCI User interface") - 1
+section = raw[start:stop]
 
-show = set()  # top-level sections kept: class defs + namedtuple assigns
-for node in tree.body:
-    is_ntuple = (isinstance(node, ast.Assign) and isinstance(node.value, ast.Call)
-                 and getattr(node.value.func, 'id', '') == 'namedtuple')
-    if isinstance(node, ast.ClassDef) or is_ntuple:
-        show.update(range(node.lineno, node.end_lineno + 1))
-
-drop = set()  # docstrings / bare string statements inside what we keep
-for node in ast.walk(tree):
+src = ''.join(section)
+drop = set()  # docstrings / bare string statements
+for node in ast.walk(ast.parse(src)):
     body = getattr(node, 'body', None)
     if isinstance(body, list):
         for stmt in body:
@@ -38,6 +29,5 @@ for tok in tokenize.generate_tokens(io.StringIO(src).readline):
         row, col = tok.start
         lines[row - 1] = lines[row - 1][:col]
 
-out = [ln.rstrip() for i, ln in enumerate(lines, 1)
-       if i in show and i not in drop and ln.rstrip()]
+out = [ln.rstrip() for i, ln in enumerate(lines, 1) if i not in drop and ln.rstrip()]
 sys.stdout.write('\n'.join(out) + '\n')
