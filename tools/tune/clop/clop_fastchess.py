@@ -16,6 +16,9 @@ import shutil
 import subprocess
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).parents[1]))
+import pentanomial  # noqa: E402
+
 
 SCORE = re.compile(
     r"Score of (candidate|baseline) vs (candidate|baseline):\s+"
@@ -83,6 +86,7 @@ def main():
     ]
     process = subprocess.run(command, text=True, stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT)
+    pentanomial.reject_failures(process.stdout)
     matches = SCORE.findall(process.stdout)
     if process.returncode or not matches:
         print(process.stdout, file=sys.stderr)

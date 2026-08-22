@@ -53,6 +53,18 @@ an optimizer's internal score as comparable Elo. One opening played twice
 with colors reversed has five possible candidate scores—0, 0.5, 1, 1.5, or
 2—so the pair is naturally pentanomial.
 
+Use one frozen training-opening schedule for every method and apply any
+feasibility gate to every method or to none. `recommend.py` emits only reached
+checkpoints; CLOP recommendations are taken only after a complete two-game
+replication. The game runners reject logs that report a disconnect,
+nonresponsive engine, illegal move, stall, crash, or forfeit, even when
+fastchess recovery returns success.
+
+Games measure sample efficiency, not total compute. If gates, optimizer cost,
+or concurrency differ, report elapsed or CPU time separately. Freeze methods
+before consulting validation results, reuse one starting-position match, and
+confirm the selected winner on a fresh opening set.
+
 The integration tests exercise parameter translation, resumable state,
 pentanomial parsing, feasibility gates, checkpoint extraction, and the shared
 validation pipeline:

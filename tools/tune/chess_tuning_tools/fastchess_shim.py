@@ -8,6 +8,9 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).parents[1]))
+import pentanomial  # noqa: E402
+
 
 SETOPTION = re.compile(r"setoption name (.*?) value (.*)")
 
@@ -85,8 +88,21 @@ def advance_openings(checkpoint):
 
 def main():
     command, checkpoint = sequence_openings(translate(sys.argv[1:], engines()))
-    status = subprocess.call(command)
-    if not status:
+    process = subprocess.Popen(
+        command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, errors="replace")
+    failure = None
+    for line in process.stdout:
+        print(line, end="", flush=True)
+        try:
+            pentanomial.reject_failures(line)
+        except pentanomial.EngineFailure as error:
+            failure = failure or error
+    status = process.wait()
+    if failure:
+        print(failure, file=sys.stderr)
+        status = status or 1
+    if status == 0:
         advance_openings(checkpoint)
     return status
 

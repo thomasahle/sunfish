@@ -42,6 +42,7 @@ from scipy.special import ndtr
 sys.path.insert(0, str(pathlib.Path(__file__).parents[1]))
 import gating  # noqa: E402
 import locking  # noqa: E402
+import pentanomial  # noqa: E402
 import logistic_gp
 
 
@@ -873,6 +874,7 @@ async def run_pair(args, slot, experiment, vector, opponent, opening, space):
             async for line in process.stdout:
                 log.write(line)
                 text = line.decode(errors="replace").rstrip()
+                pentanomial.reject_failures(text)
                 match = SCORE.search(text)
                 if match:
                     last_score = tuple(map(int, match.groups()))

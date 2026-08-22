@@ -30,6 +30,7 @@ def load(name, relative):
 
 ctt = load("ctt_fastchess_shim", "tools/tune/chess_tuning_tools/fastchess_shim.py")
 ctt_config = load("ctt_make_config", "tools/tune/chess_tuning_tools/make_config.py")
+clop = load("clop_fastchess", "tools/tune/clop/clop_fastchess.py")
 gating = load("gating", "tools/tune/gating.py")
 pentanomial = load("pentanomial", "tools/tune/pentanomial.py")
 locking = load("locking", "tools/tune/locking.py")
@@ -174,6 +175,29 @@ Elo difference: +0.00 +/- 12.50
         self.assertTrue(math.isfinite(result["error"]))
         self.assertIsNone(result["fastchess_error"])
 
+    def test_game_result_tools_reject_engine_failures(self):
+        failures = (
+            "Finished game 1 (a vs b): 1-0 {Black disconnects}",
+            "Finished game 1 (a vs b): 1-0 {Black's connection stalls}",
+            "Finished game 1 (a vs b): 1-0 {Black makes an illegal move}",
+            "Finished game 1 (a vs b): 1-0 {Black loses on time (2ms overrun)}",
+            "Warning; Engine candidate didn't respond to uci.",
+            "Engine candidate did not respond to uciok in time.",
+            "Engine candidate is not responsive", "Engine crashed (stdout)",
+            "Warning; Illegal move a1a1 played by candidate", "Timeouts: 2",
+            "Crashed: 1", "termination: time forfeit",
+        )
+        for output in failures:
+            with self.subTest(output=output), self.assertRaises(RuntimeError):
+                pentanomial.game_results(output)
+
+    def test_game_result_failure_matching_ignores_benign_substrings(self):
+        for output in (
+                "installation complete", "Score of Stallion vs CrashTest: 1 - 0 - 1",
+                "Crashed: 0", "Timeouts: 0", "info string engine is crash-resistant"):
+            with self.subTest(output=output):
+                pentanomial.reject_failures(output)
+
     def test_validation_recovers_complete_pairs_across_attempts(self):
         with tempfile.TemporaryDirectory() as directory:
             log = pathlib.Path(directory, "configuration-test.log")
@@ -188,6 +212,14 @@ Finished game 2 (baseline vs candidate): 1-0
             results, _ = validate.recover(log)
             self.assertEqual(len(results), 4)
             self.assertEqual(validate.result(results)["pentanomial"], [0, 1, 0, 0, 1])
+
+    def test_validation_does_not_recover_past_an_engine_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = pathlib.Path(directory, "configuration-test.log")
+            log.write_text(
+                "Finished game 1 (candidate vs baseline): 0-1 {White disconnects}\n")
+            with self.assertRaisesRegex(RuntimeError, "disconnect"):
+                validate.recover(log)
 
     def test_validation_checks_uci_options_before_games(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -205,11 +237,52 @@ Finished game 2 (baseline vs candidate): 1-0
         records = recommend.at_checkpoints(
             "example", [(20, {"X": 1})], [0, 10, 20, 30], {"X": 0},
             range(2, 25, 2))
-        self.assertEqual([row["trained_games"] for row in records], [0, 10, 20, 24])
-        self.assertEqual([row["recommendation_games"] for row in records], [0, 0, 20, 20])
-        self.assertEqual([row["options"]["X"] for row in records], [0, 0, 1, 1])
+        self.assertEqual([row["checkpoint"] for row in records], [0, 10, 20])
+        self.assertEqual([row["trained_games"] for row in records], [0, 10, 20])
+        self.assertEqual([row["recommendation_games"] for row in records], [0, 0, 20])
+        self.assertEqual([row["options"]["X"] for row in records], [0, 0, 1])
         self.assertEqual(recommend.metadata(["start=11", "label=bad"]),
                          {"start": 11, "label": "bad"})
+
+    def test_recommendation_reports_prior_when_first_update_overshoots_budget(self):
+        records = recommend.at_checkpoints(
+            "example", [(20, {"X": 1})], [0, 10, 20, 30], {"X": 0}, [20])
+        self.assertEqual([row["checkpoint"] for row in records], [0, 10, 20])
+        self.assertEqual([row["trained_games"] for row in records], [0, 0, 20])
+        self.assertEqual([row["options"]["X"] for row in records], [0, 0, 1])
+
+    def test_clop_recommendations_use_only_complete_pairs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = pathlib.Path(directory)
+            space = directory / "space.json"
+            space.write_text(json.dumps({"parameters": [{
+                "name": "X", "type": "integer", "min": 0, "default": 0, "max": 5,
+            }]}))
+            config = directory / "study.clop"
+            config.write_text("Name study\nReplications 2\n")
+            (directory / "study.dat").write_text(
+                "R 0 0\nR 2 0\nR 3 0\nR 1 0\n")
+            replay = types.SimpleNamespace(
+                returncode=0, stderr="",
+                stdout="1 0 0 .5 1\n2 0 0 .5 2\n3 0 0 .5 3\n4 0 0 .5 4\n")
+            args = argparse.Namespace(
+                space=str(space), config=str(config), console="console", method="clop")
+            with mock.patch.object(recommend.subprocess, "run", return_value=replay):
+                records = recommend.clop(args, [0, 2, 3, 4, 6])
+            self.assertEqual([row["checkpoint"] for row in records], [0, 2, 3, 4])
+            self.assertEqual([row["options"]["X"] for row in records], [0, 0, 3, 4])
+
+    def test_clop_recommendations_require_the_adapter_replication_count(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = pathlib.Path(directory)
+            space = directory / "space.json"
+            space.write_text('{"parameters": []}')
+            config = directory / "study.clop"
+            config.write_text("Name study\nReplications 4\n")
+            args = argparse.Namespace(
+                space=str(space), config=str(config), console="console", method="clop")
+            with self.assertRaisesRegex(RuntimeError, "Replications 2"):
+                recommend.clop(args, [0])
 
     def test_gp_recommendation_accepts_pairwise_only_studies(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -304,6 +377,55 @@ Finished game 3 (candidate vs baseline): 0-1
     def test_ctt_fastchess_state_does_not_overwrite_tuner_config(self):
         command = ctt.translate([], {})
         self.assertIn("outname=fastchess-state.json", command)
+
+    def test_ctt_does_not_advance_after_a_recovered_engine_failure(self):
+        process = types.SimpleNamespace(stdout=["Engine crashed (stdout)\n"], wait=lambda: 0)
+        with mock.patch.object(ctt, "engines", return_value={}), \
+                mock.patch.object(ctt, "translate", return_value=["fastchess"]), \
+                mock.patch.object(ctt, "sequence_openings",
+                                  return_value=(["fastchess"], "checkpoint")), \
+                mock.patch.object(ctt.subprocess, "Popen", return_value=process) as popen, \
+                mock.patch.object(ctt, "advance_openings") as advance:
+            self.assertEqual(ctt.main(), 1)
+        self.assertEqual(popen.call_args.kwargs["errors"], "replace")
+        advance.assert_not_called()
+
+    def test_clop_adapter_rejects_a_recovered_time_loss(self):
+        with tempfile.TemporaryDirectory() as directory:
+            openings = pathlib.Path(directory, "openings.epd")
+            openings.write_text("opening\n")
+            process = types.SimpleNamespace(
+                returncode=0,
+                stdout="Finished game 1 (candidate vs baseline): 0-1 "
+                       "{White loses on time (1ms overrun)}\n"
+                       "Score of candidate vs baseline: 0 - 1 - 0\n")
+            argv = [
+                "clop_fastchess.py", "--fastchess", "fastchess", "--engine", "engine",
+                "--openings", str(openings), "--opening-count", "1", "local", "0",
+            ]
+            with mock.patch.object(sys, "argv", argv), \
+                    mock.patch.object(clop.subprocess, "run", return_value=process), \
+                    self.assertRaisesRegex(RuntimeError, "loses on time"):
+                clop.main()
+
+    def test_spsa_adapter_rejects_a_recovered_time_loss(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = pathlib.Path(directory)
+            openings = directory / "openings.epd"
+            openings.write_text("opening\n")
+            logs = directory / "logs"
+            logs.mkdir()
+            process = types.SimpleNamespace(
+                returncode=0,
+                stdout=b"Finished game 1 (plus vs minus): 0-1 "
+                       b"{White loses on time (1ms overrun)}\n"
+                       b"Score of plus vs minus: 0 - 1 - 0\n")
+            args = argparse.Namespace(
+                fastchess="fastchess", engine="engine", engine_args="", tc="3+0.1",
+                openings=str(openings), slots=1, logs=str(logs))
+            with mock.patch.object(spsa.subprocess, "run", return_value=process), \
+                    self.assertRaisesRegex(RuntimeError, "loses on time"):
+                spsa.play(args, 0, 1, 1, {}, {})
 
     def test_ctt_config_carries_its_declared_start_point(self):
         with tempfile.TemporaryDirectory() as directory:
