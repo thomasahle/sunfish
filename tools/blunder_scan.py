@@ -8,10 +8,10 @@ Typical reproducible workflow::
 
 The first run downloads one PGN archive and caches it. Later runs read only
 that file unless ``--refresh`` is passed. A quick fixed-node Stockfish pass
-finds candidates; a larger fixed-node MultiPV pass confirms the loss and
-records every near-best move it can certify. Positions whose acceptable-move
-set reaches the MultiPV boundary are rejected rather than incompletely
-labelled.
+finds candidates. Equal-budget single-PV probes then confirm the loss, while
+MultiPV probes at two larger budgets must agree on every accepted near-best
+move. Positions too close to the MultiPV boundary are rejected rather than
+incompletely labelled.
 
 The output is ordinary EPD accepted by ``tools/tester.py best``. Its ``bm``
 operation contains the certified alternatives, while ``c0`` through ``c2``
@@ -59,8 +59,10 @@ class Blunder:
     oracle: str
     scan_nodes: int
     confirm_nodes: int
+    stability_nodes: int
     threshold: int
     best_margin: int
+    boundary_guard: int
     multipv: int
     source_sha: str
 
@@ -117,21 +119,26 @@ def score_cp(score, color):
     return score.score(mate_score=MATE_CP)
 
 
-def acceptable_moves(ranked, legal_count, margin):
-    """Return complete near-best set, or empty when MultiPV truncated it."""
+def acceptable_moves(ranked, legal_count, margin, boundary_guard=0):
+    """Return a safely separated near-best set, or empty when ambiguous."""
     if not ranked:
         return ()
     ranked = sorted(ranked, key=lambda item: item[1], reverse=True)
+    if len({move for move, _ in ranked}) != len(ranked):
+        return ()
     floor = ranked[0][1] - margin
     accepted = tuple(move for move, score in ranked if score >= floor)
     if len(ranked) < legal_count and ranked[-1][1] >= floor:
+        return ()
+    rejected = [score for _, score in ranked if score < floor]
+    if rejected and rejected[0] > floor - boundary_guard:
         return ()
     return accepted
 
 
 def fen_key(fen):
-    """The immutable chess state represented by an EPD line."""
-    return " ".join(fen.split()[:4])
+    """Rule-relevant static state, including the fifty-move clock."""
+    return " ".join(fen.split()[:5])
 
 
 def deduplicate(blunders):
@@ -166,8 +173,10 @@ def to_epd(blunder):
                f"tc {candidate.time_control}; played {played}; loss {blunder.loss} cp; "
                f"best {blunder.best_cp}; played {blunder.played_cp}")
     settings = (f"{blunder.oracle}; scan {blunder.scan_nodes} nodes; "
-                f"confirm {blunder.confirm_nodes}; threshold {blunder.threshold}; "
-                f"bm margin {blunder.best_margin}; multipv {blunder.multipv}; "
+                f"confirm {blunder.confirm_nodes} nodes; "
+                f"stability {blunder.stability_nodes} nodes; "
+                f"threshold {blunder.threshold}; bm margin {blunder.best_margin}; "
+                f"boundary guard {blunder.boundary_guard}; multipv {blunder.multipv}; "
                 f"threads 1; hash 256 MB; pgn sha256 {blunder.source_sha}")
     return board.epd(
         bm=blunder.best_moves,
@@ -175,6 +184,8 @@ def to_epd(blunder):
         c0=lichess_url(candidate),
         c1=details,
         c2=settings,
+        hmvc=board.halfmove_clock,
+        fmvn=board.fullmove_number,
     )
 
 
@@ -201,9 +212,10 @@ def fetch_pgn(user, games, include_casual=False, until=None):
         "evals": "true",
         "opening": "true",
         "perfType": "bullet,blitz,rapid,classical,correspondence",
-        "rated": str(not include_casual).lower(),
         "sort": "dateDesc",
     }
+    if not include_casual:
+        query["rated"] = "true"
     if games:
         query["max"] = games
     if until:
@@ -241,9 +253,9 @@ def clear_hash(engine):
 
 
 def analyse(engine, board, limit, **kwargs):
-    """Search from a clean TT so labels do not depend on archive order."""
+    """Search from clean engine state so labels do not depend on probe order."""
     clear_hash(engine)
-    return engine.analyse(board, limit, **kwargs)
+    return engine.analyse(board, limit, game=object(), **kwargs)
 
 
 def analyse_candidate(engine, candidate, args, oracle, source_sha):
@@ -259,21 +271,42 @@ def analyse_candidate(engine, candidate, args, oracle, source_sha):
     if best_cp - played_cp < args.threshold or best_cp <= -args.threshold:
         return None
 
+    confirm_limit = chess.engine.Limit(nodes=args.confirm_nodes)
+    confirmed_best = analyse(engine, board, confirm_limit)
+    confirmed_best_move = confirmed_best.get("pv", [None])[0]
+    if confirmed_best_move is None:
+        return None
+    confirmed_best_cp = score_cp(confirmed_best["score"], board.turn)
+    confirmed_played = analyse(
+        engine, board, confirm_limit, root_moves=[candidate.played])
+    confirmed_played_cp = score_cp(confirmed_played["score"], board.turn)
+    if (confirmed_best_cp - confirmed_played_cp < args.threshold
+            or confirmed_best_cp <= -args.threshold):
+        return None
+
     legal_count = board.legal_moves.count()
     multipv = min(legal_count, args.multipv)
-    confirm_limit = chess.engine.Limit(nodes=args.confirm_nodes)
+    stability_nodes = args.confirm_nodes // 2
+    stability_limit = chess.engine.Limit(nodes=stability_nodes)
+    stable_infos = analyse(engine, board, stability_limit, multipv=multipv)
+    stable_ranked = [
+        (info["pv"][0], score_cp(info["score"], board.turn))
+        for info in stable_infos if info.get("pv")
+    ]
+    stable_moves = acceptable_moves(
+        stable_ranked, legal_count, args.best_margin)
+    if not stable_moves:
+        return None
+
     infos = analyse(engine, board, confirm_limit, multipv=multipv)
     ranked = [(info["pv"][0], score_cp(info["score"], board.turn))
               for info in infos if info.get("pv")]
-    best_moves = acceptable_moves(ranked, legal_count, args.best_margin)
-    if not best_moves or best_move not in best_moves or candidate.played in best_moves:
-        return None
-
-    played = analyse(engine, board, confirm_limit, root_moves=[candidate.played])
-    confirmed_played_cp = score_cp(played["score"], board.turn)
-    confirmed_best_cp = max(score for _, score in ranked)
-    if (confirmed_best_cp - confirmed_played_cp < args.threshold
-            or confirmed_best_cp <= -args.threshold):
+    best_moves = acceptable_moves(
+        ranked, legal_count, args.best_margin, args.boundary_guard)
+    if (not best_moves
+            or set(stable_moves) != set(best_moves)
+            or confirmed_best_move not in best_moves
+            or candidate.played in best_moves):
         return None
     return Blunder(
         candidate=candidate,
@@ -283,8 +316,10 @@ def analyse_candidate(engine, candidate, args, oracle, source_sha):
         oracle=oracle,
         scan_nodes=args.scan_nodes,
         confirm_nodes=args.confirm_nodes,
+        stability_nodes=stability_nodes,
         threshold=args.threshold,
         best_margin=args.best_margin,
+        boundary_guard=args.boundary_guard,
         multipv=args.multipv,
         source_sha=source_sha,
     )
@@ -333,7 +368,7 @@ def make_parser():
     parser.add_argument("--refresh", action="store_true",
                         help="replace --pgn-cache from Lichess")
     parser.add_argument("--include-casual", action="store_true",
-                        help="include casual games (do not commit without a license basis)")
+                        help="include casual alongside rated games (license them before commit)")
     parser.add_argument("--until", metavar="YYYY-MM-DD",
                         help="fetch games no later than this UTC date")
     parser.add_argument("--output", type=pathlib.Path,
@@ -342,6 +377,8 @@ def make_parser():
                         help="minimum confirmed centipawn loss")
     parser.add_argument("--best-margin", type=int, default=30,
                         help="moves this many cp from best are all accepted")
+    parser.add_argument("--boundary-guard", type=int, default=10,
+                        help="required cp gap beyond the best-move cutoff")
     parser.add_argument("--multipv", type=int, default=5,
                         help="maximum moves ranked by the confirmation search")
     parser.add_argument("--scan-nodes", type=int, default=100_000)
@@ -356,10 +393,12 @@ def main(argv=None):
     if not args.engine:
         sys.exit("no Stockfish on PATH (brew install stockfish)")
     engine_path = shutil.which(args.engine) or args.engine
-    if args.scan_nodes <= 0 or args.confirm_nodes < args.scan_nodes:
-        sys.exit("confirmation nodes must be at least the positive scan nodes")
+    if args.scan_nodes <= 0 or args.confirm_nodes < 2 * args.scan_nodes:
+        sys.exit("confirmation nodes must be at least twice the positive scan nodes")
     if args.multipv < 2:
         sys.exit("--multipv must be at least 2")
+    if args.boundary_guard < 0:
+        sys.exit("--boundary-guard must not be negative")
 
     text = load_pgn(
         args.user,
