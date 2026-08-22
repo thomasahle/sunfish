@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import pathlib
 import random
 import re
@@ -57,6 +58,29 @@ def gate_identity(command):
         return None
     fields = shlex.split(command)
     return command_identity(fields[0], shlex.join(fields[1:]))
+
+
+def step_identity(study, number, opening, pairs, plus, minus):
+    payload = {
+        "study": study, "number": number, "opening": opening, "pairs": pairs,
+        "plus": plus, "minus": minus,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def recover_step(path, identity, pairs):
+    if not path.exists():
+        return None
+    output = path.read_text(errors="replace")
+    if not output.startswith(f"adaptive-spsa-identity {identity}\n"):
+        return None
+    pentanomial.reject_failures(output)
+    matches = SCORE.findall(output)
+    if not matches:
+        return None
+    result = tuple(map(int, matches[-1]))
+    return result if sum(result) == 2 * pairs else None
 
 
 def study_identity(args):
@@ -184,7 +208,7 @@ def render(parameters, values, seed):
     return result
 
 
-def play(args, number, opening, pairs, plus, minus):
+def play(args, study, number, opening, pairs, plus, minus):
     command = [
         args.fastchess,
         *engine(args.engine, "plus", args.engine_args, plus),
@@ -198,11 +222,20 @@ def play(args, number, opening, pairs, plus, minus):
         "-resign", "movecount=4", "score=500",
         "-output", "format=cutechess", "-scoreinterval", "1", "-ratinginterval", "0",
     ]
-    process = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-    pathlib.Path(args.logs, f"step-{number:06d}.log").write_bytes(process.stdout)
-    output = process.stdout.decode(errors="replace")
-    pentanomial.reject_failures(output)
-    matches = SCORE.findall(output)
+    identity = step_identity(study, number, opening, pairs, plus, minus)
+    path = pathlib.Path(args.logs, f"step-{number:06d}-{identity}.log")
+    if result := recover_step(path, identity, pairs):
+        return result
+    with path.open("wb") as output:
+        output.write(f"adaptive-spsa-identity {identity}\n".encode())
+        output.flush()
+        os.fsync(output.fileno())
+    with path.open("ab", buffering=0) as output:
+        process = subprocess.run(command, stdout=output, stderr=subprocess.STDOUT)
+        os.fsync(output.fileno())
+    text = path.read_text(errors="replace")
+    pentanomial.reject_failures(text)
+    matches = SCORE.findall(text)
     if process.returncode or not matches:
         raise RuntimeError(f"SPSA step {number} failed with status {process.returncode}")
     wins, losses, draws = map(int, matches[-1])
@@ -215,7 +248,10 @@ def save(path, state, parameters):
     payload = state | {"parameters": parameters}
     target = pathlib.Path(path)
     temporary = target.with_suffix(target.suffix + ".tmp")
-    temporary.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    with temporary.open("w") as output:
+        output.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+        output.flush()
+        os.fsync(output.fileno())
     temporary.replace(target)
 
 
@@ -271,7 +307,7 @@ def optimize_locked(args):
             raise RuntimeError(
                 f"policy gate rejected {args.gate_attempts} SPSA perturbations")
         opening = (args.start - 1 + iteration) % opening_count + 1
-        wins, losses, draws = play(args, number, opening, pairs, plus, minus)
+        wins, losses, draws = play(args, identity, number, opening, pairs, plus, minus)
         result = wins - losses
         for parameter, (c, r, flip) in zip(parameters, steps):
             parameter["theta"] = min(max(

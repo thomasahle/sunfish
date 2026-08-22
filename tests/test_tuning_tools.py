@@ -37,6 +37,12 @@ locking = load("locking", "tools/tune/locking.py")
 plot_recovery = load("plot_recovery", "tools/tune/plot_recovery.py")
 recovery = load("recovery_starts", "tools/tune/recovery_starts.py")
 recommend = load("recommend", "tools/tune/recommend.py")
+rbfopt_stub = types.ModuleType("rbfopt")
+rbfopt_stub.RbfoptAlgorithm = type("RbfoptAlgorithm", (), {})
+rbfopt_stub.RbfoptBlackBox = type("RbfoptBlackBox", (), {})
+rbfopt_stub.RbfoptSettings = type("RbfoptSettings", (), {})
+with mock.patch.dict(sys.modules, {"rbfopt": rbfopt_stub}):
+    rbfopt = load("rbfopt_runner", "tools/tune/rbfopt/run_rbfopt.py")
 spsa = load("spsa", "tools/tune/spsa/spsa.py")
 spsa_candidates = load("spsa_candidates", "tools/tune/spsa/candidates.py")
 spsa_pool = load("spsa_pool", "tools/tune/spsa/pool.py")
@@ -44,6 +50,33 @@ validate = load("validate", "tools/tune/validate.py")
 
 
 class TuningToolsTest(unittest.TestCase):
+    def test_rbfopt_recovers_only_an_exact_complete_evaluation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory, "evaluation.log")
+            identity = "a" * 64
+            path.write_text(
+                f"rbfopt-match-identity {identity}\n"
+                "Finished game 1 (candidate vs baseline): 1-0\n"
+                "Finished game 2 (baseline vs candidate): 1/2-1/2\n"
+                "Score of candidate vs baseline: 1 - 0 - 1\n")
+            counts, wdl = rbfopt.recover_evaluation(path, identity, 1)
+            self.assertEqual((counts, wdl), ([0, 1, 0, 0, 0], (1, 0, 1)))
+            self.assertIsNone(rbfopt.recover_evaluation(path, "b" * 64, 1))
+
+    def test_rbfopt_model_replacement_is_atomic(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory, "model.pkl")
+            path.write_text("old")
+
+            class Optimizer:
+                @staticmethod
+                def save_to_file(target):
+                    pathlib.Path(target).write_text("new")
+
+            rbfopt.save_model(Optimizer(), path)
+            self.assertEqual(path.read_text(), "new")
+            self.assertFalse(path.with_suffix(".pkl.tmp").exists())
+
     def test_spsa_candidates_decode_and_average_in_optimizer_space(self):
         with tempfile.TemporaryDirectory() as directory:
             directory = pathlib.Path(directory)
@@ -428,7 +461,7 @@ Finished game 3 (candidate vs baseline): 0-1
             self.assertLessEqual(parameter["min"], original["default"])
             self.assertGreaterEqual(parameter["max"], original["default"])
 
-    def test_ctt_opening_checkpoint_commits_only_after_match(self):
+    def test_ctt_opening_checkpoint_commits_on_the_next_persisted_iteration(self):
         with tempfile.TemporaryDirectory() as directory:
             directory = pathlib.Path(directory)
             book = directory / "openings.epd"
@@ -439,49 +472,106 @@ Finished game 3 (candidate vs baseline): 0-1
                 "-rounds", "3",
             ]
             with mock.patch.dict("os.environ", {
-                    "CTT_OPENING_STATE": str(state), "CTT_OPENING_START": "1"}):
-                sequenced, checkpoint = ctt.sequence_openings(command.copy())
+                    "CTT_OPENING_STATE": str(state), "CTT_OPENING_START": "1",
+                    "CTT_STUDY_ID": "study", "CTT_ITERATION": "0"}):
+                sequenced, transaction = ctt.sequence_openings(command.copy())
                 self.assertIn("start=1", sequenced)
-                self.assertFalse(state.exists())
-                ctt.advance_openings(checkpoint)
-                self.assertEqual(json.loads(state.read_text()),
-                                 {"games": 6, "next_opening": 4})
+                first = json.loads(state.read_text())
+                self.assertEqual((first["games"], first["next_opening"]), (0, 1))
+                self.assertEqual(first["pending"]["iteration"], 0)
+                self.assertEqual(transaction[1], first["pending"]["identity"])
+                sequenced, _ = ctt.sequence_openings(command.copy())
+                self.assertIn("start=1", sequenced)
+            with mock.patch.dict("os.environ", {
+                    "CTT_OPENING_STATE": str(state), "CTT_OPENING_START": "1",
+                    "CTT_STUDY_ID": "study", "CTT_ITERATION": "1"}):
                 sequenced, _ = ctt.sequence_openings(command.copy())
                 self.assertIn("start=4", sequenced)
+                second = json.loads(state.read_text())
+                self.assertEqual((second["games"], second["next_opening"]), (6, 4))
+                self.assertEqual(second["pending"]["iteration"], 1)
+                ctt.commit_openings(2)
+                final = json.loads(state.read_text())
+                self.assertEqual((final["games"], final["next_opening"]), (12, 2))
+                self.assertNotIn("pending", final)
 
     def test_ctt_fastchess_state_does_not_overwrite_tuner_config(self):
         command = ctt.translate([], {})
         self.assertIn("outname=fastchess-state.json", command)
+
+    def test_ctt_recovers_only_an_exact_complete_iteration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory, "match.log")
+            identity = "a" * 64
+            path.write_text(
+                f"ctt-match-identity {identity}\n"
+                "Finished game 1 (candidate vs baseline): 1-0\n"
+                "Finished game 2 (baseline vs candidate): 1/2-1/2\n"
+                "Score of candidate vs baseline: 1 - 0 - 1\n")
+            self.assertIn("Finished game 2", ctt.complete_log(path, identity, 1))
+            self.assertIsNone(ctt.complete_log(path, "b" * 64, 1))
 
     def test_ctt_does_not_advance_after_a_recovered_engine_failure(self):
         process = types.SimpleNamespace(stdout=["Engine crashed (stdout)\n"], wait=lambda: 0)
         with mock.patch.object(ctt, "engines", return_value={}), \
                 mock.patch.object(ctt, "translate", return_value=["fastchess"]), \
                 mock.patch.object(ctt, "sequence_openings",
-                                  return_value=(["fastchess"], "checkpoint")), \
-                mock.patch.object(ctt.subprocess, "Popen", return_value=process) as popen, \
-                mock.patch.object(ctt, "advance_openings") as advance:
+                                  return_value=(["fastchess"], None)), \
+                mock.patch.object(ctt.subprocess, "Popen", return_value=process) as popen:
             self.assertEqual(ctt.main(), 1)
         self.assertEqual(popen.call_args.kwargs["errors"], "replace")
-        advance.assert_not_called()
 
     def test_clop_adapter_rejects_a_recovered_time_loss(self):
         with tempfile.TemporaryDirectory() as directory:
             openings = pathlib.Path(directory, "openings.epd")
             openings.write_text("opening\n")
-            process = types.SimpleNamespace(
-                returncode=0,
-                stdout="Finished game 1 (candidate vs baseline): 0-1 "
-                       "{White loses on time (1ms overrun)}\n"
-                       "Score of candidate vs baseline: 0 - 1 - 0\n")
+            def run(*command, stdout, **kwargs):
+                stdout.write(
+                    "Finished game 1 (candidate vs baseline): 0-1 "
+                    "{White loses on time (1ms overrun)}\n"
+                    "Score of candidate vs baseline: 0 - 1 - 0\n")
+                return types.SimpleNamespace(returncode=0)
+
             argv = [
                 "clop_fastchess.py", "--fastchess", "fastchess", "--engine", "engine",
-                "--openings", str(openings), "--opening-count", "1", "local", "0",
+                "--openings", str(openings), "--opening-count", "1",
+                "--cache", str(pathlib.Path(directory, "cache")), "local", "0",
             ]
             with mock.patch.object(sys, "argv", argv), \
-                    mock.patch.object(clop.subprocess, "run", return_value=process), \
+                    mock.patch.object(clop.subprocess, "run", side_effect=run), \
                     self.assertRaisesRegex(RuntimeError, "loses on time"):
                 clop.main()
+
+    def test_clop_reuses_only_the_exact_completed_seed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = pathlib.Path(directory)
+            openings = directory / "openings.epd"
+            openings.write_text("opening\n")
+            engine = directory / "engine"
+            engine.write_text("engine\n")
+            fastchess = directory / "fastchess"
+            fastchess.write_text("manager\n")
+            calls = 0
+
+            def run(*command, stdout, **kwargs):
+                nonlocal calls
+                calls += 1
+                stdout.write("Score of candidate vs baseline: 1 - 0 - 0\n")
+                return types.SimpleNamespace(returncode=0)
+
+            base = [
+                "clop_fastchess.py", "--fastchess", str(fastchess), "--engine", str(engine),
+                "--openings", str(openings), "--opening-count", "1",
+                "--cache", str(directory / "cache"), "local", "0",
+            ]
+            with mock.patch.object(clop.subprocess, "run", side_effect=run):
+                with mock.patch.object(sys, "argv", base):
+                    self.assertEqual(clop.main(), 0)
+                with mock.patch.object(sys, "argv", base):
+                    self.assertEqual(clop.main(), 0)
+                with mock.patch.object(sys, "argv", [*base, "X", "1"]):
+                    self.assertEqual(clop.main(), 0)
+            self.assertEqual(calls, 2)
 
     def test_spsa_adapter_rejects_a_recovered_time_loss(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -490,17 +580,44 @@ Finished game 3 (candidate vs baseline): 0-1
             openings.write_text("opening\n")
             logs = directory / "logs"
             logs.mkdir()
-            process = types.SimpleNamespace(
-                returncode=0,
-                stdout=b"Finished game 1 (plus vs minus): 0-1 "
-                       b"{White loses on time (1ms overrun)}\n"
-                       b"Score of plus vs minus: 0 - 1 - 0\n")
+            def run(*command, stdout, **kwargs):
+                stdout.write(
+                    b"Finished game 1 (plus vs minus): 0-1 "
+                    b"{White loses on time (1ms overrun)}\n"
+                    b"Score of plus vs minus: 0 - 1 - 0\n")
+                return types.SimpleNamespace(returncode=0)
+
             args = argparse.Namespace(
                 fastchess="fastchess", engine="engine", engine_args="", tc="3+0.1",
                 openings=str(openings), slots=1, logs=str(logs))
-            with mock.patch.object(spsa.subprocess, "run", return_value=process), \
+            with mock.patch.object(spsa.subprocess, "run", side_effect=run), \
                     self.assertRaisesRegex(RuntimeError, "loses on time"):
-                spsa.play(args, 0, 1, 1, {}, {})
+                spsa.play(args, {"study": 1}, 0, 1, 1, {}, {})
+
+    def test_spsa_reuses_a_complete_identity_bound_step(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = pathlib.Path(directory)
+            openings = directory / "openings.epd"
+            openings.write_text("opening\n")
+            logs = directory / "logs"
+            logs.mkdir()
+            calls = 0
+
+            def run(*command, stdout, **kwargs):
+                nonlocal calls
+                calls += 1
+                stdout.write(b"Score of plus vs minus: 1 - 0 - 1\n")
+                return types.SimpleNamespace(returncode=0)
+
+            args = argparse.Namespace(
+                fastchess="fastchess", engine="engine", engine_args="", tc="3+0.1",
+                openings=str(openings), slots=1, logs=str(logs))
+            with mock.patch.object(spsa.subprocess, "run", side_effect=run):
+                first = spsa.play(args, {"study": 1}, 0, 1, 1, {"X": 1}, {"X": 0})
+                second = spsa.play(args, {"study": 1}, 0, 1, 1, {"X": 1}, {"X": 0})
+                changed = spsa.play(args, {"study": 2}, 0, 1, 1, {"X": 1}, {"X": 0})
+            self.assertEqual((first, second, changed), ((1, 0, 1),) * 3)
+            self.assertEqual(calls, 2)
 
     def test_ctt_config_carries_its_declared_start_point(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -545,10 +662,15 @@ Finished game 3 (candidate vs baseline): 0-1
                 "score = float(prob_to_elo(dist.mean().dot(scores), k=score_scale))\n"
                 "        return best_point, estimated_elo, float(best_std * 100)\n")
             (directory / "cli.py").write_text(
+                "import logging\n"
                 "    extra_points = load_points_to_evaluate(\n"
                 "        space=opt.space,\n"
                 "        csv_file=evaluate_points,\n"
-                "    while True:\n        used_extra_point = False\n")
+                "    while True:\n"
+                "        used_extra_point = False\n"
+                "        for output_line in run_match(**match_settings):\n")
+            with (directory / "local.py").open("a") as source:
+                source.write("            if opt.space == old_opt.space:\n")
             (directory / "utils.py").write_text('''    raw_bounds = getattr(res.space, "bounds", None)
     minimize_bounds = None
 
@@ -568,6 +690,8 @@ Finished game 3 (candidate vs baseline): 0-1
             self.assertIn("while iteration <= max_iterations", source)
             self.assertLess(source.index("np.savez_compressed"), source.index("break"))
             self.assertIn('None if len(X) else settings.get("evaluate_points"', source)
+            self.assertIn('os.environ["CTT_ITERATION"] = str(iteration)', source)
+            self.assertIn("list(old_opt.Xi) == X", (directory / "local.py").read_text())
 
     def test_spsa_uses_pairs_as_its_iteration_clock(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -583,7 +707,7 @@ Finished game 3 (candidate vs baseline): 0-1
             state = directory / "state.json"
             calls = []
 
-            def play(args, number, opening, pairs, plus, minus):
+            def play(args, study, number, opening, pairs, plus, minus):
                 calls.append((number, opening, pairs))
                 return ((2 * pairs, 0, 0) if plus["X"] > minus["X"]
                         else (0, 2 * pairs, 0))
