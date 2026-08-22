@@ -69,7 +69,7 @@ def paired_comparisons(records, checkpoint=1000, replicates=100000, seed=2026082
             raise ValueError(f"checkpoint {checkpoint} has misaligned starts for {method}")
     starts = sorted(expected, key=str)
 
-    scores, initial, slices, counts = {}, {}, set(), set()
+    scores, initial, slices, studies, counts = {}, {}, set(), set(), set()
     for start in starts:
         baselines, baseline_ids = [], []
         for method in methods:
@@ -92,6 +92,10 @@ def paired_comparisons(records, checkpoint=1000, replicates=100000, seed=2026082
                 slices.add(identity)
                 if any(value is None for value in identity):
                     raise ValueError(f"incomplete validation identity for {method}, start {start}")
+                study = item.get("benchmark_protocol")
+                if study is None:
+                    raise ValueError(f"missing benchmark protocol for {method}, start {start}")
+                studies.add(json.dumps(study, sort_keys=True, separators=(",", ":")))
             scores[method, start] = np.asarray(record["pair_scores"], dtype=float)
             baselines.append(tuple(baseline["pair_scores"]))
             baseline_ids.append(baseline.get("validation"))
@@ -106,6 +110,8 @@ def paired_comparisons(records, checkpoint=1000, replicates=100000, seed=2026082
         raise ValueError("misaligned opening-pair counts")
     if len(slices) > 1:
         raise ValueError("validation records use different opening slices")
+    if len(studies) > 1:
+        raise ValueError("validation records use different benchmark protocols")
 
     observed = np.empty((len(starts), len(methods)))
     raw = np.empty_like(observed)
@@ -202,6 +208,27 @@ def summarize(records):
     return output
 
 
+def areas(summary, horizon):
+    """Normalized trapezoidal recovery area at one shared game budget."""
+    output = []
+    for method in sorted({record["method"] for record in summary}):
+        line = sorted(
+            (record for record in summary
+             if record["method"] == method and record["checkpoint"] <= horizon),
+            key=lambda record: record["checkpoint"],
+        )
+        checkpoints = [record["checkpoint"] for record in line]
+        if not line or checkpoints[0] != 0 or checkpoints[-1] != horizon:
+            raise ValueError(f"{method} does not span the 0--{horizon}-game curve")
+        area = sum(
+            (right["checkpoint"] - left["checkpoint"])
+            * (left["gain"] + right["gain"]) / 2
+            for left, right in zip(line, line[1:])
+        ) / horizon
+        output.append({"method": method, "horizon": horizon, "recovery_auc": area})
+    return output
+
+
 def write_csv(path, records, fields):
     with pathlib.Path(path).open("w", newline="") as target:
         writer = csv.DictWriter(
@@ -260,6 +287,7 @@ def main():
     args = parser.parse_args()
     raw = add_gains(rows(args.validation))
     summary = summarize(raw)
+    area = areas(summary, args.primary_checkpoint)
     comparisons = paired_comparisons(
         raw, args.primary_checkpoint, args.bootstrap_replicates, args.bootstrap_seed,
         args.recovery_start or (5, 15, 23))
@@ -274,6 +302,9 @@ def main():
     write_csv(prefix.with_suffix(".paired.csv"), comparisons, [
         "checkpoint", "method_a", "method_b", "starts", "pairs_per_start", "replicates", "seed",
         "recovery_a", "recovery_b", "elo_difference", "ci_low", "ci_high", "score_difference",
+    ])
+    write_csv(prefix.with_suffix(".auc.csv"), area, [
+        "method", "horizon", "recovery_auc",
     ])
     plot(prefix.with_suffix(".svg"), raw, summary, args.title, "gain", "gain_error",
          "Held-out Elo recovered from start")

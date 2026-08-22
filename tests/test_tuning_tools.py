@@ -168,6 +168,7 @@ class TuningToolsTest(unittest.TestCase):
         identity = {
             "validation_start": 220001, "validation_pairs": 4,
             "validation_openings": "book", "validation_protocol": "protocol",
+            "benchmark_protocol": "frozen-study",
         }
         for method in ("a", "b"):
             for start in (5, 15):
@@ -195,6 +196,7 @@ class TuningToolsTest(unittest.TestCase):
                 "validation": f"start-{start}" if checkpoint == 0 else f"{method}-{start}",
                 "validation_start": 220001, "validation_pairs": len(scores),
                 "validation_openings": "book", "validation_protocol": "protocol",
+                "benchmark_protocol": "frozen-study",
             }
 
         records = [
@@ -209,6 +211,27 @@ class TuningToolsTest(unittest.TestCase):
         records[3]["validation_pairs"] = 1
         with self.assertRaisesRegex(ValueError, "pair counts"):
             plot_recovery.paired_comparisons(records, replicates=10, expected_starts=(5,))
+        records[3]["pair_scores"] = records[3]["pair_scores"] * 2
+        records[3]["validation_pairs"] = len(records[3]["pair_scores"])
+        records[3]["benchmark_protocol"] = "different-study"
+        with self.assertRaisesRegex(ValueError, "benchmark protocols"):
+            plot_recovery.paired_comparisons(records, replicates=10, expected_starts=(5,))
+
+    def test_recovery_area_uses_the_shared_checkpoint_budget(self):
+        summary = [
+            {"method": "a", "checkpoint": 0, "gain": 0},
+            {"method": "a", "checkpoint": 100, "gain": 20},
+            {"method": "a", "checkpoint": 200, "gain": 30},
+            {"method": "b", "checkpoint": 0, "gain": 0},
+            {"method": "b", "checkpoint": 100, "gain": 10},
+            {"method": "b", "checkpoint": 200, "gain": 10},
+        ]
+        self.assertEqual(plot_recovery.areas(summary, 200), [
+            {"method": "a", "horizon": 200, "recovery_auc": 17.5},
+            {"method": "b", "horizon": 200, "recovery_auc": 7.5},
+        ])
+        with self.assertRaisesRegex(ValueError, "does not span"):
+            plot_recovery.areas(summary[:-1], 200)
 
     def test_validation_parser_keeps_paired_statistics(self):
         output = b"""Finished game 2 (baseline vs candidate): 1-0
