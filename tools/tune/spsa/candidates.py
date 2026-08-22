@@ -48,7 +48,9 @@ def extract(paths, space_path, tails, results_per_state=None):
             options = space.knobs(space.canonical(decode(items, theta)))
             output.append({
                 "method": "spsa", "trajectory": path.parent.name,
-                "variant": variant, "trained_games": 2 * len(results),
+                "variant": variant,
+                "trained_games": sum(
+                    row.get("games", 4 if row.get("opponent") else 2) for row in results),
                 "options": options,
             })
     unique = {}

@@ -44,6 +44,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).parents[1]))
 import gating  # noqa: E402
 import locking  # noqa: E402
 import pentanomial  # noqa: E402
+import opponent_panel  # noqa: E402
 import logistic_gp
 
 
@@ -205,14 +206,19 @@ def command_identity(command):
 
 def study_identity(args):
     """Describe everything that changes the distribution of game observations."""
+    panel = getattr(args, "baseline_panel", [])
     return {
         "version": 3,
         "scheduler": file_identity(__file__),
         "model": file_identity(pathlib.Path(__file__).with_name("logistic_gp.py")),
         "fastchess": file_identity(shutil.which(args.fastchess) or args.fastchess),
         "candidate": engine_identity(args.engine, args.engine_args, {}),
-        "baseline": engine_identity(
-            args.baseline_engine, args.baseline_args, args.baseline_options),
+        "baseline": (None if panel else engine_identity(
+            args.baseline_engine, args.baseline_args, args.baseline_options)),
+        "baseline_panel": [{
+            "name": member["name"], "weight": member["weight"],
+            "engine": engine_identity(member["engine"], member["args"], member["options"]),
+        } for member in panel],
         "openings": file_identity(args.openings),
         "opening_schedule": {
             "cycle": args.cycle_openings,
@@ -253,6 +259,8 @@ def bind_study(state, identity):
 def fixed_baseline_point(args, space):
     """Return the parameter point already represented exactly by the baseline."""
     if not isinstance(space, logistic_gp.MixedSpace):
+        return None
+    if getattr(args, "baseline_panel", None):
         return None
     candidate = engine_identity(args.engine, args.engine_args, {})
     baseline = engine_identity(args.baseline_engine, args.baseline_args, {})
@@ -499,6 +507,9 @@ def restore_pending(state, space):
             raise ValueError(f"duplicate pending experiment {number}")
         if len(record["openings"]) != len(record["results"]):
             raise ValueError(f"pending experiment {number} has mismatched pairs")
+        baseline_ids = record.setdefault("baseline_ids", [None] * len(record["results"]))
+        if len(baseline_ids) != len(record["results"]):
+            raise ValueError(f"pending experiment {number} has mismatched panel members")
         if all(result is not None for result in record["results"]):
             raise ValueError(f"pending experiment {number} is already complete")
         expected = [pair_identity(state, record, pair) for pair in range(len(record["results"]))]
@@ -538,6 +549,7 @@ def pending_batch(record):
         "opening": record["openings"][0],
         "opening_sequence": record["opening_sequence"],
         "openings": record["openings"], "allocation": record["allocation"],
+        "baseline_ids": sorted(name for name in record["baseline_ids"] if name is not None),
         "opponent_knobs": record["opponent_knobs"],
     }
 
@@ -943,11 +955,16 @@ def recover_pair(path, identity):
     return (wins, draws, losses) if len(results) == 2 else None
 
 
-async def run_pair(args, slot, experiment, pair, identity, vector, opponent, opening, space):
+async def run_pair(args, slot, experiment, pair, identity, vector, opponent,
+                   opening, sequence, space):
     if opponent is None:
-        rival = engine_config(
-            args.baseline_engine, "baseline", args.baseline_args, args.baseline_options)
+        member = opponent_panel.select(args.baseline_panel, sequence) if args.baseline_panel else {
+            "name": "baseline", "engine": args.baseline_engine,
+            "args": args.baseline_args, "options": args.baseline_options,
+        }
+        rival = engine_config(member["engine"], "baseline", member["args"], member["options"])
     else:
+        member = None
         rival = engine_config(args.engine, "opponent", args.engine_args, space.knobs(opponent))
     command = [
         args.fastchess,
@@ -966,7 +983,7 @@ async def run_pair(args, slot, experiment, pair, identity, vector, opponent, ope
     path = pathlib.Path(args.logs, name)
     if result := recover_pair(path, identity):
         print(f"[slot {slot}] recovered experiment {experiment} pair {pair}", flush=True)
-        return experiment, pair, *result
+        return experiment, pair, *result, member["name"] if member else None
     with path.open("wb") as log:
         log.write(f"adaptive-gp-identity {identity}\n".encode())
         log.flush()
@@ -974,12 +991,14 @@ async def run_pair(args, slot, experiment, pair, identity, vector, opponent, ope
     process = await asyncio.create_subprocess_exec(
         *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
     last_score = None
+    failure = None
     try:
         with path.open("ab") as log:
             async for line in process.stdout:
                 log.write(line)
                 text = line.decode(errors="replace").rstrip()
                 pentanomial.reject_failures(text)
+                failure = failure or opponent_panel.failure(text)
                 match = SCORE.search(text)
                 if match:
                     last_score = tuple(map(int, match.groups()))
@@ -989,8 +1008,8 @@ async def run_pair(args, slot, experiment, pair, identity, vector, opponent, ope
         if process.returncode is None:
             process.terminate()
             await process.wait()
-    if status or last_score is None:
-        raise RuntimeError(f"slot {slot} failed with status {status}")
+    if status or last_score is None or failure:
+        raise RuntimeError(f"slot {slot} failed with status {status}: {failure or 'no score'}")
     wins, losses, draws = last_score
     if wins + draws + losses != 2:
         raise RuntimeError(f"slot {slot} completed {wins + draws + losses} games")
@@ -998,7 +1017,7 @@ async def run_pair(args, slot, experiment, pair, identity, vector, opponent, ope
         log.write(f"adaptive-gp-result {identity} {wins} {draws} {losses}\n")
         log.flush()
         os.fsync(log.fileno())
-    return experiment, pair, wins, draws, losses
+    return experiment, pair, wins, draws, losses, member["name"] if member else None
 
 
 async def optimize(args):
@@ -1025,6 +1044,9 @@ async def optimize_locked(args):
         space.candidates = sorted(set(space.candidates + space.full_axis_design()))
     if args.baseline_options == "default":
         args.baseline_options = space.knobs(space.default)
+    for member in args.baseline_panel:
+        if member["options"] == "default":
+            member["options"] = space.knobs(space.default)
     bind_study(state, study_identity(args))
     if seed is not None:
         old_baseline = seed.get("study", {}).get("baseline", {}).get("options", {})
@@ -1064,7 +1086,11 @@ async def optimize_locked(args):
         return
     options = set().union(*(space.knobs(candidate) for candidate in space.candidates))
     validate_options(args.engine, args.engine_args, options)
-    validate_options(args.baseline_engine, args.baseline_args, args.baseline_options)
+    if args.baseline_panel:
+        for member in args.baseline_panel:
+            validate_options(member["engine"], member["args"], member["options"])
+    else:
+        validate_options(args.baseline_engine, args.baseline_args, args.baseline_options)
     fixed = fixed_baseline_point(args, space)
     if fixed is not None:
         space.condition(fixed)
@@ -1182,6 +1208,7 @@ async def optimize_locked(args):
             "opponent_knobs": space.knobs(opponent) if opponent is not None else None,
             "opening_sequence": sequence, "openings": scheduled,
             "results": [None] * args.pairs, "allocation": diagnostics["mode"],
+            "baseline_ids": [None] * args.pairs,
         }
         record["identities"] = [pair_identity(state, record, pair)
                                 for pair in range(args.pairs)]
@@ -1272,7 +1299,8 @@ async def optimize_locked(args):
             task = asyncio.create_task(
                 run_pair(args, slot, number, pair, record["identities"][pair],
                          experiment["vector"],
-                         experiment["opponent"], opening, space))
+                         experiment["opponent"], opening,
+                         record["opening_sequence"] + pair, space))
             running[task] = slot
             activity.set()
 
@@ -1308,12 +1336,13 @@ async def optimize_locked(args):
             refill = None
         for task in done:
             running.pop(task)
-            number, pair, wins, draws, losses = task.result()
+            number, pair, wins, draws, losses, baseline_id = task.result()
             experiment = experiments[number]
             record = experiment["record"]
             if record["results"][pair] is not None:
                 raise RuntimeError(f"experiment {number} pair {pair} completed twice")
             record["results"][pair] = [wins, draws, losses]
+            record["baseline_ids"][pair] = baseline_id
             if any(result is None for result in record["results"]):
                 save_state(args.state, state)
                 continue
@@ -1353,6 +1382,8 @@ def main():
     parser.add_argument("--baseline-args")
     parser.add_argument("--baseline-options", type=lambda value: (
         value if value == "default" else json.loads(value)), default={})
+    parser.add_argument("--baseline-panel",
+        help="JSON list of deterministic integer-weighted fixed opponents")
     parser.add_argument("--space", help="JSON numeric/categorical UCI option space")
     parser.add_argument("--seed-state", help="import completed batches into a new study")
     parser.add_argument("--openings", required=True)
@@ -1421,6 +1452,10 @@ def main():
         help="override the imported allocation clock (use 0 to restart it)")
     parser.add_argument("--safe-only", action="store_true")
     args = parser.parse_args()
+    args.baseline_panel = opponent_panel.load(args.baseline_panel) if args.baseline_panel else []
+    if args.baseline_panel and (args.baseline_engine or args.baseline_args is not None
+            or args.baseline_options):
+        parser.error("--baseline-panel cannot be combined with single-baseline options")
     args.baseline_engine = args.baseline_engine or args.engine
     args.baseline_args = args.engine_args if args.baseline_args is None else args.baseline_args
     if args.source_logs and not args.battery:

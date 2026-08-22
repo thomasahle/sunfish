@@ -22,38 +22,37 @@ SUITES = (("mate1.fen", 1, 8, 8),
           ("mate3_eventual.fen", 3, 2, 2))
 
 
+def cap_horizon(options):
+    """First depth above the finite move-cap horizon."""
+    depth = options.get("FUT_CAP_DEPTH", 3) if options.get("FUT_CAP", 1) else -1
+    return max(depth + 1, 1)
+
+
 def mate_depth(options, moves):
     """Uniform depth bound for this policy's mate-in-moves gate."""
     k = 2 * moves - 1
     null_limit = options.get("NULL_LIMIT", 750)
     null_depth = options.get("NULL_MIN_DEPTH", 2)
-    fuel_depth = options.get("FUEL_MIN_DEPTH", 6)
-    fuel = options.get("FUEL_NULL", 1) if null_limit and fuel_depth < 99 else 0
-    if null_limit and not fuel and null_depth < 99:
-        raise ValueError("unbounded-classical-null")
+    null_span = options.get("NULL_SPAN", 3)
+    fuel = options.get("FUEL_NULL", 1) if null_limit else 0
 
     # Each real edge spends its ply, the hot-node fuel, and possibly LMR.
     lmr = options.get("LMR_RED", 1)
     if (options.get("LMR", 75) == -70000
-            or options.get("LMR_MIN_DEPTH", 6) == 99
             or not options.get("LMR_LIMIT", 750)):
         lmr = 0
     cost = 1 + fuel + lmr
 
     # D >= C*(k-1)+A keeps the last attacker beyond the cap horizon;
     # D >= C*k+1 leaves its terminal child at positive depth.
-    cap_depth = max(options.get("FUT_MAX", 1),
-        options.get("FUT_CAP_DEPTH", 3) if options.get("FUT_CAP", 1) else 0)
-    attacker = cap_depth + 1
+    attacker = cap_horizon(options)
     depth = max(cost * (k - 1) + attacker, cost * k + 1)
 
     # D >= C*(k-2)+B keeps the last defender beyond the null horizon.
     # If the shallow-null interval is empty, the ordinary positive-depth
-    # fold is already sufficient; otherwise it ends at FUEL_MIN_DEPTH.
+    # fold is already sufficient; otherwise it ends after NULL_SPAN depths.
     if k > 1:
-        defender = fuel_depth if null_limit and null_depth + 1 < fuel_depth else 1
-        if defender == 99:
-            raise ValueError("null-transition-disabled")
+        defender = null_depth + null_span + 1 if null_limit and null_span else 1
         depth = max(depth, cost * (k - 2) + defender)
     return depth
 
@@ -167,7 +166,7 @@ def main():
         parser.error("--node-factor requires --node-book")
     request = json.load(sys.stdin)
     options = request["options"]
-    if not options.get("MATE_DIST", 1) or not options.get("EVAL_ROUGHNESS", 15):
+    if not options.get("MATE_DIST", 1):
         print("mate-distance:disabled")
         return 1
     try:

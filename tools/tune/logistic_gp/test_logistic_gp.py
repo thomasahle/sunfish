@@ -51,6 +51,8 @@ from adaptive_gp import (
     validate_opening_budget,
 )
 from logistic_gp import ELO_PER_LOGIT, LogisticGP, MixedSpace
+from opponent_panel import failure as panel_failure, load as load_baseline_panel
+from opponent_panel import select as panel_member
 from report_gp import report_domain, report_prior
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
@@ -690,23 +692,33 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertNotIn("MATE_DIST", {
             parameter["name"] for parameter in spec["parameters"]})
 
-    def test_mate_gate_rejects_flat_mate_policies_before_running_engine(self):
+    def test_mate_gate_rejects_disabled_mate_distance_before_running_engine(self):
         gate = pathlib.Path(__file__).with_name("sunfish_gate.py")
         self.assertEqual(sunfish_gate.SUITES,
             (("mate1.fen", 1, 8, 8),
              ("mate2_eventual.fen", 2, 5, 5),
              ("mate3_eventual.fen", 3, 2, 2)))
-        for options in ({"MATE_DIST": 0}, {"EVAL_ROUGHNESS": 0}):
-            request = json.dumps({
-                "engine": "/does/not/exist",
-                "engine_args": "",
-                "options": options,
-            })
-            result = subprocess.run(
-                [sys.executable, gate], input=request, text=True,
-                capture_output=True)
-            self.assertEqual(result.returncode, 1)
-            self.assertEqual(result.stdout.strip(), "mate-distance:disabled")
+        request = json.dumps({
+            "engine": "/does/not/exist",
+            "engine_args": "",
+            "options": {"MATE_DIST": 0},
+        })
+        result = subprocess.run(
+            [sys.executable, gate], input=request, text=True,
+            capture_output=True)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(result.stdout.strip(), "mate-distance:disabled")
+
+        request = json.dumps({
+            "engine": "/does/not/exist",
+            "engine_args": "",
+            "options": {"EVAL_ROUGHNESS": 0},
+        })
+        result = subprocess.run(
+            [sys.executable, gate, "--horizon-only"], input=request,
+            text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0)
+        self.assertIn("mate1.fen:depth=4", result.stdout)
 
     def test_mate_gate_prices_each_search_policy(self):
         def depths(options):
@@ -719,11 +731,12 @@ class MixedAcquisitionTest(unittest.TestCase):
             "FUEL_NULL": 2,
             "FUEL_MIN_DEPTH": 12,
             "FUT_CAP_DEPTH": 6,
-        }), (7, 16, 24))
-        with self.assertRaisesRegex(ValueError, "unbounded-classical-null"):
-            sunfish_gate.mate_depth({"FUEL_NULL": 0}, 3)
-        with self.assertRaisesRegex(ValueError, "unbounded-classical-null"):
-            sunfish_gate.mate_depth({"FUEL_MIN_DEPTH": 99}, 2)
+        }), (7, 15, 23))
+        self.assertEqual(sunfish_gate.mate_depth({"FUEL_NULL": 0}, 3), 12)
+        self.assertEqual(sunfish_gate.mate_depth({"FUEL_MIN_DEPTH": 99}, 2), 10)
+        self.assertEqual(sunfish_gate.cap_horizon({}), 4)
+        self.assertEqual(sunfish_gate.cap_horizon({"FUT_CAP_DEPTH": -1}), 1)
+        self.assertEqual(sunfish_gate.cap_horizon({"FUT_CAP": 0}), 1)
 
     def test_horizon_gate_does_not_run_the_engine(self):
         gate = pathlib.Path(__file__).with_name("sunfish_gate.py")
@@ -1668,6 +1681,110 @@ class MixedAcquisitionTest(unittest.TestCase):
             with self.assertRaises(ValueError):
                 OpeningSchedule(book).opening(4)
 
+    def test_baseline_panel_is_weighted_by_paired_opening(self):
+        panel = [
+            {"name": "master", "weight": 2},
+            {"name": "stockfish", "weight": 1},
+            {"name": "compact", "weight": 1},
+        ]
+        first = [panel_member(panel, sequence)["name"] for sequence in range(16)]
+        second = [panel_member(panel, sequence)["name"] for sequence in range(16)]
+        self.assertEqual(first, second)
+        self.assertEqual(Counter(first), {"master": 8, "stockfish": 4, "compact": 4})
+
+    def test_baseline_panel_loader_rejects_ambiguous_members(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory, "panel.json")
+            path.write_text(json.dumps([
+                {"name": "master", "engine": "engine", "weight": 2,
+                 "options": "default"},
+                {"name": "peer", "engine": "peer", "weight": 1},
+            ]))
+            panel = load_baseline_panel(path)
+            self.assertEqual([member["args"] for member in panel], ["", ""])
+            self.assertEqual([member["options"] for member in panel], ["default", {}])
+            path.write_text(json.dumps([
+                {"name": "master", "engine": "engine", "weight": 1},
+                {"name": "master", "engine": "peer", "weight": 1},
+            ]))
+            with self.assertRaisesRegex(ValueError, "unique"):
+                load_baseline_panel(path)
+
+    def test_baseline_panel_rejects_recovered_engine_failures(self):
+        self.assertEqual(panel_failure("Finished game: Black disconnects"), "disconnects")
+        self.assertEqual(panel_failure("Engine peer is not responsive"), "not responsive")
+        self.assertEqual(panel_failure("White wins by adjudication"), None)
+
+    def test_global_search_space_is_uncoupled_and_search_only(self):
+        path = pathlib.Path(__file__).with_name("global_search_parameters.json")
+        space = MixedSpace.load(path)
+        self.assertEqual(len(space.names), 19)
+        self.assertFalse(any(name.startswith("PST_") or name.startswith("VALUE_")
+                             for name in space.names))
+        cap = space.knobs(space.canonical({"EVAL_ROUGHNESS": 30, "NULL_CAP_MARGIN": 5}))
+        self.assertEqual((cap["EVAL_ROUGHNESS"], cap["NULL_CAP_MARGIN"]), (30, 5))
+        limits = space.knobs(space.canonical({"NULL_LIMIT": 250, "LMR_LIMIT": 2000}))
+        self.assertEqual((limits["NULL_LIMIT"], limits["LMR_LIMIT"]), (250, 2000))
+        required = [space.knobs(point) for point in space.required]
+        self.assertTrue(any(knobs["NULL_SPAN"] == 0 and knobs["FUEL_NULL"] == 0
+                            for knobs in required))
+        self.assertTrue(any(knobs["NULL_LIMIT"] == 0 for knobs in required))
+        self.assertTrue(any(knobs["LMR_LIMIT"] == 0 for knobs in required))
+        spec = json.loads(path.read_text())
+        self.assertEqual(set(spec["scope"]["excluded"]), {"TABLE_SIZE", "DELAY"})
+        self.assertIn({"IID_MIN_DEPTH": 999}, spec["required"])
+        self.assertEqual(space.defaults["IID_MIN_DEPTH"], 999)
+        iid = next(parameter for parameter in spec["parameters"]
+                   if parameter["name"] == "IID_MIN_DEPTH")
+        self.assertEqual(iid["off_values"], [999])
+        self.assertIn(0, MixedSpace.parameter_values(next(
+            parameter for parameter in spec["parameters"]
+            if parameter["name"] == "EVAL_ROUGHNESS")))
+        for name in ("FUEL_MIN_DEPTH", "LMR_MIN_DEPTH"):
+            parameter = next(parameter for parameter in spec["parameters"]
+                             if parameter["name"] == name)
+            self.assertIn(99, MixedSpace.parameter_values(parameter))
+            self.assertNotIn(99, parameter.get("off_values", []))
+
+        # These are exact structural offs, not merely unreachable at common depths.
+        self.assertFalse(any(depth > 2 and depth <= 2 for depth in range(1000)))
+        self.assertFalse(any(0 and depth >= 6 for depth in range(1000)))
+        self.assertFalse(any(abs(score) < 0 for score in range(-1000, 1001)))
+        self.assertFalse(any(depth > 999 for depth in range(1, 1000)))
+
+    def test_global_search_off_values_stop_their_computation(self):
+        path = pathlib.Path(__file__).with_name("global_search_parameters.json")
+        spec = json.loads(path.read_text())
+        off = {parameter["name"]: parameter["off_values"]
+               for parameter in spec["parameters"] if parameter.get("off_values")}
+        self.assertEqual(off, {
+            "QS": [60000],
+            "LMR": [-70000],
+            "NULL_LIMIT": [0],
+            "LMR_LIMIT": [0],
+            "NULL_SPAN": [0],
+            "FUEL_NULL": [0],
+            "FUT_CAP_DEPTH": [-1],
+            "IID_MIN_DEPTH": [999],
+        })
+
+        source = path.parents[2].joinpath("ctwin", "sunfish.c").read_text()
+        self.assertIn("depth <= NULL_MIN_DEPTH + NULL_SPAN", source)
+        self.assertIn("iabs(pos->score) < NULL_LIMIT", source)
+        self.assertIn("if (guard && FUEL_NULL)", source)
+        self.assertIn("iabs(pos->score) < LMR_LIMIT", source)
+        self.assertIn("depth <= FUT_CAP_DEPTH", source)
+        self.assertIn("depth > IID_MIN_DEPTH", source)
+
+        # QS=60000 admits only values already handled as nonrecursive king captures.
+        self.assertLess(sunfish.MATE_LOWER, 60000)
+        # No classic-table move value can reach the LMR=-70000 predicate.
+        tables = sunfish.pst.values()
+        self.assertTrue(all(min(table) >= 0 for table in tables))
+        worst_static_drop = sum(max(table) - min(table) for table in tables)
+        worst_static_drop += max(sunfish.pst["P"])
+        self.assertLess(worst_static_drop, 70000)
+
     def test_policy_gate_is_cached_without_advancing_selection(self):
         with tempfile.TemporaryDirectory() as directory:
             gate = pathlib.Path(directory, "gate.py")
@@ -1805,6 +1922,9 @@ class MixedAcquisitionTest(unittest.TestCase):
                 baseline_options={"X": 1},
             )
             self.assertEqual(fixed_baseline_point(args, space), space.default)
+            args.baseline_panel = [{"name": "field"}]
+            self.assertIsNone(fixed_baseline_point(args, space))
+            args.baseline_panel = []
             args.baseline_options = {"X": 2}
             self.assertIsNone(fixed_baseline_point(args, space))
 

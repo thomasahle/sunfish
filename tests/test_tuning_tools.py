@@ -3,11 +3,15 @@ import hashlib
 import importlib.util
 import json
 import math
+import os
 import pathlib
 import runpy
 import shlex
+import signal
+import subprocess
 import sys
 import tempfile
+import time
 import types
 import unittest
 from unittest import mock
@@ -135,6 +139,57 @@ class TuningToolsTest(unittest.TestCase):
                 second = rbfopt.ChessBox(args, space).play(space.start, 1, "noisy")
             self.assertEqual(first, second)
             self.assertEqual(calls, 1)
+    def test_campaign_kills_term_survivors_in_its_private_group(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = pathlib.Path(directory)
+            setsid = directory / "setsid"
+            setsid.write_text(
+                "#!/usr/bin/env python3\n"
+                "import os,sys\n"
+                "os.setsid()\n"
+                "os.execvp(sys.argv[1],sys.argv[1:])\n")
+            setsid.chmod(0o755)
+            stubborn = directory / "stubborn.sh"
+            stubborn.write_text(
+                "#!/bin/sh\n"
+                "trap '' TERM\n"
+                ": > \"$1\"\n"
+                "while :; do sleep 1; done\n")
+            stubborn.chmod(0o755)
+            ready = directory / "ready"
+            registry = directory / "registry.tsv"
+            environment = os.environ | {
+                "PATH": f"{directory}:{os.environ['PATH']}",
+                "CAMPAIGN_LABEL": "kill-test",
+                "CAMPAIGN_REGISTRY": str(registry),
+                "CAMPAIGN_HEARTBEAT": str(directory / "heartbeat.tsv"),
+                "CAMPAIGN_CHECKPOINT": str(directory / "missing-state"),
+                "CAMPAIGN_TERM_GRACE": "1",
+                "CAMPAIGN_KILL_GRACE": "5",
+            }
+            process = subprocess.Popen(
+                ["sh", ROOT / "tools/tune/campaign.sh", stubborn, ready], env=environment,
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            for _ in range(100):
+                if registry.exists() and "launched" in registry.read_text():
+                    break
+                time.sleep(.05)
+            else:
+                self.fail("campaign did not register its private process group")
+            for _ in range(100):
+                if ready.exists():
+                    break
+                time.sleep(.05)
+            else:
+                self.fail("stubborn campaign child did not become ready")
+            pgid = int(registry.read_text().splitlines()[0].split("\t")[3])
+            process.send_signal(signal.SIGTERM)
+            self.assertEqual(process.wait(timeout=15), 143)
+            events = registry.read_text()
+            self.assertIn("\tterm-survivors\t", events)
+            self.assertIn("\tkilled\t", events)
+            with self.assertRaises(ProcessLookupError):
+                os.killpg(pgid, 0)
 
     def test_spsa_candidates_decode_and_average_in_optimizer_space(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -679,7 +734,7 @@ Finished game 2 (baseline vs candidate): 1/2-1/2
             }]}))
             state = directory / "state.json"
             state.write_text(json.dumps({
-                "study": {"allocation": {}},
+                "study": {"allocation": {}, "baseline": None},
                 "batches": [{
                     "knobs": {"X": 1}, "opponent_knobs": {"X": 0},
                     "wins": 2, "draws": 0, "losses": 0,
@@ -1022,7 +1077,8 @@ Finished game 3 (candidate vs baseline): 0-1
             openings.write_text("\n".join(f"opening {i}" for i in range(8)) + "\n")
             space = directory / "space.json"
             space.write_text(json.dumps({"parameters": [{
-                "name": "X", "type": "real", "min": 0, "default": 2, "max": 10,
+                "name": "X", "type": "real", "min": 0, "default": 2,
+                "max": 10, "count": 11,
             }]}))
             state = directory / "state.json"
             calls = []
@@ -1048,6 +1104,75 @@ Finished game 3 (candidate vs baseline): 0-1
             self.assertEqual([item["iteration"] for item in saved["results"]], [0, 2, 4])
             self.assertEqual([item["pairs"] for item in saved["results"]], [2, 2, 1])
             self.assertGreater(saved["parameters"][0]["theta"], 2)
+
+    def test_spsa_panel_compares_both_sides_with_one_fixed_opponent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = pathlib.Path(directory)
+            executable = directory / "engine"
+            executable.write_text("placeholder")
+            openings = directory / "openings.epd"
+            openings.write_text("opening\n")
+            space = directory / "space.json"
+            space.write_text(json.dumps({"parameters": [{
+                "name": "X", "type": "real", "min": 0, "default": 2,
+                "max": 10, "count": 11,
+            }]}))
+            state = directory / "state.json"
+            args = argparse.Namespace(
+                fastchess=str(executable), engine=str(executable), engine_args="",
+                space=str(space), openings=str(openings), state=str(state),
+                logs=str(directory / "logs"), tc="3+0.1", iterations=1,
+                slots=1, pairs_per_step=1, start=1, seed=2026, fixed_option=[],
+                initial_option=[], a_ratio=.1, alpha=.602, gamma=.101,
+                c_ratio=1 / 6, r_end=.02, draw_ratio=.2, precision=.5,
+                gate=None, gate_timeout=1, gate_attempts=2,
+                baseline_panel=[{
+                    "name": "master", "engine": str(executable), "args": "",
+                    "weight": 1, "options": "default",
+                }],
+            )
+            outcome = ("master", [(2, 0, 0), (0, 0, 2)])
+            with mock.patch.object(spsa, "validate_options"), \
+                    mock.patch.object(spsa, "play_panel", return_value=outcome) as panel, \
+                    mock.patch.object(spsa, "play") as direct:
+                spsa.optimize(args)
+            saved = json.loads(state.read_text())
+            result = saved["results"][0]
+            panel.assert_called_once()
+            direct.assert_not_called()
+            self.assertEqual(result["opponent"], "master")
+            self.assertEqual(result["gradient"], 1)
+            self.assertEqual((result["opening_pairs"], result["games"]), (2, 4))
+            records = recommend.spsa(
+                argparse.Namespace(state=str(state), space=str(space), method="spsa"), [4])
+            self.assertEqual(records[0]["recommendation_games"], 4)
+            self.assertEqual(spsa_candidates.extract([state], space, [1])[0]["trained_games"], 4)
+            pooled = spsa_pool.pool([state])
+            self.assertEqual(len(pooled["batches"]), 2)
+            self.assertEqual({batch["allocation"] for batch in pooled["batches"]},
+                             {"spsa-panel-perturbation"})
+
+    def test_spsa_panel_uses_the_same_opponent_and_opening(self):
+        args = argparse.Namespace(baseline_panel=[
+            {"name": "master", "weight": 2},
+            {"name": "stockfish", "weight": 1},
+            {"name": "compact", "weight": 1},
+        ])
+        calls = []
+
+        def fixed(_args, number, opening, options, member, label):
+            calls.append((number, opening, options, member["name"], label))
+            return 1, 1, 0
+
+        with mock.patch.object(spsa, "play_fixed", side_effect=fixed):
+            opponent, results = spsa.play_panel(
+                args, 7, 13, 2, {"X": 3}, {"X": 1})
+        self.assertEqual(opponent, "stockfish")
+        self.assertEqual(results, [(1, 1, 0), (1, 1, 0)])
+        self.assertCountEqual(calls, [
+            (7, 13, {"X": 3}, "stockfish", "plus"),
+            (7, 13, {"X": 1}, "stockfish", "minus"),
+        ])
 
     def test_spsa_tunes_ordered_choices_in_index_space(self):
         with tempfile.TemporaryDirectory() as directory:

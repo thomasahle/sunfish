@@ -128,8 +128,8 @@ def gp(args, checkpoints):
     state = adaptive_gp.load_state(args.state, 1)
     space = logistic_gp.MixedSpace.load(args.space)
     study = state.get("study", {})
-    baseline = study.get("baseline", {}).get("options")
-    if ({"candidate", "baseline"} <= study.keys()
+    baseline = (study.get("baseline") or {}).get("options")
+    if (study.get("candidate") and study.get("baseline")
             and same_engine(study) and baseline == space.knobs(space.default)):
         space.condition(space.default)
     history = []
@@ -225,7 +225,7 @@ def spsa(args, checkpoints):
     history = []
     games = 0
     for result in state["results"]:
-        games += 2 * result["pairs"]
+        games += result.get("games", (4 if result.get("opponent") else 2) * result["pairs"])
         point = []
         for item in items:
             value = result["theta"][item["name"]]

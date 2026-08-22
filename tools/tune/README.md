@@ -40,6 +40,11 @@ categorical, and Boolean parameters.
 - `locking.py` protects resumable studies from concurrent writers.
 - `uci_wrapper.py` exposes a UCI command with arguments as one executable.
 
+Both the global GP and SPSA accept deterministic integer-weighted opponent
+panels. Panel-anchored SPSA compares both perturbations with the same opponent
+on the same color-swapped opening before applying the gradient; one update is
+therefore two opening pairs and four games. Five such lanes use 20 engines.
+
 `search_parameters.json` is a small generic search-tuning example.
 `logistic_gp/all_parameters.json` is the wider Sunfish search space. The
 Sunfish-specific gate rejects configurations that violate the search's fuel

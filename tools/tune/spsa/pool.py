@@ -19,15 +19,23 @@ def pool(paths, results_per_state=None):
             "used_results": len(results),
         })
         gates.update(state.get("gates", {}))
-        batches.extend({
-            "knobs": result["plus"],
-            "opponent_knobs": result["minus"],
-            "wins": result["wins"],
-            "draws": result["draws"],
-            "losses": result["losses"],
-            "opening": result["opening"],
-            "allocation": "spsa-perturbation",
-        } for result in results)
+        for result in results:
+            if result.get("opponent"):
+                for side in ("plus", "minus"):
+                    wins, losses, draws = result[f"{side}_result"]
+                    batches.append({
+                        "knobs": result[side], "opponent_knobs": None,
+                        "wins": wins, "draws": draws, "losses": losses,
+                        "opening": result["opening"], "baseline_ids": [result["opponent"]],
+                        "allocation": "spsa-panel-perturbation",
+                    })
+            else:
+                batches.append({
+                    "knobs": result["plus"], "opponent_knobs": result["minus"],
+                    "wins": result["wins"], "draws": result["draws"],
+                    "losses": result["losses"], "opening": result["opening"],
+                    "allocation": "spsa-perturbation",
+                })
     return {
         "next_opening": 1,
         "study": {"allocation": {"gate_all": False}, "sources": sources},
