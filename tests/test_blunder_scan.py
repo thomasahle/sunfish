@@ -73,6 +73,7 @@ def make_blunder(loss=500, game_id="abc12345"):
         boundary_guard=10,
         multipv=5,
         source_sha="0123456789abcdef",
+        source_game_count=1,
     )
 
 
@@ -253,6 +254,7 @@ def test_epd_round_trip_contains_labels_and_provenance():
     assert "blunder delta 0.3" in operations["c2"]
     assert "boundary guard 10; multipv 5; threads 1; hash 256 MB" in operations["c2"]
     assert "pgn sha256 0123456789abcdef" in operations["c2"]
+    assert "source games 1" in operations["c2"]
     assert "game order archive" in operations["c2"]
     assert operations["hmvc"] == 18
     assert operations["fmvn"] == 37

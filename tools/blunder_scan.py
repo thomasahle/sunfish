@@ -87,6 +87,7 @@ class Blunder:
     multipv: int
     source_sha: str
     game_order: str = "archive"
+    source_game_count: int = 0
 
     @property
     def cp_loss(self):
@@ -335,7 +336,8 @@ def to_epd(blunder):
                 f"bm margin {blunder.best_margin}; "
                 f"boundary guard {blunder.boundary_guard}; multipv {blunder.multipv}; "
                 f"threads 1; hash 256 MB; pgn sha256 {blunder.source_sha}")
-    settings += f"; game order {blunder.game_order}"
+    settings += (f"; source games {blunder.source_game_count}; "
+                 f"game order {blunder.game_order}")
     return board.epd(
         bm=blunder.best_moves,
         id=identifier,
@@ -484,6 +486,7 @@ def analyse_candidate(engine, candidate, args, oracle, source_sha, funnel=None):
         source_sha=source_sha,
         game_order=("losses-first"
                     if getattr(args, "losses_first", False) else "archive"),
+        source_game_count=getattr(args, "source_game_count", 0),
     )
     if funnel:
         funnel.stable_labels += 1
@@ -503,6 +506,7 @@ def configure_engine(engine):
 
 def build_corpus(games, engine, user, args, oracle, source_sha):
     found, funnel = [], Funnel()
+    args.source_game_count = len(games)
     ordered = prioritize_games(games, user, args.losses_first)
     previous_outcome = None
     for game_number, game in enumerate(ordered, start=1):
