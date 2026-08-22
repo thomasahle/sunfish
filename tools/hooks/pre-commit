@@ -1,0 +1,13 @@
+#!/bin/bash
+# Keep compressed.py (the packed engine at the repo root) in sync with
+# sunfish.py. Regenerates from the STAGED sunfish.py so the artifact
+# matches the commit, not the working tree. Enable with:
+#     git config core.hooksPath tools/hooks
+# CI verifies the artifact is current on every push (python-app.yml).
+set -e
+if git diff --cached --quiet -- sunfish.py && [ -f compressed.py ]; then exit 0; fi
+T=$(mktemp); trap 'rm -f "$T"' EXIT
+git show :sunfish.py > "$T"
+bash "$(git rev-parse --show-toplevel)/tools/build/pack.sh" "$T" compressed.py > /dev/null
+git add compressed.py
+echo "pre-commit: compressed.py regenerated ($(wc -c < compressed.py | tr -d ' ') bytes) and staged"
