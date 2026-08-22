@@ -71,7 +71,11 @@ shared opening-index bootstrap draws within each degraded start; its default is
 inputs that do not share the complete validation protocol and starting match.
 
 The frozen five-method comparison is specified in
-[`recovery_protocol.md`](recovery_protocol.md).
+[`recovery_protocol.md`](recovery_protocol.md), with exact settings and hashes
+in [`recovery_benchmark.json`](recovery_benchmark.json). Run
+`python3 tools/tune/verify_recovery.py` before starting a campaign; supplying
+the frozen engine, tables, and training book also reproduces the corrected
+start-vector trace checks.
 
 The integration tests exercise parameter translation, resumable state,
 pentanomial parsing, feasibility gates, checkpoint extraction, and the shared

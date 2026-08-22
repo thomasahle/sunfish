@@ -1,7 +1,10 @@
 # Five-tuner recovery protocol
 
-Status: frozen on 2026-08-22. This protocol compares GP, Chess Tuning Tools
+Status: refrozen on 2026-08-23. This protocol compares GP, Chess Tuning Tools
 (CTT), RBFOpt, SPSA, and CLOP by held-out Elo recovered per training game.
+The exact machine-readable definition is
+[`recovery_benchmark.json`](recovery_benchmark.json). Earlier pilot runs use
+the superseded space and are not admissible in this comparison.
 
 ## Artifact pins
 
@@ -17,6 +20,13 @@ Status: frozen on 2026-08-22. This protocol compares GP, Chess Tuning Tools
 - Held-out-book SHA-256:
   `3f499996ff0b674a04f85f2634811d102dd53b5115841e8f11d18e1f550ba2ca`
 
+The manifest also pins every local runner by SHA-256, the project lockfile,
+CTT commit `a88f94725ac074ba4df635e263ffa98a502cee08`, RBFOpt commit
+`458402c6f0c1d57f93ef2caaba461a51054e00ea`, and the official CLOP 0.0.9
+archive. Both container recipes pin their Python base image. Record the built
+image ID in each run's metadata; all three starts for that method must use the
+same image ID.
+
 The training book has 1,991 unique positions. The held-out UHO book has
 241,670 positions, all unique after canonicalizing to the first four FEN
 fields, and has no position in common with the training book.
@@ -25,6 +35,39 @@ The recorded campaign used held-out lines 1--1,000 sequentially. An audit
 also reproduced all 197 positions selected by three recorded random-seed
 runs with fastchess's exact `mt19937_64` Fisher--Yates shuffle and mapped the
 recorded telemetry FEN. None occurs in either frozen validation slice.
+
+## Corrected parameter space and starts
+
+The refreeze removes `FUT_MAX`. Values 0--3 were behaviorally dead because
+the active ordinary-move cap through `FUT_CAP_DEPTH` already covered the same
+nodes. It adds `NULL_CAP_MARGIN` as an independent axis instead of silently
+coupling it to `EVAL_ROUGHNESS`.
+
+The three measured starts remain behavior-identical. Start 5 uses an explicit
+null cap of 21, and starts 15 and 23 use 26, equal to each start's old
+`EVAL_ROUGHNESS`. Their old `FUT_MAX` settings are dropped. The reference cap
+is explicitly 15. The manifest pins each option vector and centered-space
+hash.
+
+This was checked with one fresh frozen-engine process per option map. The
+process receives every start option, one `ucinewgame`, and then training-book
+lines 1--100 in order at `go depth 8`, without resets between positions. The
+SHA-256 of all `info` and `done` lines was identical before and after:
+
+- start 5: `4f2ece41d53624bd2a1acc0f0f1e9ac9d1a6a25abcd4c294ac1c443af3996bda`
+- start 15: `e90b22c4f19a07041b3448fe3d71cb7a0a14999df02e9cca9eac8f30c266127a`
+- start 23: `676d0d21de510653ef239e343fa73519ed9430df363da371023415b5873c7176`
+
+Reproduce both the static manifest audit and those searches with:
+
+```sh
+python3 tools/tune/verify_recovery.py \
+  --engine ENGINE --tables TABLES --training-book TRAINING_BOOK
+```
+
+The command first rejects artifacts whose hashes do not match the manifest.
+Add `--output-spaces DIRECTORY` to materialize the three exact centered JSON
+spaces used by every method.
 
 ## Fair-training prerequisites
 
@@ -44,6 +87,62 @@ Reject a combined recommendation set if its engine, parameter-space,
 training-opening schedule, or gate fingerprints differ. In particular, fresh
 validation cannot repair training-opening contamination or a method-only
 gate in an earlier pilot.
+
+Each method receives exactly 500 complete color-swapped observations, or
+1,000 games, from the same request-index schedule. Observation `i` uses
+training line `i + 1`; completion order never changes that assignment. The
+fixed-opponent methods use the explicit reference vector in the manifest.
+SPSA retains its defining symmetric plus-versus-minus comparison.
+
+The method definitions are frozen, not merely their names:
+
+- Logistic GP uses UCB, a 24-point initial design, the 0.5-to-0.2 exploration
+  schedule with half-life 40, no duels, a 128-point sparse basis, one pair per
+  observation, and ten in-flight pairs.
+- CTT uses MES, a 24-point initial design, one pair per observation, and 500
+  total observations including that design. Its point-selection loop is
+  sequential; the two games in its current pair may run concurrently.
+- RBFOpt uses its pinned MSRSM/genetic policy with noisy and accurate sample
+  sizes both set to one pair. Point selection is sequential.
+- SPSA uses one paired perturbation per step and 500 steps. The stochastic
+  approximation is intrinsically sequential.
+- CLOP uses ten processors, `Replications 2`, `DrawElo 65`, `H 3`, and all
+  correlations. Consecutive seeds form one color-swapped observation.
+
+Every numerical and Boolean setting, including otherwise implicit defaults,
+is in the manifest. Ten in-flight games or pairs are allowed where the method
+can select them without changing its algorithm. Report wall time, CPU time,
+and maximum observed engine processes separately from game efficiency. CTT's
+`concurrency = 2` runs only the two colors of its one current pair; unlike GP
+or CLOP, its local optimizer cannot choose ten independent points in advance.
+
+## Exact restart semantics
+
+A scheduler interruption must not change an optimizer's observations,
+proposal clock, opening assignment, or budget:
+
+- Logistic GP journals each accepted proposal group, all its reservations,
+  and the acquisition clock in one event before starting games. Complete
+  identity-bound pair logs are reused if observation journaling was
+  interrupted.
+- CTT durably reserves an opening before starting fastchess. It advances the
+  reservation only after the corresponding CTT data iteration exists. A
+  complete identity-bound log is reused, and persisted data supersedes a
+  lagging model pickle.
+- RBFOpt reuses complete identity-bound evaluations. Its model pickle,
+  including the black-box game state, is authoritative and is atomically
+  replaced before the human-readable JSON checkpoint.
+- SPSA reuses the exact completed step before applying and saving its update.
+- CLOP's official data-file replay resubmits the same seed and parameters; an
+  identity-bound cache returns that seed's completed result without a second
+  game.
+
+Run the same command against the same state and log directories after an
+interruption. Never delete or transplant only one part of a study. Explicit
+engine failures remain fatal and are never retried into a favorable result.
+An incomplete color-swapped observation is never fed to an optimizer; any
+physical games lost in an infrastructure interruption must be reported in
+the separate elapsed/CPU accounting.
 
 ## Deduplicated recommendation set
 
@@ -129,6 +228,8 @@ one-sided `alpha = 0.05`. Otherwise report a tie.
 ## Validity gate
 
 Every match must retain the exact artifact and protocol hashes and the exact
-number of complete pair scores. Any crash, illegal move, disconnect,
+number of complete pair scores. Any engine crash, illegal move, disconnect,
 nonresponsive engine, stall, or time loss invalidates that configuration's
 result; recovery by the tournament manager does not turn it into valid data.
+A scheduler or host interruption is recoverable only under the exact
+identity-bound rules above.

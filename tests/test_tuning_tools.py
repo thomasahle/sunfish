@@ -47,9 +47,20 @@ spsa = load("spsa", "tools/tune/spsa/spsa.py")
 spsa_candidates = load("spsa_candidates", "tools/tune/spsa/candidates.py")
 spsa_pool = load("spsa_pool", "tools/tune/spsa/pool.py")
 validate = load("validate", "tools/tune/validate.py")
+verify_recovery = load("verify_recovery", "tools/tune/verify_recovery.py")
 
 
 class TuningToolsTest(unittest.TestCase):
+    def test_frozen_recovery_manifest_is_self_consistent(self):
+        manifest, space = verify_recovery.audit(root=ROOT)
+        self.assertEqual(manifest["budget"]["games"], 1000)
+        self.assertEqual(len(manifest["starts"]), 3)
+        self.assertNotIn("FUT_MAX", {item["name"] for item in space["parameters"]})
+        with tempfile.TemporaryDirectory() as directory:
+            verify_recovery.materialize(manifest, space, directory)
+            generated = json.loads(pathlib.Path(directory, "start-05.json").read_text())
+            self.assertEqual(generated["parameters"][4]["default"], 21)
+
     def test_rbfopt_recovers_only_an_exact_complete_evaluation(self):
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory, "evaluation.log")
@@ -76,6 +87,45 @@ class TuningToolsTest(unittest.TestCase):
             rbfopt.save_model(Optimizer(), path)
             self.assertEqual(path.read_text(), "new")
             self.assertFalse(path.with_suffix(".pkl.tmp").exists())
+
+    def test_rbfopt_reuses_a_match_completed_before_model_commit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = pathlib.Path(directory)
+            for name in ("engine", "fastchess"):
+                (directory / name).write_text(name)
+            openings = directory / "openings.epd"
+            openings.write_text("opening\n")
+            space_path = directory / "space.json"
+            space_path.write_text(json.dumps({"parameters": [{
+                "name": "X", "type": "integer", "min": 0, "default": 1, "max": 2,
+            }]}))
+            logs = directory / "logs"
+            logs.mkdir()
+            args = argparse.Namespace(
+                fastchess=str(directory / "fastchess"), engine=str(directory / "engine"),
+                baseline_engine=None, engine_args="", baseline_args=None,
+                fixed_option=[], baseline_option=[], space=str(space_path),
+                openings=str(openings), state=str(directory / "state.json"),
+                logs=str(logs), tc="3+0.1", games=1000, noisy_pairs=1,
+                accurate_pairs=1, slots=1, start=1, seed=2026, gate=None, gate_timeout=60,
+            )
+            calls = 0
+
+            def run(*command, stdout, **kwargs):
+                nonlocal calls
+                calls += 1
+                stdout.write(
+                    b"Finished game 1 (candidate vs baseline): 1-0\n"
+                    b"Finished game 2 (baseline vs candidate): 1/2-1/2\n"
+                    b"Score of candidate vs baseline: 1 - 0 - 1\n")
+                return types.SimpleNamespace(returncode=0)
+
+            space = rbfopt.Space(space_path)
+            with mock.patch.object(rbfopt.subprocess, "run", side_effect=run):
+                first = rbfopt.ChessBox(args, space).play(space.start, 1, "noisy")
+                second = rbfopt.ChessBox(args, space).play(space.start, 1, "noisy")
+            self.assertEqual(first, second)
+            self.assertEqual(calls, 1)
 
     def test_spsa_candidates_decode_and_average_in_optimizer_space(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -511,6 +561,41 @@ Finished game 3 (candidate vs baseline): 0-1
             self.assertIn("Finished game 2", ctt.complete_log(path, identity, 1))
             self.assertIsNone(ctt.complete_log(path, "b" * 64, 1))
 
+    def test_ctt_reuses_a_match_completed_before_data_commit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = pathlib.Path(directory)
+            book = directory / "openings.epd"
+            book.write_text("opening\n")
+            state = directory / "openings.json"
+            command = [
+                "fastchess", "-openings", f"file={book}", "format=epd", "order=random",
+                "-rounds", "1",
+            ]
+            calls = 0
+
+            def popen(*args, **kwargs):
+                nonlocal calls
+                calls += 1
+                return types.SimpleNamespace(
+                    stdout=[
+                        "Finished game 1 (candidate vs baseline): 1-0\n",
+                        "Finished game 2 (baseline vs candidate): 1/2-1/2\n",
+                        "Score of candidate vs baseline: 1 - 0 - 1\n",
+                    ], wait=lambda: 0)
+
+            environment = {
+                "CTT_OPENING_STATE": str(state), "CTT_STUDY_ID": "study",
+                "CTT_ITERATION": "0", "CTT_MATCH_DIR": str(directory / "logs"),
+            }
+            with mock.patch.dict("os.environ", environment), \
+                    mock.patch.object(sys, "argv", ["fastchess_shim.py"]), \
+                    mock.patch.object(ctt, "engines", return_value={}), \
+                    mock.patch.object(ctt, "translate", side_effect=lambda *_: command.copy()), \
+                    mock.patch.object(ctt.subprocess, "Popen", side_effect=popen):
+                self.assertEqual(ctt.main(), 0)
+                self.assertEqual(ctt.main(), 0)
+            self.assertEqual(calls, 1)
+
     def test_ctt_does_not_advance_after_a_recovered_engine_failure(self):
         process = types.SimpleNamespace(stdout=["Engine crashed (stdout)\n"], wait=lambda: 0)
         with mock.patch.object(ctt, "engines", return_value={}), \
@@ -630,11 +715,14 @@ Finished game 3 (candidate vs baseline): 0-1
             start = directory / "start.csv"
             argv = ["make_config.py", "--space", str(space), "--output", str(config),
                     "--start-output", str(start), "--candidate", "candidate",
-                    "--baseline", "baseline", "--openings", "openings.epd"]
+                    "--baseline", "baseline", "--openings", "openings.epd",
+                    "--rounds", "1", "--iterations", "500"]
             with mock.patch.object(sys, "argv", argv):
                 ctt_config.main()
-            self.assertEqual(json.loads(config.read_text())["evaluate_points"], str(start))
-            self.assertEqual(start.read_text(), "3,5\n")
+            settings = json.loads(config.read_text())
+            self.assertEqual(settings["evaluate_points"], str(start))
+            self.assertEqual(settings["max_iterations"] * settings["rounds"] * 2, 1000)
+            self.assertEqual(start.read_text(), "3,1\n")
 
     def test_ctt_recommendation_rejects_missing_optimum_history(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -668,7 +756,9 @@ Finished game 3 (candidate vs baseline): 0-1
                 "        csv_file=evaluate_points,\n"
                 "    while True:\n"
                 "        used_extra_point = False\n"
-                "        for output_line in run_match(**match_settings):\n")
+                "        for output_line in run_match(**match_settings):\n"
+                "        with AtomicWriter(model_path, mode=\"wb\", overwrite=True).open() as f:\n"
+                "            dill.dump(opt, f)\n")
             with (directory / "local.py").open("a") as source:
                 source.write("            if opt.space == old_opt.space:\n")
             (directory / "utils.py").write_text('''    raw_bounds = getattr(res.space, "bounds", None)
@@ -688,9 +778,12 @@ Finished game 3 (candidate vs baseline): 0-1
                 runpy.run_path(ROOT / "tools/tune/chess_tuning_tools/patch_ctt.py")
             source = (directory / "cli.py").read_text()
             self.assertIn("while iteration <= max_iterations", source)
+            self.assertLess(source.index("if iteration == max_iterations"),
+                            source.index("for output_line in run_match"))
             self.assertLess(source.index("np.savez_compressed"), source.index("break"))
             self.assertIn('None if len(X) else settings.get("evaluate_points"', source)
             self.assertIn('os.environ["CTT_ITERATION"] = str(iteration)', source)
+            self.assertIn('cutechess-cli", "--commit-iteration"', source)
             self.assertIn("list(old_opt.Xi) == X", (directory / "local.py").read_text())
 
     def test_spsa_uses_pairs_as_its_iteration_clock(self):
