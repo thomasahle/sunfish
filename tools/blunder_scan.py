@@ -39,7 +39,7 @@ import chess.pgn
 
 MATE_RANK = 100_000
 LICHESS_ADVICE_COMMIT = "5b905153c32677034dbb3325ecbd66418a03281e"
-LICHESS_EVAL_COMMIT = "ed124389f090c39d1440eb9be112f6b36ed40358"
+LICHESS_EVAL_COMMIT = "34b3363839c511b258fec17b30462868e31d9b5a"
 LICHESS_BLUNDER_THRESHOLD = 0.3
 USER_AGENT = "sunfish-blunder-corpus/1 (+https://github.com/thomasahle/sunfish)"
 STANDARD_PERFS = {"bullet", "blitz", "rapid", "classical", "correspondence"}
@@ -94,9 +94,11 @@ class Blunder:
         return self.best_eval.cp - self.played_eval.cp
 
     @property
-    def deterioration(self):
-        return (evaluation_winning_chances(self.best_eval)
-                - evaluation_winning_chances(self.played_eval))
+    def chance_loss(self):
+        if self.best_eval.cp is None or self.played_eval.cp is None:
+            return None
+        return (winning_chances(self.best_eval.cp)
+                - winning_chances(self.played_eval.cp))
 
 
 @dataclasses.dataclass
@@ -206,13 +208,6 @@ def winning_chances(cp):
     return 1 - 2 / (1 + math.exp(scaled))
 
 
-def evaluation_winning_chances(value):
-    """Extend winning chances to mate endpoints for ordering/provenance."""
-    if value.cp is not None:
-        return winning_chances(value.cp)
-    return 1.0 if value.mate > 0 else -1.0
-
-
 def lichess_judgement(before, after):
     """Mirror Lichess CpAdvice and MateAdvice for mover-POV evaluations."""
     if before.cp is not None and after.cp is not None:
@@ -271,19 +266,11 @@ def fen_key(fen):
 
 
 def deduplicate(blunders):
-    """Keep the strongest confirmed example for each EPD position."""
+    """Keep the first confirmed example for each EPD rule state."""
     selected = {}
     for blunder in blunders:
         key = fen_key(blunder.candidate.fen)
-        previous = selected.get(key)
-        rank = (blunder.deterioration,
-                blunder.candidate.game_id, blunder.candidate.ply)
-        if previous is None:
-            selected[key] = blunder
-            continue
-        old_rank = (previous.deterioration,
-                    previous.candidate.game_id, previous.candidate.ply)
-        if rank > old_rank:
+        if key not in selected:
             selected[key] = blunder
     return sorted(selected.values(), key=lambda item: (
         item.candidate.game_id, item.candidate.ply, fen_key(item.candidate.fen)))
@@ -300,13 +287,18 @@ def to_epd(blunder):
     board = chess.Board(candidate.fen)
     played = board.san(candidate.played)
     identifier = f"LBG.{candidate.game_id}.{candidate.ply}"
-    comparison = (f"win-chance loss {blunder.deterioration:.6f}; "
-                  f"best {blunder.best_eval}; played {blunder.played_eval}")
-    if blunder.cp_loss is not None:
-        comparison += f"; cp loss {blunder.cp_loss}"
+    if blunder.chance_loss is not None:
+        advice = "CpAdvice"
+        comparison = (f"win-chance loss {blunder.chance_loss:.6f}; "
+                      f"best {blunder.best_eval}; played {blunder.played_eval}; "
+                      f"cp loss {blunder.cp_loss}")
+    else:
+        advice = "MateAdvice"
+        comparison = (f"mate transition; best {blunder.best_eval}; "
+                      f"played {blunder.played_eval}")
     details = (f"{candidate.user} vs {candidate.opponent}; {candidate.result}; "
                f"tc {candidate.time_control}; played {played}; "
-               f"Lichess Blunder; {comparison}")
+               f"Lichess {advice} Blunder; {comparison}")
     settings = (f"{blunder.oracle}; scan {blunder.scan_nodes} nodes; "
                 f"confirm {blunder.confirm_nodes} nodes; "
                 f"stability {blunder.stability_nodes} nodes; "
@@ -487,9 +479,12 @@ def build_corpus(games, engine, user, args, oracle, source_sha):
             if blunder := analyse_candidate(
                     engine, candidate, args, oracle, source_sha, funnel):
                 found.append(blunder)
-                metric = f"{blunder.deterioration:.3f} win-chance loss"
-                if blunder.cp_loss is not None:
-                    metric += f", {blunder.cp_loss} cp"
+                if blunder.chance_loss is not None:
+                    metric = (f"{blunder.chance_loss:.3f} win-chance loss, "
+                              f"{blunder.cp_loss} cp")
+                else:
+                    metric = (f"mate transition {blunder.best_eval} to "
+                              f"{blunder.played_eval}")
                 print(f"{blunder.candidate.game_id} ply {blunder.candidate.ply}: "
                       f"{metric}", file=sys.stderr)
     return deduplicate(found), funnel

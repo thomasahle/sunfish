@@ -199,15 +199,15 @@ def test_acceptable_moves_requires_a_guard_beyond_the_cutoff():
         separated, legal_count=4, margin=30, boundary_guard=10) == (moves[0],)
 
 
-def test_deduplicate_keeps_strongest_loss_and_has_stable_order():
+def test_deduplicate_keeps_first_source_and_has_stable_order():
     weaker = make_blunder(loss=400, game_id="later")
     stronger = make_blunder(loss=700, game_id="earlier")
     other = make_blunder(loss=500, game_id="middle")
     other_candidate = dataclasses.replace(other.candidate, fen=chess.Board().fen(), ply=1)
     other = dataclasses.replace(other, candidate=other_candidate)
     result = blunder_scan.deduplicate([weaker, other, stronger])
-    assert [item.candidate.game_id for item in result] == ["earlier", "middle"]
-    assert result[0].cp_loss == 700
+    assert [item.candidate.game_id for item in result] == ["later", "middle"]
+    assert result[0].cp_loss == 400
 
 
 def test_deduplicate_preserves_distinct_fifty_move_states():
@@ -228,7 +228,7 @@ def test_epd_round_trip_contains_labels_and_provenance():
     assert operations["id"] == "LBG.abc12345.3"
     assert operations["c0"] == "https://lichess.org/abc12345/white#3"
     assert "Opponent; 0-1; tc 180+1; played Nf3" in operations["c1"]
-    assert "Lichess Blunder; win-chance loss" in operations["c1"]
+    assert "Lichess CpAdvice Blunder; win-chance loss" in operations["c1"]
     assert "best +100 cp; played -400 cp; cp loss 500" in operations["c1"]
     assert "confirm 1000 nodes; stability 500 nodes" in operations["c2"]
     assert f"advice {blunder_scan.LICHESS_ADVICE_COMMIT}" in operations["c2"]
@@ -238,6 +238,19 @@ def test_epd_round_trip_contains_labels_and_provenance():
     assert "pgn sha256 0123456789abcdef" in operations["c2"]
     assert operations["hmvc"] == 18
     assert operations["fmvn"] == 37
+
+
+def test_mate_epd_does_not_invent_a_winning_chance_delta():
+    blunder = dataclasses.replace(
+        make_blunder(),
+        best_eval=blunder_scan.Evaluation(mate=3),
+        played_eval=blunder_scan.Evaluation(mate=-4),
+    )
+    _, operations = chess.Board.from_epd(blunder_scan.to_epd(blunder))
+    assert "Lichess MateAdvice Blunder; mate transition" in operations["c1"]
+    assert "best mate +3; played mate -4" in operations["c1"]
+    assert "win-chance" not in operations["c1"]
+    assert "cp loss" not in operations["c1"]
 
 
 def test_committed_corpus_preserves_rule_state_and_legal_labels():
