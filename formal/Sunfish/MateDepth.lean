@@ -18,10 +18,10 @@ the mate.  Two of those charges are not needed:
   (`mem_movesAbove_of_floor`), and the sub-horizon pass term enters the
   same max -- `foldMax_le_of_mem` ignores the accumulator, so a pass
   candidate can never pull the maximum DOWN.  The horizon is irrelevant
-  to the attacker.  (Below the horizon the shipped code also reduces
-  nothing: `move_depth = d - 1 - (not root and guard and val < LMR)`
-  with `guard = depth >= 6 and ...`, so each sub-horizon edge costs
-  exactly one ply, as `fuelValueD2`'s sub-horizon branch records.)
+  to the attacker. (Below the horizon the shipped code also reduces
+  nothing: both reduction predicates contain `depth >= 6`, so each
+  sub-horizon edge costs exactly one ply, as `fuelValueD2`'s branch
+  records.)
 * the CHECKMATED leaf is classified by the depth-gated terminal
   correction at any depth `≥ 1` (`fuelValueD2_checkmated`).
 
@@ -87,12 +87,14 @@ MECHANISM MAP (pre-#216 line -> post-#218 line).
   two plies" is the TOTAL real-move reduction (base ply + hot bit), not a
   second probe ply.  `C = 3` is intact.
 
-* intrinsic-LMR bit: `:439` -> `:437`.  MOVED ONLY, out of the deleted
-  `score_move` helper into the consumer loop.  Expression byte-identical,
-  `move_depth = d - 1 - (not root and guard and val < LMR)`, and `val` is
-  still `pos.value(move)` (the consumer only enters that branch when the
-  produced score is below `MATE_LOWER`, where it equals the intrinsic value).
-  `intrinsicSpend`, `intrinsic_child_depth` and `spend <= 2` unchanged.
+* intrinsic-LMR bit: `:439` -> `:437`. It moved out of the deleted
+  `score_move` helper into the consumer loop. The current expression is
+  `depth - 1 - (guard and depth >= 6 and val < LMR)
+  - (nmr and (not root or val < LMR))`. At an interior node it is exactly
+  the established base-plus-hot-plus-low recurrence; `intrinsicSpend`,
+  `intrinsic_child_depth`, and `spend <= 2` are unchanged. The unstored
+  driver root now charges the hot bit only to low-valued moves; its separate
+  one-to-two-ply selector is `rootIntrinsicSpend`.
 
 * sub-horizon pass: `:395-402` -> `:406-412`.  Guard identical
   (`not root and 2 < depth < 6 and ...`), pass child still at `depth - 3`.

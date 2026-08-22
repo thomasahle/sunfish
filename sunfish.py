@@ -151,11 +151,9 @@ directions = {
 #                 Only ever compared by size, never for equality.
 #
 # A mate found with `depth` still to spend scores MATE_LOWER + depth*EVAL_ROUGHNESS,
-# so a mate delivered near the root outscores one delivered near the horizon:
-# among winning lines the search takes the SHORTEST, and the losing side
-# drags the mate out as long as it can (issue #11). One ply is worth a whole
-# EVAL_ROUGHNESS because that is the width the MTD-bi bracket stops at - at
-# one point per ply the driver's last window could not tell two mates apart.
+# so the search prefers a mate that spends less search fuel. With equal edge
+# costs that is the shortest mate; selective reductions deliberately trade
+# chess plies for fuel, so they do not promise distance-to-mate optimality.
 MATE_LOWER = piece["K"] - 13 * piece["Q"]
 MATE_UPPER = piece["K"] + 10 * piece["Q"]
 
@@ -164,8 +162,8 @@ QS = 40
 QS_A = 140
 LMR = 75
 # Two jobs, deliberately one number: the width the MTD-bi bracket stops at,
-# and what one ply of mate distance is worth. Distances must be more than a
-# bracket apart or the driver's last window could not order two mates.
+# and what one unit of unspent mate fuel is worth. Two equal-cost mate lines
+# must be more than a bracket apart for the driver to order them.
 EVAL_ROUGHNESS = 15
 # Target margin of the deep-null fuel probe (depth >= 6): the pass must
 # beat pos.score + NULL_MARGIN for real moves to burn two plies. Its own
@@ -492,7 +490,7 @@ class Searcher:
                     # cutoff block, it stores nothing, exactly as the old
                     # suffix report did.
                     if cap < gamma: best = max(best, cap); break
-                    move_depth = depth - 1 - (guard and depth >= 6 and val < LMR) - int(nmr)
+                    move_depth = depth - 1 - (guard and depth >= 6 and val < LMR) - (nmr and (not root or val < LMR))
                     score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
                     live |= score > -MATE_UPPER
             best = max(best, score)
@@ -515,9 +513,8 @@ class Searcher:
         if depth and not live and all(
                 pos.move(m).king_capture() for m in pos.gen_moves()):
             # We can't move, but is it a checkmate or stalemate?
-            # The mate carries its DISTANCE: the depth we still had left when
-            # we found it, one EVAL_ROUGHNESS per ply, so the winner picks the
-            # fastest mate and the loser the slowest (issue #11) and the gap
+            # The mate carries its remaining SEARCH FUEL, one EVAL_ROUGHNESS
+            # per unit, so equal-cost lines prefer faster mates and the gap
             # survives the driver's final bracket. Nothing but (pos, depth)
             # enters, which is why the table needs no store/probe adjustment
             # and keeps its one value per key: measuring the distance from the
