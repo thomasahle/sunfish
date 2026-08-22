@@ -330,8 +330,8 @@ a scored best-move suite. It is generated offline, not during CI:
 
 ```bash
 python3 tools/blunder_scan.py sunfish-engine \
-  --game-id eWjtwAtB \
-  --pgn-cache /tmp/sunfish-games.pgn \
+  --games 200 --until 2023-02-28 \
+  --pgn-cache /tmp/sunfish-rated-200-through-2023-02-28.pgn \
   --output tests/files/lichess_blunders.epd
 ```
 
@@ -353,20 +353,40 @@ are rechecked locally, then `--games` is applied to the accepted records so an
 API response that exceeds its requested maximum cannot enlarge the corpus.
 Single-game exports with a non-`Standard` variant are rejected explicitly.
 
-For a larger redistributable corpus, pin the archive to the end of an already
-published CC0 month instead of sampling the mutable latest games:
+The committed 40-position corpus was generated with tool commit `01aef43` on
+2026-08-22. The exact run was:
 
 ```bash
-python3 tools/blunder_scan.py sunfish-engine --games 0 --until 2023-02-28 \
-  --pgn-cache /tmp/sunfish-rated-through-2023-02.pgn \
-  --output /tmp/lichess_blunders.epd
+/usr/bin/time -p python3 tools/blunder_scan.py sunfish-engine \
+  --games 200 --until 2023-02-28 \
+  --pgn-cache /private/tmp/sunfish-rated-200-through-2023-02-28.pgn \
+  --output /private/tmp/sunfish-lichess-blunders-rated-200-through-2023-02-28.epd
 ```
+
+The frozen input came from
+`GET https://lichess.org/api/games/user/sunfish-engine`. The request used
+`rated=true`, `sort=dateDesc`, `max=200`, `until=1677628799999`, and Standard
+bullet, blitz, rapid, classical, and correspondence performance types, with
+moves, clocks, evals, and opening tags.
+Lichess returned 204 records despite `max=200`; the local source selector
+therefore supplied the first 200 accepted records to the scanner. They are all
+rated Standard games: 111 blitz, 48 bullet, and 41 rapid, from
+2023-01-24 03:36:30 UTC through 2023-02-01 22:24:02 UTC. The full cached PGN
+is 715,190 bytes with SHA-256
+`6db73d5491270df51d65289228cb7e7a4b98a1584e1e119446776f1784464f62`.
+
+The scan examined 10,259 Sunfish moves, confirmed 41 positions, and retained
+40 after rule-state-aware deduplication. It took 2,253.93 seconds wall time
+(37m33.93s) with Stockfish 16 binary SHA-256
+`1967ae9001b4d18b7d5c97f61e807749dec8c9700ecf8a46ed66a990df584c93`.
+The resulting EPD is 18,348 bytes with SHA-256
+`20aa58d410e278dc62f2b6d65553681c2736ca768e5125197f9ac667a8b979ce`.
 
 Run it through the existing best-move harness, preferably as a depth curve:
 
 ```bash
 for depth in 6 8 10 11; do
-  python3 tools/tester.py "python3 ./sunfish.py" best \
+  python3 tools/tester.py "pypy3 ./sunfish.py" --quiet best \
     tests/files/lichess_blunders.epd --depth "$depth"
 done
 ```
@@ -374,16 +394,17 @@ done
 Do not infer Elo from this suite, and do not pick a flattering shallow depth.
 It is a deterministic discriminator for failure modes drawn from Sunfish's
 actual workload. A CI floor should be added only after the corpus is large
-enough that the floor does not encode one or two positions. The initial seed
-comes from game `eWjtwAtB` in Lichess's February 2023 CC0 rated-game dump.
-Master `a8feb63` scores 0/2, 1/2, 0/2, 0/2 at depths 6, 8, 10, 11. That
-non-monotonic curve is itself why one flattering fixed depth is not a gate.
+enough that the floor is useful rather than tuned to this snapshot. Master
+`a8feb63`, run with PyPy 3.11.15, scores 6/40, 9/40, 10/40, and 11/40 at
+depths 6, 8, 10, and 11, taking 11.94s, 27.30s, 115.46s, and 318.01s. The
+curve is depth-sensitive and is a regression characterization, not an Elo
+claim.
+
 The API is convenient input, not a license declaration: only commit positions
-whose source license is independently documented. Lichess's
-[published rated monthly dumps](https://database.lichess.org/#standard_games)
-are CC0; do not infer the same merely from a casual-game export. The seed was
-retrieved on 2026-08-22 from the exact `game/export/eWjtwAtB` endpoint, and
-its EPD records the cached PGN fingerprint `dec3460dce33cac7`.
+whose source license is independently documented. These rated games are
+covered by Lichess's CC0 January and February 2023 Standard-game dumps;
+Lichess's [published rated monthly dumps](https://database.lichess.org/#standard_games)
+document that basis. Do not infer the same merely from a casual-game export.
 
 ## Screening with the C twin (`tools/ctwin/`)
 

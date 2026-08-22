@@ -201,21 +201,38 @@ def test_epd_round_trip_contains_labels_and_provenance():
 
 
 def test_committed_corpus_preserves_rule_state_and_legal_labels():
-    expected = {
+    expected_seed_clocks = {
         "LBG.eWjtwAtB.59": (0, 30),
         "LBG.eWjtwAtB.149": (18, 75),
     }
-    seen = set()
+    expected_settings = (
+        "Stockfish 16 sha256 1967ae9001b4d18b; scan 100000 nodes; "
+        "confirm 1000000 nodes; stability 500000 nodes; threshold 300; "
+        "bm margin 30; boundary guard 10; multipv 5; threads 1; "
+        "hash 256 MB; pgn sha256 6db73d5491270df5"
+    )
+    seen, clocks, states = set(), {}, set()
     corpus = ROOT / "tests/files/lichess_blunders.epd"
-    for line in corpus.read_text().splitlines():
+    lines = corpus.read_text().splitlines()
+    assert len(lines) == 40
+    for line in lines:
         board, operations = chess.Board.from_epd(line)
         identifier = operations["id"]
+        assert identifier.startswith("LBG.")
+        assert identifier not in seen
         seen.add(identifier)
-        assert (board.halfmove_clock, board.fullmove_number) == expected[identifier]
-        assert (operations["hmvc"], operations["fmvn"]) == expected[identifier]
+        clocks[identifier] = (board.halfmove_clock, board.fullmove_number)
+        assert (operations["hmvc"], operations["fmvn"]) == clocks[identifier]
+        state = " ".join(board.fen().split()[:5])
+        assert state not in states
+        states.add(state)
         assert operations["bm"]
         assert all(move in board.legal_moves for move in operations["bm"])
-    assert seen == set(expected)
+        game_id = identifier.split(".")[1]
+        assert operations["c0"].startswith(f"https://lichess.org/{game_id}/")
+        assert operations["c2"] == expected_settings
+    assert expected_seed_clocks.items() <= clocks.items()
+    assert len(seen) == len(states) == 40
 
 
 def test_loss_confirmation_uses_equal_single_pv_budgets(monkeypatch):
