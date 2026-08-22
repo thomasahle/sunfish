@@ -36,7 +36,9 @@ def load(name, relative):
 ctt = load("ctt_fastchess_shim", "tools/tune/chess_tuning_tools/fastchess_shim.py")
 ctt_config = load("ctt_make_config", "tools/tune/chess_tuning_tools/make_config.py")
 clop = load("clop_fastchess", "tools/tune/clop/clop_fastchess.py")
+calibrate_panel = load("calibrate_panel", "tools/tune/calibrate_panel.py")
 gating = load("gating", "tools/tune/gating.py")
+freeze_panel = load("freeze_panel", "tools/tune/freeze_panel.py")
 pentanomial = load("pentanomial", "tools/tune/pentanomial.py")
 locking = load("locking", "tools/tune/locking.py")
 opponent_panel = load("opponent_panel_test", "tools/tune/opponent_panel.py")
@@ -140,6 +142,84 @@ class TuningToolsTest(unittest.TestCase):
                 second = rbfopt.ChessBox(args, space).play(space.start, 1, "noisy")
             self.assertEqual(first, second)
             self.assertEqual(calls, 1)
+    def test_panel_calibration_uses_common_pairs_and_rejects_failures(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = pathlib.Path(directory)
+            panel = directory / "panel.json"
+            panel.write_text(json.dumps([
+                {"name": "master", "engine": "master", "options": "default"},
+                {"name": "stockfish", "engine": "stockfish", "options": {"Elo": 1800}},
+                {"name": "peer", "engine": "peer", "options": {}},
+            ]))
+            fastchess = directory / "fastchess"
+            openings = directory / "book.epd"
+            fastchess.write_bytes(b"runner")
+            openings.write_text("opening\n")
+            args = argparse.Namespace(
+                fastchess=str(fastchess), panel=str(panel), openings=str(openings),
+                logs=str(directory / "logs"), tc="3+0.1", pairs=2, start=7, concurrency=1,
+            )
+            good = subprocess.CompletedProcess([], 0, b"""Crashed: 0
+Finished game 1 (opponent vs master): 1-0
+Finished game 2 (master vs opponent): 1/2-1/2
+Finished game 3 (opponent vs master): 0-1
+Finished game 4 (master vs opponent): 1/2-1/2
+Score of opponent vs master: 1 - 1 - 2
+""")
+            with mock.patch.object(calibrate_panel.subprocess, "run", return_value=good) as run:
+                payload = calibrate_panel.calibrate(args)
+            results = payload["results"]
+            self.assertEqual([result["opponent"] for result in results], ["stockfish", "peer"])
+            self.assertEqual([result["rough_elo"] for result in results], [0, 0])
+            self.assertFalse(any(result["saturated"] for result in results))
+            self.assertEqual(results[0]["pair_scores"], [.75, .25])
+            self.assertEqual(payload["identities"]["openings"]["sha256"],
+                             freeze_panel.sha256(openings))
+            for call in run.call_args_list:
+                command = call.args[0]
+                self.assertIn("start=7", command)
+                self.assertIn("tc=3+0.1", command)
+                self.assertNotIn("-recover", command)
+            bad = subprocess.CompletedProcess([], 0, b"Black crashed\n")
+            with mock.patch.object(calibrate_panel.subprocess, "run", return_value=bad), \
+                    self.assertRaisesRegex(RuntimeError, "crashed"):
+                calibrate_panel.calibrate(args)
+
+    def test_frozen_panel_verifier_covers_engine_and_opponent_sources(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = pathlib.Path(directory)
+            source = directory / "source"
+            opponent = directory / "opponent"
+            opponent.mkdir()
+            opponent_source = opponent / "source.py"
+            engine = directory / "engine"
+            source.write_bytes(b"source")
+            opponent_source.write_bytes(b"opponent")
+            engine.write_bytes(b"engine")
+            manifest = directory / "manifest.json"
+            manifest.write_text(json.dumps({
+                "schema": "sunfish-panel-freeze-v1",
+                "source_files": [freeze_panel.artifact(directory, source)],
+                "opponent_source_trees": [freeze_panel.tree_artifact(directory, opponent)],
+                "artifacts": [freeze_panel.artifact(directory, engine)],
+                "runtime": {"path": str(engine), "sha256": freeze_panel.sha256(engine)},
+            }))
+            freeze_panel.verify(manifest)
+            opponent_source.write_bytes(b"changed")
+            with self.assertRaisesRegex(RuntimeError, "opponent"):
+                freeze_panel.verify(manifest)
+
+    def test_global_panel_lock_matches_the_freezer_and_stationary_weights(self):
+        lock = json.loads((ROOT / "tools/tune/global_search_panel.lock.json").read_text())
+        self.assertEqual(
+            lock["freeze_script_sha256"],
+            freeze_panel.sha256(ROOT / "tools/tune/freeze_panel.py"),
+        )
+        self.assertEqual(lock["weights"], {
+            "master": 2, "stockfish-1800": 1, "chessidle": 1,
+        })
+        self.assertEqual(lock["revision"], "da1922277fe2d4d1cb98bc17be27b1919d277e13")
+
     def test_campaign_kills_term_survivors_in_its_private_group(self):
         with tempfile.TemporaryDirectory() as directory:
             directory = pathlib.Path(directory)

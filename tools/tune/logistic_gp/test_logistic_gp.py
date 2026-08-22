@@ -1724,6 +1724,7 @@ class MixedAcquisitionTest(unittest.TestCase):
     def test_baseline_panel_rejects_recovered_engine_failures(self):
         self.assertEqual(panel_failure("Finished game: Black disconnects"), "disconnects")
         self.assertEqual(panel_failure("Engine peer is not responsive"), "not responsive")
+        self.assertIsNone(panel_failure("Crashed: 0, disconnects: 0, stalls: 0"))
         self.assertEqual(panel_failure("White wins by adjudication"), None)
 
     def test_global_search_space_is_uncoupled_and_search_only(self):

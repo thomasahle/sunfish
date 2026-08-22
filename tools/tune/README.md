@@ -48,6 +48,19 @@ Both runners map the same one-based opening number to the same panel member.
 Panel provenance and extra source-lock files are included in resumable study
 identities, along with executable hashes and UCI options.
 
+`freeze_panel.py` builds the C twin twice on the tournament host, rejects a
+non-reproducible binary, copies the pinned opponents and licenses, and writes
+an operational `panel.json` plus a relocatable `manifest.json`. Verify an
+existing artifact with `freeze_panel.py --verify path/to/manifest.json`.
+`global_search_panel.lock.json` records the frozen 2:1:1 campaign artifact;
+the binary itself remains outside Git.
+
+The freeze also writes a pending `calibration.json`. Its command gives each
+non-master opponent 50 common color-swapped openings against frozen master at
+3+0.1. `calibrate_panel.py` omits recovery mode and rejects engine failures or
+an incomplete game count before recording WDL, so nominal engine ratings are
+never treated as calibration evidence.
+
 `search_parameters.json` is a small generic search-tuning example.
 `logistic_gp/all_parameters.json` is the wider Sunfish search space. The
 Sunfish-specific gate rejects configurations that violate the search's fuel

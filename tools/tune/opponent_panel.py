@@ -6,7 +6,9 @@ import re
 
 
 ENGINE_FAILURE = re.compile(
-    r"disconnects|not responsive|illegal move|stalls|crash|forfeit", re.IGNORECASE)
+    r"not responsive|illegal move|"
+    r"\b(?:disconnect(?:ed|s)?|stall(?:ed|s)?|crash(?:ed|es)?|forfeit(?:ed|s)?)\b"
+    r"(?!\s*[:=]\s*0\b)", re.IGNORECASE)
 IDENTITY_FIELDS = ("source", "revision", "license")
 
 
