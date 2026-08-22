@@ -86,6 +86,7 @@ class Blunder:
     boundary_guard: int
     multipv: int
     source_sha: str
+    game_order: str = "archive"
 
     @property
     def cp_loss(self):
@@ -156,6 +157,32 @@ def game_id(game):
     """Extract the stable Lichess game id from a Site header."""
     path = urllib.parse.urlparse(game.headers.get("Site", "")).path
     return path.strip("/").split("/", 1)[0] or "unknown"
+
+
+def user_outcome(game, user):
+    """Return a completed game's result from ``user``'s point of view."""
+    headers = game.headers
+    user = user.lower()
+    white = headers.get("White", "").lower()
+    black = headers.get("Black", "").lower()
+    if user not in (white, black):
+        return "other"
+    result = headers.get("Result")
+    if result == "1/2-1/2":
+        return "draw"
+    if result not in ("1-0", "0-1"):
+        return "other"
+    user_won = ((white == user and result == "1-0")
+                or (black == user and result == "0-1"))
+    return "win" if user_won else "loss"
+
+
+def prioritize_games(games, user, losses_first=False):
+    """Keep archive order, optionally grouping losses before wins and draws."""
+    if not losses_first:
+        return games
+    priority = {"loss": 0, "win": 1, "draw": 2, "other": 3}
+    return sorted(games, key=lambda game: priority[user_outcome(game, user)])
 
 
 def candidates(game, user):
@@ -308,6 +335,7 @@ def to_epd(blunder):
                 f"bm margin {blunder.best_margin}; "
                 f"boundary guard {blunder.boundary_guard}; multipv {blunder.multipv}; "
                 f"threads 1; hash 256 MB; pgn sha256 {blunder.source_sha}")
+    settings += f"; game order {blunder.game_order}"
     return board.epd(
         bm=blunder.best_moves,
         id=identifier,
@@ -454,6 +482,8 @@ def analyse_candidate(engine, candidate, args, oracle, source_sha, funnel=None):
         boundary_guard=args.boundary_guard,
         multipv=args.multipv,
         source_sha=source_sha,
+        game_order=("losses-first"
+                    if getattr(args, "losses_first", False) else "archive"),
     )
     if funnel:
         funnel.stable_labels += 1
@@ -473,7 +503,16 @@ def configure_engine(engine):
 
 def build_corpus(games, engine, user, args, oracle, source_sha):
     found, funnel = [], Funnel()
-    for game in games:
+    ordered = prioritize_games(games, user, args.losses_first)
+    previous_outcome = None
+    for game_number, game in enumerate(ordered, start=1):
+        outcome = user_outcome(game, user)
+        if args.losses_first and outcome != previous_outcome:
+            if previous_outcome is not None:
+                print(f"{previous_outcome} tranche complete after "
+                      f"{game_number - 1} games", file=sys.stderr)
+            print(f"starting {outcome} tranche", file=sys.stderr)
+            previous_outcome = outcome
         for candidate in candidates(game, user):
             funnel.examined += 1
             if blunder := analyse_candidate(
@@ -487,6 +526,14 @@ def build_corpus(games, engine, user, args, oracle, source_sha):
                               f"{blunder.played_eval}")
                 print(f"{blunder.candidate.game_id} ply {blunder.candidate.ply}: "
                       f"{metric}", file=sys.stderr)
+        if args.losses_first and game_number % 50 == 0:
+            print(f"progress {game_number}/{len(ordered)} games: "
+                  f"{funnel.examined} moves, {funnel.scan_blunders} scan, "
+                  f"{funnel.confirmed_blunders} confirmed, "
+                  f"{funnel.stable_labels} stable", file=sys.stderr)
+    if args.losses_first and previous_outcome is not None:
+        print(f"{previous_outcome} tranche complete after {len(ordered)} games",
+              file=sys.stderr)
     return deduplicate(found), funnel
 
 
@@ -513,6 +560,8 @@ def make_parser():
                         help="include casual alongside rated games (license them before commit)")
     parser.add_argument("--until", metavar="YYYY-MM-DD",
                         help="fetch games no later than this UTC date")
+    parser.add_argument("--losses-first", action="store_true",
+                        help="scan losses before wins and draws within the frozen window")
     parser.add_argument("--output", type=pathlib.Path,
                         help="write EPD here instead of stdout")
     parser.add_argument("--best-margin", type=int, default=30,

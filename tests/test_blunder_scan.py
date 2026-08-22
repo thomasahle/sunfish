@@ -28,18 +28,18 @@ PGN = """[Event "Regression fixture"]
 """
 
 
-def source_pgn(game_id, event="rated blitz game", variant="Standard"):
+def source_pgn(game_id, event="rated blitz game", variant="Standard", result="*"):
     return f"""[Event "{event}"]
 [Site "https://lichess.org/{game_id}"]
 [Date "2026.08.22"]
 [Round "-"]
 [White "Sunfish-Engine"]
 [Black "Opponent"]
-[Result "*"]
+[Result "{result}"]
 [Variant "{variant}"]
 [TimeControl "180+1"]
 
-1. e4 e5 *
+1. e4 e5 {result}
 
 """
 
@@ -109,6 +109,23 @@ def test_single_game_source_rejects_nonstandard_chess():
     selected = blunder_scan.source_games(
         source_pgn("standard"), games=100, requested_game_id="standard")
     assert [blunder_scan.game_id(game) for game in selected] == ["standard"]
+
+
+def test_loss_first_order_is_stable_within_each_outcome():
+    text = "".join([
+        source_pgn("win00001", result="1-0"),
+        source_pgn("draw0001", result="1/2-1/2"),
+        source_pgn("loss0001", result="0-1"),
+        source_pgn("win00002", result="1-0"),
+        source_pgn("loss0002", result="0-1"),
+    ])
+    games = blunder_scan.parse_games(text)
+    assert blunder_scan.prioritize_games(
+        games, "sunfish-engine") == games
+    ordered = blunder_scan.prioritize_games(
+        games, "sunfish-engine", losses_first=True)
+    assert [blunder_scan.game_id(game) for game in ordered] == [
+        "loss0001", "loss0002", "win00001", "win00002", "draw0001"]
 
 
 def test_evaluation_preserves_point_of_view_and_separates_mates():
@@ -236,6 +253,7 @@ def test_epd_round_trip_contains_labels_and_provenance():
     assert "blunder delta 0.3" in operations["c2"]
     assert "boundary guard 10; multipv 5; threads 1; hash 256 MB" in operations["c2"]
     assert "pgn sha256 0123456789abcdef" in operations["c2"]
+    assert "game order archive" in operations["c2"]
     assert operations["hmvc"] == 18
     assert operations["fmvn"] == 37
 
