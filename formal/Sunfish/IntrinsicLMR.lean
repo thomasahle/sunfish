@@ -3,12 +3,13 @@ The local obligations introduced by intrinsic LMR.
 
 The null probe uses a fixed target, so valid fail-soft reports for the same
 child value determine the same hot bit under every caller window and table
-state. At an interior node, the `eligible` bit is the static null-move guard;
-the unstored driver root supplies `false`. A real edge
-spends one ply normally, one more at a hot node, and one more for an
-intrinsically low move at an eligible node. Thus child depth is a function of the
-position, nominal depth, and move alone, and every real edge spends between
-one and three plies.
+state. At an interior node, the `eligible` bit is the static null-move guard.
+A real edge spends one ply normally, one more at a hot node, and one more for
+an intrinsically low move at an eligible node. The unstored driver root has a
+separate fixed selector: its hot bit is charged only to intrinsically low
+moves. Thus child depth is always a function of position, nominal depth, and
+move alone. Interior edges spend one to three plies; driver edges spend one
+or two.
 -/
 
 import Sunfish.EventuallyFinite
@@ -26,9 +27,42 @@ theorem intrinsicSpend_le_two (hot eligible low : Bool) :
     intrinsicSpend hot eligible low ≤ 2 := by
   cases hot <;> cases eligible <;> cases low <;> decide
 
-/-- Exact correspondence with
-`d -= hot; move_depth = d - 1 - (eligible and low)` at the armed depths,
-where the Python expression includes `not root` in `eligible`. -/
+/-- The unstored driver's selector: a hot root reduces only the intrinsic
+tail. This is separate from `intrinsicSpend`, which models keyed interior
+nodes and is unchanged. -/
+def rootIntrinsicSpend (hot low : Bool) : Nat := fuelBit (hot && low)
+
+theorem rootIntrinsicSpend_le_one (hot low : Bool) :
+    rootIntrinsicSpend hot low ≤ 1 := by
+  cases hot <;> cases low <;> decide
+
+/-- Exact correspondence with the driver's
+`depth - 1 - (nmr and val < LMR)` recursion. -/
+theorem rootIntrinsic_child_depth (depth : Nat) (hot low : Bool) :
+    depth - 1 - fuelBit (hot && low) = depth - 1 - rootIntrinsicSpend hot low := by
+  rfl
+
+/-- Every driver-root edge spends between one and two plies. -/
+theorem rootIntrinsic_edge_cost (depth : Nat) (hdepth : 2 ≤ depth)
+    (hot low : Bool) :
+    depth - 2 ≤ depth - 1 - fuelBit (hot && low) ∧
+      depth - 1 - fuelBit (hot && low) ≤ depth - 1 := by
+  cases hot <;> cases low <;> simp [fuelBit] <;> omega
+
+/-- The fixed driver-root policy over positions and moves. Unlike the keyed
+interior selector below, it has no `eligible` input: only hot, low-valued
+moves pay the extra unit. -/
+def rootIntrinsicEdgeSpend (G : QSGame) (hot : G.Pos → Nat → Bool)
+    (low : G.Pos → Nat → G.Pos → Bool) : G.Pos → Nat → G.Pos → Nat :=
+  fun p d m => rootIntrinsicSpend (hot p d) (low p d m)
+
+theorem rootIntrinsicEdgeSpend_le_one (G : QSGame) (hot : G.Pos → Nat → Bool)
+    (low : G.Pos → Nat → G.Pos → Bool) (p m : G.Pos) (d : Nat) :
+    rootIntrinsicEdgeSpend G hot low p d m ≤ 1 :=
+  rootIntrinsicSpend_le_one _ _
+
+/-- Exact correspondence with the interior specialization of the current
+Python expression, where `not root` is true. -/
 theorem intrinsic_child_depth (depth : Nat) (hdepth : 3 ≤ depth)
     (hot eligible low : Bool) :
     depth - fuelBit hot - 1 - fuelBit (eligible && low) =
@@ -42,9 +76,10 @@ theorem intrinsic_edge_cost (depth : Nat) (hdepth : 3 ≤ depth)
       depth - fuelBit hot - 1 - fuelBit (eligible && low) ≤ depth - 1 := by
   cases hot <;> cases eligible <;> cases low <;> simp [fuelBit] <;> omega
 
-/-- The production policy as an edge selector. `hot` is a fixed-target
-property of the node, `eligible` is its static guard, and `low` is an intrinsic
-property of the move. Neither the caller's window nor killer ordering enters. -/
+/-- The production interior policy as an edge selector. `hot` is a
+fixed-target property of the node, `eligible` is its static guard, and `low`
+is an intrinsic property of the move. Neither the caller's window nor killer
+ordering enters. The unstored driver uses `rootIntrinsicSpend` instead. -/
 def intrinsicEdgeSpend (G : QSGame) (hot eligible : G.Pos → Nat → Bool)
     (low : G.Pos → Nat → G.Pos → Bool) : G.Pos → Nat → G.Pos → Nat :=
   fun p d m => intrinsicSpend (hot p d) (eligible p d) (low p d m)

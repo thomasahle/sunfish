@@ -3,6 +3,15 @@ Distance-to-mate optimality: the search does not merely find a mate, it
 finds the SHORTEST one -- and the constant that makes that true is
 `EVAL_ROUGHNESS`, for a reason that is pure parity.
 
+SCOPE. This file proves that statement for the equal-depth `nullValueD2`
+fold: every real alternative at a node is compared at the same remaining
+depth. Production intrinsic LMR instead assigns move-dependent fuel costs.
+Its eventual W/D/L theorems are in `EventuallyWide.lean` and
+`IntrinsicLMR.lean`; they do not transfer this chess-ply DTM theorem. In the
+production recurrence the terminal formula orders unspent search fuel, which
+coincides with chess-ply distance only when the compared lines have equal
+edge-cost schedules.
+
 `Liveness.lean` ends at `forcedMate_play_mates`: from a root with a
 forced mate in `k` plies, the engine's own iterated choice reaches a
 checkmated position within `k` plies -- **the `k` the spec handed it**.
@@ -431,9 +440,8 @@ only to be within the driver's own `EVAL_ROUGHNESS` stopping tolerance
 of the best -- mates within `k` plies against every legal defence.
 
 `k` is the least forced-mate distance, so no strategy whatsoever mates
-faster against best defence: the engine attains the game-theoretic
-optimum, which is the "shortest PV" half of sunfish.py's constant-block
-claim.  Parity (`leastMate_odd`) is what connects the two statements --
+faster against best defence: the equal-depth model attains the
+game-theoretic optimum. Parity (`leastMate_odd`) connects the two statements --
 it is what makes a least distance an ODD one, and the odd distances are
 exactly the ones the driver's final bracket can tell apart. -/
 theorem leastMate_play_shortest (G : QSGame) (guard : G.Pos → Bool)

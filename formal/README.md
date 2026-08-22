@@ -94,13 +94,13 @@ From depth 6 on the pass is not a score candidate at all. One fixed target
 shapes only how much depth the real moves spend:
 
 ```python
-d = depth
-guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
-if guard:
-    t = pos.score + NULL_MARGIN
-    d -= int(-self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)
-
-move_depth = depth - 1 - (guard and depth >= 6 and val < LMR) - int(nmr)
+calm = abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
+guard = not root and calm
+t = pos.score + NULL_MARGIN
+nmr = (calm and depth >= 6 and
+       -self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)
+move_depth = depth - 1 - (guard and depth >= 6 and val < LMR) \
+    - (nmr and (not root or val < LMR))
 ```
 
 The target depends on `(pos, depth)` alone -- `gamma` does not enter. Table
@@ -108,19 +108,22 @@ state may still change the numeric report. Stability therefore uses the normal
 TT invariant: every reused interval reports on the same null-child value.
 Given valid reports, side-exactness makes the hot classification stable under
 different caller windows and table states (`hot_bit_stable`). A fixed target
-alone would not repair an invalid or cross-semantics TT entry. Move reduction
-uses only the static null-eligibility guard, so it needs no report theorem.
+alone would not repair an invalid or cross-semantics TT entry. The intrinsic
+low-value test is static, so it needs no report theorem.
 
 Nominal `depth` still keys the tables and QS admission; intrinsic move value
-only selects the recursion depth. Every real edge spends one to three plies,
-exactly matching the two code subtractions (`intrinsic_child_depth`,
-`intrinsic_edge_cost`). Thus the killer can reorder a move but cannot change
-its edge cost, and no MTD window changes the declared tree.
+only selects the recursion depth. Every interior real edge spends one to
+three plies, exactly matching the two code subtractions
+(`intrinsic_child_depth`, `intrinsic_edge_cost`). Thus the killer can reorder
+a move but cannot change its edge cost, and no MTD window changes the declared
+tree.
 
-The driver root is deliberately exempt from intrinsic LMR. Root probes are
-not stored in `tp_score`, so this does not create a second value for any TT
-key; the model's `eligible` bit is false there. Interior nodes retain the
-fixed edge-cost recurrence proved by `IntrinsicLMR.lean`.
+The driver root has a separate fixed selector. A hot root spends its extra
+ply only on moves with `val < LMR`; other root moves spend one ply. Root
+probes are not stored in `tp_score`, so this cannot create a second value for
+an interior TT key. `rootIntrinsicEdgeSpend`, `rootIntrinsic_child_depth`,
+and `rootIntrinsic_edge_cost` model its one-to-two-ply edges. Interior nodes
+keep the prior one-to-three-ply recurrence unchanged.
 
 That is what buys the premise: a null cutoff gives every real move unbounded
 pruning debt, and discharging it is exactly what `NoZugzwang` was for. A
@@ -647,7 +650,14 @@ case split in `legal_of_allIllegalB_false`); the distance spine
 
 `forcedMate_play_mates` mates within *the `k` the spec handed it*.
 `Shortest.lean` replaces that `k` with the LEAST one, which is the shortest-PV
-half of the claim sunfish.py's constant block has made since 2014.
+result for the equal-depth `nullValueD2` model.
+
+**Scope:** every real alternative in `Shortest.lean` is compared at the same
+remaining depth. Production intrinsic LMR instead assigns move-dependent
+fuel costs. Its terminal score therefore orders unspent search fuel, not
+chess plies in general. `EventuallyWide.lean`, `IntrinsicLMR.lean`, and
+`MateDepth.lean` prove eventual mate recognition for that production shape;
+there is no theorem transferring chess-ply DTM optimality to it.
 
 **Parity is the hinge, and it is not a chess fact.**  `ForcedMate`'s `mate`
 constructor costs one ply and `step` costs two, and `step`'s reply quantifier
@@ -667,10 +677,11 @@ leastMate_value_separation :
   EVAL_ROUGHNESS < nullValueD2 G guard D p - nullValueD2 G guard D q
 ```
 
-STRICTLY more than `EVAL_ROUGHNESS`, and `search` stops at
+STRICTLY more than `EVAL_ROUGHNESS`, and the equal-depth driver stops at
 `upper - lower <= EVAL_ROUGHNESS`, so no final bracket can hold two distinct
-mate values.  **This retires an idealisation.**  `MaximalChoice` assumes an
-exactly-converged bisection, which the shipped driver does not give;
+mate values. **Within this model, this retires an idealisation.**
+`MaximalChoice` assumes an exactly-converged bisection, which the driver does
+not give;
 `NearMaximalChoice` weakens it by exactly the driver's own stopping tolerance,
 and `forcedMate_play_shortest_odd` proves the same conclusion under it.  Where
 near-maximality loses a rung, parity refunds it: the slack budget is even, and
@@ -685,10 +696,10 @@ leastMate_play_shortest :
   MatesWithin G ch k p
 ```
 
-So `EVAL_ROUGHNESS`-per-ply is the smallest step for which the theorem is
-true, and it is true only because achievable distances have a fixed parity.
-At one point per ply the gap is 2 against a tolerance of 15 and the shipped
-driver can take the slower mate.
+So `EVAL_ROUGHNESS`-per-ply is the smallest step for which the equal-depth
+theorem is true, and it is true only because achievable distances have a
+fixed parity. At one point per ply the gap is 2 against a tolerance of 15 and
+the driver can take the slower mate.
 
 **The null reduction is a FREE parameter — `NullRed.lean` retired the
 "odd is load-bearing" claim that used to stand here.**  The parity in these
@@ -1199,7 +1210,8 @@ with a named gap to the shipped one), and UNMODELED.
 | no searched move can reach `MATE_UPPER`, so an exact `MATE_UPPER` proves a king capture | MATCHES (new) | `searched_score_below_MU`, `MU_provenance` |
 | only a searched real move sets `live` | MATCHES | the three-species split (`searchedAt`, `futTerm`), `searched_yield_two_way`, and `termFix2`'s `S = LOSS` |
 | mate/stalemate returns the exact `max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)` / `0` | MATCHES | `boundD2''_terminal_exact`, `terminalValue_exact` |
-| the mate value carries the UNSPENT depth, so the winner takes the shortest line | MATCHES | `terminalValue_anti`, `leastMate_value_separation`, `dtm_optimal`; the formula-level direction and the cost of inverting it are `matedShipped_anti`, `matedAlt_inverts_preference` |
+| the mate value carries UNSPENT search fuel | MATCHES | `terminalValue_anti`, `terminalValue_exact` |
+| equal-depth DTM | AHEAD-OF-MODEL | proved for `nullValueD2`, not production fuel |
 | every move in `tp_move` is legal | MATCHES | `storedMoveLegal`, `storedMoveLegal_qs`, `KillerLegal` |
 | a nonterminal root fail-high leaves a real witness | MATCHES | `boundD2_failHigh_attained`, `storedMove_attains`, `substitution_attains` |
 

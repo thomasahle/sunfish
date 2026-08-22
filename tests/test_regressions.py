@@ -266,11 +266,13 @@ class TestIntrinsicLMR:
                 expected = depth - hot - 1 - (guard and pos.value(move) < sf.LMR)
                 assert {d for m, d in seen if m == move} == {expected}
 
-    def test_root_moves_are_not_intrinsically_reduced(self):
+    def test_hot_root_reduces_only_the_intrinsic_tail(self):
         pos = hist_from_fen(self.FEN)[-1]
         _, moves, seen = self.observed_depths(6, pos.score + sf.NULL_MARGIN, root=True)
+        assert {pos.value(move) < sf.LMR for move in moves} == {False, True}
         for move in moves:
-            assert {d for m, d in seen if m == move} == {4}
+            expected = 4 if pos.value(move) < sf.LMR else 5
+            assert {d for m, d in seen if m == move} == {expected}
 
 
 class TestShallowNullMateFloor:
@@ -540,18 +542,13 @@ class TestMateDistance:
         # Ra8# from a bare-rook mate: the score is the band floor plus the
         # depth the search still had in hand.
         #
-        # From depth 6 the deep-null fuel oracle is live, and in this
-        # position it is hot (White is a rook up), so every real edge costs
-        # TWO plies instead of one and the mate arrives with one ply less in
-        # hand. That is the whole trade -- a bounded, uniform cost per edge
-        # instead of a null cutoff -- and pinning it here is what stops the
-        # cost from silently growing: `fuel_edge_cost` proves it is in
-        # {1, 2}, and this is the {2} branch, measured.
+        # From depth 6 the deep-null fuel oracle is hot. Ra8# is above LMR,
+        # so the root-tail policy exempts it and the edge still costs one
+        # ply. The high/low split itself is pinned in TestIntrinsicLMR.
         hist = hist_from_fen("3k4/8/3K4/8/8/8/8/7R w - - 0 1")
         searcher = sf.Searcher()
         score = searcher.bound(hist[-1], sf.MATE_LOWER, depth, root=True)
-        fuel = 1 if depth >= 6 else 0
-        want = sf.MATE_LOWER + (depth - 1 - fuel) * sf.EVAL_ROUGHNESS
+        want = sf.MATE_LOWER + (depth - 1) * sf.EVAL_ROUGHNESS
         assert score == want, (
             f"depth {depth}: mate in 1 scored {score}, expected {want}"
         )

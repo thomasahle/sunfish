@@ -730,7 +730,8 @@ static int score_move(const Pos *pos, Move move, int val, int gamma,
         if (cap >= MATE_LOWER) cap = MATE_LOWER - 1;
         if (cap < gamma) { *real = 0; return cap; }
     }
-    int move_depth = rd - 1 - (!root && guard && val < LMR);
+    int move_depth = rd - 1 - (!root && guard && val < LMR)
+        + (root && rd < depth && val >= LMR);
     Pos child = domove(pos, move);
     int full = -bound(&child, 1 - gamma, move_depth, 0, 0);
     return cap < full ? cap : full;

@@ -46,7 +46,7 @@ EXPECTED = {
     "Position.move": "69bb2460cd611c9e",
     "Position.rotate": "cb12fe4a160ae663",
     "Position.value": "11d52eaa8a661352",
-    "Searcher.bound": "adb70d639eb40543",
+    "Searcher.bound": "42e238da368215c4",
     "Searcher.search": "089a324cf1028953",
     "constants": "62b96e206341a2fb",
 }
@@ -114,7 +114,8 @@ ANCHORS = [
     "for val, move in moves():",
     "cap = MATE_UPPER if depth > 3 else pos.score + val + max(depth - 1, 0) * QS_A",
     "if cap < gamma: best = max(best, cap); break",
-    "move_depth = depth - 1 - (guard and depth >= 6 and val < LMR) - int(nmr)",
+    "move_depth = depth - 1 - (guard and depth >= 6 and val < LMR)"
+    " - (nmr and (not root or val < LMR))",
     "score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))",
     "live |= score > -MATE_UPPER",
     "best, live = -MATE_UPPER, False",
