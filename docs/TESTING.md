@@ -323,6 +323,59 @@ run those engines at `30+1` instead.
      nodes — the load-immunity that fixed-node screening has always claimed,
      and only has after the pin.
 
+## Production blunder corpus
+
+`tests/files/lichess_blunders.epd` turns mistakes from real Sunfish games into
+a scored best-move suite. It is generated offline, not during CI:
+
+```bash
+python3 tools/blunder_scan.py sunfish-engine \
+  --game-id eWjtwAtB \
+  --pgn-cache /tmp/sunfish-games.pgn \
+  --output tests/files/lichess_blunders.epd
+```
+
+The PGN cache freezes the input games. The generator uses one Stockfish thread,
+fixed node limits, and a clean hash for every probe. A cheap pass finds
+candidates; a larger MultiPV pass must confirm both the loss and the complete
+set of moves within the acceptance margin. Ambiguous MultiPV boundaries are
+discarded. The EPD records the game URL, played move, score loss, oracle name,
+and both node budgets, plus fingerprints of the PGN input and Stockfish
+binary. User-archive fetches default to rated standard-chess games; casual
+games require the explicit `--include-casual` option.
+
+For a larger redistributable corpus, pin the archive to the end of an already
+published CC0 month instead of sampling the mutable latest games:
+
+```bash
+python3 tools/blunder_scan.py sunfish-engine --games 0 --until 2023-02-28 \
+  --pgn-cache /tmp/sunfish-rated-through-2023-02.pgn \
+  --output /tmp/lichess_blunders.epd
+```
+
+Run it through the existing best-move harness, preferably as a depth curve:
+
+```bash
+for depth in 6 8 10 11; do
+  python3 tools/tester.py "python3 ./sunfish.py" best \
+    tests/files/lichess_blunders.epd --depth "$depth"
+done
+```
+
+Do not infer Elo from this suite, and do not pick a flattering shallow depth.
+It is a deterministic discriminator for failure modes drawn from Sunfish's
+actual workload. A CI floor should be added only after the corpus is large
+enough that the floor does not encode one or two positions. The initial seed
+comes from game `eWjtwAtB` in Lichess's February 2023 CC0 rated-game dump.
+Master `a8feb63` scores 0/2, 1/2, 0/2, 0/2 at depths 6, 8, 10, 11. That
+non-monotonic curve is itself why one flattering fixed depth is not a gate.
+The API is convenient input, not a license declaration: only commit positions
+whose source license is independently documented. Lichess's
+[published rated monthly dumps](https://database.lichess.org/#standard_games)
+are CC0; do not infer the same merely from a casual-game export. The seed was
+retrieved on 2026-08-22 from the exact `game/export/eWjtwAtB` endpoint, and
+its EPD records the cached PGN fingerprint `dec3460dce33cac7`.
+
 ## Screening with the C twin (`tools/ctwin/`)
 
 `tools/ctwin/` holds a C transcription of classic `sunfish.py` that searches

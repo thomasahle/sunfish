@@ -1,124 +1,395 @@
 #!/usr/bin/env python3
-"""Scan a lichess bot's recent games for blunders, with local Stockfish.
+"""Turn confirmed mistakes from a Lichess bot archive into an EPD suite.
 
-    tools/blunder_scan.py sunfish-engine --games 20
-    tools/blunder_scan.py sunfish-nnue-engine --games 100 --threshold 200
+Typical reproducible workflow::
 
-For every move OUR bot played, Stockfish evaluates the position before
-and after (same fixed depth, scores from the mover's side); a drop
-beyond the threshold is a blunder. Output is one line per blunder with
-the clickable ply anchor (lichess.org/<id>/black#<ply>), the eval
-swing, and the better move Stockfish wanted - newest games first, so
-this doubles as the production audit's first pass. Games where the
-opponent flagged mid-blunder still count: the eval is about the move,
-not the result.
+    tools/blunder_scan.py sunfish-engine --pgn-cache sunfish-games.pgn \
+        --output lichess_blunders.epd
 
-Rate limits: lichess soft-blocks bursts (429, then 404s). One export
-call fetches ALL requested games; only Stockfish runs locally after
-that, so the scan makes exactly one API request.
+The first run downloads one PGN archive and caches it. Later runs read only
+that file unless ``--refresh`` is passed. A quick fixed-node Stockfish pass
+finds candidates; a larger fixed-node MultiPV pass confirms the loss and
+records every near-best move it can certify. Positions whose acceptable-move
+set reaches the MultiPV boundary are rejected rather than incompletely
+labelled.
+
+The output is ordinary EPD accepted by ``tools/tester.py best``. Its ``bm``
+operation contains the certified alternatives, while ``c0`` through ``c2``
+record the source game, played move, score loss, and oracle settings. Network
+access and Stockfish are generation-time dependencies only; the committed EPD
+is a deterministic test input.
 """
 import argparse
+import dataclasses
+import datetime
+import hashlib
 import io
+import pathlib
 import shutil
-import subprocess
 import sys
+import urllib.parse
 import urllib.request
 
 import chess
 import chess.engine
 import chess.pgn
 
-MATE_CP = 10_000
+MATE_CP = 100_000
+USER_AGENT = "sunfish-blunder-corpus/1 (+https://github.com/thomasahle/sunfish)"
 
 
-def fetch_games(user, n):
-    url = (f"https://lichess.org/api/games/user/{user}"
-           f"?max={n}&moves=true&clocks=false&evals=false&perfType="
-           "bullet,blitz,rapid,classical")
-    req = urllib.request.Request(url, headers={"Accept": "application/x-chess-pgn"})
-    with urllib.request.urlopen(req, timeout=120) as r:
-        text = r.read().decode()
+@dataclasses.dataclass(frozen=True)
+class Candidate:
+    fen: str
+    played: chess.Move
+    game_id: str
+    ply: int
+    user: str
+    opponent: str
+    result: str
+    time_control: str
+
+
+@dataclasses.dataclass(frozen=True)
+class Blunder:
+    candidate: Candidate
+    best_moves: tuple[chess.Move, ...]
+    best_cp: int
+    played_cp: int
+    oracle: str
+    scan_nodes: int
+    confirm_nodes: int
+    threshold: int
+    best_margin: int
+    multipv: int
+    source_sha: str
+
+    @property
+    def loss(self):
+        return self.best_cp - self.played_cp
+
+
+def parse_games(text):
+    """Parse every game in a PGN stream, preserving file order."""
     games, stream = [], io.StringIO(text)
-    while (g := chess.pgn.read_game(stream)) is not None:
-        games.append(g)
+    while (game := chess.pgn.read_game(stream)) is not None:
+        if game.errors:
+            raise ValueError(f"malformed PGN game: {game.errors}")
+        games.append(game)
     return games
 
 
-def cp(score, color):
-    """Centipawns from `color`'s view, mates folded to +/-MATE_CP."""
-    s = score.pov(color)
-    return s.score() if s.score() is not None else (MATE_CP if s.mate() > 0 else -MATE_CP)
+def game_id(game):
+    """Extract the stable Lichess game id from a Site header."""
+    path = urllib.parse.urlparse(game.headers.get("Site", "")).path
+    return path.strip("/").split("/", 1)[0] or "unknown"
 
 
-def scan_game(game, engine, me, depth, threshold):
-    hdr = game.headers
-    my_color = chess.WHITE if hdr.get("White", "").lower() == me else chess.BLACK
+def candidates(game, user):
+    """Yield positions immediately before moves made by ``user``."""
+    headers = game.headers
+    white = headers.get("White", "").lower()
+    black = headers.get("Black", "").lower()
+    user = user.lower()
+    if user not in (white, black):
+        return
+    my_color = chess.WHITE if white == user else chess.BLACK
+    opponent = headers.get("Black" if my_color else "White", "?")
     board = game.board()
-    limit = chess.engine.Limit(depth=depth)
-    found = []
-    for ply, move in enumerate(game.mainline_moves(), start=1):
-        if board.turn == my_color and len(list(board.legal_moves)) > 1:
-            info = engine.analyse(board, limit)
-            best_cp = cp(info["score"], my_color)
-            best_move = info.get("pv", [None])[0]
-            if move != best_move:
-                board.push(move)
-                after = cp(engine.analyse(board, limit)["score"], my_color)
-                board.pop()
-                loss = best_cp - after
-                # Only positions that were still holdable: being lost
-                # already and staying lost is not the signal we hunt.
-                if loss >= threshold and best_cp > -threshold:
-                    found.append((ply, board.san(move),
-                                  best_cp, after,
-                                  board.san(best_move) if best_move else "?"))
-        board.push(move)
-    return my_color, found
+    for ply, played in enumerate(game.mainline_moves(), start=1):
+        if board.turn == my_color and board.legal_moves.count() > 1:
+            yield Candidate(
+                fen=board.fen(),
+                played=played,
+                game_id=game_id(game),
+                ply=ply,
+                user=user,
+                opponent=opponent,
+                result=headers.get("Result", "?"),
+                time_control=headers.get("TimeControl", "?"),
+            )
+        board.push(played)
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("user", help="lichess username of our bot")
-    ap.add_argument("--games", type=int, default=20)
-    ap.add_argument("--threshold", type=int, default=300,
-                    help="centipawn loss that counts as a blunder")
-    ap.add_argument("--depth", type=int, default=14)
-    ap.add_argument("--engine", default=shutil.which("stockfish"),
-                    help="path to a UCI engine for the oracle")
-    args = ap.parse_args()
+def score_cp(score, color):
+    """Centipawns from ``color``; mate values live far outside normal evals."""
+    score = score.pov(color)
+    return score.score(mate_score=MATE_CP)
+
+
+def acceptable_moves(ranked, legal_count, margin):
+    """Return complete near-best set, or empty when MultiPV truncated it."""
+    if not ranked:
+        return ()
+    ranked = sorted(ranked, key=lambda item: item[1], reverse=True)
+    floor = ranked[0][1] - margin
+    accepted = tuple(move for move, score in ranked if score >= floor)
+    if len(ranked) < legal_count and ranked[-1][1] >= floor:
+        return ()
+    return accepted
+
+
+def fen_key(fen):
+    """The immutable chess state represented by an EPD line."""
+    return " ".join(fen.split()[:4])
+
+
+def deduplicate(blunders):
+    """Keep the strongest confirmed example for each EPD position."""
+    selected = {}
+    for blunder in blunders:
+        key = fen_key(blunder.candidate.fen)
+        previous = selected.get(key)
+        rank = (blunder.loss, blunder.candidate.game_id, blunder.candidate.ply)
+        if previous is None:
+            selected[key] = blunder
+            continue
+        old_rank = (previous.loss, previous.candidate.game_id, previous.candidate.ply)
+        if rank > old_rank:
+            selected[key] = blunder
+    return sorted(selected.values(), key=lambda item: (
+        item.candidate.game_id, item.candidate.ply, fen_key(item.candidate.fen)))
+
+
+def lichess_url(candidate):
+    side = "white" if chess.Board(candidate.fen).turn else "black"
+    return f"https://lichess.org/{candidate.game_id}/{side}#{candidate.ply}"
+
+
+def to_epd(blunder):
+    """Serialize one labelled position with enough provenance to reproduce it."""
+    candidate = blunder.candidate
+    board = chess.Board(candidate.fen)
+    played = board.san(candidate.played)
+    identifier = f"LBG.{candidate.game_id}.{candidate.ply}"
+    details = (f"{candidate.user} vs {candidate.opponent}; {candidate.result}; "
+               f"tc {candidate.time_control}; played {played}; loss {blunder.loss} cp; "
+               f"best {blunder.best_cp}; played {blunder.played_cp}")
+    settings = (f"{blunder.oracle}; scan {blunder.scan_nodes} nodes; "
+                f"confirm {blunder.confirm_nodes}; threshold {blunder.threshold}; "
+                f"bm margin {blunder.best_margin}; multipv {blunder.multipv}; "
+                f"threads 1; hash 256 MB; pgn sha256 {blunder.source_sha}")
+    return board.epd(
+        bm=blunder.best_moves,
+        id=identifier,
+        c0=lichess_url(candidate),
+        c1=details,
+        c2=settings,
+    )
+
+
+def download_pgn(url):
+    request = urllib.request.Request(
+        url,
+        headers={"Accept": "application/x-chess-pgn", "User-Agent": USER_AGENT},
+    )
+    with urllib.request.urlopen(request, timeout=600) as response:
+        return response.read().decode()
+
+
+def date_to_millis(date):
+    """End of a UTC date, in the milliseconds expected by Lichess."""
+    day = datetime.datetime.strptime(date, "%Y-%m-%d").replace(
+        tzinfo=datetime.timezone.utc)
+    return int(day.timestamp() * 1000) + 86_399_999
+
+
+def fetch_pgn(user, games, include_casual=False, until=None):
+    query = {
+        "moves": "true",
+        "clocks": "true",
+        "evals": "true",
+        "opening": "true",
+        "perfType": "bullet,blitz,rapid,classical,correspondence",
+        "rated": str(not include_casual).lower(),
+        "sort": "dateDesc",
+    }
+    if games:
+        query["max"] = games
+    if until:
+        query["until"] = date_to_millis(until)
+    url = f"https://lichess.org/api/games/user/{user}?{urllib.parse.urlencode(query)}"
+    return download_pgn(url)
+
+
+def fetch_game(game_id):
+    query = urllib.parse.urlencode({
+        "evals": "true",
+        "clocks": "true",
+        "opening": "true",
+        "literate": "true",
+    })
+    return download_pgn(f"https://lichess.org/game/export/{game_id}?{query}")
+
+
+def load_pgn(user, games, cache, refresh=False, game_id=None,
+             include_casual=False, until=None):
+    """Read a frozen PGN archive, fetching it once when absent or refreshed."""
+    if cache and cache.exists() and not refresh:
+        return cache.read_text()
+    text = (fetch_game(game_id) if game_id else
+            fetch_pgn(user, games, include_casual, until))
+    if cache:
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(text)
+    return text
+
+
+def clear_hash(engine):
+    if "Clear Hash" in engine.options:
+        engine.configure({"Clear Hash": None})
+
+
+def analyse(engine, board, limit, **kwargs):
+    """Search from a clean TT so labels do not depend on archive order."""
+    clear_hash(engine)
+    return engine.analyse(board, limit, **kwargs)
+
+
+def analyse_candidate(engine, candidate, args, oracle, source_sha):
+    board = chess.Board(candidate.fen)
+    scan_limit = chess.engine.Limit(nodes=args.scan_nodes)
+    best = analyse(engine, board, scan_limit)
+    best_move = best.get("pv", [None])[0]
+    if best_move is None or best_move == candidate.played:
+        return None
+    best_cp = score_cp(best["score"], board.turn)
+    played = analyse(engine, board, scan_limit, root_moves=[candidate.played])
+    played_cp = score_cp(played["score"], board.turn)
+    if best_cp - played_cp < args.threshold or best_cp <= -args.threshold:
+        return None
+
+    legal_count = board.legal_moves.count()
+    multipv = min(legal_count, args.multipv)
+    confirm_limit = chess.engine.Limit(nodes=args.confirm_nodes)
+    infos = analyse(engine, board, confirm_limit, multipv=multipv)
+    ranked = [(info["pv"][0], score_cp(info["score"], board.turn))
+              for info in infos if info.get("pv")]
+    best_moves = acceptable_moves(ranked, legal_count, args.best_margin)
+    if not best_moves or best_move not in best_moves or candidate.played in best_moves:
+        return None
+
+    played = analyse(engine, board, confirm_limit, root_moves=[candidate.played])
+    confirmed_played_cp = score_cp(played["score"], board.turn)
+    confirmed_best_cp = max(score for _, score in ranked)
+    if (confirmed_best_cp - confirmed_played_cp < args.threshold
+            or confirmed_best_cp <= -args.threshold):
+        return None
+    return Blunder(
+        candidate=candidate,
+        best_moves=best_moves,
+        best_cp=confirmed_best_cp,
+        played_cp=confirmed_played_cp,
+        oracle=oracle,
+        scan_nodes=args.scan_nodes,
+        confirm_nodes=args.confirm_nodes,
+        threshold=args.threshold,
+        best_margin=args.best_margin,
+        multipv=args.multipv,
+        source_sha=source_sha,
+    )
+
+
+def configure_engine(engine):
+    required = {"Threads", "Hash", "Clear Hash", "MultiPV"}
+    if missing := required - engine.options.keys():
+        raise ValueError(f"oracle lacks required UCI options: {sorted(missing)}")
+    options = {"Threads": 1, "Hash": 256}
+    if "UCI_AnalyseMode" in engine.options:
+        options["UCI_AnalyseMode"] = True
+    if options:
+        engine.configure(options)
+
+
+def build_corpus(games, engine, user, args, oracle, source_sha):
+    found, examined = [], 0
+    for game in games:
+        for candidate in candidates(game, user):
+            examined += 1
+            if blunder := analyse_candidate(engine, candidate, args, oracle, source_sha):
+                found.append(blunder)
+                print(f"{blunder.candidate.game_id} ply {blunder.candidate.ply}: "
+                      f"{blunder.loss} cp", file=sys.stderr)
+    return deduplicate(found), examined
+
+
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as source:
+        while block := source.read(1024 * 1024):
+            digest.update(block)
+    return digest.hexdigest()
+
+
+def make_parser():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("user", help="Lichess username of our bot")
+    parser.add_argument("--games", type=int, default=100,
+                        help="games to fetch; 0 means the full archive")
+    parser.add_argument("--game-id",
+                        help="fetch one immutable game instead of a user slice")
+    parser.add_argument("--pgn-cache", type=pathlib.Path,
+                        help="read this PGN, or fetch and create it when absent")
+    parser.add_argument("--refresh", action="store_true",
+                        help="replace --pgn-cache from Lichess")
+    parser.add_argument("--include-casual", action="store_true",
+                        help="include casual games (do not commit without a license basis)")
+    parser.add_argument("--until", metavar="YYYY-MM-DD",
+                        help="fetch games no later than this UTC date")
+    parser.add_argument("--output", type=pathlib.Path,
+                        help="write EPD here instead of stdout")
+    parser.add_argument("--threshold", type=int, default=300,
+                        help="minimum confirmed centipawn loss")
+    parser.add_argument("--best-margin", type=int, default=30,
+                        help="moves this many cp from best are all accepted")
+    parser.add_argument("--multipv", type=int, default=5,
+                        help="maximum moves ranked by the confirmation search")
+    parser.add_argument("--scan-nodes", type=int, default=100_000)
+    parser.add_argument("--confirm-nodes", type=int, default=1_000_000)
+    parser.add_argument("--engine", default=shutil.which("stockfish"),
+                        help="path to the Stockfish UCI executable")
+    return parser
+
+
+def main(argv=None):
+    args = make_parser().parse_args(argv)
     if not args.engine:
-        sys.exit("no stockfish on PATH (brew install stockfish)")
+        sys.exit("no Stockfish on PATH (brew install stockfish)")
+    engine_path = shutil.which(args.engine) or args.engine
+    if args.scan_nodes <= 0 or args.confirm_nodes < args.scan_nodes:
+        sys.exit("confirmation nodes must be at least the positive scan nodes")
+    if args.multipv < 2:
+        sys.exit("--multipv must be at least 2")
 
-    me = args.user.lower()
-    games = fetch_games(args.user, args.games)
-    print(f"{len(games)} games fetched for {args.user}; "
-          f"oracle depth {args.depth}, threshold {args.threshold}cp\n")
-
-    engine = chess.engine.SimpleEngine.popen_uci([args.engine])
-    engine.configure({"Threads": 2, "Hash": 256})
-    total_blunders, games_with = 0, 0
+    text = load_pgn(
+        args.user,
+        args.games,
+        args.pgn_cache,
+        args.refresh,
+        args.game_id,
+        args.include_casual,
+        args.until,
+    )
+    source_sha = hashlib.sha256(text.encode()).hexdigest()[:16]
+    games = parse_games(text)
+    engine = chess.engine.SimpleEngine.popen_uci([engine_path])
     try:
-        for game in games:
-            hdr = game.headers
-            color, found = scan_game(game, engine, me, args.depth, args.threshold)
-            side = "white" if color == chess.WHITE else "black"
-            opp = hdr.get("Black" if color == chess.WHITE else "White", "?")
-            gid = hdr.get("Site", "").rsplit("/", 1)[-1]
-            res = hdr.get("Result", "?")
-            if found:
-                games_with += 1
-                total_blunders += len(found)
-                print(f"{gid} vs {opp} ({res}, {hdr.get('TimeControl', '?')}):")
-                for ply, san, best, after, better in found:
-                    moveno = (ply + 1) // 2
-                    dots = "." if color == chess.WHITE else "..."
-                    print(f"  {moveno}{dots}{san}  {best/100:+.2f} -> {after/100:+.2f}"
-                          f"  (SF wanted {better})"
-                          f"  https://lichess.org/{gid}/{side}#{ply}")
+        configure_engine(engine)
+        name = engine.id.get("name", "unknown UCI engine")
+        oracle = f"{name} sha256 {file_sha256(engine_path)[:16]}"
+        corpus, examined = build_corpus(
+            games, engine, args.user, args, oracle, source_sha)
     finally:
         engine.quit()
-    print(f"\n{total_blunders} blunders (>= {args.threshold}cp) "
-          f"in {games_with}/{len(games)} games")
+
+    output = "\n".join(map(to_epd, corpus)) + ("\n" if corpus else "")
+    if args.output:
+        args.output.parent.mkdir(parents=True, exist_ok=True)
+        args.output.write_text(output)
+    else:
+        print(output, end="")
+    print(f"{len(games)} games, {examined} bot moves, "
+          f"{len(corpus)} deduplicated blunders", file=sys.stderr)
 
 
 if __name__ == "__main__":
