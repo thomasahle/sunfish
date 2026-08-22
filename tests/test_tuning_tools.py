@@ -158,6 +158,58 @@ class TuningToolsTest(unittest.TestCase):
         plot_recovery.add_gains(records)
         self.assertEqual((records[1]["gain"], records[1]["gain_error"]), (0, 0))
 
+    def test_recovery_method_comparison_uses_shared_stratified_bootstrap(self):
+        records = []
+        candidates = {
+            ("a", 5): [.75, .5, .75, .5], ("b", 5): [.5, .5, .5, .5],
+            ("a", 15): [.5, .75, .5, .75], ("b", 15): [.5, .5, .5, .5],
+        }
+        starts = {5: [.25, .5, .25, .5], 15: [.5, .25, .5, .25]}
+        identity = {
+            "validation_start": 220001, "validation_pairs": 4,
+            "validation_openings": "book", "validation_protocol": "protocol",
+        }
+        for method in ("a", "b"):
+            for start in (5, 15):
+                records += [
+                    {"method": method, "start": start, "checkpoint": 0,
+                     "pair_scores": starts[start], "validation": f"start-{start}"} | identity,
+                    {"method": method, "start": start, "checkpoint": 1000,
+                     "pair_scores": candidates[method, start],
+                     "validation": f"{method}-{start}"} | identity,
+                ]
+        first = plot_recovery.paired_comparisons(
+            records, replicates=2000, seed=7, expected_starts=(5, 15))
+        second = plot_recovery.paired_comparisons(
+            records, replicates=2000, seed=7, expected_starts=(5, 15))
+        self.assertEqual(first, second)
+        self.assertEqual((first[0]["method_a"], first[0]["method_b"]), ("a", "b"))
+        self.assertGreater(first[0]["ci_low"], 0)
+        self.assertAlmostEqual(first[0]["score_difference"], .125)
+
+    def test_recovery_method_comparison_rejects_misalignment(self):
+        def record(method, start, checkpoint, scores):
+            return {
+                "method": method, "start": start, "checkpoint": checkpoint,
+                "pair_scores": scores,
+                "validation": f"start-{start}" if checkpoint == 0 else f"{method}-{start}",
+                "validation_start": 220001, "validation_pairs": len(scores),
+                "validation_openings": "book", "validation_protocol": "protocol",
+            }
+
+        records = [
+            record("a", 5, 0, [.5, .5]), record("a", 5, 1000, [.5, .5]),
+            record("b", 15, 0, [.5, .5]), record("b", 15, 1000, [.5, .5]),
+        ]
+        with self.assertRaisesRegex(ValueError, "misaligned starts"):
+            plot_recovery.paired_comparisons(records, replicates=10, expected_starts=(5, 15))
+        records[2]["start"] = records[3]["start"] = 5
+        records[2]["validation"] = "start-5"
+        records[3]["pair_scores"] = [.5]
+        records[3]["validation_pairs"] = 1
+        with self.assertRaisesRegex(ValueError, "pair counts"):
+            plot_recovery.paired_comparisons(records, replicates=10, expected_starts=(5,))
+
     def test_validation_parser_keeps_paired_statistics(self):
         output = b"""Finished game 2 (baseline vs candidate): 1-0
 Score of candidate vs baseline: 1 - 0 - 0

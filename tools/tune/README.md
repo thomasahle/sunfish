@@ -28,7 +28,8 @@ categorical, and Boolean parameters.
 - `recommend.py` extracts comparable incumbent configurations at fixed game
   budgets. It can also pool pairwise-only SPSA studies.
 - `validate.py` measures recommendations on an independent opening set.
-- `plot_recovery.py` produces held-out Elo-versus-training-games curves.
+- `plot_recovery.py` produces held-out Elo-versus-training-games curves and a
+  paired method-comparison CSV at the primary checkpoint.
 - `pentanomial.py` parses color-swapped opening pairs and estimates their
   score and uncertainty without treating the two games as independent.
 - `gating.py` caches deterministic feasibility checks before games are spent.
@@ -64,7 +65,10 @@ fastchess recovery returns success.
 Games measure sample efficiency, not total compute. If gates, optimizer cost,
 or concurrency differ, report elapsed or CPU time separately. Freeze methods
 before consulting validation results, reuse one starting-position match, and
-confirm the selected winner on a fresh opening set.
+confirm the selected winner on a fresh opening set. The paired comparison uses
+shared opening-index bootstrap draws within each degraded start; its default is
+100,000 deterministic replicates at the 1,000-game checkpoint. It rejects
+inputs that do not share the complete validation protocol and starting match.
 
 The frozen five-method comparison is specified in
 [`recovery_protocol.md`](recovery_protocol.md).
