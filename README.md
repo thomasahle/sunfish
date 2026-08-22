@@ -57,15 +57,19 @@ through your current Python interpreter automatically.
 
 ### Packing
 
-For a true minimalist experience, the bare engine itself is committed right here in the repo: [`compressed.py`](compressed.py) -- `sunfish.py` with the comments, docstrings and development scaffolding stripped away, kept in sync by a pre-commit hook (enable once per clone: `git config core.hooksPath tools/hooks`) and verified current by CI on every push:
+For a true minimalist experience, the engine's core is committed right here in the repo: [`compressed.py`](compressed.py) -- just the `Position` and `Searcher` classes, stripped of comments, tables and scaffolding. It's the whole chess engine on one screenful, meant for reading; a pre-commit hook keeps it in sync with `sunfish.py` (enable once per clone: `git config core.hooksPath tools/hooks`) and CI verifies it is current on every push.
+
+Sunfish can also be packed into a single self-extracting executable of about 3kb:
 <pre>
-$ <b>python3 compressed.py</b>
+$ <b>tools/build/pack.sh sunfish.py packed.sh</b>
+Total length: 3310
+$ <b>./packed.sh</b>
 <b>go wtime 1000 btime 1000 winc 1000 binc 1000</b>
 info depth 1 score cp 0 pv d2d4
 bestmove d2d4
 </pre>
 
-This version uses a [simplified UCI protocol by the TCEC 4k rules](https://wiki.chessdom.org/TCEC_4k_Rules#:~:text=A%204K%20UCI%20protocol%20is%20used).
+The packed version uses a [simplified UCI protocol by the TCEC 4k rules](https://wiki.chessdom.org/TCEC_4k_Rules#:~:text=A%204K%20UCI%20protocol%20is%20used).
 
 ### NNUE version
 

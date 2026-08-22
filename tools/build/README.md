@@ -57,21 +57,23 @@ additionally embeds the pickled network weights).
 ## The committed artifact and the hook
 
 The repo root carries [`compressed.py`](../../compressed.py): the
-engine as *readable* Python -- original names and indentation, with the
-`minifier-hide` block, comments, docstrings and blank lines removed by
-`compress.py` (stdlib-only, deterministic; the numbfish
-`compressed.py` style). The README links to this artifact rather than
-a command. `tools/hooks/pre-commit` regenerates it from the *staged*
-`sunfish.py` whenever that file is part of a commit (enable once per
-clone: `git config core.hooksPath tools/hooks`), and CI fails any push
-where the committed artifact no longer byte-matches a fresh
-`compress.py` run.
+engine core only -- the class definitions and their namedtuples
+(`Move`, `Position`, `Stop`, `Entry`, `Searcher`) with comments,
+docstrings and blank lines removed and the original names and
+indentation kept, exactly the style of numbfish's `compressed.py`. The
+imports, data tables, constants, helpers and UCI loop are hidden, so
+it is a *reading* artifact, not a runnable script. `compress.py`
+(stdlib-only, deterministic) generates it; `tools/hooks/pre-commit`
+regenerates it from the *staged* `sunfish.py` whenever that file is
+part of a commit (enable once per clone: `git config core.hooksPath
+tools/hooks`), and CI fails any push where the committed artifact no
+longer byte-matches a fresh run.
 
 ## CI
 
 The workflow runs `pack.sh` on every push and smoke-tests the produced
 executable end-to-end (uciok/readyok/bestmove), separately checks that
-the committed `compressed.py` (the readable stripped engine) is current and playable — the packed artifact is
+that the committed `compressed.py` (the engine-core reading artifact) is current — the packed artifact is
 a release deliverable, and the pipeline has broken silently before (a
 `pyminify` update started stripping the shebang, so the header's
 `exec $T` fed Python source to /bin/sh; fixed by exec'ing the
