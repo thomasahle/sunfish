@@ -9,12 +9,31 @@ MATCH = re.compile(r"Score of (.*?) vs (.*?):")
 FINISHED = re.compile(r"Finished game (\d+)")
 GAME = re.compile(
     r"Finished game (\d+) \((.*?) vs (.*?)\):\s*(1-0|0-1|1/2-1/2)")
+FAILURE = re.compile(
+    r"(?:\b(?:White|Black) (?:disconnects|makes an illegal move|loses on time)\b|"
+    r"\b(?:White|Black)'s connection stalls\b|\bstalled / disconnected\b|"
+    r"\bEngine\b[^\n]*\b(?:disconnects|stalls|didn't respond|did not respond|"
+    r"is not responsive|is non[- ]?responsive)\b|(?:^|[;:]\s*)Engine crashed\b|"
+    r"^\s*Warning;\s*Illegal move\b|\btime forfeit\b|"
+    r"^\s*(?:Timeouts|Crashed):\s*[1-9]\d*\s*$)",
+    re.IGNORECASE | re.MULTILINE)
 PRIOR = (0.14 * 2.5, 0.19 * 2.5, 0.34 * 2.5, 0.19 * 2.5, 0.14 * 2.5)
 PAIR_LOSS = (0, 0.25, 0.5, 0.75, 1)
 
 
+class EngineFailure(RuntimeError):
+    pass
+
+
+def reject_failures(output):
+    """Refuse recovered fastchess output that reports an engine failure."""
+    if match := FAILURE.search(output):
+        raise EngineFailure(f"engine failure reported: {match.group(0)}")
+
+
 def game_results(output, partial=False, subject=None):
     """Restore per-game W/L/D increments in game-number order."""
+    reject_failures(output)
     snapshots = [tuple(map(int, match)) for match in WDL.findall(output)]
     matches = MATCH.findall(output)
     games = GAME.findall(output)

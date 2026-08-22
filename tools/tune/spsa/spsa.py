@@ -17,6 +17,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).parents[1]))
 import gating  # noqa: E402
 import locking  # noqa: E402
+import pentanomial  # noqa: E402
 
 
 SCORE = re.compile(r"Score of plus vs minus:\s+(\d+)\s+-\s+(\d+)\s+-\s+(\d+)")
@@ -199,7 +200,9 @@ def play(args, number, opening, pairs, plus, minus):
     ]
     process = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
     pathlib.Path(args.logs, f"step-{number:06d}.log").write_bytes(process.stdout)
-    matches = SCORE.findall(process.stdout.decode(errors="replace"))
+    output = process.stdout.decode(errors="replace")
+    pentanomial.reject_failures(output)
+    matches = SCORE.findall(output)
     if process.returncode or not matches:
         raise RuntimeError(f"SPSA step {number} failed with status {process.returncode}")
     wins, losses, draws = map(int, matches[-1])
