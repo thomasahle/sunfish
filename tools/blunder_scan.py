@@ -8,25 +8,28 @@ Typical reproducible workflow::
 
 The first run downloads one PGN archive and caches it. Later runs read only
 that file unless ``--refresh`` is passed. A quick fixed-node Stockfish pass
-finds candidates. Equal-budget single-PV probes then confirm the loss, while
-MultiPV probes at two larger budgets must agree on every accepted near-best
-move. Positions too close to the MultiPV boundary are rejected rather than
-incompletely labelled.
+finds candidates using Lichess's winning-chance and mate-advice rules.
+Equal-budget single-PV probes then confirm the judgment, while MultiPV probes
+at two larger budgets must agree on every accepted near-best move. Positions
+too close to the MultiPV boundary are rejected rather than incompletely
+labelled.
 
 The output is ordinary EPD accepted by ``tools/tester.py best``. Its ``bm``
 operation contains the certified alternatives, while ``c0`` through ``c2``
-record the source game, played move, score loss, and oracle settings. Network
-access and Stockfish are generation-time dependencies only; the committed EPD
-is a deterministic test input.
+record the source game, played move, Lichess judgment, and oracle settings.
+Network access and Stockfish are generation-time dependencies only; the
+committed EPD is a deterministic test input.
 """
 import argparse
 import dataclasses
 import datetime
 import hashlib
 import io
+import math
 import pathlib
 import shutil
 import sys
+from typing import Optional
 import urllib.parse
 import urllib.request
 
@@ -34,7 +37,10 @@ import chess
 import chess.engine
 import chess.pgn
 
-MATE_CP = 100_000
+MATE_RANK = 100_000
+LICHESS_ADVICE_COMMIT = "5b905153c32677034dbb3325ecbd66418a03281e"
+LICHESS_EVAL_COMMIT = "ed124389f090c39d1440eb9be112f6b36ed40358"
+LICHESS_BLUNDER_THRESHOLD = 0.3
 USER_AGENT = "sunfish-blunder-corpus/1 (+https://github.com/thomasahle/sunfish)"
 STANDARD_PERFS = {"bullet", "blitz", "rapid", "classical", "correspondence"}
 
@@ -52,24 +58,53 @@ class Candidate:
 
 
 @dataclasses.dataclass(frozen=True)
+class Evaluation:
+    """One mover-perspective engine score, without conflating mate and cp."""
+
+    cp: Optional[int] = None
+    mate: Optional[int] = None
+
+    def __post_init__(self):
+        if (self.cp is None) == (self.mate is None):
+            raise ValueError("an evaluation must contain exactly one score kind")
+
+    def __str__(self):
+        return f"{self.cp:+d} cp" if self.cp is not None else f"mate {self.mate:+d}"
+
+
+@dataclasses.dataclass(frozen=True)
 class Blunder:
     candidate: Candidate
     best_moves: tuple[chess.Move, ...]
-    best_cp: int
-    played_cp: int
+    best_eval: Evaluation
+    played_eval: Evaluation
     oracle: str
     scan_nodes: int
     confirm_nodes: int
     stability_nodes: int
-    threshold: int
     best_margin: int
     boundary_guard: int
     multipv: int
     source_sha: str
 
     @property
-    def loss(self):
-        return self.best_cp - self.played_cp
+    def cp_loss(self):
+        if self.best_eval.cp is None or self.played_eval.cp is None:
+            return None
+        return self.best_eval.cp - self.played_eval.cp
+
+    @property
+    def deterioration(self):
+        return (evaluation_winning_chances(self.best_eval)
+                - evaluation_winning_chances(self.played_eval))
+
+
+@dataclasses.dataclass
+class Funnel:
+    examined: int = 0
+    scan_blunders: int = 0
+    confirmed_blunders: int = 0
+    stable_labels: int = 0
 
 
 def parse_games(text, accept=None, limit=None):
@@ -147,10 +182,70 @@ def candidates(game, user):
         board.push(played)
 
 
-def score_cp(score, color):
-    """Centipawns from ``color``; mate values live far outside normal evals."""
-    score = score.pov(color)
-    return score.score(mate_score=MATE_CP)
+def evaluation(score, color):
+    """Preserve a score's cp/mate kind after converting it to ``color`` POV."""
+    pov = score.pov(color)
+    if pov.is_mate():
+        return Evaluation(mate=pov.mate())
+    cp = pov.score()
+    if cp is None:
+        raise ValueError("engine score is neither centipawn nor mate")
+    return Evaluation(cp=cp)
+
+
+def score_rank(score, color):
+    """Sortable mover-POV value used only for MultiPV move-set labelling."""
+    return score.pov(color).score(mate_score=MATE_RANK)
+
+
+def winning_chances(cp):
+    """Lichess WinPercent.winningChances, in the source's [-1, +1] range."""
+    scaled = 0.00368208 * cp
+    if scaled >= 0:
+        return 2 / (1 + math.exp(-scaled)) - 1
+    return 1 - 2 / (1 + math.exp(scaled))
+
+
+def evaluation_winning_chances(value):
+    """Extend winning chances to mate endpoints for ordering/provenance."""
+    if value.cp is not None:
+        return winning_chances(value.cp)
+    return 1.0 if value.mate > 0 else -1.0
+
+
+def lichess_judgement(before, after):
+    """Mirror Lichess CpAdvice and MateAdvice for mover-POV evaluations."""
+    if before.cp is not None and after.cp is not None:
+        delta = winning_chances(before.cp) - winning_chances(after.cp)
+        for threshold, judgement in (
+                (LICHESS_BLUNDER_THRESHOLD, "Blunder"),
+                (0.2, "Mistake"), (0.1, "Inaccuracy")):
+            if delta >= threshold:
+                return judgement
+        return None
+
+    # MateCreated: a centipawn evaluation becomes forced mate against mover.
+    if (before.cp is not None and after.mate is not None
+            and after.mate < 0):
+        if before.cp < -999:
+            return "Inaccuracy"
+        if before.cp < -700:
+            return "Mistake"
+        return "Blunder"
+
+    # MateLost: mover's forced mate becomes cp or forced mate for opponent.
+    if before.mate is not None and before.mate > 0:
+        if after.cp is not None:
+            if after.cp > 999:
+                return "Inaccuracy"
+            if after.cp > 700:
+                return "Mistake"
+            return "Blunder"
+        if after.mate is not None and after.mate < 0:
+            return "Blunder"
+
+    # Same-side mate-distance changes, including delays, receive no advice.
+    return None
 
 
 def acceptable_moves(ranked, legal_count, margin, boundary_guard=0):
@@ -181,11 +276,13 @@ def deduplicate(blunders):
     for blunder in blunders:
         key = fen_key(blunder.candidate.fen)
         previous = selected.get(key)
-        rank = (blunder.loss, blunder.candidate.game_id, blunder.candidate.ply)
+        rank = (blunder.deterioration,
+                blunder.candidate.game_id, blunder.candidate.ply)
         if previous is None:
             selected[key] = blunder
             continue
-        old_rank = (previous.loss, previous.candidate.game_id, previous.candidate.ply)
+        old_rank = (previous.deterioration,
+                    previous.candidate.game_id, previous.candidate.ply)
         if rank > old_rank:
             selected[key] = blunder
     return sorted(selected.values(), key=lambda item: (
@@ -203,13 +300,20 @@ def to_epd(blunder):
     board = chess.Board(candidate.fen)
     played = board.san(candidate.played)
     identifier = f"LBG.{candidate.game_id}.{candidate.ply}"
+    comparison = (f"win-chance loss {blunder.deterioration:.6f}; "
+                  f"best {blunder.best_eval}; played {blunder.played_eval}")
+    if blunder.cp_loss is not None:
+        comparison += f"; cp loss {blunder.cp_loss}"
     details = (f"{candidate.user} vs {candidate.opponent}; {candidate.result}; "
-               f"tc {candidate.time_control}; played {played}; loss {blunder.loss} cp; "
-               f"best {blunder.best_cp}; played {blunder.played_cp}")
+               f"tc {candidate.time_control}; played {played}; "
+               f"Lichess Blunder; {comparison}")
     settings = (f"{blunder.oracle}; scan {blunder.scan_nodes} nodes; "
                 f"confirm {blunder.confirm_nodes} nodes; "
                 f"stability {blunder.stability_nodes} nodes; "
-                f"threshold {blunder.threshold}; bm margin {blunder.best_margin}; "
+                f"advice {LICHESS_ADVICE_COMMIT}; "
+                f"eval {LICHESS_EVAL_COMMIT}; "
+                f"blunder delta {LICHESS_BLUNDER_THRESHOLD}; "
+                f"bm margin {blunder.best_margin}; "
                 f"boundary guard {blunder.boundary_guard}; multipv {blunder.multipv}; "
                 f"threads 1; hash 256 MB; pgn sha256 {blunder.source_sha}")
     return board.epd(
@@ -292,31 +396,34 @@ def analyse(engine, board, limit, **kwargs):
     return engine.analyse(board, limit, game=object(), **kwargs)
 
 
-def analyse_candidate(engine, candidate, args, oracle, source_sha):
+def analyse_candidate(engine, candidate, args, oracle, source_sha, funnel=None):
     board = chess.Board(candidate.fen)
     scan_limit = chess.engine.Limit(nodes=args.scan_nodes)
     best = analyse(engine, board, scan_limit)
     best_move = best.get("pv", [None])[0]
     if best_move is None or best_move == candidate.played:
         return None
-    best_cp = score_cp(best["score"], board.turn)
+    best_eval = evaluation(best["score"], board.turn)
     played = analyse(engine, board, scan_limit, root_moves=[candidate.played])
-    played_cp = score_cp(played["score"], board.turn)
-    if best_cp - played_cp < args.threshold or best_cp <= -args.threshold:
+    played_eval = evaluation(played["score"], board.turn)
+    if lichess_judgement(best_eval, played_eval) != "Blunder":
         return None
+    if funnel:
+        funnel.scan_blunders += 1
 
     confirm_limit = chess.engine.Limit(nodes=args.confirm_nodes)
     confirmed_best = analyse(engine, board, confirm_limit)
     confirmed_best_move = confirmed_best.get("pv", [None])[0]
     if confirmed_best_move is None:
         return None
-    confirmed_best_cp = score_cp(confirmed_best["score"], board.turn)
+    confirmed_best_eval = evaluation(confirmed_best["score"], board.turn)
     confirmed_played = analyse(
         engine, board, confirm_limit, root_moves=[candidate.played])
-    confirmed_played_cp = score_cp(confirmed_played["score"], board.turn)
-    if (confirmed_best_cp - confirmed_played_cp < args.threshold
-            or confirmed_best_cp <= -args.threshold):
+    confirmed_played_eval = evaluation(confirmed_played["score"], board.turn)
+    if lichess_judgement(confirmed_best_eval, confirmed_played_eval) != "Blunder":
         return None
+    if funnel:
+        funnel.confirmed_blunders += 1
 
     legal_count = board.legal_moves.count()
     multipv = min(legal_count, args.multipv)
@@ -324,7 +431,7 @@ def analyse_candidate(engine, candidate, args, oracle, source_sha):
     stability_limit = chess.engine.Limit(nodes=stability_nodes)
     stable_infos = analyse(engine, board, stability_limit, multipv=multipv)
     stable_ranked = [
-        (info["pv"][0], score_cp(info["score"], board.turn))
+        (info["pv"][0], score_rank(info["score"], board.turn))
         for info in stable_infos if info.get("pv")
     ]
     stable_moves = acceptable_moves(
@@ -333,7 +440,7 @@ def analyse_candidate(engine, candidate, args, oracle, source_sha):
         return None
 
     infos = analyse(engine, board, confirm_limit, multipv=multipv)
-    ranked = [(info["pv"][0], score_cp(info["score"], board.turn))
+    ranked = [(info["pv"][0], score_rank(info["score"], board.turn))
               for info in infos if info.get("pv")]
     best_moves = acceptable_moves(
         ranked, legal_count, args.best_margin, args.boundary_guard)
@@ -342,21 +449,23 @@ def analyse_candidate(engine, candidate, args, oracle, source_sha):
             or confirmed_best_move not in best_moves
             or candidate.played in best_moves):
         return None
-    return Blunder(
+    blunder = Blunder(
         candidate=candidate,
         best_moves=best_moves,
-        best_cp=confirmed_best_cp,
-        played_cp=confirmed_played_cp,
+        best_eval=confirmed_best_eval,
+        played_eval=confirmed_played_eval,
         oracle=oracle,
         scan_nodes=args.scan_nodes,
         confirm_nodes=args.confirm_nodes,
         stability_nodes=stability_nodes,
-        threshold=args.threshold,
         best_margin=args.best_margin,
         boundary_guard=args.boundary_guard,
         multipv=args.multipv,
         source_sha=source_sha,
     )
+    if funnel:
+        funnel.stable_labels += 1
+    return blunder
 
 
 def configure_engine(engine):
@@ -371,15 +480,19 @@ def configure_engine(engine):
 
 
 def build_corpus(games, engine, user, args, oracle, source_sha):
-    found, examined = [], 0
+    found, funnel = [], Funnel()
     for game in games:
         for candidate in candidates(game, user):
-            examined += 1
-            if blunder := analyse_candidate(engine, candidate, args, oracle, source_sha):
+            funnel.examined += 1
+            if blunder := analyse_candidate(
+                    engine, candidate, args, oracle, source_sha, funnel):
                 found.append(blunder)
+                metric = f"{blunder.deterioration:.3f} win-chance loss"
+                if blunder.cp_loss is not None:
+                    metric += f", {blunder.cp_loss} cp"
                 print(f"{blunder.candidate.game_id} ply {blunder.candidate.ply}: "
-                      f"{blunder.loss} cp", file=sys.stderr)
-    return deduplicate(found), examined
+                      f"{metric}", file=sys.stderr)
+    return deduplicate(found), funnel
 
 
 def file_sha256(path):
@@ -407,8 +520,6 @@ def make_parser():
                         help="fetch games no later than this UTC date")
     parser.add_argument("--output", type=pathlib.Path,
                         help="write EPD here instead of stdout")
-    parser.add_argument("--threshold", type=int, default=300,
-                        help="minimum confirmed centipawn loss")
     parser.add_argument("--best-margin", type=int, default=30,
                         help="moves this many cp from best are all accepted")
     parser.add_argument("--boundary-guard", type=int, default=10,
@@ -456,7 +567,7 @@ def main(argv=None):
         configure_engine(engine)
         name = engine.id.get("name", "unknown UCI engine")
         oracle = f"{name} sha256 {file_sha256(engine_path)[:16]}"
-        corpus, examined = build_corpus(
+        corpus, funnel = build_corpus(
             games, engine, args.user, args, oracle, source_sha)
     finally:
         engine.quit()
@@ -467,7 +578,10 @@ def main(argv=None):
         args.output.write_text(output)
     else:
         print(output, end="")
-    print(f"{len(games)} games, {examined} bot moves, "
+    print(f"{len(games)} games, {funnel.examined} bot moves, "
+          f"{funnel.scan_blunders} scan blunders, "
+          f"{funnel.confirmed_blunders} confirmed blunders, "
+          f"{funnel.stable_labels} stable labels, "
           f"{len(corpus)} deduplicated blunders", file=sys.stderr)
 
 

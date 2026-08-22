@@ -63,13 +63,12 @@ def make_blunder(loss=500, game_id="abc12345"):
     return blunder_scan.Blunder(
         candidate=candidate,
         best_moves=(chess.Move.from_uci("f1c4"),),
-        best_cp=100,
-        played_cp=100 - loss,
+        best_eval=blunder_scan.Evaluation(cp=100),
+        played_eval=blunder_scan.Evaluation(cp=100 - loss),
         oracle="Stockfish fixture",
         scan_nodes=100,
         confirm_nodes=1000,
         stability_nodes=500,
-        threshold=300,
         best_margin=30,
         boundary_guard=10,
         multipv=5,
@@ -112,15 +111,51 @@ def test_single_game_source_rejects_nonstandard_chess():
     assert [blunder_scan.game_id(game) for game in selected] == ["standard"]
 
 
-def test_score_cp_preserves_point_of_view_and_separates_mates():
+def test_evaluation_preserves_point_of_view_and_separates_mates():
     cp = chess.engine.PovScore(chess.engine.Cp(42), chess.WHITE)
     mate = chess.engine.PovScore(chess.engine.Mate(3), chess.WHITE)
     mated = chess.engine.PovScore(chess.engine.Mate(0), chess.WHITE)
-    assert blunder_scan.score_cp(cp, chess.WHITE) == 42
-    assert blunder_scan.score_cp(cp, chess.BLACK) == -42
-    assert blunder_scan.score_cp(mate, chess.WHITE) == blunder_scan.MATE_CP - 3
-    assert blunder_scan.score_cp(mate, chess.BLACK) == 3 - blunder_scan.MATE_CP
-    assert blunder_scan.score_cp(mated, chess.WHITE) == -blunder_scan.MATE_CP
+    assert blunder_scan.evaluation(cp, chess.WHITE) == blunder_scan.Evaluation(cp=42)
+    assert blunder_scan.evaluation(cp, chess.BLACK) == blunder_scan.Evaluation(cp=-42)
+    assert blunder_scan.evaluation(mate, chess.WHITE) == blunder_scan.Evaluation(mate=3)
+    assert blunder_scan.evaluation(mate, chess.BLACK) == blunder_scan.Evaluation(mate=-3)
+    assert blunder_scan.evaluation(mated, chess.WHITE) == blunder_scan.Evaluation(mate=0)
+
+
+def test_equal_cp_losses_have_position_dependent_lichess_judgments():
+    evaluation = blunder_scan.Evaluation
+    assert blunder_scan.winning_chances(0) == 0
+    assert blunder_scan.winning_chances(200) == pytest.approx(
+        -blunder_scan.winning_chances(-200))
+
+    # The same 300 cp loss is decisive near equality and minor in a won ending.
+    assert blunder_scan.lichess_judgement(
+        evaluation(cp=200), evaluation(cp=-100)) == "Blunder"
+    assert blunder_scan.lichess_judgement(
+        evaluation(cp=1000), evaluation(cp=700)) is None
+
+    # There is no absolute "already losing" exclusion in Lichess CpAdvice.
+    assert blunder_scan.lichess_judgement(
+        evaluation(cp=-300), evaluation(cp=-700)) == "Blunder"
+
+
+@pytest.mark.parametrize(("before", "after", "judgement"), [
+    (("cp", -1000), ("mate", -3), "Inaccuracy"),
+    (("cp", -701), ("mate", -3), "Mistake"),
+    (("cp", -700), ("mate", -3), "Blunder"),
+    (("mate", 3), ("cp", 1000), "Inaccuracy"),
+    (("mate", 3), ("cp", 701), "Mistake"),
+    (("mate", 3), ("cp", 700), "Blunder"),
+    (("mate", 3), ("mate", -4), "Blunder"),
+    (("mate", 3), ("mate", 8), None),
+])
+def test_lichess_mate_advice_boundaries(before, after, judgement):
+    def evaluation(spec):
+        kind, value = spec
+        return blunder_scan.Evaluation(**{kind: value})
+
+    assert blunder_scan.lichess_judgement(
+        evaluation(before), evaluation(after)) == judgement
 
 
 def test_analyse_resets_the_hash_and_uci_game_for_every_probe():
@@ -172,7 +207,7 @@ def test_deduplicate_keeps_strongest_loss_and_has_stable_order():
     other = dataclasses.replace(other, candidate=other_candidate)
     result = blunder_scan.deduplicate([weaker, other, stronger])
     assert [item.candidate.game_id for item in result] == ["earlier", "middle"]
-    assert result[0].loss == 700
+    assert result[0].cp_loss == 700
 
 
 def test_deduplicate_preserves_distinct_fifty_move_states():
@@ -193,7 +228,12 @@ def test_epd_round_trip_contains_labels_and_provenance():
     assert operations["id"] == "LBG.abc12345.3"
     assert operations["c0"] == "https://lichess.org/abc12345/white#3"
     assert "Opponent; 0-1; tc 180+1; played Nf3" in operations["c1"]
+    assert "Lichess Blunder; win-chance loss" in operations["c1"]
+    assert "best +100 cp; played -400 cp; cp loss 500" in operations["c1"]
     assert "confirm 1000 nodes; stability 500 nodes" in operations["c2"]
+    assert f"advice {blunder_scan.LICHESS_ADVICE_COMMIT}" in operations["c2"]
+    assert f"eval {blunder_scan.LICHESS_EVAL_COMMIT}" in operations["c2"]
+    assert "blunder delta 0.3" in operations["c2"]
     assert "boundary guard 10; multipv 5; threads 1; hash 256 MB" in operations["c2"]
     assert "pgn sha256 0123456789abcdef" in operations["c2"]
     assert operations["hmvc"] == 18
@@ -274,16 +314,18 @@ def test_loss_confirmation_uses_equal_single_pv_budgets(monkeypatch):
     args = types.SimpleNamespace(
         scan_nodes=100,
         confirm_nodes=1000,
-        threshold=300,
         multipv=5,
         best_margin=30,
         boundary_guard=10,
     )
+    funnel = blunder_scan.Funnel(examined=1)
     result = blunder_scan.analyse_candidate(
-        object(), candidate, args, "Stockfish fixture", "source")
-    assert result.best_cp == 90
-    assert result.played_cp == -410
-    assert result.loss == 500
+        object(), candidate, args, "Stockfish fixture", "source", funnel)
+    assert result.best_eval == blunder_scan.Evaluation(cp=90)
+    assert result.played_eval == blunder_scan.Evaluation(cp=-410)
+    assert result.cp_loss == 500
+    assert funnel == blunder_scan.Funnel(
+        examined=1, scan_blunders=1, confirmed_blunders=1, stable_labels=1)
     assert [nodes for nodes, _ in calls] == [100, 100, 1000, 1000, 500, 1000]
     assert calls[2][1] == {}
     assert calls[3][1] == {"root_moves": [candidate.played]}
@@ -324,7 +366,6 @@ def test_multipv_labels_must_be_stable_between_budgets(monkeypatch):
     args = types.SimpleNamespace(
         scan_nodes=100,
         confirm_nodes=1000,
-        threshold=300,
         multipv=5,
         best_margin=30,
         boundary_guard=10,

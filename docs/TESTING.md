@@ -336,11 +336,33 @@ python3 tools/blunder_scan.py sunfish-engine \
 ```
 
 The PGN cache freezes the input games. The generator uses one Stockfish thread,
-fixed node limits, fresh UCI game state, and a clean hash for every probe. A
-cheap pass finds candidates. Equal-budget single-PV searches compare the best
-move with the played move so the loss is not inferred by comparing a split
-MultiPV budget with a full root-move budget. MultiPV is used only to label
-acceptable moves:
+fixed node limits, fresh UCI game state, and a clean hash for every probe. It
+does not select from the sparse evaluations embedded in the PGN: only 685 of
+10,442 Sunfish moves in the frozen archive have one. Fresh equal-budget
+single-PV searches compare the best move with the played move, so the judgment
+is not inferred by comparing a split MultiPV budget with a full root-move
+budget.
+
+A candidate must be a Blunder under Lichess's pinned
+[`CpAdvice`/`MateAdvice`](https://github.com/lichess-org/lila/blob/5b905153c32677034dbb3325ecbd66418a03281e/modules/tree/src/main/Advice.scala#L43-L106)
+rules. For two mover-perspective centipawn evaluations, define
+
+```text
+W(cp) = 2 / (1 + exp(-0.00368208 * cp)) - 1
+```
+
+from pinned scalachess
+[`WinPercent.winningChances`](https://github.com/lichess-org/scalachess/blob/ed124389f090c39d1440eb9be112f6b36ed40358/core/src/main/scala/eval.scala#L66-L89).
+The move is a Blunder when `W(best) - W(played) >= 0.3`; there is no absolute
+centipawn-loss threshold and no exclusion merely because the mover was already
+losing. Mate advice is mirrored separately: cp to opponent mate is a Blunder
+unless the prior mover score is below -700 cp; mover mate to cp is a Blunder
+unless the resulting mover score is above +700 cp; and mover mate to opponent
+mate is always a Blunder. Changing the distance of a same-side mate is not a
+Blunder. The EPD pins both source commits and records winning-chance
+deterioration plus the underlying cp or mate scores.
+
+MultiPV is used only to label acceptable moves:
 the set must be unchanged between half and full confirmation budgets, and the
 nearest rejected move must clear the acceptance cutoff by another 10 cp.
 Truncated or unstable boundaries are discarded. EPD `hmvc` and `fmvn`
