@@ -15,6 +15,7 @@ Usage:
   python3 difftest.py --quick            # 10 positions, depth 4, walk
   python3 difftest.py --n 40 --depth 6   # wide sweep
   python3 difftest.py --bench            # speed ratio at identical nodes
+  SF_PYREF=python3.9 make gate           # the same gate under the pinned CPython
 """
 import argparse
 import os
@@ -25,6 +26,15 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, "..", ".."))
 FILES = os.path.join(REPO, "tests", "files")
+
+# The reference interpreter.  pypy3 by DEFAULT and deliberately: `make gate`
+# is interpreter-INVARIANT on this corpus (verified 2026-08-16, README.md --
+# the full 7-line gate, byte-identical coverage, 0 mismatches under CPython
+# 3.9.19), while CPython costs ~3.2x on a smoke config and, on the gate's
+# QS=0 EVAL_ROUGHNESS=40 line, hours against pypy3's minutes.  The knob
+# exists so that verification REPRODUCES from a clean checkout:
+#     SF_PYREF=python3.9 make gate
+PYREF = os.environ.get("SF_PYREF", "pypy3")
 
 
 class Engine:
@@ -146,7 +156,7 @@ def search_phase(py, cc, name, depth):
 
 def run_diff(args):
     specs = load_positions(args.n)
-    py = Engine(["pypy3", os.path.join(HERE, "pyref.py")], "pyref")
+    py = Engine([PYREF, os.path.join(HERE, "pyref.py")], "pyref")
     cc = Engine([os.path.join(HERE, "sunfish_c"),
                  os.path.join(HERE, "tables_classic.txt")], "ctwin")
     fails, probes, gencmp = 0, 0, 0
@@ -179,8 +189,8 @@ def run_diff(args):
         py.quit()
         cc.quit()
     print("coverage: %d positions x depth 1..%d, %d probes compared, "
-          "%d movegen lists compared, %d mismatches"
-          % (len(specs), args.depth, probes, gencmp, fails))
+          "%d movegen lists compared, %d mismatches (reference: %s)"
+          % (len(specs), args.depth, probes, gencmp, fails, PYREF))
     return 1 if fails else 0
 
 
@@ -190,7 +200,7 @@ def run_bench(args):
     specs = load_positions(args.n or 6)
     results = []
     for engv, name in (
-            (["pypy3", os.path.join(HERE, "pyref.py")], "pyref"),
+            ([PYREF, os.path.join(HERE, "pyref.py")], "pyref"),
             ([os.path.join(HERE, "sunfish_c"),
               os.path.join(HERE, "tables_classic.txt")], "ctwin")):
         e = Engine(engv, name)
