@@ -44,6 +44,9 @@ Both the global GP and SPSA accept deterministic integer-weighted opponent
 panels. Panel-anchored SPSA compares both perturbations with the same opponent
 on the same color-swapped opening before applying the gradient; one update is
 therefore two opening pairs and four games. Five such lanes use 20 engines.
+Both runners map the same one-based opening number to the same panel member.
+Panel provenance and extra source-lock files are included in resumable study
+identities, along with executable hashes and UCI options.
 
 `search_parameters.json` is a small generic search-tuning example.
 `logistic_gp/all_parameters.json` is the wider Sunfish search space. The

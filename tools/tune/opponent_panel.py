@@ -7,6 +7,7 @@ import re
 
 ENGINE_FAILURE = re.compile(
     r"disconnects|not responsive|illegal move|stalls|crash|forfeit", re.IGNORECASE)
+IDENTITY_FIELDS = ("source", "revision", "license")
 
 
 def failure(text):
@@ -32,10 +33,27 @@ def load(path):
             raise ValueError("panel options must be an object or 'default'")
         if isinstance(member.get("options"), str) and member["options"] != "default":
             raise ValueError("the only panel options string is 'default'")
+        if any(not isinstance(member.get(field), str) or not member[field]
+               for field in IDENTITY_FIELDS if field in member):
+            raise ValueError("panel identity fields must be nonempty strings")
+        files = member.setdefault("identity_files", [])
+        if not isinstance(files, list) or any(not isinstance(path, str) or not path for path in files):
+            raise ValueError("panel identity_files must be a list of paths")
         member.setdefault("args", "")
         member.setdefault("options", {})
         names.add(member["name"])
     return members
+
+
+def identity(member, engine, file_digest):
+    """Pin one member's executable, configuration, provenance, and extra files."""
+    result = {
+        "name": member["name"], "weight": member["weight"],
+        "engine": engine(member["engine"], member["args"], member["options"]),
+        "identity_files": [file_digest(path) for path in member.get("identity_files", [])],
+    }
+    result.update({field: member[field] for field in IDENTITY_FIELDS if field in member})
+    return result
 
 
 def select(members, sequence):

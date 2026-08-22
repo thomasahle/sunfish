@@ -88,8 +88,11 @@ def recover_step(path, identity, pairs):
 
 def study_identity(args):
     panel = getattr(args, "baseline_panel", [])
+    def configured_engine(command, arguments, options):
+        return command_identity(command, arguments) | {"options": options}
+
     return {
-        "version": 2, "runner": digest(__file__),
+        "version": 3, "runner": digest(__file__),
         "fastchess": digest(shutil.which(args.fastchess) or args.fastchess),
         "engine": command_identity(args.engine, args.engine_args),
         "space": digest(args.space), "openings": digest(args.openings),
@@ -102,11 +105,8 @@ def study_identity(args):
         "r_end": args.r_end, "draw_ratio": args.draw_ratio, "precision": args.precision,
         "gate": gate_identity(args.gate), "gate_timeout": args.gate_timeout,
         "gate_attempts": args.gate_attempts,
-        "baseline_panel": [{
-            "name": member["name"], "weight": member["weight"],
-            "engine": command_identity(member["engine"], member["args"]),
-            "options": member["options"],
-        } for member in panel],
+        "baseline_panel": [opponent_panel.identity(member, configured_engine, digest)
+                           for member in panel],
     }
 
 
@@ -365,7 +365,7 @@ def optimize_locked(args):
                 f"policy gate rejected {args.gate_attempts} SPSA perturbations")
         opening = (args.start - 1 + iteration) % opening_count + 1
         if args.baseline_panel:
-            sequence = args.start - 1 + iteration
+            sequence = args.start + iteration
             opponent, panel_results = play_panel(
                 args, number, opening, sequence, plus, minus)
             plus_result, minus_result = panel_results

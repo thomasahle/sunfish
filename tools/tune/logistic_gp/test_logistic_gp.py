@@ -1691,6 +1691,10 @@ class MixedAcquisitionTest(unittest.TestCase):
         second = [panel_member(panel, sequence)["name"] for sequence in range(16)]
         self.assertEqual(first, second)
         self.assertEqual(Counter(first), {"master": 8, "stockfish": 4, "compact": 4})
+        self.assertEqual(
+            [panel_member(panel, sequence)["name"] for sequence in range(1, 5)],
+            ["master", "stockfish", "compact", "master"],
+        )
 
     def test_baseline_panel_loader_rejects_ambiguous_members(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1703,11 +1707,18 @@ class MixedAcquisitionTest(unittest.TestCase):
             panel = load_baseline_panel(path)
             self.assertEqual([member["args"] for member in panel], ["", ""])
             self.assertEqual([member["options"] for member in panel], ["default", {}])
+            self.assertEqual([member["identity_files"] for member in panel], [[], []])
             path.write_text(json.dumps([
                 {"name": "master", "engine": "engine", "weight": 1},
                 {"name": "master", "engine": "peer", "weight": 1},
             ]))
             with self.assertRaisesRegex(ValueError, "unique"):
+                load_baseline_panel(path)
+            path.write_text(json.dumps([{
+                "name": "peer", "engine": "peer", "weight": 1,
+                "revision": "", "identity_files": "source.lock",
+            }]))
+            with self.assertRaisesRegex(ValueError, "identity"):
                 load_baseline_panel(path)
 
     def test_baseline_panel_rejects_recovered_engine_failures(self):

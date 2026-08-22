@@ -84,6 +84,11 @@ weights. For example, weights `2, 1, 1` give 50% master, 25% Stockfish, and
 observation should be anchored to that panel. The JSON is a list of objects
 with `name`, `engine`, `weight`, and optional `args` and `options`; the special
 `"options": "default"` applies the parameter-space default to that member.
+Optional `source`, `revision`, and `license` strings record provenance, while
+`identity_files` names lock manifests or source files that must remain byte
+identical when a study resumes. GP and SPSA use the same one-based opening
+sequence to select panel members, so their weighted schedules have the same
+phase as well as the same long-run proportions.
 
 A finite inducing basis leaves residual variance that its GP features cannot
 learn, even after replaying one configuration many times. The exploration arm

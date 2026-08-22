@@ -39,6 +39,7 @@ clop = load("clop_fastchess", "tools/tune/clop/clop_fastchess.py")
 gating = load("gating", "tools/tune/gating.py")
 pentanomial = load("pentanomial", "tools/tune/pentanomial.py")
 locking = load("locking", "tools/tune/locking.py")
+opponent_panel = load("opponent_panel_test", "tools/tune/opponent_panel.py")
 plot_recovery = load("plot_recovery", "tools/tune/plot_recovery.py")
 recovery = load("recovery_starts", "tools/tune/recovery_starts.py")
 recovery_decision = load("recovery_decision", "tools/tune/recovery_decision.py")
@@ -1139,6 +1140,7 @@ Finished game 3 (candidate vs baseline): 0-1
             saved = json.loads(state.read_text())
             result = saved["results"][0]
             panel.assert_called_once()
+            self.assertEqual(panel.call_args.args[2:4], (1, 1))
             direct.assert_not_called()
             self.assertEqual(result["opponent"], "master")
             self.assertEqual(result["gradient"], 1)
@@ -1173,6 +1175,29 @@ Finished game 3 (candidate vs baseline): 0-1
             (7, 13, {"X": 3}, "stockfish", "plus"),
             (7, 13, {"X": 1}, "stockfish", "minus"),
         ])
+
+    def test_panel_identity_pins_provenance_and_extra_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = pathlib.Path(directory)
+            engine = directory / "engine"
+            source = directory / "source.lock"
+            engine.write_bytes(b"engine")
+            source.write_bytes(b"revision one")
+            member = {
+                "name": "peer", "engine": str(engine), "args": "", "weight": 1,
+                "options": {"Hash": 16}, "source": "https://example.invalid/peer",
+                "revision": "abc123", "license": "GPL-3.0-only",
+                "identity_files": [str(source)],
+            }
+            def engine_identity(command, args, options):
+                return spsa.command_identity(command, args) | {"options": options}
+
+            first = opponent_panel.identity(member, engine_identity, spsa.digest)
+            source.write_bytes(b"revision two")
+            second = opponent_panel.identity(member, engine_identity, spsa.digest)
+        self.assertNotEqual(first, second)
+        self.assertEqual(first["revision"], "abc123")
+        self.assertEqual(first["engine"]["arguments"], "")
 
     def test_spsa_tunes_ordered_choices_in_index_space(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -215,10 +215,8 @@ def study_identity(args):
         "candidate": engine_identity(args.engine, args.engine_args, {}),
         "baseline": (None if panel else engine_identity(
             args.baseline_engine, args.baseline_args, args.baseline_options)),
-        "baseline_panel": [{
-            "name": member["name"], "weight": member["weight"],
-            "engine": engine_identity(member["engine"], member["args"], member["options"]),
-        } for member in panel],
+        "baseline_panel": [opponent_panel.identity(member, engine_identity, file_identity)
+                           for member in panel],
         "openings": file_identity(args.openings),
         "opening_schedule": {
             "cycle": args.cycle_openings,
