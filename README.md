@@ -57,7 +57,7 @@ through your current Python interpreter automatically.
 
 ### Packing
 
-For a true minimalist experience, the minified engine itself is committed right here in the repo: [`compressed.py`](compressed.py) -- the `tools/build/clean.sh` output behind the line-count claim above, kept in sync with `sunfish.py` by a pre-commit hook (enable once per clone: `git config core.hooksPath tools/hooks`) and verified current by CI on every push:
+For a true minimalist experience, the bare engine itself is committed right here in the repo: [`compressed.py`](compressed.py) -- `sunfish.py` with the comments, docstrings and development scaffolding stripped away, kept in sync by a pre-commit hook (enable once per clone: `git config core.hooksPath tools/hooks`) and verified current by CI on every push:
 <pre>
 $ <b>python3 compressed.py</b>
 <b>go wtime 1000 btime 1000 winc 1000 binc 1000</b>

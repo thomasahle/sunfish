@@ -8,6 +8,6 @@ set -e
 if git diff --cached --quiet -- sunfish.py && [ -f compressed.py ]; then exit 0; fi
 T=$(mktemp); trap 'rm -f "$T"' EXIT
 git show :sunfish.py > "$T"
-bash "$(git rev-parse --show-toplevel)/tools/build/clean.sh" "$T" > compressed.py
+python3 "$(git rev-parse --show-toplevel)/tools/build/compress.py" "$T" > compressed.py
 git add compressed.py
 echo "pre-commit: compressed.py regenerated ($(wc -c < compressed.py | tr -d ' ') bytes) and staged"
