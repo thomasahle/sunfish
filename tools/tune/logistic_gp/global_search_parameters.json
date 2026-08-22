@@ -3,7 +3,17 @@
     "objective": "existing numeric search policy at fixed time and memory budgets",
     "excluded": {
       "TABLE_SIZE": "fixed memory/resource budget",
-      "DELAY": "fixed time-management/clock budget"
+      "DELAY": "fixed time-management/clock budget",
+      "FUT_MAX": "dead C-twin option; the search never reads it",
+      "FUT_CAP": "structural C-twin experiment; the current Python predicate stays fixed",
+      "MATE_DIST": "fixed scoring semantics rather than a search margin",
+      "EVICT_POLICY": "C-twin-only replacement policy, not a Python parameter",
+      "EVICT_SCAN_K": "active only for the excluded C-twin eviction experiment",
+      "KILLER_COUNT": "C-twin-only data-structure variant, not a Python parameter",
+      "USE_VARIANT": "C-twin experiment dispatcher",
+      "QS_TAIL": "unmerged PR #171 search mode",
+      "DERIVE_FRESH": "differential-test hook",
+      "FEN_HIST": "tournament harness compatibility hook"
     }
   },
   "parameters": [

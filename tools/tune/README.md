@@ -62,9 +62,12 @@ an incomplete game count before recording WDL, so nominal engine ratings are
 never treated as calibration evidence.
 
 `search_parameters.json` is a small generic search-tuning example.
-`logistic_gp/all_parameters.json` is the wider Sunfish search space. The
-Sunfish-specific gate rejects configurations that violate the search's fuel
-and eventual-widening invariants before they enter a tournament.
+`logistic_gp/all_parameters.json` includes evaluation experiments, while
+`logistic_gp/global_search_parameters.json` is the frozen search-only space.
+The latter records every excluded C-twin option and why it is not a current
+Python numeric search parameter. The Sunfish-specific gate rejects
+configurations that violate the search's fuel and eventual-widening
+invariants before they enter a tournament.
 
 Run each program with `--help` for its command line. Game-result studies need
 fastchess, a color-swapped opening book, and engines whose tunable values are

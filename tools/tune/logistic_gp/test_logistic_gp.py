@@ -1743,7 +1743,12 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertTrue(any(knobs["NULL_LIMIT"] == 0 for knobs in required))
         self.assertTrue(any(knobs["LMR_LIMIT"] == 0 for knobs in required))
         spec = json.loads(path.read_text())
-        self.assertEqual(set(spec["scope"]["excluded"]), {"TABLE_SIZE", "DELAY"})
+        self.assertEqual(set(spec["scope"]["excluded"]), {
+            "TABLE_SIZE", "DELAY", "FUT_MAX", "FUT_CAP", "MATE_DIST",
+            "EVICT_POLICY", "EVICT_SCAN_K", "KILLER_COUNT", "USE_VARIANT",
+            "QS_TAIL", "DERIVE_FRESH", "FEN_HIST",
+        })
+        self.assertTrue(all(spec["scope"]["excluded"].values()))
         self.assertIn({"IID_MIN_DEPTH": 999}, spec["required"])
         self.assertEqual(space.defaults["IID_MIN_DEPTH"], 999)
         iid = next(parameter for parameter in spec["parameters"]
