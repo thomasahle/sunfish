@@ -56,19 +56,21 @@ additionally embeds the pickled network weights).
 
 ## The committed artifact and the hook
 
-The packed build of `sunfish.py` is committed at the repo root as
-[`compressed.py`](../../compressed.py), so the README links to the
-artifact itself rather than a command. `tools/hooks/pre-commit`
-regenerates it from the *staged* `sunfish.py` whenever that file is part
-of a commit (enable once per clone: `git config core.hooksPath
-tools/hooks`), and CI fails any push where the committed artifact's
-decompressed payload no longer matches a fresh pack of `sunfish.py`.
+The minified build of `sunfish.py` is committed at the repo root as
+[`compressed.py`](../../compressed.py) -- a plain Python file (the
+pack.sh payload transform with the polyglot header re-attached, no xz,
+no shell stub; see `compress.sh`), so the README links to the artifact
+itself rather than a command. `tools/hooks/pre-commit` regenerates it
+from the *staged* `sunfish.py` whenever that file is part of a commit
+(enable once per clone: `git config core.hooksPath tools/hooks`), and
+CI fails any push where the committed artifact no longer byte-matches a
+fresh `compress.sh` run of `sunfish.py`.
 
 ## CI
 
 The workflow runs `pack.sh` on every push and smoke-tests the produced
 executable end-to-end (uciok/readyok/bestmove), separately checks that
-the committed `compressed.py` is current and playable — the packed artifact is
+the committed `compressed.py` (the minified plain-Python artifact) is current and playable — the packed artifact is
 a release deliverable, and the pipeline has broken silently before (a
 `pyminify` update started stripping the shebang, so the header's
 `exec $T` fed Python source to /bin/sh; fixed by exec'ing the

@@ -57,7 +57,7 @@ through your current Python interpreter automatically.
 
 ### Packing
 
-For a true minimalist experience, sunfish is also packed as a single compressed executable of about 3kb, committed right here in the repo: [`compressed.py`](compressed.py). A pre-commit hook keeps it in sync with `sunfish.py` (enable once per clone: `git config core.hooksPath tools/hooks`), CI verifies it is current on every push, and it runs directly:
+For a true minimalist experience, sunfish also ships minified into a single 7KB Python file, committed right here in the repo: [`compressed.py`](compressed.py). A pre-commit hook keeps it in sync with `sunfish.py` (enable once per clone: `git config core.hooksPath tools/hooks`), CI verifies it is current on every push, and it runs directly:
 <pre>
 $ <b>./compressed.py</b>
 <b>go wtime 1000 btime 1000 winc 1000 binc 1000</b>
