@@ -129,7 +129,8 @@ proposal clock, opening assignment, or budget:
 - Logistic GP journals each accepted proposal group, all its reservations,
   and the acquisition clock in one event before starting games. Complete
   identity-bound pair logs are reused if observation journaling was
-  interrupted.
+  interrupted. Its absolute 500-observation target makes a clean replay a
+  validated no-op instead of starting another tranche.
 - CTT durably reserves an opening before starting fastchess. It advances the
   reservation only after the corresponding CTT data iteration exists. A
   complete identity-bound log is reused, and persisted data supersedes a

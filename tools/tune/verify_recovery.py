@@ -76,7 +76,7 @@ def audit(manifest_path=DEFAULT_MANIFEST, root=ROOT):
     budget = manifest["budget"]["games"]
     methods = manifest["methods"]
     clocks = {
-        "logistic GP": 2 * methods["logistic_gp"]["settings"]["batches"],
+        "logistic GP": 2 * methods["logistic_gp"]["settings"]["total_batches"],
         "CTT": (2 * methods["chess_tuning_tools"]["settings"]["iterations"]
                 * methods["chess_tuning_tools"]["settings"]["rounds"]),
         "RBFOpt": methods["rbfopt"]["settings"]["games"],

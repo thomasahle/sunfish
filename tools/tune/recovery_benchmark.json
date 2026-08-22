@@ -2,7 +2,7 @@
   "version": 2,
   "frozen": "2026-08-23",
   "fresh_runs_required": true,
-  "method_source_commit": "d0c26635c5825ad6396faabd6895bb730c646182",
+  "method_source_commit": "a432fb7c5e546dd11015eb4534c8ae31707156be",
   "budget": {
     "paired_observations": 500,
     "games": 1000,
@@ -146,7 +146,7 @@
       "opponent": "reference",
       "files": {
         "tools/tune/logistic_gp/adaptive_gp.py":
-          "3dcc149c471e2a8166cc409c07bf0aec115d7d18ba4346ff7c7e524b0a9cb8c1",
+          "7c525e2c2c23859f644f6e8ac73a2161881f4c931885f10bea9c071d94d7082b",
         "tools/tune/logistic_gp/logistic_gp.py":
           "70b964e0c1fc5b2f1900365b1519576cdee5af0cc50bfa65728f7820acc1671e"
       },
@@ -155,7 +155,7 @@
         "slots": 10,
         "queue_batches": 10,
         "refill_batches": 1,
-        "batches": 500,
+        "total_batches": 500,
         "opening_order": "sequential",
         "opening_seed": 2026,
         "cycle_openings": false,
