@@ -56,6 +56,11 @@ class TuningToolsTest(unittest.TestCase):
         self.assertEqual(manifest["budget"]["games"], 1000)
         self.assertEqual(len(manifest["starts"]), 3)
         self.assertNotIn("FUT_MAX", {item["name"] for item in space["parameters"]})
+        source = manifest["artifacts"]["engine_source"]
+        self.assertEqual(source["commit"], "c01915fd31160f0f41e8f750070bcc9f5625bca7")
+        self.assertEqual(source["compiler"]["sha256"],
+                         "f679a0ba1bddf27acd9523a1df45909b8e681f1f84f2d0f1cc87f5e115a6ec26")
+        self.assertIn("CFLAGS=-O3 -march=native -Wall -Wextra", source["command"])
         with tempfile.TemporaryDirectory() as directory:
             verify_recovery.materialize(manifest, space, directory)
             generated = json.loads(pathlib.Path(directory, "start-05.json").read_text())
