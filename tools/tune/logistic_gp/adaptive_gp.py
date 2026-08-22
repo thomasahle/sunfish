@@ -235,6 +235,7 @@ def study_identity(args):
                          "full_axis_design",
                          "local_acquisition", "local_support", "acquisition")
         },
+        "total_batches": args.total_batches,
     }
 
 
@@ -1044,12 +1045,23 @@ async def optimize_locked(args):
         if all(seed["study"].get(name) == state["study"].get(name) for name in compatible):
             state["gates"] = seed.get("gates", {})
     experiments, queue = restore_pending(state, space)
-    tranche, target_batches = resume_tranche(state, args.batches, len(experiments))
+    if args.total_batches is not None:
+        if len(state["batches"]) > args.total_batches:
+            raise ValueError("state exceeds --total-batches")
+        batches = (state["tranche"]["batches"] if "tranche" in state
+                   else args.total_batches - len(state["batches"]))
+    else:
+        batches = args.batches
+    tranche, target_batches = resume_tranche(state, batches, len(experiments))
     if not args.cycle_openings:
         future = target_batches - len(experiments)
         validate_opening_budget(
             args.openings, state["next_opening"], future, args.pairs)
     save_state(args.state, state)
+    if target_batches == 0:
+        state.pop("tranche")
+        checkpoint_state(args.state, state)
+        return
     options = set().union(*(space.knobs(candidate) for candidate in space.candidates))
     validate_options(args.engine, args.engine_args, options)
     validate_options(args.baseline_engine, args.baseline_args, args.baseline_options)
@@ -1363,6 +1375,8 @@ def main():
         help="refill the pending queue after this many completions")
     parser.add_argument("--batches", type=int, default=100,
         help="posterior updates in this crash-resumable invocation")
+    parser.add_argument("--total-batches", type=int,
+        help="absolute completed-update target; a clean replay performs no more games")
     parser.add_argument("--wall-time", type=duration, default=0,
         help="stop allocating after this duration, e.g. 12h or 3d")
     parser.add_argument("--start", type=int, default=1)
@@ -1422,6 +1436,8 @@ def main():
     if min(args.pairs, args.slots, args.batches, args.gate_timeout,
            args.gate_attempts, args.gate_workers) <= 0:
         parser.error("pair, slot, batch, and gate limits must be positive")
+    if args.total_batches is not None and args.total_batches < 1:
+        parser.error("--total-batches must be positive")
     if args.queue_batches is None:
         args.queue_batches = pending_configurations(args.slots, args.pairs)
     elif args.queue_batches < 1:

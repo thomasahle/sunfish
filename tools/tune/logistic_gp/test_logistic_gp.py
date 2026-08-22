@@ -1217,7 +1217,7 @@ class MixedAcquisitionTest(unittest.TestCase):
                 {key: resumed["batches"][0][key] for key in ("wins", "draws", "losses")},
                 {"wins": 2, "draws": 4, "losses": 0})
 
-    def test_crashed_batch_tranche_resumes_its_original_total(self):
+    def test_crashed_total_batch_target_resumes_without_extending(self):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
             calls, failed = root / "calls", root / "failed"
@@ -1253,7 +1253,7 @@ class MixedAcquisitionTest(unittest.TestCase):
                 "--baseline-options", "default", "--space", str(space),
                 "--openings", str(openings), "--opening-order", "sequential",
                 "--slots", "1", "--queue-batches", "1", "--refill-batches", "1",
-                "--initial-design", "1", "--batches", "3",
+                "--initial-design", "1", "--total-batches", "3",
                 "--state", str(state), "--logs", str(root / "logs"),
             ]
             first = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -1267,9 +1267,9 @@ class MixedAcquisitionTest(unittest.TestCase):
             self.assertEqual(calls.read_text().splitlines(), ["1", "2", "2", "3"])
             subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
             fresh = load_state(state, 1)
-            self.assertEqual((len(fresh["batches"]), fresh["next_opening"]), (6, 7))
+            self.assertEqual((len(fresh["batches"]), fresh["next_opening"]), (3, 4))
             self.assertEqual(
-                calls.read_text().splitlines(), ["1", "2", "2", "3", "4", "5", "6"])
+                calls.read_text().splitlines(), ["1", "2", "2", "3"])
 
     def test_pending_journal_restores_only_unfinished_pairs(self):
         with tempfile.TemporaryDirectory() as directory:
