@@ -2,7 +2,7 @@
   "version": 2,
   "frozen": "2026-08-23",
   "fresh_runs_required": true,
-  "method_source_commit": "ea86e0dd635fde09dc6b768f11881ed2e50bd883",
+  "method_source_commit": "d0c26635c5825ad6396faabd6895bb730c646182",
   "budget": {
     "paired_observations": 500,
     "games": 1000,
