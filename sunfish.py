@@ -248,19 +248,15 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
 
     def rotate(self, nullmove=False):
         """Rotates the board, preserving enpassant, unless nullmove"""
-        return Position(
-            self.board[::-1].swapcase(), -self.score, self.bc, self.wc,
-            119 - self.ep if self.ep and not nullmove else 0,
-            119 - self.kp if self.kp and not nullmove else 0,
-        )
+        return Position(self.board[::-1].swapcase(), -self.score, self.bc, self.wc,
+                        119 - self.ep if self.ep and not nullmove else 0,
+                        119 - self.kp if self.kp and not nullmove else 0)
 
     def move(self, move):
         i, j, prom = move
-        p, q = self.board[i], self.board[j]
         put = lambda board, i, p: board[:i] + p + board[i + 1 :]
         # Copy variables and reset ep and kp
-        board = self.board
-        wc, bc, ep, kp = self.wc, self.bc, 0, 0
+        p, q, board, wc, bc, ep, kp = self.board[i], self.board[j], self.board, self.wc, self.bc, 0, 0
         score = self.score + self.value(move)
         # Actual move
         board = put(board, j, board[i])
@@ -310,8 +306,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         Serves double duty: found from a position it is the sentinel
         witness the search substitutes for a virtual cutoff; found from
         the null-rotation it says the side to move is in check."""
-        return next((m for m in self.gen_moves()
-                     if self.board[m.j] == "k" or abs(m.j - self.kp) < 2), None)
+        return next((m for m in self.gen_moves() if self.board[m.j] == "k" or abs(m.j - self.kp) < 2), None)
 
 
 ###############################################################################
@@ -414,6 +409,14 @@ class Searcher:
         # Read it before null-move in case the recursive probe evicts it.
         killer = self.tp_move.get(pos)
 
+        # The futility ceiling of a move worth val: a shallow move is worth at
+        # most a static estimate of what it wins; deep moves and king captures
+        # are uncapped. No mate-band clamp is needed - both kings stand on the
+        # board at every call site, so the sum tops out a third of the way to
+        # MATE_LOWER (CapInBand in CappedMove.lean, and its caveat if
+        # piece["Q"] ever grows past ~2400).
+        ceiling = lambda v: MATE_UPPER if depth > 3 or v >= MATE_LOWER else pos.score + v + max(depth - 1, 0) * QS_A
+
         def moves():
 
             # First try not moving at all, i.e. the null move.
@@ -432,12 +435,9 @@ class Searcher:
                 yield None, None
 
             # Every out-of-order real move yielded can reach gamma: the killer
-            # is admitted by its own ceiling, so the consumer's break - only
-            # sound on the sorted stream - can never fire on it. (The ceiling
-            # is the old threshold with its min unfolded into an or.)
-            if killer and ((val := pos.value(killer)) >= QS or depth) and (val >= MATE_LOWER or depth > 3
-                    or pos.score + val + max(depth - 1, 0) * QS_A >= gamma):
-                yield val, killer
+            # is admitted by the same ceiling the consumer prunes on, so its
+            # break - only sound on the sorted stream - can never fire on it.
+            if killer and ((val := pos.value(killer)) >= QS or depth) and ceiling(val) >= gamma: yield val, killer
 
             # Then the real moves, best value first. The QS floor lives here,
             # ahead of the sort, so the fold never walks sub-floor junk.
@@ -449,8 +449,7 @@ class Searcher:
         calm = abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
         guard = not root and calm
         t = pos.score + NULL_MARGIN
-        nmr = (calm and depth >= 6 and
-               -self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)
+        nmr = calm and depth >= 6 and -self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t
 
         # Run through the moves, shortcutting when score >= gamma.
         # live is True if we saw a legal (not null, score > -MATE_UPPER) move
@@ -470,31 +469,22 @@ class Searcher:
                         move, score, live = proof, MATE_UPPER, True
                 else:
                     score = cap
+            elif val >= MATE_LOWER:
+                # An intrinsic mate-band value is a king capture: the exact
+                # MATE_UPPER token, never a search.
+                score, live = MATE_UPPER, True
             else:
-                if val >= MATE_LOWER:
-                    # An intrinsic mate-band value is a king capture: the exact
-                    # MATE_UPPER token, never a search.
-                    score = MATE_UPPER
-                    live = True
-                else:
-                    # We lock in a futility bet: a shallow move is worth at most
-                    # a static estimate of what it wins. No mate-band clamp is
-                    # needed - both kings stand on the board at every call site,
-                    # so the sum tops out a third of the way to MATE_LOWER
-                    # (CapInBand in CappedMove.lean, and its caveat if
-                    # piece["Q"] ever grows past ~2400).
-                    cap = MATE_UPPER if depth > 3 else pos.score + val + max(depth - 1, 0) * QS_A
-                    # A cap below gamma answers for this move and, the stream
-                    # being sorted, for everything after it: fold the cap and
-                    # break. max, not assignment - an earlier report may be
-                    # tighter. Before live, because a settled move was never
-                    # searched and witnesses no legality; and skipping the
-                    # cutoff block, it stores nothing, exactly as the old
-                    # suffix report did.
-                    if cap < gamma: best = max(best, cap); break
-                    move_depth = depth - 1 - (guard and depth >= 6 and val < LMR) - int(nmr)
-                    score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
-                    live |= score > -MATE_UPPER
+                # We lock in the futility bet. A cap below gamma answers for
+                # this move and, the stream being sorted, for everything after
+                # it: fold the cap and break. max, not assignment - an earlier
+                # report may be tighter. Before live, because a settled move
+                # was never searched and witnesses no legality; and skipping
+                # the cutoff block, it stores nothing, exactly as the old
+                # suffix report did.
+                if (cap := ceiling(val)) < gamma: best = max(best, cap); break
+                move_depth = depth - 1 - (guard and depth >= 6 and val < LMR) - int(nmr)
+                score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
+                live |= score > -MATE_UPPER
             best = max(best, score)
             if best >= gamma:
                 # Save the move for pv construction and killer heuristic
@@ -512,8 +502,7 @@ class Searcher:
                 break
 
         # If no legal real move was witnessed, classify terminality exactly.
-        if depth and not live and all(
-                pos.move(m).king_capture() for m in pos.gen_moves()):
+        if depth and not live and all(pos.move(m).king_capture() for m in pos.gen_moves()):
             # We can't move, but is it a checkmate or stalemate?
             # The mate carries its DISTANCE: the depth we still had left when
             # we found it, one EVAL_ROUGHNESS per ply, so the winner picks the
@@ -544,8 +533,7 @@ class Searcher:
 
     def search(self, history):
         """Iterative deepening MTD-bi search"""
-        self.nodes, self.history = 0, set(history)
-        self.tp_score.clear()
+        self.nodes, self.history, self.tp_score = 0, set(history), {}
         # Table choice is fixed for the whole search (and tp_score is
         # cleared above), so every bound targets one value function.
         pos = self.root = history[-1]

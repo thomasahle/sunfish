@@ -54,10 +54,26 @@ the packed build actually contains, or to measure sizes.
 Lives on the NNUE branch together with the NNUE engine it packs (it
 additionally embeds the pickled network weights).
 
+## The committed artifact and the hook
+
+The repo root carries [`compressed.py`](../../compressed.py): the
+engine core only -- the class definitions and their namedtuples
+(`Move`, `Position`, `Stop`, `Entry`, `Searcher`) with comments,
+docstrings and blank lines removed and the original names and
+indentation kept, exactly the style of numbfish's `compressed.py`. The
+imports, data tables, constants, helpers and UCI loop are hidden, so
+it is a *reading* artifact, not a runnable script. `compress.py`
+(stdlib-only, deterministic) generates it; `tools/hooks/pre-commit`
+regenerates it from the *staged* `sunfish.py` whenever that file is
+part of a commit (enable once per clone: `git config core.hooksPath
+tools/hooks`), and CI fails any push where the committed artifact no
+longer byte-matches a fresh run.
+
 ## CI
 
 The workflow runs `pack.sh` on every push and smoke-tests the produced
-executable end-to-end (uciok/readyok/bestmove) — the packed artifact is
+executable end-to-end (uciok/readyok/bestmove), separately checks that
+that the committed `compressed.py` (the engine-core reading artifact) is current — the packed artifact is
 a release deliverable, and the pipeline has broken silently before (a
 `pyminify` update started stripping the shebang, so the header's
 `exec $T` fed Python source to /bin/sh; fixed by exec'ing the

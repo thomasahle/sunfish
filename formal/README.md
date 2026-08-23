@@ -489,10 +489,11 @@ not.
 
 The killer is the one move the break cannot see: it is yielded before the
 sorted stream, so its cap says nothing about what follows. The producer
-therefore admits it by its own ceiling - "every out-of-order real move
-yielded can reach gamma" - spelled as the unclamped disjunction
-`val >= MATE_LOWER or depth > 3 or pos.score + val + max(depth - 1, 0) *
-QS_A >= gamma`, which IS the old threshold with its `min` unfolded
+therefore admits it by the same ceiling the consumer prunes on - "every
+out-of-order real move yielded can reach gamma" - `ceiling(val) >= gamma`
+with `ceiling(v) = MATE_UPPER if depth > 3 or v >= MATE_LOWER else
+pos.score + v + max(depth - 1, 0) * QS_A`, which IS the old threshold with
+its `min` unfolded
 (`v >= min(a, b)` iff `v >= a` or `v >= b`), so the gate is exactly the
 retired `val_lower` test. A killer that would settle is simply not yielded;
 it still reaches the fold in its sorted position, inside the tail whose
