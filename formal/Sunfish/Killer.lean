@@ -54,10 +54,11 @@ the proof architecture); the null-move residual exception is stated as its
 own named condition `NullGuardBlocksAtCaptures` below.
 
 Audit note (exactness): sunfish gates the killer yield by the
-producer's admission floor AND by the killer's own unclamped ceiling --
-`(val >= QS or depth) and (val >= MATE_LOWER or depth > 3 or pos.score
-+ val + max(depth - 1, 0) * QS_A >= gamma)`, the retired `val_lower`
-threshold with its `min` unfolded -- so that the consumer's settled
+producer's admission floor AND by the same ceiling the consumer prunes on --
+`(val >= QS or depth) and ceiling(val) >= gamma`, where `ceiling(v)` is
+`MATE_UPPER if depth > 3 or v >= MATE_LOWER else pos.score + v +
+max(depth - 1, 0) * QS_A` (the retired `val_lower` threshold with its
+`min` unfolded) -- so that the consumer's settled
 break, which is only sound on the sorted stream, can never fire on the
 out-of-order killer yield.
 The gate is not modeled here; it CANNOT affect `boundKill_spec`,

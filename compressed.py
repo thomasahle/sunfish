@@ -19,11 +19,9 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
                     if i == A1 and self.board[j + E] == "K" and self.wc[0]: yield Move(j + E, j + W, "")
                     if i == H1 and self.board[j + W] == "K" and self.wc[1]: yield Move(j + W, j + E, "")
     def rotate(self, nullmove=False):
-        return Position(
-            self.board[::-1].swapcase(), -self.score, self.bc, self.wc,
-            119 - self.ep if self.ep and not nullmove else 0,
-            119 - self.kp if self.kp and not nullmove else 0,
-        )
+        return Position(self.board[::-1].swapcase(), -self.score, self.bc, self.wc,
+                        119 - self.ep if self.ep and not nullmove else 0,
+                        119 - self.kp if self.kp and not nullmove else 0)
     def move(self, move):
         i, j, prom = move
         put = lambda board, i, p: board[:i] + p + board[i + 1 :]
@@ -76,11 +74,11 @@ class Searcher:
             if entry.upper < gamma: return entry.upper
             if depth > 0 and pos in self.history: return 0
         killer = self.tp_move.get(pos)
+        ceiling = lambda v: MATE_UPPER if depth > 3 or v >= MATE_LOWER else pos.score + v + max(depth - 1, 0) * QS_A
         def moves():
             if 2 < depth < 6 and guard: yield None, None
             if depth == 0: yield None, None
-            if killer and ((val := pos.value(killer)) >= QS or depth) and (val >= MATE_LOWER or depth > 3
-                    or pos.score + val + max(depth - 1, 0) * QS_A >= gamma): yield val, killer
+            if killer and ((val := pos.value(killer)) >= QS or depth) and ceiling(val) >= gamma: yield val, killer
             yield from sorted(((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= QS or depth), reverse=True)
         calm = abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
         guard = not root and calm
@@ -94,14 +92,12 @@ class Searcher:
                     score = min(cap, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
                     if score >= gamma and (proof := pos.king_capture()): move, score, live = proof, MATE_UPPER, True
                 else: score = cap
+            elif val >= MATE_LOWER: score, live = MATE_UPPER, True
             else:
-                if val >= MATE_LOWER: score, live = MATE_UPPER, True
-                else:
-                    cap = MATE_UPPER if depth > 3 else pos.score + val + max(depth - 1, 0) * QS_A
-                    if cap < gamma: best = max(best, cap); break
-                    move_depth = depth - 1 - (guard and depth >= 6 and val < LMR) - int(nmr)
-                    score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
-                    live |= score > -MATE_UPPER
+                if (cap := ceiling(val)) < gamma: best = max(best, cap); break
+                move_depth = depth - 1 - (guard and depth >= 6 and val < LMR) - int(nmr)
+                score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
+                live |= score > -MATE_UPPER
             best = max(best, score)
             if best >= gamma:
                 if move is not None and depth:

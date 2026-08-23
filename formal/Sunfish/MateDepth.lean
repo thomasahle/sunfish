@@ -625,8 +625,8 @@ theorem forcedMate_fuelValueD2_sharp_C1 (G : QSGame) (guard : G.Pos → Bool)
 Part I's sharpened `3k` -- does NOT model one mechanism the shipped search
 has: the shallow static cap
 
-    cap = MATE_UPPER if depth > 3 else pos.score + val + max(depth - 1, 0) * QS_A
-    if cap < gamma: best = max(best, cap); break
+    ceiling = lambda v: MATE_UPPER if depth > 3 or v >= MATE_LOWER else pos.score + v + max(depth - 1, 0) * QS_A
+    if (cap := ceiling(val)) < gamma: best = max(best, cap); break
     score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
 
 At every nominal depth `≤ 3` EVERY move that is not a king capture reports
