@@ -60,9 +60,10 @@
     {"name": "FUT_CAP_DEPTH", "type": "discrete", "default": 3,
      "values": [-1, 0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 30],
      "off_values": [-1], "scale": 2},
-    {"name": "IID_MIN_DEPTH", "type": "discrete", "default": 999,
-     "values": [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 30, 99, 999],
-     "off_values": [999], "scale": 2},
+    {"name": "IID", "type": "discrete", "default": 0,
+     "values": [0, 1], "off_values": [0], "scale": 1},
+    {"name": "IID_MIN_DEPTH", "type": "discrete", "default": 3,
+     "values": [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 30, 99], "scale": 2},
     {"name": "IID_RED", "type": "integer", "default": 3,
      "min": 1, "max": 8, "scale": 1}
   ],
@@ -76,7 +77,7 @@
      "reset": ["NULL_MARGIN", "FUEL_MIN_DEPTH", "NULL_RED"]},
     {"when": {"LMR_LIMIT": [0]},
      "reset": ["LMR", "LMR_MIN_DEPTH", "LMR_RED"]},
-    {"when": {"IID_MIN_DEPTH": [999]}, "reset": ["IID_RED"]}
+    {"when": {"IID": [0]}, "reset": ["IID_MIN_DEPTH", "IID_RED"]}
   ],
   "required": [
     {},
@@ -87,8 +88,8 @@
     {"NULL_SPAN": 0, "FUEL_NULL": 0},
     {"LMR_LIMIT": 0},
     {"FUT_CAP_DEPTH": -1},
-    {"IID_MIN_DEPTH": 999},
-    {"IID_MIN_DEPTH": 3},
+    {"IID": 0},
+    {"IID": 1, "IID_MIN_DEPTH": 3},
     {"FUEL_NULL": 2},
     {"LMR_RED": 2},
     {"QS": 50, "QS_A": 100, "LMR": 60000,

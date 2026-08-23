@@ -23,8 +23,8 @@
  *    so tuning needs no recompilation.
  *
  * Reference: sunfish.py at the repo root of this checkout (capped null
- * move, mate-distance scoring, IID at depth > 3).  Historical master deltas
- * reachable by knob: set IID_MIN_DEPTH 2, set MATE_DIST 0.
+ * move, mate-distance scoring, no IID).  Historical variants are reachable
+ * by knob: set IID 1, IID_MIN_DEPTH 2, or MATE_DIST 0.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -77,7 +77,7 @@ static int QS_A = 140;
 static int LMR = 75;
 static int LMR_MIN_DEPTH = 6, LMR_RED = 1, LMR_LIMIT = 750;
 static int EVAL_ROUGHNESS = 15;
-static int NULL_CAP_MARGIN = -1; /* -1 follows EVAL_ROUGHNESS, as Python */
+static int NULL_CAP_MARGIN = 15; /* independent lab version of Python's shared value */
 static int VALUE_N = 280, VALUE_B = 320, VALUE_R = 479, VALUE_Q = 929;
 static int PST_P = 100, PST_N = 100, PST_B = 100, PST_R = 100;
 static int PST_Q = 100, PST_K = 100, PST_KE = 100;
@@ -88,7 +88,7 @@ static int NULL_SPAN = 3;        /* number of scoring-null depths */
 static int NULL_LIMIT = 750;     /* |score| bound for both null mechanisms */
 static int NULL_CUT_RED = 3;     /* shallow null-candidate reduction */
 static int NULL_RED = 7;         /* deep fuel-probe reduction */
-static int IID_MIN_DEPTH = 999;  /* exact off; retained as a lab knob */
+static int IID = 0, IID_MIN_DEPTH = 3;  /* deleted Python IID, retained for tuning */
 static int IID_RED = 3;          /* IID depth reduction */
 static int FUT_MAX = 1;          /* futility pruning when depth <= this */
 static int FUT_CAP = 1;          /* 0 off, 1 ordinary moves, 2 negative value */
@@ -127,7 +127,7 @@ static int USE_VARIANT = 0;      /* no-op here: forces pyref's transcribed
  *   below this node's QS threshold, retry ONLY the filtered tail in
  *   generator order (unsorted, no killer/IID/futility), as an unstored
  *   root probe (its PR base is IID>2/no-mate-distance: --cset
- *   IID_MIN_DEPTH=2 MATE_DIST=0 alongside QS_TAIL=1).
+ *   IID=1 IID_MIN_DEPTH=2 MATE_DIST=0 alongside QS_TAIL=1).
  * FUEL_NULL (MASTER DEFAULT since #192; born as the PR #182 port):
  *   classic capped null only for NULL_MIN_DEPTH < depth < FUEL_MIN_DEPTH;
  *   from FUEL_MIN_DEPTH a null probe at the fixed target pos.score +
@@ -795,8 +795,8 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
     if (!root && depth > NULL_MIN_DEPTH
             && depth <= NULL_MIN_DEPTH + NULL_SPAN
             && iabs(pos->score) < NULL_LIMIT && has_big_piece(pos)) {
-        int score = pos->score + (NULL_CAP_MARGIN < 0
-            ? EVAL_ROUGHNESS : NULL_CAP_MARGIN);
+        int score = pos->score + NULL_CAP_MARGIN;
+        if (score >= MATE_LOWER) score = MATE_LOWER - 1;
         if (score >= gamma) {
             Pos rp = rotate(pos, 1);
             int s = -bound(&rp, 1 - gamma, depth - NULL_CUT_RED, 0, 0);
@@ -831,7 +831,7 @@ static int bound(const Pos *pos, int gamma, int depth, int root, int qstail) {
     }
 
     /* Optional lab IID (driver probe: root=1, unstored). */
-    if (!qstail && nkill == 0 && depth > IID_MIN_DEPTH) {
+    if (IID && !qstail && nkill == 0 && depth > IID_MIN_DEPTH) {
         bound(pos, gamma, depth - IID_RED, 1, 0);
         tpm_get_all(pos, killers, &nkill);
     }
@@ -1257,7 +1257,7 @@ static struct knob KNOBS[] = {
     { "NULL_LIMIT", &NULL_LIMIT, NULL },
     { "NULL_CUT_RED", &NULL_CUT_RED, NULL },
     { "NULL_RED", &NULL_RED, NULL },
-    { "IID_MIN_DEPTH", &IID_MIN_DEPTH, NULL },
+    { "IID", &IID, NULL }, { "IID_MIN_DEPTH", &IID_MIN_DEPTH, NULL },
     { "IID_RED", &IID_RED, NULL },
     { "FUT_MAX", &FUT_MAX, NULL },
     { "FUT_CAP", &FUT_CAP, NULL },
@@ -1283,6 +1283,7 @@ static int set_knob(const char *name, long v) {
     if (!strcmp(name, "QS_TAIL") && (v < 0 || v > 1)) return 0;
     if (!strcmp(name, "FUEL_NULL") && (v < 0 || v > 2)) return 0;
     if (!strcmp(name, "FUT_CAP") && (v < 0 || v > 2)) return 0;
+    if (!strcmp(name, "IID") && (v < 0 || v > 1)) return 0;
     if (!strcmp(name, "FUT_CAP_DEPTH") && (v < -1 || v > 30)) return 0;
     if (!strcmp(name, "FUEL_MIN_DEPTH") && v < 1) return 0;
     if (!strcmp(name, "NULL_SPAN") && v < 0) return 0;

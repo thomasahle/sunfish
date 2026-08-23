@@ -1730,7 +1730,7 @@ class MixedAcquisitionTest(unittest.TestCase):
     def test_global_search_space_is_uncoupled_and_search_only(self):
         path = pathlib.Path(__file__).with_name("global_search_parameters.json")
         space = MixedSpace.load(path)
-        self.assertEqual(len(space.names), 19)
+        self.assertEqual(len(space.names), 20)
         self.assertFalse(any(name.startswith("PST_") or name.startswith("VALUE_")
                              for name in space.names))
         cap = space.knobs(space.canonical({"EVAL_ROUGHNESS": 30, "NULL_CAP_MARGIN": 5}))
@@ -1749,11 +1749,12 @@ class MixedAcquisitionTest(unittest.TestCase):
             "QS_TAIL", "DERIVE_FRESH", "FEN_HIST",
         })
         self.assertTrue(all(spec["scope"]["excluded"].values()))
-        self.assertIn({"IID_MIN_DEPTH": 999}, spec["required"])
-        self.assertEqual(space.defaults["IID_MIN_DEPTH"], 999)
+        self.assertIn({"IID": 0}, spec["required"])
+        self.assertIn({"IID": 1, "IID_MIN_DEPTH": 3}, spec["required"])
+        self.assertEqual(space.defaults["IID"], 0)
         iid = next(parameter for parameter in spec["parameters"]
-                   if parameter["name"] == "IID_MIN_DEPTH")
-        self.assertEqual(iid["off_values"], [999])
+                   if parameter["name"] == "IID")
+        self.assertEqual(iid["off_values"], [0])
         self.assertIn(0, MixedSpace.parameter_values(next(
             parameter for parameter in spec["parameters"]
             if parameter["name"] == "EVAL_ROUGHNESS")))
@@ -1767,7 +1768,7 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertFalse(any(depth > 2 and depth <= 2 for depth in range(1000)))
         self.assertFalse(any(0 and depth >= 6 for depth in range(1000)))
         self.assertFalse(any(abs(score) < 0 for score in range(-1000, 1001)))
-        self.assertFalse(any(depth > 999 for depth in range(1, 1000)))
+        self.assertFalse(any(0 and depth > 3 for depth in range(1000)))
 
     def test_global_search_off_values_stop_their_computation(self):
         path = pathlib.Path(__file__).with_name("global_search_parameters.json")
@@ -1782,7 +1783,7 @@ class MixedAcquisitionTest(unittest.TestCase):
             "NULL_SPAN": [0],
             "FUEL_NULL": [0],
             "FUT_CAP_DEPTH": [-1],
-            "IID_MIN_DEPTH": [999],
+            "IID": [0],
         })
 
         source = path.parents[2].joinpath("ctwin", "sunfish.c").read_text()
@@ -1791,7 +1792,10 @@ class MixedAcquisitionTest(unittest.TestCase):
         self.assertIn("if (guard && FUEL_NULL)", source)
         self.assertIn("iabs(pos->score) < LMR_LIMIT", source)
         self.assertIn("depth <= FUT_CAP_DEPTH", source)
-        self.assertIn("depth > IID_MIN_DEPTH", source)
+        self.assertIn("if (IID && !qstail", source)
+        self.assertIn("pos->score + NULL_CAP_MARGIN", source)
+        self.assertNotIn("NULL_CAP_MARGIN < 0", source)
+        self.assertIn("if (score >= MATE_LOWER) score = MATE_LOWER - 1", source)
 
         # QS=60000 admits only values already handled as nonrecursive king captures.
         self.assertLess(sunfish.MATE_LOWER, 60000)
