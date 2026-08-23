@@ -698,6 +698,10 @@ class MixedAcquisitionTest(unittest.TestCase):
             (("mate1.fen", 1, 8, 8),
              ("mate2_eventual.fen", 2, 5, 5),
              ("mate3_eventual.fen", 3, 2, 2)))
+        self.assertEqual(sunfish_gate.mate_lower({}), 47923)
+        self.assertEqual(sunfish_gate.mate_lower({"VALUE_Q": 1000}), 47000)
+        with self.assertRaises(ValueError):
+            sunfish_gate.mate_lower({"VALUE_Q": 5000})
         request = json.dumps({
             "engine": "/does/not/exist",
             "engine_args": "",

@@ -20,12 +20,22 @@ DONE = re.compile(r"done nodes (\d+) gen (\d+)")
 SUITES = (("mate1.fen", 1, 8, 8),
           ("mate2_eventual.fen", 2, 5, 5),
           ("mate3_eventual.fen", 3, 2, 2))
+KING_VALUE = 60000
+QUEEN_VALUE = 929
 
 
 def cap_horizon(options):
     """First depth above the finite move-cap horizon."""
     depth = options.get("FUT_CAP_DEPTH", 3) if options.get("FUT_CAP", 1) else -1
     return max(depth + 1, 1)
+
+
+def mate_lower(options):
+    """Positive mate-band boundary under the C twin's current piece values."""
+    result = KING_VALUE - 13 * options.get("VALUE_Q", QUEEN_VALUE)
+    if result <= 0:
+        raise ValueError("queen value leaves no positive mate band")
+    return result
 
 
 def mate_depth(options, moves):
@@ -68,7 +78,7 @@ def wait_for(process, prefix):
             return lines
 
 
-def mate_floor(argv, name, depth, limit):
+def mate_floor(argv, name, depth, limit, threshold):
     path = ROOT / "tests" / "files" / name
     positions = [line.strip() for line in path.read_text().splitlines() if line.strip()][:limit]
     process = subprocess.Popen(
@@ -83,7 +93,7 @@ def mate_floor(argv, name, depth, limit):
             lines = wait_for(process, "done")
             scores = [int(match.group(2)) for line in lines
                       if (match := INFO.match(line)) and int(match.group(1)) == depth]
-            found += bool(scores and scores[-1] > 10000)
+            found += bool(scores and scores[-1] >= threshold)
         process.stdin.write("quit\n")
         process.stdin.flush()
         process.wait(timeout=5)
@@ -170,6 +180,7 @@ def main():
         print("mate-distance:disabled")
         return 1
     try:
+        threshold = mate_lower(options)
         suites = [(name, mate_depth(options, moves), limit, floor)
                   for name, moves, limit, floor in SUITES]
     except ValueError as error:
@@ -180,7 +191,7 @@ def main():
     else:
         argv = [request["engine"], *shlex.split(request["engine_args"])]
         argv += [f"{name}={value}" for name, value in sorted(options.items())]
-        results = {name: mate_floor(argv, name, depth, limit)
+        results = {name: mate_floor(argv, name, depth, limit, threshold)
                    for name, depth, limit, floor in suites}
         print(" ".join(f"{name}:{found}/{total}" for name, (found, total) in results.items()))
         if any(results[name][0] < floor for name, depth, limit, floor in suites):
