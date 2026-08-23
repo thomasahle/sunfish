@@ -14,6 +14,8 @@ import sys
 
 
 ROOT = pathlib.Path(__file__).parents[2]
+STOCKFISH_RELEASE = "Stockfish 15"
+STOCKFISH_REVISION = "e6e324eb28fd49c1fc44b3b65784f85a773ec61c"
 SOURCE_FILES = (
     "sunfish.py", "LICENSE.md", "tools/ctwin/sunfish.c", "tools/ctwin/gen_tables.py",
 )
@@ -119,6 +121,72 @@ def absolute_member(root, member):
     return result
 
 
+def calibration_plan():
+    return {
+        "tc": "3+0.1", "pairs": 50, "games_per_opponent": 100,
+        "start": 1, "common_openings": "openings.epd", "reject_engine_failures": True,
+        "command": [
+            "python", "runner/calibrate_panel.py", "--fastchess", "runner/fastchess",
+            "--panel", "panel.json", "--openings", "openings.epd",
+            "--logs", "calibration", "--tc", "3+0.1", "--pairs", "50", "--start", "1",
+        ],
+    }
+
+
+def validate_calibration(record, opponents):
+    plan = calibration_plan()
+    results = record.get("results", [])
+    if any(record.get(key) != value for key, value in plan.items()):
+        raise RuntimeError("calibration record does not match the frozen plan")
+    if record.get("status") != "complete" or [result.get("opponent") for result in results] != opponents:
+        raise RuntimeError("calibration results do not cover the frozen opponents")
+    if any(result.get("games") != plan["games_per_opponent"] or
+           result.get("pairs") != plan["pairs"] or result.get("tc") != plan["tc"]
+           for result in results):
+        raise RuntimeError("calibration results are incomplete or use the wrong time control")
+    if any(result.get("saturated") is not False for result in results):
+        raise RuntimeError("calibration opponent is saturated")
+    if [log.get("path") for log in record.get("logs", [])] != [
+            f"calibration/{opponent}.log" for opponent in opponents]:
+        raise RuntimeError("calibration record does not cover the frozen logs")
+    paths = [*record.get("command", []), *(log.get("path", "") for log in record.get("logs", []))]
+    if any(pathlib.Path(path).is_absolute() for path in paths):
+        raise RuntimeError("calibration record contains an absolute host path")
+
+
+def complete_calibration(output, members):
+    """Normalize completed calibration evidence without retaining host paths."""
+    output = pathlib.Path(output)
+    directory = output / "calibration"
+    raw = directory / "results.json"
+    if not raw.is_file():
+        raise RuntimeError("calibration did not produce results.json")
+    payload = json.loads(raw.read_text())
+    results = [{key: value for key, value in result.items() if key != "pair_scores"}
+               for result in payload.get("results", [])]
+    opponents = [member["name"] for member in members if member["name"] != "master"]
+    plan = calibration_plan()
+    record = plan | {"status": "complete", "results": results}
+    logs = []
+    for opponent in opponents:
+        log = directory / f"{opponent}.log"
+        if not log.is_file():
+            raise RuntimeError(f"calibration log is missing: {opponent}")
+        logs.append(artifact(output, log))
+    record["logs"] = logs
+    validate_calibration(record, opponents)
+    raw.unlink()
+    write_json(output / "calibration.json", record)
+    return record, [directory / f"{opponent}.log" for opponent in opponents]
+
+
+def run_calibration(output, python, members):
+    plan = calibration_plan()
+    command = [str(python), *(output / part if "/" in part else part for part in plan["command"][1:])]
+    subprocess.run([str(part) for part in command], cwd=output, check=True)
+    return complete_calibration(output, members)
+
+
 def freeze(args):
     root = pathlib.Path(args.source_root).resolve()
     output = pathlib.Path(args.output).resolve()
@@ -154,7 +222,8 @@ def freeze(args):
     stockfish_lock = opponents / "stockfish.lock.json"
     write_json(stockfish_lock, {
         "source": "https://github.com/official-stockfish/Stockfish",
-        "revision": "Stockfish 15", "binary": artifact(output, stockfish),
+        "release": STOCKFISH_RELEASE, "revision": STOCKFISH_REVISION,
+        "binary": artifact(output, stockfish),
         "license": artifact(output, stockfish_license),
     })
 
@@ -188,7 +257,7 @@ def freeze(args):
                         ["source/LICENSE.md"]),
         relative_member("stockfish-1800", 1, "opponents/stockfish15", "", {
             "UCI_LimitStrength": "true", "UCI_Elo": 1800, "Threads": 1, "Hash": 16,
-        }, "https://github.com/official-stockfish/Stockfish", "Stockfish 15", [
+        }, "https://github.com/official-stockfish/Stockfish", STOCKFISH_REVISION, [
             "opponents/stockfish.lock.json", "opponents/stockfish-Copying.txt",
         ]),
         relative_member("chessidle", 1, "opponents/chessidle.sh", "", {
@@ -200,24 +269,17 @@ def freeze(args):
     panel = output / "panel.json"
     write_json(panel, [absolute_member(output, member) for member in members])
 
-    calibration = output / "calibration.json"
-    write_json(calibration, {
-        "status": "pending", "tc": "3+0.1", "pairs": 50, "games_per_opponent": 100,
-        "start": 1, "common_openings": "openings.epd", "reject_engine_failures": True,
-        "command": [
-            str(python), "runner/calibrate_panel.py", "--fastchess", "runner/fastchess",
-            "--panel", "panel.json", "--openings", "openings.epd",
-            "--logs", "calibration", "--tc", "3+0.1", "--pairs", "50", "--start", "1",
-        ],
-    })
+    calibration, calibration_logs = run_calibration(output, python, members)
+    calibration_file = output / "calibration.json"
 
     paths = [
         binary, tables, stockfish, stockfish_license, stockfish_lock,
         chessidle_wrapper, chessidle_lock, chessidle_root / "LICENSE", panel,
-        fastchess, calibrator, panel_helper, penta_helper, openings, calibration,
+        fastchess, calibrator, panel_helper, penta_helper, openings,
+        calibration_file, *calibration_logs,
     ]
     manifest = {
-        "schema": "sunfish-panel-freeze-v1", "source": source, "revision": revision,
+        "schema": "sunfish-panel-freeze-v2", "source": source, "revision": revision,
         "source_files": sources, "artifacts": [artifact(output, path) for path in paths],
         "opponent_source_trees": [chessidle["tree"]],
         "compiler": {
@@ -230,6 +292,7 @@ def freeze(args):
             "version": run(python, "--version"),
         },
         "panel": members, "weights": {member["name"]: member["weight"] for member in members},
+        "calibration": calibration,
         "freeze_script_sha256": sha256(__file__),
     }
     write_json(output / "manifest.json", manifest)
@@ -240,7 +303,7 @@ def freeze(args):
 def verify(path):
     path = pathlib.Path(path).resolve()
     manifest = json.loads(path.read_text())
-    if manifest.get("schema") != "sunfish-panel-freeze-v1":
+    if manifest.get("schema") != "sunfish-panel-freeze-v2":
         raise RuntimeError("unknown freeze manifest schema")
     records = [*manifest["source_files"], *manifest["artifacts"]]
     for record in records:
@@ -254,6 +317,15 @@ def verify(path):
     runtime = manifest["runtime"]
     if not pathlib.Path(runtime["path"]).is_file() or sha256(runtime["path"]) != runtime["sha256"]:
         raise RuntimeError("frozen Python runtime changed")
+    calibration = json.loads((path.parent / "calibration.json").read_text())
+    if calibration != manifest.get("calibration") or calibration.get("status") != "complete":
+        raise RuntimeError("frozen calibration record does not match the manifest")
+    opponents = [member["name"] for member in manifest["panel"] if member["name"] != "master"]
+    validate_calibration(calibration, opponents)
+    if any(record not in manifest["artifacts"] for record in calibration.get("logs", [])):
+        raise RuntimeError("frozen calibration logs are not covered by the manifest")
+    if (path.parent / "calibration/results.json").exists():
+        raise RuntimeError("raw calibration results were not normalized")
     return manifest
 
 

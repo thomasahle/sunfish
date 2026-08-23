@@ -53,13 +53,16 @@ non-reproducible binary, copies the pinned opponents and licenses, and writes
 an operational `panel.json` plus a relocatable `manifest.json`. Verify an
 existing artifact with `freeze_panel.py --verify path/to/manifest.json`.
 `global_search_panel.lock.json` records the frozen 2:1:1 campaign artifact;
-the binary itself remains outside Git.
+the binary itself remains outside Git. Stockfish's release, exact upstream
+commit, executable, and license are separate locked identities.
 
-The freeze also writes a pending `calibration.json`. Its command gives each
-non-master opponent 50 common color-swapped openings against frozen master at
-3+0.1. `calibrate_panel.py` omits recovery mode and rejects engine failures or
-an incomplete game count before recording WDL, so nominal engine ratings are
-never treated as calibration evidence.
+The freeze completes calibration before writing its final manifest. It gives
+each non-master opponent 50 common color-swapped openings against frozen
+master at 3+0.1, rejects engine failures, incomplete results, and saturated
+opponents, then freezes the result summary and raw-log hashes. Host-specific
+commands and paths from the temporary result file are discarded. Thus nominal
+engine ratings and a merely pending calibration are never accepted as panel
+evidence.
 
 `search_parameters.json` is a small generic search-tuning example.
 `logistic_gp/all_parameters.json` includes evaluation experiments, while

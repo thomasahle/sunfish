@@ -196,18 +196,131 @@ Score of opponent vs master: 1 - 1 - 2
             source.write_bytes(b"source")
             opponent_source.write_bytes(b"opponent")
             engine.write_bytes(b"engine")
+            calibration_log = directory / "calibration" / "opponent.log"
+            calibration_log.parent.mkdir()
+            calibration_log.write_text("two completed games\n")
+            calibration = freeze_panel.calibration_plan() | {
+                "status": "complete", "results": [{
+                    "opponent": "opponent", "games": 100, "pairs": 50,
+                    "tc": "3+0.1", "saturated": False,
+                }],
+                "logs": [freeze_panel.artifact(directory, calibration_log)],
+            }
+            calibration_file = directory / "calibration.json"
+            calibration_file.write_text(json.dumps(calibration))
             manifest = directory / "manifest.json"
             manifest.write_text(json.dumps({
-                "schema": "sunfish-panel-freeze-v1",
+                "schema": "sunfish-panel-freeze-v2",
                 "source_files": [freeze_panel.artifact(directory, source)],
                 "opponent_source_trees": [freeze_panel.tree_artifact(directory, opponent)],
-                "artifacts": [freeze_panel.artifact(directory, engine)],
+                "artifacts": [
+                    freeze_panel.artifact(directory, engine),
+                    freeze_panel.artifact(directory, calibration_file),
+                    freeze_panel.artifact(directory, calibration_log),
+                ],
                 "runtime": {"path": str(engine), "sha256": freeze_panel.sha256(engine)},
+                "calibration": calibration,
+                "panel": [{"name": "master"}, {"name": "opponent"}],
             }))
             freeze_panel.verify(manifest)
             opponent_source.write_bytes(b"changed")
             with self.assertRaisesRegex(RuntimeError, "opponent"):
                 freeze_panel.verify(manifest)
+
+    def test_frozen_panel_verifier_rejects_old_or_mismatched_calibration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = pathlib.Path(directory)
+            runtime = directory / "runtime"
+            log = directory / "calibration" / "peer.log"
+            runtime.write_bytes(b"runtime")
+            log.parent.mkdir()
+            log.write_text("completed games\n")
+            record = freeze_panel.calibration_plan() | {
+                "status": "complete", "results": [{
+                    "opponent": "peer", "games": 100, "pairs": 50,
+                    "tc": "3+0.1", "saturated": False,
+                }],
+                "logs": [freeze_panel.artifact(directory, log)],
+            }
+            calibration = directory / "calibration.json"
+            calibration.write_text(json.dumps(record))
+            manifest = directory / "manifest.json"
+            payload = {
+                "schema": "sunfish-panel-freeze-v2", "source_files": [],
+                "opponent_source_trees": [], "calibration": record,
+                "panel": [{"name": "master"}, {"name": "peer"}],
+                "artifacts": [freeze_panel.artifact(directory, calibration),
+                              freeze_panel.artifact(directory, log)],
+                "runtime": {"path": str(runtime), "sha256": freeze_panel.sha256(runtime)},
+            }
+            manifest.write_text(json.dumps(payload))
+            freeze_panel.verify(manifest)
+            payload["schema"] = "sunfish-panel-freeze-v1"
+            manifest.write_text(json.dumps(payload))
+            with self.assertRaisesRegex(RuntimeError, "schema"):
+                freeze_panel.verify(manifest)
+            payload["schema"] = "sunfish-panel-freeze-v2"
+            payload["calibration"] = record | {"status": "pending"}
+            manifest.write_text(json.dumps(payload))
+            with self.assertRaisesRegex(RuntimeError, "calibration"):
+                freeze_panel.verify(manifest)
+            payload["calibration"] = record
+            manifest.write_text(json.dumps(payload))
+            log.write_text("tampered\n")
+            with self.assertRaisesRegex(RuntimeError, "artifact"):
+                freeze_panel.verify(manifest)
+            log.write_text("completed games\n")
+            raw = log.parent / "results.json"
+            raw.write_text('{"private": "/private/machine/path"}')
+            with self.assertRaisesRegex(RuntimeError, "raw calibration"):
+                freeze_panel.verify(manifest)
+            raw.unlink()
+            log.unlink()
+            with self.assertRaisesRegex(RuntimeError, "artifact"):
+                freeze_panel.verify(manifest)
+
+    def test_complete_calibration_normalizes_and_rejects_bad_evidence(self):
+        members = [{"name": "master"}, {"name": "stockfish"}, {"name": "peer"}]
+
+        def result(opponent, saturated=False, games=100):
+            return {
+                "opponent": opponent, "games": games, "pairs": 50,
+                "tc": "3+0.1", "saturated": saturated, "pair_scores": [0.25, 0.75],
+            }
+
+        with tempfile.TemporaryDirectory() as directory:
+            directory = pathlib.Path(directory)
+            logs = directory / "calibration"
+            logs.mkdir()
+            for opponent in ("stockfish", "peer"):
+                (logs / f"{opponent}.log").write_text(f"{opponent} completed\n")
+            raw = logs / "results.json"
+            raw.write_text(json.dumps({
+                "commands": {"private": ["/private/machine/path"]},
+                "identities": {"private": "/private/machine/path"},
+                "results": [result("stockfish"), result("peer")],
+            }))
+            record, frozen_logs = freeze_panel.complete_calibration(directory, members)
+            self.assertFalse(raw.exists())
+            self.assertEqual(record["status"], "complete")
+            self.assertNotIn("pair_scores", record["results"][0])
+            self.assertEqual([path.name for path in frozen_logs], ["stockfish.log", "peer.log"])
+            self.assertNotIn("/private/", json.dumps(record))
+            self.assertFalse(any(pathlib.Path(part).is_absolute() for part in record["command"]))
+
+            for bad, message in (
+                    ([result("stockfish")], "cover"),
+                    ([result("stockfish", saturated=True), result("peer")], "saturated"),
+                    ([result("stockfish", games=98), result("peer")], "incomplete")):
+                raw.write_text(json.dumps({"results": bad}))
+                with self.subTest(message=message), self.assertRaisesRegex(RuntimeError, message):
+                    freeze_panel.complete_calibration(directory, members)
+            raw.write_text(json.dumps({
+                "results": [result("stockfish"), result("peer")],
+            }))
+            (logs / "peer.log").unlink()
+            with self.assertRaisesRegex(RuntimeError, "missing"):
+                freeze_panel.complete_calibration(directory, members)
 
     def test_global_panel_lock_matches_the_freezer_and_stationary_weights(self):
         lock = json.loads((ROOT / "tools/tune/global_search_panel.lock.json").read_text())
@@ -219,6 +332,11 @@ Score of opponent vs master: 1 - 1 - 2
             "master": 2, "stockfish-1800": 1, "chessidle": 1,
         })
         self.assertEqual(lock["revision"], "da1922277fe2d4d1cb98bc17be27b1919d277e13")
+        stockfish = next(member for member in lock["panel"] if member["name"] == "stockfish-1800")
+        self.assertEqual(stockfish["revision"], freeze_panel.STOCKFISH_REVISION)
+        self.assertEqual(lock["schema"], "sunfish-panel-freeze-v2")
+        self.assertEqual(lock["calibration"]["status"], "complete")
+        self.assertFalse(any(result["saturated"] for result in lock["calibration"]["results"]))
 
     def test_campaign_kills_term_survivors_in_its_private_group(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -18,7 +18,7 @@
     },
     {
       "path": "opponents/stockfish.lock.json",
-      "sha256": "7f8b4159ec95d390c6612ffc7959c25a3e71c410245f893ec2ab805f7084203b"
+      "sha256": "80a4fcb39ef9fe0c32f8e4b8bcb27838aa21fdcf7c5084d34354d9b1da978824"
     },
     {
       "path": "opponents/chessidle.sh",
@@ -34,7 +34,7 @@
     },
     {
       "path": "panel.json",
-      "sha256": "e72bf24e719235a6eafc6caa0c8064bccf34b242e4f0b5c8ded1493ad8de9f7a"
+      "sha256": "776de9016eac4fb99b18b037b70d6931937e713a7edb6a5c16684cee06ca0536"
     },
     {
       "path": "runner/fastchess",
@@ -58,9 +58,120 @@
     },
     {
       "path": "calibration.json",
-      "sha256": "a5ff56febc89e097d5bc08e6d999da55de1b70b9ab3a117262a1dc8d9cfc0551"
+      "sha256": "e4787497c3e03479cc509ea11c42f4da1d7bac9989c0189e1a61747947437935"
+    },
+    {
+      "path": "calibration/stockfish-1800.log",
+      "sha256": "87e596e5d91fc81132168c189317fca378490138fc05ec5c0427f97341c6651d"
+    },
+    {
+      "path": "calibration/chessidle.log",
+      "sha256": "abbc9641051cfc576da26a5103fca125f1e709db6592ff0853f5033af973f68a"
     }
   ],
+  "calibration": {
+    "command": [
+      "python",
+      "runner/calibrate_panel.py",
+      "--fastchess",
+      "runner/fastchess",
+      "--panel",
+      "panel.json",
+      "--openings",
+      "openings.epd",
+      "--logs",
+      "calibration",
+      "--tc",
+      "3+0.1",
+      "--pairs",
+      "50",
+      "--start",
+      "1"
+    ],
+    "common_openings": "openings.epd",
+    "games_per_opponent": 100,
+    "logs": [
+      {
+        "path": "calibration/stockfish-1800.log",
+        "sha256": "87e596e5d91fc81132168c189317fca378490138fc05ec5c0427f97341c6651d"
+      },
+      {
+        "path": "calibration/chessidle.log",
+        "sha256": "abbc9641051cfc576da26a5103fca125f1e709db6592ff0853f5033af973f68a"
+      }
+    ],
+    "pairs": 50,
+    "reject_engine_failures": true,
+    "results": [
+      {
+        "draws": 8,
+        "games": 100,
+        "losses": 31,
+        "master": "master",
+        "opponent": "stockfish-1800",
+        "pairs": 50,
+        "pentanomial": [
+          17,
+          7,
+          20,
+          1,
+          5
+        ],
+        "posterior_elo": 102.10900204132246,
+        "posterior_elo_95": [
+          41.06557763638744,
+          170.05230269900582
+        ],
+        "posterior_score": 0.6428571428571429,
+        "posterior_score_95": [
+          0.5588244389431143,
+          0.7268898467711715
+        ],
+        "posterior_score_sd": 0.042873828527565626,
+        "rough_elo": 107.53812491703201,
+        "saturated": false,
+        "score": 0.65,
+        "start": 1,
+        "tc": "3+0.1",
+        "wins": 61
+      },
+      {
+        "draws": 5,
+        "games": 100,
+        "losses": 21,
+        "master": "master",
+        "opponent": "chessidle",
+        "pairs": 50,
+        "pentanomial": [
+          27,
+          4,
+          16,
+          1,
+          2
+        ],
+        "posterior_elo": 193.06149732784937,
+        "posterior_elo_95": [
+          126.44652649998119,
+          275.97048640781816
+        ],
+        "posterior_score": 0.7523809523809524,
+        "posterior_score_95": [
+          0.6743409168585321,
+          0.8304209879033726
+        ],
+        "posterior_score_sd": 0.039816344654295996,
+        "rough_elo": 205.03742915275254,
+        "saturated": false,
+        "score": 0.765,
+        "start": 1,
+        "tc": "3+0.1",
+        "wins": 74
+      }
+    ],
+    "start": 1,
+    "status": "complete",
+    "tc": "3+0.1"
+  },
   "compiler": {
     "flags": [
       "-O3",
@@ -74,7 +185,7 @@
     "sha256": "f679a0ba1bddf27acd9523a1df45909b8e681f1f84f2d0f1cc87f5e115a6ec26",
     "version": "gcc (GCC) 11.5.0 20240719 (Red Hat 11.5.0-14)"
   },
-  "freeze_script_sha256": "b24631d46ba88fd32c4af32f1d28c53d205067b6e8c9017430f553bf35102275",
+  "freeze_script_sha256": "3da8804d66ed649f3d2ee13847088e44bad391911d6294969efc424d6bf83689",
   "opponent_source_trees": [
     {
       "files": 31,
@@ -111,7 +222,7 @@
         "UCI_Elo": 1800,
         "UCI_LimitStrength": "true"
       },
-      "revision": "Stockfish 15",
+      "revision": "e6e324eb28fd49c1fc44b3b65784f85a773ec61c",
       "source": "https://github.com/official-stockfish/Stockfish",
       "weight": 1
     },
@@ -140,7 +251,7 @@
     "sha256": "c87babf8337b668da60e26d897d694df7bd9a5b7907416e4eda078b9c33d05e0",
     "version": "Python 3.9.25"
   },
-  "schema": "sunfish-panel-freeze-v1",
+  "schema": "sunfish-panel-freeze-v2",
   "source": "https://github.com/thomasahle/sunfish",
   "source_files": [
     {
