@@ -204,9 +204,9 @@ recommendation's Elo against master and its Elo recovered from that degraded
 start. Compare methods directly rather than comparing overlapping marginal
 error bars.
 
-For a method contrast, resample opening indices within each start, applying
-the same sampled indices to both methods and the shared starting
-configuration. In each of 100,000 stratified bootstrap replicates, recompute
+For a method contrast, resample one vector of opening indices and apply it
+across every start, method, and shared starting configuration. In each of
+100,000 stratified bootstrap replicates, recompute
 logistic Elo, recovery, the mean over three starts, and the method difference.
 Report the paired mean-score difference and percentile 95% interval.
 
@@ -234,13 +234,16 @@ Holm-corrected one-sided `alpha = 0.05`. Otherwise report the result as
 inconclusive.
 
 The confirmation family contains every finalist-versus-zero hypothesis and
-every ordered finalist-versus-finalist hypothesis. Tests use exact paired
-sign flips on aligned opening-pair scores: `score - 0.5` against zero and
-`score_A - score_B` for a method contrast. All differences are quarter-
-integers, so the tail distribution is evaluated deterministically rather than
-estimated by Monte Carlo. One Holm correction covers the entire family. This
-is deliberately conservative: it permits the confirmation ranking to differ
-from the primary ranking without silently changing the tested family.
+every ordered finalist-versus-finalist hypothesis. One aligned opening index,
+including all three degraded starts, is the independent unit. Tests exactly
+sign-flip `sum_starts(score) - 1.5` against zero and
+`sum_starts(score_A - score_B)` for a method contrast. The totals remain
+quarter-integers, so the tail distribution is evaluated deterministically
+rather than estimated by Monte Carlo. This also prevents a recommendation
+alias from being counted as a new match. One Holm correction covers the entire
+family. This is deliberately conservative: it permits the confirmation
+ranking to differ from the primary ranking without silently changing the
+tested family.
 
 ## Audited post-training commands
 

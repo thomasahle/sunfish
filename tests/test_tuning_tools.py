@@ -390,6 +390,18 @@ class TuningToolsTest(unittest.TestCase):
         }
         self.assertEqual(accepted, {"a"})
 
+    def test_confirmation_sign_flips_shared_openings_not_start_aliases(self):
+        repeated = np.asarray([[.75] * 4] * 3)
+        hypotheses = recovery_decision.confirmation_tests({
+            "a": repeated,
+            "b": np.asarray([[.5] * 4] * 3),
+        })
+        a_zero = next(item for item in hypotheses if item["name"] == "a>zero")
+        self.assertEqual(a_zero["p_value"], 1 / 16)
+        self.assertEqual(a_zero["score_difference"], .25)
+        with self.assertRaisesRegex(ValueError, "start/opening grid"):
+            recovery_decision.confirmation_tests({"a": repeated, "b": np.asarray([[.5] * 4])})
+
     def test_recovery_protocol_rejects_identity_and_opening_drift(self):
         benchmark = {
             "budget": {"time_control": "3+0.1"},

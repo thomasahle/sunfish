@@ -70,7 +70,7 @@ Games measure sample efficiency, not total compute. If gates, optimizer cost,
 or concurrency differ, report elapsed or CPU time separately. Freeze methods
 before consulting validation results, reuse one starting-position match, and
 confirm the selected winner on a fresh opening set. The paired comparison uses
-shared opening-index bootstrap draws within each degraded start; its default is
+one shared opening-index bootstrap draw across every degraded start; its default is
 100,000 deterministic replicates at the 1,000-game checkpoint. It rejects
 inputs that do not share the complete validation protocol and starting match.
 

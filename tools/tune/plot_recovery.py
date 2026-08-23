@@ -126,8 +126,8 @@ def paired_comparisons(records, checkpoint=1000, replicates=100000, seed=2026082
     pair_count = counts.pop()
     for offset in range(0, replicates, 4096):
         stop = min(offset + 4096, replicates)
+        sample = rng.integers(pair_count, size=(stop - offset, pair_count))
         for start in starts:
-            sample = rng.integers(pair_count, size=(stop - offset, pair_count))
             base = logistic_elo(initial[start][sample].mean(axis=1))
             for m, method in enumerate(methods):
                 recovery[offset:stop, m] += (

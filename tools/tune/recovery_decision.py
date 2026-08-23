@@ -245,28 +245,33 @@ def holm(hypotheses):
 
 
 def confirmation_tests(scores):
+    matrices = {method: np.atleast_2d(values) for method, values in scores.items()}
+    shapes = {values.shape for values in matrices.values()}
+    if len(shapes) != 1:
+        raise ValueError("confirmation scores do not share a start/opening grid")
+    start_count, _ = shapes.pop()
     hypotheses = []
-    for method in sorted(scores):
-        values = scores[method]
+    for method in sorted(matrices):
+        values = matrices[method]
         hypotheses.append({
             "name": f"{method}>zero", "kind": "versus-zero", "method": method,
             "score_difference": float(np.mean(values) - .5),
             "elo_difference": float(plot_recovery.logistic_elo(np.mean(values))),
-            "_p": exact_sign_flip(values - .5),
+            "_p": exact_sign_flip(np.sum(values, axis=0) - start_count / 2),
         })
-    for candidate in sorted(scores):
-        for rival in sorted(scores):
+    for candidate in sorted(matrices):
+        for rival in sorted(matrices):
             if candidate == rival:
                 continue
-            difference = scores[candidate] - scores[rival]
+            difference = matrices[candidate] - matrices[rival]
             hypotheses.append({
                 "name": f"{candidate}>{rival}", "kind": "pairwise",
                 "method": candidate, "rival": rival,
                 "score_difference": float(np.mean(difference)),
                 "elo_difference": float(
-                    plot_recovery.logistic_elo(np.mean(scores[candidate]))
-                    - plot_recovery.logistic_elo(np.mean(scores[rival]))),
-                "_p": exact_sign_flip(difference),
+                    plot_recovery.logistic_elo(np.mean(matrices[candidate]))
+                    - plot_recovery.logistic_elo(np.mean(matrices[rival]))),
+                "_p": exact_sign_flip(np.sum(difference, axis=0)),
             })
     return holm(hypotheses)
 
@@ -297,7 +302,7 @@ def confirmation(args):
             recovered_elo.append(
                 final_elo - float(plot_recovery.logistic_elo(np.mean(initial_scores))))
             values += final_scores
-        scores[method] = np.asarray(values, dtype=float)
+        scores[method] = np.asarray(values, dtype=float).reshape(len(starts), phase["pairs"])
         estimates[method] = {
             "score": float(np.mean(values)), "elo_vs_master": float(np.mean(master_elo)),
             "recovery_elo": float(np.mean(recovered_elo)),

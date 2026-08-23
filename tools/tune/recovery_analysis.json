@@ -28,8 +28,9 @@
     "test": "exact_paired_sign_flip",
     "correction": "holm",
     "alternative": "greater",
-    "zero_difference": "score - 0.5",
-    "pairwise_difference": "score_A - score_B",
+    "sampling_unit": "one aligned opening index summed across all degraded starts",
+    "zero_difference": "sum_starts(score) - number_of_starts / 2",
+    "pairwise_difference": "sum_starts(score_A - score_B)",
     "family": "all finalist-vs-zero and ordered finalist-vs-finalist hypotheses",
     "winner": "rejects zero and every rival after familywise correction"
   }
