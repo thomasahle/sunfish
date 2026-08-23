@@ -376,6 +376,19 @@ Finished game 2 (baseline vs candidate): 1-0
             self.assertEqual(len(results), 4)
             self.assertEqual(validate.result(results)["pentanomial"], [0, 1, 0, 0, 1])
 
+    def test_validation_recovers_after_an_empty_attempt(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = pathlib.Path(directory, "configuration-test.log")
+            log.write_text("")
+            log.with_name("configuration-test.part-01.log").write_text(
+                "validation-match-identity interrupted\n")
+            log.with_name("configuration-test.part-02.log").write_text(
+                """Finished game 1 (candidate vs baseline): 1-0
+Finished game 2 (baseline vs candidate): 1/2-1/2
+""")
+            results, _ = validate.recover(log)
+            self.assertEqual(len(results), 2)
+
     def test_validation_does_not_recover_past_an_engine_failure(self):
         with tempfile.TemporaryDirectory() as directory:
             log = pathlib.Path(directory, "configuration-test.log")

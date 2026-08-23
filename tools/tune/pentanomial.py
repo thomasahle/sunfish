@@ -60,6 +60,8 @@ def game_results(output, partial=False, subject=None):
             raise ValueError("per-game results disagree with the final score")
         return ordered, wdl
     order = [int(game) for game in FINISHED.findall(output)]
+    if partial and not order and not snapshots:
+        return [], (0, 0, 0)
     if len(snapshots) != len(order) or len(order) % 2:
         raise ValueError("match output does not contain complete paired results")
     previous = (0, 0, 0)
