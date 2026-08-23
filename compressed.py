@@ -2,8 +2,7 @@ Move = namedtuple("Move", "i j prom")
 class Position(namedtuple("Position", "board score wc bc ep kp")):
     def gen_moves(self):
         for i, p in enumerate(self.board):
-            if p not in "PNBRQK":
-                continue
+            if p not in "PNBRQK": continue
             for d in directions[p]:
                 for j in count(i + d, d):
                     q = self.board[j]
@@ -73,8 +72,7 @@ class Searcher:
         self.nodes += 1
         if self.nodes % 2048 == 0 and time.time() > self.deadline: raise Stop
         depth = max(depth, 0)
-        if pos.score <= -MATE_LOWER:
-            return -MATE_UPPER
+        if pos.score <= -MATE_LOWER: return -MATE_UPPER
         if not root:
             entry = self.tp_score.get((pos, depth), Entry(-MATE_UPPER, MATE_UPPER))
             if entry.lower >= gamma: return entry.lower
@@ -82,13 +80,10 @@ class Searcher:
             if depth > 0 and pos in self.history: return 0
         killer = self.tp_move.get(pos)
         def moves():
-            if 2 < depth < 6 and guard:
-                yield None, None
-            if depth == 0:
-                yield None, None
+            if 2 < depth < 6 and guard: yield None, None
+            if depth == 0: yield None, None
             if killer and ((val := pos.value(killer)) >= QS or depth) and (val >= MATE_LOWER or depth > 3
-                    or pos.score + val + max(depth - 1, 0) * QS_A >= gamma):
-                yield val, killer
+                    or pos.score + val + max(depth - 1, 0) * QS_A >= gamma): yield val, killer
             yield from sorted(((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= QS or depth), reverse=True)
         calm = abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
         guard = not root and calm
@@ -97,15 +92,12 @@ class Searcher:
                -self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)
         best, live = -MATE_UPPER, False
         for val, move in moves():
-            if move is None and depth == 0:
-                score = pos.score
+            if move is None and depth == 0: score = pos.score
             elif move is None:
                 if (cap := pos.score + EVAL_ROUGHNESS) >= gamma:
                     score = min(cap, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
-                    if score >= gamma and (proof := pos.king_capture()):
-                        move, score, live = proof, MATE_UPPER, True
-                else:
-                    score = cap
+                    if score >= gamma and (proof := pos.king_capture()): move, score, live = proof, MATE_UPPER, True
+                else: score = cap
             else:
                 if val >= MATE_LOWER:
                     score = MATE_UPPER
@@ -120,21 +112,17 @@ class Searcher:
             if best >= gamma:
                 if move is not None and depth:
                     self.tp_move[pos] = move
-                    if len(self.tp_move) > TABLE_SIZE:
-                        del self.tp_move[next(k for k in self.tp_move if k != self.root)]
+                    if len(self.tp_move) > TABLE_SIZE: del self.tp_move[next(k for k in self.tp_move if k != self.root)]
                 break
         if depth and not live and all(
                 pos.move(m).king_capture() for m in pos.gen_moves()):
             mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)
             best = mate if pos.rotate(nullmove=True).king_capture() else 0
-        if not root:
-            self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)
-        if len(self.tp_score) > TABLE_SIZE:
-            del self.tp_score[next(iter(self.tp_score))]
+        if not root: self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)
+        if len(self.tp_score) > TABLE_SIZE: del self.tp_score[next(iter(self.tp_score))]
         return best
     def search(self, history):
-        self.nodes, self.history = 0, set(history)
-        self.tp_score.clear()
+        self.nodes, self.history, self.tp_score = 0, set(history), {}
         pos = self.root = history[-1]
         pst["K"] = K_MID if "Q" in pos.board and "q" in pos.board else K_END
         gamma = 0

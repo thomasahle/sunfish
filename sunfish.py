@@ -544,8 +544,7 @@ class Searcher:
 
     def search(self, history):
         """Iterative deepening MTD-bi search"""
-        self.nodes, self.history = 0, set(history)
-        self.tp_score.clear()
+        self.nodes, self.history, self.tp_score = 0, set(history), {}
         # Table choice is fixed for the whole search (and tp_score is
         # cleared above), so every bound targets one value function.
         pos = self.root = history[-1]
