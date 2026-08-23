@@ -2,7 +2,7 @@
 
 Sunfish is a simple, but strong chess engine, written in Python. With its simple
 [UCI](http://wbec-ridderkerk.nl/html/UCIProtocol.html) interface, and removing comments and whitespace,
-it takes up just 148 lines of code! (`tools/build/clean.sh sunfish.py | wc -l`).
+it takes up just [126 lines of code](compressed.py)!
 
 There is also a (somewhat) stronger NNUE based sunfish, which you can also [play against on Lichess](https://lichess.org/@/sunfish-nnue-engine).
 It's only 4096 bytes for the whole engine, so the neuron network is very small.
@@ -56,8 +56,6 @@ and make sure `python3` is on your PATH. On Windows, `.py` engines are launched
 through your current Python interpreter automatically.
 
 ### Packing
-
-For a true minimalist experience, the engine's core is committed right here in the repo: [`compressed.py`](compressed.py) -- just the `Position` and `Searcher` classes, stripped of comments, tables and scaffolding. It's the whole chess engine on one screenful, meant for reading; a pre-commit hook keeps it in sync with `sunfish.py` (enable once per clone: `git config core.hooksPath tools/hooks`) and CI verifies it is current on every push.
 
 Sunfish can also be packed into a single self-extracting executable of about 3kb:
 <pre>
