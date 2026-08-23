@@ -107,6 +107,10 @@ def study_identity(args):
         "gate_attempts": args.gate_attempts,
         "baseline_panel": [opponent_panel.identity(member, configured_engine, digest)
                            for member in panel],
+        "panel_selection": ({
+            "helper": digest(opponent_panel.__file__),
+            "seed": getattr(args, "panel_seed", 2026),
+        } if panel else None),
     }
 
 
@@ -281,7 +285,7 @@ def play_fixed(args, number, opening, options, member, label):
 
 def play_panel(args, number, opening, sequence, plus, minus):
     """Compare both perturbations with one opponent on the same color pair."""
-    member = opponent_panel.select(args.baseline_panel, sequence)
+    member = opponent_panel.select(args.baseline_panel, sequence, args.panel_seed)
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
         futures = [
             executor.submit(play_fixed, args, number, opening, options, member, label)
@@ -407,6 +411,8 @@ def main():
     parser.add_argument("--engine-args", default="")
     parser.add_argument("--baseline-panel",
         help="evaluate both perturbations against one weighted-panel member")
+    parser.add_argument("--panel-seed", type=int, default=2026,
+        help="seed for shuffled weighted opponent blocks")
     parser.add_argument("--space", required=True)
     parser.add_argument("--openings", required=True)
     parser.add_argument("--state", default="spsa.json")

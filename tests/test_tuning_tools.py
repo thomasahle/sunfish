@@ -1325,6 +1325,7 @@ Finished game 3 (candidate vs baseline): 0-1
                 initial_option=[], a_ratio=.1, alpha=.602, gamma=.101,
                 c_ratio=1 / 6, r_end=.02, draw_ratio=.2, precision=.5,
                 gate=None, gate_timeout=1, gate_attempts=2,
+                panel_seed=2026,
                 baseline_panel=[{
                     "name": "master", "engine": str(executable), "args": "",
                     "weight": 1, "options": "default",
@@ -1353,7 +1354,7 @@ Finished game 3 (candidate vs baseline): 0-1
                              {"spsa-panel-perturbation"})
 
     def test_spsa_panel_uses_the_same_opponent_and_opening(self):
-        args = argparse.Namespace(baseline_panel=[
+        args = argparse.Namespace(panel_seed=2026, baseline_panel=[
             {"name": "master", "weight": 2},
             {"name": "stockfish", "weight": 1},
             {"name": "compact", "weight": 1},
@@ -1367,11 +1368,11 @@ Finished game 3 (candidate vs baseline): 0-1
         with mock.patch.object(spsa, "play_fixed", side_effect=fixed):
             opponent, results = spsa.play_panel(
                 args, 7, 13, 2, {"X": 3}, {"X": 1})
-        self.assertEqual(opponent, "stockfish")
+        self.assertEqual(opponent, "compact")
         self.assertEqual(results, [(1, 1, 0), (1, 1, 0)])
         self.assertCountEqual(calls, [
-            (7, 13, {"X": 3}, "stockfish", "plus"),
-            (7, 13, {"X": 1}, "stockfish", "minus"),
+            (7, 13, {"X": 3}, "compact", "plus"),
+            (7, 13, {"X": 1}, "compact", "minus"),
         ])
 
     def test_panel_identity_pins_provenance_and_extra_files(self):

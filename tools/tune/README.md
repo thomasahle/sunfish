@@ -40,12 +40,13 @@ categorical, and Boolean parameters.
 - `locking.py` protects resumable studies from concurrent writers.
 - `uci_wrapper.py` exposes a UCI command with arguments as one executable.
 
-Both the global GP and SPSA accept deterministic integer-weighted opponent
+Both the global GP and SPSA accept seeded, integer-weighted opponent
 panels. Panel-anchored SPSA compares both perturbations with the same opponent
 on the same color-swapped opening before applying the gradient; one update is
 therefore two opening pairs and four games. Five such lanes use 20 engines.
-Both runners map the same one-based opening number to the same panel member.
-Panel provenance and extra source-lock files are included in resumable study
+Both runners shuffle the same weighted block for each group of opening numbers,
+which preserves exact weights without a fixed opponent phase. The seed, panel
+helper, provenance, and extra source-lock files are included in resumable study
 identities, along with executable hashes and UCI options.
 
 `freeze_panel.py` builds the C twin twice on the tournament host, rejects a

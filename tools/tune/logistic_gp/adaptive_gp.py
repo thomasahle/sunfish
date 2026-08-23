@@ -217,6 +217,10 @@ def study_identity(args):
             args.baseline_engine, args.baseline_args, args.baseline_options)),
         "baseline_panel": [opponent_panel.identity(member, engine_identity, file_identity)
                            for member in panel],
+        "panel_selection": ({
+            "helper": file_identity(opponent_panel.__file__),
+            "seed": getattr(args, "panel_seed", 2026),
+        } if panel else None),
         "openings": file_identity(args.openings),
         "opening_schedule": {
             "cycle": args.cycle_openings,
@@ -956,7 +960,8 @@ def recover_pair(path, identity):
 async def run_pair(args, slot, experiment, pair, identity, vector, opponent,
                    opening, sequence, space):
     if opponent is None:
-        member = opponent_panel.select(args.baseline_panel, sequence) if args.baseline_panel else {
+        member = opponent_panel.select(
+            args.baseline_panel, sequence, args.panel_seed) if args.baseline_panel else {
             "name": "baseline", "engine": args.baseline_engine,
             "args": args.baseline_args, "options": args.baseline_options,
         }
@@ -1382,6 +1387,8 @@ def main():
         value if value == "default" else json.loads(value)), default={})
     parser.add_argument("--baseline-panel",
         help="JSON list of deterministic integer-weighted fixed opponents")
+    parser.add_argument("--panel-seed", type=int, default=2026,
+        help="seed for shuffled weighted opponent blocks")
     parser.add_argument("--space", help="JSON numeric/categorical UCI option space")
     parser.add_argument("--seed-state", help="import completed batches into a new study")
     parser.add_argument("--openings", required=True)

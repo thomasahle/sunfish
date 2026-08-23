@@ -2,6 +2,7 @@
 
 import json
 import pathlib
+import random
 import re
 
 
@@ -58,11 +59,11 @@ def identity(member, engine, file_digest):
     return result
 
 
-def select(members, sequence):
-    """Map a paired-opening sequence reproducibly onto the weighted panel."""
-    offset = sequence % sum(member["weight"] for member in members)
-    for member in members:
-        if offset < member["weight"]:
-            return member
-        offset -= member["weight"]
-    raise AssertionError("unreachable panel offset")
+def select(members, sequence, seed=2026):
+    """Choose from a reproducibly shuffled block with the exact panel weights."""
+    if sequence < 1:
+        raise ValueError("panel sequence must be one-based")
+    block = [member for member in members for _ in range(member["weight"])]
+    epoch, offset = divmod(sequence - 1, len(block))
+    random.Random(f"{seed}:{epoch}").shuffle(block)
+    return block[offset]

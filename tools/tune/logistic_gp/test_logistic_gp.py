@@ -1692,14 +1692,19 @@ class MixedAcquisitionTest(unittest.TestCase):
             {"name": "stockfish", "weight": 1},
             {"name": "compact", "weight": 1},
         ]
-        first = [panel_member(panel, sequence)["name"] for sequence in range(16)]
-        second = [panel_member(panel, sequence)["name"] for sequence in range(16)]
+        first = [panel_member(panel, sequence)["name"] for sequence in range(1, 17)]
+        second = [panel_member(panel, sequence)["name"] for sequence in range(1, 17)]
+        other = [panel_member(panel, sequence, 2027)["name"] for sequence in range(1, 17)]
         self.assertEqual(first, second)
+        self.assertNotEqual(first, other)
         self.assertEqual(Counter(first), {"master": 8, "stockfish": 4, "compact": 4})
-        self.assertEqual(
-            [panel_member(panel, sequence)["name"] for sequence in range(1, 5)],
-            ["master", "stockfish", "compact", "master"],
-        )
+        expected = {"master": 2, "stockfish": 1, "compact": 1}
+        self.assertTrue(all(Counter(first[offset:offset + 4]) == expected
+                            for offset in range(0, 16, 4)))
+        self.assertGreater(len({tuple(first[offset:offset + 4])
+                                for offset in range(0, 16, 4)}), 1)
+        with self.assertRaises(ValueError):
+            panel_member(panel, 0)
 
     def test_baseline_panel_loader_rejects_ambiguous_members(self):
         with tempfile.TemporaryDirectory() as directory:
