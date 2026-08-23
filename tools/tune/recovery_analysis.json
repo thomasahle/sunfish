@@ -18,6 +18,8 @@
     "checkpoint": 1000,
     "bootstrap_replicates": 100000,
     "bootstrap_seed": 20260822,
+    "estimand": "logistic Elo of the uniform degraded-start/opening mixture",
+    "recovery": "mixture final Elo - mixture starting Elo",
     "finalists": "leader, runner-up, and methods whose runner-up contrast includes zero"
   },
   "confirmation": {
@@ -29,9 +31,11 @@
     "correction": "holm",
     "alternative": "greater",
     "sampling_unit": "one aligned opening index summed across all degraded starts",
+    "assumption": "opening-cluster differences are sign-exchangeable under each tested sharp null",
     "zero_difference": "sum_starts(score) - number_of_starts / 2",
     "pairwise_difference": "sum_starts(score_A - score_B)",
     "family": "all finalist-vs-zero and ordered finalist-vs-finalist hypotheses",
-    "winner": "rejects zero and every rival after familywise correction"
+    "winner": "rejects zero and every screened rival after finalist-family correction",
+    "scope": "confirmation does not provide familywise control over the upstream five-method screen"
   }
 }

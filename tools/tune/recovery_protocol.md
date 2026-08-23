@@ -199,18 +199,20 @@ the sampling unit.
 
 ## Inference and selection
 
-Align all methods by start, checkpoint, and book-line index. Compute each
-recommendation's Elo against master and its Elo recovered from that degraded
-start. Compare methods directly rather than comparing overlapping marginal
-error bars.
+Align all methods by start, checkpoint, and book-line index. Give each degraded
+start equal weight, pool its normalized pair scores, and apply the logistic Elo
+transform once to that uniform start/opening mixture. Recovery is the final
+mixture Elo minus the starting mixture Elo. This avoids averaging nonlinear
+Elo transforms and gives primary selection and confirmation one estimand.
+Compare methods directly rather than comparing overlapping marginal error bars.
 
 For a method contrast, resample one vector of opening indices and apply it
 across every start, method, and shared starting configuration. In each of
-100,000 stratified bootstrap replicates, recompute
-logistic Elo, recovery, the mean over three starts, and the method difference.
-Report the paired mean-score difference and percentile 95% interval.
+100,000 stratified bootstrap replicates, recompute the pooled logistic Elo,
+recovery, and method difference. Report the paired mean-score difference and
+percentile 95% interval.
 
-The primary metric is mean held-out Elo recovered at 1,000 training games.
+The primary metric is held-out mixture Elo recovered at 1,000 training games.
 Advance its empirical leader and runner-up, plus any other method whose paired
 95% difference from the runner-up includes zero. Normalized trapezoidal area
 under the 0--1,000-game recovery curve is secondary and cannot override a
@@ -244,6 +246,14 @@ alias from being counted as a new match. One Holm correction covers the entire
 family. This is deliberately conservative: it permits the confirmation
 ranking to differ from the primary ranking without silently changing the
 tested family.
+
+The enumeration is exact conditional on the opening-cluster differences being
+sign-exchangeable under each tested sharp null. Pairing alone does not make a
+sign-flip test distribution-free for every composite zero-mean null. Holm
+controls the family of hypotheses among the finalists selected by the primary
+screen; it does not retroactively provide familywise control over all five
+screened methods. A declared winner is therefore a winner among the screened
+finalists under this pre-registered two-stage procedure.
 
 ## Audited post-training commands
 

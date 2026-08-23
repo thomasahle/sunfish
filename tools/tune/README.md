@@ -33,7 +33,7 @@ categorical, and Boolean parameters.
 - `plot_recovery.py` produces held-out Elo-versus-training-games curves and a
   paired method-comparison CSV at the primary checkpoint.
 - `recovery_decision.py` selects tied primary finalists and performs the
-  independent, familywise-corrected confirmation decision.
+  independent, familywise-corrected decision among those screened finalists.
 - `pentanomial.py` parses color-swapped opening pairs and estimates their
   score and uncertainty without treating the two games as independent.
 - `gating.py` caches deterministic feasibility checks before games are spent.
@@ -69,8 +69,9 @@ fastchess recovery returns success.
 Games measure sample efficiency, not total compute. If gates, optimizer cost,
 or concurrency differ, report elapsed or CPU time separately. Freeze methods
 before consulting validation results, reuse one starting-position match, and
-confirm the selected winner on a fresh opening set. The paired comparison uses
-one shared opening-index bootstrap draw across every degraded start; its default is
+confirm the selected winner on a fresh opening set. Pair scores are pooled over
+the equally weighted degraded starts before converting the mixture to Elo. The
+paired comparison uses one shared opening-index draw across every start; its default is
 100,000 deterministic replicates at the 1,000-game checkpoint. It rejects
 inputs that do not share the complete validation protocol and starting match.
 

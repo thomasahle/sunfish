@@ -291,21 +291,20 @@ def confirmation(args):
     verify_recommendations(payload, args.recommendations, recommendation_sha)
     scores, estimates = {}, {}
     for method in finalists:
-        values, master_elo, recovered_elo = [], [], []
+        values, initial_values = [], []
         for start in sorted(starts):
             record = indexed[method, start, checkpoint]
             initial = indexed[method, start, 0]
             final_scores = payload["matches"][record["validation"]]["pair_scores"]
             initial_scores = payload["matches"][initial["validation"]]["pair_scores"]
-            final_elo = float(plot_recovery.logistic_elo(np.mean(final_scores)))
-            master_elo.append(final_elo)
-            recovered_elo.append(
-                final_elo - float(plot_recovery.logistic_elo(np.mean(initial_scores))))
-            values += final_scores
-        scores[method] = np.asarray(values, dtype=float).reshape(len(starts), phase["pairs"])
+            values.append(final_scores)
+            initial_values.append(initial_scores)
+        scores[method] = np.asarray(values, dtype=float)
+        final_elo = float(plot_recovery.logistic_elo(np.mean(scores[method])))
+        initial_elo = float(plot_recovery.logistic_elo(np.mean(initial_values)))
         estimates[method] = {
-            "score": float(np.mean(values)), "elo_vs_master": float(np.mean(master_elo)),
-            "recovery_elo": float(np.mean(recovered_elo)),
+            "score": float(np.mean(scores[method])), "elo_vs_master": final_elo,
+            "recovery_elo": final_elo - initial_elo,
         }
     hypotheses = confirmation_tests(scores)
     alpha = phase["alpha"]

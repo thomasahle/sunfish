@@ -280,6 +280,45 @@ class TuningToolsTest(unittest.TestCase):
         self.assertGreater(first[0]["ci_low"], 0)
         self.assertAlmostEqual(first[0]["score_difference"], .125)
 
+    def test_recovery_metric_is_elo_of_the_uniform_start_mixture(self):
+        records = []
+        identity = {
+            "validation_start": 220001, "validation_pairs": 4,
+            "validation_openings": "book", "validation_protocol": "protocol",
+            "benchmark_protocol": "frozen-study",
+        }
+        for method, finals in {
+                "a": ([.75] * 4, [.75] * 4, [.75] * 4),
+                "b": ([.5] * 4, [.5] * 4, [1] * 4),
+        }.items():
+            for start, scores in zip((5, 15, 23), finals):
+                records += [
+                    {"method": method, "start": start, "checkpoint": 0,
+                     "pair_scores": [.5] * 4, "validation": f"start-{start}"} | identity,
+                    {"method": method, "start": start, "checkpoint": 1000,
+                     "pair_scores": scores, "validation": f"{method}-{start}"} | identity,
+                ]
+        comparison = plot_recovery.paired_comparisons(
+            records, replicates=100, seed=7, expected_starts=(5, 15, 23))[0]
+        self.assertGreater(comparison["elo_difference"], 0)
+        enriched = plot_recovery.add_gains([
+            record | {"trained_games": record["checkpoint"], "elo": 0, "error": 1}
+            for record in records
+        ])
+        a = next(row for row in plot_recovery.summarize(enriched)
+                 if row["method"] == "a" and row["checkpoint"] == 1000)
+        b = next(row for row in plot_recovery.summarize(enriched)
+                 if row["method"] == "b" and row["checkpoint"] == 1000)
+        self.assertAlmostEqual(a["elo"], float(plot_recovery.logistic_elo(.75)))
+        self.assertAlmostEqual(b["elo"], float(plot_recovery.logistic_elo(2 / 3)))
+        confirmation = recovery_decision.confirmation_tests({
+            "a": np.asarray([[.75] * 4] * 3),
+            "b": np.asarray([[.5] * 4, [.5] * 4, [1] * 4]),
+        })
+        a_over_b = next(item for item in confirmation if item["name"] == "a>b")
+        self.assertGreater(a_over_b["score_difference"], 0)
+        self.assertGreater(a_over_b["elo_difference"], 0)
+
     def test_recovery_method_comparison_rejects_misalignment(self):
         def record(method, start, checkpoint, scores):
             return {

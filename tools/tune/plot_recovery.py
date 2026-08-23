@@ -113,13 +113,12 @@ def paired_comparisons(records, checkpoint=1000, replicates=100000, seed=2026082
     if len(studies) > 1:
         raise ValueError("validation records use different benchmark protocols")
 
-    observed = np.empty((len(starts), len(methods)))
-    raw = np.empty_like(observed)
-    for s, start in enumerate(starts):
-        base = logistic_elo(initial[start].mean())
-        for m, method in enumerate(methods):
-            observed[s, m] = logistic_elo(scores[method, start].mean()) - base
-            raw[s, m] = np.mean(scores[method, start] - initial[start])
+    initial_score = np.mean([initial[start].mean() for start in starts])
+    observed, raw = np.empty(len(methods)), np.empty(len(methods))
+    for m, method in enumerate(methods):
+        final_score = np.mean([scores[method, start].mean() for start in starts])
+        observed[m] = logistic_elo(final_score) - logistic_elo(initial_score)
+        raw[m] = final_score - initial_score
 
     rng = np.random.default_rng(seed)
     recovery = np.zeros((replicates, len(methods)))
@@ -127,12 +126,15 @@ def paired_comparisons(records, checkpoint=1000, replicates=100000, seed=2026082
     for offset in range(0, replicates, 4096):
         stop = min(offset + 4096, replicates)
         sample = rng.integers(pair_count, size=(stop - offset, pair_count))
+        baseline = np.zeros(stop - offset)
+        final = np.zeros((stop - offset, len(methods)))
         for start in starts:
-            base = logistic_elo(initial[start][sample].mean(axis=1))
+            baseline += initial[start][sample].mean(axis=1)
             for m, method in enumerate(methods):
-                recovery[offset:stop, m] += (
-                    logistic_elo(scores[method, start][sample].mean(axis=1)) - base)
-    recovery /= len(starts)
+                final[:, m] += scores[method, start][sample].mean(axis=1)
+        baseline /= len(starts)
+        recovery[offset:stop] = (
+            logistic_elo(final / len(starts)) - logistic_elo(baseline)[:, None])
 
     output = []
     for a, b in itertools.combinations(range(len(methods)), 2):
@@ -142,11 +144,11 @@ def paired_comparisons(records, checkpoint=1000, replicates=100000, seed=2026082
             "checkpoint": checkpoint, "method_a": methods[a], "method_b": methods[b],
             "starts": len(starts), "pairs_per_start": pair_count,
             "replicates": replicates, "seed": seed,
-            "recovery_a": observed[:, a].mean(),
-            "recovery_b": observed[:, b].mean(),
-            "elo_difference": observed[:, a].mean() - observed[:, b].mean(),
+            "recovery_a": observed[a],
+            "recovery_b": observed[b],
+            "elo_difference": observed[a] - observed[b],
             "ci_low": low, "ci_high": high,
-            "score_difference": raw[:, a].mean() - raw[:, b].mean(),
+            "score_difference": raw[a] - raw[b],
         })
     return output
 
@@ -190,7 +192,18 @@ def aggregate(group, value, error):
     return statistics.mean(values), 1.96 * math.sqrt(within + between)
 
 
+def pooled_scores(group):
+    vectors = [record.get("pair_scores") for record in group]
+    if not vectors or any(not vector or len(vector) != len(vectors[0]) for vector in vectors):
+        return None
+    return [statistics.mean(values) for values in zip(*vectors)]
+
+
 def summarize(records):
+    starts = {
+        (record["method"], record.get("start")): record
+        for record in records if record["checkpoint"] == 0
+    }
     groups = {}
     for record in records:
         groups.setdefault((record["method"], record["checkpoint"]), []).append(record)
@@ -202,7 +215,16 @@ def summarize(records):
             "trained_games": statistics.mean(record["trained_games"] for record in group),
             "starts": len(group), "elo": elo, "error": error,
         }
-        if all("gain" in record for record in group):
+        initial = [starts.get((method, record.get("start"))) for record in group]
+        final_scores = pooled_scores(group)
+        initial_scores = pooled_scores(initial) if all(initial) else None
+        if final_scores and initial_scores:
+            row["elo"] = float(logistic_elo(statistics.mean(final_scores)))
+            row["error"] = paired_error(final_scores, [.5] * len(final_scores))
+            initial_elo = float(logistic_elo(statistics.mean(initial_scores)))
+            row["gain"] = row["elo"] - initial_elo
+            row["gain_error"] = paired_error(final_scores, initial_scores)
+        elif all("gain" in record for record in group):
             row["gain"], row["gain_error"] = aggregate(group, "gain", "gain_error")
         output.append(row)
     return output
