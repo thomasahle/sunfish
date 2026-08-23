@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.11-slim@sha256:9c900dea9e8fb7e16277c179b555cc72d29a352dbc33cff48ad5a0412fd5bfc7
 
 ARG RBFOPT_COMMIT=458402c6f0c1d57f93ef2caaba461a51054e00ea
 

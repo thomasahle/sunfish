@@ -1,0 +1,300 @@
+{
+  "version": 2,
+  "frozen": "2026-08-23",
+  "fresh_runs_required": true,
+  "method_source_commit": "a432fb7c5e546dd11015eb4534c8ae31707156be",
+  "budget": {
+    "paired_observations": 500,
+    "games": 1000,
+    "checkpoints": [0, 100, 200, 400, 700, 1000],
+    "time_control": "3+0.1",
+    "random_seed": 2026,
+    "maximum_engine_processes": 20,
+    "training_gate": null
+  },
+  "artifacts": {
+    "engine": "c5039b4a0f88a2e11cf18ad13cd3f7d2c206b0a6901249d67d0b43ec02c95478",
+    "engine_source": {
+      "commit": "c01915f2349849598e617d24149b74d2fc65ef2a",
+      "machine": "x86_64",
+      "compiler": {
+        "path": "/usr/bin/gcc",
+        "version": "gcc (GCC) 11.5.0 20240719 (Red Hat 11.5.0-14)",
+        "sha256": "f679a0ba1bddf27acd9523a1df45909b8e681f1f84f2d0f1cc87f5e115a6ec26"
+      },
+      "command": [
+        "make", "-C", "tools/ctwin", "CC=/usr/bin/gcc",
+        "CFLAGS=-O3 -march=native -Wall -Wextra"
+      ]
+    },
+    "tables": "d09fc445930a0e4babbab1aa176847a77923d3bf00c0b6fb0c46b0a90d14bbf0",
+    "fastchess": "3d0a8f3c8b837a96366ac838f3ddf6fe87b813abb4ad2852284c0ce409132566",
+    "training_book": "2c17253fc1282d7f41410d64e0621d801bb992c3bfba6ecd2372b06e7c5eae5f",
+    "heldout_book": "3f499996ff0b674a04f85f2634811d102dd53b5115841e8f11d18e1f550ba2ca",
+    "project": {
+      "pyproject.toml": "5af791f8e2378b60577c9b2c558925dc6f4c8ce040b1f69ab564de676eab0ff7",
+      "uv.lock": "a707e0d6519177adbe30821dd4f5284a68992f85b5c5a6cf7b8feff93175e2b3"
+    }
+  },
+  "space": {
+    "path": "tools/tune/search_parameters.json",
+    "sha256": "656aa8281bb91401ea38940f9ee1482f809b5b421dacacc7dc633d4fd94fcfc6",
+    "canonical_sha256": "72724668872d34cab256ee3c1fb630e663abb33d4151d8799c568fb12a95c15e",
+    "removed_dead_axis": "FUT_MAX",
+    "added_axis": "NULL_CAP_MARGIN"
+  },
+  "reference": {
+    "options": {
+      "QS": 40,
+      "QS_A": 140,
+      "LMR": 75,
+      "EVAL_ROUGHNESS": 15,
+      "NULL_CAP_MARGIN": 15,
+      "NULL_MARGIN": -200,
+      "NULL_LIMIT": 750,
+      "NULL_CUT_RED": 3,
+      "NULL_RED": 7,
+      "NULL_MIN_DEPTH": 2,
+      "FUEL_MIN_DEPTH": 6,
+      "FUT_CAP_DEPTH": 3
+    },
+    "canonical_sha256": "885f08bbe0ac45ceafc1b8c3f048166c37304f607f0a1be2102f77598d8fc006"
+  },
+  "starts": [
+    {
+      "source_index": 5,
+      "options": {
+        "QS": 153,
+        "QS_A": 94,
+        "LMR": 62,
+        "EVAL_ROUGHNESS": 21,
+        "NULL_CAP_MARGIN": 21,
+        "NULL_MARGIN": -11,
+        "NULL_LIMIT": 700,
+        "NULL_CUT_RED": 4,
+        "NULL_RED": 7,
+        "NULL_MIN_DEPTH": 2,
+        "FUEL_MIN_DEPTH": 7,
+        "FUT_CAP_DEPTH": 4
+      },
+      "canonical_sha256": "ff9be1ff11918258c17682fc4cff5e3e8c50d9bc29cdd402d0cc31f774044e8f",
+      "centered_space_sha256": "df2772915ca43e6a7c5a9407e12b4cb6457ac5abb1245e05311f07856750252d",
+      "materialized_sha256": "4fdd7555a9d697162bab2ff3d6b768d7c2738c1facdf3477ecde5344968d6738",
+      "old_overrides": {"NULL_CAP_MARGIN": -1, "FUT_MAX": 2},
+      "depth8_trace_sha256": "4f2ece41d53624bd2a1acc0f0f1e9ac9d1a6a25abcd4c294ac1c443af3996bda"
+    },
+    {
+      "source_index": 15,
+      "options": {
+        "QS": 88,
+        "QS_A": 186,
+        "LMR": -25,
+        "EVAL_ROUGHNESS": 26,
+        "NULL_CAP_MARGIN": 26,
+        "NULL_MARGIN": 227,
+        "NULL_LIMIT": 613,
+        "NULL_CUT_RED": 3,
+        "NULL_RED": 8,
+        "NULL_MIN_DEPTH": 3,
+        "FUEL_MIN_DEPTH": 9,
+        "FUT_CAP_DEPTH": 4
+      },
+      "canonical_sha256": "227d19eabe4e7265f0e9ba7b9ff0e6092c2017283ecd8bffc1e3075f7d4b9f56",
+      "centered_space_sha256": "2306718d8658fafaa1ca34c8ceaf445f4717044471733664d7c5706bb84fd922",
+      "materialized_sha256": "7a818fca3d0806e2af58b4a25f45fa54965cf19541da121c072914704e0ec4bf",
+      "old_overrides": {"NULL_CAP_MARGIN": -1, "FUT_MAX": 1},
+      "depth8_trace_sha256": "e90b22c4f19a07041b3448fe3d71cb7a0a14999df02e9cca9eac8f30c266127a"
+    },
+    {
+      "source_index": 23,
+      "options": {
+        "QS": 101,
+        "QS_A": 128,
+        "LMR": 50,
+        "EVAL_ROUGHNESS": 26,
+        "NULL_CAP_MARGIN": 26,
+        "NULL_MARGIN": -232,
+        "NULL_LIMIT": 1042,
+        "NULL_CUT_RED": 2,
+        "NULL_RED": 5,
+        "NULL_MIN_DEPTH": 2,
+        "FUEL_MIN_DEPTH": 8,
+        "FUT_CAP_DEPTH": 3
+      },
+      "canonical_sha256": "d9519bcf63231a9670a63b71f08834d5dec75b015eb0a8f373ee643bc0a9723f",
+      "centered_space_sha256": "0a7568a19256e444cc5181ff5f559df191d17d9b60e08c248fd5a25d4280df84",
+      "materialized_sha256": "a4879fad9fa33c000e97d3f09ef27d9520ae69e79bf4d549c1afa8e46c6b4eea",
+      "old_overrides": {"NULL_CAP_MARGIN": -1, "FUT_MAX": 1},
+      "depth8_trace_sha256": "676d0d21de510653ef239e343fa73519ed9430df363da371023415b5873c7176"
+    }
+  ],
+  "openings": {
+    "order": "sequential",
+    "first_line": 1,
+    "pairs": 500,
+    "mapping": "observation i uses training-book line i + 1"
+  },
+  "match": {
+    "games_per_round": 2,
+    "repeat": true,
+    "recover": true,
+    "draw": {"movenumber": 40, "movecount": 8, "score": 10},
+    "resign": {"movecount": 4, "score": 500}
+  },
+  "methods": {
+    "logistic_gp": {
+      "opponent": "reference",
+      "files": {
+        "tools/tune/logistic_gp/adaptive_gp.py":
+          "7c525e2c2c23859f644f6e8ac73a2161881f4c931885f10bea9c071d94d7082b",
+        "tools/tune/logistic_gp/logistic_gp.py":
+          "70b964e0c1fc5b2f1900365b1519576cdee5af0cc50bfa65728f7820acc1671e"
+      },
+      "settings": {
+        "pairs": 1,
+        "slots": 10,
+        "queue_batches": 10,
+        "refill_batches": 1,
+        "total_batches": 500,
+        "opening_order": "sequential",
+        "opening_seed": 2026,
+        "cycle_openings": false,
+        "acquisition": "ucb",
+        "exploration": 1.0,
+        "initial_design": 24,
+        "explore_start": 0.5,
+        "explore_floor": 0.2,
+        "explore_half_life": 40,
+        "explore_optimism": 0.0,
+        "explore_confidence": 1.96,
+        "duel_fraction": 0.0,
+        "pair_weight": 0.5,
+        "inducing": 128,
+        "acquisition_restarts": 8,
+        "update_batches": 1,
+        "checkpoint_batches": 1000,
+        "gate_workers": 4,
+        "axis_design": false,
+        "full_axis_design": false,
+        "learn_mean": false,
+        "local_acquisition": false,
+        "local_support": 1,
+        "safe_only": false,
+        "seed_state": null,
+        "source_logs": null,
+        "wall_time": 0
+      }
+    },
+    "chess_tuning_tools": {
+      "opponent": "reference",
+      "upstream_commit": "a88f94725ac074ba4df635e263ffa98a502cee08",
+      "upstream_version": "0.9.5",
+      "dockerfile_sha256": "cc86e77424c4e569191004fbf188b757e7126784afeebed65207b607e5ce3bb5",
+      "files": {
+        "tools/tune/chess_tuning_tools/fastchess_shim.py":
+          "cb49c83a7478c305a261ad89fb6a7d44c6607b88d1c8a90c2b7c5d8fe7e4a4d1",
+        "tools/tune/chess_tuning_tools/patch_ctt.py":
+          "0cfe071acdddb471252820d801f0edbf85ea3f65c3a77c87301d5645704a5a21",
+        "tools/tune/chess_tuning_tools/make_config.py":
+          "56f45a7100d250a714ae41b350f2e4e3b0788ca5ba0ef7aad2b73545d31a83b8"
+      },
+      "settings": {
+        "acquisition": "mes",
+        "acquisition_samples": 1,
+        "confidence": 0.9,
+        "rounds": 1,
+        "concurrency": 2,
+        "initial_points": 24,
+        "points": 1000,
+        "iterations": 500,
+        "seed": 2026,
+        "gp_burnin": 5,
+        "gp_samples": 300,
+        "gp_initial_burnin": 100,
+        "gp_initial_samples": 300,
+        "gp_signal_prior_scale": 4.0,
+        "gp_noise_prior_scale": 0.0006,
+        "gp_lengthscale_prior_lb": 0.1,
+        "gp_lengthscale_prior_ub": 0.5,
+        "warp_inputs": true,
+        "resume": true,
+        "fast_resume": true,
+        "plot_every": 0,
+        "result_every": 1,
+        "evaluate_start_first": true
+      }
+    },
+    "rbfopt": {
+      "opponent": "reference",
+      "upstream_commit": "458402c6f0c1d57f93ef2caaba461a51054e00ea",
+      "dockerfile_sha256": "6d954f01728d54665fa830ad9bb51d34ebd6e3601cb654deef097297c2a33a12",
+      "files": {
+        "tools/tune/rbfopt/run_rbfopt.py":
+          "782cf7471561cd453860313ac85bae5eca9734d33cdc25bb0b375e8e821269c7"
+      },
+      "settings": {
+        "algorithm": "MSRSM",
+        "global_search_method": "genetic",
+        "seed": 2026,
+        "games": 1000,
+        "noisy_pairs": 1,
+        "accurate_pairs": 1,
+        "slots": 10,
+        "do_local_search": false,
+        "max_iterations": 1000000,
+        "max_evaluations": 1000000,
+        "max_noisy_evaluations": 1000000,
+        "max_noisy_iterations": 1000000,
+        "max_noisy_restarts": 1000000,
+        "save_state_interval": 1000000
+      }
+    },
+    "spsa": {
+      "opponent": "symmetric_perturbation",
+      "files": {
+        "tools/tune/spsa/spsa.py":
+          "51dd9220334d2025c7eb46c67c045be62d56a8b7ca31caab85af6ab152019c7d"
+      },
+      "settings": {
+        "iterations": 500,
+        "pairs_per_step": 1,
+        "slots": 10,
+        "seed": 2026,
+        "a_ratio": 0.1,
+        "alpha": 0.602,
+        "gamma": 0.101,
+        "c_ratio": 0.16666666666666666,
+        "r_end": null,
+        "draw_ratio": 0.2,
+        "precision": 0.5,
+        "gate_attempts": 100
+      }
+    },
+    "clop": {
+      "opponent": "reference",
+      "upstream_version": "0.0.9",
+      "archive_sha256": "0d66228387327ceef282e8135ff53ae216393bbd3c03cb19a14460ee1e9652e7",
+      "files": {
+        "tools/tune/clop/clop_fastchess.py":
+          "5ed1703683f296f09bbac8e0eed508bfed1459a8bae0741adbc9413afdf8a692",
+        "tools/tune/clop/make_config.py":
+          "18fe0af5811d427eb94dec35acfd85bea60a1071b11f373902d31f7d864a6c47"
+      },
+      "settings": {
+        "processors": 10,
+        "replications": 2,
+        "draw_elo": 65,
+        "h": 3,
+        "correlations": "all",
+        "max_games": 1000,
+        "start": 1
+      }
+    }
+  },
+  "runtime": {
+    "container_base":
+      "python:3.11-slim@sha256:9c900dea9e8fb7e16277c179b555cc72d29a352dbc33cff48ad5a0412fd5bfc7",
+    "record_built_image_ids": true,
+    "require_one_image_id_per_containerized_method": true
+  }
+}

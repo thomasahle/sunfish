@@ -28,6 +28,7 @@ import math
 import pathlib
 import random
 import re
+import secrets
 import shlex
 import shutil
 import subprocess
@@ -42,11 +43,15 @@ from scipy.special import ndtr
 sys.path.insert(0, str(pathlib.Path(__file__).parents[1]))
 import gating  # noqa: E402
 import locking  # noqa: E402
+import pentanomial  # noqa: E402
 import logistic_gp
 
 
 SCORE = re.compile(
     r"Score of candidate vs (?:baseline|opponent):\s+(\d+)\s+-\s+(\d+)\s+-\s+(\d+)")
+PAIR_HEADER = re.compile(r"^adaptive-gp-identity ([0-9a-f]{64})$", re.MULTILINE)
+PAIR_RESULT = re.compile(
+    r"^adaptive-gp-result ([0-9a-f]{64}) (\d+) (\d+) (\d+)$", re.MULTILINE)
 UCI_OPTION = re.compile(r"^option name (.+?) type ")
 SAVED_STATES = {}
 STATE_LOCK = threading.RLock()
@@ -221,7 +226,7 @@ def study_identity(args):
         "tc": args.tc,
         "allocation": {
             name: getattr(args, name)
-            for name in ("pair_weight", "exploration", "initial_design", "explore_start",
+            for name in ("pairs", "pair_weight", "exploration", "initial_design", "explore_start",
                          "explore_floor", "explore_half_life", "explore_optimism",
                          "explore_confidence",
                          "duel_fraction", "inducing", "seed_selections",
@@ -230,13 +235,14 @@ def study_identity(args):
                          "full_axis_design",
                          "local_acquisition", "local_support", "acquisition")
         },
+        "total_batches": args.total_batches,
     }
 
 
 def bind_study(state, identity):
     previous = state.get("study")
     if previous is None:
-        if state["batches"]:
+        if state["batches"] or state.get("pending"):
             raise RuntimeError("state has observations but no study identity; start a new state")
         state["study"] = identity
     elif previous != identity:
@@ -468,6 +474,72 @@ class OpeningSchedule:
                 random.Random(self.seed + epoch).shuffle(order)
             self.epochs[epoch] = order
         return self.epochs[epoch][offset]
+
+
+def pair_identity(state, record, pair):
+    """Bind a game result to one state generation and frozen comparison."""
+    payload = {
+        "state": state["state_id"], "study": state["study"],
+        "experiment": record["number"], "pair": pair,
+        "knobs": record["knobs"], "opponent_knobs": record["opponent_knobs"],
+        "opening_sequence": record["opening_sequence"] + pair,
+        "opening": record["openings"][pair],
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def restore_pending(state, space):
+    """Rebuild unfinished experiments and pair tasks from durable state."""
+    experiments = {}
+    queue = deque()
+    for record in state.setdefault("pending", []):
+        number = record["number"]
+        if number in experiments:
+            raise ValueError(f"duplicate pending experiment {number}")
+        if len(record["openings"]) != len(record["results"]):
+            raise ValueError(f"pending experiment {number} has mismatched pairs")
+        if all(result is not None for result in record["results"]):
+            raise ValueError(f"pending experiment {number} is already complete")
+        expected = [pair_identity(state, record, pair) for pair in range(len(record["results"]))]
+        if record.setdefault("identities", expected) != expected:
+            raise ValueError(f"pending experiment {number} has a mismatched identity")
+        vector = space.canonical(record["knobs"])
+        opponent = (space.canonical(record["opponent_knobs"])
+                    if record["opponent_knobs"] is not None else None)
+        experiments[number] = {"record": record, "vector": vector, "opponent": opponent}
+        for pair, result in enumerate(record["results"]):
+            if result is None:
+                queue.append((number, pair))
+            elif len(result) != 3 or sum(result) != 2:
+                raise ValueError(f"pending experiment {number} has an invalid pair result")
+    return experiments, queue
+
+
+def resume_tranche(state, batches, pending):
+    """Start a batch tranche, or resume the exact budget interrupted earlier."""
+    tranche = state.setdefault("tranche", {"batches": batches, "completed": 0})
+    if tranche["batches"] != batches:
+        raise ValueError(
+            f"unfinished tranche used --batches {tranche['batches']}; resume with that value")
+    if not 0 <= tranche["completed"] <= batches:
+        raise ValueError("invalid completed count in batch tranche")
+    remaining = batches - tranche["completed"]
+    if not 0 <= pending <= remaining:
+        raise ValueError("pending experiments exceed the unfinished batch tranche")
+    return tranche, remaining
+
+
+def pending_batch(record):
+    """Turn one completely observed pending experiment into a GP batch."""
+    wins, draws, losses = map(sum, zip(*record["results"]))
+    return {
+        "knobs": record["knobs"], "wins": wins, "draws": draws, "losses": losses,
+        "opening": record["openings"][0],
+        "opening_sequence": record["opening_sequence"],
+        "openings": record["openings"], "allocation": record["allocation"],
+        "opponent_knobs": record["opponent_knobs"],
+    }
 
 
 def gate_policy(args, state, space, vector):
@@ -846,7 +918,32 @@ def validate_opening_budget(path, start, batches, pairs):
         raise ValueError(f"study needs opening {required}, but {path} has {openings}")
 
 
-async def run_pair(args, slot, experiment, vector, opponent, opening, space):
+def recover_pair(path, identity):
+    """Reuse a complete validated pair whose scheduler journal was interrupted."""
+    path = pathlib.Path(path)
+    if not path.exists():
+        return None
+    output = path.read_text(errors="replace")
+    if PAIR_HEADER.findall(output) != [identity]:
+        return None
+    pentanomial.reject_failures(output)
+    if markers := PAIR_RESULT.findall(output):
+        marker, *counts = markers[-1]
+        if marker != identity:
+            return None
+        result = tuple(map(int, counts))
+        if sum(result) != 2:
+            raise ValueError(f"invalid saved pair result in {path}")
+        return result
+    try:
+        results, (wins, losses, draws) = pentanomial.game_results(
+            output, subject="candidate")
+    except (IndexError, ValueError):
+        return None
+    return (wins, draws, losses) if len(results) == 2 else None
+
+
+async def run_pair(args, slot, experiment, pair, identity, vector, opponent, opening, space):
     if opponent is None:
         rival = engine_config(
             args.baseline_engine, "baseline", args.baseline_args, args.baseline_options)
@@ -864,15 +961,25 @@ async def run_pair(args, slot, experiment, vector, opponent, opening, space):
         "-resign", "movecount=4", "score=500",
         "-output", "format=cutechess", "-scoreinterval", "1", "-ratinginterval", "0",
     ]
+    name = (f"experiment{experiment:04d}-pair{pair:03d}-opening{opening:06d}-"
+            f"{identity}.log")
+    path = pathlib.Path(args.logs, name)
+    if result := recover_pair(path, identity):
+        print(f"[slot {slot}] recovered experiment {experiment} pair {pair}", flush=True)
+        return experiment, pair, *result
+    with path.open("wb") as log:
+        log.write(f"adaptive-gp-identity {identity}\n".encode())
+        log.flush()
+        os.fsync(log.fileno())
     process = await asyncio.create_subprocess_exec(
         *command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
     last_score = None
-    name = f"experiment{experiment:04d}-{opening:06d}.log"
     try:
-        with pathlib.Path(args.logs, name).open("wb") as log:
+        with path.open("ab") as log:
             async for line in process.stdout:
                 log.write(line)
                 text = line.decode(errors="replace").rstrip()
+                pentanomial.reject_failures(text)
                 match = SCORE.search(text)
                 if match:
                     last_score = tuple(map(int, match.groups()))
@@ -887,7 +994,11 @@ async def run_pair(args, slot, experiment, vector, opponent, opening, space):
     wins, losses, draws = last_score
     if wins + draws + losses != 2:
         raise RuntimeError(f"slot {slot} completed {wins + draws + losses} games")
-    return experiment, wins, draws, losses
+    with path.open("a") as log:
+        log.write(f"adaptive-gp-result {identity} {wins} {draws} {losses}\n")
+        log.flush()
+        os.fsync(log.fileno())
+    return experiment, pair, wins, draws, losses
 
 
 async def optimize(args):
@@ -898,11 +1009,11 @@ async def optimize(args):
 async def optimize_locked(args):
     pathlib.Path(args.logs).mkdir(parents=True, exist_ok=True)
     state = load_state(args.state, args.start)
-    seed = load_state(args.seed_state, args.start) if args.seed_state and not state["batches"] else None
+    state.setdefault("state_id", secrets.token_hex(16))
+    seed = (load_state(args.seed_state, args.start)
+            if args.seed_state and not state["batches"] and not state.get("pending") else None)
     openings = OpeningSchedule(
         args.openings, args.opening_seed, args.cycle_openings, args.opening_order)
-    if not args.cycle_openings:
-        validate_opening_budget(args.openings, state["next_opening"], args.batches, args.pairs)
     space = logistic_gp.MixedSpace.load(args.space) if args.space else logistic_gp.LegacySpace()
     if args.axis_design:
         if not isinstance(space, logistic_gp.MixedSpace):
@@ -933,7 +1044,24 @@ async def optimize_locked(args):
         compatible = ("candidate", "gate", "gate_timeout", "space")
         if all(seed["study"].get(name) == state["study"].get(name) for name in compatible):
             state["gates"] = seed.get("gates", {})
+    experiments, queue = restore_pending(state, space)
+    if args.total_batches is not None:
+        if len(state["batches"]) > args.total_batches:
+            raise ValueError("state exceeds --total-batches")
+        batches = (state["tranche"]["batches"] if "tranche" in state
+                   else args.total_batches - len(state["batches"]))
+    else:
+        batches = args.batches
+    tranche, target_batches = resume_tranche(state, batches, len(experiments))
+    if not args.cycle_openings:
+        future = target_batches - len(experiments)
+        validate_opening_budget(
+            args.openings, state["next_opening"], future, args.pairs)
     save_state(args.state, state)
+    if target_batches == 0:
+        state.pop("tranche")
+        checkpoint_state(args.state, state)
+        return
     options = set().union(*(space.knobs(candidate) for candidate in space.candidates))
     validate_options(args.engine, args.engine_args, options)
     validate_options(args.baseline_engine, args.baseline_args, args.baseline_options)
@@ -972,9 +1100,7 @@ async def optimize_locked(args):
         wall_deadline = state.setdefault("wall_deadline", time.time() + args.wall_time)
         deadline = time.monotonic() + max(0, wall_deadline - time.time())
         save_state(args.state, state)
-    queue = deque()
     activity = asyncio.Event()
-    experiments = {}
     running = {}
     completed = 0
     allocation_model = None
@@ -988,6 +1114,11 @@ async def optimize_locked(args):
         if (batch.get("opponent_knobs") is None
             or space.canonical(batch["opponent_knobs"]) == space.default)
     }
+    if experiments:
+        finished = sum(result is not None
+            for experiment in experiments.values() for result in experiment["record"]["results"])
+        print(f"[resume] {len(experiments)} experiments; "
+              f"{finished} pairs kept, {len(queue)} pairs remaining", flush=True)
 
     def refresh_model():
         nonlocal allocation_model, mean_function, mean_learned, modeled_batches
@@ -1046,14 +1177,18 @@ async def optimize_locked(args):
         sequence = state["next_opening"]
         state["next_opening"] += args.pairs
         scheduled = [openings.opening(sequence + offset) for offset in range(args.pairs)]
-        experiments[number] = {
-            "vector": vector, "opening": scheduled[0], "opening_sequence": sequence,
-            "openings": scheduled, "wins": 0, "draws": 0, "losses": 0,
-            "allocation": diagnostics["mode"], "opponent": opponent,
+        record = {
+            "number": number, "knobs": space.knobs(vector),
+            "opponent_knobs": space.knobs(opponent) if opponent is not None else None,
+            "opening_sequence": sequence, "openings": scheduled,
+            "results": [None] * args.pairs, "allocation": diagnostics["mode"],
         }
-        for opening in scheduled:
-            queue.append((number, vector, opponent, opening))
-        save_state(args.state, state)
+        record["identities"] = [pair_identity(state, record, pair)
+                                for pair in range(args.pairs)]
+        state["pending"].append(record)
+        experiments[number] = {"record": record, "vector": vector, "opponent": opponent}
+        for pair in range(args.pairs):
+            queue.append((number, pair))
         elo = diagnostics["mean"] * logistic_gp.ELO_PER_LOGIT
         error = 1.96 * diagnostics["sd"] * logistic_gp.ELO_PER_LOGIT
         print(
@@ -1091,7 +1226,6 @@ async def optimize_locked(args):
                 proposals.append([vector, diagnostics, reservation, 0, reservation_pending])
                 pending.append((vector, None))
 
-            commit_selection(state, proposal_state)
             tasks = {
                 asyncio.create_task(asyncio.to_thread(
                     gate_policy, args, state, space, item[0])): item
@@ -1099,14 +1233,11 @@ async def optimize_locked(args):
             }
             while tasks:
                 done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-                released = False
                 for task in done:
                     item = tasks.pop(task)
                     passed = task.result()
                     if passed:
                         item[3] = -1
-                        schedule_experiment(item[0], item[1])
-                        released = True
                         continue
                     forbidden.add(item[0])
                     item[3] += 1
@@ -1124,28 +1255,36 @@ async def optimize_locked(args):
                     item[1] = replacement
                     tasks[asyncio.create_task(asyncio.to_thread(
                         gate_policy, args, state, space, item[0]))] = item
-                if released:
-                    save_state(args.state, state)
-                    start_queued()
+            commit_selection(state, proposal_state)
+            for vector, diagnostics, *_ in proposals:
+                schedule_experiment(vector, diagnostics)
+            save_state(args.state, state)
+            start_queued()
 
     def start_queued():
         while queue and len(running) < args.slots:
             used = set(running.values())
             slot = next(index for index in range(args.slots) if index not in used)
-            experiment, vector, opponent, opening = queue.popleft()
+            number, pair = queue.popleft()
+            experiment = experiments[number]
+            record = experiment["record"]
+            opening = record["openings"][pair]
             task = asyncio.create_task(
-                run_pair(args, slot, experiment, vector, opponent, opening, space))
+                run_pair(args, slot, number, pair, record["identities"][pair],
+                         experiment["vector"],
+                         experiment["opponent"], opening, space))
             running[task] = slot
             activity.set()
 
     refill = None
-    while completed < args.batches:
+    while completed < target_batches:
         expired = deadline is not None and time.monotonic() >= deadline
         if (not expired and refill is None
+                and completed + len(experiments) < target_batches
                 and len(experiments) <= args.queue_batches - args.refill_batches):
             count = min(
                 args.queue_batches - len(experiments),
-                args.batches - completed - len(experiments))
+                target_batches - completed - len(experiments))
             refill = asyncio.create_task(add_experiments(count))
         start_queued()
         activity.clear()
@@ -1169,39 +1308,39 @@ async def optimize_locked(args):
             refill = None
         for task in done:
             running.pop(task)
-            number, wins, draws, losses = task.result()
+            number, pair, wins, draws, losses = task.result()
             experiment = experiments[number]
-            experiment["wins"] += wins
-            experiment["draws"] += draws
-            experiment["losses"] += losses
-            games = experiment["wins"] + experiment["draws"] + experiment["losses"]
-            if games != 2 * args.pairs:
+            record = experiment["record"]
+            if record["results"][pair] is not None:
+                raise RuntimeError(f"experiment {number} pair {pair} completed twice")
+            record["results"][pair] = [wins, draws, losses]
+            if any(result is None for result in record["results"]):
+                save_state(args.state, state)
                 continue
             vector = experiment["vector"]
-            state["batches"].append({
-                "knobs": space.knobs(vector),
-                "wins": experiment["wins"],
-                "draws": experiment["draws"],
-                "losses": experiment["losses"],
-                "opening": experiment["opening"],
-                "opening_sequence": experiment["opening_sequence"],
-                "openings": experiment["openings"],
-                "allocation": experiment["allocation"],
-                "opponent_knobs": (
-                    space.knobs(experiment["opponent"])
-                    if experiment["opponent"] is not None else None),
-            })
+            batch = pending_batch(record)
+            state["batches"].append(batch)
             observation_counts[vector] += 1
             if experiment["opponent"] is None or experiment["opponent"] == space.default:
                 anchored.add(vector)
+            # One journal event atomically replaces the reservation with its observation.
+            state["pending"].remove(record)
             del experiments[number]
             completed += 1
+            tranche["completed"] += 1
             save_state(args.state, state)
             if completed % args.checkpoint_batches == 0:
                 checkpoint_state(args.state, state)
             print(f"[experiment {number}] result "
-                  f"{experiment['wins']}-{experiment['losses']}-{experiment['draws']}",
+                  f"{batch['wins']}-{batch['losses']}-{batch['draws']}",
                   flush=True)
+    if state["pending"]:
+        raise RuntimeError("scheduler stopped with pending experiments")
+    unfinished = tranche["completed"] < tranche["batches"]
+    if unfinished and (deadline is None or time.monotonic() < deadline):
+        raise RuntimeError("scheduler stopped before completing its batch tranche")
+    state.pop("tranche")
+    state.pop("wall_deadline", None)
     checkpoint_state(args.state, state)
 
 
@@ -1234,7 +1373,10 @@ def main():
         help="pending configurations (default: enough to fill all slots)")
     parser.add_argument("--refill-batches", type=int, default=1,
         help="refill the pending queue after this many completions")
-    parser.add_argument("--batches", type=int, default=100)
+    parser.add_argument("--batches", type=int, default=100,
+        help="posterior updates in this crash-resumable invocation")
+    parser.add_argument("--total-batches", type=int,
+        help="absolute completed-update target; a clean replay performs no more games")
     parser.add_argument("--wall-time", type=duration, default=0,
         help="stop allocating after this duration, e.g. 12h or 3d")
     parser.add_argument("--start", type=int, default=1)
@@ -1294,6 +1436,8 @@ def main():
     if min(args.pairs, args.slots, args.batches, args.gate_timeout,
            args.gate_attempts, args.gate_workers) <= 0:
         parser.error("pair, slot, batch, and gate limits must be positive")
+    if args.total_batches is not None and args.total_batches < 1:
+        parser.error("--total-batches must be positive")
     if args.queue_batches is None:
         args.queue_batches = pending_configurations(args.slots, args.pairs)
     elif args.queue_batches < 1:

@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "training_benchmark": {
+    "path": "tools/tune/recovery_benchmark.json",
+    "sha256": "092d9d965a03611267c16943a46d49eeccb4ebd886dee1241733ab9461d356ef"
+  },
+  "method_labels": {
+    "logistic_gp": "logistic-gp",
+    "chess_tuning_tools": "ctt-mes",
+    "rbfopt": "rbfopt",
+    "spsa": "spsa",
+    "clop": "clop"
+  },
+  "primary": {
+    "start": 220001,
+    "pairs": 400,
+    "slice_sha256": "ea3b33a266182072685abc4b81685d2e2e7e7e223cd17ede4ddb4076cd201cc4",
+    "checkpoint": 1000,
+    "bootstrap_replicates": 100000,
+    "bootstrap_seed": 20260822,
+    "estimand": "logistic Elo of the uniform degraded-start/opening mixture",
+    "recovery": "mixture final Elo - mixture starting Elo",
+    "finalists": "leader, runner-up, and methods whose runner-up contrast includes zero"
+  },
+  "confirmation": {
+    "start": 230001,
+    "pairs": 1000,
+    "slice_sha256": "a423b3fcd39e2cf4f7277629d94950a07f15aa53674c4d77c510e09c7bc04921",
+    "alpha": 0.05,
+    "test": "exact_paired_sign_flip",
+    "correction": "holm",
+    "alternative": "greater",
+    "sampling_unit": "one aligned opening index summed across all degraded starts",
+    "assumption": "opening-cluster differences are sign-exchangeable under each tested sharp null",
+    "zero_difference": "sum_starts(score) - number_of_starts / 2",
+    "pairwise_difference": "sum_starts(score_A - score_B)",
+    "family": "all finalist-vs-zero and ordered finalist-vs-finalist hypotheses",
+    "winner": "rejects zero and every screened rival after finalist-family correction",
+    "scope": "confirmation does not provide familywise control over the upstream five-method screen"
+  }
+}

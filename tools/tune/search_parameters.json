@@ -8,6 +8,8 @@
      "min": -200, "max": 200, "scale": 40},
     {"name": "EVAL_ROUGHNESS", "type": "integer", "default": 15,
      "min": 5, "max": 50, "scale": 10},
+    {"name": "NULL_CAP_MARGIN", "type": "integer", "default": 15,
+     "min": 0, "max": 50, "scale": 10},
     {"name": "NULL_MARGIN", "type": "integer", "default": -200,
      "min": -400, "max": 800, "scale": 150},
     {"name": "NULL_LIMIT", "type": "integer", "default": 750,
@@ -20,8 +22,6 @@
      "min": 1, "max": 5, "scale": 1.5},
     {"name": "FUEL_MIN_DEPTH", "type": "integer", "default": 6,
      "min": 4, "max": 12, "scale": 2},
-    {"name": "FUT_MAX", "type": "integer", "default": 1,
-     "min": 0, "max": 3, "scale": 1},
     {"name": "FUT_CAP_DEPTH", "type": "integer", "default": 3,
      "min": 2, "max": 6, "scale": 1}
   ],

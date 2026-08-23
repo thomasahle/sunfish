@@ -10,11 +10,18 @@ same opening with reversed engine order, forming a color-swapped pair.
 """
 
 import argparse
+import hashlib
+import json
+import os
 import pathlib
 import re
+import shlex
 import shutil
 import subprocess
 import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).parents[1]))
+import pentanomial  # noqa: E402
 
 
 SCORE = re.compile(
@@ -37,6 +44,36 @@ def parse_options(values):
     return dict(zip(values[::2], values[1::2]))
 
 
+def digest(path):
+    result = hashlib.sha256()
+    with pathlib.Path(path).open("rb") as source:
+        for block in iter(lambda: source.read(1 << 20), b""):
+            result.update(block)
+    return result.hexdigest()
+
+
+def command_identity(command, arguments):
+    executable = shutil.which(command) or command
+    files = [path for path in [executable, *shlex.split(arguments)]
+             if pathlib.Path(path).is_file()]
+    return {
+        "command": str(pathlib.Path(executable).resolve()), "arguments": arguments,
+        "files": [(str(pathlib.Path(path).resolve()), digest(path)) for path in files],
+    }
+
+
+def result(output):
+    pentanomial.reject_failures(output)
+    matches = SCORE.findall(output)
+    if not matches:
+        return None
+    first, _, wins, losses, draws = matches[-1]
+    wins, losses, draws = map(int, (wins, losses, draws))
+    if first == "baseline":
+        wins, losses = losses, wins
+    return (wins, losses, draws) if wins + losses + draws == 1 else None
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--fastchess", required=True)
@@ -51,6 +88,7 @@ def main():
     parser.add_argument("--start", type=int, default=1)
     parser.add_argument("--tc", default="3+0.1")
     parser.add_argument("--max-games", type=int, default=0)
+    parser.add_argument("--cache", default="clop-match-cache")
     parser.add_argument("processor")
     parser.add_argument("seed", type=int)
     parser.add_argument("options", nargs=argparse.REMAINDER)
@@ -81,19 +119,37 @@ def main():
         "-resign", "movecount=4", "score=500",
         "-output", "format=cutechess", "-scoreinterval", "1", "-ratinginterval", "0",
     ]
-    process = subprocess.run(command, text=True, stdout=subprocess.PIPE,
-                             stderr=subprocess.STDOUT)
-    matches = SCORE.findall(process.stdout)
-    if process.returncode or not matches:
-        print(process.stdout, file=sys.stderr)
-        return 1
-    first, _, wins, losses, draws = matches[-1]
-    wins, losses, draws = map(int, (wins, losses, draws))
-    if first == "baseline":
-        wins, losses = losses, wins
-    if wins + losses + draws != 1:
-        print(f"fastchess completed {wins + losses + draws} games", file=sys.stderr)
-        return 1
+    study = {
+        "version": 1, "runner": digest(__file__),
+        "fastchess": command_identity(args.fastchess, ""),
+        "candidate": command_identity(args.engine, args.engine_args),
+        "baseline": command_identity(baseline_engine, baseline_args),
+        "openings": (str(pathlib.Path(args.openings).resolve()), digest(args.openings)),
+        "opening_count": args.opening_count, "start": args.start, "tc": args.tc,
+        "max_games": args.max_games, "seed": args.seed, "tuned": tuned, "baseline_options": baseline,
+    }
+    identity = hashlib.sha256(
+        json.dumps(study, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    cache = pathlib.Path(args.cache)
+    cache.mkdir(parents=True, exist_ok=True)
+    path = cache / f"seed-{args.seed:09d}-{identity}.log"
+    output = path.read_text(errors="replace") if path.exists() else ""
+    game = result(output) if output.startswith(f"clop-match-identity {identity}\n") else None
+    if game is None:
+        with path.open("w") as log:
+            log.write(f"clop-match-identity {identity}\n")
+            log.flush()
+            os.fsync(log.fileno())
+        with path.open("a", buffering=1) as log:
+            process = subprocess.run(command, text=True, stdout=log, stderr=subprocess.STDOUT)
+            log.flush()
+            os.fsync(log.fileno())
+        output = path.read_text(errors="replace")
+        game = result(output)
+        if process.returncode or game is None:
+            print(output, file=sys.stderr)
+            return 1
+    wins, losses, draws = game
     print("W" if wins else "L" if losses else "D")
     return 0
 

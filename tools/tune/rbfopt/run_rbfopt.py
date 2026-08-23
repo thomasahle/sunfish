@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import pathlib
 import re
 import shlex
@@ -57,6 +58,55 @@ def gate_identity(command):
         return None
     fields = shlex.split(command)
     return command_identity(fields[0], shlex.join(fields[1:]))
+
+
+def evaluation_identity(study, number, opening, pairs, mode, knobs):
+    payload = {
+        "study": study, "number": number, "opening": opening,
+        "pairs": pairs, "mode": mode, "options": knobs,
+    }
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def recover_evaluation(path, identity, pairs):
+    if not path.exists():
+        return None
+    output = path.read_text(errors="replace")
+    if not output.startswith(f"rbfopt-match-identity {identity}\n"):
+        return None
+    pentanomial.reject_failures(output)
+    try:
+        counts, wdl = pentanomial.parse(output)
+    except (IndexError, ValueError):
+        return None
+    return (counts, wdl) if sum(counts) == pairs else None
+
+
+def save_model(optimizer, path):
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    optimizer.save_to_file(temporary)
+    with temporary.open("rb") as saved:
+        os.fsync(saved.fileno())
+    temporary.replace(path)
+
+
+def study_identity(args):
+    return {
+        "version": 2,
+        "runner": digest(__file__),
+        "fastchess": digest(shutil.which(args.fastchess) or args.fastchess),
+        "candidate": command_identity(args.engine, args.engine_args),
+        "baseline": command_identity(
+            args.baseline_engine or args.engine,
+            args.baseline_args if args.baseline_args is not None else args.engine_args),
+        "space": digest(args.space), "openings": digest(args.openings),
+        "tc": args.tc, "fixed": options(args.fixed_option),
+        "baseline_options": options(args.baseline_option),
+        "noisy_pairs": args.noisy_pairs, "accurate_pairs": args.accurate_pairs,
+        "seed": args.seed, "gate": gate_identity(args.gate),
+        "gate_timeout": args.gate_timeout,
+    }
 
 
 def validate(command, arguments, required):
@@ -125,22 +175,7 @@ class ChessBox(RbfoptBlackBox):
         path = pathlib.Path(self.args.state)
         state = json.loads(path.read_text()) if path.exists() else {
             "next_opening": self.args.start, "games": 0, "evaluations": [], "checkpoints": []}
-        identity = {
-            "version": 1,
-            "runner": digest(__file__),
-            "fastchess": digest(shutil.which(self.args.fastchess) or self.args.fastchess),
-            "candidate": command_identity(self.args.engine, self.args.engine_args),
-            "baseline": command_identity(
-                self.args.baseline_engine or self.args.engine,
-                self.args.baseline_args if self.args.baseline_args is not None
-                else self.args.engine_args),
-            "space": digest(self.args.space), "openings": digest(self.args.openings),
-            "tc": self.args.tc, "fixed": options(self.args.fixed_option),
-            "baseline_options": options(self.args.baseline_option),
-            "noisy_pairs": self.args.noisy_pairs, "accurate_pairs": self.args.accurate_pairs,
-            "seed": self.args.seed, "gate": gate_identity(self.args.gate),
-            "gate_timeout": self.args.gate_timeout,
-        }
+        identity = study_identity(self.args)
         if "study" in state and state["study"] != identity:
             raise RuntimeError("state belongs to a different RBFOpt study")
         state["study"] = identity
@@ -149,7 +184,10 @@ class ChessBox(RbfoptBlackBox):
     def save(self):
         path = pathlib.Path(self.args.state)
         temporary = path.with_suffix(path.suffix + ".tmp")
-        temporary.write_text(json.dumps(self.state, indent=2, sort_keys=True) + "\n")
+        with temporary.open("w") as output:
+            output.write(json.dumps(self.state, indent=2, sort_keys=True) + "\n")
+            output.flush()
+            os.fsync(output.fileno())
         temporary.replace(path)
 
     def get_dimension(self):
@@ -188,7 +226,6 @@ class ChessBox(RbfoptBlackBox):
         if not gating.policy(
                 self.args.gate, self.args.gate_timeout, payload,
                 self.state.setdefault("gates", {})):
-            self.save()
             return 0.5, 0, 0
         opening = self.state["next_opening"]
         command = [
@@ -205,14 +242,24 @@ class ChessBox(RbfoptBlackBox):
             "-resign", "movecount=4", "score=500", "-output", "format=cutechess",
             "-scoreinterval", "1", "-ratinginterval", "0",
         ]
-        process = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         number = len(self.state["evaluations"])
-        pathlib.Path(self.args.logs, f"evaluation-{number:06d}.log").write_bytes(process.stdout)
-        if process.returncode:
-            raise RuntimeError(f"fastchess evaluation {number} failed with {process.returncode}")
-        counts, wdl = pentanomial.parse(process.stdout.decode(errors="replace"))
-        if sum(counts) != pairs:
-            raise RuntimeError(f"fastchess evaluation {number} returned {sum(counts)} pairs")
+        identity = evaluation_identity(
+            self.state["study"], number, opening, pairs, mode, knobs)
+        path = pathlib.Path(self.args.logs, f"evaluation-{number:06d}-{identity}.log")
+        recovered = recover_evaluation(path, identity, pairs)
+        if recovered is None:
+            with path.open("wb") as output:
+                output.write(f"rbfopt-match-identity {identity}\n".encode())
+                output.flush()
+                os.fsync(output.fileno())
+            with path.open("ab", buffering=0) as output:
+                process = subprocess.run(command, stdout=output, stderr=subprocess.STDOUT)
+                os.fsync(output.fileno())
+            recovered = recover_evaluation(path, identity, pairs)
+            if process.returncode or recovered is None:
+                raise RuntimeError(
+                    f"fastchess evaluation {number} failed with {process.returncode}")
+        counts, wdl = recovered
         self.state["evaluations"].append({
             "number": number, "mode": mode, "opening": opening, "pairs": pairs,
             "options": knobs, "counts": counts, "wins": wdl[0], "losses": wdl[1],
@@ -220,7 +267,6 @@ class ChessBox(RbfoptBlackBox):
         })
         self.state["games"] += 2 * pairs
         self.state["next_opening"] = (opening - 1 + pairs) % self.opening_count + 1
-        self.save()
         combined = self.aggregate(knobs)
         mean, deviation, interval = pentanomial.posterior(combined)
         value = mean - 0.5
@@ -273,9 +319,15 @@ def main():
     if model.exists():
         optimizer = RbfoptAlgorithm.load_from_file(model)
         optimizer.bb.args = args
-        optimizer.bb.state = optimizer.bb.load_state()
+        expected = study_identity(args)
+        if optimizer.bb.state.get("study") != expected:
+            raise RuntimeError("model belongs to a different RBFOpt study")
+        optimizer.bb.space = space
         optimizer.settings.do_local_search = False
         optimizer.l_settings.do_local_search = False
+        optimizer.bb.save()
+    elif pathlib.Path(args.state).exists():
+        raise RuntimeError("RBFOpt state exists without its authoritative model")
     else:
         black_box = ChessBox(args, space)
         settings = RbfoptSettings(
@@ -288,8 +340,7 @@ def main():
     with pathlib.Path(args.logs, "rbfopt.log").open("a") as output:
         optimizer.set_output_stream(output)
         idle = 0
-        reserve = 2 * (args.noisy_pairs + args.accurate_pairs)
-        while optimizer.bb.state["games"] + reserve <= args.games:
+        while optimizer.bb.state["games"] + 2 <= args.games:
             before = optimizer.bb.state["games"]
             _, point, *_ = optimizer.optimize(pause_after_iters=1)
             if optimizer.bb.state["games"] > before:
@@ -300,8 +351,8 @@ def main():
                 idle = 0
             else:
                 idle += 1
+            save_model(optimizer, model)
             optimizer.bb.save()
-            optimizer.save_to_file(model)
             if idle == 100:
                 raise RuntimeError("RBFOpt made no evaluation in 100 iterations")
 

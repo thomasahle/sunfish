@@ -44,6 +44,10 @@ from adaptive_gp import (
     state_file_identity,
     UCI_OPTION,
     pending_configurations,
+    pending_batch,
+    recover_pair,
+    restore_pending,
+    resume_tranche,
     validate_opening_budget,
 )
 from logistic_gp import ELO_PER_LOGIT, LogisticGP, MixedSpace
@@ -1150,9 +1154,247 @@ class MixedAcquisitionTest(unittest.TestCase):
             ]
             subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
             subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
-            self.assertEqual(len(load_state(state, 1)["batches"]), 1)
+            self.assertEqual(len(load_state(state, 1)["batches"]), 2)
 
-    def test_policy_gates_do_not_block_queued_games(self):
+    def test_failed_multi_pair_batch_resumes_without_losing_results(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            calls, failed = root / "calls", root / "failed"
+            engine, manager = root / "engine", root / "fastchess"
+            engine.write_text(
+                f"#!{sys.executable}\n"
+                "print('option name X type spin default 0 min 0 max 1')\n"
+                "print('uciok')\n")
+            manager.write_text(
+                f"#!{sys.executable}\n"
+                "import pathlib,sys\n"
+                "opening=int(next(x for x in sys.argv if x.startswith('start=')).split('=')[1])\n"
+                f"calls=pathlib.Path({str(calls)!r})\n"
+                "with calls.open('a') as output: output.write(f'{opening}\\n')\n"
+                f"failed=pathlib.Path({str(failed)!r})\n"
+                "if opening == 2 and not failed.exists(): failed.touch();sys.exit(1)\n"
+                "print('Score of candidate vs baseline: 1 - 0 - 1  [0.750] 2')\n")
+            engine.chmod(0o755)
+            manager.chmod(0o755)
+            space = root / "space.json"
+            space.write_text(json.dumps({
+                "parameters": [{
+                    "name": "X", "type": "integer", "min": 0, "max": 1,
+                    "default": 0,
+                }],
+            }))
+            openings = root / "openings.fen"
+            openings.write_text("one\ntwo\nthree\n")
+            state = root / "state.json"
+            command = [
+                sys.executable, str(pathlib.Path(__file__).with_name("adaptive_gp.py")),
+                "--fastchess", str(manager), "--engine", str(engine),
+                "--baseline-options", "default", "--space", str(space),
+                "--openings", str(openings), "--opening-order", "sequential",
+                "--pairs", "3", "--slots", "1", "--queue-batches", "1",
+                "--refill-batches", "1", "--initial-design", "1", "--batches", "1",
+                "--state", str(state), "--logs", str(root / "logs"),
+            ]
+            first = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.assertNotEqual(first.returncode, 0)
+            interrupted = load_state(state, 1)
+            self.assertEqual(interrupted["next_opening"], 4)
+            self.assertEqual(interrupted["pending"][0]["results"], [[1, 1, 0], None, None])
+            identity = interrupted["pending"][0]["identities"][1]
+            pathlib.Path(
+                root, "logs",
+                f"experiment0000-pair001-opening000002-{identity}.log").write_text(
+                f"adaptive-gp-identity {identity}\n"
+                "Finished game 1 (candidate vs baseline): 1/2-1/2\n"
+                "Score of candidate vs baseline: 0 - 0 - 1\n"
+                "Finished game 2 (baseline vs candidate): 1/2-1/2\n"
+                "Score of candidate vs baseline: 0 - 0 - 2\n")
+            subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
+            resumed = load_state(state, 1)
+            self.assertEqual(calls.read_text().splitlines(), ["1", "2", "3"])
+            self.assertEqual(resumed["pending"], [])
+            self.assertEqual(
+                {key: resumed["batches"][0][key] for key in ("wins", "draws", "losses")},
+                {"wins": 2, "draws": 4, "losses": 0})
+
+    def test_crashed_total_batch_target_resumes_without_extending(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            calls, failed = root / "calls", root / "failed"
+            engine, manager = root / "engine", root / "fastchess"
+            engine.write_text(
+                f"#!{sys.executable}\n"
+                "print('option name X type spin default 0 min 0 max 1')\n"
+                "print('uciok')\n")
+            manager.write_text(
+                f"#!{sys.executable}\n"
+                "import pathlib,sys\n"
+                "opening=int(next(x for x in sys.argv if x.startswith('start=')).split('=')[1])\n"
+                f"calls=pathlib.Path({str(calls)!r})\n"
+                "with calls.open('a') as output: output.write(f'{opening}\\n')\n"
+                f"failed=pathlib.Path({str(failed)!r})\n"
+                "if opening == 2 and not failed.exists(): failed.touch();sys.exit(1)\n"
+                "print('Score of candidate vs baseline: 1 - 0 - 1  [0.750] 2')\n")
+            engine.chmod(0o755)
+            manager.chmod(0o755)
+            space = root / "space.json"
+            space.write_text(json.dumps({
+                "parameters": [{
+                    "name": "X", "type": "integer", "min": 0, "max": 1,
+                    "default": 0,
+                }],
+            }))
+            openings = root / "openings.fen"
+            openings.write_text("\n".join(f"position {number}" for number in range(1, 7)))
+            state = root / "state.json"
+            command = [
+                sys.executable, str(pathlib.Path(__file__).with_name("adaptive_gp.py")),
+                "--fastchess", str(manager), "--engine", str(engine),
+                "--baseline-options", "default", "--space", str(space),
+                "--openings", str(openings), "--opening-order", "sequential",
+                "--slots", "1", "--queue-batches", "1", "--refill-batches", "1",
+                "--initial-design", "1", "--total-batches", "3",
+                "--state", str(state), "--logs", str(root / "logs"),
+            ]
+            first = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.assertNotEqual(first.returncode, 0)
+            interrupted = load_state(state, 1)
+            self.assertEqual(interrupted["tranche"], {"batches": 3, "completed": 1})
+            subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
+            resumed = load_state(state, 1)
+            self.assertEqual((len(resumed["batches"]), resumed["next_opening"]), (3, 4))
+            self.assertNotIn("tranche", resumed)
+            self.assertEqual(calls.read_text().splitlines(), ["1", "2", "2", "3"])
+            subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
+            fresh = load_state(state, 1)
+            self.assertEqual((len(fresh["batches"]), fresh["next_opening"]), (3, 4))
+            self.assertEqual(
+                calls.read_text().splitlines(), ["1", "2", "2", "3"])
+
+    def test_pending_journal_restores_only_unfinished_pairs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory, "state.json")
+            record = {
+                "number": 7, "knobs": {"X": 100, "Y": 10},
+                "opponent_knobs": {"X": 0, "Y": 10},
+                "opening_sequence": 12, "openings": [4, 5, 6],
+                "results": [None, None, None], "allocation": "explore",
+            }
+            state = {
+                "next_opening": 15, "batches": [], "pending": [record],
+                "state_id": "0" * 32, "study": {"name": "test"},
+            }
+            save_state(path, state)
+            record["results"][0] = [1, 1, 0]
+            save_state(path, state)
+            resumed = load_state(path, 1)
+            experiments, queue = restore_pending(resumed, self.space)
+            self.assertEqual(list(queue), [(7, 1), (7, 2)])
+            self.assertEqual(experiments[7]["vector"], self.space.canonical(record["knobs"]))
+            resumed["pending"][0]["results"][1:] = [[0, 2, 0], [0, 1, 1]]
+            self.assertEqual(
+                {key: pending_batch(resumed["pending"][0])[key]
+                 for key in ("wins", "draws", "losses")},
+                {"wins": 1, "draws": 4, "losses": 1})
+
+    def test_torn_completion_keeps_the_pending_pair_instead_of_the_batch(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory, "state.json")
+            record = {
+                "number": 7, "knobs": {"X": 100, "Y": 10},
+                "opponent_knobs": None, "opening_sequence": 12,
+                "openings": [4, 5], "results": [[1, 1, 0], None],
+                "allocation": "design",
+            }
+            state = {
+                "next_opening": 14, "batches": [], "pending": [record],
+                "tranche": {"batches": 1, "completed": 0},
+            }
+            save_state(path, state)
+            record["results"][1] = [0, 1, 1]
+            state["batches"].append(pending_batch(record))
+            state["pending"].clear()
+            state["tranche"]["completed"] += 1
+            save_state(path, state)
+            journal = path.with_suffix(".jsonl")
+            journal.write_bytes(journal.read_bytes()[:-2])
+            recovered = load_state(path, 1)
+            self.assertEqual(recovered["batches"], [])
+            self.assertEqual(recovered["pending"][0]["results"], [[1, 1, 0], None])
+            self.assertEqual(recovered["tranche"]["completed"], 0)
+
+    def test_batch_tranche_requires_the_same_budget_until_clean_completion(self):
+        state = {}
+        tranche, remaining = resume_tranche(state, 64, 2)
+        self.assertEqual((tranche, remaining), ({"batches": 64, "completed": 0}, 64))
+        tranche["completed"] = 23
+        self.assertEqual(resume_tranche(state, 64, 2)[1], 41)
+        with self.assertRaisesRegex(ValueError, "resume with that value"):
+            resume_tranche(state, 32, 2)
+
+    def test_complete_pair_log_can_close_the_journal_crash_window(self):
+        with tempfile.TemporaryDirectory() as directory:
+            log = pathlib.Path(directory, "pair.log")
+            identity = "a" * 64
+            log.write_text(
+                f"adaptive-gp-identity {identity}\n"
+                "Finished game 1 (candidate vs baseline): 1-0\n"
+                "Score of candidate vs baseline: 1 - 0 - 0\n"
+                "Finished game 2 (baseline vs candidate): 1/2-1/2\n"
+                "Score of candidate vs baseline: 1 - 0 - 1\n")
+            self.assertEqual(recover_pair(log, identity), (1, 1, 0))
+            self.assertIsNone(recover_pair(log, "b" * 64))
+
+    def test_replacing_state_does_not_reuse_stale_logs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            calls = root / "calls"
+            engine, manager = root / "engine", root / "fastchess"
+            engine.write_text(
+                f"#!{sys.executable}\n"
+                "print('option name X type spin default 0 min 0 max 1')\n"
+                "print('uciok')\n")
+            manager.write_text(
+                f"#!{sys.executable}\n"
+                "import pathlib\n"
+                f"calls=pathlib.Path({str(calls)!r})\n"
+                f"logs=pathlib.Path({str(root / 'logs')!r})\n"
+                "prior=len(calls.read_text().splitlines()) if calls.exists() else 0\n"
+                "files=list(logs.glob('*.log'))\n"
+                "assert len(files)==prior+1\n"
+                "assert all(f.read_text().startswith('adaptive-gp-identity ') for f in files)\n"
+                "with calls.open('a') as output: output.write('game\\n')\n"
+                "print('Score of candidate vs baseline: 1 - 0 - 1  [0.750] 2')\n")
+            engine.chmod(0o755)
+            manager.chmod(0o755)
+            space = root / "space.json"
+            space.write_text(json.dumps({
+                "parameters": [{
+                    "name": "X", "type": "integer", "min": 0, "max": 1,
+                    "default": 0,
+                }],
+            }))
+            openings = root / "openings.fen"
+            openings.write_text("startpos\n")
+            state = root / "state.json"
+            command = [
+                sys.executable, str(pathlib.Path(__file__).with_name("adaptive_gp.py")),
+                "--fastchess", str(manager), "--engine", str(engine),
+                "--baseline-options", "default", "--space", str(space),
+                "--openings", str(openings), "--slots", "1", "--queue-batches", "1",
+                "--refill-batches", "1", "--initial-design", "1", "--batches", "1",
+                "--state", str(state), "--logs", str(root / "logs"),
+            ]
+            subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
+            first_id = load_state(state, 1)["state_id"]
+            state.unlink()
+            state.with_suffix(".jsonl").unlink(missing_ok=True)
+            subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
+            self.assertNotEqual(first_id, load_state(state, 1)["state_id"])
+            self.assertEqual(calls.read_text().splitlines(), ["game", "game"])
+            self.assertEqual(len(list(pathlib.Path(root, "logs").glob("*.log"))), 2)
+
+    def test_gate_group_is_durable_before_games_start(self):
         with tempfile.TemporaryDirectory() as directory:
             root = pathlib.Path(directory)
             starts, intervals = root / "starts", root / "gates"
@@ -1198,8 +1440,65 @@ class MixedAcquisitionTest(unittest.TestCase):
             games = [float(value) for value in starts.read_text().splitlines()]
             gates = sorted(tuple(map(float, line.split()))
                            for line in intervals.read_text().splitlines())
-            self.assertLess(games[0], max(end for _, end in gates))
-            self.assertLess(games[1], max(end for _, end in gates))
+            self.assertGreaterEqual(games[0], max(end for _, end in gates))
+
+    def test_failed_parallel_gate_group_does_not_spend_the_allocation_clock(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            calls, marker = root / "calls", root / "failed"
+            engine, manager, gate = root / "engine", root / "fastchess", root / "gate"
+            engine.write_text(
+                f"#!{sys.executable}\n"
+                "print('option name X type spin default 0 min 0 max 2')\n"
+                "print('uciok')\n")
+            manager.write_text(
+                f"#!{sys.executable}\n"
+                "import pathlib\n"
+                f"calls=pathlib.Path({str(calls)!r})\n"
+                "with calls.open('a') as output: output.write('game\\n')\n"
+                "print('Score of candidate vs baseline: 1 - 0 - 1  [0.750] 2')\n")
+            gate.write_text(
+                f"#!{sys.executable}\n"
+                "import os,sys,time\n"
+                f"marker={str(marker)!r}\n"
+                "try: fd=os.open(marker,os.O_CREAT|os.O_EXCL|os.O_WRONLY)\n"
+                "except FileExistsError: sys.exit(0)\n"
+                "os.close(fd);time.sleep(.2);sys.exit(2)\n")
+            for program in (engine, manager, gate):
+                program.chmod(0o755)
+            space = root / "space.json"
+            space.write_text(json.dumps({
+                "parameters": [{
+                    "name": "X", "type": "integer", "min": 0, "max": 2,
+                    "default": 0,
+                }],
+            }))
+            openings = root / "openings.fen"
+            openings.write_text("one\ntwo\n")
+            state = root / "state.json"
+            command = [
+                sys.executable, str(pathlib.Path(__file__).with_name("adaptive_gp.py")),
+                "--fastchess", str(manager), "--engine", str(engine),
+                "--baseline-options", "default", "--space", str(space),
+                "--openings", str(openings), "--opening-order", "sequential",
+                "--gate", str(gate), "--gate-workers", "2", "--slots", "1",
+                "--queue-batches", "2", "--refill-batches", "2",
+                "--initial-design", "2", "--batches", "2",
+                "--state", str(state), "--logs", str(root / "logs"),
+            ]
+            first = subprocess.run(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.assertNotEqual(first.returncode, 0)
+            interrupted = load_state(state, 1)
+            self.assertEqual(interrupted.get("selections", 0), 0)
+            self.assertEqual(interrupted.get("allocations", {}), {})
+            self.assertEqual(interrupted["pending"], [])
+            self.assertEqual(interrupted["next_opening"], 1)
+            self.assertFalse(calls.exists())
+            subprocess.run(command, check=True, stdout=subprocess.DEVNULL)
+            resumed = load_state(state, 1)
+            self.assertEqual((resumed["selections"], len(resumed["batches"])), (2, 2))
+            self.assertEqual(resumed["allocations"], {"design": 2})
+            self.assertEqual(calls.read_text().splitlines(), ["game", "game"])
 
     def test_gate_all_restricts_the_candidate_space(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1455,6 +1754,11 @@ class MixedAcquisitionTest(unittest.TestCase):
         bind_study(state, {"version": 1, "tc": "3+0.1"})
         with self.assertRaisesRegex(RuntimeError, "tc changed"):
             bind_study(state, {"version": 1, "tc": "5+0.1"})
+
+    def test_unidentified_pending_experiment_is_not_adopted(self):
+        state = {"next_opening": 2, "batches": [], "pending": [{"number": 0}]}
+        with self.assertRaisesRegex(RuntimeError, "no study identity"):
+            bind_study(state, {"version": 1})
 
     def test_state_journal_replays_incrementally_across_checkpoints(self):
         with tempfile.TemporaryDirectory() as directory:

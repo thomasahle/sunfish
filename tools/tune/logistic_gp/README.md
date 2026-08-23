@@ -103,5 +103,16 @@ RBFOpt adapter.
 
 Results append to a JSONL journal and periodically compact into the state file.
 Runs are restartable, preserve their exploration clock, and finish reserved
-color pairs before a wall-time stop. `report_gp.py` can inspect the saved
+color pairs before a wall-time stop. Accepted configurations are durable before
+games start, and each pair result is durable as soon as the scheduler collects
+it. A restart therefore replays only pairs without a saved result, including
+inside a multi-pair posterior update. `report_gp.py` can inspect the saved
 posterior without resuming the tournament.
+
+Every reusable log is bound to a fresh state generation, the frozen study,
+both configurations, and its opening. Parallel gate groups commit all clocks
+and reservations together before starting any of their games.
+
+`--batches N` is one durable tranche: after a crash, the same command finishes
+exactly N updates in total rather than N more. A clean exit closes the tranche,
+so a later invocation starts a fresh N-update tranche.

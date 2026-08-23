@@ -48,10 +48,18 @@ def decode(items, point):
 
 
 def at_checkpoints(method, history, checkpoints, initial, progress=None):
+    """Return strict-budget recommendations for every checkpoint the run crossed.
+
+    An atomic update may cross a checkpoint. In that case its games and
+    recommendation are unavailable at the smaller budget, so the preceding
+    complete update (or the initial point) is reported.
+    """
     history = sorted(history, key=lambda item: item[0])
     progress = sorted(progress if progress is not None else [games for games, _ in history])
     output = []
     for checkpoint in checkpoints:
+        if checkpoint and (not progress or progress[-1] < checkpoint):
+            continue
         eligible = [item for item in history if item[0] <= checkpoint]
         recommendation_games, options = eligible[-1] if eligible else (0, initial)
         trained = [games for games in progress if games <= checkpoint]
@@ -164,9 +172,20 @@ def ctt(args, checkpoints):
 def clop(args, checkpoints):
     items = parameters(args.space)
     config = pathlib.Path(args.config).read_text()
+    replications = next((int(line.split()[1]) for line in config.splitlines()
+                         if line.startswith("Replications ")), 0)
+    if replications != 2:
+        raise RuntimeError("CLOP checkpoint extraction requires Replications 2")
     name = next(line.split(maxsplit=1)[1] for line in config.splitlines()
                 if line.startswith("Name "))
     source = pathlib.Path(args.config).parent / f"{name}.dat"
+    result_seeds = [
+        int(fields[1])
+        for line in source.read_text().splitlines()
+        if len(fields := line.split()) == 3 and fields[0] == "R"
+    ]
+    if len(result_seeds) != len(set(result_seeds)):
+        raise RuntimeError("CLOP data contains duplicate result seeds")
     with tempfile.TemporaryDirectory() as directory:
         shutil.copy2(source, pathlib.Path(directory, source.name))
         process = subprocess.run(
@@ -174,8 +193,7 @@ def clop(args, checkpoints):
             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if process.returncode:
         raise RuntimeError(f"CLOP replay failed:\n{process.stderr}")
-    history = []
-    games = 0
+    rows = []
     for line in process.stdout.splitlines():
         fields = line.split()
         if len(fields) < 4:
@@ -184,8 +202,18 @@ def clop(args, checkpoints):
             [float(field) for field in fields[:4]]
         except ValueError:
             continue
+        rows.append(fields)
+    if len(rows) != len(result_seeds):
+        raise RuntimeError("CLOP replay and data contain different result counts")
+
+    history = []
+    completed = set()
+    games = 0
+    for seed, fields in zip(result_seeds, rows):
         games += 1
-        if len(fields) >= 4 + len(items):
+        completed.add(seed)
+        pair = seed // 2 * 2
+        if pair in completed and pair + 1 in completed and len(fields) >= 4 + len(items):
             history.append((games, decode(items, fields[-len(items):])))
     return at_checkpoints(
         args.method, history, checkpoints, defaults(items), range(1, games + 1))

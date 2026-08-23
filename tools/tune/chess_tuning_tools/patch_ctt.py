@@ -13,6 +13,28 @@ if source.count(old) != 1:
     raise RuntimeError("the pinned CTT source no longer matches the reviewed patch")
 path.write_text(source.replace(old, new))
 
+path = pathlib.Path(tune.__file__).with_name("cli.py")
+source = path.read_text()
+old = "import logging\n"
+new = "import logging\nimport os\nimport subprocess\n"
+if source.count(old) != 1:
+    raise RuntimeError("the pinned CTT import block no longer matches the reviewed patch")
+source = source.replace(old, new)
+old = "        for output_line in run_match(**match_settings):\n"
+new = ('        os.environ["CTT_ITERATION"] = str(iteration)\n'
+       '        for output_line in run_match(**match_settings):\n')
+if source.count(old) != 1:
+    raise RuntimeError("the pinned CTT match loop no longer matches the reviewed patch")
+path.write_text(source.replace(old, new))
+
+path = pathlib.Path(tune.__file__).with_name("local.py")
+source = path.read_text()
+old = "            if opt.space == old_opt.space:\n"
+new = "            if opt.space == old_opt.space and list(old_opt.Xi) == X:\n"
+if source.count(old) != 1:
+    raise RuntimeError("the pinned CTT resume branch no longer matches the reviewed patch")
+path.write_text(source.replace(old, new))
+
 path = pathlib.Path(tune.__file__).with_name("local.py")
 source = path.read_text()
 old = "        return best_point, estimated_elo, float(best_std * 100)"
@@ -36,6 +58,9 @@ new = '''        if iteration == max_iterations:
                     f, np.array(X), np.array(y), np.array(noise),
                     np.array(optima), np.array(performance), np.array(iteration),
                 )
+            if os.environ.get("CTT_OPENING_STATE"):
+                subprocess.run(
+                    ["cutechess-cli", "--commit-iteration", str(iteration)], check=True)
             break
 
         used_extra_point = False
