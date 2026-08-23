@@ -310,8 +310,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
         Serves double duty: found from a position it is the sentinel
         witness the search substitutes for a virtual cutoff; found from
         the null-rotation it says the side to move is in check."""
-        return next((m for m in self.gen_moves()
-                     if self.board[m.j] == "k" or abs(m.j - self.kp) < 2), None)
+        return next((m for m in self.gen_moves() if self.board[m.j] == "k" or abs(m.j - self.kp) < 2), None)
 
 
 ###############################################################################

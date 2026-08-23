@@ -60,8 +60,7 @@ class Position(namedtuple("Position", "board score wc bc ep kp")):
             if j == self.ep: score += pst["P"][119 - (j + S)]
         return score
     def king_capture(self):
-        return next((m for m in self.gen_moves()
-                     if self.board[m.j] == "k" or abs(m.j - self.kp) < 2), None)
+        return next((m for m in self.gen_moves() if self.board[m.j] == "k" or abs(m.j - self.kp) < 2), None)
 class Stop(Exception): pass
 Entry = namedtuple("Entry", "lower upper")
 class Searcher:
