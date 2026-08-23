@@ -330,10 +330,13 @@ a scored best-move suite. It is generated offline, not during CI:
 
 ```bash
 python3 tools/blunder_scan.py sunfish-engine \
-  --games 200 --until 2023-02-28 \
-  --pgn-cache /tmp/sunfish-rated-200-through-2023-02-28.pgn \
-  --checkpoint /tmp/sunfish-rated-200-through-2023-02-28.checkpoint.json \
-  --output tests/files/lichess_blunders.epd
+  --games 0 --include-casual --losses-first \
+  --pgn-cache /tmp/sunfish-engine-full-20260823.pgn \
+  --checkpoint /tmp/sunfish-engine-full-20260823.checkpoint.json \
+  --output tests/files/lichess_blunders.epd \
+  --engine /path/to/stockfish-18 \
+  --scan-nodes 100000 --confirm-nodes 1000000 \
+  --multipv 5 --best-margin 30 --boundary-guard 10
 ```
 
 The PGN cache freezes the input games. The checkpoint stores one checksummed
@@ -344,13 +347,11 @@ settings. A resume rejects any mismatch or corrupt record, then reconstructs
 results in original analysis order before global deduplication, so it produces
 the same EPD bytes as an uninterrupted scan.
 
-The generator uses one Stockfish thread,
-fixed node limits, fresh UCI game state, and a clean hash for every probe. It
-does not select from the sparse evaluations embedded in the PGN: only 685 of
-10,442 Sunfish moves in the frozen archive have one. Fresh equal-budget
-single-PV searches compare the best move with the played move, so the judgment
-is not inferred by comparing a split MultiPV budget with a full root-move
-budget.
+The generator uses one Stockfish thread, a 256 MiB hash, fixed node limits,
+fresh UCI game state, and a clean hash for every probe. It does not select from
+the sparse evaluations embedded in the PGN. Fresh equal-budget single-PV
+searches compare the best move with the played move, so the judgment is not
+inferred by comparing a split MultiPV budget with a full root-move budget.
 
 A candidate must be a Blunder under Lichess's pinned
 [`Advice.scala`](https://github.com/lichess-org/lila/blob/5b905153c326/modules/tree/src/main/Advice.scala#L43-L106)
@@ -386,35 +387,30 @@ are rechecked locally, then `--games` is applied to the accepted records so an
 API response that exceeds its requested maximum cannot enlarge the corpus.
 Single-game exports with a non-`Standard` variant are rejected explicitly.
 
-The committed 40-position labels were generated with tool commit `01aef43` on
-2026-08-22, then mechanically converted to the compact EPD format. The analysis
-run was:
-
-```bash
-/usr/bin/time -p python3 tools/blunder_scan.py sunfish-engine \
-  --games 200 --until 2023-02-28 \
-  --pgn-cache /tmp/sunfish-rated-200-through-2023-02-28.pgn \
-  --output /tmp/sunfish-lichess-blunders-rated-200-through-2023-02-28.epd
-```
+The committed 1,736-position corpus was generated on 2026-08-23 from a frozen
+full-profile export with tool commit `29d6a30` and generator SHA-256
+`4a4c9c6534046de61aff85f91a402a1a809aacbcc9873adf34a31cacf8c1667f`.
+The local source selector accepted all 3,365 Standard games in the supported
+bullet, blitz, rapid, classical, and correspondence performance types,
+including rated and casual games. `--losses-first` changed only analysis order;
+the checkpoint identity pins that order and the full ordered game-ID list.
 
 The frozen input came from
-`GET https://lichess.org/api/games/user/sunfish-engine`. The request used
-`rated=true`, `sort=dateDesc`, `max=200`, `until=1677628799999`, and Standard
-bullet, blitz, rapid, classical, and correspondence performance types, with
-moves, clocks, evals, and opening tags.
-Lichess returned 204 records despite `max=200`; the local source selector
-therefore supplied the first 200 accepted records to the scanner. They are all
-rated Standard games: 111 blitz, 48 bullet, and 41 rapid, from
-2023-01-24 03:36:30 UTC through 2023-02-01 22:24:02 UTC. The full cached PGN
-is 715,190 bytes with SHA-256
-`6db73d5491270df51d65289228cb7e7a4b98a1584e1e119446776f1784464f62`.
+`GET https://lichess.org/api/games/user/sunfish-engine`. The full-profile
+request used `sort=dateDesc`, requested moves, clocks, evals, and opening tags,
+and set no game limit, date cutoff, or rated-only constraint. The local filter
+then enforced the Standard variant and supported performance types. The cached
+PGN is 9,414,378 bytes with SHA-256
+`9d922b8c17e60ebd9e9abb1222eaefdbbd82199a4da5a82b9bfcb9ddfd2bfdf9`.
 
-The scan examined 10,259 Sunfish moves, confirmed 41 positions, and retained
-40 after position deduplication. It took 2,253.93 seconds wall time
-(37m33.93s) with Stockfish 16 binary SHA-256
-`1967ae9001b4d18b7d5c97f61e807749dec8c9700ecf8a46ed66a990df584c93`.
-In the compact format, the resulting EPD is 3,109 bytes with SHA-256
-`b6e2bc003f012ac6a27551a8475fab1da0dac67fcc9bfc6123f52c0e7c7aee38`.
+The scan examined 132,076 Sunfish moves, found 3,030 scan blunders, confirmed
+2,656, produced 1,813 stable labels, and retained 1,736 after four-field
+position deduplication. It used Stockfish 18 binary SHA-256
+`0a119807d135b44f427d1e0e31b87076152a3c83ca0e34a37a25207e471d5534`,
+100,000 scan nodes, 1,000,000 confirmation nodes, 500,000 stability nodes,
+MultiPV 5, a 30 cp best-move margin, and a 10 cp boundary guard. In compact
+format, the resulting EPD is 144,261 bytes with SHA-256
+`020fcb24368c01c34637119ab212da7cbca289f3ff12dbb621ea5dd9e0e37877`.
 
 Run it through the existing best-move harness, preferably as a depth curve:
 
@@ -427,18 +423,16 @@ done
 
 Do not infer Elo from this suite, and do not pick a flattering shallow depth.
 It is a deterministic discriminator for failure modes drawn from Sunfish's
-actual workload. A CI floor should be added only after the corpus is large
-enough that the floor is useful rather than tuned to this snapshot. Master
-`a8feb63`, run with PyPy 3.11.15, scores 6/40, 9/40, 10/40, and 11/40 at
-depths 6, 8, 10, and 11, taking 11.94s, 27.30s, 115.46s, and 318.01s. The
-curve is depth-sensitive and is a regression characterization, not an Elo
-claim.
+actual workload. A CI floor should be added only after a depth curve on the
+full snapshot establishes a useful threshold rather than one tuned to a
+smaller predecessor corpus. The curve is depth-sensitive and is a regression
+characterization, not an Elo claim.
 
-The API is convenient input, not a license declaration: only commit positions
-whose source license is independently documented. These rated games are
-covered by Lichess's CC0 January and February 2023 Standard-game dumps;
-Lichess's [published rated monthly dumps](https://database.lichess.org/#standard_games)
-document that basis. Do not infer the same merely from a casual-game export.
+The API is convenient input, not a license declaration. The committed compact
+artifact contains only four-field positions and independently generated
+best-move labels; it includes no PGN move text, comments, player names, URLs,
+or game metadata. Review source licensing separately before redistributing the
+frozen PGN itself.
 
 ## Screening with the C twin (`tools/ctwin/`)
 

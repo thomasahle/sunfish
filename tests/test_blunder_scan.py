@@ -293,7 +293,7 @@ def test_committed_corpus_has_compact_legal_best_move_labels():
     seen, states, multiple = set(), set(), False
     corpus = ROOT / "tests/files/lichess_blunders.epd"
     lines = corpus.read_text().splitlines()
-    assert len(lines) == 40
+    assert len(lines) == 1736
     for line in lines:
         assert len(line.split(" bm ", 1)[0].split()) == 4
         board, operations = chess.Board.from_epd(line)
@@ -308,7 +308,7 @@ def test_committed_corpus_has_compact_legal_best_move_labels():
         assert operations["bm"]
         assert all(move in board.legal_moves for move in operations["bm"])
         multiple |= len(operations["bm"]) > 1
-    assert len(seen) == len(states) == 40
+    assert len(seen) == len(states) == 1736
     assert multiple
 
 
