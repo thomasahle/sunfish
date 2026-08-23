@@ -291,6 +291,9 @@ def test_epd_round_trip_contains_labels_and_provenance():
     assert "blunder delta 0.3" in operations["c2"]
     assert "boundary guard 10; multipv 5; threads 1; hash 256 MB" in operations["c2"]
     assert "pgn sha256 0123456789abcdef" in operations["c2"]
+    assert f"generator sha256 {blunder_scan.GENERATOR_SHA256[:16]}" in operations["c2"]
+    assert f"python {blunder_scan.PYTHON_RUNTIME}" in operations["c2"]
+    assert f"python-chess {chess.__version__}" in operations["c2"]
     assert "source games 1" in operations["c2"]
     assert "game order archive" in operations["c2"]
     assert operations["hmvc"] == 18
@@ -523,6 +526,11 @@ def test_checkpoint_rejects_corruption_and_identity_mismatch(tmp_path):
     args = checkpoint_args(checkpoint)
     identity = blunder_scan.checkpoint_identity(
         games, "sunfish-engine", args, source_sha, engine_sha, oracle)
+    assert blunder_scan.GENERATOR_SHA256 == blunder_scan.file_sha256(
+        ROOT / "tools/blunder_scan.py")
+    assert identity["generator_sha256"] == blunder_scan.GENERATOR_SHA256
+    assert identity["python"] == blunder_scan.PYTHON_RUNTIME
+    assert identity["python_chess"] == chess.__version__
     document = {
         "schema": blunder_scan.CHECKPOINT_SCHEMA,
         "identity": identity,
@@ -541,6 +549,10 @@ def test_checkpoint_rejects_corruption_and_identity_mismatch(tmp_path):
         games, "sunfish-engine", args, "c" * 64, engine_sha, oracle)
     with pytest.raises(ValueError, match="settings mismatch: source_sha256"):
         blunder_scan.load_checkpoint(checkpoint, changed_input)
+
+    changed_generator = dict(identity, generator_sha256="c" * 64)
+    with pytest.raises(ValueError, match="settings mismatch: generator_sha256"):
+        blunder_scan.load_checkpoint(checkpoint, changed_generator)
 
     corrupt = {
         "schema": blunder_scan.CHECKPOINT_SCHEMA,

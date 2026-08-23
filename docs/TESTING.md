@@ -338,10 +338,11 @@ python3 tools/blunder_scan.py sunfish-engine \
 
 The PGN cache freezes the input games. The checkpoint stores one checksummed
 record per completed game and is replaced atomically after every game. Its
-identity pins the full PGN hash, ordered game IDs, engine hash, Lichess source
-commits, and all analysis settings. A resume rejects any mismatch or corrupt
-record, then reconstructs results in original analysis order before global
-deduplication, so it produces the same EPD bytes as an uninterrupted scan.
+identity pins the full PGN hash, ordered game IDs, engine hash, generator hash,
+Python runtime, `python-chess` version, Lichess source commits, and all analysis
+settings. A resume rejects any mismatch or corrupt record, then reconstructs
+results in original analysis order before global deduplication, so it produces
+the same EPD bytes as an uninterrupted scan.
 
 The generator uses one Stockfish thread,
 fixed node limits, fresh UCI game state, and a clean hash for every probe. It
@@ -380,7 +381,8 @@ nearest rejected move must clear the acceptance cutoff by another 10 cp.
 Truncated or unstable boundaries are discarded. EPD `hmvc` and `fmvn`
 operations preserve the exact rule state that Stockfish analysed. The EPD also
 records the game URL, played move, score loss, oracle name, node budgets, and
-boundary guard, plus fingerprints of the PGN input and Stockfish binary.
+boundary guard, plus fingerprints of the PGN input, generator, Stockfish
+binary, Python runtime, and `python-chess` version.
 User-archive fetches default to rated standard-chess games;
 `--include-casual` includes casual games alongside rated ones. Archive records
 are rechecked locally, then `--games` is applied to the accepted records so an

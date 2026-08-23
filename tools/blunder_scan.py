@@ -48,6 +48,8 @@ LICHESS_ADVICE_COMMIT = "5b905153c32677034dbb3325ecbd66418a03281e"
 LICHESS_EVAL_COMMIT = "34b3363839c511b258fec17b30462868e31d9b5a"
 LICHESS_BLUNDER_THRESHOLD = 0.3
 CHECKPOINT_SCHEMA = "sunfish-blunder-checkpoint-v1"
+GENERATOR_SHA256 = hashlib.sha256(pathlib.Path(__file__).read_bytes()).hexdigest()
+PYTHON_RUNTIME = f"{sys.implementation.name} {sys.version.split()[0]}"
 USER_AGENT = "sunfish-blunder-corpus/1 (+https://github.com/thomasahle/sunfish)"
 STANDARD_PERFS = {"bullet", "blitz", "rapid", "classical", "correspondence"}
 
@@ -343,7 +345,10 @@ def to_epd(blunder):
                 f"bm margin {blunder.best_margin}; "
                 f"boundary guard {blunder.boundary_guard}; multipv {blunder.multipv}; "
                 f"threads 1; hash 256 MB; pgn sha256 {blunder.source_sha}")
-    settings += (f"; source games {blunder.source_game_count}; "
+    settings += (f"; generator sha256 {GENERATOR_SHA256[:16]}; "
+                 f"python {PYTHON_RUNTIME}; "
+                 f"python-chess {chess.__version__}; "
+                 f"source games {blunder.source_game_count}; "
                  f"game order {blunder.game_order}")
     return board.epd(
         bm=blunder.best_moves,
@@ -545,6 +550,9 @@ def checkpoint_identity(games, user, args, source_sha256, engine_sha256, oracle)
     if len(game_ids) != len(set(game_ids)):
         raise ValueError("checkpointing requires unique Lichess game ids")
     return {
+        "generator_sha256": GENERATOR_SHA256,
+        "python": PYTHON_RUNTIME,
+        "python_chess": chess.__version__,
         "source_sha256": source_sha256,
         "source_games": len(games),
         "game_ids": game_ids,
