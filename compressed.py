@@ -87,8 +87,7 @@ class Searcher:
         calm = abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
         guard = not root and calm
         t = pos.score + NULL_MARGIN
-        nmr = (calm and depth >= 6 and
-               -self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)
+        nmr = calm and depth >= 6 and -self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t
         best, live = -MATE_UPPER, False
         for val, move in moves():
             if move is None and depth == 0: score = pos.score

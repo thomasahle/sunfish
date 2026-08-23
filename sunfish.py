@@ -448,8 +448,7 @@ class Searcher:
         calm = abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
         guard = not root and calm
         t = pos.score + NULL_MARGIN
-        nmr = (calm and depth >= 6 and
-               -self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)
+        nmr = calm and depth >= 6 and -self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t
 
         # Run through the moves, shortcutting when score >= gamma.
         # live is True if we saw a legal (not null, score > -MATE_UPPER) move
