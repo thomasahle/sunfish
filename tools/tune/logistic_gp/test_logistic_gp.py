@@ -1767,6 +1767,10 @@ class MixedAcquisitionTest(unittest.TestCase):
                              if parameter["name"] == name)
             self.assertIn(99, MixedSpace.parameter_values(parameter))
             self.assertNotIn(99, parameter.get("off_values", []))
+        design = set(space.full_axis_design()) | set(space.required)
+        for index, name in enumerate(space.names):
+            self.assertEqual({point[index] for point in design},
+                             {point[index] for point in space.candidates}, name)
 
         # These are exact structural offs, not merely unreachable at common depths.
         self.assertFalse(any(depth > 2 and depth <= 2 for depth in range(1000)))
