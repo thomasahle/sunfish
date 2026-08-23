@@ -92,7 +92,7 @@ def checkpoint_args(checkpoint):
 
 def checkpoint_blunder(candidate, args, oracle, source_sha):
     fields = candidate.fen.split()
-    fields[4] = candidate.game_id[-1]
+    fields[2] = {"1": "KQkq", "2": "KQk", "3": "KQ"}[candidate.game_id[-1]]
     candidate = dataclasses.replace(candidate, fen=" ".join(fields))
     board = chess.Board(candidate.fen)
     best_move = next(move for move in board.legal_moves if move != candidate.played)
@@ -265,87 +265,51 @@ def test_deduplicate_keeps_first_source_and_has_stable_order():
     assert result[0].cp_loss == 400
 
 
-def test_deduplicate_preserves_distinct_fifty_move_states():
+def test_deduplicate_uses_the_four_epd_position_fields():
     first = make_blunder(game_id="first")
     fields = first.candidate.fen.split()
     fields[4] = str(int(fields[4]) + 1)
     second_candidate = dataclasses.replace(
         first.candidate, fen=" ".join(fields), game_id="second")
     second = dataclasses.replace(first, candidate=second_candidate)
-    assert len(blunder_scan.deduplicate([first, second])) == 2
+    assert len(blunder_scan.deduplicate([first, second])) == 1
 
 
-def test_epd_round_trip_contains_labels_and_provenance():
-    epd = blunder_scan.to_epd(make_blunder())
+def test_epd_round_trip_matches_the_wac_format():
+    blunder = dataclasses.replace(make_blunder(), best_moves=(
+        chess.Move.from_uci("f1c4"), chess.Move.from_uci("d2d4")))
+    epd = blunder_scan.to_epd(blunder)
     board, operations = chess.Board.from_epd(epd)
-    assert board.fen() == make_blunder().candidate.fen
-    assert operations["bm"] == [chess.Move.from_uci("f1c4")]
+    assert " ".join(board.fen().split()[:4]) == " ".join(
+        blunder.candidate.fen.split()[:4])
+    assert operations["bm"] == [
+        chess.Move.from_uci("f1c4"), chess.Move.from_uci("d2d4")]
     assert operations["id"] == "LBG.abc12345.3"
-    assert operations["c0"] == "https://lichess.org/abc12345/white#3"
-    assert "Opponent; 0-1; tc 180+1; played Nf3" in operations["c1"]
-    assert "Lichess CpAdvice Blunder; win-chance loss" in operations["c1"]
-    assert "best +100 cp; played -400 cp; cp loss 500" in operations["c1"]
-    assert "confirm 1000 nodes; stability 500 nodes" in operations["c2"]
-    assert f"advice {blunder_scan.LICHESS_ADVICE_COMMIT}" in operations["c2"]
-    assert f"eval {blunder_scan.LICHESS_EVAL_COMMIT}" in operations["c2"]
-    assert "blunder delta 0.3" in operations["c2"]
-    assert "boundary guard 10; multipv 5; threads 1; hash 256 MB" in operations["c2"]
-    assert "pgn sha256 0123456789abcdef" in operations["c2"]
-    assert f"generator sha256 {blunder_scan.GENERATOR_SHA256[:16]}" in operations["c2"]
-    assert f"python {blunder_scan.PYTHON_RUNTIME}" in operations["c2"]
-    assert f"python-chess {chess.__version__}" in operations["c2"]
-    assert "source games 1" in operations["c2"]
-    assert "game order archive" in operations["c2"]
-    assert operations["hmvc"] == 18
-    assert operations["fmvn"] == 37
+    assert set(operations) == {"bm", "id"}
+    assert epd.endswith('bm Bc4 d4; id "LBG.abc12345.3";')
 
 
-def test_mate_epd_does_not_invent_a_winning_chance_delta():
-    blunder = dataclasses.replace(
-        make_blunder(),
-        best_eval=blunder_scan.Evaluation(mate=3),
-        played_eval=blunder_scan.Evaluation(mate=-4),
-    )
-    _, operations = chess.Board.from_epd(blunder_scan.to_epd(blunder))
-    assert "Lichess MateAdvice Blunder; mate transition" in operations["c1"]
-    assert "best mate +3; played mate -4" in operations["c1"]
-    assert "win-chance" not in operations["c1"]
-    assert "cp loss" not in operations["c1"]
-
-
-def test_committed_corpus_preserves_rule_state_and_legal_labels():
-    expected_seed_clocks = {
-        "LBG.eWjtwAtB.59": (0, 30),
-        "LBG.eWjtwAtB.149": (18, 75),
-    }
-    expected_settings = (
-        "Stockfish 16 sha256 1967ae9001b4d18b; scan 100000 nodes; "
-        "confirm 1000000 nodes; stability 500000 nodes; threshold 300; "
-        "bm margin 30; boundary guard 10; multipv 5; threads 1; "
-        "hash 256 MB; pgn sha256 6db73d5491270df5"
-    )
-    seen, clocks, states = set(), {}, set()
+def test_committed_corpus_has_compact_legal_best_move_labels():
+    seen, states, multiple = set(), set(), False
     corpus = ROOT / "tests/files/lichess_blunders.epd"
     lines = corpus.read_text().splitlines()
     assert len(lines) == 40
     for line in lines:
+        assert len(line.split(" bm ", 1)[0].split()) == 4
         board, operations = chess.Board.from_epd(line)
         identifier = operations["id"]
         assert identifier.startswith("LBG.")
         assert identifier not in seen
         seen.add(identifier)
-        clocks[identifier] = (board.halfmove_clock, board.fullmove_number)
-        assert (operations["hmvc"], operations["fmvn"]) == clocks[identifier]
-        state = " ".join(board.fen().split()[:5])
+        assert set(operations) == {"bm", "id"}
+        state = " ".join(board.fen().split()[:4])
         assert state not in states
         states.add(state)
         assert operations["bm"]
         assert all(move in board.legal_moves for move in operations["bm"])
-        game_id = identifier.split(".")[1]
-        assert operations["c0"].startswith(f"https://lichess.org/{game_id}/")
-        assert operations["c2"] == expected_settings
-    assert expected_seed_clocks.items() <= clocks.items()
+        multiple |= len(operations["bm"]) > 1
     assert len(seen) == len(states) == 40
+    assert multiple
 
 
 def test_loss_confirmation_uses_equal_single_pv_budgets(monkeypatch):

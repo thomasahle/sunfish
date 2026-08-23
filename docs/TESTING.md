@@ -371,32 +371,30 @@ losing. Mate advice is mirrored separately: cp to opponent mate is a Blunder
 unless the prior mover score is below -700 cp; mover mate to cp is a Blunder
 unless the resulting mover score is above +700 cp; and mover mate to opponent
 mate is always a Blunder. Changing the distance of a same-side mate is not a
-Blunder. The EPD pins both source commits. `CpAdvice` records winning-chance
-deterioration and both cp scores; `MateAdvice` records the score transition
-without inventing a winning-chance value that Lichess itself does not use.
+Blunder. The updater and its checkpoint identity pin both source commits.
 
 MultiPV is used only to label acceptable moves:
 the set must be unchanged between half and full confirmation budgets, and the
 nearest rejected move must clear the acceptance cutoff by another 10 cp.
-Truncated or unstable boundaries are discarded. EPD `hmvc` and `fmvn`
-operations preserve the exact rule state that Stockfish analysed. The EPD also
-records the game URL, played move, score loss, oracle name, node budgets, and
-boundary guard, plus fingerprints of the PGN input, generator, Stockfish
-binary, Python runtime, and `python-chess` version.
+Truncated or unstable boundaries are discarded. The output deliberately uses
+the same compact format as WAC: the four position fields, all accepted `bm`
+moves, and an `id`. Reproduction metadata belongs in the frozen PGN,
+checkpoint, and this guide rather than every EPD line.
 User-archive fetches default to rated standard-chess games;
 `--include-casual` includes casual games alongside rated ones. Archive records
 are rechecked locally, then `--games` is applied to the accepted records so an
 API response that exceeds its requested maximum cannot enlarge the corpus.
 Single-game exports with a non-`Standard` variant are rejected explicitly.
 
-The committed 40-position corpus was generated with tool commit `01aef43` on
-2026-08-22. The exact run was:
+The committed 40-position labels were generated with tool commit `01aef43` on
+2026-08-22, then mechanically converted to the compact EPD format. The analysis
+run was:
 
 ```bash
 /usr/bin/time -p python3 tools/blunder_scan.py sunfish-engine \
   --games 200 --until 2023-02-28 \
-  --pgn-cache /private/tmp/sunfish-rated-200-through-2023-02-28.pgn \
-  --output /private/tmp/sunfish-lichess-blunders-rated-200-through-2023-02-28.epd
+  --pgn-cache /tmp/sunfish-rated-200-through-2023-02-28.pgn \
+  --output /tmp/sunfish-lichess-blunders-rated-200-through-2023-02-28.epd
 ```
 
 The frozen input came from
@@ -412,11 +410,11 @@ is 715,190 bytes with SHA-256
 `6db73d5491270df51d65289228cb7e7a4b98a1584e1e119446776f1784464f62`.
 
 The scan examined 10,259 Sunfish moves, confirmed 41 positions, and retained
-40 after rule-state-aware deduplication. It took 2,253.93 seconds wall time
+40 after position deduplication. It took 2,253.93 seconds wall time
 (37m33.93s) with Stockfish 16 binary SHA-256
 `1967ae9001b4d18b7d5c97f61e807749dec8c9700ecf8a46ed66a990df584c93`.
-The resulting EPD is 18,348 bytes with SHA-256
-`20aa58d410e278dc62f2b6d65553681c2736ca768e5125197f9ac667a8b979ce`.
+In the compact format, the resulting EPD is 3,109 bytes with SHA-256
+`b6e2bc003f012ac6a27551a8475fab1da0dac67fcc9bfc6123f52c0e7c7aee38`.
 
 Run it through the existing best-move harness, preferably as a depth curve:
 

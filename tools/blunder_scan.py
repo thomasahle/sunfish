@@ -17,11 +17,10 @@ at two larger budgets must agree on every accepted near-best move. Positions
 too close to the MultiPV boundary are rejected rather than incompletely
 labelled.
 
-The output is ordinary EPD accepted by ``tools/tester.py best``. Its ``bm``
-operation contains the certified alternatives, while ``c0`` through ``c2``
-record the source game, played move, Lichess judgment, and oracle settings.
-Network access and Stockfish are generation-time dependencies only; the
-committed EPD is a deterministic test input.
+The output is ordinary EPD accepted by ``tools/tester.py best``. Like the WAC
+suite, each line contains only the position, its certified ``bm`` alternatives,
+and an ``id``. Network access and Stockfish are generation-time dependencies
+only; the committed EPD is a deterministic test input.
 """
 import argparse
 import dataclasses
@@ -298,8 +297,8 @@ def acceptable_moves(ranked, legal_count, margin, boundary_guard=0):
 
 
 def fen_key(fen):
-    """Rule-relevant static state, including the fifty-move clock."""
-    return " ".join(fen.split()[:5])
+    """The four position fields retained by EPD."""
+    return " ".join(fen.split()[:4])
 
 
 def deduplicate(blunders):
@@ -313,52 +312,12 @@ def deduplicate(blunders):
         item.candidate.game_id, item.candidate.ply, fen_key(item.candidate.fen)))
 
 
-def lichess_url(candidate):
-    side = "white" if chess.Board(candidate.fen).turn else "black"
-    return f"https://lichess.org/{candidate.game_id}/{side}#{candidate.ply}"
-
-
 def to_epd(blunder):
-    """Serialize one labelled position with enough provenance to reproduce it."""
+    """Serialize one labelled position in the same compact form as WAC."""
     candidate = blunder.candidate
-    board = chess.Board(candidate.fen)
-    played = board.san(candidate.played)
-    identifier = f"LBG.{candidate.game_id}.{candidate.ply}"
-    if blunder.chance_loss is not None:
-        advice = "CpAdvice"
-        comparison = (f"win-chance loss {blunder.chance_loss:.6f}; "
-                      f"best {blunder.best_eval}; played {blunder.played_eval}; "
-                      f"cp loss {blunder.cp_loss}")
-    else:
-        advice = "MateAdvice"
-        comparison = (f"mate transition; best {blunder.best_eval}; "
-                      f"played {blunder.played_eval}")
-    details = (f"{candidate.user} vs {candidate.opponent}; {candidate.result}; "
-               f"tc {candidate.time_control}; played {played}; "
-               f"Lichess {advice} Blunder; {comparison}")
-    settings = (f"{blunder.oracle}; scan {blunder.scan_nodes} nodes; "
-                f"confirm {blunder.confirm_nodes} nodes; "
-                f"stability {blunder.stability_nodes} nodes; "
-                f"advice {LICHESS_ADVICE_COMMIT}; "
-                f"eval {LICHESS_EVAL_COMMIT}; "
-                f"blunder delta {LICHESS_BLUNDER_THRESHOLD}; "
-                f"bm margin {blunder.best_margin}; "
-                f"boundary guard {blunder.boundary_guard}; multipv {blunder.multipv}; "
-                f"threads 1; hash 256 MB; pgn sha256 {blunder.source_sha}")
-    settings += (f"; generator sha256 {GENERATOR_SHA256[:16]}; "
-                 f"python {PYTHON_RUNTIME}; "
-                 f"python-chess {chess.__version__}; "
-                 f"source games {blunder.source_game_count}; "
-                 f"game order {blunder.game_order}")
-    return board.epd(
+    return chess.Board(candidate.fen).epd(
         bm=blunder.best_moves,
-        id=identifier,
-        c0=lichess_url(candidate),
-        c1=details,
-        c2=settings,
-        hmvc=board.halfmove_clock,
-        fmvn=board.fullmove_number,
-    )
+        id=f"LBG.{candidate.game_id}.{candidate.ply}")
 
 
 def _require_keys(value, keys, label):
