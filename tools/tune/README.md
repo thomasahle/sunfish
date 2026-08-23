@@ -65,6 +65,11 @@ commands and paths from the temporary result file are discarded. Thus nominal
 engine ratings and a merely pending calibration are never accepted as panel
 evidence.
 
+Calibration proves reliability and non-saturation; it is not subtracted as an
+Elo offset. The target is expected weighted-panel score, including matchup
+effects. Each normalized pair score is in `[0, 1]`, so one Bernoulli-equivalent
+observation after randomized opponent assignment is conservative.
+
 `search_parameters.json` is a small generic search-tuning example.
 `logistic_gp/all_parameters.json` includes evaluation experiments, while
 `logistic_gp/global_search_parameters.json` is the frozen search-only space.
