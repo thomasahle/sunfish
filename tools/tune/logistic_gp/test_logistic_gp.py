@@ -4,6 +4,7 @@ import itertools
 import json
 import math
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -1795,6 +1796,15 @@ class MixedAcquisitionTest(unittest.TestCase):
         })
 
         source = path.parents[2].joinpath("ctwin", "sunfish.c").read_text()
+        exposed = set(re.findall(r'\{ "([A-Z][A-Z0-9_]*)",', source))
+        evaluation = {
+            "VALUE_N", "VALUE_B", "VALUE_R", "VALUE_Q",
+            "PST_P", "PST_N", "PST_B", "PST_R", "PST_Q", "PST_K", "PST_KE",
+        }
+        included = {parameter["name"] for parameter in spec["parameters"]}
+        documented = included | set(spec["scope"]["excluded"]) | evaluation
+        # DELAY belongs to Python's clock manager and has no C-twin UCI option.
+        self.assertEqual(exposed, documented - {"DELAY"})
         self.assertIn("depth <= NULL_MIN_DEPTH + NULL_SPAN", source)
         self.assertIn("iabs(pos->score) < NULL_LIMIT", source)
         self.assertIn("if (guard && FUEL_NULL)", source)
