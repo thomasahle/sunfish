@@ -46,6 +46,15 @@ def digest(path):
     return {"path": str(path), "sha256": result.hexdigest()}
 
 
+def slice_digest(path, start, pairs):
+    lines = [line for line in pathlib.Path(path).read_bytes().splitlines(keepends=True)
+             if line.strip()]
+    selected = lines[start - 1:start - 1 + pairs]
+    if len(selected) != pairs:
+        raise RuntimeError("validation opening slice is incomplete")
+    return hashlib.sha256(b"".join(selected)).hexdigest()
+
+
 def command_identity(command, arguments):
     executable = shutil.which(command) or command
     return {
@@ -194,14 +203,19 @@ async def validate_locked(args):
     baseline_engine = args.baseline_engine or args.engine
     baseline_args = args.baseline_args if args.baseline_args is not None else args.engine_args
     baseline_options = dict(item.split("=", 1) for item in args.baseline_option)
+    opening_slice = slice_digest(args.openings, args.start, args.pairs)
+    if args.opening_slice_sha256 and opening_slice != args.opening_slice_sha256:
+        raise RuntimeError("validation opening-slice hash does not match")
     validate_options(args.engine, args.engine_args,
                      set().union(*(options.keys() for options in configurations.values())))
     validate_options(baseline_engine, baseline_args, baseline_options)
     payload = {
         "protocol": {
             "tc": args.tc, "pairs": args.pairs, "start": args.start,
+            "opening_slice_sha256": opening_slice,
             "opening_format": args.opening_format,
             "fastchess": digest(shutil.which(args.fastchess) or args.fastchess),
+            "recommendations": digest(args.recommendations),
             "candidate": command_identity(args.engine, args.engine_args),
             "baseline": command_identity(baseline_engine, baseline_args),
             "baseline_options": baseline_options, "openings": digest(args.openings),
@@ -250,6 +264,7 @@ def main():
     parser.add_argument("--baseline-option", action="append", default=[])
     parser.add_argument("--openings", required=True)
     parser.add_argument("--opening-format", choices=("epd", "pgn"), default="epd")
+    parser.add_argument("--opening-slice-sha256")
     parser.add_argument("--tc", default="3+0.1")
     parser.add_argument("--pairs", type=int, default=50)
     parser.add_argument("--slots", type=int, default=10)

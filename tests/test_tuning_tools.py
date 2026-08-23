@@ -1,4 +1,5 @@
 import argparse
+import hashlib
 import importlib.util
 import json
 import math
@@ -15,7 +16,7 @@ import pytest
 
 # tools/tune modules import numpy at module level; the PyPy CI env has no numpy,
 # and an ImportError here aborts collection of the ENTIRE suite. Skip loudly instead.
-pytest.importorskip("numpy")
+np = pytest.importorskip("numpy")
 
 
 ROOT = pathlib.Path(__file__).parents[1]
@@ -36,7 +37,10 @@ pentanomial = load("pentanomial", "tools/tune/pentanomial.py")
 locking = load("locking", "tools/tune/locking.py")
 plot_recovery = load("plot_recovery", "tools/tune/plot_recovery.py")
 recovery = load("recovery_starts", "tools/tune/recovery_starts.py")
+recovery_decision = load("recovery_decision", "tools/tune/recovery_decision.py")
 recommend = load("recommend", "tools/tune/recommend.py")
+freeze_recommendations = load(
+    "freeze_recommendations", "tools/tune/freeze_recommendations.py")
 rbfopt_stub = types.ModuleType("rbfopt")
 rbfopt_stub.RbfoptAlgorithm = type("RbfoptAlgorithm", (), {})
 rbfopt_stub.RbfoptBlackBox = type("RbfoptBlackBox", (), {})
@@ -320,6 +324,160 @@ class TuningToolsTest(unittest.TestCase):
         ])
         with self.assertRaisesRegex(ValueError, "does not span"):
             plot_recovery.areas(summary[:-1], 200)
+
+    def test_recommendation_freeze_requires_and_normalizes_the_full_grid(self):
+        benchmark = json.loads((ROOT / "tools/tune/recovery_benchmark.json").read_text())
+        analysis = ROOT / "tools/tune/recovery_analysis.json"
+        methods = json.loads(analysis.read_text())["method_labels"].values()
+        checkpoints = benchmark["budget"]["checkpoints"]
+        starts = {item["source_index"]: item["options"] for item in benchmark["starts"]}
+        with tempfile.TemporaryDirectory() as directory:
+            sources = []
+            for method in methods:
+                for start, options in starts.items():
+                    source = pathlib.Path(directory, f"{method}-{start}.json")
+                    source.write_text(json.dumps([{
+                        "method": method, "start": start, "checkpoint": checkpoint,
+                        "trained_games": checkpoint, "recommendation_games": checkpoint,
+                        "options": options if checkpoint == 0 else benchmark["reference"]["options"],
+                    } for checkpoint in checkpoints]))
+                    sources.append(source)
+            first = freeze_recommendations.freeze(
+                ROOT / "tools/tune/recovery_benchmark.json", analysis, sources)
+            second = freeze_recommendations.freeze(
+                ROOT / "tools/tune/recovery_benchmark.json", analysis, reversed(sources))
+        self.assertEqual(first, second)
+        aliases, audit = first
+        self.assertEqual((len(aliases), audit["aliases"], audit["unique_configurations"]),
+                         (90, 90, 4))
+        self.assertEqual(set(aliases[0]["options"]), set(benchmark["reference"]["options"]))
+        self.assertEqual(len(audit["recommendation_artifacts"]), 15)
+
+    def test_primary_selection_retains_methods_tied_with_the_runner_up(self):
+        recoveries = {"a": 30, "b": 20, "c": 15, "d": 0}
+        comparisons = [
+            {"method_a": "b", "method_b": "c", "ci_low": -4, "ci_high": 3},
+            {"method_a": "b", "method_b": "d", "ci_low": 10, "ci_high": 25},
+        ]
+        ranking, leader, runner, finalists = recovery_decision.select_finalists(
+            recoveries, comparisons)
+        self.assertEqual((ranking, leader, runner), (["a", "b", "c", "d"], "a", "b"))
+        self.assertEqual(finalists, ["a", "b", "c"])
+
+    def test_exact_sign_flip_and_holm_are_deterministic(self):
+        self.assertAlmostEqual(float(recovery_decision.exact_sign_flip([.25, .25])), .25)
+        self.assertAlmostEqual(float(recovery_decision.exact_sign_flip([.25, -.25])), .75)
+        hypotheses = recovery_decision.holm([
+            {"name": "a", "_p": np.longdouble(.01)},
+            {"name": "b", "_p": np.longdouble(.03)},
+            {"name": "c", "_p": np.longdouble(.04)},
+        ])
+        self.assertEqual([round(item["adjusted_p_value"], 2) for item in hypotheses],
+                         [.03, .06, .06])
+
+    def test_confirmation_tests_every_finalist_against_zero_and_every_rival(self):
+        scores = {
+            "a": np.asarray([.75] * 12),
+            "b": np.asarray([.5] * 12),
+        }
+        hypotheses = recovery_decision.confirmation_tests(scores)
+        self.assertEqual({item["name"] for item in hypotheses},
+                         {"a>zero", "b>zero", "a>b", "b>a"})
+        accepted = {
+            method for method in scores
+            if all(item["score_difference"] > 0 and item["adjusted_p_value"] <= .05
+                   for item in hypotheses if item["method"] == method)
+        }
+        self.assertEqual(accepted, {"a"})
+
+    def test_recovery_protocol_rejects_identity_and_opening_drift(self):
+        benchmark = {
+            "budget": {"time_control": "3+0.1"},
+            "artifacts": {
+                "engine": "engine", "tables": "tables", "fastchess": "fastchess",
+                "heldout_book": "book",
+            },
+            "reference": {"options": {"X": 1}},
+        }
+        phase = {"pairs": 10, "start": 20, "slice_sha256": "slice"}
+        identity = {
+            "arguments": "tables", "files": [{"sha256": "engine"}, {"sha256": "tables"}],
+        }
+        protocol = {
+            "tc": "3+0.1", "pairs": 10, "start": 20,
+            "opening_slice_sha256": "slice", "opening_format": "epd",
+            "openings": {"sha256": "book"}, "fastchess": {"sha256": "fastchess"},
+            "recommendations": {"sha256": "recommendations"},
+            "candidate": identity, "baseline": identity, "baseline_options": {"X": "1"},
+        }
+        recovery_decision.verify_protocol(protocol, benchmark, phase, "recommendations")
+        protocol["openings"]["sha256"] = "other"
+        with self.assertRaisesRegex(ValueError, "opening book"):
+            recovery_decision.verify_protocol(protocol, benchmark, phase, "recommendations")
+
+    def test_recovery_validation_requires_the_exact_record_and_match_grid(self):
+        parameters = [{"name": "X", "type": "integer", "min": 0, "default": 1, "max": 2}]
+        reference, starts = {"X": 1}, {5: {"X": 0}}
+        fingerprint = {"study": "frozen"}
+        benchmark = {
+            "budget": {"time_control": "3+0.1"},
+            "artifacts": {
+                "engine": "engine", "tables": "tables", "fastchess": "fastchess",
+                "heldout_book": "book",
+            },
+            "reference": {"options": reference},
+        }
+        phase = {"pairs": 2, "start": 20, "slice_sha256": "slice"}
+        identity = {
+            "arguments": "tables", "files": [{"sha256": "engine"}, {"sha256": "tables"}],
+        }
+        protocol = {
+            "tc": "3+0.1", "pairs": 2, "start": 20,
+            "opening_slice_sha256": "slice", "opening_format": "epd",
+            "openings": {"sha256": "book"}, "fastchess": {"sha256": "fastchess"},
+            "recommendations": {"sha256": "recommendations"},
+            "candidate": identity, "baseline": identity, "baseline_options": {"X": "1"},
+        }
+        records, matches = [], {}
+        for checkpoint, options, scores in ((0, {"X": 0}, [.5, .5]),
+                                             (1000, {"X": 2}, [.5, .75])):
+            config = validate.identifier(options)
+            records.append({
+                "method": "a", "start": 5, "checkpoint": checkpoint,
+                "configuration": config, "validation": config,
+                "benchmark_protocol": fingerprint, "options": options,
+            })
+            wins, losses, draws = ((0, 0, 4) if checkpoint == 0 else (2, 1, 1))
+            matches[config] = {
+                "pair_scores": scores,
+                "pentanomial": ([0, 0, 2, 0, 0] if checkpoint == 0 else [0, 1, 1, 0, 0]),
+                "wins": wins, "losses": losses, "draws": draws,
+            }
+        with tempfile.TemporaryDirectory() as directory:
+            validation = pathlib.Path(directory, "validation.json")
+            validation.write_text(json.dumps({
+                "protocol": protocol, "records": records, "matches": matches,
+            }))
+            recovery_decision.verify_validation(
+                validation, benchmark, phase, parameters, reference, starts, fingerprint,
+                ["a"], (0, 1000), "recommendations")
+            records.pop()
+            validation.write_text(json.dumps({
+                "protocol": protocol, "records": records, "matches": matches,
+            }))
+            with self.assertRaisesRegex(ValueError, "unrelated matches"):
+                recovery_decision.verify_validation(
+                    validation, benchmark, phase, parameters, reference, starts, fingerprint,
+                    ["a"], (0,), "recommendations")
+
+    def test_validation_opening_slice_hash_is_exact(self):
+        with tempfile.TemporaryDirectory() as directory:
+            openings = pathlib.Path(directory, "openings.epd")
+            openings.write_bytes(b"one\n\ntwo\nthree\n")
+            expected = hashlib.sha256(b"two\nthree\n").hexdigest()
+            self.assertEqual(validate.slice_digest(openings, 2, 2), expected)
+            with self.assertRaisesRegex(RuntimeError, "incomplete"):
+                validate.slice_digest(openings, 3, 2)
 
     def test_validation_parser_keeps_paired_statistics(self):
         output = b"""Finished game 2 (baseline vs candidate): 1-0

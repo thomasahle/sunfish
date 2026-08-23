@@ -27,9 +27,13 @@ categorical, and Boolean parameters.
 - `screen_starts.py` measures those starts against a fixed UCI baseline.
 - `recommend.py` extracts comparable incumbent configurations at fixed game
   budgets. It can also pool pairwise-only SPSA studies.
+- `freeze_recommendations.py` normalizes and audits a complete method/start/
+  checkpoint recommendation grid before held-out games are consulted.
 - `validate.py` measures recommendations on an independent opening set.
 - `plot_recovery.py` produces held-out Elo-versus-training-games curves and a
   paired method-comparison CSV at the primary checkpoint.
+- `recovery_decision.py` selects tied primary finalists and performs the
+  independent, familywise-corrected confirmation decision.
 - `pentanomial.py` parses color-swapped opening pairs and estimates their
   score and uncertainty without treating the two games as independent.
 - `gating.py` caches deterministic feasibility checks before games are spent.

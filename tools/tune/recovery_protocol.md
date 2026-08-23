@@ -3,8 +3,9 @@
 Status: refrozen on 2026-08-23. This protocol compares GP, Chess Tuning Tools
 (CTT), RBFOpt, SPSA, and CLOP by held-out Elo recovered per training game.
 The exact machine-readable definition is
-[`recovery_benchmark.json`](recovery_benchmark.json). Earlier pilot runs use
-the superseded space and are not admissible in this comparison.
+[`recovery_benchmark.json`](recovery_benchmark.json); the predeclared held-out
+analysis is in [`recovery_analysis.json`](recovery_analysis.json). Earlier
+pilot runs use the superseded space and are not admissible in this comparison.
 
 ## Artifact pins
 
@@ -227,9 +228,102 @@ a423b3fcd39e2cf4f7277629d94950a07f15aa53674c4d77c510e09c7bc04921
 
 With two finalists, confirmation has at most nine unique configurations, or
 18,000 games. Each extra finalist adds at most 6,000 games. Declare a unique
-winner only if its confirmation recovery is positive and its paired method
-difference is positive against every other finalist under Holm-corrected
-one-sided `alpha = 0.05`. Otherwise report a tie.
+winner only if its confirmation score against master is positive and its
+paired method difference is positive against every other finalist under
+Holm-corrected one-sided `alpha = 0.05`. Otherwise report the result as
+inconclusive.
+
+The confirmation family contains every finalist-versus-zero hypothesis and
+every ordered finalist-versus-finalist hypothesis. Tests use exact paired
+sign flips on aligned opening-pair scores: `score - 0.5` against zero and
+`score_A - score_B` for a method contrast. All differences are quarter-
+integers, so the tail distribution is evaluated deterministically rather than
+estimated by Monte Carlo. One Holm correction covers the entire family. This
+is deliberately conservative: it permits the confirmation ranking to differ
+from the primary ranking without silently changing the tested family.
+
+## Audited post-training commands
+
+First use `recommend.py` to write one six-checkpoint JSON artifact for each of
+the 15 method/start studies. Freeze all 15 before looking at held-out results:
+
+```sh
+mkdir -p results/recommendations results/primary-logs results/confirmation-logs
+RECOMMENDATIONS=()
+for path in results/recommendations/*.json; do
+  RECOMMENDATIONS+=(--recommendation "$path")
+done
+python3 tools/tune/freeze_recommendations.py \
+  --benchmark tools/tune/recovery_benchmark.json \
+  --analysis tools/tune/recovery_analysis.json \
+  "${RECOMMENDATIONS[@]}" \
+  --output results/recommendations.json \
+  --audit results/recommendations.audit.json
+```
+
+The freezer rejects anything other than the exact 5-by-3-by-6 grid. It expands
+engine defaults, checks bounds and types, pins every input-artifact SHA-256 and
+the frozen benchmark/source fingerprint, and retains aliases while
+deduplicating exact configurations for play.
+
+The following Bash array is the frozen master baseline:
+
+```sh
+BASELINE=(
+  --baseline-option QS=40 --baseline-option QS_A=140
+  --baseline-option LMR=75 --baseline-option EVAL_ROUGHNESS=15
+  --baseline-option NULL_CAP_MARGIN=15 --baseline-option NULL_MARGIN=-200
+  --baseline-option NULL_LIMIT=750 --baseline-option NULL_CUT_RED=3
+  --baseline-option NULL_RED=7 --baseline-option NULL_MIN_DEPTH=2
+  --baseline-option FUEL_MIN_DEPTH=6 --baseline-option FUT_CAP_DEPTH=3
+)
+```
+
+With the pinned `ENGINE`, `TABLES`, `FASTCHESS`, and `HELDOUT_BOOK` artifacts,
+run the primary validation and freeze its finalist decision:
+
+```sh
+python3 tools/tune/validate.py \
+  --recommendations results/recommendations.json \
+  --output results/primary.json --logs results/primary-logs \
+  --fastchess "$FASTCHESS" --engine "$ENGINE" --engine-args "$TABLES" \
+  "${BASELINE[@]}" --openings "$HELDOUT_BOOK" --tc 3+0.1 \
+  --start 220001 --pairs 400 --slots 10 \
+  --opening-slice-sha256 ea3b33a266182072685abc4b81685d2e2e7e7e223cd17ede4ddb4076cd201cc4
+
+python3 tools/tune/plot_recovery.py \
+  --validation results/primary.json --output-prefix results/recovery \
+  --recovery-start 5 --recovery-start 15 --recovery-start 23
+
+python3 tools/tune/recovery_decision.py \
+  --benchmark tools/tune/recovery_benchmark.json \
+  --analysis tools/tune/recovery_analysis.json primary \
+  --validation results/primary.json --recommendations results/recommendations.json \
+  --audit results/recommendations.audit.json \
+  --output results/primary-selection.json \
+  --confirmation-recommendations results/confirmation-recommendations.json
+```
+
+Validate only the selected checkpoint-zero and checkpoint-1,000 aliases on
+the independent slice, then make the predeclared confirmation decision:
+
+```sh
+python3 tools/tune/validate.py \
+  --recommendations results/confirmation-recommendations.json \
+  --output results/confirmation.json --logs results/confirmation-logs \
+  --fastchess "$FASTCHESS" --engine "$ENGINE" --engine-args "$TABLES" \
+  "${BASELINE[@]}" --openings "$HELDOUT_BOOK" --tc 3+0.1 \
+  --start 230001 --pairs 1000 --slots 10 \
+  --opening-slice-sha256 a423b3fcd39e2cf4f7277629d94950a07f15aa53674c4d77c510e09c7bc04921
+
+python3 tools/tune/recovery_decision.py \
+  --benchmark tools/tune/recovery_benchmark.json \
+  --analysis tools/tune/recovery_analysis.json confirmation \
+  --validation results/confirmation.json \
+  --recommendations results/confirmation-recommendations.json \
+  --selection results/primary-selection.json \
+  --output results/confirmation-decision.json
+```
 
 ## Validity gate
 
