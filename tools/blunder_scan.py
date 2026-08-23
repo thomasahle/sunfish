@@ -4,11 +4,14 @@
 Typical reproducible workflow::
 
     tools/blunder_scan.py sunfish-engine --pgn-cache sunfish-games.pgn \
+        --checkpoint sunfish-games.checkpoint.json \
         --output lichess_blunders.epd
 
 The first run downloads one PGN archive and caches it. Later runs read only
-that file unless ``--refresh`` is passed. A quick fixed-node Stockfish pass
-finds candidates using Lichess's winning-chance and mate-advice rules.
+that file unless ``--refresh`` is passed. The optional checkpoint journals
+each completed game atomically and resumes only when its input and settings
+identity matches exactly. A quick fixed-node Stockfish pass finds candidates
+using Lichess's winning-chance and mate-advice rules.
 Equal-budget single-PV probes then confirm the judgment, while MultiPV probes
 at two larger budgets must agree on every accepted near-best move. Positions
 too close to the MultiPV boundary are rejected rather than incompletely
@@ -25,10 +28,13 @@ import dataclasses
 import datetime
 import hashlib
 import io
+import json
 import math
+import os
 import pathlib
 import shutil
 import sys
+import tempfile
 from typing import Optional
 import urllib.parse
 import urllib.request
@@ -41,6 +47,7 @@ MATE_RANK = 100_000
 LICHESS_ADVICE_COMMIT = "5b905153c32677034dbb3325ecbd66418a03281e"
 LICHESS_EVAL_COMMIT = "34b3363839c511b258fec17b30462868e31d9b5a"
 LICHESS_BLUNDER_THRESHOLD = 0.3
+CHECKPOINT_SCHEMA = "sunfish-blunder-checkpoint-v1"
 USER_AGENT = "sunfish-blunder-corpus/1 (+https://github.com/thomasahle/sunfish)"
 STANDARD_PERFS = {"bullet", "blitz", "rapid", "classical", "correspondence"}
 
@@ -349,6 +356,296 @@ def to_epd(blunder):
     )
 
 
+def _require_keys(value, keys, label):
+    if not isinstance(value, dict) or set(value) != set(keys):
+        raise ValueError(f"invalid checkpoint {label}")
+
+
+def _checkpoint_evaluation(value):
+    _require_keys(value, ("cp", "mate"), "evaluation")
+    for score in value.values():
+        if score is not None and type(score) is not int:
+            raise ValueError("invalid checkpoint evaluation score")
+    try:
+        return Evaluation(cp=value["cp"], mate=value["mate"])
+    except ValueError as error:
+        raise ValueError(f"invalid checkpoint evaluation: {error}") from error
+
+
+def blunder_to_checkpoint(blunder):
+    candidate = blunder.candidate
+    return {
+        "candidate": {
+            "fen": candidate.fen,
+            "played": candidate.played.uci(),
+            "game_id": candidate.game_id,
+            "ply": candidate.ply,
+            "user": candidate.user,
+            "opponent": candidate.opponent,
+            "result": candidate.result,
+            "time_control": candidate.time_control,
+        },
+        "best_moves": [move.uci() for move in blunder.best_moves],
+        "best_eval": dataclasses.asdict(blunder.best_eval),
+        "played_eval": dataclasses.asdict(blunder.played_eval),
+        "oracle": blunder.oracle,
+        "scan_nodes": blunder.scan_nodes,
+        "confirm_nodes": blunder.confirm_nodes,
+        "stability_nodes": blunder.stability_nodes,
+        "best_margin": blunder.best_margin,
+        "boundary_guard": blunder.boundary_guard,
+        "multipv": blunder.multipv,
+        "source_sha": blunder.source_sha,
+        "game_order": blunder.game_order,
+        "source_game_count": blunder.source_game_count,
+    }
+
+
+def blunder_from_checkpoint(value, expected_game_id):
+    fields = (
+        "candidate", "best_moves", "best_eval", "played_eval", "oracle",
+        "scan_nodes", "confirm_nodes", "stability_nodes", "best_margin",
+        "boundary_guard", "multipv", "source_sha", "game_order",
+        "source_game_count",
+    )
+    _require_keys(value, fields, "blunder")
+    candidate_value = value["candidate"]
+    candidate_fields = (
+        "fen", "played", "game_id", "ply", "user", "opponent", "result",
+        "time_control",
+    )
+    _require_keys(candidate_value, candidate_fields, "candidate")
+    if candidate_value["game_id"] != expected_game_id:
+        raise ValueError("checkpoint blunder belongs to the wrong game")
+    string_fields = (
+        "fen", "played", "game_id", "user", "opponent", "result",
+        "time_control",
+    )
+    if any(not isinstance(candidate_value[field], str) for field in string_fields):
+        raise ValueError("invalid checkpoint candidate strings")
+    if type(candidate_value["ply"]) is not int or candidate_value["ply"] <= 0:
+        raise ValueError("invalid checkpoint candidate ply")
+    try:
+        board = chess.Board(candidate_value["fen"])
+        played = chess.Move.from_uci(candidate_value["played"])
+    except (ValueError, TypeError) as error:
+        raise ValueError(f"invalid checkpoint candidate: {error}") from error
+    if played not in board.legal_moves:
+        raise ValueError("checkpoint played move is not legal")
+    moves_value = value["best_moves"]
+    if (not isinstance(moves_value, list) or not moves_value
+            or any(not isinstance(move, str) for move in moves_value)):
+        raise ValueError("invalid checkpoint best moves")
+    try:
+        best_moves = tuple(chess.Move.from_uci(move) for move in moves_value)
+    except (ValueError, TypeError) as error:
+        raise ValueError(f"invalid checkpoint best move: {error}") from error
+    if (len(set(best_moves)) != len(best_moves)
+            or any(move not in board.legal_moves for move in best_moves)
+            or played in best_moves):
+        raise ValueError("invalid checkpoint best-move set")
+    integer_fields = (
+        "scan_nodes", "confirm_nodes", "stability_nodes", "best_margin",
+        "boundary_guard", "multipv", "source_game_count",
+    )
+    if any(type(value[field]) is not int for field in integer_fields):
+        raise ValueError("invalid checkpoint numeric setting")
+    if (value["scan_nodes"] <= 0 or value["confirm_nodes"] <= 0
+            or value["stability_nodes"] <= 0 or value["multipv"] < 2
+            or value["boundary_guard"] < 0 or value["source_game_count"] <= 0):
+        raise ValueError("invalid checkpoint numeric setting")
+    for field in ("oracle", "source_sha", "game_order"):
+        if not isinstance(value[field], str) or not value[field]:
+            raise ValueError("invalid checkpoint text setting")
+    candidate = Candidate(
+        fen=candidate_value["fen"],
+        played=played,
+        game_id=candidate_value["game_id"],
+        ply=candidate_value["ply"],
+        user=candidate_value["user"],
+        opponent=candidate_value["opponent"],
+        result=candidate_value["result"],
+        time_control=candidate_value["time_control"],
+    )
+    return Blunder(
+        candidate=candidate,
+        best_moves=best_moves,
+        best_eval=_checkpoint_evaluation(value["best_eval"]),
+        played_eval=_checkpoint_evaluation(value["played_eval"]),
+        oracle=value["oracle"],
+        scan_nodes=value["scan_nodes"],
+        confirm_nodes=value["confirm_nodes"],
+        stability_nodes=value["stability_nodes"],
+        best_margin=value["best_margin"],
+        boundary_guard=value["boundary_guard"],
+        multipv=value["multipv"],
+        source_sha=value["source_sha"],
+        game_order=value["game_order"],
+        source_game_count=value["source_game_count"],
+    )
+
+
+def funnel_to_checkpoint(funnel):
+    return dataclasses.asdict(funnel)
+
+
+def funnel_from_checkpoint(value):
+    fields = ("examined", "scan_blunders", "confirmed_blunders", "stable_labels")
+    _require_keys(value, fields, "funnel")
+    if any(type(value[field]) is not int or value[field] < 0 for field in fields):
+        raise ValueError("invalid checkpoint funnel count")
+    counts = [value[field] for field in fields]
+    if counts != sorted(counts, reverse=True):
+        raise ValueError("invalid checkpoint funnel ordering")
+    return Funnel(**value)
+
+
+def checkpoint_record(game_identifier, blunders, funnel):
+    payload = {
+        "game_id": game_identifier,
+        "blunders": [blunder_to_checkpoint(blunder) for blunder in blunders],
+        "funnel": funnel_to_checkpoint(funnel),
+    }
+    digest = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    return {"payload": payload, "sha256": digest}
+
+
+def checkpoint_record_values(value, expected_game_id):
+    _require_keys(value, ("payload", "sha256"), "game record")
+    payload = value["payload"]
+    if not isinstance(value["sha256"], str):
+        raise ValueError("invalid checkpoint game checksum")
+    actual = hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    if value["sha256"] != actual:
+        raise ValueError("checkpoint game checksum mismatch")
+    _require_keys(payload, ("game_id", "blunders", "funnel"), "game payload")
+    if payload["game_id"] != expected_game_id:
+        raise ValueError("checkpoint record belongs to the wrong game")
+    if not isinstance(payload["blunders"], list):
+        raise ValueError("invalid checkpoint blunder list")
+    blunders = [
+        blunder_from_checkpoint(blunder, expected_game_id)
+        for blunder in payload["blunders"]
+    ]
+    funnel = funnel_from_checkpoint(payload["funnel"])
+    if len(blunders) != funnel.stable_labels:
+        raise ValueError("checkpoint stable-label count does not match records")
+    return blunders, funnel
+
+
+def checkpoint_identity(games, user, args, source_sha256, engine_sha256, oracle):
+    ordered = prioritize_games(games, user, args.losses_first)
+    game_ids = [game_id(game) for game in ordered]
+    if any(identifier == "unknown" for identifier in game_ids):
+        raise ValueError("checkpointing requires a Lichess game id for every game")
+    if len(game_ids) != len(set(game_ids)):
+        raise ValueError("checkpointing requires unique Lichess game ids")
+    return {
+        "source_sha256": source_sha256,
+        "source_games": len(games),
+        "game_ids": game_ids,
+        "game_order": "losses-first" if args.losses_first else "archive",
+        "user": user.lower(),
+        "engine_sha256": engine_sha256,
+        "oracle": oracle,
+        "scan_nodes": args.scan_nodes,
+        "confirm_nodes": args.confirm_nodes,
+        "stability_nodes": args.confirm_nodes // 2,
+        "best_margin": args.best_margin,
+        "boundary_guard": args.boundary_guard,
+        "multipv": args.multipv,
+        "threads": 1,
+        "hash_mb": 256,
+        "advice_commit": LICHESS_ADVICE_COMMIT,
+        "eval_commit": LICHESS_EVAL_COMMIT,
+        "blunder_delta": LICHESS_BLUNDER_THRESHOLD,
+    }
+
+
+def _validate_checkpoint(document, identity):
+    _require_keys(document, ("schema", "identity", "games"), "document")
+    if document["schema"] != CHECKPOINT_SCHEMA:
+        raise ValueError("unsupported checkpoint schema")
+    if document["identity"] != identity:
+        stored = document["identity"] if isinstance(document["identity"], dict) else {}
+        changed = sorted(
+            key for key in set(stored) | set(identity)
+            if stored.get(key) != identity.get(key)
+        )
+        details = ", ".join(changed) if changed else "identity"
+        raise ValueError(f"checkpoint input/settings mismatch: {details}")
+    records = document["games"]
+    if not isinstance(records, dict):
+        raise ValueError("invalid checkpoint game records")
+    expected = set(identity["game_ids"])
+    if unknown := set(records) - expected:
+        raise ValueError(f"checkpoint contains unknown games: {sorted(unknown)}")
+    for identifier, record in records.items():
+        blunders, _ = checkpoint_record_values(record, identifier)
+        for blunder in blunders:
+            settings = {
+                "oracle": identity["oracle"],
+                "scan_nodes": identity["scan_nodes"],
+                "confirm_nodes": identity["confirm_nodes"],
+                "stability_nodes": identity["stability_nodes"],
+                "best_margin": identity["best_margin"],
+                "boundary_guard": identity["boundary_guard"],
+                "multipv": identity["multipv"],
+                "source_sha": identity["source_sha256"][:16],
+                "game_order": identity["game_order"],
+                "source_game_count": identity["source_games"],
+            }
+            if any(getattr(blunder, field) != value
+                   for field, value in settings.items()):
+                raise ValueError("checkpoint blunder settings do not match identity")
+
+
+def load_checkpoint(path, identity):
+    if not path.exists():
+        return {"schema": CHECKPOINT_SCHEMA, "identity": identity, "games": {}}
+    try:
+        document = json.loads(path.read_text())
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"cannot read checkpoint {path}: {error}") from error
+    _validate_checkpoint(document, identity)
+    return document
+
+
+def atomic_write_text(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=path.parent,
+                prefix=f".{path.name}.", suffix=".tmp", delete=False) as handle:
+            temporary = pathlib.Path(handle.name)
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+        temporary = None
+        try:
+            directory = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(directory)
+            finally:
+                os.close(directory)
+        except OSError:
+            pass
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
+
+
+def save_checkpoint(path, document):
+    text = json.dumps(document, sort_keys=True, separators=(",", ":")) + "\n"
+    atomic_write_text(path, text)
+
+
 def download_pgn(url):
     request = urllib.request.Request(
         url,
@@ -504,12 +801,30 @@ def configure_engine(engine):
         engine.configure(options)
 
 
-def build_corpus(games, engine, user, args, oracle, source_sha):
+def add_funnel(total, part):
+    total.examined += part.examined
+    total.scan_blunders += part.scan_blunders
+    total.confirmed_blunders += part.confirmed_blunders
+    total.stable_labels += part.stable_labels
+
+
+def build_corpus(games, engine, user, args, oracle, source_sha256, engine_sha256):
     found, funnel = [], Funnel()
     args.source_game_count = len(games)
     ordered = prioritize_games(games, user, args.losses_first)
+    checkpoint = None
+    records = {}
+    if args.checkpoint:
+        identity = checkpoint_identity(
+            games, user, args, source_sha256, engine_sha256, oracle)
+        checkpoint = load_checkpoint(args.checkpoint, identity)
+        records = checkpoint["games"]
+        if records:
+            print(f"resuming {len(records)}/{len(ordered)} completed games from "
+                  f"{args.checkpoint}", file=sys.stderr)
     previous_outcome = None
     for game_number, game in enumerate(ordered, start=1):
+        identifier = game_id(game)
         outcome = user_outcome(game, user)
         if args.losses_first and outcome != previous_outcome:
             if previous_outcome is not None:
@@ -517,19 +832,35 @@ def build_corpus(games, engine, user, args, oracle, source_sha):
                       f"{game_number - 1} games", file=sys.stderr)
             print(f"starting {outcome} tranche", file=sys.stderr)
             previous_outcome = outcome
-        for candidate in candidates(game, user):
-            funnel.examined += 1
-            if blunder := analyse_candidate(
-                    engine, candidate, args, oracle, source_sha, funnel):
-                found.append(blunder)
-                if blunder.chance_loss is not None:
-                    metric = (f"{blunder.chance_loss:.3f} win-chance loss, "
-                              f"{blunder.cp_loss} cp")
-                else:
-                    metric = (f"mate transition {blunder.best_eval} to "
-                              f"{blunder.played_eval}")
-                print(f"{blunder.candidate.game_id} ply {blunder.candidate.ply}: "
-                      f"{metric}", file=sys.stderr)
+        if identifier in records:
+            game_found, game_funnel = checkpoint_record_values(
+                records[identifier], identifier)
+            expected = sum(1 for _ in candidates(game, user))
+            if game_funnel.examined != expected:
+                raise ValueError(
+                    f"checkpoint move count mismatch for game {identifier}")
+        else:
+            game_found, game_funnel = [], Funnel()
+            for candidate in candidates(game, user):
+                game_funnel.examined += 1
+                if blunder := analyse_candidate(
+                        engine, candidate, args, oracle, source_sha256[:16],
+                        game_funnel):
+                    game_found.append(blunder)
+                    if blunder.chance_loss is not None:
+                        metric = (f"{blunder.chance_loss:.3f} win-chance loss, "
+                                  f"{blunder.cp_loss} cp")
+                    else:
+                        metric = (f"mate transition {blunder.best_eval} to "
+                                  f"{blunder.played_eval}")
+                    print(f"{blunder.candidate.game_id} ply "
+                          f"{blunder.candidate.ply}: {metric}", file=sys.stderr)
+            if checkpoint is not None:
+                records[identifier] = checkpoint_record(
+                    identifier, game_found, game_funnel)
+                save_checkpoint(args.checkpoint, checkpoint)
+        found.extend(game_found)
+        add_funnel(funnel, game_funnel)
         if args.losses_first and game_number % 50 == 0:
             print(f"progress {game_number}/{len(ordered)} games: "
                   f"{funnel.examined} moves, {funnel.scan_blunders} scan, "
@@ -568,6 +899,8 @@ def make_parser():
                         help="scan losses before wins and draws within the frozen window")
     parser.add_argument("--output", type=pathlib.Path,
                         help="write EPD here instead of stdout")
+    parser.add_argument("--checkpoint", type=pathlib.Path,
+                        help="atomically journal completed games for safe resume")
     parser.add_argument("--best-margin", type=int, default=30,
                         help="moves this many cp from best are all accepted")
     parser.add_argument("--boundary-guard", type=int, default=10,
@@ -594,6 +927,10 @@ def main(argv=None):
         sys.exit("--multipv must be at least 2")
     if args.boundary_guard < 0:
         sys.exit("--boundary-guard must not be negative")
+    if args.checkpoint:
+        protected = [path for path in (args.pgn_cache, args.output) if path]
+        if any(args.checkpoint.resolve() == path.resolve() for path in protected):
+            sys.exit("--checkpoint must differ from --pgn-cache and --output")
 
     text = load_pgn(
         args.user,
@@ -604,7 +941,7 @@ def main(argv=None):
         args.include_casual,
         args.until,
     )
-    source_sha = hashlib.sha256(text.encode()).hexdigest()[:16]
+    source_sha256 = hashlib.sha256(text.encode()).hexdigest()
     try:
         games = source_games(
             text, args.games, args.include_casual, args.game_id)
@@ -614,16 +951,20 @@ def main(argv=None):
     try:
         configure_engine(engine)
         name = engine.id.get("name", "unknown UCI engine")
-        oracle = f"{name} sha256 {file_sha256(engine_path)[:16]}"
-        corpus, funnel = build_corpus(
-            games, engine, args.user, args, oracle, source_sha)
+        engine_sha256 = file_sha256(engine_path)
+        oracle = f"{name} sha256 {engine_sha256[:16]}"
+        try:
+            corpus, funnel = build_corpus(
+                games, engine, args.user, args, oracle, source_sha256,
+                engine_sha256)
+        except ValueError as error:
+            sys.exit(str(error))
     finally:
         engine.quit()
 
     output = "\n".join(map(to_epd, corpus)) + ("\n" if corpus else "")
     if args.output:
-        args.output.parent.mkdir(parents=True, exist_ok=True)
-        args.output.write_text(output)
+        atomic_write_text(args.output, output)
     else:
         print(output, end="")
     print(f"{len(games)} games, {funnel.examined} bot moves, "

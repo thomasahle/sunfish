@@ -332,10 +332,18 @@ a scored best-move suite. It is generated offline, not during CI:
 python3 tools/blunder_scan.py sunfish-engine \
   --games 200 --until 2023-02-28 \
   --pgn-cache /tmp/sunfish-rated-200-through-2023-02-28.pgn \
+  --checkpoint /tmp/sunfish-rated-200-through-2023-02-28.checkpoint.json \
   --output tests/files/lichess_blunders.epd
 ```
 
-The PGN cache freezes the input games. The generator uses one Stockfish thread,
+The PGN cache freezes the input games. The checkpoint stores one checksummed
+record per completed game and is replaced atomically after every game. Its
+identity pins the full PGN hash, ordered game IDs, engine hash, Lichess source
+commits, and all analysis settings. A resume rejects any mismatch or corrupt
+record, then reconstructs results in original analysis order before global
+deduplication, so it produces the same EPD bytes as an uninterrupted scan.
+
+The generator uses one Stockfish thread,
 fixed node limits, fresh UCI game state, and a clean hash for every probe. It
 does not select from the sparse evaluations embedded in the PGN: only 685 of
 10,442 Sunfish moves in the frozen archive have one. Fresh equal-budget
@@ -344,16 +352,18 @@ is not inferred by comparing a split MultiPV budget with a full root-move
 budget.
 
 A candidate must be a Blunder under Lichess's pinned
-[`CpAdvice`/`MateAdvice`](https://github.com/lichess-org/lila/blob/5b905153c32677034dbb3325ecbd66418a03281e/modules/tree/src/main/Advice.scala#L43-L106)
-rules. For two mover-perspective centipawn evaluations, define
+[`Advice.scala`](https://github.com/lichess-org/lila/blob/5b905153c326/modules/tree/src/main/Advice.scala#L43-L106)
+rules at commit `5b905153c32677034dbb3325ecbd66418a03281e`. For two
+mover-perspective centipawn evaluations, define
 
 ```text
 W(cp) = 2 / (1 + exp(-0.00368208 * cp)) - 1
 ```
 
 from pinned scalachess
-[`WinPercent.winningChances`](https://github.com/lichess-org/scalachess/blob/34b3363839c511b258fec17b30462868e31d9b5a/core/src/main/scala/eval.scala#L66-L89),
-the commit behind lila's declared scalachess `17.16.2` dependency.
+[`eval.scala`](https://github.com/lichess-org/scalachess/blob/34b3363839c5/core/src/main/scala/eval.scala#L66-L89)
+at commit `34b3363839c511b258fec17b30462868e31d9b5a`, the commit
+behind lila's declared scalachess `17.16.2` dependency.
 The move is a Blunder when `W(best) - W(played) >= 0.3`; there is no absolute
 centipawn-loss threshold and no exclusion merely because the mover was already
 losing. Mate advice is mirrored separately: cp to opponent mate is a Blunder

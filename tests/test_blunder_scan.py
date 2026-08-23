@@ -1,5 +1,6 @@
 import dataclasses
 import importlib.util
+import json
 from pathlib import Path
 import types
 import urllib.parse
@@ -74,6 +75,42 @@ def make_blunder(loss=500, game_id="abc12345"):
         multipv=5,
         source_sha="0123456789abcdef",
         source_game_count=1,
+    )
+
+
+def checkpoint_args(checkpoint):
+    return types.SimpleNamespace(
+        checkpoint=checkpoint,
+        losses_first=False,
+        scan_nodes=100,
+        confirm_nodes=1000,
+        multipv=5,
+        best_margin=30,
+        boundary_guard=10,
+    )
+
+
+def checkpoint_blunder(candidate, args, oracle, source_sha):
+    fields = candidate.fen.split()
+    fields[4] = candidate.game_id[-1]
+    candidate = dataclasses.replace(candidate, fen=" ".join(fields))
+    board = chess.Board(candidate.fen)
+    best_move = next(move for move in board.legal_moves if move != candidate.played)
+    return blunder_scan.Blunder(
+        candidate=candidate,
+        best_moves=(best_move,),
+        best_eval=blunder_scan.Evaluation(cp=100),
+        played_eval=blunder_scan.Evaluation(cp=-400),
+        oracle=oracle,
+        scan_nodes=args.scan_nodes,
+        confirm_nodes=args.confirm_nodes,
+        stability_nodes=args.confirm_nodes // 2,
+        best_margin=args.best_margin,
+        boundary_guard=args.boundary_guard,
+        multipv=args.multipv,
+        source_sha=source_sha,
+        game_order="losses-first" if args.losses_first else "archive",
+        source_game_count=args.source_game_count,
     )
 
 
@@ -416,6 +453,133 @@ def test_pgn_cache_is_read_without_network(tmp_path, monkeypatch):
 
     monkeypatch.setattr(blunder_scan, "fetch_pgn", unexpected_fetch)
     assert blunder_scan.load_pgn("sunfish-engine", 10, cache) == PGN
+
+
+def test_checkpoint_resume_is_byte_identical_to_uninterrupted(tmp_path, monkeypatch):
+    games = blunder_scan.parse_games("".join([
+        source_pgn("resume01"),
+        source_pgn("resume02"),
+        source_pgn("resume03"),
+    ]))
+    checkpoint = tmp_path / "scan.json"
+    source_sha = "a" * 64
+    engine_sha = "b" * 64
+    oracle = f"Stockfish fixture sha256 {engine_sha[:16]}"
+    args = checkpoint_args(checkpoint)
+    interrupted_calls = []
+
+    def interrupted(_engine, candidate, settings, name, digest, funnel):
+        interrupted_calls.append(candidate.game_id)
+        if candidate.game_id == "resume02":
+            raise KeyboardInterrupt
+        funnel.scan_blunders += 1
+        funnel.confirmed_blunders += 1
+        funnel.stable_labels += 1
+        return checkpoint_blunder(candidate, settings, name, digest)
+
+    monkeypatch.setattr(blunder_scan, "analyse_candidate", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        blunder_scan.build_corpus(
+            games, object(), "sunfish-engine", args, oracle, source_sha,
+            engine_sha)
+    saved = json.loads(checkpoint.read_text())
+    assert interrupted_calls == ["resume01", "resume02"]
+    assert list(saved["games"]) == ["resume01"]
+
+    resumed_calls = []
+
+    def completed(_engine, candidate, settings, name, digest, funnel):
+        resumed_calls.append(candidate.game_id)
+        funnel.scan_blunders += 1
+        funnel.confirmed_blunders += 1
+        funnel.stable_labels += 1
+        return checkpoint_blunder(candidate, settings, name, digest)
+
+    monkeypatch.setattr(blunder_scan, "analyse_candidate", completed)
+    resumed, resumed_funnel = blunder_scan.build_corpus(
+        games, object(), "sunfish-engine", args, oracle, source_sha, engine_sha)
+    assert resumed_calls == ["resume02", "resume03"]
+
+    uninterrupted_args = checkpoint_args(None)
+    uninterrupted, uninterrupted_funnel = blunder_scan.build_corpus(
+        games, object(), "sunfish-engine", uninterrupted_args, oracle,
+        source_sha, engine_sha)
+    assert len(resumed) == len(uninterrupted) == 3
+    assert [blunder_scan.to_epd(item) for item in resumed] == [
+        blunder_scan.to_epd(item) for item in uninterrupted
+    ]
+    assert resumed_funnel == uninterrupted_funnel == blunder_scan.Funnel(
+        examined=3, scan_blunders=3, confirmed_blunders=3, stable_labels=3)
+    assert set(json.loads(checkpoint.read_text())["games"]) == {
+        "resume01", "resume02", "resume03"}
+
+
+def test_checkpoint_rejects_corruption_and_identity_mismatch(tmp_path):
+    games = blunder_scan.parse_games(source_pgn("resume01"))
+    checkpoint = tmp_path / "scan.json"
+    source_sha = "a" * 64
+    engine_sha = "b" * 64
+    oracle = f"Stockfish fixture sha256 {engine_sha[:16]}"
+    args = checkpoint_args(checkpoint)
+    identity = blunder_scan.checkpoint_identity(
+        games, "sunfish-engine", args, source_sha, engine_sha, oracle)
+    document = {
+        "schema": blunder_scan.CHECKPOINT_SCHEMA,
+        "identity": identity,
+        "games": {},
+    }
+    blunder_scan.save_checkpoint(checkpoint, document)
+
+    changed_args = checkpoint_args(checkpoint)
+    changed_args.scan_nodes += 1
+    changed = blunder_scan.checkpoint_identity(
+        games, "sunfish-engine", changed_args, source_sha, engine_sha, oracle)
+    with pytest.raises(ValueError, match="settings mismatch: scan_nodes"):
+        blunder_scan.load_checkpoint(checkpoint, changed)
+
+    changed_input = blunder_scan.checkpoint_identity(
+        games, "sunfish-engine", args, "c" * 64, engine_sha, oracle)
+    with pytest.raises(ValueError, match="settings mismatch: source_sha256"):
+        blunder_scan.load_checkpoint(checkpoint, changed_input)
+
+    corrupt = {
+        "schema": blunder_scan.CHECKPOINT_SCHEMA,
+        "identity": identity,
+        "games": {
+            "resume01": blunder_scan.checkpoint_record(
+                "resume01", [], blunder_scan.Funnel(examined=1)),
+        },
+    }
+    corrupt["games"]["resume01"]["payload"]["funnel"]["examined"] = 2
+    blunder_scan.save_checkpoint(checkpoint, corrupt)
+    with pytest.raises(ValueError, match="checksum mismatch"):
+        blunder_scan.load_checkpoint(checkpoint, identity)
+
+    checkpoint.write_text("{not json")
+    with pytest.raises(ValueError, match="cannot read checkpoint"):
+        blunder_scan.load_checkpoint(checkpoint, identity)
+
+
+def test_checkpoint_replacement_failure_preserves_previous_file(
+        tmp_path, monkeypatch):
+    checkpoint = tmp_path / "scan.json"
+    blunder_scan.save_checkpoint(checkpoint, {"generation": 1})
+    original = checkpoint.read_bytes()
+    replaced = []
+
+    def fail_replace(source, target):
+        source, target = Path(source), Path(target)
+        replaced.append((source, target))
+        assert source.parent == target.parent == tmp_path
+        assert source.exists()
+        raise OSError("simulated preemption")
+
+    monkeypatch.setattr(blunder_scan.os, "replace", fail_replace)
+    with pytest.raises(OSError, match="simulated preemption"):
+        blunder_scan.save_checkpoint(checkpoint, {"generation": 2})
+    assert checkpoint.read_bytes() == original
+    assert replaced and replaced[0][1] == checkpoint
+    assert list(tmp_path.iterdir()) == [checkpoint]
 
 
 def test_include_casual_omits_the_rated_only_filter(monkeypatch):
