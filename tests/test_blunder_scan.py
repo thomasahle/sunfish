@@ -458,6 +458,19 @@ def test_pgn_cache_is_read_without_network(tmp_path, monkeypatch):
     assert blunder_scan.load_pgn("sunfish-engine", 10, cache) == PGN
 
 
+def test_pgn_cache_refresh_is_atomic(tmp_path, monkeypatch):
+    cache = tmp_path / "games.pgn"
+    cache.write_text("old")
+    writes = []
+    monkeypatch.setattr(blunder_scan, "fetch_pgn", lambda *_args: PGN)
+    monkeypatch.setattr(
+        blunder_scan, "atomic_write_text",
+        lambda path, text: writes.append((path, text)))
+    assert blunder_scan.load_pgn(
+        "sunfish-engine", 10, cache, refresh=True) == PGN
+    assert writes == [(cache, PGN)]
+
+
 def test_checkpoint_resume_is_byte_identical_to_uninterrupted(tmp_path, monkeypatch):
     games = blunder_scan.parse_games("".join([
         source_pgn("resume01"),

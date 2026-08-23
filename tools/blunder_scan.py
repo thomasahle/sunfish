@@ -707,8 +707,7 @@ def load_pgn(user, games, cache, refresh=False, game_id=None,
     text = (fetch_game(game_id) if game_id else
             fetch_pgn(user, games, include_casual, until))
     if cache:
-        cache.parent.mkdir(parents=True, exist_ok=True)
-        cache.write_text(text)
+        atomic_write_text(cache, text)
     return text
 
 
