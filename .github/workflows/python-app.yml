@@ -82,6 +82,9 @@ jobs:
                echo "(or enable the hook once: git config core.hooksPath tools/hooks)"; exit 1; }
         rm fresh.py
         python3 -c "import ast; ast.parse(open('compressed.py').read())"
+        n=$(wc -l < compressed.py | tr -d ' ')
+        grep -qF "just [$n lines of code](compressed.py)" README.md \
+          || { echo "README line-count claim is stale: compressed.py has $n lines"; exit 1; }
     - name: 4k entry is fresh and under budget
       # nnue_4k/pst_entry.py is GENERATED. That is only worth something if it
       # stays true: the committed source once drifted 38 lines behind its
@@ -91,17 +94,12 @@ jobs:
       run: |
         pip install python-minifier==3.2.0
         bash tools/build/check_entry.sh
-    - name: Minify test (tools/build/clean.sh) + README line-count claim
-      # clean.sh is the source of the README's "N lines of code" claim.
-      # Assert the minified engine actually runs, and that the README
-      # number matches reality - numbers in prose rot, asserts don't.
+    - name: Minify test (tools/build/clean.sh)
+      # Assert the minified engine actually runs.
       run: |
         bash tools/build/clean.sh sunfish.py > clean_sunfish.py
         { printf 'uci\nisready\nposition startpos\ngo wtime 4000 winc 0\n'; sleep 3; printf 'quit\n'; } \
           | timeout 60 python clean_sunfish.py | tee /dev/stderr | grep -q bestmove
-        n=$(wc -l < clean_sunfish.py | tr -d ' ')
-        grep -qF "just $n lines of code" README.md \
-          || { echo "README line-count claim is stale: clean.sh now yields $n lines"; exit 1; }
         rm clean_sunfish.py
     - name: Tournament manager match (fastchess)
       # Play quick self-play matches under a real tournament manager, like the
