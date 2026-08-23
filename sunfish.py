@@ -472,8 +472,7 @@ class Searcher:
                 if val >= MATE_LOWER:
                     # An intrinsic mate-band value is a king capture: the exact
                     # MATE_UPPER token, never a search.
-                    score = MATE_UPPER
-                    live = True
+                    score, live = MATE_UPPER, True
                 else:
                     # We lock in a futility bet: a shallow move is worth at most
                     # a static estimate of what it wins. No mate-band clamp is
@@ -510,8 +509,7 @@ class Searcher:
                 break
 
         # If no legal real move was witnessed, classify terminality exactly.
-        if depth and not live and all(
-                pos.move(m).king_capture() for m in pos.gen_moves()):
+        if depth and not live and all(pos.move(m).king_capture() for m in pos.gen_moves()):
             # We can't move, but is it a checkmate or stalemate?
             # The mate carries its DISTANCE: the depth we still had left when
             # we found it, one EVAL_ROUGHNESS per ply, so the winner picks the

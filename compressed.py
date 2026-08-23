@@ -97,9 +97,7 @@ class Searcher:
                     if score >= gamma and (proof := pos.king_capture()): move, score, live = proof, MATE_UPPER, True
                 else: score = cap
             else:
-                if val >= MATE_LOWER:
-                    score = MATE_UPPER
-                    live = True
+                if val >= MATE_LOWER: score, live = MATE_UPPER, True
                 else:
                     cap = MATE_UPPER if depth > 3 else pos.score + val + max(depth - 1, 0) * QS_A
                     if cap < gamma: best = max(best, cap); break
@@ -112,8 +110,7 @@ class Searcher:
                     self.tp_move[pos] = move
                     if len(self.tp_move) > TABLE_SIZE: del self.tp_move[next(k for k in self.tp_move if k != self.root)]
                 break
-        if depth and not live and all(
-                pos.move(m).king_capture() for m in pos.gen_moves()):
+        if depth and not live and all(pos.move(m).king_capture() for m in pos.gen_moves()):
             mate = max(1 - MATE_UPPER, -MATE_LOWER - depth * EVAL_ROUGHNESS)
             best = mate if pos.rotate(nullmove=True).king_capture() else 0
         if not root: self.tp_score[pos, depth] = Entry(best, entry.upper) if best >= gamma else Entry(entry.lower, best)
