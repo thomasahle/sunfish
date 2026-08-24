@@ -551,7 +551,7 @@ def pending_batch(record):
         "opening": record["openings"][0],
         "opening_sequence": record["opening_sequence"],
         "openings": record["openings"], "allocation": record["allocation"],
-        "baseline_ids": sorted(name for name in record["baseline_ids"] if name is not None),
+        "baseline_ids": sorted(name for name in record.get("baseline_ids", ()) if name is not None),
         "opponent_knobs": record["opponent_knobs"],
     }
 

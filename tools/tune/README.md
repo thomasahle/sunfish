@@ -113,7 +113,9 @@ The frozen five-method comparison is specified in
 in [`recovery_benchmark.json`](recovery_benchmark.json). Run
 `python3 tools/tune/verify_recovery.py` before starting a campaign; supplying
 the frozen engine, tables, and training book also reproduces the corrected
-start-vector trace checks.
+start-vector trace checks. Pass `--method-root` to additionally verify a
+checkout of the manifest's frozen optimizer-source commit; live tuner code is
+allowed to evolve without rewriting historical hashes.
 
 The integration tests exercise parameter translation, resumable state,
 pentanomial parsing, feasibility gates, checkpoint extraction, and the shared

@@ -77,6 +77,9 @@ class TuningToolsTest(unittest.TestCase):
             generated = json.loads(pathlib.Path(directory, "start-05.json").read_text())
             self.assertEqual(generated["parameters"][4]["default"], 21)
 
+        with self.assertRaisesRegex(RuntimeError, "adaptive_gp.py"):
+            verify_recovery.audit(root=ROOT, method_root=ROOT)
+
     def test_rbfopt_recovers_only_an_exact_complete_evaluation(self):
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory, "evaluation.log")
