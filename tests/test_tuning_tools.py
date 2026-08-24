@@ -96,6 +96,17 @@ class TuningToolsTest(unittest.TestCase):
         self.assertTrue(status["fuel_null_off"])
         self.assertTrue(status["all_null_off"])
 
+    def test_consensus_compact_policy_drops_line_costing_iid(self):
+        selected = {"IID": 1, "IID_MIN_DEPTH": 8, "IID_RED": 5}
+        parameters = {
+            "IID": {"default": 0},
+            "IID_MIN_DEPTH": {"default": 3},
+            "IID_RED": {"default": 3},
+        }
+        self.assertEqual(
+            audit_consensus.compact_policy(selected, parameters),
+            {"IID": 0, "IID_MIN_DEPTH": 3, "IID_RED": 3})
+
     def test_frozen_recovery_manifest_is_self_consistent(self):
         manifest, space = verify_recovery.audit(root=ROOT)
         self.assertEqual(manifest["budget"]["games"], 1000)

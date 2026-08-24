@@ -109,6 +109,16 @@ def mechanism_status(selected):
     }
 
 
+def compact_policy(selected, parameters):
+    """Apply only the preregistered zero-line source rendering."""
+    compact = dict(selected)
+    compact["IID"] = parameters["IID"]["default"]
+    if not compact["IID"]:
+        compact["IID_MIN_DEPTH"] = parameters["IID_MIN_DEPTH"]["default"]
+        compact["IID_RED"] = parameters["IID_RED"]["default"]
+    return compact
+
+
 def audit(root, space_path):
     root, space_path = pathlib.Path(root).resolve(), pathlib.Path(space_path)
     verify_seal(root)
@@ -125,10 +135,7 @@ def audit(root, space_path):
             raise RuntimeError(f"out-of-domain value: {name}={value}")
     selected = canonical(selected, space)
     limit = selected["NULL_LIMIT"]
-    compact = dict(selected)
-    if not compact["IID"]:
-        compact["IID_MIN_DEPTH"] = parameters["IID_MIN_DEPTH"]["default"]
-        compact["IID_RED"] = parameters["IID_RED"]["default"]
+    compact = compact_policy(selected, parameters)
     fuel = compact["FUEL_NULL"] if limit and compact["FUEL_MIN_DEPTH"] < 99 else 0
     lmr = (compact["LMR_RED"] if compact["LMR_LIMIT"]
            and compact["LMR_MIN_DEPTH"] < 99 else 0)
@@ -144,6 +151,7 @@ def audit(root, space_path):
         "compact_changes": {name: [defaults[name], value]
                             for name, value in compact.items() if value != defaults[name]},
         "mechanisms": mechanism_status(selected),
+        "compact_mechanisms": mechanism_status(compact),
         "proof": {
             "maximum_real_edge_cost": 1 + fuel + lmr,
             "shallow_null_first_depth": selected["NULL_MIN_DEPTH"] + 1,
