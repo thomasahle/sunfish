@@ -44,7 +44,7 @@ def require(actual, expected, label):
         raise RuntimeError(f"{label}: expected {expected}, got {actual}")
 
 
-def audit(manifest_path=DEFAULT_MANIFEST, root=ROOT):
+def audit(manifest_path=DEFAULT_MANIFEST, root=ROOT, method_root=None):
     root = pathlib.Path(root)
     manifest = json.loads(pathlib.Path(manifest_path).read_text())
     space_record = manifest["space"]
@@ -65,14 +65,16 @@ def audit(manifest_path=DEFAULT_MANIFEST, root=ROOT):
         require(canonical_digest(generated), start["centered_space_sha256"], f"{label} space")
         rendered = (json.dumps(generated, indent=2) + "\n").encode()
         require(hashlib.sha256(rendered).hexdigest(), start["materialized_sha256"], label)
-    paths = dict(manifest["artifacts"]["project"])
-    for method in manifest["methods"].values():
-        paths.update(method.get("files", {}))
-    for name, expected in paths.items():
+    for name, expected in manifest["artifacts"]["project"].items():
         require(digest(root / name), expected, name)
-    for name in ("chess_tuning_tools", "rbfopt"):
-        path = root / "tools" / "tune" / name / "Dockerfile"
-        require(digest(path), manifest["methods"][name]["dockerfile_sha256"], str(path))
+    if method_root:
+        method_root = pathlib.Path(method_root)
+        for method in manifest["methods"].values():
+            for name, expected in method.get("files", {}).items():
+                require(digest(method_root / name), expected, name)
+        for name in ("chess_tuning_tools", "rbfopt"):
+            path = method_root / "tools" / "tune" / name / "Dockerfile"
+            require(digest(path), manifest["methods"][name]["dockerfile_sha256"], str(path))
     budget = manifest["budget"]["games"]
     methods = manifest["methods"]
     clocks = {
@@ -134,6 +136,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--manifest", default=DEFAULT_MANIFEST)
     parser.add_argument("--root", default=ROOT)
+    parser.add_argument("--method-root")
     parser.add_argument("--engine")
     parser.add_argument("--tables")
     parser.add_argument("--training-book")
@@ -141,7 +144,7 @@ def main():
     parser.add_argument("--heldout-book")
     parser.add_argument("--output-spaces")
     args = parser.parse_args()
-    manifest, space = audit(args.manifest, args.root)
+    manifest, space = audit(args.manifest, args.root, args.method_root)
     supplied = [args.engine, args.tables, args.training_book]
     if any(supplied) and not all(supplied):
         parser.error("--engine, --tables, and --training-book must be supplied together")

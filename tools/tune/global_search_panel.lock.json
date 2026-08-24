@@ -1,0 +1,279 @@
+{
+  "artifacts": [
+    {
+      "path": "sunfish_c",
+      "sha256": "43a3a0cbf76b107457ab4094bb53e077e8a7e8e3325ac3a19db373528b16e53b"
+    },
+    {
+      "path": "tables.txt",
+      "sha256": "d09fc445930a0e4babbab1aa176847a77923d3bf00c0b6fb0c46b0a90d14bbf0"
+    },
+    {
+      "path": "opponents/stockfish15",
+      "sha256": "8d98fae296d51ae94b66fef2ab96d2306a248b0dfd84073506fe3f202d56e344"
+    },
+    {
+      "path": "opponents/stockfish-Copying.txt",
+      "sha256": "0b383d5a63da644f628d99c33976ea6487ed89aaa59f0b3257992deac1171e6b"
+    },
+    {
+      "path": "opponents/stockfish.lock.json",
+      "sha256": "80a4fcb39ef9fe0c32f8e4b8bcb27838aa21fdcf7c5084d34354d9b1da978824"
+    },
+    {
+      "path": "opponents/chessidle.sh",
+      "sha256": "9451620cb2a13767a35937d25c3a3130631f55488005ee4ec47a24eb04a09925"
+    },
+    {
+      "path": "opponents/chessidle.lock.json",
+      "sha256": "bc10b1e16cd1610859a5f6a10acd68c40882f59cc5e13f807469985ae12e70b2"
+    },
+    {
+      "path": "opponents/chessidle/LICENSE",
+      "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986"
+    },
+    {
+      "path": "panel.json",
+      "sha256": "776de9016eac4fb99b18b037b70d6931937e713a7edb6a5c16684cee06ca0536"
+    },
+    {
+      "path": "runner/fastchess",
+      "sha256": "3d0a8f3c8b837a96366ac838f3ddf6fe87b813abb4ad2852284c0ce409132566"
+    },
+    {
+      "path": "runner/calibrate_panel.py",
+      "sha256": "dca61f7855d82617f45c3982f2eab71139909982a55cef2e6780bf19af68766d"
+    },
+    {
+      "path": "runner/opponent_panel.py",
+      "sha256": "53da70263f8a0aa177a972346e0364591f5acb8c4196c3fc61142f528d95344f"
+    },
+    {
+      "path": "runner/pentanomial.py",
+      "sha256": "254cf5ab834ae3ea426105afb1d7d69fd87b83d5e329295fef4013ed63a6e11b"
+    },
+    {
+      "path": "openings.epd",
+      "sha256": "3f499996ff0b674a04f85f2634811d102dd53b5115841e8f11d18e1f550ba2ca"
+    },
+    {
+      "path": "calibration.json",
+      "sha256": "e4787497c3e03479cc509ea11c42f4da1d7bac9989c0189e1a61747947437935"
+    },
+    {
+      "path": "calibration/stockfish-1800.log",
+      "sha256": "87e596e5d91fc81132168c189317fca378490138fc05ec5c0427f97341c6651d"
+    },
+    {
+      "path": "calibration/chessidle.log",
+      "sha256": "abbc9641051cfc576da26a5103fca125f1e709db6592ff0853f5033af973f68a"
+    }
+  ],
+  "calibration": {
+    "command": [
+      "python",
+      "runner/calibrate_panel.py",
+      "--fastchess",
+      "runner/fastchess",
+      "--panel",
+      "panel.json",
+      "--openings",
+      "openings.epd",
+      "--logs",
+      "calibration",
+      "--tc",
+      "3+0.1",
+      "--pairs",
+      "50",
+      "--start",
+      "1"
+    ],
+    "common_openings": "openings.epd",
+    "games_per_opponent": 100,
+    "logs": [
+      {
+        "path": "calibration/stockfish-1800.log",
+        "sha256": "87e596e5d91fc81132168c189317fca378490138fc05ec5c0427f97341c6651d"
+      },
+      {
+        "path": "calibration/chessidle.log",
+        "sha256": "abbc9641051cfc576da26a5103fca125f1e709db6592ff0853f5033af973f68a"
+      }
+    ],
+    "pairs": 50,
+    "reject_engine_failures": true,
+    "results": [
+      {
+        "draws": 8,
+        "games": 100,
+        "losses": 31,
+        "master": "master",
+        "opponent": "stockfish-1800",
+        "pairs": 50,
+        "pentanomial": [
+          17,
+          7,
+          20,
+          1,
+          5
+        ],
+        "posterior_elo": 102.10900204132246,
+        "posterior_elo_95": [
+          41.06557763638744,
+          170.05230269900582
+        ],
+        "posterior_score": 0.6428571428571429,
+        "posterior_score_95": [
+          0.5588244389431143,
+          0.7268898467711715
+        ],
+        "posterior_score_sd": 0.042873828527565626,
+        "rough_elo": 107.53812491703201,
+        "saturated": false,
+        "score": 0.65,
+        "start": 1,
+        "tc": "3+0.1",
+        "wins": 61
+      },
+      {
+        "draws": 5,
+        "games": 100,
+        "losses": 21,
+        "master": "master",
+        "opponent": "chessidle",
+        "pairs": 50,
+        "pentanomial": [
+          27,
+          4,
+          16,
+          1,
+          2
+        ],
+        "posterior_elo": 193.06149732784937,
+        "posterior_elo_95": [
+          126.44652649998119,
+          275.97048640781816
+        ],
+        "posterior_score": 0.7523809523809524,
+        "posterior_score_95": [
+          0.6743409168585321,
+          0.8304209879033726
+        ],
+        "posterior_score_sd": 0.039816344654295996,
+        "rough_elo": 205.03742915275254,
+        "saturated": false,
+        "score": 0.765,
+        "start": 1,
+        "tc": "3+0.1",
+        "wins": 74
+      }
+    ],
+    "start": 1,
+    "status": "complete",
+    "tc": "3+0.1"
+  },
+  "compiler": {
+    "flags": [
+      "-O3",
+      "-march=native",
+      "-Wall",
+      "-Wextra"
+    ],
+    "machine": "x86_64",
+    "path": "/usr/bin/gcc",
+    "platform": "Linux-5.14.0-687.20.1.el9_8.x86_64-x86_64-with-glibc2.34",
+    "sha256": "f679a0ba1bddf27acd9523a1df45909b8e681f1f84f2d0f1cc87f5e115a6ec26",
+    "version": "gcc (GCC) 11.5.0 20240719 (Red Hat 11.5.0-14)"
+  },
+  "freeze_script_sha256": "3da8804d66ed649f3d2ee13847088e44bad391911d6294969efc424d6bf83689",
+  "opponent_source_trees": [
+    {
+      "files": 31,
+      "path": "opponents/chessidle",
+      "sha256": "0aa781fc638792738ce53f6a9b23c97078538692893d6902be7b4919583687f6"
+    }
+  ],
+  "panel": [
+    {
+      "args": "tables.txt",
+      "engine": "sunfish_c",
+      "identity_files": [
+        "source/LICENSE.md"
+      ],
+      "license": "GPL-3.0-only",
+      "name": "master",
+      "options": "default",
+      "revision": "da1922277fe2d4d1cb98bc17be27b1919d277e13",
+      "source": "https://github.com/thomasahle/sunfish",
+      "weight": 2
+    },
+    {
+      "args": "",
+      "engine": "opponents/stockfish15",
+      "identity_files": [
+        "opponents/stockfish.lock.json",
+        "opponents/stockfish-Copying.txt"
+      ],
+      "license": "GPL-3.0-only",
+      "name": "stockfish-1800",
+      "options": {
+        "Hash": 16,
+        "Threads": 1,
+        "UCI_Elo": 1800,
+        "UCI_LimitStrength": "true"
+      },
+      "revision": "e6e324eb28fd49c1fc44b3b65784f85a773ec61c",
+      "source": "https://github.com/official-stockfish/Stockfish",
+      "weight": 1
+    },
+    {
+      "args": "",
+      "engine": "opponents/chessidle.sh",
+      "identity_files": [
+        "opponents/chessidle.lock.json",
+        "opponents/chessidle/LICENSE",
+        "/usr/bin/python3.9"
+      ],
+      "license": "GPL-3.0-only",
+      "name": "chessidle",
+      "options": {
+        "Hash": 16,
+        "Threads": 1
+      },
+      "revision": "a9dae286c6a2c9fb2d17f9836b6644829d4e7834",
+      "source": "https://github.com/alvinypeng/chessidle",
+      "weight": 1
+    }
+  ],
+  "revision": "da1922277fe2d4d1cb98bc17be27b1919d277e13",
+  "runtime": {
+    "path": "/usr/bin/python3.9",
+    "sha256": "c87babf8337b668da60e26d897d694df7bd9a5b7907416e4eda078b9c33d05e0",
+    "version": "Python 3.9.25"
+  },
+  "schema": "sunfish-panel-freeze-v2",
+  "source": "https://github.com/thomasahle/sunfish",
+  "source_files": [
+    {
+      "path": "source/sunfish.py",
+      "sha256": "f6c481a6a2c9f4c3686c13115adb36719693676d47b0121af03347d3a01219a1"
+    },
+    {
+      "path": "source/LICENSE.md",
+      "sha256": "4052be61f35ad6a156dcee919b8f99058b24b0417a152ecef746f702c7f34c5c"
+    },
+    {
+      "path": "source/tools/ctwin/sunfish.c",
+      "sha256": "e678b3ab8dd2c5b961d4034a5676f61300b31f562f9d24b95e27ca2e60c1d009"
+    },
+    {
+      "path": "source/tools/ctwin/gen_tables.py",
+      "sha256": "3d557cc7cd3eea5d565c962627a995b86626ec2488177647b7bc5d46c6d7b42e"
+    }
+  ],
+  "weights": {
+    "chessidle": 1,
+    "master": 2,
+    "stockfish-1800": 1
+  }
+}

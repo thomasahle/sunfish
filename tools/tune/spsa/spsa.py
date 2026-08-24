@@ -2,6 +2,7 @@
 """Tune ordered UCI options with the classic Fishtest SPSA schedule."""
 
 import argparse
+import concurrent.futures
 import hashlib
 import json
 import math
@@ -19,9 +20,11 @@ sys.path.insert(0, str(pathlib.Path(__file__).parents[1]))
 import gating  # noqa: E402
 import locking  # noqa: E402
 import pentanomial  # noqa: E402
+import opponent_panel  # noqa: E402
 
 
 SCORE = re.compile(r"Score of plus vs minus:\s+(\d+)\s+-\s+(\d+)\s+-\s+(\d+)")
+PANEL_SCORE = re.compile(r"Score of candidate vs baseline:\s+(\d+)\s+-\s+(\d+)\s+-\s+(\d+)")
 UCI_OPTION = re.compile(r"^option name (.+?) type ")
 
 
@@ -84,8 +87,12 @@ def recover_step(path, identity, pairs):
 
 
 def study_identity(args):
+    panel = getattr(args, "baseline_panel", [])
+    def configured_engine(command, arguments, options):
+        return command_identity(command, arguments) | {"options": options}
+
     return {
-        "version": 1, "runner": digest(__file__),
+        "version": 3, "runner": digest(__file__),
         "fastchess": digest(shutil.which(args.fastchess) or args.fastchess),
         "engine": command_identity(args.engine, args.engine_args),
         "space": digest(args.space), "openings": digest(args.openings),
@@ -98,6 +105,12 @@ def study_identity(args):
         "r_end": args.r_end, "draw_ratio": args.draw_ratio, "precision": args.precision,
         "gate": gate_identity(args.gate), "gate_timeout": args.gate_timeout,
         "gate_attempts": args.gate_attempts,
+        "baseline_panel": [opponent_panel.identity(member, configured_engine, digest)
+                           for member in panel],
+        "panel_selection": ({
+            "helper": digest(opponent_panel.__file__),
+            "seed": getattr(args, "panel_seed", 2026),
+        } if panel else None),
     }
 
 
@@ -244,6 +257,44 @@ def play(args, study, number, opening, pairs, plus, minus):
     return wins, losses, draws
 
 
+def play_fixed(args, number, opening, options, member, label):
+    command = [
+        args.fastchess,
+        *engine(args.engine, "candidate", args.engine_args, options),
+        *engine(member["engine"], "baseline", member["args"], member["options"]),
+        "-each", "proto=uci", f"tc={args.tc}",
+        "-openings", f"file={pathlib.Path(args.openings).resolve()}", "format=epd",
+        "order=sequential", f"start={opening}", "-rounds", "1",
+        "-games", "2", "-repeat", "-concurrency", "1", "-recover",
+        "-draw", "movenumber=40", "movecount=8", "score=10",
+        "-resign", "movecount=4", "score=500",
+        "-output", "format=cutechess", "-scoreinterval", "1", "-ratinginterval", "0",
+    ]
+    process = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    pathlib.Path(args.logs, f"step-{number:06d}-{label}.log").write_bytes(process.stdout)
+    output = process.stdout.decode(errors="replace")
+    matches = PANEL_SCORE.findall(output)
+    failure = opponent_panel.failure(output)
+    if process.returncode or not matches or failure:
+        raise RuntimeError(f"SPSA panel step {number}/{label} failed with status {process.returncode}")
+    wins, losses, draws = map(int, matches[-1])
+    if wins + losses + draws != 2:
+        raise RuntimeError(f"SPSA panel step {number}/{label} completed {wins + losses + draws} games")
+    return wins, losses, draws
+
+
+def play_panel(args, number, opening, sequence, plus, minus):
+    """Compare both perturbations with one opponent on the same color pair."""
+    member = opponent_panel.select(args.baseline_panel, sequence, args.panel_seed)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(play_fixed, args, number, opening, options, member, label)
+            for options, label in ((plus, "plus"), (minus, "minus"))
+        ]
+        results = [future.result() for future in futures]
+    return member["name"], results
+
+
 def save(path, state, parameters):
     payload = state | {"parameters": parameters}
     target = pathlib.Path(path)
@@ -262,7 +313,15 @@ def optimize(args):
 
 def optimize_locked(args):
     pathlib.Path(args.logs).mkdir(parents=True, exist_ok=True)
+    args.baseline_panel = getattr(args, "baseline_panel", [])
     fixed = dict(item.split("=", 1) for item in args.fixed_option)
+    defaults = {
+        item["name"]: item["default"]
+        for item in json.loads(pathlib.Path(args.space).read_text())["parameters"]
+    }
+    for member in args.baseline_panel:
+        if member["options"] == "default":
+            member["options"] = defaults
     state_path = pathlib.Path(args.state)
     identity = study_identity(args)
     if state_path.exists():
@@ -274,6 +333,8 @@ def optimize_locked(args):
         parameters = load_parameters(args.space, args.iterations, args)
         state = {"study": identity, "results": []}
     validate_options(args.engine, args.engine_args, [p["name"] for p in parameters])
+    for member in args.baseline_panel:
+        validate_options(member["engine"], member["args"], member["options"])
     overlap = fixed.keys() & {p["name"] for p in parameters}
     if overlap:
         raise ValueError(f"fixed and tuned options overlap: {', '.join(sorted(overlap))}")
@@ -307,23 +368,40 @@ def optimize_locked(args):
             raise RuntimeError(
                 f"policy gate rejected {args.gate_attempts} SPSA perturbations")
         opening = (args.start - 1 + iteration) % opening_count + 1
-        wins, losses, draws = play(args, identity, number, opening, pairs, plus, minus)
-        result = wins - losses
+        if args.baseline_panel:
+            sequence = args.start + iteration
+            opponent, panel_results = play_panel(
+                args, number, opening, sequence, plus, minus)
+            plus_result, minus_result = panel_results
+            result = ((plus_result[0] + plus_result[2] / 2)
+                      - (minus_result[0] + minus_result[2] / 2))
+            wins = losses = draws = 0
+        else:
+            opponent = None
+            plus_result = minus_result = None
+            wins, losses, draws = play(
+                args, identity, number, opening, pairs, plus, minus)
+            result = wins - losses
         for parameter, (c, r, flip) in zip(parameters, steps):
             parameter["theta"] = min(max(
                 parameter["theta"] + r * c * result * flip,
                 parameter["min"]), parameter["max"])
         state["results"].append({
             "number": number, "iteration": iteration, "pairs": pairs,
+            "opening_pairs": 2 * pairs if opponent is not None else pairs,
+            "games": 4 * pairs if opponent is not None else 2 * pairs,
             "opening": opening, "plus": plus, "minus": minus,
             "wins": wins, "draws": draws, "losses": losses,
+            "opponent": opponent, "plus_result": plus_result,
+            "minus_result": minus_result, "gradient": result,
             "theta": {p["name"]: p["theta"] for p in parameters},
         })
         iteration += pairs
         save(args.state, state, parameters)
         values = " ".join(f"{p['name']}={p['theta']:.3g}" for p in parameters)
-        print(f"[{iteration}/{args.iterations} pairs] "
-              f"{wins}-{losses}-{draws} {values}", flush=True)
+        outcome = (f"{wins}-{losses}-{draws}" if opponent is None else
+            f"{opponent} plus={plus_result} minus={minus_result}")
+        print(f"[{iteration}/{args.iterations} steps] {outcome} {values}", flush=True)
 
 
 def main():
@@ -331,13 +409,17 @@ def main():
     parser.add_argument("--fastchess", required=True)
     parser.add_argument("--engine", required=True)
     parser.add_argument("--engine-args", default="")
+    parser.add_argument("--baseline-panel",
+        help="evaluate both perturbations against one weighted-panel member")
+    parser.add_argument("--panel-seed", type=int, default=2026,
+        help="seed for shuffled weighted opponent blocks")
     parser.add_argument("--space", required=True)
     parser.add_argument("--openings", required=True)
     parser.add_argument("--state", default="spsa.json")
     parser.add_argument("--logs", default="spsa-logs")
     parser.add_argument("--tc", default="3+0.1")
     parser.add_argument("--iterations", type=int, required=True,
-                        help="total Fishtest iterations, i.e. paired openings")
+                        help="total SPSA update steps")
     parser.add_argument("--slots", type=int, default=10)
     parser.add_argument("--pairs-per-step", type=int, default=5)
     parser.add_argument("--start", type=int, default=1)
@@ -355,6 +437,9 @@ def main():
     parser.add_argument("--gate-timeout", type=float, default=60)
     parser.add_argument("--gate-attempts", type=int, default=100)
     args = parser.parse_args()
+    args.baseline_panel = opponent_panel.load(args.baseline_panel) if args.baseline_panel else []
+    if args.baseline_panel and (args.pairs_per_step != 1 or args.slots != 1):
+        parser.error("panel-anchored SPSA requires --pairs-per-step 1 --slots 1")
     if min(args.iterations, args.slots, args.pairs_per_step,
            args.gate_timeout, args.gate_attempts) < 1:
         parser.error("iteration, slot, pair, and gate limits must be positive")

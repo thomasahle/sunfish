@@ -158,9 +158,10 @@ SF_PYREF=python3.9 make gate   # the same gate under the pinned CPython
 Tuning knobs (no recompile): UCI `setoption name NAME value VALUE`, lab
 `set NAME VALUE`, `SF_NAME=` env, or `NAME=VALUE` argv after the table path —
 `QS QS_A LMR EVAL_ROUGHNESS TABLE_SIZE NULL_CAP_MARGIN NULL_MARGIN
-NULL_MIN_DEPTH NULL_LIMIT NULL_CUT_RED NULL_RED IID_MIN_DEPTH IID_RED FUT_MAX FUT_CAP FUT_CAP_DEPTH
-MATE_DIST FUEL_NULL FUEL_MIN_DEPTH FEN_HIST` (`NULL_CAP_MARGIN=-1` follows
-`EVAL_ROUGHNESS`, `NULL_MARGIN` is the fuel-probe target margin, and the two
+NULL_MIN_DEPTH NULL_LIMIT NULL_CUT_RED NULL_RED IID IID_MIN_DEPTH IID_RED
+FUT_MAX FUT_CAP FUT_CAP_DEPTH MATE_DIST FUEL_NULL FUEL_MIN_DEPTH FEN_HIST`
+(`NULL_CAP_MARGIN=15` matches Python's shared default but is independent for
+tuning; `NULL_MARGIN` is the fuel-probe target, and the two
 `NULL_*_RED` knobs control the shallow and deep probes; `FUEL_NULL` controls
 the hot node's extra depth cost, while zero skips the probe but retains the
 static intrinsic-LMR guard). `FUT_CAP` selects no shallow cap, the current
@@ -176,6 +177,10 @@ evict-before-insert, 2 depth-stored bounded scan with `EVICT_SCAN_K`,
 3 hash-slot two-tier replace-if-deeper), `KILLER_COUNT` (1..3 most recent
 distinct killers), `USE_VARIANT` (Python-side transcription proof; no-op
 in C). Unknown or out-of-range knobs are hard errors on every input path.
+
+Only defaults and knob combinations equivalent to current Python carry the
+node-identity claim. Independent lab axes define candidate recurrences; a
+selected candidate must first be ported to Python and pass the gate again.
 
 The complete optimizer documentation and the Sunfish joint-parameter example
 now live in [`../tune/logistic_gp/`](../tune/logistic_gp/README.md). Keeping the

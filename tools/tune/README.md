@@ -40,10 +40,43 @@ categorical, and Boolean parameters.
 - `locking.py` protects resumable studies from concurrent writers.
 - `uci_wrapper.py` exposes a UCI command with arguments as one executable.
 
+Both the global GP and SPSA accept seeded, integer-weighted opponent
+panels. Panel-anchored SPSA compares both perturbations with the same opponent
+on the same color-swapped opening before applying the gradient; one update is
+therefore two opening pairs and four games. Five such lanes use 20 engines.
+Both runners shuffle the same weighted block for each group of opening numbers,
+which preserves exact weights without a fixed opponent phase. The seed, panel
+helper, provenance, and extra source-lock files are included in resumable study
+identities, along with executable hashes and UCI options.
+
+`freeze_panel.py` builds the C twin twice on the tournament host, rejects a
+non-reproducible binary, copies the pinned opponents and licenses, and writes
+an operational `panel.json` plus a relocatable `manifest.json`. Verify an
+existing artifact with `freeze_panel.py --verify path/to/manifest.json`.
+`global_search_panel.lock.json` records the frozen 2:1:1 campaign artifact;
+the binary itself remains outside Git. Stockfish's release, exact upstream
+commit, executable, and license are separate locked identities.
+
+The freeze completes calibration before writing its final manifest. It gives
+each non-master opponent 50 common color-swapped openings against frozen
+master at 3+0.1, rejects engine failures, incomplete results, and saturated
+opponents, then freezes the result summary and raw-log hashes. Host-specific
+commands and paths from the temporary result file are discarded. Thus nominal
+engine ratings and a merely pending calibration are never accepted as panel
+evidence.
+
+Calibration proves reliability and non-saturation; it is not subtracted as an
+Elo offset. The target is expected weighted-panel score, including matchup
+effects. Each normalized pair score is in `[0, 1]`, so one Bernoulli-equivalent
+observation after randomized opponent assignment is conservative.
+
 `search_parameters.json` is a small generic search-tuning example.
-`logistic_gp/all_parameters.json` is the wider Sunfish search space. The
-Sunfish-specific gate rejects configurations that violate the search's fuel
-and eventual-widening invariants before they enter a tournament.
+`logistic_gp/all_parameters.json` includes evaluation experiments, while
+`logistic_gp/global_search_parameters.json` is the frozen search-only space.
+The latter records every excluded C-twin option and why it is not a current
+Python numeric search parameter. The Sunfish-specific gate rejects
+configurations that violate the search's fuel and eventual-widening
+invariants before they enter a tournament.
 
 Run each program with `--help` for its command line. Game-result studies need
 fastchess, a color-swapped opening book, and engines whose tunable values are
@@ -80,7 +113,9 @@ The frozen five-method comparison is specified in
 in [`recovery_benchmark.json`](recovery_benchmark.json). Run
 `python3 tools/tune/verify_recovery.py` before starting a campaign; supplying
 the frozen engine, tables, and training book also reproduces the corrected
-start-vector trace checks.
+start-vector trace checks. Pass `--method-root` to additionally verify a
+checkout of the manifest's frozen optimizer-source commit; live tuner code is
+allowed to evolve without rewriting historical hashes.
 
 The integration tests exercise parameter translation, resumable state,
 pentanomial parsing, feasibility gates, checkpoint extraction, and the shared

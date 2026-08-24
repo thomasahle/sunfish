@@ -20,6 +20,7 @@ against the fixed baseline as an absolute anchor.
   inference.
 - `report_gp.py` reports the posterior and coordinate slices from a saved run.
 - `all_parameters.json` is Sunfish's joint search/evaluation example.
+- `global_search_parameters.json` is Sunfish's search-only global space.
 - `sunfish_gate.py` is Sunfish's deterministic mate-safety gate example.
 - `test_logistic_gp.py` covers the model, scheduler, restart journal, UCI option
   validation, exploration policy, and Sunfish examples.
@@ -75,6 +76,19 @@ can be imported with `--seed-state`; both sides of every duel then count as
 observed axis coverage, while games against the fixed default supply the new
 study's absolute Elo anchor.
 
+`--baseline-panel panel.json` can replace one fixed baseline with a stationary
+integer-weighted mixture. Each seeded block shuffles one copy of every weighted
+slot, so restarts reproduce the schedule and every complete block has exact
+weights without a fixed opponent phase. For example, weights `2, 1, 1` give
+50% master, 25% Stockfish, and 25% an independent peer. Use `--duel-fraction 0`
+when every global-search observation should be anchored to that panel. The JSON is a list of objects
+with `name`, `engine`, `weight`, and optional `args` and `options`; the special
+`"options": "default"` applies the parameter-space default to that member.
+Optional `source`, `revision`, and `license` strings record provenance, while
+`identity_files` names lock manifests or source files that must remain byte
+identical when a study resumes. GP and SPSA use the same one-based opening
+sequence and seed, so their shuffled weighted blocks are identical.
+
 A finite inducing basis leaves residual variance that its GP features cannot
 learn, even after replaying one configuration many times. The exploration arm
 conditions that residual on the exact number of completed pairs, using the
@@ -83,18 +97,21 @@ error from masquerading as permanently useful uncertainty; GP-UCB itself still
 uses the unmodified posterior.
 
 `--baseline-options default` pins the configured default point to zero. The
-Sunfish space covers every live search/evaluation constant except memory and
-historical flavor switches. Its domains preserve the mate-band, promotion, and
-nonnegative-table invariants, and the gate rejects policies without a finite
-eventual-mate horizon before they consume games.
+Sunfish space covers every live numeric search choice except time, memory, and
+historical flavor switches. Its domains preserve the mate-band invariants, and
+the gate rejects policies without a finite eventual-mate horizon before they
+consume games.
+
+`TABLE_SIZE` and `DELAY` are deliberately absent: the former buys strength with
+memory, while the latter changes the clock budget. The global-search objective
+holds both resource budgets fixed and records those exclusions in the space.
 
 The mate gate derives each suite depth from the candidate's maximum real-edge
 cost, move-cap horizon, and null-candidate horizon. `--horizon-only` cheaply
 rejects policies without a finite bound during a broad optimization; omit it
-to run the executable mate suites on finalists. Classical null
-(`FUEL_NULL=0`) is rejected because its null candidate has no finite defender
-horizon. The configured `FUEL_MIN_DEPTH=99` off sentinel is likewise rejected
-when it would leave shallow null active throughout the practical depth range.
+to run the executable mate suites on finalists. Scoring-null and fuel-null
+horizons are independent, so either mechanism can be disabled without making
+the other unbounded.
 The optional node ceiling rejects policies whose fixed-depth tree exceeds a
 generous multiple of the default engine on a small deterministic sample. It is
 a feasibility constraint, not a surrogate objective: accepted policies are
