@@ -29,6 +29,8 @@ categorical, and Boolean parameters.
   budgets. It can also pool pairwise-only SPSA studies.
 - `freeze_recommendations.py` normalizes and audits a complete method/start/
   checkpoint recommendation grid before held-out games are consulted.
+- `audit_consensus.py` independently recomputes the frozen support/L1/SHA
+  consensus and its eventual-correctness parameters before validation.
 - `validate.py` measures recommendations on an independent opening set.
 - `plot_recovery.py` produces held-out Elo-versus-training-games curves and a
   paired method-comparison CSV at the primary checkpoint.

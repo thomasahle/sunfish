@@ -35,6 +35,7 @@ def load(name, relative):
 
 ctt = load("ctt_fastchess_shim", "tools/tune/chess_tuning_tools/fastchess_shim.py")
 ctt_config = load("ctt_make_config", "tools/tune/chess_tuning_tools/make_config.py")
+audit_consensus = load("audit_consensus", "tools/tune/audit_consensus.py")
 clop = load("clop_fastchess", "tools/tune/clop/clop_fastchess.py")
 calibrate_panel = load("calibrate_panel", "tools/tune/calibrate_panel.py")
 gating = load("gating", "tools/tune/gating.py")
@@ -62,6 +63,28 @@ verify_recovery = load("verify_recovery", "tools/tune/verify_recovery.py")
 
 
 class TuningToolsTest(unittest.TestCase):
+    def test_consensus_audit_recomputes_selection(self):
+        parameters = {
+            "X": {"name": "X", "type": "discrete", "default": 0, "values": [0, 1, 2]},
+            "Y": {"name": "Y", "type": "discrete", "default": 0, "values": [0, 1]},
+        }
+        space = {"parameters": list(parameters.values()), "conditions": []}
+        a, b, c = {"X": 0, "Y": 0}, {"X": 2, "Y": 0}, {"X": 2, "Y": 1}
+        payload = json.dumps(a, sort_keys=True, separators=(",", ":"))
+        candidate = {
+            "lane_optima": [a] * 10 + [b] * 5 + [c] * 5,
+            "selected": a,
+            "selection_evidence": {
+                "support": 10,
+                "total_normalized_l1": 15.0,
+                "canonical_sha256": hashlib.sha256(payload.encode()).hexdigest(),
+            },
+        }
+        audit_consensus.verify_selection(candidate, parameters, space)
+        candidate["selected"] = b
+        with self.assertRaisesRegex(RuntimeError, "not the preregistered consensus"):
+            audit_consensus.verify_selection(candidate, parameters, space)
+
     def test_frozen_recovery_manifest_is_self_consistent(self):
         manifest, space = verify_recovery.audit(root=ROOT)
         self.assertEqual(manifest["budget"]["games"], 1000)
