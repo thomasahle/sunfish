@@ -85,6 +85,17 @@ class TuningToolsTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "not the preregistered consensus"):
             audit_consensus.verify_selection(candidate, parameters, space)
 
+    def test_consensus_audit_null_limit_disables_both_null_modes(self):
+        selected = {
+            "QS": 40, "NULL_LIMIT": 0, "NULL_SPAN": 3, "NULL_MIN_DEPTH": 2,
+            "FUEL_NULL": 1, "FUEL_MIN_DEPTH": 6, "LMR_LIMIT": 750,
+            "LMR_MIN_DEPTH": 6, "FUT_CAP_DEPTH": 3, "IID": 0,
+        }
+        status = audit_consensus.mechanism_status(selected)
+        self.assertTrue(status["scoring_null_off"])
+        self.assertTrue(status["fuel_null_off"])
+        self.assertTrue(status["all_null_off"])
+
     def test_frozen_recovery_manifest_is_self_consistent(self):
         manifest, space = verify_recovery.audit(root=ROOT)
         self.assertEqual(manifest["budget"]["games"], 1000)

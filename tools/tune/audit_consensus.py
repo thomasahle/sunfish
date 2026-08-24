@@ -94,6 +94,21 @@ def verify_selection(candidate, parameters, space):
         raise RuntimeError("selection evidence does not reproduce")
 
 
+def mechanism_status(selected):
+    limit = selected["NULL_LIMIT"]
+    scoring_off = not limit or selected["NULL_SPAN"] == 0 or selected["NULL_MIN_DEPTH"] >= 30
+    fuel_off = not limit or selected["FUEL_NULL"] == 0 or selected["FUEL_MIN_DEPTH"] >= 30
+    return {
+        "qsearch_off": selected["QS"] >= 3000,
+        "scoring_null_off": scoring_off,
+        "fuel_null_off": fuel_off,
+        "all_null_off": scoring_off and fuel_off,
+        "lmr_off": selected["LMR_LIMIT"] == 0 or selected["LMR_MIN_DEPTH"] >= 30,
+        "caps_off": selected["FUT_CAP_DEPTH"] < 0,
+        "iid_on": bool(selected["IID"]),
+    }
+
+
 def audit(root, space_path):
     root, space_path = pathlib.Path(root).resolve(), pathlib.Path(space_path)
     verify_seal(root)
@@ -110,8 +125,6 @@ def audit(root, space_path):
             raise RuntimeError(f"out-of-domain value: {name}={value}")
     selected = canonical(selected, space)
     limit = selected["NULL_LIMIT"]
-    scoring_off = not limit or selected["NULL_SPAN"] == 0 or selected["NULL_MIN_DEPTH"] >= 30
-    fuel_off = selected["FUEL_NULL"] == 0 or selected["FUEL_MIN_DEPTH"] >= 30
     compact = dict(selected)
     if not compact["IID"]:
         compact["IID_MIN_DEPTH"] = parameters["IID_MIN_DEPTH"]["default"]
@@ -130,15 +143,7 @@ def audit(root, space_path):
                             for name, value in selected.items() if value != defaults[name]},
         "compact_changes": {name: [defaults[name], value]
                             for name, value in compact.items() if value != defaults[name]},
-        "mechanisms": {
-            "qsearch_off": selected["QS"] >= 3000,
-            "scoring_null_off": scoring_off,
-            "fuel_null_off": fuel_off,
-            "all_null_off": scoring_off and fuel_off,
-            "lmr_off": (selected["LMR_LIMIT"] == 0 or selected["LMR_MIN_DEPTH"] >= 30),
-            "caps_off": selected["FUT_CAP_DEPTH"] < 0,
-            "iid_on": bool(selected["IID"]),
-        },
+        "mechanisms": mechanism_status(selected),
         "proof": {
             "maximum_real_edge_cost": 1 + fuel + lmr,
             "shallow_null_first_depth": selected["NULL_MIN_DEPTH"] + 1,
