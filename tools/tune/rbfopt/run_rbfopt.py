@@ -342,7 +342,19 @@ def main():
         idle = 0
         while optimizer.bb.state["games"] + 2 <= args.games:
             before = optimizer.bb.state["games"]
-            _, point, *_ = optimizer.optimize(pause_after_iters=1)
+            try:
+                _, point, *_ = optimizer.optimize(pause_after_iters=1)
+            except RuntimeError as error:
+                if (str(error) != "game budget exhausted inside an RBFOpt evaluation"
+                        or optimizer.bb.state["games"] != args.games):
+                    raise
+                optimizer.bb.state["checkpoints"].append({
+                    "games": args.games,
+                    "options": optimizer.bb.state["checkpoints"][-1]["options"],
+                })
+                save_model(optimizer, model)
+                optimizer.bb.save()
+                break
             if optimizer.bb.state["games"] > before:
                 optimizer.bb.state["checkpoints"].append({
                     "games": optimizer.bb.state["games"],
