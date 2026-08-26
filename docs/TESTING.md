@@ -77,11 +77,13 @@ run those engines at `30+1` instead.
 
    `-sprt elo0=0 elo1=10 alpha=0.05 beta=0.05 model=logistic`
 
-   For a simplification allowed to lose `B` Elo, use `elo0=-B elo1=0`. The
-   standing source-size exchange rate is `B = 5 * removed cleaned lines`.
-   `model=logistic` keeps these hypotheses in the conventional Elo units used
-   elsewhere in this document; do not silently compare them with normalized
-   Elo (`model=normalized`).
+   A simplification must also be non-losing: test `elo0=0 elo1=10`, or a
+   narrower pre-registered positive alternative when appropriate. Use the
+   standing `5 Elo per removed cleaned line` exchange rate only to rank
+   candidates that clear this floor; source size never buys permission to ship
+   negative Elo. `model=logistic` keeps these hypotheses in the conventional
+   Elo units used elsewhere in this document; do not silently compare them
+   with normalized Elo (`model=normalized`).
 
    Set `-rounds` to a generous maximum, not a desired sample size. The opening
    book must cover that maximum without cycling. A test stops early when either
@@ -89,6 +91,11 @@ run those engines at `30+1` instead.
    whole maximum, which is the correct price of an ambiguous result. Report the
    SPRT hypotheses, error rates, decision, LLR bounds, game count, and
    pentanomial counts.
+
+   Do not combine an SPRT with `-output format=cutechess`: fastchess disables
+   its pentanomial report in that compatibility mode. Keep native output and
+   verify that the saved config has `report_penta: true` plus populated
+   `penta_WW` through `penta_LL` cells before accepting the decision.
 
    **SPRT decides; it does not measure.** A stopped test pays for its
    optionality in width *and* in location: it is likeliest to cross a boundary

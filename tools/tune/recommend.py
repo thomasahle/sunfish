@@ -47,7 +47,8 @@ def decode(items, point):
     return result
 
 
-def at_checkpoints(method, history, checkpoints, initial, progress=None):
+def at_checkpoints(method, history, checkpoints, initial, progress=None,
+                   reached_budget=None):
     """Return strict-budget recommendations for every checkpoint the run crossed.
 
     An atomic update may cross a checkpoint. In that case its games and
@@ -58,7 +59,8 @@ def at_checkpoints(method, history, checkpoints, initial, progress=None):
     progress = sorted(progress if progress is not None else [games for games, _ in history])
     output = []
     for checkpoint in checkpoints:
-        if checkpoint and (not progress or progress[-1] < checkpoint):
+        reached = progress[-1] if progress else 0
+        if checkpoint and max(reached, reached_budget or 0) < checkpoint:
             continue
         eligible = [item for item in history if item[0] <= checkpoint]
         recommendation_games, options = eligible[-1] if eligible else (0, initial)
@@ -247,7 +249,38 @@ def rbfopt(args, checkpoints):
     for evaluation in state["evaluations"]:
         games += 2 * evaluation["pairs"]
         progress.append(games)
-    return at_checkpoints(args.method, history, checkpoints, defaults(items), progress)
+    if args.budget:
+        pairs = state["study"]["noisy_pairs"] + state["study"]["accurate_pairs"]
+        if not state["games"] <= args.budget < state["games"] + 2 * pairs:
+            raise RuntimeError("RBFOpt budget is not at its atomic-update boundary")
+    return at_checkpoints(
+        args.method, history, checkpoints, defaults(items), progress, args.budget)
+
+
+def required(args, checkpoints):
+    """Materialize canonical declared points without reading optimizer state."""
+    sys.path.insert(0, str(pathlib.Path(__file__).parent / "logistic_gp"))
+    import logistic_gp
+
+    space = logistic_gp.MixedSpace.load(args.space)
+    points = list(dict.fromkeys([space.default, *space.required]))
+    if args.off_only:
+        default = space.knobs(space.default)
+
+        def changed_off(point):
+            values = space.knobs(point)
+            changed = [parameter for parameter in space.parameters
+                       if values[parameter["name"]] != default[parameter["name"]]]
+            return bool(changed) and all(
+                values[parameter["name"]] in parameter.get("off_values", [])
+                for parameter in changed)
+
+        points = [space.default, *filter(changed_off, points)]
+        points = list(dict.fromkeys(points))
+    return [{
+        "method": args.method, "checkpoint": 0, "trained_games": 0,
+        "recommendation_games": 0, "options": space.knobs(point),
+    } for point in points]
 
 
 def main():
@@ -285,6 +318,12 @@ def main():
     rbf_parser.add_argument("--state", required=True)
     rbf_parser.add_argument("--space", required=True)
     rbf_parser.add_argument("--method", default="rbfopt")
+    rbf_parser.add_argument("--budget", type=int)
+
+    required_parser = subparsers.add_parser("required")
+    required_parser.add_argument("--space", required=True)
+    required_parser.add_argument("--method", default="required")
+    required_parser.add_argument("--off-only", action="store_true")
 
     args = parser.parse_args()
     checkpoints = sorted(set(map(int, args.checkpoints.split(","))))

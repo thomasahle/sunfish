@@ -893,6 +893,14 @@ Finished game 2 (baseline vs candidate): 1/2-1/2
         self.assertEqual([row["trained_games"] for row in records], [0, 0, 20])
         self.assertEqual([row["options"]["X"] for row in records], [0, 0, 1])
 
+    def test_recommendation_reports_an_unspendable_atomic_budget(self):
+        records = recommend.at_checkpoints(
+            "example", [(398, {"X": 1})], [0, 200, 400], {"X": 0},
+            range(2, 399, 2), reached_budget=400)
+        self.assertEqual([row["checkpoint"] for row in records], [0, 200, 400])
+        self.assertEqual([row["trained_games"] for row in records], [0, 200, 398])
+        self.assertEqual([row["recommendation_games"] for row in records], [0, 0, 398])
+
     def test_clop_recommendations_use_only_complete_pairs(self):
         with tempfile.TemporaryDirectory() as directory:
             directory = pathlib.Path(directory)
@@ -1032,6 +1040,45 @@ Finished game 3 (candidate vs baseline): 0-1
     def test_ctt_fastchess_state_does_not_overwrite_tuner_config(self):
         command = ctt.translate([], {})
         self.assertIn("outname=fastchess-state.json", command)
+
+    def test_ctt_weighted_panel_replaces_only_the_fixed_opponent(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = pathlib.Path(directory)
+            panel = directory / "panel.json"
+            panel.write_text(json.dumps([
+                {"name": "master", "engine": "master", "args": "tables",
+                 "options": "default", "weight": 2},
+                {"name": "stockfish", "engine": "stockfish", "args": "",
+                 "options": {"Hash": 16}, "weight": 1},
+                {"name": "peer", "engine": "peer", "args": "weights",
+                 "options": {"Threads": 1}, "weight": 1},
+            ]))
+            panel_sha = hashlib.sha256(panel.read_bytes()).hexdigest()
+            configs = {
+                "engine1": {"name": "engine1", "command": "candidate"},
+                "engine2": {"name": "engine2", "command": "old-baseline"},
+            }
+            commands = []
+            for iteration in range(8):
+                with mock.patch.dict("os.environ", {
+                        "CTT_OPPONENT_PANEL": str(panel),
+                        "CTT_PANEL_SHA256": panel_sha,
+                        "CTT_ITERATION": str(iteration), "CTT_PANEL_SEED": "7"}):
+                    selected = ctt.select_opponent(configs)
+                self.assertEqual(selected["engine1"], configs["engine1"])
+                commands.append(pathlib.Path(selected["engine2"]["command"]).name)
+                translated = ctt.translate(["-engine", "conf=engine2"], selected)
+                self.assertIn(f"dir={directory.resolve()}", translated)
+            self.assertEqual({name: commands.count(name) for name in set(commands)},
+                             {"master": 4, "stockfish": 2, "peer": 2})
+            stockfish = commands.index("stockfish")
+            with mock.patch.dict("os.environ", {
+                    "CTT_OPPONENT_PANEL": str(panel),
+                    "CTT_PANEL_SHA256": panel_sha,
+                    "CTT_ITERATION": str(stockfish), "CTT_PANEL_SEED": "7"}):
+                selected = ctt.select_opponent(configs)
+            translated = ctt.translate(["-engine", "conf=engine2"], selected)
+            self.assertIn("option.Hash=16", translated)
 
     def test_ctt_recovers_only_an_exact_complete_iteration(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -1207,6 +1254,57 @@ Finished game 3 (candidate vs baseline): 0-1
             self.assertEqual(settings["evaluate_points"], str(start))
             self.assertEqual(settings["max_iterations"] * settings["rounds"] * 2, 1000)
             self.assertEqual(start.read_text(), "3,1\n")
+
+    def test_ctt_config_forces_canonical_required_points(self):
+        with tempfile.TemporaryDirectory() as directory:
+            directory = pathlib.Path(directory)
+            space = directory / "space.json"
+            space.write_text(json.dumps({
+                "parameters": [
+                    {"name": "ON", "type": "discrete", "default": 1, "values": [0, 1]},
+                    {"name": "MARGIN", "type": "integer", "min": 0, "default": 3, "max": 9},
+                ],
+                "conditions": [{"when": {"ON": [0]}, "reset": ["MARGIN"]}],
+                "required": [{"ON": 0, "MARGIN": 9}, {"MARGIN": 7}, {"MARGIN": 7}],
+            }))
+            config = directory / "tuner.json"
+            points = directory / "points.csv"
+            argv = ["make_config.py", "--space", str(space), "--output", str(config),
+                    "--start-output", str(points), "--candidate", "candidate",
+                    "--baseline", "baseline", "--openings", "openings.epd", "--rounds", "2"]
+            with mock.patch.object(sys, "argv", argv):
+                ctt_config.main()
+            self.assertEqual(points.read_text(), "1,3,2\n0,3,2\n1,7,2\n")
+
+    def test_ctt_global_space_forces_all_structural_points(self):
+        path = ROOT / "tools/tune/logistic_gp/global_search_parameters.json"
+        spec = json.loads(path.read_text())
+        names = [parameter["name"] for parameter in spec["parameters"]]
+        points = [dict(zip(names, values)) for values in ctt_config.required_points(spec)]
+        self.assertEqual(len(points), 35)
+        self.assertTrue(any(point["QS"] == 60000 for point in points))
+        self.assertTrue(any(point["NULL_LIMIT"] == 0 for point in points))
+        self.assertTrue(any(point["LMR_LIMIT"] == 0 for point in points))
+        self.assertTrue(any(point["FUT_CAP_DEPTH"] == -1 for point in points))
+        self.assertTrue(any(point["IID"] == 1 for point in points))
+        self.assertTrue(any(point["NULL_SPAN"] == 0 and point["FUEL_MIN_DEPTH"] == 5
+                            for point in points))
+        self.assertTrue(any(point["NULL_SPAN"] == 0 and point["LMR_MIN_DEPTH"] == 5
+                            for point in points))
+
+    def test_required_recommendations_freeze_changed_off_points(self):
+        path = ROOT / "tools/tune/logistic_gp/global_search_parameters.json"
+        args = argparse.Namespace(space=str(path), method="off-boundary", off_only=True)
+        records = recommend.required(args, [])
+        self.assertEqual(len(records), 8)
+        self.assertTrue(all(record["checkpoint"] == 0 for record in records))
+        options = [record["options"] for record in records]
+        self.assertTrue(any(point["QS"] == 60000 for point in options))
+        self.assertTrue(any(point["NULL_LIMIT"] == 0 for point in options))
+        self.assertTrue(any(point["NULL_SPAN"] == 0 and point["FUEL_NULL"] == 0
+                            for point in options))
+        self.assertTrue(any(point["LMR_LIMIT"] == 0 for point in options))
+        self.assertTrue(any(point["FUT_CAP_DEPTH"] == -1 for point in options))
 
     def test_ctt_recommendation_rejects_missing_optimum_history(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -22,6 +22,26 @@ def dimension(parameter):
     raise ValueError(f"unsupported parameter type: {kind}")
 
 
+def required_points(spec):
+    parameters = spec["parameters"]
+    defaults = {parameter["name"]: parameter["default"] for parameter in parameters}
+    result = []
+    for override in [{}, *spec.get("required", [])]:
+        point = defaults | override
+        changed = True
+        while changed:
+            changed = False
+            for clause in spec.get("conditions", []):
+                if all(point[name] in values for name, values in clause["when"].items()):
+                    for name in clause["reset"]:
+                        changed |= point[name] != defaults[name]
+                        point[name] = defaults[name]
+        values = tuple(point[parameter["name"]] for parameter in parameters)
+        if values not in result:
+            result.append(values)
+    return result
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--space", required=True)
@@ -47,7 +67,8 @@ def main():
                         choices=("mes", "pvrs", "vr", "ts", "ei", "ttei", "lcb", "mean"))
     parser.add_argument("--seed", type=int, default=2026)
     args = parser.parse_args()
-    parameters = json.loads(pathlib.Path(args.space).read_text())["parameters"]
+    spec = json.loads(pathlib.Path(args.space).read_text())
+    parameters = spec["parameters"]
     config = {
         "engines": [
             {"command": str(pathlib.Path(args.candidate).resolve()),
@@ -82,8 +103,8 @@ def main():
         config["evaluate_points"] = args.start_output
     pathlib.Path(args.output).write_text(json.dumps(config, indent=2) + "\n")
     if args.start_output:
-        values = [str(parameter["default"]) for parameter in parameters]
-        pathlib.Path(args.start_output).write_text(",".join([*values, str(args.rounds)]) + "\n")
+        rows = [",".join(map(str, [*point, args.rounds])) for point in required_points(spec)]
+        pathlib.Path(args.start_output).write_text("\n".join(rows) + "\n")
 
 
 if __name__ == "__main__":

@@ -10,6 +10,7 @@ import subprocess
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parents[1]))
+import opponent_panel  # noqa: E402
 import pentanomial  # noqa: E402
 
 
@@ -19,6 +20,41 @@ SETOPTION = re.compile(r"setoption name (.*?) value (.*)")
 def engines():
     return {engine["name"]: engine for engine in json.loads(
         pathlib.Path("engines.json").read_text())}
+
+
+def panel_engine(member, root, name):
+    command = pathlib.Path(member["engine"])
+    if not command.is_absolute():
+        command = root / command
+    options = member.get("options", {})
+    return {
+        "name": name, "command": str(command.resolve()), "protocol": "uci",
+        "directory": str(root), "arguments": member.get("args", ""),
+        "initStrings": (["uci"] if options == "default" else
+                        ["uci", *(f"setoption name {key} value {value}"
+                                  for key, value in sorted(options.items()))]),
+    }
+
+
+def select_opponent(configs):
+    path = os.environ.get("CTT_OPPONENT_PANEL")
+    if not path:
+        return configs
+    if "CTT_ITERATION" not in os.environ:
+        raise RuntimeError("CTT_OPPONENT_PANEL requires CTT_ITERATION")
+    path = pathlib.Path(path).resolve()
+    expected = os.environ.get("CTT_PANEL_SHA256")
+    actual = hashlib.sha256(path.read_bytes()).hexdigest()
+    if not expected or actual != expected:
+        raise RuntimeError("CTT opponent panel identity mismatch")
+    members = opponent_panel.load(path)
+    sequence = int(os.environ["CTT_ITERATION"]) + 1
+    seed = int(os.environ.get("CTT_PANEL_SEED", 2026))
+    member = opponent_panel.select(members, sequence, seed)
+    name = os.environ.get("CTT_PANEL_ENGINE", "engine2")
+    if name not in configs:
+        raise RuntimeError(f"CTT panel engine is absent: {name}")
+    return configs | {name: panel_engine(member, path.parent, name)}
 
 
 def translate(argv, configs):
@@ -45,6 +81,10 @@ def translate(argv, configs):
         engine = configs[values.pop("conf")]
         result += ["-engine", f"cmd={engine['command']}", f"name={engine['name']}",
                    f"proto={engine.get('protocol', 'uci')}"]
+        if engine.get("directory"):
+            result.append(f"dir={engine['directory']}")
+        if engine.get("arguments"):
+            result.append(f"args={engine['arguments']}")
         for command in engine.get("initStrings", []):
             if match := SETOPTION.fullmatch(command):
                 result.append(f"option.{match.group(1)}={match.group(2)}")
@@ -142,7 +182,8 @@ def main():
     if sys.argv[1:2] == ["--commit-iteration"]:
         commit_openings(int(sys.argv[2]))
         return 0
-    command, transaction = sequence_openings(translate(sys.argv[1:], engines()))
+    command, transaction = sequence_openings(
+        translate(sys.argv[1:], select_opponent(engines())))
     if transaction:
         path, identity, rounds = transaction
         if output := complete_log(path, identity, rounds):

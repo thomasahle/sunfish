@@ -1732,15 +1732,22 @@ class MixedAcquisitionTest(unittest.TestCase):
                 load_baseline_panel(path)
 
     def test_baseline_panel_rejects_recovered_engine_failures(self):
-        self.assertEqual(panel_failure("Finished game: Black disconnects"), "disconnects")
-        self.assertEqual(panel_failure("Engine peer is not responsive"), "not responsive")
-        self.assertIsNone(panel_failure("Crashed: 0, disconnects: 0, stalls: 0"))
+        self.assertEqual(panel_failure("Finished game: Black disconnects"), "Black disconnects")
+        self.assertEqual(panel_failure("Engine peer is not responsive"),
+                         "Engine peer is not responsive")
+        self.assertEqual(panel_failure("White loses on time"), "White loses on time")
+        self.assertEqual(panel_failure("Termination: time forfeit"), "time forfeit")
+        self.assertEqual(panel_failure("Timeouts: 2"), "Timeouts: 2")
+        self.assertIsNone(panel_failure(
+            "Crashed: 0, disconnects: 0, stalls: 0, Timeouts: 0"))
         self.assertEqual(panel_failure("White wins by adjudication"), None)
 
     def test_global_search_space_is_uncoupled_and_search_only(self):
         path = pathlib.Path(__file__).with_name("global_search_parameters.json")
         space = MixedSpace.load(path)
         self.assertEqual(len(space.names), 20)
+        self.assertEqual((space.defaults["QS"], space.defaults["LMR"],
+                          space.defaults["LMR_MIN_DEPTH"]), (40, 75, 6))
         self.assertFalse(any(name.startswith("PST_") or name.startswith("VALUE_")
                              for name in space.names))
         cap = space.knobs(space.canonical({"EVAL_ROUGHNESS": 30, "NULL_CAP_MARGIN": 5}))
@@ -1752,8 +1759,22 @@ class MixedAcquisitionTest(unittest.TestCase):
                             for knobs in required))
         self.assertTrue(any(knobs["NULL_LIMIT"] == 0 for knobs in required))
         self.assertTrue(any(knobs["LMR_LIMIT"] == 0 for knobs in required))
+        self.assertTrue(any(knobs["NULL_SPAN"] == 0 and knobs["FUEL_MIN_DEPTH"] == 5
+                            for knobs in required))
+        self.assertTrue(any(knobs["NULL_SPAN"] == 0 and knobs["LMR_MIN_DEPTH"] == 5
+                            for knobs in required))
         spec = json.loads(path.read_text())
+        parameters = {parameter["name"]: parameter for parameter in spec["parameters"]}
+        self.assertGreaterEqual(parameters["NULL_CUT_RED"]["min"], 1)
+        self.assertGreaterEqual(parameters["NULL_RED"]["min"], 1)
+        self.assertGreaterEqual(parameters["IID_RED"]["min"], 1)
+        self.assertTrue(all(value >= 1 for value in parameters["LMR_RED"]["values"]))
+        self.assertTrue(all(value >= 0 for value in parameters["NULL_SPAN"]["values"]))
+        self.assertLessEqual(max(parameters["FUEL_NULL"]["values"]), 2)
+        self.assertLessEqual(max(parameters["FUT_CAP_DEPTH"]["values"]), 30)
         self.assertEqual(set(spec["scope"]["excluded"]), {
+            "VALUE_N", "VALUE_B", "VALUE_R", "VALUE_Q",
+            "PST_P", "PST_N", "PST_B", "PST_R", "PST_Q", "PST_K", "PST_KE",
             "TABLE_SIZE", "DELAY", "FUT_MAX", "FUT_CAP", "MATE_DIST",
             "EVICT_POLICY", "EVICT_SCAN_K", "KILLER_COUNT", "USE_VARIANT",
             "QS_TAIL", "DERIVE_FRESH", "FEN_HIST",
@@ -1777,6 +1798,8 @@ class MixedAcquisitionTest(unittest.TestCase):
         for index, name in enumerate(space.names):
             self.assertEqual({point[index] for point in design},
                              {point[index] for point in space.candidates}, name)
+        self.assertLessEqual(max(sunfish_gate.mate_depth(space.knobs(point), 3)
+                                 for point in space.candidates), 76)
 
         # These are exact structural offs, not merely unreachable at common depths.
         self.assertFalse(any(depth > 2 and depth <= 2 for depth in range(1000)))
@@ -1802,12 +1825,8 @@ class MixedAcquisitionTest(unittest.TestCase):
 
         source = path.parents[2].joinpath("ctwin", "sunfish.c").read_text()
         exposed = set(re.findall(r'\{ "([A-Z][A-Z0-9_]*)",', source))
-        evaluation = {
-            "VALUE_N", "VALUE_B", "VALUE_R", "VALUE_Q",
-            "PST_P", "PST_N", "PST_B", "PST_R", "PST_Q", "PST_K", "PST_KE",
-        }
         included = {parameter["name"] for parameter in spec["parameters"]}
-        documented = included | set(spec["scope"]["excluded"]) | evaluation
+        documented = included | set(spec["scope"]["excluded"])
         # DELAY belongs to Python's clock manager and has no C-twin UCI option.
         self.assertEqual(exposed, documented - {"DELAY"})
         self.assertIn("depth <= NULL_MIN_DEPTH + NULL_SPAN", source)
