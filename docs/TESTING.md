@@ -92,6 +92,11 @@ run those engines at `30+1` instead.
    SPRT hypotheses, error rates, decision, LLR bounds, game count, and
    pentanomial counts.
 
+   Do not combine an SPRT with `-output format=cutechess`: fastchess disables
+   its pentanomial report in that compatibility mode. Keep native output and
+   verify that the saved config has `report_penta: true` plus populated
+   `penta_WW` through `penta_LL` cells before accepting the decision.
+
    **SPRT decides; it does not measure.** A stopped test pays for its
    optionality in width *and* in location: it is likeliest to cross a boundary
    on a lucky stretch, so its point estimate reads high. Measured here on the
