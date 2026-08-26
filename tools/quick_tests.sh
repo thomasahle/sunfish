@@ -8,15 +8,15 @@ T="python3 $TOOLS/tester.py"
 
 echo "Terminal and eventual-mate correctness..."
 # Every real edge costs at most C=3 plies, and the shallow cap blocks any
-# mate report below nominal depth 4, so a k-ply mate proof is armed at
-# D >= 3k+1 -- ci_code_mate_in_{1,2,3} in formal/Sunfish/MateDepth.lean (#214).
+# mate report below nominal depth 5, so a k-ply mate proof is armed at
+# D >= 3k+2 -- ci_code_mate_in_{1,2,3} in formal/Sunfish/MateDepth.lean.
 # mate-in-n has k = 2n-1. These are the PROVED depths, so the suite is a
 # depth regression detector, not a round number: measured first success is
-# 4/7/15, leaving 0/3/1 plies of margin.
+# 4/7/15, leaving 1/4/2 plies of margin.
 $T "$1" ${2:-"--quiet"} draw $TESTF/stalemate0.fen --depth 1 --floor 4
-$T "$1" ${2:-"--quiet"} mate $TESTF/mate1.fen --depth 4 --floor 8
-$T "$1" ${2:-"--quiet"} mate $TESTF/mate2_eventual.fen --depth 10 --floor 5
-$T "$1" ${2:-"--quiet"} mate $TESTF/mate3_eventual.fen --depth 16 --floor 2
+$T "$1" ${2:-"--quiet"} mate $TESTF/mate1.fen --depth 5 --floor 8
+$T "$1" ${2:-"--quiet"} mate $TESTF/mate2_eventual.fen --depth 11 --floor 5
+$T "$1" ${2:-"--quiet"} mate $TESTF/mate3_eventual.fen --depth 17 --floor 2
 echo
 
 echo "Tactical strength regressions..."

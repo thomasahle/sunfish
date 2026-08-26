@@ -94,13 +94,13 @@ From depth 6 on the pass is not a score candidate at all. One fixed target
 shapes only how much depth the real moves spend:
 
 ```python
-d = depth
-guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
-if guard:
-    t = pos.score + NULL_MARGIN
-    d -= int(-self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)
+calm = abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
+guard = not root and calm
+t = pos.score + NULL_MARGIN
+nmr = calm and depth >= 6 and -self.bound(
+    pos.rotate(nullmove=True), 1 - t, depth - 7) >= t
 
-move_depth = depth - 1 - (guard and depth >= 6 and val < LMR) - int(nmr)
+move_depth = depth - 1 - (guard and depth >= 7 and val < LMR) - int(nmr)
 ```
 
 The target depends on `(pos, depth)` alone -- `gamma` does not enter. Table
@@ -211,23 +211,23 @@ forcedMate_fuelValueD2_sharp    :  D >= max 2 (C*(k-2) + 6)   -- 3k    shipped (
 forcedlyMated_fuelValueD2_sharp :  D >= max 6 (C*(k-1) + 6)   -- 3k+3  shipped (was 3k+7)
 ```
 
-**The shallow cap costs one more ply, and `fuelValueD2` did not have it.**
+**The shallow cap costs two more plies, and `fuelValueD2` did not have it.**
 The fuel value omits
 
 ```python
-cap = MATE_UPPER if depth > 3 or val >= MATE_LOWER else pos.score + val + margin
+cap = MATE_UPPER if depth > 4 or val >= MATE_LOWER else pos.score + val + margin
 ```
 
 and that cap puts every non-king-capture report strictly below `MATE_LOWER`
 (`shallowMoveCap_below_positiveMate`, under the both-kings material
 invariant `CapInBand` - the clamp that used to make this syntactic was
 dead code and is gone): an attacker node at any nominal depth
-zero through three cannot report a mate at all. This is the delay the section
+zero through four cannot report a mate at all. This is the delay the section
 above calls "a mate proof found exactly at the selective frontier", priced.
-`capClamp` carries the same `depth <= 3` band as the shipped `cap`, and the
+`capClamp` carries the same `depth <= 4` band as the shipped `cap`, and the
 two ends of the band behave differently:
 
-- at depths **two and three** the clamp is the selective cap, and it binds:
+- at depths **two through four** the clamp is the selective cap, and it binds:
   the mate the attacker can see one ply below is replaced by
   `pos.score + val + (depth - 1) * QS_A`.
 - at depths **zero and one** natural subtraction flattens the margin and the
@@ -235,17 +235,17 @@ two ends of the band behave differently:
   It is mate-neutral there, and not by luck: a fold weight can only reach the
   positive mate band through a child whose king is gone, and such a parent
   fires the node-level `hasKingCapture` branch before any fold is taken. So
-  widening the band from `2 <= depth <= 3` to `depth <= 3` moves no value in
+  widening the band from `2 <= depth <= 4` to `depth <= 4` moves no value in
   this file.
 
 The cap only ever LOWERS a report, so a defender node (bounded above) pays
-nothing for it; the attacker's floor rises from 2 to 4 -- depths 2 and 3 are
+nothing for it; the attacker's floor rises from 2 to 5 -- depths 2 through 4 are
 blocked outright and depths 0 and 1 are below the fold floor either way.
 `fuelValueD2C` is `fuelValueD2` with the clamp on every fold weight, and
 
 ```text
-forcedMate_fuelValueD2C_sharp    : D >= max 4 (C*(k-1) + 4) (C*(k-2) + 6)  -- 3k+1
-forcedlyMated_fuelValueD2C_sharp : D >= max 6 (C*k + 4) (C*k + 6 - C)      -- 3k+4
+forcedMate_fuelValueD2C_sharp    : D >= max 5 (C*(k-1) + 5) (C*(k-2) + 7)  -- 3k+2
+forcedlyMated_fuelValueD2C_sharp : D >= max 7 (C*k + 5) (C*k + 7 - C)      -- 3k+5
 ```
 
 Premises unchanged throughout: `ValFloor G 192` and nothing else -- no
@@ -266,23 +266,23 @@ worth 0 and the mate is masked:
 | `sharp_mate3_at_8` | mate in 3 plies, value 0 at `D = 8 = 3*3 - 1` |
 | `sharp_mate5_at_14` | mate in 5 plies, value 0 at `D = 14 = 3*5 - 1` |
 | `sharp_mated3_at_11` | the dual escapes at `D = 11 = 3*3 + 2` |
-| `sharp_cap_mate3_at_9` | with the cap, `D = 9 = 3*3` is still one ply short |
+| `sharp_cap_mate3_at_10` | with the cap, `D = 10 = 3*3+1` is still one ply short |
 
 The pair at 8 and 14 is `2*C` apart, so no bound with a slope below `C` holds
 either: the certificates pin the slope as well as the constants.
 
 **The CI table.** `tools/quick_tests.sh` states the convention -- mate-in-`n`
-moves is `k = 2n - 1` plies -- and currently spends `3k + 4`:
+moves is `k = 2n - 1` plies -- and currently spends the proved `3k + 2`:
 
 | suite | `k` | script today | proved, fuel model | proved, shipped (cap) |
 | --- | --- | --- | --- | --- |
-| `mate1.fen` | 1 | 7 | 2 (`ci_mate_in_1`) | 4 (`ci_code_mate_in_1`) |
-| `mate2_eventual.fen` | 3 | 13 | 9 (`ci_mate_in_2`) | 10 (`ci_code_mate_in_2`) |
-| `mate3_eventual.fen` | 5 | 19 | 15 (`ci_mate_in_3`) | 16 (`ci_code_mate_in_3`) |
+| `mate1.fen` | 1 | 5 | 2 (`ci_mate_in_1`) | 5 (`ci_code_mate_in_1`) |
+| `mate2_eventual.fen` | 3 | 11 | 9 (`ci_mate_in_2`) | 11 (`ci_code_mate_in_2`) |
+| `mate3_eventual.fen` | 5 | 17 | 15 (`ci_mate_in_3`) | 17 (`ci_code_mate_in_3`) |
 
 The shipped column is the one a CI depth may be lowered to. The gap between
-the columns is the shallow cap, and it is not academic: at depth 3 the suite's
-mate-in-1 positions are all missed, and at depth 4 all eight are found. The
+the columns is the shallow cap, and it is not academic: at depth 4 the suite's
+mate-in-1 positions are all missed, and at depth 5 all eight are found. The
 fuel-model column -- 2 / 9 / 15 -- costs the whole cap, on both branches of
 the consumer, at the Elo the correction under the menu records; the cheap
 route to it is refuted there, so those three depths are not reachable that
@@ -294,16 +294,16 @@ new proof:
 
 | engine variant | bound | theorem |
 | --- | --- | --- |
-| today (`C = 3`, cap, sub-horizon pass) | `3k + 1` | `forcedMate_fuelValueD2C_sharp` |
-| one reduction bit (`C = 2`) | `2k + 2` | `forcedMate_fuelValueD2C_C2` |
-| no reductions (`C = 1`) | `k + 4` | `forcedMate_fuelValueD2C_C1` |
-| delete the sub-horizon pass ONLY | `3k + 1` -- unchanged | `code_mate_depth_bound_sharp_k3_guardOff` |
+| today (`C = 3`, cap, sub-horizon pass) | `3k + 2` | `forcedMate_fuelValueD2C_sharp` |
+| one reduction bit (`C = 2`) | `2k + 3` | `forcedMate_fuelValueD2C_C2` |
+| no reductions (`C = 1`) | `k + 5` | `forcedMate_fuelValueD2C_C1` |
+| delete the sub-horizon pass ONLY | `3k + 2` -- unchanged | `code_mate_depth_bound_sharp_k3_guardOff` |
 | delete the shallow cap ONLY -- on BOTH branches | `3k` | `forcedMate_fuelValueD2_sharp`, sharp per `sharp_mate3_at_8` |
 | exempt only the SEARCHED report from the cap | `3k` for the declared value | **REFUTED on correctness** -- gamma-dependent, see below |
 | delete both | `max 2 (C*k + 4 - 3*C)`, i.e. `3k - 5` | `forcedMate_fuelValueD2_noSubPass` |
 
 The fourth row is the useful surprise: the cap and the sub-horizon pass mask
-in *different* depth bands (2--3 for the capped attacker, 3--5 for the
+in *different* depth bands (2--4 for the capped attacker, 3--5 for the
 defender's pass), and removing either one alone leaves the other binding. The
 certificate is the same witness game with the guard off -- it still masks, at
 the capped attacker node.
@@ -363,17 +363,16 @@ table, is unpriced and recorded here as a note only. Evidence:
 against pre-#216 `bound()`. #215 and #218 moved the fuel probe and the
 intrinsic-LMR bit out of the `moves()` generator, deleted the depth-one lazy
 tail and the `depth <= 1` futility break, made admission unconditional at
-positive depth, and widened the cap band to `depth <= 3`. The two mechanisms
+positive depth, and widened the cap band to `depth <= 4`. The two mechanisms
 the bounds spend are byte-identical after the move -- the probe is still one
 ply at `depth - 7`, and the reduced move depth is still one intrinsic-LMR
 bit and one fuel bit off `depth` - now spelled `depth - 1 - (guard and
-depth >= 6 and val < LMR) - int(nmr)` with `guard = not root and calm`,
+depth >= 7 and val < LMR) - int(nmr)` with `guard = not root and calm`,
 the same predicates - so `C = 3` holds -- and the
 admission change cannot reach the proofs, which never fold at nominal depth
 one. `MateDepth.lean`'s header carries the mechanism-by-mechanism audit. The
-suites confirm it: first-success depths are unchanged across the refactor at
-`mate1` 4, `mate2_eventual` 7, and `mate3_eventual` 15, with `mate1` still
-missed at 3 -- the mate-in-1 corner is exactly tight at `3k + 1`.
+suites exercise the new proved depths 5, 11, and 17, with `mate1` still missed
+at 4 -- the mate-in-1 corner is exactly tight at the cap horizon.
 
 ## Positive-depth moves and shallow move caps
 
@@ -427,7 +426,7 @@ The producer also resolves an intrinsic mate-band move immediately as
 branch is an actual king capture. Recursing into its kingless child would only
 return `-MATE_UPPER`, so the normalization is exact.
 
-At depths zero through three, every other admitted move passes through the
+At depths zero through four, every other admitted move passes through the
 same static cap
 
 ```text
@@ -444,7 +443,7 @@ spell never bound - `EvalBounds`' headline is the concrete arithmetic. At depths
 one, natural subtraction makes the margin zero. The score identity then makes
 the cap exactly the existing stand-pat futility report; this is
 `shallowMoveCap_lowDepth` together with `futilityOK_discharged`. At depths two
-and three, the cap defines the selective move value.
+through four, the cap defines the selective move value.
 
 The implementation evaluates that same fixed fold lazily, and it never
 computes the threshold. The producer yields `(value, move)` pairs - the sort
@@ -491,14 +490,15 @@ The killer is the one move the break cannot see: it is yielded before the
 sorted stream, so its cap says nothing about what follows. The producer
 therefore admits it by the same ceiling the consumer prunes on - "every
 out-of-order real move yielded can reach gamma" - `ceiling(val) >= gamma`
-with `ceiling(v) = MATE_UPPER if depth > 3 or v >= MATE_LOWER else
+with `ceiling(v) = MATE_UPPER if depth > 4 or v >= MATE_LOWER else
 pos.score + v + max(depth - 1, 0) * QS_A`, which IS the old threshold with
 its `min` unfolded
 (`v >= min(a, b)` iff `v >= a` or `v >= b`), so the gate is exactly the
 retired `val_lower` test. A killer that would settle is simply not yielded;
 it still reaches the fold in its sorted position, inside the tail whose
 report the break delivers anyway. A searched killer that failed low is
-re-searched from the sorted stream against a table entry, as before. Above depth three the threshold equals `base`, the tail is
+re-searched from the sorted stream against a table entry, as before. Above
+depth four the threshold equals `base`, the tail is
 empty, and the cap disappears. For searched moves, `WindowReport.cap` still
 transports the child report through `min`.
 
@@ -513,7 +513,7 @@ genuine negative mate is retained exactly.
 
 The cap deliberately changes ordinary shallow move values, including captures,
 promotions, and checks. It can therefore delay a mate proof found exactly at
-the selective frontier. It exists only at depths two and three, so deeper
+the selective frontier. It exists only at depths two through four, so deeper
 iterations move every fixed proof above that frontier. Its strength is an
 empirical question, separate from report correctness.
 

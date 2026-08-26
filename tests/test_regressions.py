@@ -253,17 +253,20 @@ class TestIntrinsicLMR:
             (self.FEN, 5, 0),
             (self.FEN, 6, 0),
             (self.FEN, 6, sf.NULL_MARGIN),
-            ("4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1", 6, sf.NULL_MARGIN),
-            ("4k3/8/8/8/8/8/8/Q3K3 w - - 0 1", 6, sf.NULL_MARGIN),
+            (self.FEN, 7, 0),
+            (self.FEN, 7, sf.NULL_MARGIN),
+            ("4k3/8/8/3p4/4P3/8/8/4K3 w - - 0 1", 7, sf.NULL_MARGIN),
+            ("4k3/8/8/8/8/8/8/Q3K3 w - - 0 1", 7, sf.NULL_MARGIN),
         )
         for fen, depth, offset in cases:
             pos = hist_from_fen(fen)[-1]
             pass_score = pos.score + offset
             pos, moves, seen = self.observed_depths(depth, pass_score, fen)
-            guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
-            hot = guard and pass_score >= pos.score + sf.NULL_MARGIN
+            calm = abs(pos.score) < 750 and any(c in pos.board for c in "RBNQ")
+            hot = calm and depth >= 6 and pass_score >= pos.score + sf.NULL_MARGIN
+            lmr = calm and depth >= 7
             for move in moves:
-                expected = depth - hot - 1 - (guard and pos.value(move) < sf.LMR)
+                expected = depth - hot - 1 - (lmr and pos.value(move) < sf.LMR)
                 assert {d for m, d in seen if m == move} == {expected}
 
     def test_root_moves_are_not_intrinsically_reduced(self):
@@ -283,19 +286,19 @@ class TestShallowNullMateFloor:
 
     FEN = "2q1r3/4pR2/3rQ1pk/p1pnN2p/Pn5B/8/1P4PP/3R3K w - - 1 0"
 
-    def test_depth_eight_search_reports_mate(self):
+    def test_depth_nine_search_reports_mate(self):
         pos = hist_from_fen(self.FEN)[-1]
         result = None
         for depth, _, score, move in sf.Searcher().search([pos]):
-            if depth == 8:
+            if depth == 9:
                 result = score, move
-            elif depth > 8:
+            elif depth > 9:
                 break
         assert result is not None and result[0] >= sf.MATE_LOWER
 
 
 class TestStaticMoveCap:
-    """Ordinary depth-two and depth-three moves have a fixed static upper cap.
+    """Ordinary moves through depth four have a fixed static upper cap.
 
     A cap below the current window proves fail-low without a child search.
     Only a king capture bypasses it and retains the exact mate sentinel -
@@ -306,11 +309,11 @@ class TestStaticMoveCap:
         pos = sf.Position(sf.initial, 0, (True, True), (True, True), 0, 0)
         searcher = sf.Searcher()
         searcher.root, searcher.history = pos, set()
-        score = searcher.bound(pos, 200, 2, root=True)
+        score = searcher.bound(pos, 227, 2, root=True)
         caps = [min(sf.MATE_LOWER - 1, pos.score + pos.value(m) + sf.QS_A)
             for m in pos.gen_moves()]
 
-        assert score == max(caps) == 186
+        assert score == max(caps) == 226
         assert searcher.nodes == 1
 
     def test_bk15_forcing_capture_recovers_above_cap_horizon(self):
@@ -337,7 +340,7 @@ class TestStaticMoveCap:
 
         assert child not in calls
 
-    # A promotion at depth 2-3 is capped like anything else. #213 removed the
+    # A promotion at depths 2-4 is capped like anything else. #213 removed the
     # "and not move.prom" exemption the gate used to carry, and nothing in the
     # suite noticed: re-adding it leaves every other test green (mutation run,
     # 2026-08-17). It is a sound cap because pos.value(move) already adds
@@ -348,7 +351,7 @@ class TestStaticMoveCap:
     PROM_FEN = "4k3/P7/8/8/8/8/8/R3K3 w - - 0 1"
 
     def test_promotion_uses_the_ordinary_move_cap(self):
-        for depth in (2, 3):
+        for depth in (2, 3, 4):
             pos = hist_from_fen(self.PROM_FEN)[-1]
             searcher = sf.Searcher()
             searcher.root, searcher.history = pos, set()
@@ -506,7 +509,7 @@ class TestMateDistance:
     The position below is the complaint in miniature: three mating moves
     and eight moves that mate in three, all scoring exactly 47923 on
     master, and 47998 vs 47938 at depth 6 here. The finite move cap can keep
-    a proof below the mate band at depths two and three; these guarantees
+    a proof below the mate band at depths two through four; these guarantees
     begin once the proof has moved above that frontier."""
 
     FEN = "8/3Q4/8/8/8/3R4/5K1k/8 w - - 0 1"
@@ -519,7 +522,7 @@ class TestMateDistance:
         searcher = sf.Searcher()
         return -searcher.bound(child, -sf.MATE_LOWER, depth - 1, root=True)
 
-    @pytest.mark.parametrize("depth", [6, 7, 8])
+    @pytest.mark.parametrize("depth", [7, 8, 9])
     def test_faster_mate_scores_strictly_better(self, depth):
         hist = hist_from_fen(self.FEN)
         fast = [self.yield_of(hist, m, depth) for m in self.FAST]
@@ -535,7 +538,7 @@ class TestMateDistance:
             f"same distance, different score: {fast} / {slow}"
         )
 
-    @pytest.mark.parametrize("depth", [4, 5, 6, 7, 8, 9, 10])
+    @pytest.mark.parametrize("depth", [5, 6, 7, 8, 9, 10])
     def test_mate_in_one_score_carries_the_distance(self, depth):
         # Ra8# from a bare-rook mate: the score is the band floor plus the
         # depth the search still had in hand.

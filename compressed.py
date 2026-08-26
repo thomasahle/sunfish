@@ -74,7 +74,7 @@ class Searcher:
             if entry.upper < gamma: return entry.upper
             if depth > 0 and pos in self.history: return 0
         killer = self.tp_move.get(pos)
-        ceiling = lambda v: MATE_UPPER if depth > 3 or v >= MATE_LOWER else pos.score + v + max(depth - 1, 0) * QS_A
+        ceiling = lambda v: MATE_UPPER if depth > 4 or v >= MATE_LOWER else pos.score + v + max(depth - 1, 0) * QS_A
         def moves():
             if 2 < depth < 6 and guard: yield None, None
             if depth == 0: yield None, None
@@ -95,7 +95,7 @@ class Searcher:
             elif val >= MATE_LOWER: score, live = MATE_UPPER, True
             else:
                 if (cap := ceiling(val)) < gamma: best = max(best, cap); break
-                move_depth = depth - 1 - (guard and depth >= 6 and val < LMR) - int(nmr)
+                move_depth = depth - 1 - (guard and depth >= 7 and val < LMR) - int(nmr)
                 score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
                 live |= score > -MATE_UPPER
             best = max(best, score)

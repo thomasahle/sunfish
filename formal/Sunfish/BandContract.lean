@@ -768,7 +768,7 @@ theorem window_flip_preserves_range {gamma : Int}
     (h1 : -MATE_UPPER < gamma) (h2 : gamma ≤ MATE_UPPER) :
     -MATE_UPPER < 1 - gamma ∧ 1 - gamma ≤ MATE_UPPER := ⟨by omega, by omega⟩
 
-/-- **The intentional asymmetry, in one statement.**  At depth ≤ 3 a SEARCHED
+/-- **The intentional asymmetry, in one statement.**  At depth ≤ 4 a SEARCHED
 move is clamped strictly below the mate band, while a king capture bypasses the
 clamp entirely and reports the token: the two never overlap, so a shallow
 search can neither invent a mate nor hide a capture. -/

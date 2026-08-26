@@ -19,8 +19,8 @@ the mate.  Two of those charges are not needed:
   same max -- `foldMax_le_of_mem` ignores the accumulator, so a pass
   candidate can never pull the maximum DOWN.  The horizon is irrelevant
   to the attacker.  (Below the horizon the shipped code also reduces
-  nothing: `move_depth = d - 1 - (not root and guard and val < LMR)`
-  with `guard = depth >= 6 and ...`, so each sub-horizon edge costs
+  nothing: intrinsic LMR starts at depth 7 and the fuel probe at depth 6,
+  so each sub-horizon edge costs
   exactly one ply, as `fuelValueD2`'s sub-horizon branch records.)
 * the CHECKMATED leaf is classified by the depth-gated terminal
   correction at any depth `≥ 1` (`fuelValueD2_checkmated`).
@@ -78,10 +78,11 @@ MECHANISM MAP (pre-#216 line -> post-#218 line).
   4673322 has since renamed the locals only (`target` -> `t`, `nullpos`
   inlined at its single use, the bool subtraction spelled `int(...)`), so the
   current text reads
-  `guard = depth >= 6 and abs(pos.score) < 750 and any(c in pos.board ...)`,
+  `calm = abs(pos.score) < 750 and any(c in pos.board ...)`,
   `t = pos.score + NULL_MARGIN`,
-  `d -= int(-self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t)`.
-  Still ONE ply (`d -= <0 or 1>`), still ONE probe, still at the fixed target
+  `nmr = calm and depth >= 6 and -self.bound(pos.rotate(nullmove=True),
+  1 - t, depth - 7) >= t`. Still ONE ply (`int(nmr)`), still ONE probe,
+  still at the fixed target
   `pos.score + NULL_MARGIN` and depth `depth - 7`.  `NULL_MARGIN = -200` and
   its tuner range `(-400, 800)` are untouched; the reworded comment's "burn
   two plies" is the TOTAL real-move reduction (base ply + hot bit), not a
@@ -89,7 +90,8 @@ MECHANISM MAP (pre-#216 line -> post-#218 line).
 
 * intrinsic-LMR bit: `:439` -> `:437`.  MOVED ONLY, out of the deleted
   `score_move` helper into the consumer loop.  Expression byte-identical,
-  `move_depth = d - 1 - (not root and guard and val < LMR)`, and `val` is
+  `move_depth = depth - 1 - (guard and depth >= 7 and val < LMR) - int(nmr)`,
+  and `val` is
   still `pos.value(move)` (the consumer only enters that branch when the
   produced score is below `MATE_LOWER`, where it equals the intrinsic value).
   `intrinsicSpend`, `intrinsic_child_depth` and `spend <= 2` unchanged.
@@ -108,12 +110,10 @@ MECHANISM MAP (pre-#216 line -> post-#218 line).
   depths 3-5, and every defender node in both inductions is required to sit
   at nominal depth >= 6 (`fuelValueD2C_of_fold_regime`, `hd : 5 <= d`).
 
-* shallow static cap: `:441-442` -> `:433-434`.  The band WIDENED from
-  `2 <= depth <= 3` to `depth <= 3`; the arithmetic is unchanged inside the
-  old band (`max(depth - 1, 0)` reproduces `(depth - 1)` at depths 2 and 3,
-  and master has already made `shallowMoveCap` use natural subtraction to
-  match).  This was the only real model delta and `capClamp` now carries the
-  widened band -- see the closing section.  The cap's guard
+* shallow static cap: the band now extends through depth 4. The arithmetic is
+  unchanged in shape, while the tuned `QS_A = 180` makes its largest margin
+  `3 * QS_A = 540`. `capClamp` carries the widened band -- see the closing
+  section. The cap's guard
   `val < MATE_LOWER` is unchanged; its `MATE_LOWER - 1` ceiling has since
   been dropped from the code as dead under the both-kings material
   invariant, so `shallowMoveCap_below_positiveMate` now applies through
@@ -153,43 +153,17 @@ MECHANISM MAP (pre-#216 line -> post-#218 line).
   `tp_move` store behave as before, and the terminal finalizer (`:456-472`)
   is untouched.
 
-THE ONE EDIT, TAKEN.  `capClamp` used to guard on `2 <= d /\ d <= 3`; it now
-guards on `d <= 3`, the shipped band.  The theorems are parametric in the
-clamp: the only clamp facts any proof body uses are `capClamp_le` (the clamp
-lowers) and `capClamp_of_deep` (identity from depth 4).  Both survived
-verbatim -- the edit was one token in `capClamp_of_deep`'s `if_neg`, one
-dropped hypothesis in `capClamp_lt_ML`, and one `And.intro` nesting in
-`sharp_cap_A0_3`, with `capClamp_lt_ML` coming out STRONGER (`d <= 3` instead
-of `2 <= d /\ d <= 3`).  Evaluating the old and the new clamp side by side on
-the witness game gives the same number everywhere:
+CURRENT RE-AUDIT. The tuned cap extends through depth 4, so `capClamp` now
+guards on `d <= 4` and becomes the identity from depth 5. The proof spine
+uses only that identity, `capClamp_le`, and the mate-band separation. Its
+uniform bounds therefore rise by one ply. The witness was extended one node:
+at `D = 10` the last attacker lands at depth 4 and is capped at 540, below
+`MATE_LOWER`; at `D = 11` the proof clears the cap. Thus `3k + 2` is sharp.
 
-    old band {2,3}                     new band {0,1,2,3}
-    fuelValueD2C  MDG 9  A1 = 280      fuelValueD2C  MDG 9  A1 = 280
-    fuelValueD2C  MDG 10 A1 = 47968    fuelValueD2C  MDG 10 A1 = 47968
-    guard off,    MDG 9  A1 = 280      guard off,    MDG 9  A1 = 280
-
-so `sharp_cap_mate3_at_9`, `code_mate_depth_bound_sharp_k3` and
-`code_mate_depth_bound_sharp_k3_guardOff` are unaffected -- 280 is below
-`MATE_LOWER = 47923` at `D = 3k = 9`, and 47968 is above it at
-`D = 3k + 1 = 10`.  `MDG` has
-`val = 0` and `eval = 0` off `KG`, so its admitted sets and its depth-0/1
-fold weights are identical under both the old and the new producer; the
-uncapped certificates `sharp_mate3_at_8`, `sharp_mate5_at_14` and
-`sharp_mated3_at_11` all still evaluate to 0.  The attacker floor stays 4:
-depths 2 and 3 were already blocked, and at depths 0 and 1 a fold weight can
-only reach the mate band through a child whose king is gone, which fires the
-node-level `hasKingCapture` branch before any fold.
-
-EMPIRICAL ANCHORS (pre-#216 e499dae vs post-#218 d0687b9, same harness).
-First-success depths did NOT move on any suite:
-
-    mate1.fen           0/8 at D=3,  8/8 at D=4    (proved `ci_code_mate_in_1` = 4)
-    mate2_eventual.fen  1/5 at D=6,  5/5 at D=7    (proved `ci_code_mate_in_2` = 10)
-    mate3_eventual.fen  1/2 at D=14, 2/2 at D=15   (proved `ci_code_mate_in_3` = 16)
-
-Identical counts at every depth from 1 to 16 on both engines.  The mate-in-1
-corner is still exactly tight -- missed at `3k = 3`, found at `3k + 1 = 4` --
-which is the observable the cap's ply predicts.
+The executable regression depths move with that theorem: mate-in-1/2/3 use
+5/11/17. All formal modules compile, the terminal battery passes at its new
+depth-5 observation horizon, and the uncapped Part I certificates are
+unchanged.
 -/
 
 import Sunfish.IntrinsicLMR
@@ -428,10 +402,10 @@ theorem forcedlyMated_intrinsicValue_sharp (G : QSGame) (guard : G.Pos → Bool)
 /-! ## The CI table
 
 The suite convention (`tools/quick_tests.sh`): mate-in-`n` moves is
-`k = 2n - 1` plies.  The three depths the sharpened bound licenses,
-against the `3k + 4` the suite currently uses. -/
+`k = 2n - 1` plies. These are the cap-free comparison depths; the executable
+suite uses the capped depths 5/11/17 below. -/
 
-/-- mate-in-1 (`k = 1`): `D = 2` suffices (suite: 7). -/
+/-- mate-in-1 (`k = 1`): `D = 2` suffices (capped suite: 5). -/
 theorem ci_mate_in_1 (G : QSGame) (guard : G.Pos → Bool)
     (hot eligible : G.Pos → Nat → Bool) (low : G.Pos → Nat → G.Pos → Bool)
     (hF : ValFloor G 192) {p : G.Pos} (hFM : ForcedMate G 1 p) :
@@ -439,14 +413,14 @@ theorem ci_mate_in_1 (G : QSGame) (guard : G.Pos → Bool)
   forcedMate_fuelValueD2_short G guard 3 (intrinsicEdgeSpend G hot eligible low)
     (by omega) (by omega) hF (by omega) hFM 2 (by omega)
 
-/-- mate-in-2 (`k = 3`): `D = 9` suffices (suite: 13). -/
+/-- mate-in-2 (`k = 3`): `D = 9` suffices (capped suite: 11). -/
 theorem ci_mate_in_2 (G : QSGame) (guard : G.Pos → Bool)
     (hot eligible : G.Pos → Nat → Bool) (low : G.Pos → Nat → G.Pos → Bool)
     (hF : ValFloor G 192) {p : G.Pos} (hFM : ForcedMate G 3 p) :
     MATE_LOWER ≤ fuelValueD2 G guard 3 (intrinsicEdgeSpend G hot eligible low) 9 p :=
   forcedMate_intrinsicValue_sharp G guard hot eligible low hF hFM 9 (by omega) (by omega)
 
-/-- mate-in-3 (`k = 5`): `D = 15` suffices (suite: 19). -/
+/-- mate-in-3 (`k = 5`): `D = 15` suffices (capped suite: 17). -/
 theorem ci_mate_in_3 (G : QSGame) (guard : G.Pos → Bool)
     (hot eligible : G.Pos → Nat → Bool) (low : G.Pos → Nat → G.Pos → Bool)
     (hF : ValFloor G 192) {p : G.Pos} (hFM : ForcedMate G 5 p) :
@@ -625,11 +599,11 @@ theorem forcedMate_fuelValueD2_sharp_C1 (G : QSGame) (guard : G.Pos → Bool)
 Part I's sharpened `3k` -- does NOT model one mechanism the shipped search
 has: the shallow static cap
 
-    ceiling = lambda v: MATE_UPPER if depth > 3 or v >= MATE_LOWER else pos.score + v + max(depth - 1, 0) * QS_A
+    ceiling = lambda v: MATE_UPPER if depth > 4 or v >= MATE_LOWER else pos.score + v + max(depth - 1, 0) * QS_A
     if (cap := ceiling(val)) < gamma: best = max(best, cap); break
     score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
 
-At every nominal depth `≤ 3` EVERY move that is not a king capture reports
+At every nominal depth `≤ 4` EVERY move that is not a king capture reports
 at most `shallowMoveCap`, which `shallowMoveCap_below_positiveMate`
 (CappedMove.lean) puts strictly below `MATE_LOWER` under the both-kings
 material invariant `CapInBand` - the spine below consumes it through
@@ -640,26 +614,25 @@ the selective frontier", as formal/README.md puts it, and this is the
 delay, priced.  The cap only ever LOWERS a report, so it cannot hurt a
 defender node (whose fold needs an upper bound); it binds exactly at the
 ATTACKER nodes of the mating line, whose admission floor therefore rises
-from 2 to 4.
+from 2 to 5.
 
-The two ends of the band are not the same mechanism.  At depths 2 and 3 the
+The two ends of the band are not the same mechanism.  At depths 2 through 4 the
 clamp is the SELECTIVE cap and it binds.  At depths 0 and 1 natural
 subtraction flattens the margin and the clamp is the old stand-pat futility
 estimate (`shallowMoveCap_lowDepth`), where it is mate-neutral -- a fold
 weight can only reach the positive mate band through a child whose king is
 gone, and such a parent fires the node-level `hasKingCapture` branch before
-any fold is taken.  So `capClamp` carries the shipped `depth ≤ 3` band
-exactly, and the floor is still 4.
+any fold is taken.  So `capClamp` carries the shipped `depth ≤ 4` band
+exactly, and the floor is 5.
 
 Consequence for the uniform bound (`fuelValueD2C` below is `fuelValueD2`
 plus the clamp):
 
-    D ≥ 4,   C*k + 4 ≤ D + C,   C*k + 6 ≤ D + 2*C
+    D ≥ 5,   C*k + 5 ≤ D + C,   C*k + 7 ≤ D + 2*C
 
-i.e. `D ≥ max 4 (C*(k-1) + 4) (C*(k-2) + 6)`, which at the shipped `C = 3`
-is `D ≥ 3k + 1` for `k ≥ 3` and `D ≥ 4` for `k ≤ 2` -- three plies below
-the shipped `3k + 4`, one above Part I's cap-free `3k`.  The one-ply corner
-is exactly what the suite shows: mate-in-1 needs `D = 4`, not 2.
+i.e. `D ≥ max 5 (C*(k-1) + 5) (C*(k-2) + 7)`, which at the shipped `C = 3`
+is `D ≥ 3k + 2` for `k ≥ 3` and `D ≥ 5` for `k ≤ 2`. The one-ply corner
+is exactly what the suite shows: mate-in-1 needs `D = 5`.
 
 MEASUREMENT CORRECTION (2026-08-17).  The cheap way to buy Part I's
 cap-free `3k` in the shipped engine -- keep the clamp, but exempt a child
@@ -687,13 +660,13 @@ at -60.41 ± 26.61 Elo, so Elo-inadmissible -- or a
 
 /-- The shipped cap as a fold weight transformer, under the model's band
 ENVELOPE `min (MATE_LOWER - 1) ·`.  The band is the consumer's own
-`depth > 3` test, so it covers depths 0 through 3.  The code carries no
+`depth > 4` test, so it covers depths 0 through 4.  The code carries no
 such envelope; `capClamp_eq_shipped` proves the two agree under the
 material invariant `CapInBand`, which localizes the both-kings premise to
 that one lemma and lets the whole mate-depth spine below keep consuming
 the envelope's unconditional band-safety. -/
 def capClamp (G : QSGame) (p : G.Pos) (d : Nat) (m : G.Pos) (x : Int) : Int :=
-  if d ≤ 3 ∧ G.val p m < MATE_LOWER then
+  if d ≤ 4 ∧ G.val p m < MATE_LOWER then
     min (min (MATE_LOWER - 1) (shallowMoveCap (G.eval p) (G.val p m) d)) x
   else x
 
@@ -702,7 +675,7 @@ model's fold weight is exactly the shipped `min(cap, child)`. -/
 theorem capClamp_eq_shipped (G : QSGame) (p : G.Pos) (d : Nat) (m : G.Pos)
     (x : Int) (hband : CapInBand (G.eval p) (G.val p m) d) :
     capClamp G p d m x =
-      if d ≤ 3 ∧ G.val p m < MATE_LOWER then
+      if d ≤ 4 ∧ G.val p m < MATE_LOWER then
         min (shallowMoveCap (G.eval p) (G.val p m) d) x
       else x := by
   have hb : G.eval p + G.val p m + ((d - 1 : Nat) : Int) * QS_A
@@ -724,19 +697,18 @@ theorem capClamp_le (G : QSGame) (p : G.Pos) (d : Nat) (m : G.Pos) (x : Int) :
   · exact Int.min_le_right _ _
   · exact Int.le_refl x
 
-/-- Above depth three the clamp is the identity: it "disappears above depth
-three", as `CappedMove.lean` states. -/
-theorem capClamp_of_deep (G : QSGame) (p : G.Pos) {d : Nat} (hd : 4 ≤ d)
+/-- Above depth four the clamp is the identity. -/
+theorem capClamp_of_deep (G : QSGame) (p : G.Pos) {d : Nat} (hd : 5 ≤ d)
     (m : G.Pos) (x : Int) : capClamp G p d m x = x := by
   unfold capClamp
   rw [if_neg (fun h => by have := h.1; omega)]
 
 /-- At any depth in the band no ordinary move can report a mate. -/
-theorem capClamp_lt_ML (G : QSGame) (p : G.Pos) {d : Nat} (hd3 : d ≤ 3)
+theorem capClamp_lt_ML (G : QSGame) (p : G.Pos) {d : Nat} (hd4 : d ≤ 4)
     (m : G.Pos) (hval : G.val p m < MATE_LOWER) (x : Int) :
     capClamp G p d m x < MATE_LOWER := by
   unfold capClamp
-  rw [if_pos ⟨hd3, hval⟩]
+  rw [if_pos ⟨hd4, hval⟩]
   have h1 := Int.min_le_left (MATE_LOWER - 1)
     (shallowMoveCap (G.eval p) (G.val p m) d)
   have h2 := Int.min_le_left
@@ -847,17 +819,16 @@ theorem fuelValueD2C_checkmated (G : QSGame) (guard : G.Pos → Bool)
       have := terminalValue_mate G (d' + 1) m hmate.2
       omega
 
-/-- The last ply under the cap: the attacker node needs depth `≥ 4`, because
-at 2 and 3 its own report is clamped below the band. -/
+/-- The last ply under the cap: the attacker node needs depth `≥ 5`. -/
 theorem forcedMate_leaf_fuelValueD2C (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC1 : 1 ≤ C) (hC4 : C ≤ 4)
     (hF : ValFloor G 192) {p m : G.Pos}
     (hkg : ¬ (G.eval p ≤ -MATE_LOWER)) (hm : m ∈ G.moves p)
     (hleg : hasKingCapture G.toNullGame.toGame m = false) (hmate : Checkmated G m) :
-    ∀ D : Nat, 4 ≤ D → MATE_LOWER ≤ fuelValueD2C G guard C spend D p := by
+    ∀ D : Nat, 5 ≤ D → MATE_LOWER ≤ fuelValueD2C G guard C spend D p := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
-  intro D h4
+  intro D h5
   cases D with
   | zero => omega
   | succ d =>
@@ -898,22 +869,22 @@ theorem forcedMate_leaf_fuelValueD2C (G : QSGame) (guard : G.Pos → Bool)
         omega
 
 /-- **Mate-in-k completeness for the SHIPPED search, sharp**: the cap costs
-one ply of slope-independent depth and raises the one-ply corner to 4.
-Shipped `C = 3`: `D ≥ 3k + 1` (`k ≥ 3`), `D ≥ 4` (`k ≤ 2`).  `ValFloor`
+two plies of slope-independent depth and raises the one-ply corner to 5.
+Shipped `C = 3`: `D ≥ 3k + 2` (`k ≥ 3`), `D ≥ 5` (`k ≤ 2`).  `ValFloor`
 only -- still no chess premise. -/
 theorem forcedMate_fuelValueD2C_sharp (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC1 : 1 ≤ C) (hC4 : C ≤ 4)
     (hF : ValFloor G 192)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
-    ∀ D : Nat, 4 ≤ D → C * k + 4 ≤ D + C → C * k + 6 ≤ D + 2 * C →
+    ∀ D : Nat, 5 ≤ D → C * k + 5 ≤ D + C → C * k + 7 ≤ D + 2 * C →
       MATE_LOWER ≤ fuelValueD2C G guard C spend D p := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
   induction hFM with
   | @mate k p m hkg hm hleg hmate =>
-    intro D h4 _ _
-    exact forcedMate_leaf_fuelValueD2C G guard C spend hC1 hC4 hF hkg hm hleg hmate D h4
+    intro D h5 _ _
+    exact forcedMate_leaf_fuelValueD2C G guard C spend hC1 hC4 hF hkg hm hleg hmate D h5
   | @step k p m hkg hm hleg hnt hreply ih =>
     intro D h4 hD1 hD2
     rcases Nat.eq_zero_or_pos k with hk0 | hk1
@@ -969,19 +940,19 @@ theorem forcedMate_fuelValueD2C_sharp (G : QSGame) (guard : G.Pos → Bool)
 
 /-- The mated dual under the cap: the cap only lowers reports, so the
 defender side pays nothing for it beyond the mate side's own floor.
-Shipped `C = 3`: `D ≥ 3k + 4`. -/
+Shipped `C = 3`: `D ≥ 3k + 5`. -/
 theorem forcedlyMated_fuelValueD2C_sharp (G : QSGame) (guard : G.Pos → Bool)
     (C : Nat) (spend : G.Pos → Nat → G.Pos → Nat) (hC1 : 1 ≤ C) (hC4 : C ≤ 4)
     (hF : ValFloor G 192)
     {k : Nat} {q : G.Pos}
     (hcapq : hasKingCapture G.toNullGame.toGame q = false)
     (hFL : ForcedlyMated G k q) :
-    ∀ D : Nat, 6 ≤ D → C * k + 4 ≤ D → C * k + 6 ≤ D + C →
+    ∀ D : Nat, 7 ≤ D → C * k + 5 ≤ D → C * k + 7 ≤ D + C →
       fuelValueD2C G guard C spend D q ≤ -MATE_LOWER := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
-  intro D h6 hD1 hD2
+  intro D h7 hD1 hD2
   cases D with
   | zero => omega
   | succ d =>
@@ -1026,53 +997,51 @@ theorem forcedlyMated_fuelValueD2C_sharp (G : QSGame) (guard : G.Pos → Bool)
 /-! ## The CI table for the SHIPPED search (`C = 3`, cap included)
 
 The suite convention (`tools/quick_tests.sh`): mate-in-`n` moves is
-`k = 2n - 1` plies.  These are the depths the sharpened accounting licenses
-for the engine as it stands, against the `3k + 4` in the script today. -/
+`k = 2n - 1` plies. These are both the sharp proved depths and the executable
+suite depths for the engine as it stands. -/
 
-/-- mate-in-1 (`k = 1`): `D = 4`.  Suite today: 7. -/
+/-- mate-in-1 (`k = 1`): `D = 5`. -/
 theorem ci_code_mate_in_1 (G : QSGame) (guard : G.Pos → Bool)
     (hot eligible : G.Pos → Nat → Bool) (low : G.Pos → Nat → G.Pos → Bool)
     (hF : ValFloor G 192) {p : G.Pos} (hFM : ForcedMate G 1 p) :
-    MATE_LOWER ≤ fuelValueD2C G guard 3 (intrinsicEdgeSpend G hot eligible low) 4 p :=
+    MATE_LOWER ≤ fuelValueD2C G guard 3 (intrinsicEdgeSpend G hot eligible low) 5 p :=
   forcedMate_fuelValueD2C_sharp G guard 3 (intrinsicEdgeSpend G hot eligible low)
-    (by omega) (by omega) hF hFM 4 (by omega) (by omega) (by omega)
+    (by omega) (by omega) hF hFM 5 (by omega) (by omega) (by omega)
 
-/-- mate-in-2 (`k = 3`): `D = 10`.  Suite today: 13. -/
+/-- mate-in-2 (`k = 3`): `D = 11`. -/
 theorem ci_code_mate_in_2 (G : QSGame) (guard : G.Pos → Bool)
     (hot eligible : G.Pos → Nat → Bool) (low : G.Pos → Nat → G.Pos → Bool)
     (hF : ValFloor G 192) {p : G.Pos} (hFM : ForcedMate G 3 p) :
-    MATE_LOWER ≤ fuelValueD2C G guard 3 (intrinsicEdgeSpend G hot eligible low) 10 p :=
+    MATE_LOWER ≤ fuelValueD2C G guard 3 (intrinsicEdgeSpend G hot eligible low) 11 p :=
   forcedMate_fuelValueD2C_sharp G guard 3 (intrinsicEdgeSpend G hot eligible low)
-    (by omega) (by omega) hF hFM 10 (by omega) (by omega) (by omega)
+    (by omega) (by omega) hF hFM 11 (by omega) (by omega) (by omega)
 
-/-- mate-in-3 (`k = 5`): `D = 16`.  Suite today: 19.  (The measured
-first-success depth of the hardest suite position is 15, so 16 keeps one
-ply of margin -- and the theorem says no position can need more.) -/
+/-- mate-in-3 (`k = 5`): `D = 17`. -/
 theorem ci_code_mate_in_3 (G : QSGame) (guard : G.Pos → Bool)
     (hot eligible : G.Pos → Nat → Bool) (low : G.Pos → Nat → G.Pos → Bool)
     (hF : ValFloor G 192) {p : G.Pos} (hFM : ForcedMate G 5 p) :
-    MATE_LOWER ≤ fuelValueD2C G guard 3 (intrinsicEdgeSpend G hot eligible low) 16 p :=
+    MATE_LOWER ≤ fuelValueD2C G guard 3 (intrinsicEdgeSpend G hot eligible low) 17 p :=
   forcedMate_fuelValueD2C_sharp G guard 3 (intrinsicEdgeSpend G hot eligible low)
-    (by omega) (by omega) hF hFM 16 (by omega) (by omega) (by omega)
+    (by omega) (by omega) hF hFM 17 (by omega) (by omega) (by omega)
 
 /-- Menu options at a glance, capped model: one reduction bit (`C = 2`)
-gives `D ≥ 2k + 2`; no reductions (`C = 1`) gives `D ≥ k + 3`.  Both are
+gives `D ≥ 2k + 3`; no reductions (`C = 1`) gives `D ≥ k + 5`.  Both are
 instances -- only the edge-cost cap changes. -/
 theorem forcedMate_fuelValueD2C_C2 (G : QSGame) (guard : G.Pos → Bool)
     (spend : G.Pos → Nat → G.Pos → Nat) (hF : ValFloor G 192)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
-    ∀ D : Nat, 4 ≤ D → 2 * k + 2 ≤ D →
+    ∀ D : Nat, 5 ≤ D → 2 * k + 3 ≤ D →
       MATE_LOWER ≤ fuelValueD2C G guard 2 spend D p :=
-  fun D h4 hD => forcedMate_fuelValueD2C_sharp G guard 2 spend (by omega) (by omega)
-    hF hFM D h4 (by omega) (by omega)
+  fun D h5 hD => forcedMate_fuelValueD2C_sharp G guard 2 spend (by omega) (by omega)
+    hF hFM D h5 (by omega) (by omega)
 
 theorem forcedMate_fuelValueD2C_C1 (G : QSGame) (guard : G.Pos → Bool)
     (spend : G.Pos → Nat → G.Pos → Nat) (hF : ValFloor G 192)
     {k : Nat} {p : G.Pos} (hFM : ForcedMate G k p) :
-    ∀ D : Nat, 4 ≤ D → k + 4 ≤ D →
+    ∀ D : Nat, 5 ≤ D → k + 5 ≤ D →
       MATE_LOWER ≤ fuelValueD2C G guard 1 spend D p :=
-  fun D h4 hD => forcedMate_fuelValueD2C_sharp G guard 1 spend (by omega) (by omega)
-    hF hFM D h4 (by omega) (by omega)
+  fun D h5 hD => forcedMate_fuelValueD2C_sharp G guard 1 spend (by omega) (by omega)
+    hF hFM D h5 (by omega) (by omega)
 
 /-! # Part II: sharpness
 
@@ -1299,105 +1268,110 @@ theorem mated_depth_bound_sharp_k3 :
 
 /-! ## Sharpness of the capped bound
 
-The same game certifies the extra ply the cap costs.  At `D = 9 = 3*3` --
-Part I's cap-free bound -- the mating line's last attacker node lands at
-nominal depth 3, where the shipped cap clamps its report to
-`shallowMoveCap = 280`.  The mate never leaves that node, so the root
-reports 280, not a mate score: `3k + 1` is the exact bound for the shipped
-search, and `3k` is one ply too few. -/
+The same game certifies the two plies the widened cap costs. At
+`D = 10 = 3*3+1`, the mating line's last attacker node lands at nominal
+depth 4, where the shipped cap clamps its report to `shallowMoveCap = 540`.
+The mate never leaves that node, so `3k + 2` is the exact uniform bound and
+`3k + 1` is one ply too few. -/
 
 theorem sharp_cap_ZP0 (g : MDPos → Bool) : fuelValueD2C MDG g 3 mdSpend 0 MDPos.ZP = 0 := by
   simp only [fuelValueD2C]
   rw [if_neg (by decide), if_neg (by decide)]
   rfl
 
-/-- The capped last attacker node: at nominal depth 3 the mate it can see
+theorem sharp_cap_ZP1 (g : MDPos → Bool) : fuelValueD2C MDG g 3 mdSpend 1 MDPos.ZP = 0 := by
+  rw [fuelValueD2C_of_allIllegal MDG g 3 mdSpend 0 MDPos.ZP
+    (by decide) (by decide) (by decide)]
+  have hic : inCheckB MDG.toNullGame MDPos.ZP = false := by decide
+  simp [terminalValue, hic]
+
+/-- The capped last attacker node: at nominal depth 4 the mate it can see
 one ply below is clamped to the static cap. -/
-theorem sharp_cap_A0_3 (g : MDPos → Bool) : fuelValueD2C MDG g 3 mdSpend 3 MDPos.A0 ≤ 280 := by
+theorem sharp_cap_A0_4 (g : MDPos → Bool) : fuelValueD2C MDG g 3 mdSpend 4 MDPos.A0 ≤ 540 := by
   have hMU : MATE_UPPER = 69290 := rfl
   have hML : MATE_LOWER = 47923 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
-  have hma : movesAbove MDG (val_lower 3) MDPos.A0 = [MDPos.LF] :=
-    movesAbove_all MDG 3 MDPos.A0 (by decide)
-  have hZ : fuelValueD2C MDG g 3 mdSpend (2 + 1 - 3) (MDG.pass MDPos.A0) = 0 :=
-    sharp_cap_ZP0 g
-  rw [show (3 : Nat) = 2 + 1 from rfl,
-    fuelValueD2C_of_fold_sub MDG g 3 mdSpend 2 MDPos.A0
+  have hma : movesAbove MDG (val_lower 4) MDPos.A0 = [MDPos.LF] :=
+    movesAbove_all MDG 4 MDPos.A0 (by decide)
+  have hZ : fuelValueD2C MDG g 3 mdSpend (3 + 1 - 3) (MDG.pass MDPos.A0) = 0 :=
+    sharp_cap_ZP1 g
+  rw [show (4 : Nat) = 3 + 1 from rfl,
+    fuelValueD2C_of_fold_sub MDG g 3 mdSpend 3 MDPos.A0
       (by decide) (by decide) (by decide) (by omega),
     hma, hZ]
   refine foldMax_le _ _ _ (fun m hm => ?_) (by split <;> (try split) <;> omega)
   have hm' : m = MDPos.LF := by simpa using hm
   subst hm'
-  have hcap : capClamp MDG MDPos.A0 (2 + 1) MDPos.LF
-      (-(fuelValueD2C MDG g 3 mdSpend 2 MDPos.LF))
-      ≤ shallowMoveCap (MDG.eval MDPos.A0) (MDG.val MDPos.A0 MDPos.LF) (2 + 1) := by
+  have hcap : capClamp MDG MDPos.A0 (3 + 1) MDPos.LF
+      (-(fuelValueD2C MDG g 3 mdSpend 3 MDPos.LF))
+      ≤ shallowMoveCap (MDG.eval MDPos.A0) (MDG.val MDPos.A0 MDPos.LF) (3 + 1) := by
     unfold capClamp
     rw [if_pos (And.intro (by omega) (by decide))]
     exact Int.min_le_left _ _
-  have hval : shallowMoveCap (MDG.eval MDPos.A0) (MDG.val MDPos.A0 MDPos.LF) (2 + 1) = 280 := by
-    show shallowMoveCap (0 : Int) 0 3 = 280
+  have hval : shallowMoveCap (MDG.eval MDPos.A0) (MDG.val MDPos.A0 MDPos.LF) (3 + 1) = 540 := by
+    show shallowMoveCap (0 : Int) 0 4 = 540
     unfold shallowMoveCap QS_A
     omega
   omega
 
 /-- The defender node above it keeps its escape, one ply of depth cheaper
 than in the cap-free model. -/
-theorem sharp_cap_D1_6 (g : MDPos → Bool) : -280 ≤ fuelValueD2C MDG g 3 mdSpend 6 MDPos.D1 := by
-  have hma : movesAbove MDG (val_lower 6) MDPos.D1 = [MDPos.A0] :=
-    movesAbove_all MDG 6 MDPos.D1 (by decide)
-  have hA0 := sharp_cap_A0_3 g
-  rw [show (6 : Nat) = 5 + 1 from rfl,
-    fuelValueD2C_of_fold_regime MDG g 3 mdSpend 5 MDPos.D1
+theorem sharp_cap_D1_7 (g : MDPos → Bool) : -540 ≤ fuelValueD2C MDG g 3 mdSpend 7 MDPos.D1 := by
+  have hma : movesAbove MDG (val_lower 7) MDPos.D1 = [MDPos.A0] :=
+    movesAbove_all MDG 7 MDPos.D1 (by decide)
+  have hA0 := sharp_cap_A0_4 g
+  rw [show (7 : Nat) = 6 + 1 from rfl,
+    fuelValueD2C_of_fold_regime MDG g 3 mdSpend 6 MDPos.D1
       (by decide) (by decide) (by decide) (by omega),
     hma]
-  have hcl := capClamp_of_deep MDG MDPos.D1 (d := 5 + 1) (by omega) MDPos.A0
-    (-(fuelValueD2C MDG g 3 mdSpend (5 - min (3 - 1) (mdSpend MDPos.D1 (5 + 1) MDPos.A0))
+  have hcl := capClamp_of_deep MDG MDPos.D1 (d := 6 + 1) (by omega) MDPos.A0
+    (-(fuelValueD2C MDG g 3 mdSpend (6 - min (3 - 1) (mdSpend MDPos.D1 (6 + 1) MDPos.A0))
       MDPos.A0))
-  have hfold : capClamp MDG MDPos.D1 (5 + 1) MDPos.A0
+  have hfold : capClamp MDG MDPos.D1 (6 + 1) MDPos.A0
         (-(fuelValueD2C MDG g 3 mdSpend
-          (5 - min (3 - 1) (mdSpend MDPos.D1 (5 + 1) MDPos.A0)) MDPos.A0))
-      ≤ foldMax (fun x => capClamp MDG MDPos.D1 (5 + 1) x
+          (6 - min (3 - 1) (mdSpend MDPos.D1 (6 + 1) MDPos.A0)) MDPos.A0))
+      ≤ foldMax (fun x => capClamp MDG MDPos.D1 (6 + 1) x
           (-(fuelValueD2C MDG g 3 mdSpend
-            (5 - min (3 - 1) (mdSpend MDPos.D1 (5 + 1) x)) x)))
+            (6 - min (3 - 1) (mdSpend MDPos.D1 (6 + 1) x)) x)))
           [MDPos.A0] LOSS :=
     foldMax_le_of_mem _ _ _ _ (List.mem_cons_self _ _)
   rw [hcl] at hfold
   have hA0' : fuelValueD2C MDG g 3 mdSpend
-      (5 - min (3 - 1) (mdSpend MDPos.D1 (5 + 1) MDPos.A0)) MDPos.A0 ≤ 280 := hA0
+      (6 - min (3 - 1) (mdSpend MDPos.D1 (6 + 1) MDPos.A0)) MDPos.A0 ≤ 540 := hA0
   omega
 
 /-- **The cap's ply, certified**: `ForcedMate MDG 3 A1` holds, and at
-`D = 9` the declared value of the shipped-shaped search is at most 280 --
-far below `MATE_LOWER`.  So `3k` does NOT license the CI depth; `3k + 1`
-is the sharp one. -/
-theorem sharp_cap_mate3_at_9 (g : MDPos → Bool) :
-    fuelValueD2C MDG g 3 mdSpend 9 MDPos.A1 < MATE_LOWER := by
+`D = 10` the declared value of the shipped-shaped search is at most 540 --
+far below `MATE_LOWER`. So `3k + 1` does NOT license the CI depth;
+`3k + 2` is sharp. -/
+theorem sharp_cap_mate3_at_10 (g : MDPos → Bool) :
+    fuelValueD2C MDG g 3 mdSpend 10 MDPos.A1 < MATE_LOWER := by
   have hML : MATE_LOWER = 47923 := rfl
   have hLOSS : LOSS = -MATE_UPPER := rfl
   have hMU : MATE_UPPER = 69290 := rfl
-  have hma : movesAbove MDG (val_lower 9) MDPos.A1 = [MDPos.D1] :=
-    movesAbove_all MDG 9 MDPos.A1 (by decide)
-  have hD1 := sharp_cap_D1_6 g
-  rw [show (9 : Nat) = 8 + 1 from rfl,
-    fuelValueD2C_of_fold_regime MDG g 3 mdSpend 8 MDPos.A1
+  have hma : movesAbove MDG (val_lower 10) MDPos.A1 = [MDPos.D1] :=
+    movesAbove_all MDG 10 MDPos.A1 (by decide)
+  have hD1 := sharp_cap_D1_7 g
+  rw [show (10 : Nat) = 9 + 1 from rfl,
+    fuelValueD2C_of_fold_regime MDG g 3 mdSpend 9 MDPos.A1
       (by decide) (by decide) (by decide) (by omega),
     hma]
-  refine Int.lt_of_le_of_lt (foldMax_le _ _ _ (fun m hm => ?_) (by omega)) (by omega : (280:Int) < MATE_LOWER)
+  refine Int.lt_of_le_of_lt (foldMax_le _ _ _ (fun m hm => ?_) (by omega)) (by omega : (540:Int) < MATE_LOWER)
   have hm' : m = MDPos.D1 := by simpa using hm
   subst hm'
-  have hcl := capClamp_of_deep MDG MDPos.A1 (d := 8 + 1) (by omega) MDPos.D1
-    (-(fuelValueD2C MDG g 3 mdSpend (8 - min (3 - 1) (mdSpend MDPos.A1 (8 + 1) MDPos.D1))
+  have hcl := capClamp_of_deep MDG MDPos.A1 (d := 9 + 1) (by omega) MDPos.D1
+    (-(fuelValueD2C MDG g 3 mdSpend (9 - min (3 - 1) (mdSpend MDPos.A1 (9 + 1) MDPos.D1))
       MDPos.D1))
   rw [hcl]
-  simp only [mdSpend, show (8 - min (3 - 1) 2 : Nat) = 6 from rfl]
+  simp only [mdSpend, show (9 - min (3 - 1) 2 : Nat) = 7 from rfl]
   omega
 
 theorem code_mate_depth_bound_sharp_k3 :
     ∃ (G : QSGame) (guard : G.Pos → Bool) (spend : G.Pos → Nat → G.Pos → Nat) (p : G.Pos),
       ValFloor G 192 ∧ ForcedMate G 3 p ∧
-        fuelValueD2C G guard 3 spend (3 * 3) p < MATE_LOWER :=
+        fuelValueD2C G guard 3 spend (3 * 3 + 1) p < MATE_LOWER :=
   ⟨MDG, mdGuard, mdSpend, MDPos.A1, sharp_valFloor, sharp_forcedMate_3_A1,
-    sharp_cap_mate3_at_9 mdGuard⟩
+    sharp_cap_mate3_at_10 mdGuard⟩
 
 /-- **Menu option M1 alone buys nothing**: with the shallow cap in place, the
 witness masks at the CAPPED attacker node, not at the pass -- so deleting the
@@ -1406,8 +1380,8 @@ just the same.  The two mechanisms have to go together to move the bound. -/
 theorem code_mate_depth_bound_sharp_k3_guardOff :
     ∃ (G : QSGame) (guard : G.Pos → Bool) (spend : G.Pos → Nat → G.Pos → Nat) (p : G.Pos),
       ValFloor G 192 ∧ (∀ q, guard q = false) ∧ ForcedMate G 3 p ∧
-        fuelValueD2C G guard 3 spend (3 * 3) p < MATE_LOWER :=
+        fuelValueD2C G guard 3 spend (3 * 3 + 1) p < MATE_LOWER :=
   ⟨MDG, fun _ => false, mdSpend, MDPos.A1, sharp_valFloor, fun _ => rfl,
-    sharp_forcedMate_3_A1, sharp_cap_mate3_at_9 (fun _ => false)⟩
+    sharp_forcedMate_3_A1, sharp_cap_mate3_at_10 (fun _ => false)⟩
 
 end Sunfish
