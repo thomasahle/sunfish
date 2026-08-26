@@ -72,10 +72,10 @@ static int MATE_LOWER, MATE_UPPER;
 static int tables_loaded = 0;
 
 /* Runtime knobs.  Defaults reproduce sunfish.py at the repo root. */
-static int QS = 40;
-static int QS_A = 140;
-static int LMR = 75;
-static int LMR_MIN_DEPTH = 6, LMR_RED = 1, LMR_LIMIT = 750;
+static int QS = 36;
+static int QS_A = 180;
+static int LMR = 70;
+static int LMR_MIN_DEPTH = 7, LMR_RED = 1, LMR_LIMIT = 750;
 static int EVAL_ROUGHNESS = 15;
 static int NULL_CAP_MARGIN = 15; /* independent lab version of Python's shared value */
 static int VALUE_N = 280, VALUE_B = 320, VALUE_R = 479, VALUE_Q = 929;
@@ -92,7 +92,7 @@ static int IID = 0, IID_MIN_DEPTH = 3;  /* deleted Python IID, retained for tuni
 static int IID_RED = 3;          /* IID depth reduction */
 static int FUT_MAX = 1;          /* futility pruning when depth <= this */
 static int FUT_CAP = 1;          /* 0 off, 1 ordinary moves, 2 negative value */
-static int FUT_CAP_DEPTH = 3;
+static int FUT_CAP_DEPTH = 4;
 static int MATE_DIST = 1;        /* mate scores carry distance (master: 0) */
 /* Replacement-policy battery knobs (tp_move only; tp_score untouched).
  * EVICT_POLICY 0: master/branch root-guarded FIFO insert-then-evict (>).

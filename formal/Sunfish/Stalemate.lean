@@ -673,11 +673,11 @@ just the loop's first, cutoff-checked accumulator update) is
 
 /-! ### The threshold -/
 
-/-- sunfish.py line 149: `QS = 40`. -/
-def QS : Int := 40
+/-- sunfish.py line 149: `QS = 36`. -/
+def QS : Int := 36
 
-/-- sunfish.py line 150: `QS_A = 140`. -/
-def QS_A : Int := 140
+/-- sunfish.py line 150: `QS_A = 180`. -/
+def QS_A : Int := 180
 
 /-- The QS move-value threshold, `sunfish.py`:
 
@@ -710,7 +710,7 @@ theorem val_lower_le_QS (d : Nat) : val_lower d ≤ QS := by
 (`val ≥ MATE_LOWER`) pass the filter at every depth. -/
 theorem val_lower_lt_ML (d : Nat) : val_lower d < MATE_LOWER := by
   have h := val_lower_le_QS d
-  have hQ : QS = 40 := rfl
+  have hQ : QS = 36 := rfl
   have hML : MATE_LOWER = 47923 := rfl
   omega
 
@@ -726,7 +726,7 @@ theorem val_lower_deep (d : Nat) (h : 1 ≤ d) : val_lower d ≤ -380 := by
 bought: the depth-sloped form `QS - depth * QS_A`, which masked a
 legal move whenever its table value fell in `[-192, -100)` at remaining
 depth 1.  Nothing in the shipped model reads this. -/
-def val_lower_pre (d : Nat) : Int := QS - d * QS_A
+def val_lower_pre (d : Nat) : Int := 40 - d * 140
 
 theorem val_lower_pre_one : val_lower_pre 1 = -100 := by decide
 
@@ -1954,7 +1954,7 @@ then REFUTED on real boards, which is what forced the verified design:
   playouts + 1,459,694 sparse positions + 214,004 corner packings)
   found 100+ natural corner-mate hits (simplest:
   `8/8/8/7p/7P/1K5P/p7/k5R1 b`, K_MID pricing the mated king's quiet
-  moves at 65-145, above `QS = 40`): the shape is common, not exotic.
+  moves at 65-145, above `QS = 36`): the shape is common, not exotic.
   The d2 answer is not to defend the hypothesis but to remove the
   consumer: `if depth and ...` excludes depth 0 from the correction
   entirely -- QS evaluates the fold and never claims an exact terminal
@@ -2224,7 +2224,7 @@ theorem cexT_crossing :
 /-- Depth-0 correction-terminality, by content (this model's depth 0 is
 QS-as-eval, so the old engine's depth-0 loop is stated by what its gate
 certified): our king is on the board, no pseudo-legal move falls below
-the depth-0 threshold `val_lower 0 = QS = 40`, and every pseudo-legal
+the depth-0 threshold `val_lower 0 = QS = 36`, and every pseudo-legal
 move loses the king to an immediate recapture. -/
 def CorrectionTerminal0 (G : QSGame) (p : G.Pos) : Prop :=
   ¬ (G.eval p ≤ -MATE_LOWER) ∧ allAboveB G 0 p = true ∧

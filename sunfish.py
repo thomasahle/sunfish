@@ -160,9 +160,9 @@ MATE_LOWER = piece["K"] - 13 * piece["Q"]
 MATE_UPPER = piece["K"] + 10 * piece["Q"]
 
 # Constants for tuning search
-QS = 40
-QS_A = 140
-LMR = 75
+QS = 36
+QS_A = 180
+LMR = 70
 # Two jobs, deliberately one number: the width the MTD-bi bracket stops at,
 # and what one ply of mate distance is worth. Distances must be more than a
 # bracket apart or the driver's last window could not order two mates.
@@ -415,7 +415,7 @@ class Searcher:
         # board at every call site, so the sum tops out a third of the way to
         # MATE_LOWER (CapInBand in CappedMove.lean, and its caveat if
         # piece["Q"] ever grows past ~2400).
-        ceiling = lambda v: MATE_UPPER if depth > 3 or v >= MATE_LOWER else pos.score + v + max(depth - 1, 0) * QS_A
+        ceiling = lambda v: MATE_UPPER if depth > 4 or v >= MATE_LOWER else pos.score + v + max(depth - 1, 0) * QS_A
 
         def moves():
 
@@ -482,7 +482,7 @@ class Searcher:
                 # the cutoff block, it stores nothing, exactly as the old
                 # suffix report did.
                 if (cap := ceiling(val)) < gamma: best = max(best, cap); break
-                move_depth = depth - 1 - (guard and depth >= 6 and val < LMR) - int(nmr)
+                move_depth = depth - 1 - (guard and depth >= 7 and val < LMR) - int(nmr)
                 score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))
                 live |= score > -MATE_UPPER
             best = max(best, score)

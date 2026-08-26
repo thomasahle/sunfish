@@ -7,7 +7,7 @@ the window and move table. A mate-band intrinsic value is normalized directly
 to `MATE_UPPER`; `HighValIsKingCapture` says that this branch is exactly a king
 capture, whose recursive child would immediately return `-MATE_UPPER`.
 
-Every other move at depths zero through three has the fixed cap
+Every other move at depths zero through four has the fixed cap
 
     static + gain + (depth - 1) * QS_A.
 
@@ -18,12 +18,12 @@ the code used to spell never bound.
 Natural subtraction makes the margin zero at depths zero and one. There the
 cap is the existing exact stand-pat futility estimate: the score identity and
 `futilityOK_discharged` show that it targets the ordinary child value. At
-depths two and three it instead declares the move value to be the minimum of
+depths two through four it instead declares the move value to be the minimum of
 the cap and the full child value. If the cap lies below the window, the child
 need not be searched; otherwise `WindowReport.cap` transports its report.
 
 The positive-band ceiling prevents a selective cap from inventing mate. The
-cap disappears above depth three.  The implementation evaluates this fixed
+cap disappears above depth four.  The implementation evaluates this fixed
 fold lazily, and it does so WITHOUT ever computing the threshold: the
 producer yields `(value, move)` pairs in decreasing intrinsic value, and the
 consumer caps each move at its single scoring site.  When the cap is below
@@ -64,7 +64,7 @@ move (so no king was captured making it), and the null child shares the
 board.  Hence `|pos.score|` is material-bounded (about 15k - EvalBounds'
 headline proves the static eval alone sits strictly below the band), an
 ordinary move value is below ~2k, and the shallow margin is at most
-`2 * QS_A = 280` (the cap lives at `depth <= 3`) - the sum tops out around
+`3 * QS_A = 540` (the cap lives at `depth <= 4`) - the sum tops out around
 a third of `MATE_LOWER - 1 = 47922`, so the clamp the code used to spell
 could never bind.  CAVEAT: `MATE_LOWER` is derived, `piece[K] - 13 *
 piece[Q]`.  In twin-option space the headroom closes around `piece[Q] >~
@@ -177,7 +177,7 @@ def producerFloor (depth : Nat) : Int :=
 king captures in the searched prefix.  Above the capped horizon the threshold
 is just the producer floor, so the tail is empty. -/
 def lazyMoveThreshold (static gamma : Int) (depth : Nat) : Int :=
-  if depth ≤ 3 then
+  if depth ≤ 4 then
     max (producerFloor depth)
       (min MATE_LOWER
         (gamma - static - ((depth - 1 : Nat) : Int) * QS_A))
@@ -228,7 +228,7 @@ theorem mem_lazyMoveTail {G : QSGame} {static gamma : Int} {depth : Nat}
 arithmetic correspondence between Python's intrinsic threshold and the cap;
 no chess or child-search premise is involved. -/
 theorem lazyMoveTail_cap_lt_gamma (G : QSGame) (hF : ValFloor G 192)
-    (static gamma : Int) (depth : Nat) (p m : G.Pos) (hdepth : depth ≤ 3)
+    (static gamma : Int) (depth : Nat) (p m : G.Pos) (hdepth : depth ≤ 4)
     (hm : m ∈ lazyMoveTail G static gamma depth p) :
     shallowMoveCap static (G.val p m) depth < gamma := by
   have hmem := (mem_lazyMoveTail.mp hm).1
@@ -265,7 +265,7 @@ because `val < MATE_LOWER` bounds it under the window.  Dropping the clamp
 made this iff UNCONDITIONAL in `gamma`: the old side condition
 `gamma <= MATE_LOWER - 1` marked exactly where the two clamps agreed. -/
 theorem shippedCap_iff_tail (G : QSGame) (hF : ValFloor G 192)
-    (static gamma : Int) (depth : Nat) (p m : G.Pos) (hdepth : depth ≤ 3)
+    (static gamma : Int) (depth : Nat) (p m : G.Pos) (hdepth : depth ≤ 4)
     (hm : m ∈ producerMoves G depth p) (hval : G.val p m < MATE_LOWER) :
     shallowMoveCap static (G.val p m) depth < gamma ↔
       m ∈ lazyMoveTail G static gamma depth p := by
@@ -306,7 +306,7 @@ theorem foldMax_windowReports {α : Type _} (gamma : Int)
 actual capped tail values. -/
 theorem lazyMoveTail_report (G : QSGame) (hF : ValFloor G 192)
     (static gamma : Int) (depth : Nat) (p : G.Pos) (full : G.Pos → Int)
-    (hdepth : depth ≤ 3) (hwindow : LOSS < gamma) :
+    (hdepth : depth ≤ 4) (hwindow : LOSS < gamma) :
     WindowReport gamma
       (foldMax (fun m => shallowMoveCap static (G.val p m) depth)
         (lazyMoveTail G static gamma depth p) LOSS)

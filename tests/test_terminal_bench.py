@@ -114,10 +114,10 @@ def test_terminal_invariants(parts, cls):
             up = min(up, score)
         brackets[depth] = (lo, up)
         last = depth
-        if depth > 4 or s.nodes > 250_000:
+        if depth > 5 or s.nodes > 250_000:
             break
     assert not any(e.lower > e.upper for e in s.tp_score.values()), "driver crossing"
-    lo, up = brackets.get(min(last, 4), brackets[last])
+    lo, up = brackets.get(min(last, 5), brackets[last])
     root_move = s.tp_move.get(pos)
     if root_move is not None:
         board = chess.Board(" ".join(parts[:4]) + " 0 1")

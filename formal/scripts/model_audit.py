@@ -46,9 +46,9 @@ EXPECTED = {
     "Position.move": "2bb64b5eed188bc4",
     "Position.rotate": "c0ba20968acca6ce",
     "Position.value": "11d52eaa8a661352",
-    "Searcher.bound": "533228b5272ab3f0",
+    "Searcher.bound": "bde33f994242678a",
     "Searcher.search": "d1a2cb5c89a77c53",
-    "constants": "62b96e206341a2fb",
+    "constants": "a606e88a69af8dd0",
 }
 
 
@@ -106,13 +106,13 @@ ANCHORS = [
     "score = min(cap, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))",
     "if score >= gamma and (proof := pos.king_capture()):",
     "move, score, live = proof, MATE_UPPER, True",
-    "ceiling = lambda v: MATE_UPPER if depth > 3 or v >= MATE_LOWER else pos.score + v + max(depth - 1, 0) * QS_A",
+    "ceiling = lambda v: MATE_UPPER if depth > 4 or v >= MATE_LOWER else pos.score + v + max(depth - 1, 0) * QS_A",
     "if killer and ((val := pos.value(killer)) >= QS or depth) and ceiling(val) >= gamma: yield val, killer",
     "yield val, killer",
     "yield from sorted(((v, m) for m in pos.gen_moves() if (v := pos.value(m)) >= QS or depth), reverse=True)",
     "for val, move in moves():",
     "if (cap := ceiling(val)) < gamma: best = max(best, cap); break",
-    "move_depth = depth - 1 - (guard and depth >= 6 and val < LMR) - int(nmr)",
+    "move_depth = depth - 1 - (guard and depth >= 7 and val < LMR) - int(nmr)",
     "score = min(cap, -self.bound(pos.move(move), 1 - gamma, move_depth))",
     "live |= score > -MATE_UPPER",
     "best, live = -MATE_UPPER, False",
