@@ -227,3 +227,14 @@ coordinates before forwarding UCI options. A raw full-range trial and the
 compact RBFOpt comparison were discarded after their runners failed, before
 any held-out result was read. No new engine setting is claimed until a fresh
 opening screen and an independent SPRT both clear the incumbent.
+
+The shared-host run was paused after 83, 83, and 85 points (251 paired
+observations, 502 games) when unrelated high-CPU work appeared. The three
+surrogates still selected configurations close to the incumbent; none produced
+an independently validated improvement. One setting appeared three times in
+the observations: the incumbent with `FUEL_NULL=0` instead of `1`, with a noisy
+`+67.4` Elo point estimate over those three pairs. A separate held-out check
+was stopped after 16 games at `7-5-4` (`+33` Elo posterior estimate, 90%
+interval `[-72,+146]`), so this is only a lead, not a tuning result. The
+validated `#264` combination therefore remains the best result and the
+shipping default.
