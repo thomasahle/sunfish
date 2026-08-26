@@ -893,6 +893,14 @@ Finished game 2 (baseline vs candidate): 1/2-1/2
         self.assertEqual([row["trained_games"] for row in records], [0, 0, 20])
         self.assertEqual([row["options"]["X"] for row in records], [0, 0, 1])
 
+    def test_recommendation_reports_an_unspendable_atomic_budget(self):
+        records = recommend.at_checkpoints(
+            "example", [(398, {"X": 1})], [0, 200, 400], {"X": 0},
+            range(2, 399, 2), reached_budget=400)
+        self.assertEqual([row["checkpoint"] for row in records], [0, 200, 400])
+        self.assertEqual([row["trained_games"] for row in records], [0, 200, 398])
+        self.assertEqual([row["recommendation_games"] for row in records], [0, 0, 398])
+
     def test_clop_recommendations_use_only_complete_pairs(self):
         with tempfile.TemporaryDirectory() as directory:
             directory = pathlib.Path(directory)

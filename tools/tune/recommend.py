@@ -47,7 +47,8 @@ def decode(items, point):
     return result
 
 
-def at_checkpoints(method, history, checkpoints, initial, progress=None):
+def at_checkpoints(method, history, checkpoints, initial, progress=None,
+                   reached_budget=None):
     """Return strict-budget recommendations for every checkpoint the run crossed.
 
     An atomic update may cross a checkpoint. In that case its games and
@@ -58,7 +59,8 @@ def at_checkpoints(method, history, checkpoints, initial, progress=None):
     progress = sorted(progress if progress is not None else [games for games, _ in history])
     output = []
     for checkpoint in checkpoints:
-        if checkpoint and (not progress or progress[-1] < checkpoint):
+        reached = progress[-1] if progress else 0
+        if checkpoint and max(reached, reached_budget or 0) < checkpoint:
             continue
         eligible = [item for item in history if item[0] <= checkpoint]
         recommendation_games, options = eligible[-1] if eligible else (0, initial)
@@ -247,7 +249,12 @@ def rbfopt(args, checkpoints):
     for evaluation in state["evaluations"]:
         games += 2 * evaluation["pairs"]
         progress.append(games)
-    return at_checkpoints(args.method, history, checkpoints, defaults(items), progress)
+    if args.budget:
+        pairs = state["study"]["noisy_pairs"] + state["study"]["accurate_pairs"]
+        if not state["games"] <= args.budget < state["games"] + 2 * pairs:
+            raise RuntimeError("RBFOpt budget is not at its atomic-update boundary")
+    return at_checkpoints(
+        args.method, history, checkpoints, defaults(items), progress, args.budget)
 
 
 def required(args, checkpoints):
@@ -311,6 +318,7 @@ def main():
     rbf_parser.add_argument("--state", required=True)
     rbf_parser.add_argument("--space", required=True)
     rbf_parser.add_argument("--method", default="rbfopt")
+    rbf_parser.add_argument("--budget", type=int)
 
     required_parser = subparsers.add_parser("required")
     required_parser.add_argument("--space", required=True)
