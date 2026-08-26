@@ -15,7 +15,9 @@ FAILURE = re.compile(
     r"\bEngine\b[^\n]*\b(?:disconnects|stalls|didn't respond|did not respond|"
     r"is not responsive|is non[- ]?responsive)\b|(?:^|[;:]\s*)Engine crashed\b|"
     r"^\s*Warning;\s*Illegal move\b|\btime forfeit\b|"
-    r"^\s*(?:Timeouts|Crashed):\s*[1-9]\d*\s*$)",
+    r"^\s*(?:Timeouts|Crashed):\s*[1-9]\d*\s*$|"
+    r"\b(?:disconnect(?:ed|s)?|stall(?:ed|s)?|crash(?:ed|es)?|forfeit(?:ed|s)?)\b"
+    r"(?![- ]resistant|\s*[:=]\s*0\b))",
     re.IGNORECASE | re.MULTILINE)
 PRIOR = (0.14 * 2.5, 0.19 * 2.5, 0.34 * 2.5, 0.19 * 2.5, 0.14 * 2.5)
 PAIR_LOSS = (0, 0.25, 0.5, 0.75, 1)
@@ -25,10 +27,16 @@ class EngineFailure(RuntimeError):
     pass
 
 
+def failure(output):
+    """Return the first engine-failure marker reported by fastchess."""
+    match = FAILURE.search(output)
+    return match.group(0) if match else None
+
+
 def reject_failures(output):
     """Refuse recovered fastchess output that reports an engine failure."""
-    if match := FAILURE.search(output):
-        raise EngineFailure(f"engine failure reported: {match.group(0)}")
+    if marker := failure(output):
+        raise EngineFailure(f"engine failure reported: {marker}")
 
 
 def game_results(output, partial=False, subject=None):

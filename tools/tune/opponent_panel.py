@@ -3,20 +3,18 @@
 import json
 import pathlib
 import random
-import re
 
+try:
+    from . import pentanomial
+except ImportError:
+    import pentanomial
 
-ENGINE_FAILURE = re.compile(
-    r"not responsive|illegal move|"
-    r"\b(?:disconnect(?:ed|s)?|stall(?:ed|s)?|crash(?:ed|es)?|forfeit(?:ed|s)?)\b"
-    r"(?!\s*[:=]\s*0\b)", re.IGNORECASE)
 IDENTITY_FIELDS = ("source", "revision", "license")
 
 
 def failure(text):
     """Return the first engine-failure marker hidden by fastchess recovery."""
-    match = ENGINE_FAILURE.search(text)
-    return match.group(0) if match else None
+    return pentanomial.failure(text)
 
 
 def load(path):

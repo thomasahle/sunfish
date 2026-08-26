@@ -26,7 +26,9 @@ categorical, and Boolean parameters.
   configurations.
 - `screen_starts.py` measures those starts against a fixed UCI baseline.
 - `recommend.py` extracts comparable incumbent configurations at fixed game
-  budgets. It can also pool pairwise-only SPSA studies.
+  budgets. It can also pool pairwise-only SPSA studies, or materialize declared
+  parameter-space points without an optimizer; `required --off-only` produces a
+  validation-ready default-plus-mechanism-off artifact.
 - `freeze_recommendations.py` normalizes and audits a complete method/start/
   checkpoint recommendation grid before held-out games are consulted.
 - `validate.py` measures recommendations on an independent opening set.
@@ -40,14 +42,21 @@ categorical, and Boolean parameters.
 - `locking.py` protects resumable studies from concurrent writers.
 - `uci_wrapper.py` exposes a UCI command with arguments as one executable.
 
-Both the global GP and SPSA accept seeded, integer-weighted opponent
-panels. Panel-anchored SPSA compares both perturbations with the same opponent
+The global GP, SPSA, and Chess Tuning Tools adapter accept seeded,
+integer-weighted opponent panels. Panel-anchored SPSA compares both perturbations with the same opponent
 on the same color-swapped opening before applying the gradient; one update is
 therefore two opening pairs and four games. Five such lanes use 20 engines.
 Both runners shuffle the same weighted block for each group of opening numbers,
 which preserves exact weights without a fixed opponent phase. The seed, panel
 helper, provenance, and extra source-lock files are included in resumable study
 identities, along with executable hashes and UCI options.
+
+The CTT adapter binds every persisted iteration to one deterministic panel
+member and checks the panel hash before starting a game. Its generated initial
+point file contains the default plus every distinct point listed under
+`required` in the shared parameter space. This guarantees that declared
+mechanism-off boundaries are measured instead of merely being available to the
+surrogate by chance.
 
 `freeze_panel.py` builds the C twin twice on the tournament host, rejects a
 non-reproducible binary, copies the pinned opponents and licenses, and writes
@@ -90,6 +99,13 @@ recommendations on openings that were never used for training, and never use
 an optimizer's internal score as comparable Elo. One opening played twice
 with colors reversed has five possible candidate scores—0, 0.5, 1, 1.5, or
 2—so the pair is naturally pentanomial.
+
+Keep the shipping defaults as the permanent zero-Elo incumbent. Losing points
+are useful optimizer observations, but never tuning results: if no independently
+validated recommendation is non-losing, ship the defaults and report zero gain.
+For a strength tune, require the recommendation to pass the pre-registered
+0-versus-positive SPRT against the defaults; rejection or an inconclusive maximum
+keeps the defaults. Quote gain only from a separate fixed-N match.
 
 Use one frozen training-opening schedule for every method and apply any
 feasibility gate to every method or to none. `recommend.py` emits only reached

@@ -250,6 +250,32 @@ def rbfopt(args, checkpoints):
     return at_checkpoints(args.method, history, checkpoints, defaults(items), progress)
 
 
+def required(args, checkpoints):
+    """Materialize canonical declared points without reading optimizer state."""
+    sys.path.insert(0, str(pathlib.Path(__file__).parent / "logistic_gp"))
+    import logistic_gp
+
+    space = logistic_gp.MixedSpace.load(args.space)
+    points = list(dict.fromkeys([space.default, *space.required]))
+    if args.off_only:
+        default = space.knobs(space.default)
+
+        def changed_off(point):
+            values = space.knobs(point)
+            changed = [parameter for parameter in space.parameters
+                       if values[parameter["name"]] != default[parameter["name"]]]
+            return bool(changed) and all(
+                values[parameter["name"]] in parameter.get("off_values", [])
+                for parameter in changed)
+
+        points = [space.default, *filter(changed_off, points)]
+        points = list(dict.fromkeys(points))
+    return [{
+        "method": args.method, "checkpoint": 0, "trained_games": 0,
+        "recommendation_games": 0, "options": space.knobs(point),
+    } for point in points]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoints", default="0,100,200,400,700,1000")
@@ -285,6 +311,11 @@ def main():
     rbf_parser.add_argument("--state", required=True)
     rbf_parser.add_argument("--space", required=True)
     rbf_parser.add_argument("--method", default="rbfopt")
+
+    required_parser = subparsers.add_parser("required")
+    required_parser.add_argument("--space", required=True)
+    required_parser.add_argument("--method", default="required")
+    required_parser.add_argument("--off-only", action="store_true")
 
     args = parser.parse_args()
     checkpoints = sorted(set(map(int, args.checkpoints.split(","))))
