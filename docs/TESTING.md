@@ -501,7 +501,7 @@ The other selected settings are `QS_A=140`, `EVAL_ROUGHNESS=15`,
 capped null from depth 3 through 5, real-only fuel shaping from depth 6, and
 IID disabled. The study coupled the shallow and deep reductions at 7; the
 depth-six mate floor subsequently showed that this was invalid. Production
-retains the shallow candidate's three-ply reduction, the `abs(score) < 750`
+uses the shallow candidate's independently tested four-ply reduction, the `abs(score) < 750`
 guard for both null mechanisms, and exempts the unstored driver root from
 intrinsic LMR. The depth-eight mate floor invalidated removal of the score
 guard. A complete threshold sweep retained 12/14 mate-in-three positions

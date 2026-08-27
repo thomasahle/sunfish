@@ -86,7 +86,7 @@ static int NULL_MARGIN = -200;   /* fuel-probe target margin */
 static int NULL_MIN_DEPTH = 2;   /* null move when depth > this */
 static int NULL_SPAN = 3;        /* number of scoring-null depths */
 static int NULL_LIMIT = 750;     /* |score| bound for both null mechanisms */
-static int NULL_CUT_RED = 3;     /* shallow null-candidate reduction */
+static int NULL_CUT_RED = 4;     /* shallow null-candidate reduction */
 static int NULL_RED = 7;         /* deep fuel-probe reduction */
 static int IID = 0, IID_MIN_DEPTH = 3;  /* deleted Python IID, retained for tuning */
 static int IID_RED = 3;          /* IID depth reduction */

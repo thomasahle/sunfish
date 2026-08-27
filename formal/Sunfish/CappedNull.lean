@@ -62,7 +62,7 @@ theorem WindowReport.cap_failLow (cap gamma value : Int) (h : cap < gamma) :
     split <;> omega
 
 /-- The exact local proof obligation of the Python expression
-`min(cap, -bound(pass, 1 - gamma, depth - 3))`. -/
+`min(cap, -bound(pass, 1 - gamma, depth - 4))`. -/
 theorem cappedNull_report (cap gamma childReport childValue : Int)
     (h : WindowReport (1 - gamma) childReport childValue) :
     WindowReport gamma

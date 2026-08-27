@@ -143,3 +143,102 @@ validation pipeline:
 python3 -m unittest tools.tune.logistic_gp.test_logistic_gp \
   tests.test_tuning_tools
 ```
+
+## Sunfish search campaign, August 2026
+
+The production campaign treated the checked-in defaults as a permanent
+zero-Elo incumbent. Losing configurations remained optimizer observations;
+they were never promoted merely because they were smaller or faster. Search
+changes had to pass a positive SPRT, and a separate fixed-size match supplied
+the quoted Elo magnitude.
+
+The production search-only space held piece values, PST values, time management,
+and memory size fixed. The compact five-method recovery benchmark used a
+deliberately small 12-control projection. A separate full-space follow-up
+covered all 20 numeric search controls exposed by the C twin, including depth
+thresholds, null-search reductions, LMR, shallow move caps, and their explicit
+off-boundaries. The selected production configuration changed only five values:
+
+| Parameter | Old | Selected |
+| --- | ---: | ---: |
+| `QS` | 40 | 36 |
+| `QS_A` | 140 | 180 |
+| `LMR` | 75 | 70 |
+| `LMR_MIN_DEPTH` | 6 | 7 |
+| `FUT_CAP_DEPTH` | 3 | 4 |
+
+The combination was tested as one policy; these are not five independent Elo
+claims. It added no executable line. Its direct paired results against the old
+defaults were:
+
+| Evidence | Result |
+| --- | --- |
+| Pentanomial SPRT `[0, +10]` | H1 after 1,314 games; `+23.83 +/- 15.61` Elo |
+| Independent fixed 1,000 games | `+32.41 +/- 18.52` Elo; LOS 99.97% |
+| Frozen 2:1:1 opponent panel | `+21.84` Elo; 90% interval `[+11.11, +30.22]` |
+
+The panel combined old Sunfish, a calibrated Stockfish, and ChessIdle. Both
+external-opponent point estimates were non-negative. There were no crashes,
+illegal moves, stalls, disconnects, or time losses.
+
+The parameter change also passed the full Lean build and the source/model
+audit. The resulting uniform eventual-search bounds are `D >= 3k + 2` for a
+forced mate in `k` plies and `D >= 3k + 5` for the forced-loss dual; a concrete
+mate-in-three witness proves the first bound sharp for this recurrence. Python
+and the C twin agreed on 5,220 bound reports and 1,042 generated move lists.
+The deterministic gates were WAC 170/300 at depth 8, Bratko-Kopec 11/24 at
+depth 8, and Lichess regressions 451/1,736 at depth 8.
+
+Explicit deletion tests did not reveal a free simplification. Disabling
+shallow null and compensating with earlier fuel reduction was inconclusive at
+`-3.47 +/- 13.31` Elo; compensating with earlier LMR was rejected at
+`-17.78 +/- 16.99` Elo. Other mechanism-off variants expanded the fixed-depth
+tree substantially. Under the five-Elo-per-line rule, none earned deletion.
+
+## Comparing the five game-result tuners
+
+The final optimizer comparison asks how much strength a method recovers from
+three deliberately degraded configurations after 0, 100, 200, and 400
+training games. Logistic GP, CTT/MES, RBFOpt, SPSA, and CLOP receive identical
+engine builds, parameter bounds, starts, training openings, and physical-game
+budgets. The reference engine is stationary. Each checkpoint recommendation
+is frozen before any held-out result is read.
+
+The training score is never plotted as Elo. Recommendations play the same 50
+unseen color-swapped opening pairs at each start. Pair scores are pooled over
+the three equally weighted starts before applying the logistic Elo transform.
+Method contrasts resample the same opening index across all starts, preserving
+the pairing. Finalists use another disjoint 50-pair slice, followed by a
+predeclared 100-pair look only if necessary. The confirmation uses exact
+sign-flip tests with Holm correction.
+
+This compact benchmark replaced two tempting but invalid shortcuts. A first
+one-start pilot was far too noisy to separate methods, and a later 5,981-game
+run had unequal method/start cells and no held-out matches. Optimizer posterior
+scores from those games are useful diagnostics, but they are not comparable
+Elo and do not enter the final ranking.
+
+The full-space follow-up searched all 20 controls from the merged
+incumbent. It uses the C twin at 3+0.1 and three independent CTT/MES seeds. The
+finite candidate sets are encoded as compact integer coordinates so sentinel
+values such as “mechanism off” remain searchable without giving the surrogate
+huge meaningless numeric intervals; the engine wrapper decodes those
+coordinates before forwarding UCI options. A raw full-range trial and the
+compact RBFOpt comparison were discarded after their runners failed, before
+any held-out result was read. No new engine setting is claimed until a fresh
+opening screen and an independent SPRT both clear the incumbent.
+
+The run paused after 83, 83, and 85 points (251 paired observations, 502
+games). The three surrogates stayed close to the incumbent and produced no
+validated improvement. A three-pair `FUEL_NULL=0` observation looked positive,
+but an audit found the relevant direct match: disabling the fuel reduction lost
+`-60.14 +/- 19.51` Elo over 986 games. The noisy observation is rejected, not a
+lead.
+
+The strongest unmerged coordinate result was the shallow null reduction from
+three to four plies. Its registered pentanomial SPRT accepted H1 `[0,+10]`
+after 3,046 games at `+13.24 +/- 10.29` Elo. A fixed 1,000-game run measured
+the same R4 change at `+18.4` Elo with a 95% interval of `[-0.2,+37.1]`.
+`NullRed.lean` proves that the reduction's parity is not load-bearing, so the
+production patch changes only the reduction. Confirmation against the jointly
+tuned defaults remains separate from this earlier coordinate evidence.

@@ -97,7 +97,7 @@ MECHANISM MAP (pre-#216 line -> post-#218 line).
   `intrinsicSpend`, `intrinsic_child_depth` and `spend <= 2` unchanged.
 
 * sub-horizon pass: `:395-402` -> `:406-412`.  Guard identical
-  (`not root and 2 < depth < 6 and ...`), pass child still at `depth - 3`.
+  (`not root and 2 < depth < 6 and ...`), pass child now at `depth - 4`.
   Two local changes, neither reaching this file: (i) a sub-window
   short-circuit `score = cap if (cap := pos.score + EVAL_ROUGHNESS) < gamma
   else min(cap, ...)`, which is the same declared value `min(cap, P)` with a
@@ -217,8 +217,8 @@ theorem forcedMate_leaf_fuelValueD2 (G : QSGame) (guard : G.Pos → Bool)
             ≤ foldMax (fun x => -(fuelValueD2 G guard C spend d x))
                 (movesAbove G (val_lower (d + 1)) p)
                 (if guard p = true ∧ 2 < d + 1 then
-                  (if -(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
-                    max LOSS (-(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)))
+                  (if -(fuelValueD2 G guard C spend (d + 1 - 4) (G.pass p)) < MATE_LOWER then
+                    max LOSS (-(fuelValueD2 G guard C spend (d + 1 - 4) (G.pass p)))
                   else LOSS)
                 else LOSS) :=
           foldMax_le_of_mem _ _ _ _ hmem
@@ -548,8 +548,8 @@ theorem forcedMate_fuelValueD2_noSubPass (G : QSGame) (guard : G.Pos → Bool)
                 ≤ foldMax (fun x => -(fuelValueD2 G guard C spend d x))
                     (movesAbove G (val_lower (d + 1)) p)
                     (if guard p = true ∧ 2 < d + 1 then
-                      (if -(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
-                        max LOSS (-(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)))
+                      (if -(fuelValueD2 G guard C spend (d + 1 - 4) (G.pass p)) < MATE_LOWER then
+                        max LOSS (-(fuelValueD2 G guard C spend (d + 1 - 4) (G.pass p)))
                       else LOSS)
                     else LOSS) :=
               foldMax_le_of_mem _ _ _ _ hmem
@@ -732,8 +732,8 @@ def fuelValueD2C (G : QSGame) (guard : G.Pos → Bool) (C : Nat)
       foldMax (fun m => capClamp G p (d + 1) m (-(fuelValueD2C G guard C spend d m)))
         (movesAbove G (val_lower (d + 1)) p)
         (if guard p = true ∧ 2 < d + 1 then
-          (if -(fuelValueD2C G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
-            max LOSS (-(fuelValueD2C G guard C spend (d + 1 - 3) (G.pass p)))
+          (if -(fuelValueD2C G guard C spend (d + 1 - 4) (G.pass p)) < MATE_LOWER then
+            max LOSS (-(fuelValueD2C G guard C spend (d + 1 - 4) (G.pass p)))
           else LOSS)
         else LOSS)
     else
@@ -795,8 +795,8 @@ theorem fuelValueD2C_of_fold_sub (G : QSGame) (guard : G.Pos → Bool)
       = foldMax (fun m => capClamp G p (d + 1) m (-(fuelValueD2C G guard C spend d m)))
           (movesAbove G (val_lower (d + 1)) p)
           (if guard p = true ∧ 2 < d + 1 then
-            (if -(fuelValueD2C G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
-              max LOSS (-(fuelValueD2C G guard C spend (d + 1 - 3) (G.pass p)))
+            (if -(fuelValueD2C G guard C spend (d + 1 - 4) (G.pass p)) < MATE_LOWER then
+              max LOSS (-(fuelValueD2C G guard C spend (d + 1 - 4) (G.pass p)))
             else LOSS)
           else LOSS) := by
   simp only [fuelValueD2C]
@@ -860,8 +860,8 @@ theorem forcedMate_leaf_fuelValueD2C (G : QSGame) (guard : G.Pos → Bool)
             ≤ foldMax (fun x => capClamp G p (d + 1) x (-(fuelValueD2C G guard C spend d x)))
                 (movesAbove G (val_lower (d + 1)) p)
                 (if guard p = true ∧ 2 < d + 1 then
-                  (if -(fuelValueD2C G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
-                    max LOSS (-(fuelValueD2C G guard C spend (d + 1 - 3) (G.pass p)))
+                  (if -(fuelValueD2C G guard C spend (d + 1 - 4) (G.pass p)) < MATE_LOWER then
+                    max LOSS (-(fuelValueD2C G guard C spend (d + 1 - 4) (G.pass p)))
                   else LOSS)
                 else LOSS) :=
           foldMax_le_of_mem _ _ _ _ hmem
@@ -1136,10 +1136,10 @@ channel, in one equation. -/
 theorem sub_seed_of_pass_zero (G : QSGame) (guard : G.Pos → Bool) (C : Nat)
     (spend : G.Pos → Nat → G.Pos → Nat) (d : Nat) (p : G.Pos)
     (hg : guard p = true) (h2 : 2 < d + 1)
-    (hpass : fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p) = 0) :
+    (hpass : fuelValueD2 G guard C spend (d + 1 - 4) (G.pass p) = 0) :
     (if guard p = true ∧ 2 < d + 1 then
-      (if -(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)) < MATE_LOWER then
-        max LOSS (-(fuelValueD2 G guard C spend (d + 1 - 3) (G.pass p)))
+      (if -(fuelValueD2 G guard C spend (d + 1 - 4) (G.pass p)) < MATE_LOWER then
+        max LOSS (-(fuelValueD2 G guard C spend (d + 1 - 4) (G.pass p)))
       else LOSS)
     else LOSS) = 0 := by
   have hMU : MATE_UPPER = 69290 := rfl
@@ -1171,8 +1171,8 @@ theorem sharp_D1_5 : fuelValueD2 MDG mdGuard 3 mdSpend 5 MDPos.D1 = 0 := by
   have hML : MATE_LOWER = 47923 := rfl
   have hma : movesAbove MDG (val_lower 5) MDPos.D1 = [MDPos.A0] :=
     movesAbove_all MDG 5 MDPos.D1 (by decide)
-  have hpassZ : fuelValueD2 MDG mdGuard 3 mdSpend (4 + 1 - 3) (MDG.pass MDPos.D1) = 0 :=
-    sharp_ZP 1
+  have hpassZ : fuelValueD2 MDG mdGuard 3 mdSpend (4 + 1 - 4) (MDG.pass MDPos.D1) = 0 :=
+    sharp_ZP 0
   have hA0 := sharp_A0_4
   rw [show (5 : Nat) = 4 + 1 from rfl,
     fuelValueD2_of_fold_sub MDG mdGuard 3 mdSpend 4 MDPos.D1
@@ -1293,8 +1293,8 @@ theorem sharp_cap_A0_4 (g : MDPos → Bool) : fuelValueD2C MDG g 3 mdSpend 4 MDP
   have hLOSS : LOSS = -MATE_UPPER := rfl
   have hma : movesAbove MDG (val_lower 4) MDPos.A0 = [MDPos.LF] :=
     movesAbove_all MDG 4 MDPos.A0 (by decide)
-  have hZ : fuelValueD2C MDG g 3 mdSpend (3 + 1 - 3) (MDG.pass MDPos.A0) = 0 :=
-    sharp_cap_ZP1 g
+  have hZ : fuelValueD2C MDG g 3 mdSpend (3 + 1 - 4) (MDG.pass MDPos.A0) = 0 :=
+    sharp_cap_ZP0 g
   rw [show (4 : Nat) = 3 + 1 from rfl,
     fuelValueD2C_of_fold_sub MDG g 3 mdSpend 3 MDPos.A0
       (by decide) (by decide) (by decide) (by omega),

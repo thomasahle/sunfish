@@ -67,7 +67,7 @@ The production guard is:
 The pass is a score candidate only below depth 6. From depth 6 on it is a
 fuel oracle instead -- see the next section.
 
-The shallow candidate retains its original three-ply reduction. The deep
+The shallow candidate uses a four-ply reduction. The deep
 fuel probe has a different role and may use a more aggressive reduction;
 sharing one reduction between them changes the declared shallow value.
 

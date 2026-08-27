@@ -1747,7 +1747,7 @@ class MixedAcquisitionTest(unittest.TestCase):
         space = MixedSpace.load(path)
         self.assertEqual(len(space.names), 20)
         self.assertEqual((space.defaults["QS"], space.defaults["LMR"],
-                          space.defaults["LMR_MIN_DEPTH"]), (40, 75, 6))
+                          space.defaults["LMR_MIN_DEPTH"]), (36, 70, 7))
         self.assertFalse(any(name.startswith("PST_") or name.startswith("VALUE_")
                              for name in space.names))
         cap = space.knobs(space.canonical({"EVAL_ROUGHNESS": 30, "NULL_CAP_MARGIN": 5}))
