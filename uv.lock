@@ -129,7 +129,7 @@ wheels = [
 
 [[package]]
 name = "sunfish"
-version = "2026"
+version = "2026.1"
 source = { editable = "." }
 dependencies = [
     { name = "chess" },
