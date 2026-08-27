@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sunfish"
-version = "2026.1"
+version = "2026.2"
 description = "Sunfish: a minimalist chess engine written in Python"
 readme = "README.md"
 license = { file = "LICENSE.md" }
@@ -40,4 +40,3 @@ dev = [
 # a name for a distribution to claim in site-packages.
 py-modules = ["sunfish"]
 packages = ["sunfish_ui"]
-

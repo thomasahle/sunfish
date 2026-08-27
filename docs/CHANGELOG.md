@@ -1,5 +1,16 @@
 # Changelog
 
+## sunfish 2026.2
+
+A small strength follow-up containing the final search-tuning result that
+landed immediately after the 2026.1 tag.
+
+- The shallow scoring-null child is searched one ply less. The exact change
+  passed a `[0, +10]` pentanomial SPRT at `+13.24 +/- 10.29` Elo over 3,046
+  games, with an independent 1,000-game match measuring `+18.4` Elo.
+- The fail-soft and eventual-mate proofs, C twin, compressed engine, and tuning
+  defaults were updated with the executable. No executable line was added.
+
 ## sunfish 2026.1
 
 A strength and production update following the first 2026 release.
