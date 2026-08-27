@@ -46,7 +46,7 @@ EXPECTED = {
     "Position.move": "2bb64b5eed188bc4",
     "Position.rotate": "c0ba20968acca6ce",
     "Position.value": "11d52eaa8a661352",
-    "Searcher.bound": "bde33f994242678a",
+    "Searcher.bound": "5befa60b6a39586b",
     "Searcher.search": "d1a2cb5c89a77c53",
     "constants": "a606e88a69af8dd0",
 }
@@ -103,7 +103,7 @@ ANCHORS = [
     "nmr = calm and depth >= 6 and -self.bound(pos.rotate(nullmove=True), 1 - t, depth - 7) >= t",
     "if 2 < depth < 6 and guard:",
     "if (cap := pos.score + EVAL_ROUGHNESS) >= gamma:",
-    "score = min(cap, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))",
+    "score = min(cap, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 4))",
     "if score >= gamma and (proof := pos.king_capture()):",
     "move, score, live = proof, MATE_UPPER, True",
     "ceiling = lambda v: MATE_UPPER if depth > 4 or v >= MATE_LOWER else pos.score + v + max(depth - 1, 0) * QS_A",

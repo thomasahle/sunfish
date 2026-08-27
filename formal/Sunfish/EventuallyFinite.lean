@@ -105,7 +105,7 @@ it, by countermodel.  The four design items:
    what any selector's fold is worth; it is absorbed by the
    quantifier, and its worst case is already priced into the bound as
    the `C` of `D0 = C*N + C + 6` (every edge at full spend).  The
-   sub-horizon pass (depths 3..5, probing at depth <= 2) IS a score
+   sub-horizon pass (depths 3..5, probing at depth <= 1) IS a score
    candidate, and sits strictly below the invariant's floor,
    unreachable.  So the value-correctness argument needs
    frontier-freedom only on the real-move tree, which is precisely

@@ -461,10 +461,11 @@ class Searcher:
                 # Cap the pass at static evaluation plus one score bucket: that
                 # keeps its value monotone and below the positive mate band. A
                 # sub-window cap needs no child report; otherwise one is enough.
+                # Negative mate pass values are inert in the max; NullRed covers every positive reduction.
                 # A king capture substitutes the exact MATE_UPPER for a virtual
                 # fail-high - and hands the store below its witness.
                 if (cap := pos.score + EVAL_ROUGHNESS) >= gamma:
-                    score = min(cap, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
+                    score = min(cap, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 4))
                     if score >= gamma and (proof := pos.king_capture()):
                         move, score, live = proof, MATE_UPPER, True
                 else:

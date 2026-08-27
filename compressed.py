@@ -89,7 +89,7 @@ class Searcher:
             if move is None and depth == 0: score = pos.score
             elif move is None:
                 if (cap := pos.score + EVAL_ROUGHNESS) >= gamma:
-                    score = min(cap, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 3))
+                    score = min(cap, -self.bound(pos.rotate(nullmove=True), 1 - gamma, depth - 4))
                     if score >= gamma and (proof := pos.king_capture()): move, score, live = proof, MATE_UPPER, True
                 else: score = cap
             elif val >= MATE_LOWER: score, live = MATE_UPPER, True

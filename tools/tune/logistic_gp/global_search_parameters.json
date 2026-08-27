@@ -56,7 +56,7 @@
     {"name": "NULL_SPAN", "type": "discrete", "default": 3,
      "values": [0, 1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 30],
      "off_values": [0], "scale": 2},
-    {"name": "NULL_CUT_RED", "type": "integer", "default": 3,
+    {"name": "NULL_CUT_RED", "type": "integer", "default": 4,
      "min": 1, "max": 10, "scale": 1},
     {"name": "FUEL_MIN_DEPTH", "type": "discrete", "default": 6,
      "values": [3, 4, 5, 6, 7, 8, 9, 10, 12, 16, 20, 30, 99], "scale": 2},

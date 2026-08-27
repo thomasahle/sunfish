@@ -136,7 +136,7 @@ class TestCappedNullMove:
 
         def observed(pos, gamma, depth, root=False):
             calls.append((gamma, depth, root))
-            if pos == nullpos and gamma == 1 and depth == 2:
+            if pos == nullpos and gamma == 1 and depth == 1:
                 return -sf.MATE_LOWER
             return bound(pos, gamma, depth, root)
 
@@ -144,8 +144,8 @@ class TestCappedNullMove:
         score = bound(pos, 0, 5)
 
         assert score == pos.score + sf.EVAL_ROUGHNESS == 409
+        assert (1, 1, False) in calls
         assert not any(gamma == 1 - sf.MATE_LOWER for gamma, _, _ in calls)
-
 
 class TestFuelOracle:
     """From depth 6 the pass is a fuel oracle, not a score candidate.
@@ -280,7 +280,7 @@ class TestShallowNullMateFloor:
     """#205 coupled the shallow null candidate to the deep probe's reduction.
 
     Together with root LMR, that hid this forced mate completely. Shallow null
-    keeps its three-ply recurrence, root moves get no intrinsic reduction, and
+    keeps its own four-ply recurrence, root moves get no intrinsic reduction, and
     the finite shallow move cap may delay but not erase the proof.
     """
 

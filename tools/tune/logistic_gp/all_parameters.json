@@ -14,7 +14,7 @@
      "values": [0, 250, 350, 500, 750, 1000, 1250, 2000, 60000],
      "ordered_values": [0, 250, 350, 500, 750, 1000, 1250, 2000],
      "off_values": [0], "scale": 500},
-    {"name": "NULL_CUT_RED", "type": "integer", "default": 3,
+    {"name": "NULL_CUT_RED", "type": "integer", "default": 4,
      "min": 1, "max": 5, "scale": 1},
     {"name": "NULL_RED", "type": "integer", "default": 7,
      "min": 3, "max": 10, "scale": 2},

@@ -218,7 +218,7 @@ run had unequal method/start cells and no held-out matches. Optimizer posterior
 scores from those games are useful diagnostics, but they are not comparable
 Elo and do not enter the final ranking.
 
-The current follow-up searches the complete 20-control space from the merged
+The full-space follow-up searched all 20 controls from the merged
 incumbent. It uses the C twin at 3+0.1 and three independent CTT/MES seeds. The
 finite candidate sets are encoded as compact integer coordinates so sentinel
 values such as “mechanism off” remain searchable without giving the surrogate
@@ -228,13 +228,17 @@ compact RBFOpt comparison were discarded after their runners failed, before
 any held-out result was read. No new engine setting is claimed until a fresh
 opening screen and an independent SPRT both clear the incumbent.
 
-The shared-host run was paused after 83, 83, and 85 points (251 paired
-observations, 502 games) when unrelated high-CPU work appeared. The three
-surrogates still selected configurations close to the incumbent; none produced
-an independently validated improvement. One setting appeared three times in
-the observations: the incumbent with `FUEL_NULL=0` instead of `1`, with a noisy
-`+67.4` Elo point estimate over those three pairs. A separate held-out check
-was stopped after 16 games at `7-5-4` (`+33` Elo posterior estimate, 90%
-interval `[-72,+146]`), so this is only a lead, not a tuning result. The
-validated `#264` combination therefore remains the best result and the
-shipping default.
+The run paused after 83, 83, and 85 points (251 paired observations, 502
+games). The three surrogates stayed close to the incumbent and produced no
+validated improvement. A three-pair `FUEL_NULL=0` observation looked positive,
+but an audit found the relevant direct match: disabling the fuel reduction lost
+`-60.14 +/- 19.51` Elo over 986 games. The noisy observation is rejected, not a
+lead.
+
+The strongest unmerged coordinate result was the shallow null reduction from
+three to four plies. Its registered pentanomial SPRT accepted H1 `[0,+10]`
+after 3,046 games at `+13.24 +/- 10.29` Elo. A fixed 1,000-game run measured
+the same R4 change at `+18.4` Elo with a 95% interval of `[-0.2,+37.1]`.
+`NullRed.lean` proves that the reduction's parity is not load-bearing, so the
+production patch changes only the reduction. Confirmation against the jointly
+tuned defaults remains separate from this earlier coordinate evidence.
