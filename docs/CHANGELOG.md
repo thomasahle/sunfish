@@ -1,5 +1,24 @@
 # Changelog
 
+## sunfish 2026.1
+
+A strength and production update following the first 2026 release.
+
+- Five existing shallow-search parameters were tuned jointly without adding
+  engine code. The change passed a `[0, +10]` pentanomial SPRT at
+  `+23.83 +/- 15.61` Elo and scored `+32.41 +/- 18.52` Elo in an independent
+  1,000-game match.
+- The search now uses fixed intrinsic reductions, monotone shallow move caps,
+  and a deep null probe as a position-dependent fuel signal. The corresponding
+  fail-soft and eventual-mate models were updated with the executable.
+- Time management now allocates a shared clock pool across moves, with
+  production-tested handling for increments, pondering, overhead, and hard
+  deadlines.
+- The C twin, game-result tuning suite, and 1,736-position Lichess blunder
+  corpus make search changes faster to measure and harder to regress.
+- The packed NNUE sibling, its training and verification tools, and both
+  production Lichess-bot bundles are included in the repository.
+
 ## sunfish 2026
 
 The first PyPI release. Three years of work since sunfish 2023, in four
