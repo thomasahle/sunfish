@@ -9,7 +9,7 @@ It's only 4096 bytes for the whole engine, so the neuron network is very small.
 
 Because Sunfish is small and strives to be simple, the code provides a great platform for experimenting. People have used it for testing parallel search algorithms, experimenting with evaluation functions, and developing deep learning chess programs. Fork it today and see what you can do!
 
-The name Sunfish refers to the [Pygmy Sunfish](http://en.wikipedia.org/wiki/Pygmy_sunfish), which is among the very few fish to start with the letters 'Py'. The use of a fish is in the spirit of great engines such as Stockfish, Zappa and Rybka. In terms of Heritage, Sunfish borrows much more from [Micro-Max by Geert Muller](http://home.hccnet.nl/h.g.muller/max-src2.html) and [PyChess](http://pychess.org).
+The name Sunfish refers to the [Pygmy Sunfish](http://en.wikipedia.org/wiki/Pygmy_sunfish), which is among the very few fish to start with the letters 'Py'. The use of a fish is in the spirit of great engines such as Stockfish, Zappa and Rybka. In terms of Heritage, Sunfish borrows much more from [Micro-Max by Geert Muller](http://home.hccnet.nl/h.g.muller/max-src2.html) and [PyChess](https://pychess.github.io/).
 
 ## Play against sunfish!
 
@@ -31,7 +31,7 @@ The engine speaks UCI: point any tool at `sunfish-uci` (after
 `pip install sunfish`) or `./sunfish.py` (from a checkout).
 
 * **UCI GUIs** ([Arena](http://www.playwitharena.de),
-  [Cute Chess](https://cutechess.com), [PyChess](http://pychess.org),
+  [Cute Chess](https://cutechess.com), [PyChess](https://pychess.github.io/),
   BanksiaGUI): add an engine, protocol UCI, command `sunfish-uci`.
 * **WinBoard / XBoard**: use the
   [PolyGlot](https://github.com/ddugovic/polyglot) adapter with the
