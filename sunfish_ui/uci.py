@@ -540,7 +540,7 @@ def mate_loop(
     debug=False,
     hclock=0,
 ):
-    start = time.time()
+    start = time.perf_counter()
     try:
       for d in range(int(max_depth) + 1):
         if find_draw:
