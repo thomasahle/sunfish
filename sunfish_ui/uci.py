@@ -580,6 +580,9 @@ def mate_loop(
 
 
 def perft(pos, depth, debug=False):
+    if depth <= 0:
+        print("Nodes searched:", 1)
+        return
 
     def _perft_count(pos, depth):
         # Check that we didn't get to an illegal position
