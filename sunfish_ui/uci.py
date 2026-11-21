@@ -546,10 +546,10 @@ def mate_loop(
         if find_draw:
             s0 = searcher.bound(hist[-1], 0, d)
             elapsed = time.perf_counter() - start
-            print("info", "depth", d, "score lowerbound cp", s0)
+            print("info", "depth", d, "score cp", s0, "lowerbound")
             s1 = searcher.bound(hist[-1], 1, d)
             elapsed = time.perf_counter() - start
-            print("info", "depth", d, "score upperbound cp", s1)
+            print("info", "depth", d, "score cp", s1, "upperbound")
             if s0 >= 0 and s1 < 1:
                 break
         else:
